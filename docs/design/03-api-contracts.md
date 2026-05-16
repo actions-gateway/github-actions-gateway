@@ -135,10 +135,10 @@ type ActionsGatewayStatus struct {
 // threshold the current active-pod count has not yet reached.
 //
 // Thresholds are cumulative across the RunnerGroup, not per-tier slot counts.
-// For example, given tiers with thresholds [5, 15, 30]:
-//   - pods 1–5   → first tier's PriorityClass  (can preempt lower-priority pods)
-//   - pods 6–15  → second tier's PriorityClass (opportunistic)
-//   - pods 16–30 → third tier's PriorityClass  (best-effort)
+// For example, given tiers with thresholds [5, 20, 30]:
+//   - pods 1–5   → first tier's PriorityClass  (preempts lower-priority pods)
+//   - pods 6–20  → second tier's PriorityClass (opportunistic, no preemption)
+//   - pods 21–30 → third tier's PriorityClass  (best-effort, no preemption)
 //   - pod 31+    → held; not created until count falls below 30
 //
 // The last tier's threshold is therefore the effective maxConcurrentJobs ceiling
@@ -147,6 +147,12 @@ type ActionsGatewayStatus struct {
 // PriorityClass objects are cluster-scoped and must be pre-created by the
 // platform team before the RunnerGroup is applied — the GMC does not create
 // them, as doing so would require a cluster-level write privilege expansion.
+//
+// Recommended practice: set PreemptionPolicy to PreemptLowerPriority only on
+// the first (highest-priority) tier. All subsequent tiers should use
+// PreemptionPolicy: Never so that burst and best-effort pods gain scheduling
+// preference over truly lower-priority workloads without evicting running jobs.
+// This confines eviction risk to the minimum guaranteed floor pods only.
 // +kubebuilder:validation:XValidation:rule="self == self.sorted(x, y, x.threshold < y.threshold)",message="priorityTiers must be in strictly ascending threshold order"
 type PriorityTier struct {
     // PriorityClassName is the name of an existing cluster-scoped PriorityClass
@@ -159,6 +165,31 @@ type PriorityTier struct {
     // strictly greater than the previous tier's Threshold.
     // +kubebuilder:validation:Minimum=1
     Threshold int32 `json:"threshold"`
+
+    // PreemptionPolicy controls whether pods in this tier may evict
+    // lower-priority running pods to claim resources. Mirrors the
+    // preemptionPolicy field on the referenced PriorityClass, but
+    // expressed here per-tier so operators can reason about eviction
+    // behaviour directly from the RunnerGroup spec without cross-referencing
+    // cluster-scoped PriorityClass objects.
+    //
+    // PreemptLowerPriority (default): pods in this tier will evict lower-
+    //   priority running pods when the namespace has insufficient free capacity.
+    //   Use only for the first (floor-guarantee) tier.
+    //
+    // Never: pods in this tier will not evict running pods. They gain
+    //   scheduling priority over lower-priority pending pods but wait for
+    //   capacity to free up naturally. Recommended for all tiers above the
+    //   first to avoid disrupting long-running jobs.
+    //
+    // The value here is informational and used by the AGC for documentation
+    // and alerting purposes; the actual preemption behaviour is determined by
+    // the PriorityClass object in the cluster. Operators must ensure the two
+    // are consistent.
+    // +kubebuilder:validation:Enum=PreemptLowerPriority;Never
+    // +kubebuilder:default=Never
+    // +optional
+    PreemptionPolicy string `json:"preemptionPolicy,omitempty"`
 }
 
 // RunnerGroup is a namespace-scoped CRD managed by the AGC.
@@ -188,12 +219,15 @@ type RunnerGroupSpec struct {
     // opportunistic, capped at 30 best-effort:
     //
     //   priorityTiers:
-    //   - priorityClassName: runner-critical   # can preempt lower-priority pods
+    //   - priorityClassName: runner-critical        # floor: can preempt
     //     threshold: 5
-    //   - priorityClassName: runner-standard   # schedules opportunistically
+    //     preemptionPolicy: PreemptLowerPriority
+    //   - priorityClassName: runner-standard        # burst: no eviction
     //     threshold: 20
-    //   - priorityClassName: runner-opportunistic  # best-effort; may be evicted
+    //     preemptionPolicy: Never
+    //   - priorityClassName: runner-opportunistic   # best-effort: no eviction
     //     threshold: 30
+    //     preemptionPolicy: Never
     //
     // PriorityClass objects must be pre-created by the platform team. Tiers must
     // be listed in strictly ascending threshold order; the CRD admission webhook
