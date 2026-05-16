@@ -1,0 +1,159 @@
+# 2. Core Architectural Components
+
+← [Executive Summary](01-executive-summary.md) | [Back to index](README.md) | Next: [API & Data Contracts →](03-api-contracts.md)
+
+---
+
+The system has four layers. The GMC sits at the cluster level and manages tenant gateway instances. Each tenant's AGC handles the GitHub API control plane. A horizontally autoscaled proxy pool provides isolated, fault-tolerant egress for all GitHub traffic. Ephemeral worker pods form the execution data plane, fully isolated within the tenant's namespace.
+
+The architecture has two flows worth diagramming separately: **provisioning** (how a tenant's gateway comes into existence) and **runtime** (how a job is acquired and executed). The two flows touch overlapping resources but answer different questions.
+
+**Provisioning flow** — what happens when a tenant applies an `ActionsGateway` CR.
+
+```
+  Tenant namespace                           System namespace
+  ----------------                           ----------------
+  +-----------------------+                  +----------------------------+
+  |  ActionsGateway CR    |  ──watch (1)──>  |  Gateway Manager Controller|
+  |  (namespace-scoped)   |                  |          (GMC)             |
+  +-----------------------+                  +----------------------------+
+          │                                          │
+          │              ┌──── reconciles (2) ───────┘
+          ▼              ▼
+  +------------------------------------------------------------+
+  |  Tenant namespace resources created by GMC                 |
+  |  ────────────────────────────────────────────────────────  |
+  |  • ServiceAccount + Role + RoleBinding   (RBAC)            |
+  |  • NetworkPolicy + ResourceQuota         (guardrails)      |
+  |  • Proxy Deployment + Service + HPA + PDB                  |
+  |  • AGC Deployment  (replicas: 1, App creds mounted)        |
+  |  • RunnerGroup CRs (bootstrap)                             |
+  +------------------------------------------------------------+
+```
+
+**Runtime flow** — what happens once the gateway is running and a job arrives.
+
+```
+                          GitHub Actions Backend
+                                  ▲
+                                  │ all egress
+                                  ▼
+                          +---------------------+
+                          |  Egress Proxy Pool  |  (HPA-managed)
+                          |  proxy-0 ... proxy-N|
+                          +---------------------+
+                              ▲              ▲
+              HTTP(S)_PROXY   │              │   HTTP(S)_PROXY
+                              │              │
+                  +---------------------+    +----------------------+
+                  |  AGC (1 replica)    |    | Ephemeral Worker Pod |
+                  |  • session loops    |    | (Runner.Worker)      |
+                  |  • token manager   |    +----------------------+
+                  |  • renewjob goros  |             ▲
+                  +---------------------+             │
+                              │                       │ spawned by
+                              │ Create Secret + Pod   │ K8s scheduler
+                              ▼                       │
+                  +---------------------+             │
+                  |  Kubernetes API     | ────────────┘
+                  |  Server             |
+                  +---------------------+
+```
+
+All AGC and worker traffic to GitHub flows through the proxy pool; Kubernetes API traffic from the AGC stays in-cluster (excluded via `NO_PROXY`).
+
+---
+
+## 2.1. Tier 1 — Gateway Manager Controller (GMC)
+
+Deployed once by the platform team in a dedicated system namespace (e.g. `actions-gateway-system`). It holds a ClusterRole that grants it read access to `ActionsGateway` resources across all namespaces, and write access to Deployments, Roles, RoleBindings, NetworkPolicies, and ResourceQuotas within any namespace where an `ActionsGateway` CR exists.
+
+* **Deployment Model:** Runs as a `Deployment` with `replicas: 2` and `controller-runtime` leader election enabled (`leaderElectionID: "actions-gateway-gmc-leader"`). Only the leader pod actively reconciles; the standby is immediately promoted if the leader fails. The GMC's reconciler is fully idempotent, so failover produces no duplicate or conflicting resources.
+* **Tenant Provisioner:** On `ActionsGateway` creation, the GMC operates entirely within the CR's own namespace — the namespace already exists because the tenant created the CR there. It creates a scoped `ServiceAccount`, `Role`, and `RoleBinding` granting the AGC permission to manage Pods and Secrets only within that namespace, and applies a `NetworkPolicy` and `ResourceQuota` derived from the `ActionsGateway` spec. The initial `NetworkPolicy` egress rules for the proxy pods are populated by fetching GitHub's current IP ranges from `api.github.com/meta` at provisioning time.
+* **Proxy Deployer:** Creates and manages a proxy `Deployment` and `ClusterIP` `Service` within the tenant namespace, along with a `HorizontalPodAutoscaler` that scales the proxy pool based on CPU utilization. Proxy pods are given explicit `resources.requests` and `resources.limits` so the HPA can compute CPU utilization percentages. `podAntiAffinity` rules spread replicas across nodes and a `PodDisruptionBudget` ensures at least one proxy pod survives node drains. The AGC Deployment and all worker pod templates are injected with `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables — `NO_PROXY` includes `kubernetes.default.svc.cluster.local`, `localhost`, `127.0.0.1`, and the cluster service CIDR so that Kubernetes API calls are never routed through the egress proxy.
+* **AGC Deployer:** Creates and manages a `Deployment` running the AGC binary with `replicas: 1` inside the CR's namespace, injecting the tenant's GitHub App credentials from the Secret referenced in the `ActionsGateway` spec. The AGC is kept at a single replica to avoid multiple instances independently managing the goroutine session registry; HA is provided at the job level — any unacquired job is redelivered by GitHub.
+* **IP Range Reconciler:** Runs a background loop every 24 hours that fetches the current GitHub IP ranges from `api.github.com/meta` and patches any proxy pod `NetworkPolicy` whose egress rules are stale. Tenants running Cilium or Calico with FQDN-based egress policies can opt out of this feature via `spec.proxy.managedNetworkPolicy: false`. The fetcher is abstracted behind a `GitHubIPRangeFetcher` interface (default implementation calls `https://api.github.com/meta`) so integration tests can inject a stub without network access:
+
+```go
+type GitHubIPRangeFetcher interface {
+    FetchIPRanges(ctx context.Context) ([]net.IPNet, error)
+}
+```
+
+* **Lifecycle Manager:** Propagates spec changes (resource limits, proxy scaling bounds, credential Secret reference changes) down to the tenant's AGC deployment and proxy HPA. When `gitHubAppRef` changes, the GMC rolls the AGC Deployment so the new Pod mounts the new Secret — Secrets are treated as immutable and are never updated in place. On `ActionsGateway` deletion, removes only the GMC-owned resources within the namespace — it does not delete the namespace itself, since the tenant owns it.
+
+---
+
+## 2.2. Tier 2 — Actions Gateway Controller (AGC)
+
+A namespace-scoped operator deployed and managed by the GMC, one instance per tenant. It runs with RBAC permissions limited to its own namespace and manages the lifecycle of `RunnerGroup` Custom Resources within that namespace.
+
+* **Session Multiplexer:** Spawns and manages an internal registry of decoupled, long-polling background goroutines, one per virtual runner slot.
+* **Pod Provisioner:** Intercepts workflow triggers, decrypts incoming payloads, maps runner labels to target pod configurations, and schedules ephemeral worker pods within the tenant namespace.
+* **Token Manager:** A single background goroutine holds the current GitHub App installation access token in a mutex-protected struct shared across all session goroutines. Installation tokens expire after one hour; the Token Manager proactively refreshes at T-5 minutes before expiry. In-flight long-poll connections are unaffected — the token is only consulted when initiating new connections, not mid-connection. On refresh failure, the manager retries with exponential backoff (5s → 60s cap) and emits `actions_gateway_token_refresh_errors_total`; if the old token expires before refresh succeeds, in-flight session goroutines will start failing on next reconnection and re-register as the new token becomes available.
+* **Job Lock Renewer:** After a job is acquired, a per-job background goroutine calls `renewjob` on the run service every 60 seconds to keep the job lock alive (GitHub grants a 10-minute window per renewal). The renewer exits when the worker pod completes or the job is cancelled.
+
+**Why long-poll, not webhooks.** GitHub's broker protocol is the only mechanism for *claiming* and *executing* runner jobs. `workflow_job` webhooks signal that work has queued, but they do not deliver the job payload or the broker session — only the broker's `GetMessage` long-poll returns a `RunnerJobRequest` that can be acquired. Webhooks are useful as a scaling signal (and could pre-warm goroutines in a future revision), but they cannot replace the polling loop.
+
+**Single replica, job-level HA.** The AGC runs at `replicas: 1` because the session registry and per-job RenewJob goroutines are in-memory state; two replicas would race on session creation and produce duplicate acquires. HA is provided by GitHub's redelivery contract: any job not acquired within the 2-minute delivery window is redelivered to another session. An AGC restart drops all in-flight long polls (which GitHub redelivers) and abandons all per-job RenewJob loops — any job whose renewal window lapses before the AGC recovers will be cancelled by GitHub. The practical blackout budget is therefore `(remaining_lock_time on each in-flight job)`, where each renewal grants ~10 minutes. See [Appendix A](appendix-a-capacity-slos.md) for the target recovery SLO.
+
+**Graceful shutdown.** The AGC's SIGTERM handler iterates the session registry and issues `DELETE /sessions/{id}` for each open session before exiting, so GitHub can re-queue any unacquired work immediately rather than waiting for session TTL. Hard crashes (SIGKILL, OOM, node failure) fall back to GitHub's natural session expiry.
+
+---
+
+## 2.3. Tier 3 — Egress Proxy Pool
+
+A pool of stateless HTTPS `CONNECT` proxy pods deployed per tenant by the GMC, exposed via a `ClusterIP` `Service`. All outbound GitHub traffic from both the AGC and worker pods routes through this pool, giving each tenant a distinct set of egress IPs that are never shared with other tenants.
+
+* **Stateless CONNECT proxy:** Handles only `CONNECT` tunneling — it does not inspect or terminate TLS. This keeps the proxy simple, fast, and horizontally scalable without shared state.
+* **HPA-managed scaling:** A `HorizontalPodAutoscaler` targets the proxy `Deployment`, scaling replica count between `proxy.minReplicas` and `proxy.maxReplicas` based on CPU utilization. As job concurrency rises, the proxy pool grows automatically; it scales back down during idle periods. CPU is a coarse proxy for connection load — under bursty, low-CPU workloads (the common case for CONNECT tunneling) the HPA may lag. The v2 upgrade path is a custom `active_connections` metric exposed via prometheus-adapter; CPU is chosen for v1 because it requires no metrics-server extension.
+* **Fault tolerance:** `podAntiAffinity` rules distribute replicas across nodes, and a `PodDisruptionBudget` with `minAvailable: 1` ensures at least one proxy pod remains healthy during node drains or rolling updates.
+
+---
+
+## 2.4. Tier 4 — Ephemeral Worker Pod
+
+A highly secure, short-lived pod optimized to do exactly one thing: execute a single allocated workflow job. Runs inside the tenant namespace alongside the AGC.
+
+* **Entrypoint Wrapper:** A lightweight utility acting as a dummy parent process. It reads the job payload from a mounted Kubernetes Secret, writes it into local Named Pipes (FIFOs), and initializes the execution engine.
+* **Runner.Worker Engine:** The native, open-source .NET binary harvested from `actions/runner`. It parses the raw payload from the pipes, executes steps, compiles code, and handles real-time log ingestion back to GitHub via the **Twirp Results Service** — GitHub's protobuf-over-HTTP log and step-summary ingestion endpoint that the worker streams to over a long-lived HTTP/2 connection routed through the egress proxy.
+* **Minimal RBAC Surface:** Worker pods are created with `automountServiceAccountToken: false` and a dedicated, minimally-scoped service account. These fields are overwritten by the AGC unconditionally after merging the tenant's `PodTemplate` — workflow code has no reason to call the Kubernetes API, and the token omission removes an unnecessary lateral-movement vector from any compromised workflow step.
+* **Full `PodTemplateSpec` with controller-enforced invariants:** The `RunnerGroup` `PodTemplate` field is a standard `corev1.PodTemplateSpec`, giving tenants access to the full range of Kubernetes pod configuration — init containers, sidecars, volumes, scheduling constraints, and so on — using the same schema and tooling they use for any other workload. A small set of fields that the AGC depends on for correct operation (`serviceAccountName`, `automountServiceAccountToken`, `hostPID`, `hostNetwork`, `hostIPC`, and the reserved proxy env vars) are rejected at admission by CRD CEL validation rules and overwritten at pod-creation time. All other security constraints are delegated to the cluster's admission policy engine (e.g. Kyverno, OPA Gatekeeper); the AGC does not duplicate general-purpose policy enforcement.
+* **Sandboxed runtime (optional):** Operators concerned about container-escape attacks can set `runtimeClassName` (e.g. `gvisor`, `kata-containers`) in the `PodTemplate`. The system functions correctly on the default `runc` runtime; sandboxed runtimes are a hardening option, not a requirement. See [Appendix B](appendix-b-worker-isolation.md) for tradeoffs.
+
+---
+
+## 2.5. Observability
+
+Both the GMC and AGC expose Prometheus metrics via a `/metrics` endpoint (standard `controller-runtime` metrics server). The following metrics are the minimum required for production operation; additional `controller-runtime` built-ins (reconcile latency, queue depth, etc.) are emitted automatically.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_active_sessions` | Gauge | `namespace`, `runner_group` | Currently open long-poll sessions |
+| `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired |
+| `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures (404/409/422/other) |
+| `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from acquirejob to pod completion |
+| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from acquirejob to pod Scheduled event |
+| `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful installation token refreshes |
+| `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refreshes |
+| `actions_gateway_renewjob_errors_total` | Counter | `namespace` | RenewJob call failures (leading indicator for cancelled jobs) |
+| `actions_gateway_message_poll_errors_total` | Counter | `namespace` | GetMessage errors (non-empty-poll, non-session-expired) |
+| `actions_gateway_reconcile_errors_total` | Counter | `controller`, `resource` | GMC/AGC reconcile errors |
+| `actions_gateway_ip_range_updates_total` | Counter | `namespace` | NetworkPolicy egress rule refreshes from GitHub meta API |
+| `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC |
+
+---
+
+## 2.6. Upgrade Strategy
+
+The system has three independently versioned components — GMC binary, AGC binary, worker image. Each upgrades on its own cadence.
+
+* **GMC upgrade:** Standard rolling Deployment update. Because the GMC runs `replicas: 2` with leader election, only one replica reconciles at any moment and the leadership lease transfers seamlessly across the rollout. In-flight tenant reconciliations are idempotent — the new leader re-derives state from the API server and converges without producing duplicate resources.
+* **AGC upgrade:** Rolling update of the per-tenant AGC Deployment. Because the AGC is `replicas: 1`, every upgrade incurs the same blackout window described in [§2.2](#22-tier-2--actions-gateway-controller-agc) — in-flight long polls drop and GitHub redelivers within ~2 minutes, while per-job RenewJob loops resume after the new pod starts. Jobs whose lock expires during the window are cancelled by GitHub. Operators should schedule upgrades during low-traffic periods or accept the blackout as a known cost. The SIGTERM session cleanup hook keeps the blackout bounded by the new pod's startup time rather than the full session TTL.
+* **Worker image upgrade:** Workers are versioned per `RunnerGroup` via `spec.workerImage`. Bumping the field rolls forward all *future* worker pods on the next job; pods already running on the old image complete their current job and exit normally. Roll-back is symmetrical — revert the field. Because the field is per-RunnerGroup, blue/green or canary worker images can be tested by adding a second RunnerGroup with the new image and a distinct label selector before flipping the default.
+
+GitHub enforces a minimum runner version at session creation; tenants who let `workerImage` drift will start receiving `400 Bad Request` from `POST /sessions`. The session goroutine surfaces this as a `RunnerGroup` condition (see [§7.1](07-test-plan.md#71-unit-tests)) so operators can detect the staleness without scraping pod logs.
+
+---
+
+← [Executive Summary](01-executive-summary.md) | [Back to index](README.md) | Next: [API & Data Contracts →](03-api-contracts.md)
