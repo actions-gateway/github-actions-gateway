@@ -40,6 +40,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix A — Capacity Targets & SLOs](appendix-a-capacity-slos.md)
 - [Appendix B — Worker Isolation Runtime (Optional)](appendix-b-worker-isolation.md)
 - [Appendix C — AI-Assisted Implementation Notes (Optional)](appendix-c-ai-implementation.md)
+- [Appendix D — Alternatives Considered](appendix-d-alternatives-considered.md)
 
 ---
 

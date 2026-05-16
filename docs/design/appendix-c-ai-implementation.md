@@ -1,6 +1,6 @@
 # Appendix C — AI-Assisted Implementation Notes (Optional)
 
-← [Appendix B](appendix-b-worker-isolation.md) | [Back to index](README.md)
+← [Appendix B](appendix-b-worker-isolation.md) | [Back to index](README.md) | Next: [Appendix D — Alternatives Considered →](appendix-d-alternatives-considered.md)
 
 ---
 
@@ -50,4 +50,4 @@ If your team has not used these tools before, the five-week timeline may not inc
 
 ---
 
-← [Appendix B](appendix-b-worker-isolation.md) | [Back to index](README.md)
+← [Appendix B](appendix-b-worker-isolation.md) | [Back to index](README.md) | Next: [Appendix D — Alternatives Considered →](appendix-d-alternatives-considered.md)
