@@ -130,6 +130,37 @@ type ActionsGatewayStatus struct {
 //   ProxyAvailable — true when proxy pool has >= minReplicas pods Ready.
 //   AGCAvailable   — true when the AGC Deployment has >= 1 pod Ready.
 
+// PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
+// threshold. The AGC assigns the PriorityClass of the first tier whose
+// threshold the current active-pod count has not yet reached.
+//
+// Thresholds are cumulative across the RunnerGroup, not per-tier slot counts.
+// For example, given tiers with thresholds [5, 15, 30]:
+//   - pods 1–5   → first tier's PriorityClass  (can preempt lower-priority pods)
+//   - pods 6–15  → second tier's PriorityClass (opportunistic)
+//   - pods 16–30 → third tier's PriorityClass  (best-effort)
+//   - pod 31+    → held; not created until count falls below 30
+//
+// The last tier's threshold is therefore the effective maxConcurrentJobs ceiling
+// for this RunnerGroup. No separate maxConcurrentJobs field is required.
+//
+// PriorityClass objects are cluster-scoped and must be pre-created by the
+// platform team before the RunnerGroup is applied — the GMC does not create
+// them, as doing so would require a cluster-level write privilege expansion.
+// +kubebuilder:validation:XValidation:rule="self == self.sorted(x, y, x.threshold < y.threshold)",message="priorityTiers must be in strictly ascending threshold order"
+type PriorityTier struct {
+    // PriorityClassName is the name of an existing cluster-scoped PriorityClass
+    // to assign to worker pods when the active pod count is below Threshold.
+    // Must reference a PriorityClass that already exists in the cluster.
+    PriorityClassName string `json:"priorityClassName"`
+
+    // Threshold is the cumulative active-pod count at which this tier is
+    // exhausted and the next tier (if any) takes over. Must be > 0 and
+    // strictly greater than the previous tier's Threshold.
+    // +kubebuilder:validation:Minimum=1
+    Threshold int32 `json:"threshold"`
+}
+
 // RunnerGroup is a namespace-scoped CRD managed by the AGC.
 // Each instance maps to a pool of virtual runner sessions.
 // The GMC names RunnerGroup CRs as "{actionsgateway-name}-{runnergroup.name}".
@@ -140,6 +171,39 @@ type RunnerGroupSpec struct {
     Name         string                      `json:"name"`
     Replicas     int32                       `json:"replicas"`
     RunnerLabels []string                    `json:"runnerLabels"`
+
+    // PriorityTiers defines a list of PriorityClass assignments and their
+    // cumulative pod-count thresholds. When a job is acquired, the AGC counts
+    // the currently active and pending worker pods for this RunnerGroup and
+    // assigns the PriorityClass of the first tier whose threshold has not yet
+    // been reached. If the count equals or exceeds the last tier's threshold,
+    // the pod is held and not created until capacity falls below that ceiling.
+    //
+    // This mechanism allows a RunnerGroup to guarantee a minimum number of
+    // high-priority (preempting) slots while still permitting additional
+    // opportunistic capacity at lower priority — without consuming dedicated
+    // reserved resources when those slots are idle.
+    //
+    // Example — GPU runner with a hard floor of 5 preempting slots, up to 20
+    // opportunistic, capped at 30 best-effort:
+    //
+    //   priorityTiers:
+    //   - priorityClassName: runner-critical   # can preempt lower-priority pods
+    //     threshold: 5
+    //   - priorityClassName: runner-standard   # schedules opportunistically
+    //     threshold: 20
+    //   - priorityClassName: runner-opportunistic  # best-effort; may be evicted
+    //     threshold: 30
+    //
+    // PriorityClass objects must be pre-created by the platform team. Tiers must
+    // be listed in strictly ascending threshold order; the CRD admission webhook
+    // enforces this via CEL validation.
+    //
+    // When PriorityTiers is empty, no PriorityClass is set on worker pods and
+    // the namespace ResourceQuota is the only active ceiling.
+    // +optional
+    // +kubebuilder:validation:MaxItems=10
+    PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
     // PodTemplate is a standard Kubernetes PodTemplateSpec that controls the
     // ephemeral worker pod created for each acquired job. Tenants may use any
