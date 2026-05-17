@@ -14,61 +14,102 @@
 - The probe acquires a real job and renews its lock at least three times without GitHub cancelling it.
 - The decrypted payload is committed as a fixture under `testdata/`.
 - Both investigation tasks (AcknowledgeRunnerRequest and egress IP variance) are resolved with findings documented in this file or inline code comments.
-- All unit tests pass under `go test -race ./...`.
+- All unit tests pass under `go test -race ./...` (run from repo root; the workspace dispatches to both the root module and the probe module).
 - Code is committed to the repository.
 
 ---
 
 ## 1. Repository Scaffolding
 
-Before writing probe logic, establish the Go module and directory layout that every subsequent milestone will build on.
+Before writing probe logic, establish the Go workspace and module layout that every subsequent milestone will build on.
 
-### 1.1 Module initialization
+### 1.1 Module and workspace initialization
+
+The repository uses **Go workspaces** so that future binaries (AGC in Milestone 2, GMC in Milestone 4) each live in their own module and can be built, tested, and versioned independently, while still sharing the common library code in the root module during local development without requiring published intermediate releases.
+
+**Root module** — shared library code (broker client, GitHub App auth):
 
 ```
+cd github-actions-gateway
 go mod init github.com/your-org/github-actions-gateway
 ```
 
-Use Go 1.22 or later (required for `net/http` routing improvements and `slices` stdlib package used later). Pin the Go version in `go.mod`.
+**Probe module** — the Milestone 1 binary:
+
+```
+mkdir -p cmd/probe
+cd cmd/probe
+go mod init github.com/your-org/github-actions-gateway/probe
+```
+
+**Workspace file** — ties all modules together for local development:
+
+```
+cd github-actions-gateway   # back to repo root
+go work init .
+go work use ./cmd/probe
+```
+
+This produces a `go.work` at the repo root. With it in place, `go build ./cmd/probe/...` from the root resolves the root module dependency locally, and `go test ./...` from the root runs tests in every module in the workspace.
+
+The `go.work` file is committed to the repository. Future milestones add new module entries as each binary is scaffolded:
+
+```
+# go.work (final state after all milestones)
+go 1.22
+
+use (
+    .             # root shared library module
+    ./cmd/probe   # Milestone 1
+    ./cmd/agc     # Milestone 2
+    ./cmd/gmc     # Milestone 4
+)
+```
+
+Use Go 1.22 or later (required for `net/http` routing improvements and the `slices` stdlib package used later). Pin the Go version in both `go.mod` files and in `go.work`.
 
 ### 1.2 Directory layout
 
 ```
 github-actions-gateway/
+├── go.work                          # workspace: ties root + cmd/* modules together
+├── go.mod                           # root module: github.com/your-org/github-actions-gateway
+├── broker/
+│   ├── client.go                    # BrokerClient: sessions, message, acquirejob, renewjob
+│   ├── client_test.go
+│   ├── types.go                     # TaskAgentMessage, RunnerJobRequestBody, etc.
+│   ├── crypto.go                    # AES-256 payload decryption
+│   └── crypto_test.go
+├── githubapp/
+│   ├── auth.go                      # JWT signing + installation token exchange
+│   └── auth_test.go
 ├── cmd/
 │   └── probe/
-│       └── main.go             # Probe entry point
-├── internal/
-│   ├── broker/
-│   │   ├── client.go           # BrokerClient: sessions, message, acquirejob, renewjob
-│   │   ├── client_test.go
-│   │   ├── types.go            # TaskAgentMessage, RunnerJobRequestBody, etc.
-│   │   └── crypto.go           # AES-256 payload decryption
-│   │   └── crypto_test.go
-│   └── githubapp/
-│       ├── auth.go             # JWT signing + installation token exchange
-│       └── auth_test.go
+│       ├── go.mod                   # module: github.com/your-org/github-actions-gateway/probe
+│       └── main.go                  # Probe entry point; imports root module packages
 ├── testdata/
-│   ├── job_payload.json        # Committed decrypted payload fixture (from live probe run)
-│   └── crypto_fixture_test.go  # Pre-generated key/ciphertext for unit tests
+│   ├── job_payload.json             # Committed decrypted payload fixture (from live probe run)
+│   └── crypto_fixture.json         # Pre-generated key/ciphertext for unit tests
 └── docs/
     ├── design/
     └── plan/
-        └── milestone-1.md      # This file
+        └── milestone-1.md           # This file
 ```
 
-The `internal/` prefix enforces that broker and auth packages are not importable outside this module, which is appropriate until a stable public API is defined.
+Shared packages (`broker`, `githubapp`) live at the root module level, not under `internal/`. Because the root module is a library consumed only by other modules in this workspace, visibility is controlled by module boundaries rather than the `internal/` directory mechanism — packages are importable by sibling modules in the workspace but not by unrelated external consumers unless the root module is explicitly published and depended upon. This is the right trade-off for a single-repo multi-binary project.
 
 ### 1.3 Required dependencies
 
-Fetch these before writing code so `go.sum` is clean from the start:
+Add these to the **root module** (`go.mod` at repo root), since the shared packages need them:
 
-| Package | Purpose |
-|---|---|
-| `github.com/golang-jwt/jwt/v5` | RS256 JWT signing for GitHub App auth |
-| `golang.org/x/crypto` | Supplementary crypto (if needed beyond stdlib AES) |
-| `go.uber.org/goleak` | Goroutine leak detection in tests |
-| `github.com/stretchr/testify` | `assert` and `require` helpers |
+| Package | Purpose | Module |
+|---|---|---|
+| `github.com/golang-jwt/jwt/v5` | RS256 JWT signing for GitHub App auth | root |
+| `golang.org/x/crypto` | Supplementary crypto (if needed beyond stdlib AES) | root |
+| `go.uber.org/goleak` | Goroutine leak detection in tests | root |
+| `github.com/stretchr/testify` | `assert` and `require` helpers | root + probe |
+
+The probe module's `go.mod` requires only the root module; transitive dependencies are resolved via the workspace. Run `go work sync` after any dependency change to keep the workspace consistent.
 
 No Kubernetes dependencies are introduced in Milestone 1. The broker and auth packages must remain K8s-free so they can be unit-tested without a cluster.
 
@@ -76,7 +117,7 @@ No Kubernetes dependencies are introduced in Milestone 1. The broker and auth pa
 
 ## 2. Package Design
 
-### 2.1 `internal/githubapp` — Authentication
+### 2.1 `githubapp` — Authentication
 
 Responsible for generating short-lived GitHub App installation access tokens. The probe calls this once at startup and again if the token is near expiry (though the probe is short-lived enough that a single token suffices).
 
@@ -115,7 +156,7 @@ func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client) To
 - Non-200 from GitHub: assert error is returned with status code in the message.
 - Clock-skew buffer: assert the JWT's `iat` claim is at least 60 seconds before `now` (prevents GitHub rejection on clock-skewed hosts).
 
-### 2.2 `internal/broker` — GitHub Broker API Client
+### 2.2 `broker` — GitHub Broker API Client
 
 Implements the four broker protocol calls. The design separates concerns clearly:
 
@@ -232,7 +273,7 @@ func DecryptMessageBody(encryptedBody string, key []byte) ([]byte, error)
 
 ### 2.3 `cmd/probe/main.go` — Probe Entry Point
 
-The probe is a thin orchestration layer over the two packages above. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.
+The probe is a thin orchestration layer over the two packages above. It imports them as `github.com/your-org/github-actions-gateway/broker` and `github.com/your-org/github-actions-gateway/githubapp` — the workspace resolves these to the root module locally. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.
 
 **Startup sequence:**
 
@@ -321,11 +362,11 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 
 ## 4. Test Plan
 
-### 4.1 Unit Tests (`go test -race ./internal/...`)
+### 4.1 Unit Tests (`go test -race ./...` from repo root)
 
 All unit tests must run without network access. Use `httptest.NewServer` for any HTTP interaction. All tests must pass under `-race`.
 
-#### `internal/githubapp`
+#### `githubapp` (root module)
 
 | Test | What it verifies |
 |---|---|
@@ -335,7 +376,7 @@ All unit tests must run without network access. Use `httptest.NewServer` for any
 | `TestToken_ClockSkewBuffer` | Parse the JWT sent to the stub server. Assert `iat` ≤ `now - 60s`. |
 | `TestToken_ExpiresAtParsed` | Assert the returned token value carries the correct expiry time so the AGC Token Manager can schedule proactive refresh. |
 
-#### `internal/broker` — `client_test.go`
+#### `broker` — `client_test.go` (root module)
 
 | Test | What it verifies |
 |---|---|
@@ -353,7 +394,7 @@ All unit tests must run without network access. Use `httptest.NewServer` for any
 | `TestRenewJob_NonOKResponse` | Stub returns 500. Assert error is surfaced; no panic; goroutine does not spin. |
 | `TestDeleteSession_IssuesDELETE` | Assert DELETE is issued to the correct URL with the session ID. |
 
-#### `internal/broker` — `crypto_test.go`
+#### `broker` — `crypto_test.go` (root module)
 
 | Test | What it verifies |
 |---|---|
@@ -393,8 +434,8 @@ After a successful live probe run:
 
 ## 5. Success Criteria Checklist
 
-- [ ] `go build ./cmd/probe/` succeeds with no warnings.
-- [ ] `go test -race ./internal/...` passes with zero failures.
+- [ ] `go build ./cmd/probe/` succeeds with no warnings (run from repo root via workspace).
+- [ ] `go test -race ./...` passes with zero failures across both the root module and probe module.
 - [ ] `goleak.VerifyNone` passes in all goroutine-spawning tests.
 - [ ] Live probe run: job acquired, payload printed, three renewals logged, no GitHub cancellation.
 - [ ] `testdata/job_payload.json` committed (with tokens redacted).
