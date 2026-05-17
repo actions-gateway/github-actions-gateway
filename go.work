@@ -1,0 +1,6 @@
+go 1.22
+
+use (
+	.            // root shared library module
+	./cmd/probe  // Milestone 1
+)

@@ -1,0 +1,10 @@
+{
+  "key_base64": "BP5bb2cSp17Q7rmjJrRQr+qFv2k05D/NgfxGGmclexg=",
+  "encrypted_body": "IbqxPPGbb1qAAX+ZzXcaDa6bIVNqOhL1zEjybONNstOsQBamv3Dizt+GddAHKQf6gLYAkwAZYMZWcNJFU+qEYllbDlj5ErOLPkiZWQjPaochXAUsjvtaow2p+4rO8HVixqU297+ZoDVx3SrLSUasiSvLp+JIJK2k0DiJRXsu3n5AjUj7f7D46zZpOWBdmWhR",
+  "plaintext": {
+    "runner_request_id": "rr-fixture-001",
+    "run_service_url": "https://example.com/run",
+    "billing_owner_id": "owner-fixture"
+  },
+  "_note": "Synthetic fixture for broker/crypto_test.go. Never use a real GitHub session key here."
+}
