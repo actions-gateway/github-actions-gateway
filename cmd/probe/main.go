@@ -18,12 +18,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -228,21 +231,51 @@ func run(logger *slog.Logger) error {
 	return nil
 }
 
-// probeAcknowledge attempts the unconfirmed POST /acknowledge call and returns
-// a short status string describing the outcome. See Investigation A in
-// milestone-1.md for the full investigation protocol.
+// probeAcknowledge attempts the unconfirmed POST {brokerURL}/acknowledge call
+// observed in the official runner source (AcknowledgeRunnerRequestAsync) and
+// returns a short status string describing the outcome.
+//
+// We make the call directly using BrokerClient's underlying http.Client rather
+// than adding a dedicated BrokerClient method — the method will only be added if
+// Investigation A confirms the call is required for correct delivery semantics.
+//
+// Document findings (HTTP status, response body, effect of omitting the call) in
+// docs/plan/milestone-1.md §8.A before closing Milestone 1.
 func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, runnerRequestID, sessionID string) string {
-	type ackBody struct {
-		RunnerRequestID string `json:"runnerRequestId"`
-		SessionID       string `json:"sessionId"`
+	body, err := json.Marshal(map[string]string{
+		"runnerRequestId": runnerRequestID,
+		"sessionId":       sessionID,
+	})
+	if err != nil {
+		return fmt.Sprintf("marshal-error: %v", err)
 	}
-	// We call the broker endpoint directly via the BrokerClient's http.Client
-	// to keep the probe self-contained without adding a new method to BrokerClient
-	// before the investigation is complete.
-	logger.Info("probing AcknowledgeRunnerRequest", "runnerRequestId", runnerRequestID, "sessionId", sessionID)
-	// NOTE: add the result of this call (HTTP status + whether omitting it changes
-	// behaviour) to section 8.A of milestone-1.md before closing the milestone.
-	return "not-yet-investigated"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		bc.BrokerURL+"/acknowledge", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Sprintf("build-request-error: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+bc.Token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	client := bc.HTTPClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Sprintf("request-error: %v", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+
+	logger.Info("AcknowledgeRunnerRequest response",
+		"status", resp.StatusCode,
+		"body", string(respBody),
+	)
+	// Return a compact status string for the top-level log line.
+	return fmt.Sprintf("HTTP-%d", resp.StatusCode)
 }
 
 // backoffDelay returns a randomised delay for GetMessage retries based on the

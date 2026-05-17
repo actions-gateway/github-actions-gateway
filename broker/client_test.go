@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -326,4 +327,75 @@ func TestGetMessage_Retry429_ExponentialFallback(t *testing.T) {
 	var rlErr *broker.RateLimitError
 	require.ErrorAs(t, err, &rlErr)
 	assert.Equal(t, time.Duration(-1), rlErr.RetryAfter, "RetryAfter -1 signals exponential fallback")
+}
+
+func TestGetMessage_Retry429_CounterIncremented(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	counter := &stubPollMetrics{}
+	c := newTestClient(srv)
+	c.PollMetrics = counter
+
+	for i := 0; i < 3; i++ {
+		_, _ = c.GetMessage(context.Background(), "sess-1")
+	}
+
+	assert.Equal(t, int64(3), counter.rateLimited.Load(),
+		"IncPollError(\"rate_limited\") must be called once per 429 response")
+}
+
+// ── RenewJobLoop ──────────────────────────────────────────────────────────────
+
+// TestRenewJob_Interval verifies that RenewJobLoop calls RenewJob exactly once
+// per tick with no drift. A manually-driven channel replaces time.Ticker so the
+// test advances time without sleeping and gets a deterministic call count.
+func TestRenewJob_Interval(t *testing.T) {
+	// renewed is signalled by the server handler after each successful renewjob.
+	renewed := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{
+			LockedUntil: time.Now().Add(10 * time.Minute),
+		})
+		renewed <- struct{}{}
+	}))
+	defer srv.Close()
+
+	// Unbuffered channel: sending a tick blocks until the goroutine selects it,
+	// giving us precise sequencing with no sleep-based synchronisation.
+	tickCh := make(chan time.Time)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c := newTestClient(srv)
+	errCh := c.RenewJobLoop(ctx, srv.URL, broker.RenewJobRequest{PlanID: "p", JobID: "j"}, tickCh)
+
+	const wantRenewals = 3
+	for i := 0; i < wantRenewals; i++ {
+		tickCh <- time.Now()  // trigger exactly one renewal
+		<-renewed             // wait for the HTTP round-trip to complete
+	}
+
+	// Cancel and drain the error channel — this waits for the goroutine to exit,
+	// which goleak.VerifyTestMain will confirm leaves no leaked goroutines.
+	cancel()
+	for range errCh {
+	}
+}
+
+// ── Test helpers ──────────────────────────────────────────────────────────────
+
+// stubPollMetrics is a test-only PollMetricsRecorder that counts calls by label.
+type stubPollMetrics struct {
+	rateLimited atomic.Int64
+}
+
+func (s *stubPollMetrics) IncPollError(reason string) {
+	switch reason {
+	case "rate_limited":
+		s.rateLimited.Add(1)
+	}
 }

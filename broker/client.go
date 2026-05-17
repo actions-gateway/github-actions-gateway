@@ -52,6 +52,9 @@ type BrokerClient struct {
 	HTTPClient *http.Client
 	// Token is the installation access token set before each call.
 	Token string
+	// PollMetrics records GetMessage polling error statistics.
+	// If nil, metrics calls are skipped (zero-value BrokerClient is safe).
+	PollMetrics PollMetricsRecorder
 }
 
 func (c *BrokerClient) httpClient() *http.Client {
@@ -158,6 +161,9 @@ func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskA
 	case http.StatusAccepted: // 202 — no job queued
 		return nil, nil
 	case http.StatusTooManyRequests: // 429
+		if c.PollMetrics != nil {
+			c.PollMetrics.IncPollError("rate_limited")
+		}
 		return nil, parseRateLimitError(resp)
 	case http.StatusOK:
 		// fall through to decode
@@ -240,6 +246,38 @@ func (c *BrokerClient) RenewJob(ctx context.Context, runServiceURL string, reqDa
 		return nil, fmt.Errorf("broker: RenewJob: decode response: %w", err)
 	}
 	return &result, nil
+}
+
+// RenewJobLoop starts a background goroutine that calls RenewJob on every tick
+// until ctx is cancelled or RenewJob returns a non-nil error.
+//
+// tickC drives the renewal cadence. Pass time.NewTicker(60*time.Second).C for
+// production use, or a manually-driven channel in tests to advance time without
+// sleeping (zero drift, deterministic call counts).
+//
+// The returned channel receives the first RenewJob error and is then closed.
+// On a clean context cancellation the channel is closed with no value sent.
+// The goroutine is guaranteed to have exited by the time the channel is closed.
+func (c *BrokerClient) RenewJobLoop(ctx context.Context, runServiceURL string, req RenewJobRequest, tickC <-chan time.Time) <-chan error {
+	errCh := make(chan error, 1)
+	go func() {
+		defer close(errCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, ok := <-tickC:
+				if !ok {
+					return // ticker stopped externally
+				}
+				if _, err := c.RenewJob(ctx, runServiceURL, req); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}
+	}()
+	return errCh
 }
 
 // DeleteSession tears down a broker session, allowing GitHub to re-queue any
