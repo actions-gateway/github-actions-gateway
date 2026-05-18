@@ -224,14 +224,36 @@ echo "  binary: /tmp/probe"
 # ── Trigger workflow ──────────────────────────────────────────────────────────
 
 step "Triggering workflow_dispatch"
-gh_curl "dispatch probe-test workflow" POST \
+# Try the API first. If it returns 403 (App lacks actions:write), fall back to
+# the gh CLI (uses the user's personal token). If neither works, print manual
+# instructions and continue — the probe will poll until a job appears.
+DISPATCH_RESP=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X POST \
     "https://api.github.com/repos/$OWNER/$REPO/actions/workflows/probe-test.yml/dispatches" \
     -H "Authorization: Bearer $INSTALL_TOKEN" \
     -H "Accept: application/vnd.github+json" \
     -H "Content-Type: application/json" \
-    -d '{"ref":"main"}' \
-    > /dev/null
-echo "  dispatched — job will appear in the queue within a few seconds"
+    -d '{"ref":"main"}')
+DISPATCH_STATUS=$(echo "$DISPATCH_RESP" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
+
+if [[ "$DISPATCH_STATUS" =~ ^2 ]]; then
+    echo "  dispatched via API — job will appear in the queue within a few seconds"
+elif command -v gh &>/dev/null; then
+    echo "  API dispatch returned HTTP $DISPATCH_STATUS — trying gh CLI"
+    gh workflow run probe-test.yml --repo "$GITHUB_OWNER_REPO" --ref main \
+        && echo "  dispatched via gh CLI" \
+        || echo "  WARNING: gh CLI dispatch also failed — trigger manually (see below)"
+else
+    echo
+    echo "  WARNING: workflow_dispatch failed (HTTP $DISPATCH_STATUS)" >&2
+    echo "  The GitHub App installation likely lacks 'actions: write' permission." >&2
+    echo >&2
+    echo "  Fix A: GitHub.com → Settings → Developer settings → GitHub Apps → your app" >&2
+    echo "         → Permissions & events → Actions → Read and write → Save → re-install." >&2
+    echo >&2
+    echo "  Fix B (manual): open the Actions tab in the repo, run 'probe-test' workflow" >&2
+    echo "         manually, then the probe below will pick up the queued job." >&2
+    echo
+fi
 
 # ── Run probe ─────────────────────────────────────────────────────────────────
 
