@@ -201,48 +201,17 @@ echo "  broker URL: $BROKER_URL"
 step "Ensuring probe-test workflow exists in $GITHUB_OWNER_REPO"
 WORKFLOW_PATH=".github/workflows/probe-test.yml"
 
-# Check using the raw content URL (no auth required for public repos;
-# avoids needing contents:read on the installation token).
-WORKFLOW_HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-    "https://raw.githubusercontent.com/$OWNER/$REPO/main/$WORKFLOW_PATH")
-
-if [[ "$WORKFLOW_HTTP_STATUS" != "200" ]]; then
-    echo "  $WORKFLOW_PATH not found in repo — attempting to create via API"
-    WORKFLOW_CONTENT='# Probe test workflow for Milestone 1 live run.
-on:
-  workflow_dispatch:
-jobs:
-  probe-test:
-    runs-on: [self-hosted, probe]
-    timeout-minutes: 5
-    steps:
-      - name: probe acquired this job
-        run: echo "acquired at $(date -u)"'
-    ENCODED=$(printf '%s' "$WORKFLOW_CONTENT" | base64 | tr -d '\n')
-    CREATE_RESP=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X PUT \
-        "https://api.github.com/repos/$OWNER/$REPO/contents/$WORKFLOW_PATH" \
-        -H "Authorization: Bearer $INSTALL_TOKEN" \
-        -H "Accept: application/vnd.github+json" \
-        -H "Content-Type: application/json" \
-        -d "{\"message\":\"ci: add probe-test workflow\",\"content\":\"$ENCODED\"}")
-    CREATE_STATUS=$(echo "$CREATE_RESP" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
-    if [[ "$CREATE_STATUS" =~ ^2 ]]; then
-        echo "  created — sleeping 5s for GitHub to index it"
-        sleep 5
-    else
-        CREATE_BODY=$(echo "$CREATE_RESP" | grep -v '__HTTP_STATUS__')
-        echo
-        echo "  WARNING: could not create $WORKFLOW_PATH (HTTP $CREATE_STATUS)" >&2
-        echo "  Response: $CREATE_BODY" >&2
-        echo
-        echo "  The GitHub App installation likely lacks 'contents: write' permission." >&2
-        echo "  Fix: commit .github/workflows/probe-test.yml to the repo manually," >&2
-        echo "  then re-run this script. The script will skip creation once the file exists." >&2
-        echo
-        die "workflow not present and could not be created — see instructions above"
-    fi
+# Check locally — the file must be committed and pushed so GitHub can
+# index it for workflow_dispatch. No API call needed; avoids contents:read
+# permission requirement on the installation token.
+if [[ ! -f "$REPO_ROOT/$WORKFLOW_PATH" ]]; then
+    echo >&2
+    echo "  ERROR: $WORKFLOW_PATH not found locally." >&2
+    echo "  The file must be committed and pushed before running this script." >&2
+    echo "  It should already exist at .github/workflows/probe-test.yml in the repo." >&2
+    die "workflow file missing — check that you are running from the repo root and have pulled latest"
 else
-    echo "  already exists (HTTP $WORKFLOW_HTTP_STATUS)"
+    echo "  found at $REPO_ROOT/$WORKFLOW_PATH"
 fi
 
 # ── Build probe ───────────────────────────────────────────────────────────────
