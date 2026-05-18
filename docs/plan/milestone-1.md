@@ -434,15 +434,15 @@ After a successful live probe run:
 
 ## 5. Success Criteria Checklist
 
-- [ ] `go build ./cmd/probe/` succeeds with no warnings (run from repo root via workspace).
-- [ ] `go test -race ./...` passes with zero failures across both the root module and probe module.
-- [ ] `goleak.VerifyNone` passes in all goroutine-spawning tests.
-- [ ] Live probe run: job acquired, payload printed, three renewals logged, no GitHub cancellation.
-- [ ] `testdata/job_payload.json` committed (with tokens redacted).
-- [ ] `testdata/crypto_fixture.json` committed.
-- [ ] Investigation A finding documented.
-- [ ] Investigation B finding documented.
-- [ ] No `TODO(milestone-2+)` items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.
+- [x] `go build ./cmd/probe/` succeeds with no warnings (run from repo root via workspace).
+- [x] `go test -race ./...` passes with zero failures across both the root module and probe module.
+- [x] `goleak.VerifyNone` passes in all goroutine-spawning tests.
+- [x] Live probe run: job acquired, payload printed, three renewals logged, no GitHub cancellation.
+- [x] `testdata/job_payload.json` committed (with tokens redacted).
+- [x] `testdata/crypto_fixture.json` committed.
+- [x] Investigation A finding documented.
+- [x] Investigation B finding documented.
+- [x] No `TODO(milestone-2+)` items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.
 
 ---
 

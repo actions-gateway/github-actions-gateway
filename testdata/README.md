@@ -26,9 +26,32 @@ The **redacted** raw `AcquireJob` response body captured from a live probe run
 (see `cmd/probe/main.go`). It is the ground-truth fixture for Milestone 3's
 worker pod handoff tests.
 
-**Redaction:** The `ACTIONS_RUNTIME_TOKEN` field (if present) has been replaced
-with the placeholder value `"REDACTED"`. Any other bearer tokens or secrets
-found in the body should be replaced with `"REDACTED"` before committing.
+Top-level fields in the payload:
 
-This file does **not** exist yet. It will be added after the first successful
-live probe run per the instructions in Milestone 1 §4.3.
+| Field | Description |
+|---|---|
+| `fileTable` | List of workflow file paths referenced by the job. |
+| `mask` | List of regex/string patterns the runner uses to redact secrets from logs. |
+| `steps` | Ordered list of step definitions (action reference, inputs, conditions). |
+| `variables` | Map of job-scoped variables, each with a `value` and optional `isSecret` flag. |
+| `messageType` | Always `"RunnerJobRequest"` for job dispatch messages. |
+| `plan` | Plan metadata: `planId`, `planType`, `artifactUri`, `artifactLocation`. |
+| `timeline` | Timeline object for reporting step progress back to GitHub. |
+| `jobId` | Unique identifier for this job execution. |
+| `jobDisplayName` / `jobName` | Human-readable and internal job names. |
+| `requestId` | Broker request ID (matches `RunnerJobRequestBody.RunnerRequestID`). |
+| `lockedUntil` | RFC3339 timestamp until which the job lock is held (extended by `renewjob`). |
+| `resources` | Service endpoints (e.g., the Actions runtime endpoint) with auth credentials. |
+| `contextData` | Serialised GitHub Actions context objects (`github`, `job`, `strategy`, etc.). |
+| `billingOwnerId` | Owner identifier used for billing attribution. |
+
+**Redacted fields** (replaced with `"REDACTED"` before committing):
+
+| JSON path | Original content |
+|---|---|
+| `variables.github_token.value` | `GITHUB_TOKEN` for this job. |
+| `variables.system.github.token.value` | Duplicate system token. |
+| `resources.endpoints[0].authorization.parameters.AccessToken` | Actions runtime bearer token. |
+
+This file is safe to commit with the redactions above applied. It contains no
+live credentials.
