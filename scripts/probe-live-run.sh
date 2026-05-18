@@ -216,9 +216,22 @@ RUNNER_RSA_PARAMS="$RUNNER_TMP/.credentials_rsaparams"
 [[ -f "$RUNNER_CREDENTIALS" ]] || die ".credentials not found after config.sh"
 [[ -f "$RUNNER_RSA_PARAMS"  ]] || die ".credentials_rsaparams not found after config.sh"
 echo "  credentials: $RUNNER_CREDENTIALS  rsa_params: $RUNNER_RSA_PARAMS"
-echo "  .credentials_rsaparams keys: $(jq -r 'keys_unsorted | join(", ")' "$RUNNER_RSA_PARAMS" 2>/dev/null \
-    || python3 -c "import json,sys; d=json.loads(open('$RUNNER_RSA_PARAMS','rb').read().lstrip(b'\\xef\\xbb\\xbf')); print(', '.join(d.keys()))")"
-echo "  D populated: $(jq -r 'if .D != null and .D != "" then "yes (\(.D | length) chars)" else "NO" end' "$RUNNER_RSA_PARAMS" 2>/dev/null || echo "unknown")"
+python3 - "$RUNNER_RSA_PARAMS" <<'PYEOF'
+import json, base64, sys
+data = open(sys.argv[1], 'rb').read().lstrip(b'\xef\xbb\xbf')
+p = json.loads(data)
+print(f"  .credentials_rsaparams keys: {', '.join(p.keys())}")
+for field in ('d', 'modulus', 'p', 'q'):
+    v = p.get(field, '')
+    if v:
+        try:
+            b = base64.b64decode(v + '==')
+            print(f"  {field}: {len(v)} chars → {len(b)} bytes decoded")
+        except Exception as e:
+            print(f"  {field}: decode error: {e}")
+    else:
+        print(f"  {field}: EMPTY/MISSING")
+PYEOF
 
 # ── Ensure probe-test workflow exists ─────────────────────────────────────────
 

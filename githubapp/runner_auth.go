@@ -165,24 +165,18 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		httpClient = http.DefaultClient
 	}
 
-	// VSTS uses the scheme+host of the authorization URL as the audience,
-	// not the full path (which contains a tenant-specific GUID).
-	authURL, err := url.Parse(creds.AuthorizationURL)
-	if err != nil {
-		return "", fmt.Errorf("parse authorizationUrl: %w", err)
-	}
-	audience := authURL.Scheme + "://" + authURL.Host + "/"
-
 	// Build a JWT assertion signed with the runner's RSA private key.
 	// VSTS identifies the registered public key via the "kid" header = clientId.
+	// Use the full authorizationUrl as the audience (string, not array) and
+	// set nbf == iat (no clock-skew offset) to match the .NET runner behaviour.
 	now := time.Now()
 	tok := jwt.New(jwt.SigningMethodRS256)
 	tok.Header["kid"] = creds.ClientID
 	tok.Claims = jwt.MapClaims{
 		"sub": creds.ClientID,
 		"iss": creds.ClientID,
-		"aud": jwt.ClaimStrings{audience},
-		"nbf": jwt.NewNumericDate(now.Add(-60 * time.Second)), // clock-skew buffer
+		"aud": creds.AuthorizationURL, // string, not []string; full URL
+		"nbf": jwt.NewNumericDate(now),
 		"iat": jwt.NewNumericDate(now),
 		"exp": jwt.NewNumericDate(now.Add(5 * time.Minute)),
 	}
