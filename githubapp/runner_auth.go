@@ -140,27 +140,14 @@ func ParseRunnerRSAKey(path string) (*rsa.PrivateKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	dp, err := decodeBigInt("DP", params.DP)
-	if err != nil {
-		return nil, err
-	}
-	dq, err := decodeBigInt("DQ", params.DQ)
-	if err != nil {
-		return nil, err
-	}
-	qinv, err := decodeBigInt("InverseQ", params.InverseQ)
-	if err != nil {
-		return nil, err
-	}
-
 	priv := &rsa.PrivateKey{
 		PublicKey: rsa.PublicKey{N: n, E: int(e.Int64())},
 		D:         d,
 		Primes:    []*big.Int{p, q},
 	}
-	priv.Precomputed.Dp = dp
-	priv.Precomputed.Dq = dq
-	priv.Precomputed.Qinv = qinv
+	// Recompute Dp, Dq, Qinv from D, P, Q rather than trusting the file values,
+	// to avoid subtle issues with .NET's serialization of precomputed fields.
+	priv.Precompute()
 
 	if err := priv.Validate(); err != nil {
 		return nil, fmt.Errorf("rsa key invalid: %w", err)
@@ -202,6 +189,17 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 	assertion, err := tok.SignedString(privateKey)
 	if err != nil {
 		return "", fmt.Errorf("sign runner JWT assertion: %w", err)
+	}
+
+	// Print the decoded JWT header and claims to stderr for debugging.
+	// Remove once the token exchange is confirmed working.
+	if parts := strings.SplitN(assertion, ".", 3); len(parts) == 3 {
+		if hdr, e := base64.RawURLEncoding.DecodeString(parts[0]); e == nil {
+			fmt.Fprintf(os.Stderr, "DEBUG runner JWT header : %s\n", hdr)
+		}
+		if clm, e := base64.RawURLEncoding.DecodeString(parts[1]); e == nil {
+			fmt.Fprintf(os.Stderr, "DEBUG runner JWT claims : %s\n", clm)
+		}
 	}
 
 	// POST the assertion to the VSTS token endpoint (form-urlencoded).

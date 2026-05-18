@@ -216,6 +216,9 @@ RUNNER_RSA_PARAMS="$RUNNER_TMP/.credentials_rsaparams"
 [[ -f "$RUNNER_CREDENTIALS" ]] || die ".credentials not found after config.sh"
 [[ -f "$RUNNER_RSA_PARAMS"  ]] || die ".credentials_rsaparams not found after config.sh"
 echo "  credentials: $RUNNER_CREDENTIALS  rsa_params: $RUNNER_RSA_PARAMS"
+echo "  .credentials_rsaparams keys: $(jq -r 'keys_unsorted | join(", ")' "$RUNNER_RSA_PARAMS" 2>/dev/null \
+    || python3 -c "import json,sys; d=json.loads(open('$RUNNER_RSA_PARAMS','rb').read().lstrip(b'\\xef\\xbb\\xbf')); print(', '.join(d.keys()))")"
+echo "  D populated: $(jq -r 'if .D != null and .D != "" then "yes (\(.D | length) chars)" else "NO" end' "$RUNNER_RSA_PARAMS" 2>/dev/null || echo "unknown")"
 
 # ── Ensure probe-test workflow exists ─────────────────────────────────────────
 
