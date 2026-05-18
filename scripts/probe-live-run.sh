@@ -151,8 +151,13 @@ else
     [[ -n "$RUNNER_VERSION" ]] || die "Could not determine latest runner version"
 fi
 
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+RAW_OS=$(uname -s)
 RAW_ARCH=$(uname -m)
+case "$RAW_OS" in
+    Linux)  OS="linux" ;;
+    Darwin) OS="osx"   ;;  # runner releases use "osx", not "darwin"
+    *) die "Unsupported OS: $RAW_OS" ;;
+esac
 case "$RAW_ARCH" in
     x86_64)        ARCH="x64"   ;;
     aarch64|arm64) ARCH="arm64" ;;
