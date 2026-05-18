@@ -110,7 +110,7 @@ func TestFetchRunnerOAuthToken_HappyPath(t *testing.T) {
 		require.Equal(t, http.MethodPost, r.Method)
 		require.NoError(t, r.ParseForm())
 		assert.Equal(t, "urn:ietf:params:oauth:grant-type:jwt-bearer", r.FormValue("grant_type"))
-		assert.NotEmpty(t, r.FormValue("client_assertion"))
+		assert.NotEmpty(t, r.FormValue("assertion"), "VSTS uses 'assertion', not 'client_assertion'")
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"access_token":"stub-token","token_type":"Bearer"}`))

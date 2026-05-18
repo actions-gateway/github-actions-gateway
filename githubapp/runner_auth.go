@@ -194,11 +194,12 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		return "", fmt.Errorf("sign runner JWT assertion: %w", err)
 	}
 
-	// POST the assertion to the token endpoint (form-urlencoded per RFC 7523).
+	// POST the assertion to the VSTS token endpoint (form-urlencoded).
+	// VSTS uses "assertion" as the JWT parameter name rather than the RFC 7523
+	// "client_assertion" field name.
 	form := url.Values{
-		"grant_type":            {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
-		"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
-		"client_assertion":      {assertion},
+		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
+		"assertion":  {assertion},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.AuthorizationURL,
 		strings.NewReader(form.Encode()))
