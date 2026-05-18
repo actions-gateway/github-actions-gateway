@@ -18,7 +18,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -62,6 +61,14 @@ func run(logger *slog.Logger) error {
 	}
 	brokerURL := mustEnv("GITHUB_BROKER_URL")
 	runnerVersion := mustEnv("GITHUB_RUNNER_VERSION")
+	poolID := 1
+	if v := os.Getenv("GITHUB_POOL_ID"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse GITHUB_POOL_ID: %w", err)
+		}
+		poolID = n
+	}
 
 	// ── 2. Mint installation access token ───────────────────────────────────
 	creds := githubapp.Credentials{
@@ -86,6 +93,7 @@ func run(logger *slog.Logger) error {
 	// ── 3. Create broker session ─────────────────────────────────────────────
 	bc := &broker.BrokerClient{
 		BrokerURL: brokerURL,
+		PoolID:    poolID,
 		Token:     token,
 	}
 	sessionID, activeBrokerURL, err := bc.CreateSession(ctx, runnerVersion)
@@ -219,9 +227,11 @@ func run(logger *slog.Logger) error {
 	}()
 
 	// ── 9. Optional: AcknowledgeRunnerRequest (Investigation A) ──────────────
-	// Attempt the acknowledge call and record the result; this feeds into the
-	// Investigation A findings in milestone-1.md.
-	acknowledgeResult := probeAcknowledge(ctx, logger, bc, jobReq.RunnerRequestID, sessionID)
+	// Attempt the VSTS delete-message call and record the result; this feeds
+	// into the Investigation A findings in milestone-1.md.
+	// The VSTS Task Agent protocol acknowledges job delivery by deleting the
+	// message: DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
+	acknowledgeResult := probeAcknowledge(ctx, logger, bc, msg.MessageID, sessionID)
 	logger.Info("AcknowledgeRunnerRequest result", "status", acknowledgeResult)
 
 	// ── 10. Block until interrupted ──────────────────────────────────────────
@@ -231,32 +241,24 @@ func run(logger *slog.Logger) error {
 	return nil
 }
 
-// probeAcknowledge attempts the unconfirmed POST {brokerURL}/acknowledge call
-// observed in the official runner source (AcknowledgeRunnerRequestAsync) and
-// returns a short status string describing the outcome.
+// probeAcknowledge attempts the VSTS Task Agent delete-message call which is
+// the standard way to acknowledge job delivery:
 //
-// We make the call directly using BrokerClient's underlying http.Client rather
-// than adding a dedicated BrokerClient method — the method will only be added if
-// Investigation A confirms the call is required for correct delivery semantics.
+//	DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
 //
-// Document findings (HTTP status, response body, effect of omitting the call) in
-// docs/plan/milestone-1.md §8.A before closing Milestone 1.
-func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, runnerRequestID, sessionID string) string {
-	body, err := json.Marshal(map[string]string{
-		"runnerRequestId": runnerRequestID,
-		"sessionId":       sessionID,
-	})
-	if err != nil {
-		return fmt.Sprintf("marshal-error: %v", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		bc.BrokerURL+"/acknowledge", bytes.NewReader(body))
+// We make the call directly rather than via a dedicated BrokerClient method —
+// the method will only be added once Investigation A confirms this call is
+// required for correct delivery semantics.
+//
+// Document findings (HTTP status, response body, effect of omitting the call)
+// in docs/plan/milestone-1.md §8.A before closing Milestone 1.
+func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, messageID int64, sessionID string) string {
+	url := fmt.Sprintf("%s/messages/%d?sessionId=%s", bc.PoolBase(), messageID, sessionID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return fmt.Sprintf("build-request-error: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+bc.Token)
-	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
 	client := bc.HTTPClient

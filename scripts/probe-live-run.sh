@@ -196,6 +196,9 @@ BROKER_URL=$(jq -r '.serverUrl // .brokerUrl // empty' "$RUNNER_CONFIG")
 [[ -n "$BROKER_URL" ]] || die "Could not find serverUrl/brokerUrl in .runner — see contents above"
 echo "  broker URL: $BROKER_URL"
 
+POOL_ID=$(jq -r '.poolId // 1' "$RUNNER_CONFIG")
+echo "  pool ID: $POOL_ID"
+
 # ── Ensure probe-test workflow exists ─────────────────────────────────────────
 
 step "Ensuring probe-test workflow exists in $GITHUB_OWNER_REPO"
@@ -271,6 +274,7 @@ export GITHUB_APP_PRIVATE_KEY
 export GITHUB_APP_INSTALLATION_ID
 export GITHUB_BROKER_URL="$BROKER_URL"
 export GITHUB_RUNNER_VERSION="$RUNNER_VERSION"
+export GITHUB_POOL_ID="$POOL_ID"
 
 /tmp/probe 2>&1 1>"$RAW_PAYLOAD" | tee /tmp/probe.log || true
 

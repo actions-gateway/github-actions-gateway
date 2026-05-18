@@ -21,9 +21,14 @@ func TestMain(m *testing.M) {
 }
 
 // newTestClient returns a BrokerClient pointed at the given httptest server.
+// PoolID is set to 1 so tests exercise the correct VSTS API path prefix:
+//
+//	/_apis/distributedtask/pools/1/sessions   (CreateSession, DeleteSession)
+//	/_apis/distributedtask/pools/1/messages   (GetMessage)
 func newTestClient(srv *httptest.Server) *broker.BrokerClient {
 	return &broker.BrokerClient{
 		BrokerURL:  srv.URL,
+		PoolID:     1,
 		HTTPClient: srv.Client(),
 		Token:      "test-token",
 	}
@@ -38,7 +43,7 @@ func TestCreateSession_HappyPath(t *testing.T) {
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/sessions", r.URL.Path)
+		assert.Equal(t, "/_apis/distributedtask/pools/1/sessions", r.URL.Path)
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
 
 		w.WriteHeader(http.StatusOK)
@@ -118,8 +123,9 @@ func TestGetMessage_JobAvailable(t *testing.T) {
 }
 
 func TestGetMessage_UsesSessionID(t *testing.T) {
-	var gotSessionID string
+	var gotPath, gotSessionID string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
 		gotSessionID = r.URL.Query().Get("sessionId")
 		w.WriteHeader(http.StatusAccepted)
 	}))
@@ -127,6 +133,7 @@ func TestGetMessage_UsesSessionID(t *testing.T) {
 
 	c := newTestClient(srv)
 	_, _ = c.GetMessage(context.Background(), "my-session-id")
+	assert.Equal(t, "/_apis/distributedtask/pools/1/messages", gotPath)
 	assert.Equal(t, "my-session-id", gotSessionID)
 }
 
@@ -292,7 +299,7 @@ func TestDeleteSession_IssuesDELETE(t *testing.T) {
 	err := c.DeleteSession(context.Background(), "sess-del")
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodDelete, gotMethod)
-	assert.Equal(t, "/sessions/sess-del", gotPath)
+	assert.Equal(t, "/_apis/distributedtask/pools/1/sessions/sess-del", gotPath)
 }
 
 // ── Rate-limit / backoff ──────────────────────────────────────────────────────

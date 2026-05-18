@@ -46,7 +46,14 @@ func (e *RateLimitError) Error() string {
 // passed as an explicit parameter — see the package-level two-URL model note.
 type BrokerClient struct {
 	// BrokerURL is the static base URL for session and message calls.
+	// It is the serverUrl value from the runner's .runner config file.
 	BrokerURL string
+	// PoolID is the GitHub Actions runner pool ID from the .runner config.
+	// Defaults to 1 when zero, which is the standard self-hosted runner pool.
+	// Used to construct VSTS Task Agent API paths:
+	//   _apis/distributedtask/pools/{poolId}/sessions
+	//   _apis/distributedtask/pools/{poolId}/messages
+	PoolID int
 	// HTTPClient is used for all outbound calls. Tests substitute an
 	// httptest-backed client.
 	HTTPClient *http.Client
@@ -55,6 +62,22 @@ type BrokerClient struct {
 	// PollMetrics records GetMessage polling error statistics.
 	// If nil, metrics calls are skipped (zero-value BrokerClient is safe).
 	PollMetrics PollMetricsRecorder
+}
+
+// PoolBase returns the base URL for VSTS Task Agent pool API calls, e.g.:
+//
+//	https://pipelines.actions.githubusercontent.com/TOKEN/_apis/distributedtask/pools/1
+//
+// It trims any trailing slash from BrokerURL. If PoolID is zero it defaults to 1.
+// Exported so probe and gateway code can construct auxiliary VSTS paths (e.g.
+// the delete-message acknowledgement endpoint) without duplicating the logic.
+func (c *BrokerClient) PoolBase() string {
+	poolID := c.PoolID
+	if poolID == 0 {
+		poolID = 1
+	}
+	return fmt.Sprintf("%s/_apis/distributedtask/pools/%d",
+		strings.TrimRight(c.BrokerURL, "/"), poolID)
 }
 
 func (c *BrokerClient) httpClient() *http.Client {
@@ -99,7 +122,8 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 		"useFipsEncryption": false,
 		"userAgent":       fmt.Sprintf("GitHubActionsGateway/%s", runnerVersion),
 	}
-	req, err := c.newJSONRequest(ctx, http.MethodPost, c.BrokerURL+"/sessions", reqBody)
+	url := c.PoolBase() + "/sessions"
+	req, err := c.newJSONRequest(ctx, http.MethodPost, url, reqBody)
 	if err != nil {
 		return "", "", err
 	}
@@ -121,7 +145,8 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 		return "", "", fmt.Errorf("broker: CreateSession: 400 %s", msg)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", "", fmt.Errorf("broker: CreateSession: unexpected status %d", resp.StatusCode)
+		return "", "", fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",
+			resp.StatusCode, url, string(rawBody))
 	}
 
 	var respBody struct {
@@ -145,7 +170,7 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 // Callers are responsible for retrying on nil/nil with appropriate backoff.
 // Returns *RateLimitError on 429.
 func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
-	url := c.BrokerURL + "/message?sessionId=" + sessionID
+	url := c.PoolBase() + "/messages?sessionId=" + sessionID
 	req, err := c.newJSONRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -283,7 +308,7 @@ func (c *BrokerClient) RenewJobLoop(ctx context.Context, runServiceURL string, r
 // DeleteSession tears down a broker session, allowing GitHub to re-queue any
 // unacquired work. Called during graceful shutdown.
 func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) error {
-	req, err := c.newJSONRequest(ctx, http.MethodDelete, c.BrokerURL+"/sessions/"+sessionID, nil)
+	req, err := c.newJSONRequest(ctx, http.MethodDelete, c.PoolBase()+"/sessions/"+sessionID, nil)
 	if err != nil {
 		return err
 	}
