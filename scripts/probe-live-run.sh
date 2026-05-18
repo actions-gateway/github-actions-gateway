@@ -208,7 +208,7 @@ EXISTING_SHA=$(curl -s \
     | jq -r '.sha // empty')
 
 if [[ -z "$EXISTING_SHA" ]]; then
-    echo "  creating $WORKFLOW_PATH"
+    echo "  $WORKFLOW_PATH not found in repo — attempting to create via API"
     WORKFLOW_CONTENT='# Probe test workflow for Milestone 1 live run.
 on:
   workflow_dispatch:
@@ -220,15 +220,28 @@ jobs:
       - name: probe acquired this job
         run: echo "acquired at $(date -u)"'
     ENCODED=$(printf '%s' "$WORKFLOW_CONTENT" | base64 | tr -d '\n')
-    gh_curl "create probe-test workflow" PUT \
+    CREATE_RESP=$(curl -s -w '\n__HTTP_STATUS__%{http_code}' -X PUT \
         "https://api.github.com/repos/$OWNER/$REPO/contents/$WORKFLOW_PATH" \
         -H "Authorization: Bearer $INSTALL_TOKEN" \
         -H "Accept: application/vnd.github+json" \
         -H "Content-Type: application/json" \
-        -d "{\"message\":\"ci: add probe-test workflow\",\"content\":\"$ENCODED\"}" \
-        > /dev/null
-    echo "  created — sleeping 5s for GitHub to index it"
-    sleep 5
+        -d "{\"message\":\"ci: add probe-test workflow\",\"content\":\"$ENCODED\"}")
+    CREATE_STATUS=$(echo "$CREATE_RESP" | grep '__HTTP_STATUS__' | sed 's/.*__HTTP_STATUS__//')
+    if [[ "$CREATE_STATUS" =~ ^2 ]]; then
+        echo "  created — sleeping 5s for GitHub to index it"
+        sleep 5
+    else
+        CREATE_BODY=$(echo "$CREATE_RESP" | grep -v '__HTTP_STATUS__')
+        echo
+        echo "  WARNING: could not create $WORKFLOW_PATH (HTTP $CREATE_STATUS)" >&2
+        echo "  Response: $CREATE_BODY" >&2
+        echo
+        echo "  The GitHub App installation likely lacks 'contents: write' permission." >&2
+        echo "  Fix: commit .github/workflows/probe-test.yml to the repo manually," >&2
+        echo "  then re-run this script. The script will skip creation once the file exists." >&2
+        echo
+        die "workflow not present and could not be created — see instructions above"
+    fi
 else
     echo "  already exists (sha $EXISTING_SHA)"
 fi

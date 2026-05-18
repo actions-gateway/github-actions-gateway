@@ -1,0 +1,12 @@
+# Probe test workflow for Milestone 1 live run.
+# Triggered manually via workflow_dispatch; picked up by the self-hosted probe
+# runner registered by scripts/probe-live-run.sh.
+on:
+  workflow_dispatch:
+jobs:
+  probe-test:
+    runs-on: [self-hosted, probe]
+    timeout-minutes: 5
+    steps:
+      - name: probe acquired this job
+        run: echo "acquired at $(date -u)"
