@@ -16,6 +16,9 @@
 #
 # Required environment variables:
 #   GITHUB_APP_ID              — numeric App ID from the App settings page
+#   GITHUB_APP_CLIENT_ID       — client ID (Iv1.xxx) from the App settings page
+#                                GitHub now requires client_id as the JWT iss claim
+#                                (numeric App ID no longer accepted as of late 2024)
 #   GITHUB_APP_PRIVATE_KEY     — path to the .pem file downloaded from the App
 #   GITHUB_APP_INSTALLATION_ID — installation ID (from URL after installing App)
 #   GITHUB_OWNER_REPO          — "owner/repo" to register the runner against
@@ -79,6 +82,7 @@ done
 echo "  go, jq, curl, openssl: OK"
 
 [[ -n "${GITHUB_APP_ID:-}"              ]] || die "GITHUB_APP_ID is not set"
+[[ -n "${GITHUB_APP_CLIENT_ID:-}"       ]] || die "GITHUB_APP_CLIENT_ID is not set (Iv1.xxx from App settings)"
 [[ -n "${GITHUB_APP_PRIVATE_KEY:-}"     ]] || die "GITHUB_APP_PRIVATE_KEY is not set"
 [[ -n "${GITHUB_APP_INSTALLATION_ID:-}" ]] || die "GITHUB_APP_INSTALLATION_ID is not set"
 [[ -n "${GITHUB_OWNER_REPO:-}"          ]] || die "GITHUB_OWNER_REPO is not set"
@@ -99,7 +103,9 @@ b64url() { base64 | tr -d '=' | tr '+/' '-_' | tr -d '\n'; }
 
 NOW=$(date +%s)
 HEADER=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
-CLAIMS=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((NOW - 60)) $((NOW + 600)) "$GITHUB_APP_ID" | b64url)
+# GitHub now requires the client_id (Iv1.xxx) as the iss claim, not the
+# numeric App ID. The numeric ID was deprecated in late 2024.
+CLAIMS=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((NOW - 60)) $((NOW + 600)) "$GITHUB_APP_CLIENT_ID" | b64url)
 
 # openssl dgst -sha256 -sign produces a PKCS#1 v1.5 RS256 signature.
 SIG=$(printf '%s.%s' "$HEADER" "$CLAIMS" \
@@ -203,10 +209,23 @@ jq . "$RUNNER_CONFIG"
 
 BROKER_URL=$(jq -r '.serverUrl // .brokerUrl // empty' "$RUNNER_CONFIG")
 [[ -n "$BROKER_URL" ]] || die "Could not find serverUrl/brokerUrl in .runner — see contents above"
-echo "  broker URL: $BROKER_URL"
+echo "  broker URL (v1): $BROKER_URL"
+
+# serverUrlV2 is the static broker v2 endpoint used when useV2Flow is true.
+BROKER_URL_V2=$(jq -r '.serverUrlV2 // empty' "$RUNNER_CONFIG")
+[[ -n "$BROKER_URL_V2" ]] && echo "  broker URL (v2): $BROKER_URL_V2"
 
 POOL_ID=$(jq -r '.poolId // 1' "$RUNNER_CONFIG")
 echo "  pool ID: $POOL_ID"
+
+AGENT_ID=$(jq -r '.agentId' "$RUNNER_CONFIG")
+AGENT_NAME=$(jq -r '.agentName' "$RUNNER_CONFIG")
+[[ -n "$AGENT_ID" && "$AGENT_ID" != "null" ]] || die "Could not find agentId in .runner"
+[[ -n "$AGENT_NAME" && "$AGENT_NAME" != "null" ]] || die "Could not find agentName in .runner"
+echo "  agent ID: $AGENT_ID  agent name: $AGENT_NAME"
+
+USE_V2_FLOW=$(jq -r '.useV2Flow // false' "$RUNNER_CONFIG")
+echo "  useV2Flow: $USE_V2_FLOW"
 
 # The VSTS Task Agent API requires an OAuth token obtained by exchanging
 # the runner's RSA private key (.credentials_rsaparams) using the JWT bearer
@@ -307,8 +326,14 @@ export GITHUB_APP_ID
 export GITHUB_APP_PRIVATE_KEY
 export GITHUB_APP_INSTALLATION_ID
 export GITHUB_BROKER_URL="$BROKER_URL"
+export GITHUB_BROKER_URL_V2="${BROKER_URL_V2:-}"
 export GITHUB_RUNNER_VERSION="$RUNNER_VERSION"
+export GITHUB_RUNNER_OS="$OS"
+export GITHUB_RUNNER_ARCH="$ARCH"
 export GITHUB_POOL_ID="$POOL_ID"
+export GITHUB_AGENT_ID="$AGENT_ID"
+export GITHUB_AGENT_NAME="$AGENT_NAME"
+export GITHUB_USE_V2_FLOW="$USE_V2_FLOW"
 export GITHUB_RUNNER_CREDENTIALS_FILE="$RUNNER_CREDENTIALS"
 export GITHUB_RUNNER_RSA_PARAMS_FILE="$RUNNER_RSA_PARAMS"
 

@@ -11,6 +11,12 @@
 //	GITHUB_APP_INSTALLATION_ID - Installation ID for the target org/repo
 //	GITHUB_BROKER_URL          - Broker base URL (e.g. https://pipelines.actions.githubusercontent.com/...)
 //	GITHUB_RUNNER_VERSION      - Runner version string (e.g. 2.327.1)
+//	GITHUB_AGENT_ID            - Registered agent ID from the runner's .runner config (agentId field)
+//	GITHUB_AGENT_NAME          - Registered agent name from the runner's .runner config (agentName field)
+//	GITHUB_USE_V2_FLOW         - "true" to use broker v2 API (/session, /message); default: v1 VSTS pool API
+//	GITHUB_BROKER_URL_V2       - Broker v2 base URL (serverUrlV2 from .runner, e.g. https://broker.actions.githubusercontent.com/)
+//	GITHUB_RUNNER_OS           - OS string for v2 message polls (e.g. "osx", "linux")
+//	GITHUB_RUNNER_ARCH         - Arch string for v2 message polls (e.g. "x64", "arm64")
 //
 // The decrypted AcquireJob response body is printed to stdout as JSON.
 // Pipe it to testdata/job_payload.json after a successful run (redact
@@ -19,6 +25,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -61,6 +68,20 @@ func run(logger *slog.Logger) error {
 	}
 	brokerURL := mustEnv("GITHUB_BROKER_URL")
 	runnerVersion := mustEnv("GITHUB_RUNNER_VERSION")
+	agentName := mustEnv("GITHUB_AGENT_NAME")
+	agentID, err := strconv.ParseInt(mustEnv("GITHUB_AGENT_ID"), 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse GITHUB_AGENT_ID: %w", err)
+	}
+	runnerOS := os.Getenv("GITHUB_RUNNER_OS")
+	runnerArch := os.Getenv("GITHUB_RUNNER_ARCH")
+	useV2Flow := os.Getenv("GITHUB_USE_V2_FLOW") == "true"
+	// In v2 flow, the broker API lives at serverUrlV2, not serverUrl.
+	if useV2Flow {
+		if v2URL := os.Getenv("GITHUB_BROKER_URL_V2"); v2URL != "" {
+			brokerURL = v2URL
+		}
+	}
 	poolID := 1
 	if v := os.Getenv("GITHUB_POOL_ID"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -101,6 +122,9 @@ func run(logger *slog.Logger) error {
 	// We exchange these for a short-lived OAuth2 bearer token via RFC 7523
 	// JWT bearer assertion.  The script exports the paths; fall back to the
 	// installation token only when the files are absent (e.g. unit-test mode).
+	// runnerKey is kept in scope so it can decrypt the AES session key from
+	// the CreateSession response later. It is nil when credential files are absent.
+	var runnerKey *rsa.PrivateKey
 	var brokerToken string
 	credsFile := os.Getenv("GITHUB_RUNNER_CREDENTIALS_FILE")
 	rsaFile := os.Getenv("GITHUB_RUNNER_RSA_PARAMS_FILE")
@@ -109,7 +133,7 @@ func run(logger *slog.Logger) error {
 		if err != nil {
 			return fmt.Errorf("parse runner credentials: %w", err)
 		}
-		runnerKey, err := githubapp.ParseRunnerRSAKey(rsaFile)
+		runnerKey, err = githubapp.ParseRunnerRSAKey(rsaFile)
 		if err != nil {
 			return fmt.Errorf("parse runner rsa key: %w", err)
 		}
@@ -124,16 +148,23 @@ func run(logger *slog.Logger) error {
 	}
 
 	bc := &broker.BrokerClient{
-		BrokerURL: brokerURL,
-		PoolID:    poolID,
-		Token:     brokerToken,
+		BrokerURL:     brokerURL,
+		PoolID:        poolID,
+		Token:         brokerToken,
+		UseV2Flow:     useV2Flow,
+		RunnerVersion: runnerVersion,
+		RunnerOS:      runnerOS,
+		RunnerArch:    runnerArch,
 	}
-	sessionID, activeBrokerURL, err := bc.CreateSession(ctx, runnerVersion)
+	sess, err := bc.CreateSession(ctx, agentID, agentName, runnerVersion)
 	if err != nil {
 		return fmt.Errorf("CreateSession: %w", err)
 	}
-	bc.BrokerURL = activeBrokerURL
-	logger.Info("session created", "sessionId", sessionID, "brokerURL", activeBrokerURL)
+	bc.BrokerURL = sess.BrokerURL
+	logger.Info("session created", "sessionId", sess.SessionID, "brokerURL", sess.BrokerURL,
+		"hasEncryptionKey", sess.EncryptionKey != nil)
+
+	sessionID := sess.SessionID
 
 	// Ensure DeleteSession runs on exit regardless of success or error path.
 	defer func() {
@@ -186,14 +217,23 @@ func run(logger *slog.Logger) error {
 		msg = got
 		logger.Info("job message received", "messageId", msg.MessageID)
 
-		// TODO(milestone-2): session key will be returned in CreateSession response
-		// and stored per session. For the probe, we read it from an env var as a
-		// temporary stand-in while the full session handshake is mapped out.
-		sessionKeyB64 := os.Getenv("GITHUB_SESSION_KEY")
-		if sessionKeyB64 != "" {
-			sessionKey, err = base64.StdEncoding.DecodeString(sessionKeyB64)
+			// Decrypt the session key from the CreateSession response using the
+		// runner's RSA private key, or fall back to the GITHUB_SESSION_KEY env var.
+		if len(sess.EncryptionKey) > 0 && runnerKey != nil {
+			sessionKey, err = broker.DecryptSessionKey(sess.EncryptionKey, runnerKey)
 			if err != nil {
-				return fmt.Errorf("decode GITHUB_SESSION_KEY: %w", err)
+				logger.Warn("failed to decrypt session key from CreateSession response; falling back to GITHUB_SESSION_KEY", "error", err)
+			} else {
+				logger.Info("session key decrypted from CreateSession response")
+			}
+		}
+		if len(sessionKey) == 0 {
+			sessionKeyB64 := os.Getenv("GITHUB_SESSION_KEY")
+			if sessionKeyB64 != "" {
+				sessionKey, err = base64.StdEncoding.DecodeString(sessionKeyB64)
+				if err != nil {
+					return fmt.Errorf("decode GITHUB_SESSION_KEY: %w", err)
+				}
 			}
 		}
 		break

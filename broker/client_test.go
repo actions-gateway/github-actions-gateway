@@ -44,7 +44,18 @@ func TestCreateSession_HappyPath(t *testing.T) {
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.Equal(t, "/_apis/distributedtask/pools/1/sessions", r.URL.Path)
+		assert.Equal(t, "5.1-preview.1", r.URL.Query().Get("api-version"))
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		// Verify body has nested agent object (not flat fields).
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		assert.Equal(t, "test-agent", body["ownerName"])
+		agent, ok := body["agent"].(map[string]any)
+		require.True(t, ok, "agent field must be a nested object")
+		assert.Equal(t, float64(42), agent["id"], "agent.id must match agentID parameter")
+		assert.Equal(t, "test-agent", agent["name"])
+		assert.Equal(t, "2.327.1", agent["version"])
 
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -55,10 +66,10 @@ func TestCreateSession_HappyPath(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv)
-	sessionID, brokerURL, err := c.CreateSession(context.Background(), "2.327.1")
+	sess, err := c.CreateSession(context.Background(), 42, "test-agent", "2.327.1")
 	require.NoError(t, err)
-	assert.Equal(t, "sess-abc", sessionID)
-	assert.Equal(t, srv.URL, brokerURL)
+	assert.Equal(t, "sess-abc", sess.SessionID)
+	assert.Equal(t, srv.URL, sess.BrokerURL)
 }
 
 func TestCreateSession_VersionTooOld(t *testing.T) {
@@ -69,7 +80,7 @@ func TestCreateSession_VersionTooOld(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv)
-	_, _, err := c.CreateSession(context.Background(), "1.0.0")
+	_, err := c.CreateSession(context.Background(), 1, "test-agent", "1.0.0")
 	require.Error(t, err)
 	var vtoErr *broker.VersionTooOldError
 	assert.ErrorAs(t, err, &vtoErr, "expected VersionTooOldError")
@@ -84,9 +95,9 @@ func TestCreateSession_FallsBackToBrokerURL(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv)
-	_, brokerURL, err := c.CreateSession(context.Background(), "2.327.1")
+	sess, err := c.CreateSession(context.Background(), 42, "test-agent", "2.327.1")
 	require.NoError(t, err)
-	assert.Equal(t, srv.URL, brokerURL)
+	assert.Equal(t, srv.URL, sess.BrokerURL)
 }
 
 // ── GetMessage ───────────────────────────────────────────────────────────────

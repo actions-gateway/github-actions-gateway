@@ -3,9 +3,27 @@ package broker
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1" //nolint:gosec // SHA-1 required by .NET RSA.Decrypt OAEP default
 	"encoding/base64"
 	"fmt"
 )
+
+// DecryptSessionKey decrypts the RSA-encrypted AES session key returned in the
+// CreateSession response's encryptionKey.value field.
+//
+// The .NET runner encrypts the session key with RSA-OAEP (SHA-1 hash, no label),
+// which matches rsa.DecryptOAEP with sha1.New(). The result is the raw 32-byte
+// AES-256-CBC key passed to DecryptMessageBody.
+func DecryptSessionKey(encryptedKey []byte, privateKey *rsa.PrivateKey) ([]byte, error) {
+	//nolint:gosec // SHA-1 is mandated by the .NET RSA.Decrypt OAEP default; not our choice
+	plain, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, privateKey, encryptedKey, nil)
+	if err != nil {
+		return nil, fmt.Errorf("broker: DecryptSessionKey: RSA-OAEP decrypt: %w", err)
+	}
+	return plain, nil
+}
 
 // DecryptMessageBody decrypts the AES-256-CBC encrypted body of a TaskAgentMessage.
 //

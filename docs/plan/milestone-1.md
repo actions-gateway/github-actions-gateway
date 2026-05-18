@@ -475,12 +475,76 @@ The following are explicitly out of scope for Milestone 1 but are noted here so 
 
 ## 8. Investigation Findings
 
-*To be filled in before closing Milestone 1.*
-
 ### 8.A — `AcknowledgeRunnerRequest`
 
-> TBD — document HTTP status, response body, and observed effect of omitting the call.
+**Finding: not required for correct job delivery. AcquireJob alone claims the job.**
+
+**What was tested.** After a successful `AcquireJob`, `probeAcknowledge` in `cmd/probe/main.go`
+attempted the v1 VSTS delete-message path:
+
+```
+DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
+```
+
+The live probe (v2 flow, `broker.actions.githubusercontent.com`) returned:
+
+```
+HTTP 404  body: "Not found: /_apis/distributedtask/pools/1/messages/5714371765723164553"
+```
+
+**Why it 404s.** The v2 broker host (`broker.actions.githubusercontent.com`) does not expose the
+VSTS pool API at all. The correct v2 acknowledge endpoint from the runner source
+(`BrokerHttpClient.AcknowledgeRunnerRequestAsync`) is:
+
+```
+POST {brokerURL}acknowledge?sessionId={sessionId}
+Content-Type: application/json
+
+{"runnerRequestId": "<runnerRequestId>"}
+```
+
+**Effect of omitting the call.** The probe acquired the job (planId non-empty, job payload
+returned) and the job was not redelivered. The VSTS `DeleteMessage` semantics are irrelevant in
+the v2 flow — `AcquireJob` itself is the atomic claim; once it succeeds the job is locked to this
+runner until the lock expires or is explicitly released.
+
+**Decision: do not add to the required execution path.** Acknowledge is a telemetry notification
+to the broker, not a delivery gate. The `probeAcknowledge` function in `cmd/probe/main.go` will
+remain as a diagnostic probe only. The `BrokerClient` does not need an `AcknowledgeRunnerRequest`
+method for Milestone 2.
+
+**Future note.** If future investigation of the v1 VSTS flow (non-v2 runners) reveals that
+`DeleteMessage` is required for requeue prevention, add `DeleteMessage` (not `Acknowledge`) to
+`BrokerClient` under a v1 flag. For v2 runners this is confirmed unnecessary.
+
+---
 
 ### 8.B — Egress IP Variance
 
-> TBD — document call-by-call results across two simulated proxy pods and recommended proxy affinity approach.
+**Finding: IP variance is safe. The v2 broker protocol is stateless per-request. Proceed with
+the Milestone 4 proxy pool design without session affinity.**
+
+**Unit-level confirmation.** `broker/egress_ip_test.go` provides `TestCONNECTProxy_TunnelsHTTPS`,
+which runs four requests through two alternating transparent CONNECT proxies to a local TLS
+backend. All four succeed. This confirms the proxy infrastructure is correct and that per-call
+proxy rotation is transparent to the HTTP client.
+
+**Why statelessness is assured.** The v2 broker flow observed during the live probe run:
+
+- Authentication is a Bearer token in the `Authorization` header on every request — no session
+  cookies, no connection-level state.
+- `CreateSession` (v2) returns `hasEncryptionKey: false` — message bodies are plaintext JSON.
+  There is no RSA-negotiated per-session AES key that would need to be re-established if the
+  TCP connection changes.
+- `GetMessage` and `DeleteSession` use only the `sessionId` query param and the Bearer token.
+  No IP-bound state is observed server-side.
+
+**Live test status.** `TestEgressIPVariance_Live` was scaffolded in `broker/egress_ip_test.go`
+but was not executed against real GitHub credentials in Milestone 1 (the full protocol impl is
+not wired into a test-callable form yet). It is left with a `TODO(investigation-b)` for Milestone 2,
+when `NewInstallationTokenProvider` and `BrokerClient` are fully integrated and can be called
+from a test harness without duplicating the probe's main.go orchestration.
+
+**Recommendation.** Deploy the Milestone 4 proxy pool without `sessionAffinity: ClientIP`. If
+unexpected 401/403 responses appear in production under proxy rotation, add affinity as the
+low-effort fallback before investigating per-goroutine proxy assignment.

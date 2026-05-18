@@ -1,0 +1,1027 @@
+{
+  "fileTable": [
+    ".github/workflows/probe-test.yml"
+  ],
+  "mask": [
+    {
+      "type": "regex",
+      "value": "\\b(?:eyJ0eXAiOi|eyJhbGciOi|eyJ4NXQiOi|eyJraWQiOi)[^\\s'\";]+"
+    },
+    {
+      "type": "regex",
+      "value": "\\bBearer\\s+[^\\s'\";]+"
+    },
+    {
+      "type": "regex",
+      "value": "\\b(?i:Password|Pwd)=(?:[^\\s'\";]+|\"[^\"]+\")"
+    },
+    {
+      "type": "regex",
+      "value": "\\s+-(?i:Password|Pwd)\\s+(?:[^\\s'\";]+|\"[^\"]+\")"
+    },
+    {
+      "type": "regex",
+      "value": "\\bv1\\.[0-9A-Fa-f]{40}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\bgh[pousr]{1}_[A-Za-z0-9]{36}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\bgithub_pat_[0-9][A-Za-z0-9]{21}_[A-Za-z0-9]{59}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "(?:[a-zA-Z][a-zA-Z\\d+-.]*):\\/\\/([a-zA-Z\\d\\-._~\\!$&'()*+,;=%]+):([a-zA-Z\\d\\-._~\\!$&'()*+,;=:%]*)@"
+    },
+    {
+      "type": "regex",
+      "value": "\\b[0-9A-Za-z-_~.]{3}7Q~[0-9A-Za-z-_~.]{31}\\b|\\b[0-9A-Za-z-_~.]{3}8Q~[0-9A-Za-z-_~.]{34}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "(?:^|[^0-9A-Za-z+/])[0-9A-Za-z+/]{76}(APIM|ACDb|\\+(ABa|AMC|ASt))[0-9A-Za-z+/]{5}[AQgw]=="
+    },
+    {
+      "type": "regex",
+      "value": "(?:^|[^0-9A-Za-z+/])[0-9A-Za-z+/]{33}(AIoT|\\+(ASb|AEh|ARm))[A-P][0-9A-Za-z+/]{5}="
+    },
+    {
+      "type": "regex",
+      "value": "\\b[0-9A-Za-z_\\-]{44}AzFu[0-9A-Za-z\\-_]{5}[AQgw]=="
+    },
+    {
+      "type": "regex",
+      "value": "\\b[0-9A-Za-z]{42}AzSe[A-D][0-9A-Za-z]{5}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\b[0-9A-Za-z+/]{42}\\+ACR[A-D][0-9A-Za-z+/]{5}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\b[0-9A-Za-z]{33}AzCa[A-P][0-9A-Za-z]{5}="
+    },
+    {
+      "type": "regex",
+      "value": "\\boy2[a-p][0-9a-z]{15}[aq][0-9a-z]{11}[eu][bdfhjlnprtvxz357][a-p][0-9a-z]{11}[aeimquy4]\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\bnpm_[0-9A-Za-z]{36}\\b"
+    },
+    {
+      "type": "regex",
+      "value": "\\bx-ghcr-signature=[^&]+"
+    }
+  ],
+  "steps": [
+    {
+      "type": "action",
+      "reference": {
+        "type": "script"
+      },
+      "id": "84c370ac-87a7-4bd7-a332-0b88e2b11fb6",
+      "contextName": "__run",
+      "name": "__run",
+      "displayNameToken": {
+        "type": 0,
+        "file": 1,
+        "line": 11,
+        "col": 15,
+        "lit": "probe acquired this job"
+      },
+      "condition": "success()",
+      "continueOnError": null,
+      "timeoutInMinutes": null,
+      "inputs": {
+        "type": 2,
+        "map": [
+          {
+            "Key": {
+              "type": 0,
+              "lit": "script"
+            },
+            "Value": {
+              "type": 0,
+              "file": 1,
+              "line": 12,
+              "col": 14,
+              "lit": "echo \"acquired at $(date -u)\""
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "variables": {
+    "Actions.EnableHttpRedirects": {
+      "value": "true"
+    },
+    "DistributedTask.AddWarningToNode12Action": {
+      "value": "true"
+    },
+    "DistributedTask.AddWarningToNode16Action": {
+      "value": "true"
+    },
+    "DistributedTask.AllowRunnerContainerHooks": {
+      "value": "true"
+    },
+    "DistributedTask.DeprecateStepOutputCommands": {
+      "value": "true"
+    },
+    "DistributedTask.DetailUntarFailure": {
+      "value": "true"
+    },
+    "DistributedTask.EnableCompositeActions": {
+      "value": "true"
+    },
+    "DistributedTask.EnableJobServerQueueTelemetry": {
+      "value": "true"
+    },
+    "DistributedTask.EnhancedAnnotations": {
+      "value": "true"
+    },
+    "DistributedTask.ForceGithubJavascriptActionsToNode16": {
+      "value": "true"
+    },
+    "DistributedTask.ForceGithubJavascriptActionsToNode20": {
+      "value": "true"
+    },
+    "DistributedTask.LogTemplateErrorsAsDebugMessages": {
+      "value": "true"
+    },
+    "DistributedTask.MarkJobAsFailedOnWorkerCrash": {
+      "value": "true"
+    },
+    "DistributedTask.NewActionMetadata": {
+      "value": "true"
+    },
+    "DistributedTask.UploadStepSummary": {
+      "value": "true"
+    },
+    "DistributedTask.UseActionArchiveCache": {
+      "value": "true"
+    },
+    "DistributedTask.UseWhich2": {
+      "value": "true"
+    },
+    "RunService.FixEmbeddedIssues": {
+      "value": "true"
+    },
+    "actions.runner.requirenode24": {
+      "value": "false"
+    },
+    "actions.runner.usenode24bydefault": {
+      "value": "false"
+    },
+    "actions.runner.warnonnode20": {
+      "value": "true"
+    },
+    "actions_add_check_run_id_to_job_context": {
+      "value": "true"
+    },
+    "actions_batch_action_resolution": {
+      "value": "false"
+    },
+    "actions_container_action_runner_temp": {
+      "value": "true"
+    },
+    "actions_display_helpful_actions_download_errors": {
+      "value": "true"
+    },
+    "actions_runner_compare_workflow_parser": {
+      "value": "false"
+    },
+    "actions_runner_deprecate_linux_arm32": {
+      "value": "false"
+    },
+    "actions_runner_emit_composite_markers": {
+      "value": "false"
+    },
+    "actions_runner_kill_linux_arm32": {
+      "value": "false"
+    },
+    "actions_runner_node20_removal_date": {
+      "value": ""
+    },
+    "actions_runner_node24_default_date": {
+      "value": ""
+    },
+    "actions_service_container_command": {
+      "value": "true"
+    },
+    "actions_set_orchestration_id_env_for_actions": {
+      "value": "true"
+    },
+    "actions_skip_retry_complete_job_upon_known_errors": {
+      "value": "true"
+    },
+    "actions_snapshot_preflight_hosted_runner_check": {
+      "value": "false"
+    },
+    "actions_snapshot_preflight_image_gen_pool_check": {
+      "value": "false"
+    },
+    "actions_use_bearer_token_for_codeload": {
+      "value": "false"
+    },
+    "actions_uses_cache_service_v2": {
+      "value": "true"
+    },
+    "github_token": {
+      "value": "REDACTED",
+      "isSecret": true
+    },
+    "system.from_run_service": {
+      "value": "true"
+    },
+    "system.github.job": {
+      "value": "probe-test"
+    },
+    "system.github.launch_endpoint": {
+      "value": "https://launch.actions.githubusercontent.com"
+    },
+    "system.github.results_endpoint": {
+      "value": "https://results-receiver.actions.githubusercontent.com/"
+    },
+    "system.github.results_upload_with_sdk": {
+      "value": "true"
+    },
+    "system.github.token": {
+      "value": "REDACTED",
+      "isSecret": true
+    },
+    "system.github.token.permissions": {
+      "value": "{\"Contents\":\"read\",\"Metadata\":\"read\",\"Packages\":\"read\"}"
+    },
+    "system.orchestrationId": {
+      "value": "0b7eb6b1-ab3c-46bc-a6e9-21298ec14671.probe-test.__default"
+    },
+    "system.phaseDisplayName": {
+      "value": "probe-test"
+    },
+    "system.runner.lowdiskspacethreshold": {
+      "value": "100"
+    },
+    "system.runnerEnvironment": {
+      "value": "self-hosted"
+    },
+    "system.runnerGroupName": {
+      "value": "Default"
+    }
+  },
+  "messageType": "RunnerJobRequest",
+  "plan": {
+    "planType": "actions",
+    "version": 0,
+    "planId": "0b7eb6b1-ab3c-46bc-a6e9-21298ec14671",
+    "artifactUri": "",
+    "artifactLocation": ""
+  },
+  "timeline": {
+    "id": "0b7eb6b1-ab3c-46bc-a6e9-21298ec14671",
+    "changeId": 0,
+    "location": null
+  },
+  "jobId": "8e3faf38-534e-5b05-9cf9-da9360891e1f",
+  "jobDisplayName": "probe-test",
+  "jobName": "__default",
+  "requestId": 0,
+  "lockedUntil": "0001-01-01T00:00:00",
+  "environmentVariables": [],
+  "defaults": [],
+  "jobOutputs": null,
+  "jobContainer": null,
+  "jobServiceContainers": null,
+  "resources": {
+    "endpoints": [
+      {
+        "data": {
+          "ServerId": "",
+          "ServerName": "",
+          "CacheServerUrl": "https://artifactcache.actions.githubusercontent.com/c8hPt41715dRHWLn1mqddTbd0mhBzPnRM0Fs9Kg7bYonw5vCVr/",
+          "FeedStreamUrl": "wss://results-receiver.actions.githubusercontent.com/_ws/ingest.sock",
+          "ResultsServiceUrl": "https://results-receiver.actions.githubusercontent.com/",
+          "PipelinesServiceUrl": "https://pipelinesghubeus22.actions.githubusercontent.com/c8hPt41715dRHWLn1mqddTbd0mhBzPnRM0Fs9Kg7bYonw5vCVr/",
+          "GenerateIdTokenUrl": "",
+          "ConnectivityChecks": "[\"https://broker.actions.githubusercontent.com/health\",\"https://token.actions.githubusercontent.com/ready\",\"https://run.actions.githubusercontent.com/health\"]"
+        },
+        "name": "SystemVssConnection",
+        "url": "https://run-actions-2-azure-eastus.actions.githubusercontent.com/38/",
+        "authorization": {
+          "parameters": {
+            "AccessToken": "REDACTED"
+          },
+          "scheme": "OAuth"
+        },
+        "isShared": false,
+        "isReady": true
+      }
+    ]
+  },
+  "contextData": {
+    "github": {
+      "t": 2,
+      "d": [
+        {
+          "k": "ref",
+          "v": "refs/heads/main"
+        },
+        {
+          "k": "sha",
+          "v": "907e3cb853ee36a18949def5634f39832044baad"
+        },
+        {
+          "k": "repository",
+          "v": "karlkfi/github-actions-gateway"
+        },
+        {
+          "k": "repository_owner",
+          "v": "karlkfi"
+        },
+        {
+          "k": "repository_owner_id",
+          "v": "3980984"
+        },
+        {
+          "k": "repositoryUrl",
+          "v": "git://github.com/karlkfi/github-actions-gateway.git"
+        },
+        {
+          "k": "run_id",
+          "v": "26056010752"
+        },
+        {
+          "k": "run_number",
+          "v": "11"
+        },
+        {
+          "k": "retention_days",
+          "v": "90"
+        },
+        {
+          "k": "run_attempt",
+          "v": "1"
+        },
+        {
+          "k": "artifact_cache_size_limit",
+          "v": "10"
+        },
+        {
+          "k": "repository_visibility",
+          "v": "private"
+        },
+        {
+          "k": "actor_id",
+          "v": "285586090"
+        },
+        {
+          "k": "actor",
+          "v": "gh-actions-gateway-test[bot]"
+        },
+        {
+          "k": "workflow",
+          "v": ".github/workflows/probe-test.yml"
+        },
+        {
+          "k": "head_ref",
+          "v": ""
+        },
+        {
+          "k": "base_ref",
+          "v": ""
+        },
+        {
+          "k": "event_name",
+          "v": "workflow_dispatch"
+        },
+        {
+          "k": "server_url",
+          "v": "https://github.com"
+        },
+        {
+          "k": "api_url",
+          "v": "https://api.github.com"
+        },
+        {
+          "k": "graphql_url",
+          "v": "https://api.github.com/graphql"
+        },
+        {
+          "k": "ref_name",
+          "v": "main"
+        },
+        {
+          "k": "ref_protected",
+          "v": false
+        },
+        {
+          "k": "ref_type",
+          "v": "branch"
+        },
+        {
+          "k": "secret_source",
+          "v": "Actions"
+        },
+        {
+          "k": "event",
+          "v": {
+            "t": 2,
+            "d": [
+              {
+                "k": "ref",
+                "v": "refs/heads/main"
+              },
+              {
+                "k": "workflow",
+                "v": ".github/workflows/probe-test.yml"
+              },
+              {
+                "k": "inputs",
+                "v": null
+              },
+              {
+                "k": "repository",
+                "v": {
+                  "t": 2,
+                  "d": [
+                    {
+                      "k": "id",
+                      "v": 1241076663
+                    },
+                    {
+                      "k": "node_id",
+                      "v": "R_kgDOSflTtw"
+                    },
+                    {
+                      "k": "name",
+                      "v": "github-actions-gateway"
+                    },
+                    {
+                      "k": "full_name",
+                      "v": "karlkfi/github-actions-gateway"
+                    },
+                    {
+                      "k": "private",
+                      "v": true
+                    },
+                    {
+                      "k": "owner",
+                      "v": {
+                        "t": 2,
+                        "d": [
+                          {
+                            "k": "login",
+                            "v": "karlkfi"
+                          },
+                          {
+                            "k": "id",
+                            "v": 3980984
+                          },
+                          {
+                            "k": "node_id",
+                            "v": "MDQ6VXNlcjM5ODA5ODQ="
+                          },
+                          {
+                            "k": "avatar_url",
+                            "v": "https://avatars.githubusercontent.com/u/3980984?v=4"
+                          },
+                          {
+                            "k": "gravatar_id",
+                            "v": ""
+                          },
+                          {
+                            "k": "url",
+                            "v": "https://api.github.com/users/karlkfi"
+                          },
+                          {
+                            "k": "html_url",
+                            "v": "https://github.com/karlkfi"
+                          },
+                          {
+                            "k": "followers_url",
+                            "v": "https://api.github.com/users/karlkfi/followers"
+                          },
+                          {
+                            "k": "following_url",
+                            "v": "https://api.github.com/users/karlkfi/following{/other_user}"
+                          },
+                          {
+                            "k": "gists_url",
+                            "v": "https://api.github.com/users/karlkfi/gists{/gist_id}"
+                          },
+                          {
+                            "k": "starred_url",
+                            "v": "https://api.github.com/users/karlkfi/starred{/owner}{/repo}"
+                          },
+                          {
+                            "k": "subscriptions_url",
+                            "v": "https://api.github.com/users/karlkfi/subscriptions"
+                          },
+                          {
+                            "k": "organizations_url",
+                            "v": "https://api.github.com/users/karlkfi/orgs"
+                          },
+                          {
+                            "k": "repos_url",
+                            "v": "https://api.github.com/users/karlkfi/repos"
+                          },
+                          {
+                            "k": "events_url",
+                            "v": "https://api.github.com/users/karlkfi/events{/privacy}"
+                          },
+                          {
+                            "k": "received_events_url",
+                            "v": "https://api.github.com/users/karlkfi/received_events"
+                          },
+                          {
+                            "k": "type",
+                            "v": "User"
+                          },
+                          {
+                            "k": "user_view_type",
+                            "v": "public"
+                          },
+                          {
+                            "k": "site_admin",
+                            "v": false
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "k": "html_url",
+                      "v": "https://github.com/karlkfi/github-actions-gateway"
+                    },
+                    {
+                      "k": "description",
+                      "v": "Kubernetes-native orchestration for GitHub Actions Runners"
+                    },
+                    {
+                      "k": "fork",
+                      "v": false
+                    },
+                    {
+                      "k": "url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway"
+                    },
+                    {
+                      "k": "forks_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/forks"
+                    },
+                    {
+                      "k": "keys_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/keys{/key_id}"
+                    },
+                    {
+                      "k": "collaborators_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/collaborators{/collaborator}"
+                    },
+                    {
+                      "k": "teams_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/teams"
+                    },
+                    {
+                      "k": "hooks_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/hooks"
+                    },
+                    {
+                      "k": "issue_events_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/issues/events{/number}"
+                    },
+                    {
+                      "k": "events_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/events"
+                    },
+                    {
+                      "k": "assignees_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/assignees{/user}"
+                    },
+                    {
+                      "k": "branches_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/branches{/branch}"
+                    },
+                    {
+                      "k": "tags_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/tags"
+                    },
+                    {
+                      "k": "blobs_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/git/blobs{/sha}"
+                    },
+                    {
+                      "k": "git_tags_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/git/tags{/sha}"
+                    },
+                    {
+                      "k": "git_refs_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/git/refs{/sha}"
+                    },
+                    {
+                      "k": "trees_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/git/trees{/sha}"
+                    },
+                    {
+                      "k": "statuses_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/statuses/{sha}"
+                    },
+                    {
+                      "k": "languages_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/languages"
+                    },
+                    {
+                      "k": "stargazers_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/stargazers"
+                    },
+                    {
+                      "k": "contributors_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/contributors"
+                    },
+                    {
+                      "k": "subscribers_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/subscribers"
+                    },
+                    {
+                      "k": "subscription_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/subscription"
+                    },
+                    {
+                      "k": "commits_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/commits{/sha}"
+                    },
+                    {
+                      "k": "git_commits_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/git/commits{/sha}"
+                    },
+                    {
+                      "k": "comments_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/comments{/number}"
+                    },
+                    {
+                      "k": "issue_comment_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/issues/comments{/number}"
+                    },
+                    {
+                      "k": "contents_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/contents/{+path}"
+                    },
+                    {
+                      "k": "compare_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/compare/{base}...{head}"
+                    },
+                    {
+                      "k": "merges_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/merges"
+                    },
+                    {
+                      "k": "archive_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/{archive_format}{/ref}"
+                    },
+                    {
+                      "k": "downloads_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/downloads"
+                    },
+                    {
+                      "k": "issues_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/issues{/number}"
+                    },
+                    {
+                      "k": "pulls_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/pulls{/number}"
+                    },
+                    {
+                      "k": "milestones_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/milestones{/number}"
+                    },
+                    {
+                      "k": "notifications_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/notifications{?since,all,participating}"
+                    },
+                    {
+                      "k": "labels_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/labels{/name}"
+                    },
+                    {
+                      "k": "releases_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/releases{/id}"
+                    },
+                    {
+                      "k": "deployments_url",
+                      "v": "https://api.github.com/repos/karlkfi/github-actions-gateway/deployments"
+                    },
+                    {
+                      "k": "created_at",
+                      "v": "2026-05-16T23:42:27Z"
+                    },
+                    {
+                      "k": "updated_at",
+                      "v": "2026-05-18T17:23:04Z"
+                    },
+                    {
+                      "k": "pushed_at",
+                      "v": "2026-05-18T17:22:59Z"
+                    },
+                    {
+                      "k": "git_url",
+                      "v": "git://github.com/karlkfi/github-actions-gateway.git"
+                    },
+                    {
+                      "k": "ssh_url",
+                      "v": "git@github.com:karlkfi/github-actions-gateway.git"
+                    },
+                    {
+                      "k": "clone_url",
+                      "v": "https://github.com/karlkfi/github-actions-gateway.git"
+                    },
+                    {
+                      "k": "svn_url",
+                      "v": "https://github.com/karlkfi/github-actions-gateway"
+                    },
+                    {
+                      "k": "homepage",
+                      "v": null
+                    },
+                    {
+                      "k": "size",
+                      "v": 134
+                    },
+                    {
+                      "k": "stargazers_count",
+                      "v": 0
+                    },
+                    {
+                      "k": "watchers_count",
+                      "v": 0
+                    },
+                    {
+                      "k": "language",
+                      "v": "Go"
+                    },
+                    {
+                      "k": "has_issues",
+                      "v": true
+                    },
+                    {
+                      "k": "has_projects",
+                      "v": true
+                    },
+                    {
+                      "k": "has_downloads",
+                      "v": true
+                    },
+                    {
+                      "k": "has_wiki",
+                      "v": false
+                    },
+                    {
+                      "k": "has_pages",
+                      "v": false
+                    },
+                    {
+                      "k": "has_discussions",
+                      "v": false
+                    },
+                    {
+                      "k": "forks_count",
+                      "v": 0
+                    },
+                    {
+                      "k": "mirror_url",
+                      "v": null
+                    },
+                    {
+                      "k": "archived",
+                      "v": false
+                    },
+                    {
+                      "k": "disabled",
+                      "v": false
+                    },
+                    {
+                      "k": "open_issues_count",
+                      "v": 0
+                    },
+                    {
+                      "k": "license",
+                      "v": null
+                    },
+                    {
+                      "k": "allow_forking",
+                      "v": true
+                    },
+                    {
+                      "k": "is_template",
+                      "v": false
+                    },
+                    {
+                      "k": "web_commit_signoff_required",
+                      "v": false
+                    },
+                    {
+                      "k": "has_pull_requests",
+                      "v": true
+                    },
+                    {
+                      "k": "pull_request_creation_policy",
+                      "v": "all"
+                    },
+                    {
+                      "k": "topics",
+                      "v": {
+                        "t": 1,
+                        "a": []
+                      }
+                    },
+                    {
+                      "k": "visibility",
+                      "v": "private"
+                    },
+                    {
+                      "k": "forks",
+                      "v": 0
+                    },
+                    {
+                      "k": "open_issues",
+                      "v": 0
+                    },
+                    {
+                      "k": "watchers",
+                      "v": 0
+                    },
+                    {
+                      "k": "default_branch",
+                      "v": "main"
+                    }
+                  ]
+                }
+              },
+              {
+                "k": "sender",
+                "v": {
+                  "t": 2,
+                  "d": [
+                    {
+                      "k": "login",
+                      "v": "gh-actions-gateway-test[bot]"
+                    },
+                    {
+                      "k": "id",
+                      "v": 285586090
+                    },
+                    {
+                      "k": "node_id",
+                      "v": "BOT_kgDOEQWyqg"
+                    },
+                    {
+                      "k": "avatar_url",
+                      "v": "https://avatars.githubusercontent.com/u/3980984?v=4"
+                    },
+                    {
+                      "k": "gravatar_id",
+                      "v": ""
+                    },
+                    {
+                      "k": "url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D"
+                    },
+                    {
+                      "k": "html_url",
+                      "v": "https://github.com/apps/gh-actions-gateway-test"
+                    },
+                    {
+                      "k": "followers_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/followers"
+                    },
+                    {
+                      "k": "following_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/following{/other_user}"
+                    },
+                    {
+                      "k": "gists_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/gists{/gist_id}"
+                    },
+                    {
+                      "k": "starred_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/starred{/owner}{/repo}"
+                    },
+                    {
+                      "k": "subscriptions_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/subscriptions"
+                    },
+                    {
+                      "k": "organizations_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/orgs"
+                    },
+                    {
+                      "k": "repos_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/repos"
+                    },
+                    {
+                      "k": "events_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/events{/privacy}"
+                    },
+                    {
+                      "k": "received_events_url",
+                      "v": "https://api.github.com/users/gh-actions-gateway-test%5Bbot%5D/received_events"
+                    },
+                    {
+                      "k": "type",
+                      "v": "Bot"
+                    },
+                    {
+                      "k": "user_view_type",
+                      "v": "public"
+                    },
+                    {
+                      "k": "site_admin",
+                      "v": false
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "k": "workflow_ref",
+          "v": "karlkfi/github-actions-gateway/.github/workflows/probe-test.yml@refs/heads/main"
+        },
+        {
+          "k": "workflow_sha",
+          "v": "907e3cb853ee36a18949def5634f39832044baad"
+        },
+        {
+          "k": "repository_id",
+          "v": "1241076663"
+        },
+        {
+          "k": "triggering_actor",
+          "v": "gh-actions-gateway-test[bot]"
+        }
+      ]
+    },
+    "inputs": {
+      "t": 2,
+      "d": []
+    },
+    "job": {
+      "t": 2,
+      "d": [
+        {
+          "k": "check_run_id",
+          "v": 76604170560
+        },
+        {
+          "k": "workflow_ref",
+          "v": "karlkfi/github-actions-gateway/.github/workflows/probe-test.yml@refs/heads/main"
+        },
+        {
+          "k": "workflow_sha",
+          "v": "907e3cb853ee36a18949def5634f39832044baad"
+        },
+        {
+          "k": "workflow_repository",
+          "v": "karlkfi/github-actions-gateway"
+        },
+        {
+          "k": "workflow_file_path",
+          "v": ".github/workflows/probe-test.yml"
+        }
+      ]
+    },
+    "matrix": null,
+    "needs": {
+      "t": 2,
+      "d": []
+    },
+    "strategy": {
+      "t": 2,
+      "d": [
+        {
+          "k": "fail-fast",
+          "v": true
+        },
+        {
+          "k": "job-index",
+          "v": 0
+        },
+        {
+          "k": "job-total",
+          "v": 1
+        },
+        {
+          "k": "max-parallel",
+          "v": 1
+        }
+      ]
+    },
+    "vars": {
+      "t": 2,
+      "d": []
+    }
+  },
+  "snapshot": null,
+  "billingOwnerId": "U_kgDOADy-uA"
+}

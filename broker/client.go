@@ -53,7 +53,23 @@ type BrokerClient struct {
 	// Used to construct VSTS Task Agent API paths:
 	//   _apis/distributedtask/pools/{poolId}/sessions
 	//   _apis/distributedtask/pools/{poolId}/messages
+	// Ignored when UseV2Flow is true.
 	PoolID int
+	// UseV2Flow switches to the broker v2 HTTP API (BrokerHttpClient.cs) instead
+	// of the VSTS pool API. Set when the runner's .runner config has useV2Flow: true.
+	//
+	// In v2 mode, session and message URLs are:
+	//   POST/DELETE {BrokerURL}session
+	//   GET         {BrokerURL}message?sessionId=...&status=online&runnerVersion=...
+	// No pool path, no api-version query param.
+	UseV2Flow bool
+	// RunnerVersion is the runner version string (e.g. "2.334.0").
+	// Required in v2 mode: sent as a query parameter on GetMessage calls.
+	RunnerVersion string
+	// RunnerOS is the OS identifier for v2 GetMessage query params (e.g. "osx", "linux").
+	RunnerOS string
+	// RunnerArch is the architecture for v2 GetMessage query params (e.g. "x64", "arm64").
+	RunnerArch string
 	// HTTPClient is used for all outbound calls. Tests substitute an
 	// httptest-backed client.
 	HTTPClient *http.Client
@@ -62,6 +78,45 @@ type BrokerClient struct {
 	// PollMetrics records GetMessage polling error statistics.
 	// If nil, metrics calls are skipped (zero-value BrokerClient is safe).
 	PollMetrics PollMetricsRecorder
+}
+
+// CreateSessionResult is returned by CreateSession.
+type CreateSessionResult struct {
+	// SessionID is the unique identifier for this session.
+	SessionID string
+	// BrokerURL is the URL to use for subsequent GetMessage and DeleteSession calls.
+	// May differ from BrokerClient.BrokerURL if the server redirected.
+	BrokerURL string
+	// EncryptionKey is the RSA-encrypted symmetric key for message decryption.
+	// It must be RSA-OAEP (SHA-1) decrypted with the runner's private key to
+	// obtain the 32-byte AES-256-CBC session key used by DecryptMessageBody.
+	// Nil if the server did not return an encryption key.
+	EncryptionKey []byte
+	// EncryptionKeyEncrypted indicates whether EncryptionKey is RSA-encrypted
+	// (true) or a raw plaintext key (false).
+	EncryptionKeyEncrypted bool
+}
+
+// VSTS Task Agent API versions for each endpoint, sourced from the runner SDK's
+// TaskAgentHttpClientBase.cs. These must be sent on every request to the VSTS
+// pool API or the server returns 500 VssVersionNotSpecifiedException.
+const (
+	// vstsAPIVersionSession is the api-version for CreateSession and DeleteSession
+	// (locationId 134e239e-2df3-4794-a6f6-24f1f19ec8dc, ApiResourceVersion(5.1,1)).
+	vstsAPIVersionSession = "5.1-preview.1"
+	// vstsAPIVersionMessage is the api-version for GetMessage
+	// (locationId c3a054f6-7a8a-49c0-944e-3a8e5d7adfd7, ApiResourceVersion(6.0,1)).
+	vstsAPIVersionMessage = "6.0-preview.1"
+)
+
+// vstsURL appends an api-version query parameter to a VSTS Task Agent API URL.
+// The VSTS platform requires api-version on every request; without it the server
+// returns 500 VssVersionNotSpecifiedException.
+func vstsURL(base, apiVersion string) string {
+	if strings.Contains(base, "?") {
+		return base + "&api-version=" + apiVersion
+	}
+	return base + "?api-version=" + apiVersion
 }
 
 // PoolBase returns the base URL for VSTS Task Agent pool API calls, e.g.:
@@ -109,28 +164,50 @@ func (c *BrokerClient) newJSONRequest(ctx context.Context, method, url string, b
 	return req, nil
 }
 
-// CreateSession registers a virtual runner with the broker and returns the
-// session ID and the broker URL to use for subsequent message polls.
+// CreateSession registers a virtual runner with the broker and returns session
+// info including the AES session key (RSA-encrypted) for message decryption.
+//
+// agentID must match the agent's registered ID in the pool (the agentId field
+// from the runner's .runner config file written by config.sh). agentName is
+// the registered runner name. The server validates that agent.id is non-zero
+// and refers to a known agent in the pool.
+//
+// When UseV2Flow is true, the broker v2 API path ({BrokerURL}session) is used
+// instead of the VSTS pool API, matching BrokerHttpClient.CreateSessionAsync.
 //
 // A 400 response with a version-too-old message body is returned as a
 // *VersionTooOldError so callers can surface it as a non-retriable condition.
-func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) (sessionID string, brokerURL string, err error) {
+func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentName, runnerVersion string) (*CreateSessionResult, error) {
+	// The body follows the TaskAgentSession shape from the runner SDK:
+	//   ownerName         — machine/process that owns the session
+	//   agent             — TaskAgentReference: registered agent id, name, version
+	//   useFipsEncryption — FIPS-compliant AES key wrapping (false for normal runners)
 	reqBody := map[string]any{
-		"agentName":       "github-actions-gateway",
-		"agentVersion":    runnerVersion,
-		"agentLabel":      runnerVersion,
+		"ownerName": agentName,
+		"agent": map[string]any{
+			"id":      agentID,
+			"name":    agentName,
+			"version": runnerVersion,
+		},
 		"useFipsEncryption": false,
-		"userAgent":       fmt.Sprintf("GitHubActionsGateway/%s", runnerVersion),
 	}
-	url := c.PoolBase() + "/sessions"
+
+	var url string
+	if c.UseV2Flow {
+		// Broker v2 API: POST {serverUrl}session (no pool path, no api-version).
+		url = strings.TrimRight(c.BrokerURL, "/") + "/session"
+	} else {
+		url = vstsURL(c.PoolBase()+"/sessions", vstsAPIVersionSession)
+	}
+
 	req, err := c.newJSONRequest(ctx, http.MethodPost, url, reqBody)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("broker: CreateSession: %w", err)
+		return nil, fmt.Errorf("broker: CreateSession: %w", err)
 	}
 	defer resp.Body.Close()
 	rawBody, _ := io.ReadAll(resp.Body)
@@ -140,12 +217,12 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 		if strings.Contains(strings.ToLower(msg), "version") ||
 			strings.Contains(strings.ToLower(msg), "too old") ||
 			strings.Contains(strings.ToLower(msg), "minimum") {
-			return "", "", &VersionTooOldError{Message: msg}
+			return nil, &VersionTooOldError{Message: msg}
 		}
-		return "", "", fmt.Errorf("broker: CreateSession: 400 %s", msg)
+		return nil, fmt.Errorf("broker: CreateSession: 400 %s", msg)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", "", fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",
+		return nil, fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",
 			resp.StatusCode, url, string(rawBody))
 	}
 
@@ -153,15 +230,28 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 		SessionID string `json:"sessionId"`
 		// GitHub may return an updated broker URL in the session response.
 		// Use it if present; fall back to BrokerClient.BrokerURL.
-		BrokerURL string `json:"brokerURL"`
+		BrokerURL     string `json:"brokerURL"`
+		EncryptionKey *struct {
+			Encrypted bool   `json:"encrypted"`
+			Value     []byte `json:"value"` // raw bytes; JSON decoder handles base64
+		} `json:"encryptionKey"`
 	}
 	if err := json.Unmarshal(rawBody, &respBody); err != nil {
-		return "", "", fmt.Errorf("broker: CreateSession: decode response: %w", err)
+		return nil, fmt.Errorf("broker: CreateSession: decode response: %w", err)
 	}
 	if respBody.BrokerURL == "" {
 		respBody.BrokerURL = c.BrokerURL
 	}
-	return respBody.SessionID, respBody.BrokerURL, nil
+
+	result := &CreateSessionResult{
+		SessionID: respBody.SessionID,
+		BrokerURL: respBody.BrokerURL,
+	}
+	if respBody.EncryptionKey != nil {
+		result.EncryptionKey = respBody.EncryptionKey.Value
+		result.EncryptionKeyEncrypted = respBody.EncryptionKey.Encrypted
+	}
+	return result, nil
 }
 
 // GetMessage opens a 50-second long-poll against the broker.
@@ -170,7 +260,26 @@ func (c *BrokerClient) CreateSession(ctx context.Context, runnerVersion string) 
 // Callers are responsible for retrying on nil/nil with appropriate backoff.
 // Returns *RateLimitError on 429.
 func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
-	url := c.PoolBase() + "/messages?sessionId=" + sessionID
+	var url string
+	if c.UseV2Flow {
+		// Broker v2 API: GET {serverUrl}message with status/version/os/arch params.
+		// Matches BrokerHttpClient.GetRunnerMessageAsync.
+		url = strings.TrimRight(c.BrokerURL, "/") + "/message" +
+			"?sessionId=" + sessionID +
+			"&status=online"
+		if c.RunnerVersion != "" {
+			url += "&runnerVersion=" + c.RunnerVersion
+		}
+		if c.RunnerOS != "" {
+			url += "&os=" + c.RunnerOS
+		}
+		if c.RunnerArch != "" {
+			url += "&architecture=" + c.RunnerArch
+		}
+		url += "&disableUpdate=false"
+	} else {
+		url = vstsURL(c.PoolBase()+"/messages?sessionId="+sessionID, vstsAPIVersionMessage)
+	}
 	req, err := c.newJSONRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -307,8 +416,17 @@ func (c *BrokerClient) RenewJobLoop(ctx context.Context, runServiceURL string, r
 
 // DeleteSession tears down a broker session, allowing GitHub to re-queue any
 // unacquired work. Called during graceful shutdown.
+//
+// In v2 flow mode, sessionID is ignored: the server identifies the session
+// from the bearer token, and the URL is simply {BrokerURL}session.
 func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) error {
-	req, err := c.newJSONRequest(ctx, http.MethodDelete, c.PoolBase()+"/sessions/"+sessionID, nil)
+	var deleteURL string
+	if c.UseV2Flow {
+		deleteURL = strings.TrimRight(c.BrokerURL, "/") + "/session"
+	} else {
+		deleteURL = vstsURL(c.PoolBase()+"/sessions/"+sessionID, vstsAPIVersionSession)
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodDelete, deleteURL, nil)
 	if err != nil {
 		return err
 	}
