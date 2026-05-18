@@ -91,10 +91,22 @@ func run(logger *slog.Logger) error {
 	logger.Info("obtained installation access token")
 
 	// ── 3. Create broker session ─────────────────────────────────────────────
+	//
+	// The VSTS Task Agent API (sessions, messages) requires the runner's OAuth
+	// token from .credentials, not the GitHub App installation token.
+	// GITHUB_RUNNER_AGENT_TOKEN is set by probe-live-run.sh from .credentials.
+	// Fall back to the installation token so the probe remains runnable without
+	// the script (for future investigation modes).
+	brokerToken := os.Getenv("GITHUB_RUNNER_AGENT_TOKEN")
+	if brokerToken == "" {
+		logger.Warn("GITHUB_RUNNER_AGENT_TOKEN not set; using installation token for broker (likely to get 401)")
+		brokerToken = token
+	}
+
 	bc := &broker.BrokerClient{
 		BrokerURL: brokerURL,
 		PoolID:    poolID,
-		Token:     token,
+		Token:     brokerToken,
 	}
 	sessionID, activeBrokerURL, err := bc.CreateSession(ctx, runnerVersion)
 	if err != nil {
