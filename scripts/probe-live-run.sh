@@ -201,13 +201,12 @@ echo "  broker URL: $BROKER_URL"
 step "Ensuring probe-test workflow exists in $GITHUB_OWNER_REPO"
 WORKFLOW_PATH=".github/workflows/probe-test.yml"
 
-EXISTING_SHA=$(curl -s \
-    -H "Authorization: Bearer $INSTALL_TOKEN" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/$OWNER/$REPO/contents/$WORKFLOW_PATH" \
-    | jq -r '.sha // empty')
+# Check using the raw content URL (no auth required for public repos;
+# avoids needing contents:read on the installation token).
+WORKFLOW_HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+    "https://raw.githubusercontent.com/$OWNER/$REPO/main/$WORKFLOW_PATH")
 
-if [[ -z "$EXISTING_SHA" ]]; then
+if [[ "$WORKFLOW_HTTP_STATUS" != "200" ]]; then
     echo "  $WORKFLOW_PATH not found in repo — attempting to create via API"
     WORKFLOW_CONTENT='# Probe test workflow for Milestone 1 live run.
 on:
@@ -243,7 +242,7 @@ jobs:
         die "workflow not present and could not be created — see instructions above"
     fi
 else
-    echo "  already exists (sha $EXISTING_SHA)"
+    echo "  already exists (HTTP $WORKFLOW_HTTP_STATUS)"
 fi
 
 # ── Build probe ───────────────────────────────────────────────────────────────
