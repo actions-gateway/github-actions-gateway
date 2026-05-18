@@ -1,19 +1,23 @@
 package githubapp
 
-// FetchRunnerOAuthToken implements the OAuth2 JWT bearer assertion grant (RFC 7523)
-// used by GitHub Actions runner agents to authenticate to the VSTS Task Agent API.
+// FetchRunnerOAuthToken implements the OAuth 2.0 client credentials grant with a
+// JWT bearer client assertion (RFC 7523 §2.2), matching the VssOAuthCredential
+// flow used by the GitHub Actions runner to authenticate to the VSTS Task Agent API.
 //
 // After config.sh registers a runner, GitHub writes two credential files:
 //
-//   .credentials       — JSON with scheme "OAuth", clientId, and authorizationUrl.
+//   .credentials           — JSON with scheme "OAuth", clientId, and authorizationUrl.
 //   .credentials_rsaparams — JSON with the runner's RSA private key in .NET
-//                        RSAParameters format (Base64-encoded big-endian components).
+//                            RSAParameters format (Base64-encoded big-endian components).
 //
 // The exchange flow:
 //  1. Read clientId and authorizationUrl from .credentials.
 //  2. Read the RSA private key from .credentials_rsaparams.
-//  3. Build a JWT signed with the RSA key (RS256, iss/sub = clientId, aud = authorizationUrl).
-//  4. POST the JWT as a client_assertion to the authorizationUrl (form-urlencoded).
+//  3. Build a JWT (RS256): header={alg,typ}, claims={iss,sub,aud,nbf,exp,jti}.
+//  4. POST to authorizationUrl with:
+//       grant_type=client_credentials
+//       client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+//       client_assertion=<JWT>
 //  5. Return the access_token from the JSON response.
 //
 // The returned token is suitable for Authorization: Bearer in VSTS Task Agent API calls
@@ -22,6 +26,7 @@ package githubapp
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -165,43 +170,42 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		httpClient = http.DefaultClient
 	}
 
-	// Build a JWT assertion signed with the runner's RSA private key.
-	// VSTS identifies the registered public key via the "kid" header = clientId.
-	// Use the full authorizationUrl as the audience (string, not array) and
-	// set nbf == iat (no clock-skew offset) to match the .NET runner behaviour.
+	// Build a JWT client assertion signed with the runner's RSA private key.
+	//
+	// The .NET runner uses VssOAuthJwtBearerClientCredential which mirrors the
+	// OAuth 2.0 Private Key JWT client authentication profile (RFC 7523 §2.2):
+	//   - Header: {"alg":"RS256","typ":"JWT"}  — no "kid"
+	//   - Claims: iss=clientId, sub=clientId, aud=authorizationUrl,
+	//             nbf=now, exp=now+5m, jti=<unique GUID>
+	//             No "iat" claim (the .NET SDK explicitly omits it unless set).
 	now := time.Now()
 	tok := jwt.New(jwt.SigningMethodRS256)
-	tok.Header["kid"] = creds.ClientID
+	// Do NOT add a "kid" header — the runner SDK does not set one.
+	delete(tok.Header, "kid")
 	tok.Claims = jwt.MapClaims{
 		"sub": creds.ClientID,
 		"iss": creds.ClientID,
 		"aud": creds.AuthorizationURL, // string, not []string; full URL
 		"nbf": jwt.NewNumericDate(now),
-		"iat": jwt.NewNumericDate(now),
 		"exp": jwt.NewNumericDate(now.Add(5 * time.Minute)),
+		"jti": newUUID(), // required by VSTS token service
+		// No "iat" — the .NET runner SDK omits it for client assertions.
 	}
 	assertion, err := tok.SignedString(privateKey)
 	if err != nil {
 		return "", fmt.Errorf("sign runner JWT assertion: %w", err)
 	}
 
-	// Print the decoded JWT header and claims to stderr for debugging.
-	// Remove once the token exchange is confirmed working.
-	if parts := strings.SplitN(assertion, ".", 3); len(parts) == 3 {
-		if hdr, e := base64.RawURLEncoding.DecodeString(parts[0]); e == nil {
-			fmt.Fprintf(os.Stderr, "DEBUG runner JWT header : %s\n", hdr)
-		}
-		if clm, e := base64.RawURLEncoding.DecodeString(parts[1]); e == nil {
-			fmt.Fprintf(os.Stderr, "DEBUG runner JWT claims : %s\n", clm)
-		}
-	}
-
-	// POST the assertion to the VSTS token endpoint (form-urlencoded).
-	// VSTS uses "assertion" as the JWT parameter name rather than the RFC 7523
-	// "client_assertion" field name.
+	// POST the assertion using the OAuth 2.0 client credentials grant with a
+	// JWT bearer client assertion — matching the VssOAuthClientCredentialsGrant
+	// + VssOAuthJwtBearerClientCredential combination in the runner SDK:
+	//   grant_type=client_credentials
+	//   client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+	//   client_assertion=<JWT>
 	form := url.Values{
-		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
-		"assertion":  {assertion},
+		"grant_type":            {"client_credentials"},
+		"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
+		"client_assertion":      {assertion},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.AuthorizationURL,
 		strings.NewReader(form.Encode()))
@@ -233,4 +237,18 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		return "", fmt.Errorf("runner token response missing access_token: %s", body)
 	}
 	return tokenResp.AccessToken, nil
+}
+
+// newUUID returns a random UUID v4 string (xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx).
+// Used to populate the jti claim, which the VSTS token service requires to be
+// unique per request.
+func newUUID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("crypto/rand unavailable: " + err.Error())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
