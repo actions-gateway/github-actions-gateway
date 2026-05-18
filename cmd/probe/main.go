@@ -90,16 +90,36 @@ func run(logger *slog.Logger) error {
 	}
 	logger.Info("obtained installation access token")
 
-	// ── 3. Create broker session ─────────────────────────────────────────────
+	// ── 3. Obtain broker token (runner OAuth) ───────────────────────────────
 	//
 	// The VSTS Task Agent API (sessions, messages) requires the runner's OAuth
-	// token from .credentials, not the GitHub App installation token.
-	// GITHUB_RUNNER_AGENT_TOKEN is set by probe-live-run.sh from .credentials.
-	// Fall back to the installation token so the probe remains runnable without
-	// the script (for future investigation modes).
-	brokerToken := os.Getenv("GITHUB_RUNNER_AGENT_TOKEN")
-	if brokerToken == "" {
-		logger.Warn("GITHUB_RUNNER_AGENT_TOKEN not set; using installation token for broker (likely to get 401)")
+	// token, NOT the GitHub App installation token.  After config.sh, GitHub
+	// writes two credential files:
+	//   .credentials           — clientId + authorizationUrl
+	//   .credentials_rsaparams — RSA private key in .NET RSAParameters format
+	//
+	// We exchange these for a short-lived OAuth2 bearer token via RFC 7523
+	// JWT bearer assertion.  The script exports the paths; fall back to the
+	// installation token only when the files are absent (e.g. unit-test mode).
+	var brokerToken string
+	credsFile := os.Getenv("GITHUB_RUNNER_CREDENTIALS_FILE")
+	rsaFile := os.Getenv("GITHUB_RUNNER_RSA_PARAMS_FILE")
+	if credsFile != "" && rsaFile != "" {
+		runnerCreds, err := githubapp.ParseRunnerCredentials(credsFile)
+		if err != nil {
+			return fmt.Errorf("parse runner credentials: %w", err)
+		}
+		runnerKey, err := githubapp.ParseRunnerRSAKey(rsaFile)
+		if err != nil {
+			return fmt.Errorf("parse runner rsa key: %w", err)
+		}
+		brokerToken, err = githubapp.FetchRunnerOAuthToken(ctx, runnerCreds, runnerKey, nil)
+		if err != nil {
+			return fmt.Errorf("fetch runner OAuth token: %w", err)
+		}
+		logger.Info("obtained runner OAuth token via JWT bearer assertion")
+	} else {
+		logger.Warn("GITHUB_RUNNER_CREDENTIALS_FILE/RSA_PARAMS_FILE not set; using installation token (expect 401)")
 		brokerToken = token
 	}
 

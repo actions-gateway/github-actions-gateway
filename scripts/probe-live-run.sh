@@ -208,16 +208,14 @@ echo "  broker URL: $BROKER_URL"
 POOL_ID=$(jq -r '.poolId // 1' "$RUNNER_CONFIG")
 echo "  pool ID: $POOL_ID"
 
-# The VSTS Task Agent API (sessions, messages) requires the runner's own OAuth
-# token, not the GitHub App installation token. config.sh stores it in .credentials.
+# The VSTS Task Agent API requires an OAuth token obtained by exchanging
+# the runner's RSA private key (.credentials_rsaparams) using the JWT bearer
+# assertion grant (RFC 7523). The probe performs this exchange internally.
 RUNNER_CREDENTIALS="$RUNNER_TMP/.credentials"
+RUNNER_RSA_PARAMS="$RUNNER_TMP/.credentials_rsaparams"
 [[ -f "$RUNNER_CREDENTIALS" ]] || die ".credentials not found after config.sh"
-# Field name is 'Token' in older runners, 'token' in newer ones.
-RUNNER_AGENT_TOKEN=$(jq -r '
-    if .data then (.data.Token // .data.token // empty)
-    else empty end' "$RUNNER_CREDENTIALS")
-[[ -n "$RUNNER_AGENT_TOKEN" ]] || die "Could not extract OAuth token from .credentials — contents: $(cat "$RUNNER_CREDENTIALS")"
-echo "  runner agent token: ${RUNNER_AGENT_TOKEN:0:8}… (${#RUNNER_AGENT_TOKEN} chars)"
+[[ -f "$RUNNER_RSA_PARAMS"  ]] || die ".credentials_rsaparams not found after config.sh"
+echo "  credentials: $RUNNER_CREDENTIALS  rsa_params: $RUNNER_RSA_PARAMS"
 
 # ── Ensure probe-test workflow exists ─────────────────────────────────────────
 
@@ -295,7 +293,8 @@ export GITHUB_APP_INSTALLATION_ID
 export GITHUB_BROKER_URL="$BROKER_URL"
 export GITHUB_RUNNER_VERSION="$RUNNER_VERSION"
 export GITHUB_POOL_ID="$POOL_ID"
-export GITHUB_RUNNER_AGENT_TOKEN="$RUNNER_AGENT_TOKEN"
+export GITHUB_RUNNER_CREDENTIALS_FILE="$RUNNER_CREDENTIALS"
+export GITHUB_RUNNER_RSA_PARAMS_FILE="$RUNNER_RSA_PARAMS"
 
 /tmp/probe 2>&1 1>"$RAW_PAYLOAD" | tee /tmp/probe.log || true
 

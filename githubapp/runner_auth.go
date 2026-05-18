@@ -1,0 +1,223 @@
+package githubapp
+
+// FetchRunnerOAuthToken implements the OAuth2 JWT bearer assertion grant (RFC 7523)
+// used by GitHub Actions runner agents to authenticate to the VSTS Task Agent API.
+//
+// After config.sh registers a runner, GitHub writes two credential files:
+//
+//   .credentials       — JSON with scheme "OAuth", clientId, and authorizationUrl.
+//   .credentials_rsaparams — JSON with the runner's RSA private key in .NET
+//                        RSAParameters format (Base64-encoded big-endian components).
+//
+// The exchange flow:
+//  1. Read clientId and authorizationUrl from .credentials.
+//  2. Read the RSA private key from .credentials_rsaparams.
+//  3. Build a JWT signed with the RSA key (RS256, iss/sub = clientId, aud = authorizationUrl).
+//  4. POST the JWT as a client_assertion to the authorizationUrl (form-urlencoded).
+//  5. Return the access_token from the JSON response.
+//
+// The returned token is suitable for Authorization: Bearer in VSTS Task Agent API calls
+// (CreateSession, GetMessage, DeleteSession).
+
+import (
+	"context"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+// RunnerCredentials holds the OAuth2 client credentials from the runner's
+// .credentials file. These are written by config.sh during runner registration.
+type RunnerCredentials struct {
+	ClientID         string
+	AuthorizationURL string
+}
+
+// ParseRunnerCredentials reads the runner's .credentials JSON file and extracts
+// the clientId and authorizationUrl from the OAuth data section.
+func ParseRunnerCredentials(path string) (*RunnerCredentials, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read runner credentials: %w", err)
+	}
+	var raw struct {
+		Scheme string `json:"scheme"`
+		Data   struct {
+			ClientID         string `json:"clientId"`
+			AuthorizationURL string `json:"authorizationUrl"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse runner credentials: %w", err)
+	}
+	if raw.Data.ClientID == "" || raw.Data.AuthorizationURL == "" {
+		return nil, fmt.Errorf("runner credentials missing clientId or authorizationUrl (got scheme=%q)", raw.Scheme)
+	}
+	return &RunnerCredentials{
+		ClientID:         raw.Data.ClientID,
+		AuthorizationURL: raw.Data.AuthorizationURL,
+	}, nil
+}
+
+// dotNetRSAParams matches the JSON written by .NET's RSAParameters serializer.
+// All fields are standard Base64 (with padding), big-endian byte arrays.
+type dotNetRSAParams struct {
+	Exponent string `json:"Exponent"`
+	Modulus  string `json:"Modulus"`
+	P        string `json:"P"`
+	Q        string `json:"Q"`
+	DP       string `json:"DP"`
+	DQ       string `json:"DQ"`
+	InverseQ string `json:"InverseQ"`
+	D        string `json:"D"`
+}
+
+// ParseRunnerRSAKey reads the runner's .credentials_rsaparams JSON file and
+// reconstructs the RSA private key. Both standard Base64 (with padding) and
+// Base64URL (without padding) encodings are accepted for forward-compatibility.
+func ParseRunnerRSAKey(path string) (*rsa.PrivateKey, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read rsa params: %w", err)
+	}
+	var params dotNetRSAParams
+	if err := json.Unmarshal(data, &params); err != nil {
+		return nil, fmt.Errorf("parse rsa params: %w", err)
+	}
+
+	decodeBigInt := func(fieldName, s string) (*big.Int, error) {
+		if s == "" {
+			return nil, fmt.Errorf("field %s is empty", fieldName)
+		}
+		b, err := base64.StdEncoding.DecodeString(s)
+		if err != nil {
+			// Fallback: try base64url (no padding) in case the runner uses JWK format.
+			b, err = base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
+			if err != nil {
+				return nil, fmt.Errorf("field %s: base64 decode: %w", fieldName, err)
+			}
+		}
+		return new(big.Int).SetBytes(b), nil
+	}
+
+	n, err := decodeBigInt("Modulus", params.Modulus)
+	if err != nil {
+		return nil, err
+	}
+	e, err := decodeBigInt("Exponent", params.Exponent)
+	if err != nil {
+		return nil, err
+	}
+	d, err := decodeBigInt("D", params.D)
+	if err != nil {
+		return nil, err
+	}
+	p, err := decodeBigInt("P", params.P)
+	if err != nil {
+		return nil, err
+	}
+	q, err := decodeBigInt("Q", params.Q)
+	if err != nil {
+		return nil, err
+	}
+	dp, err := decodeBigInt("DP", params.DP)
+	if err != nil {
+		return nil, err
+	}
+	dq, err := decodeBigInt("DQ", params.DQ)
+	if err != nil {
+		return nil, err
+	}
+	qinv, err := decodeBigInt("InverseQ", params.InverseQ)
+	if err != nil {
+		return nil, err
+	}
+
+	priv := &rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{N: n, E: int(e.Int64())},
+		D:         d,
+		Primes:    []*big.Int{p, q},
+	}
+	priv.Precomputed.Dp = dp
+	priv.Precomputed.Dq = dq
+	priv.Precomputed.Qinv = qinv
+
+	if err := priv.Validate(); err != nil {
+		return nil, fmt.Errorf("rsa key invalid: %w", err)
+	}
+	return priv, nil
+}
+
+// FetchRunnerOAuthToken exchanges the runner's RSA credentials for a VSTS Task
+// Agent OAuth2 access token using the JWT bearer assertion grant (RFC 7523).
+//
+// The returned token is used as Authorization: Bearer for broker API calls
+// (CreateSession, GetMessage, DeleteSession).
+func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privateKey *rsa.PrivateKey, httpClient *http.Client) (string, error) {
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+
+	// Build a JWT assertion signed with the runner's RSA private key.
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub": creds.ClientID,
+		"iss": creds.ClientID,
+		"aud": jwt.ClaimStrings{creds.AuthorizationURL},
+		"nbf": jwt.NewNumericDate(now.Add(-60 * time.Second)), // clock-skew buffer
+		"iat": jwt.NewNumericDate(now),
+		"exp": jwt.NewNumericDate(now.Add(5 * time.Minute)),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	assertion, err := tok.SignedString(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign runner JWT assertion: %w", err)
+	}
+
+	// POST the assertion to the token endpoint (form-urlencoded per RFC 7523).
+	form := url.Values{
+		"grant_type":            {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
+		"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
+		"client_assertion":      {assertion},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.AuthorizationURL,
+		strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("build token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("runner token request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("runner token endpoint returned %d: %s", resp.StatusCode, body)
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("parse runner token response: %w", err)
+	}
+	if tokenResp.AccessToken == "" {
+		return "", fmt.Errorf("runner token response missing access_token: %s", body)
+	}
+	return tokenResp.AccessToken, nil
+}
