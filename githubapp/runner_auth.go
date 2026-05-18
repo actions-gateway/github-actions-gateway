@@ -20,6 +20,7 @@ package githubapp
 // (CreateSession, GetMessage, DeleteSession).
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
@@ -35,6 +36,15 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// utf8BOM is the byte-order mark that .NET writes at the start of JSON files.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
+// stripBOM removes a leading UTF-8 BOM if present. .NET's JSON serializer
+// writes BOM-prefixed files; Go's json package does not handle the BOM.
+func stripBOM(data []byte) []byte {
+	return bytes.TrimPrefix(data, utf8BOM)
+}
 
 // RunnerCredentials holds the OAuth2 client credentials from the runner's
 // .credentials file. These are written by config.sh during runner registration.
@@ -57,7 +67,7 @@ func ParseRunnerCredentials(path string) (*RunnerCredentials, error) {
 			AuthorizationURL string `json:"authorizationUrl"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if err := json.Unmarshal(stripBOM(data), &raw); err != nil {
 		return nil, fmt.Errorf("parse runner credentials: %w", err)
 	}
 	if raw.Data.ClientID == "" || raw.Data.AuthorizationURL == "" {
@@ -91,7 +101,7 @@ func ParseRunnerRSAKey(path string) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("read rsa params: %w", err)
 	}
 	var params dotNetRSAParams
-	if err := json.Unmarshal(data, &params); err != nil {
+	if err := json.Unmarshal(stripBOM(data), &params); err != nil {
 		return nil, fmt.Errorf("parse rsa params: %w", err)
 	}
 

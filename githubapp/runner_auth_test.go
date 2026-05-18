@@ -81,6 +81,19 @@ func TestParseRunnerCredentials_HappyPath(t *testing.T) {
 	assert.Equal(t, "https://example.com/token", creds.AuthorizationURL)
 }
 
+func TestParseRunnerCredentials_DOTNETBOM(t *testing.T) {
+	// .NET's JSON serializer writes a UTF-8 BOM prefix (\xEF\xBB\xBF).
+	// Verify we strip it before parsing.
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	content := append(bom, []byte(`{"scheme":"OAuth","data":{"clientId":"bom-client","authorizationUrl":"https://bom.example.com/token"}}`)...)
+	path := filepath.Join(t.TempDir(), ".credentials")
+	require.NoError(t, os.WriteFile(path, content, 0600))
+
+	creds, err := githubapp.ParseRunnerCredentials(path)
+	require.NoError(t, err)
+	assert.Equal(t, "bom-client", creds.ClientID)
+}
+
 func TestParseRunnerCredentials_MissingFields(t *testing.T) {
 	content := `{"scheme": "OAuth", "data": {}}`
 	path := filepath.Join(t.TempDir(), ".credentials")
