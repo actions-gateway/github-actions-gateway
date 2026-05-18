@@ -30,6 +30,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNNER_TMP=$(mktemp -d /tmp/actions-runner-XXXXXX)
+RUNNER_CACHE_DIR="${PROBE_RUNNER_CACHE:-$HOME/.cache/github-actions-runner}"
 RAW_PAYLOAD="${PROBE_RAW_OUTPUT:-/tmp/probe-raw-payload.json}"
 REG_TOKEN=""  # set later; used by cleanup
 
@@ -168,10 +169,18 @@ echo "  version=$RUNNER_VERSION  os=$OS  arch=$ARCH"
 RUNNER_ARCHIVE="actions-runner-${OS}-${ARCH}-${RUNNER_VERSION}.tar.gz"
 RUNNER_URL="https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/${RUNNER_ARCHIVE}"
 
-step "Downloading actions/runner $RUNNER_VERSION"
-curl -fL --progress-bar "$RUNNER_URL" -o "$RUNNER_TMP/$RUNNER_ARCHIVE" \
-    || die "Failed to download runner from $RUNNER_URL"
-tar -C "$RUNNER_TMP" -xzf "$RUNNER_TMP/$RUNNER_ARCHIVE"
+step "Fetching actions/runner $RUNNER_VERSION"
+mkdir -p "$RUNNER_CACHE_DIR"
+CACHED_ARCHIVE="$RUNNER_CACHE_DIR/$RUNNER_ARCHIVE"
+if [[ -f "$CACHED_ARCHIVE" ]]; then
+    echo "  cache hit: $CACHED_ARCHIVE"
+else
+    echo "  downloading $RUNNER_URL"
+    curl -fL --progress-bar "$RUNNER_URL" -o "$CACHED_ARCHIVE" \
+        || { rm -f "$CACHED_ARCHIVE"; die "Failed to download runner from $RUNNER_URL"; }
+    echo "  cached to $CACHED_ARCHIVE"
+fi
+tar -C "$RUNNER_TMP" -xzf "$CACHED_ARCHIVE"
 echo "  extracted to $RUNNER_TMP"
 
 # ── Configure runner (broker URL discovery) ───────────────────────────────────
