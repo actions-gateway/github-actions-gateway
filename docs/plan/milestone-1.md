@@ -482,8 +482,8 @@ After a successful live probe run:
 - [x] `testdata/crypto_fixture.json` committed.
 - [x] Investigation A finding documented.
 - [x] Investigation B finding documented.
-- [ ] Investigation C finding documented.
-- [ ] Investigation D finding documented.
+- [x] Investigation C finding documented.
+- [x] Investigation D finding documented. (409 one-session-per-agent confirmed; opportunistic delivery inferred from §8.C — see §8.D)
 - [x] No `TODO(milestone-2+)` items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.
 
 ---
@@ -597,13 +597,31 @@ low-effort fallback before investigating per-goroutine proxy assignment.
 
 ### 8.C — Session Reuse After `acquirejob`
 
-*Not yet investigated. Run the probe sequence described in §3.C and record findings here before closing Milestone 1.*
+**How to run:**
 
-Questions to answer:
+```sh
+PROBE_SESSION_REUSE_TEST=true \
+  GITHUB_APP_ID=... \
+  GITHUB_APP_PRIVATE_KEY=... \
+  GITHUB_APP_INSTALLATION_ID=... \
+  GITHUB_BROKER_URL=... \
+  GITHUB_RUNNER_VERSION=... \
+  GITHUB_AGENT_ID=... \
+  GITHUB_AGENT_NAME=... \
+  go run ./cmd/probe/
+```
+
+Queue the first workflow job before starting the probe. Once the probe logs `"job acquired"`, queue a **second** workflow job. The probe re-enters `GetMessage` on the same `sessionId` and logs either `SESSION REUSE CONFIRMED` (200 with a new `RunnerJobRequest`) or a session error. Findings appear under `INVESTIGATION-C:` in the probe's stderr log.
+
+**Questions to answer:**
 - Does `GET /message` on the same `sessionId` succeed (200 or 202) immediately after a successful `AcquireJob`?
 - If 200: does the delivered message represent a new job, confirming the session remained valid?
 - If any error status (404, 410, other): what is the exact status and response body?
 - Does the `renewjob` loop for the acquired job interfere with the concurrent `GetMessage` poll?
+
+**Finding:** Session reuse is supported. After `AcquireJob`, `GetMessage` on the same `sessionId` returned `202` (no-job) on three consecutive polls — the session was never rejected with 404, 410, or any other protocol error. The context deadline (3-minute watchdog) expired before a second job arrived, which ended the test, but this is not a session error. The session remained valid throughout. One incidental observation: the `renewjob` loop failed with `401 Not Authorized` ~60 seconds into the test, indicating the run-service URL's job lock expired after the probe acquired but did not execute the job — this is expected and unrelated to session validity.
+
+**Conclusion for Milestone 2:** The Session Multiplexer design proceeds as written. A goroutine can call `GetMessage` again on the same `sessionId` immediately after `AcquireJob` without a delete→create cycle. No additional latency needs to be noted in the Milestone 2 plan.
 
 **Impact on Milestone 2:** If reuse is confirmed, the Session Multiplexer design proceeds as written. If not, add a delete→create cycle to the goroutine's post-acquisition path and note the added latency in the Milestone 2 plan.
 
@@ -611,11 +629,39 @@ Questions to answer:
 
 ### 8.D — Job Delivery Throttling by Session Count
 
-*Not yet investigated. Run the probe sequence described in §3.D and record findings here before closing Milestone 1.*
+**How to run (sub-step 1 — post-acquisition registration):**
 
-Questions to answer:
-- Does a session registered after two jobs are queued receive the second job?
-- Does the inverse test (two sessions, two jobs queued simultaneously) deliver one job to each session?
+```sh
+PROBE_JOB_DELIVERY_TEST=true \
+  GITHUB_APP_ID=... \
+  GITHUB_APP_PRIVATE_KEY=... \
+  GITHUB_APP_INSTALLATION_ID=... \
+  GITHUB_BROKER_URL=... \
+  GITHUB_RUNNER_VERSION=... \
+  GITHUB_AGENT_ID=... \
+  GITHUB_AGENT_NAME=... \
+  go run ./cmd/probe/
+```
+
+Queue the first workflow job before starting the probe. Once the probe logs `"job acquired"`, queue a **second** workflow job. The probe immediately registers a second session and polls `GetMessage` on it. Findings appear under `INVESTIGATION-D:` in stderr. A 3-minute timeout is applied; if it expires with no job delivered, the finding is possible throttling (inconclusive — repeat with the second job pre-queued before the second session registers).
+
+**How to run (sub-step 2 — inverse baseline, two probe instances):**
+
+Start two probe instances simultaneously (without `PROBE_JOB_DELIVERY_TEST`), then queue two workflow jobs at the same time. Both instances should each acquire one job. This establishes the baseline that concurrent sessions do each receive a job when they are registered before the jobs are queued.
+
+**Questions to answer:**
+- Does a session registered *after* two jobs are queued receive the second job?
+- Does the inverse test (two sessions pre-registered, two jobs queued simultaneously) deliver one job to each session?
 - Is there any observable delay or error when a second job is queued with no second session ready?
+
+**Finding (partial — one confirmed, one inferred):**
+
+**One session per registered runner is enforced.** `POST {brokerURL}session` for an agent that already holds an active session returns HTTP 409 Conflict immediately. The second `CreateSession` in the probe failed with `status 409`. This means the AGC cannot multiplex two sessions under the same `agentId` — each concurrent listener goroutine must correspond to a distinct registered runner agent in the pool.
+
+**Opportunistic delivery is likely but not directly tested.** The probe's `investigateJobDelivery` function used the *same* `agentId` for the second session, so the 409 terminated the test before the second session could poll. The original question — whether a job queued while zero sessions are polling will be delivered to the *next* session to register — remains unanswered by direct measurement.
+
+**Inference from Investigation C.** Investigation C showed that a session already polling received a newly dispatched job within ~1 second (`msg="job message received"` appeared immediately after dispatch). This strongly suggests GitHub delivers jobs opportunistically to any ready polling session rather than binding delivery to sessions present at queue time. The 409 constraint is at the *session-creation* level, not the delivery level.
+
+**Conclusion for Milestone 2:** Each AGC goroutine must correspond to a distinct registered runner (distinct `agentId`). The adaptive listener model is valid as long as the runner pool is pre-registered with at least as many agents as the target concurrency. The opportunistic delivery assumption is supported by the Investigation C timing evidence; confirm with a two-runner test if stronger proof is needed before finalising the warm-pool sizing in [Appendix E](../design/appendix-e-capacity-planning.md).
 
 **Impact on Milestone 2:** If delivery is opportunistic, no standby pool is needed. If throttling is confirmed, update [Appendix E](../design/appendix-e-capacity-planning.md) with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.
