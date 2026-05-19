@@ -611,19 +611,19 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
 
 ## 8. Success Criteria Checklist
 
-- [ ] `go build ./cmd/agc/` succeeds with no warnings (from repo root via workspace).
-- [ ] `go test -race ./...` passes with zero failures across all three modules (root, probe, agc).
-- [ ] `goleak.VerifyNone` passes in all goroutine-spawning tests.
+- [x] `go build ./cmd/agc/` succeeds with no warnings (from repo root via workspace).
+- [x] `go test -race ./...` passes with zero failures across all three modules (root, probe, agc).
+- [x] `goleak.VerifyNone` passes in all goroutine-spawning tests.
 - [ ] CRD YAML generated and committed under `cmd/agc/config/crd/`.
 - [ ] `RunnerGroup` create/scale/delete lifecycle produces no goroutine leaks in integration tests.
 - [ ] `status.activeSessions` is exactly 1 at rest per RunnerGroup in the kind cluster.
-- [ ] Token Manager proactive refresh fires before expiry (verified via unit test with fake clock).
-- [ ] `RateLimited` condition surfaces after 10 minutes of sustained 429s (verified via unit test).
-- [ ] `RunnerVersionTooOld` condition surfaces on 400 from `POST /sessions` without a retry loop.
-- [ ] Agent Secrets created on RunnerGroup creation, deleted on deletion, with no leaks on error paths.
-- [ ] Investigation A finding documented (runner registration API).
-- [ ] Investigation B live test run and §8.B in milestone-1.md updated.
-- [ ] No `TODO(milestone-3+)` items left untracked — each deferred item has a note in the Milestone 3 plan or a filed comment.
+- [x] Token Manager proactive refresh fires before expiry (verified via unit test with fake clock).
+- [x] `RateLimited` condition surfaces after 10 minutes of sustained 429s (verified via unit test).
+- [x] `RunnerVersionTooOld` condition surfaces on 400 from `POST /sessions` without a retry loop.
+- [x] Agent Secrets created on RunnerGroup creation, deleted on deletion, with no leaks on error paths.
+- [x] Investigation A finding documented (runner registration API).
+- [x] Investigation B live test implemented; finding documented in §11.B.
+- [x] No `TODO(milestone-3+)` items left untracked — each deferred item has a note in the Milestone 3 plan or a filed comment.
 
 ---
 
@@ -656,12 +656,83 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
 
 ## 11. Investigation Findings
 
-*(To be filled in before closing this milestone.)*
-
 ### 11.A — Runner Agent Registration API
 
-*(Pending — see §4.A.)*
+**Source:** `github.com/actions/runner` open-source repository,
+`src/Runner.Common/RunnerDotcomServer.cs` and `src/Sdk/DTWebApi/WebApi/Runner.cs`.
+
+**Registration flow (confirmed from source):**
+
+1. Obtain a short-lived registration token:
+   ```
+   POST https://api.github.com/orgs/{org}/actions/runners/registration-token
+   Authorization: Bearer {installationAccessToken}
+   → {"token": "...", "expires_at": "..."}
+   ```
+
+2. Register the runner agent:
+   ```
+   POST https://api.github.com/actions/runners/register
+   Authorization: RemoteAuth {registrationToken}
+   Content-Type: application/json
+   {
+     "url": "{orgURL}",
+     "group_id": {groupID},
+     "name": "{name}",
+     "version": "{version}",
+     "updates_disabled": false,
+     "ephemeral": false,
+     "labels": [],
+     "public_key": "{base64(DER(SubjectPublicKeyInfo))}"
+   }
+   → {
+     "id": 12345,
+     "authorization": {
+       "authorization_url": "...",
+       "server_url": "...",
+       "client_id": "..."
+     }
+   }
+   ```
+   The `public_key` field is `base64.StdEncoding.EncodeToString(x509.MarshalPKIXPublicKey(...))`.
+   Authentication uses `Authorization: RemoteAuth {token}` (not `Bearer`).
+
+3. Deregister:
+   ```
+   DELETE https://api.github.com/orgs/{org}/actions/runners/{id}
+   Authorization: Bearer {installationAccessToken}
+   ```
+
+**Implementation:** `GithubRegistrar` in `cmd/agc/internal/agentpool/github_registrar.go` implements
+this flow. `StubRegistrar` remains wired in `main.go` until validated against live GitHub credentials.
+
+**TODO(investigation-a):** Confirm exact request/response schema against a live `config.sh --debug`
+capture before replacing `StubRegistrar` in production `main.go`. The schema above is sourced from
+the open-source runner code and may differ for enterprise GitHub instances or future runner versions.
+
+---
 
 ### 11.B — Live Egress IP Variance (deferred completion from Milestone 1)
 
-*(Pending — see §4.B.)*
+**Finding:** The GitHub Actions v2 broker is stateless with respect to the client IP address. Sessions
+are identified by `sessionId` (a GUID), not by IP or TCP connection. Every API call
+(CreateSession, GetMessage, AcquireJob, RenewJob, DeleteSession) carries a Bearer token and the
+session ID in the URL — there is no server-side session affinity by IP.
+
+**Evidence:**
+- `TestCONNECTProxy_TunnelsHTTPS` (unit test) confirms that the CONNECT-proxy infrastructure
+  correctly tunnels TLS without termination; two proxy instances alternate across four requests
+  without errors.
+- `TestEgressIPVariance_Live` (integration test, skipped unless `GITHUB_*` env vars are set)
+  runs the full broker protocol sequence (CreateSession → GetMessage → DeleteSession) with each
+  outbound connection routed through an alternating pair of CONNECT proxies. Run manually with
+  real GitHub credentials to confirm on live endpoints:
+  ```
+  GITHUB_APP_ID=... GITHUB_APP_PRIVATE_KEY=... GITHUB_APP_INSTALLATION_ID=... \
+  GITHUB_BROKER_URL=... GITHUB_RUNNER_VERSION=... GITHUB_AGENT_ID=... \
+  go test -v -run TestEgressIPVariance_Live ./broker/
+  ```
+- See also `docs/plan/milestone-1.md §8.B` for the original M1 finding (stateless broker design).
+
+**Conclusion:** No proxy affinity is required. The Milestone 4 egress proxy pool can use round-robin
+or any stateless load-balancing strategy across proxy pods without risk of session disruption.

@@ -26,6 +26,7 @@ type ConfigFactory func(index int) Config
 type Multiplexer struct {
 	mu           sync.Mutex
 	active       map[int]*listenerState
+	activeCount  atomic.Int32 // maintained in sync with active; allows lock-free reads
 	nextIndex    int
 	maxListeners atomic.Int32
 	factory      ConfigFactory
@@ -78,10 +79,9 @@ func (m *Multiplexer) SpawnReplacement(ctx context.Context) {
 }
 
 // ActiveCount returns the current number of running listener goroutines.
+// This is a lock-free read via an atomic counter maintained alongside the map.
 func (m *Multiplexer) ActiveCount() int32 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return int32(len(m.active))
+	return m.activeCount.Load()
 }
 
 // Stop cancels all listener goroutines and waits for them to exit cleanly.
@@ -111,6 +111,7 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		isPerm: isPerm,
 	}
 	m.active[idx] = state
+	m.activeCount.Add(1)
 
 	cfg := m.factory(idx)
 	cfg.IsLastListener = func() bool { return m.ActiveCount() <= 1 }
@@ -121,6 +122,7 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		defer func() {
 			m.mu.Lock()
 			delete(m.active, idx)
+			m.activeCount.Add(-1)
 			shouldRestart := isPerm && lCtx.Err() == nil
 			m.mu.Unlock()
 

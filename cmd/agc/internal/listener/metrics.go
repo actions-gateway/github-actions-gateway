@@ -69,3 +69,13 @@ func NewMetrics() *Metrics {
 	)
 	return m
 }
+
+// IncTokenRefreshes implements token.MetricsRecorder.
+func (m *Metrics) IncTokenRefreshes(ns string) {
+	m.TokenRefreshesTotal.WithLabelValues(ns).Inc()
+}
+
+// IncTokenRefreshErrors implements token.MetricsRecorder.
+func (m *Metrics) IncTokenRefreshErrors(ns string) {
+	m.TokenRefreshErrorsTotal.WithLabelValues(ns).Inc()
+}

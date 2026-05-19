@@ -18,9 +18,9 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/controller"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -68,19 +68,20 @@ func run() error {
 	}
 	tokenMgr := token.NewManager(expProvider, nil)
 
-	// ── 3. Build scheme ──────────────────────────────────────────────────────
+	// ── 3. Build Prometheus metrics ──────────────────────────────────────────
+	m := listener.NewMetrics()
+
+	// ── 4. Build scheme ──────────────────────────────────────────────────────
 	scheme := runtime.NewScheme()
+	// clientgoscheme already includes corev1; no need to add it separately.
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return err
-	}
-	if err := corev1.AddToScheme(scheme); err != nil {
 		return err
 	}
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		return err
 	}
 
-	// ── 4. Start the controller-runtime manager ──────────────────────────────
+	// ── 5. Start the controller-runtime manager ──────────────────────────────
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 	})
@@ -88,8 +89,11 @@ func run() error {
 		return fmt.Errorf("create manager: %w", err)
 	}
 
-	// ── 5. Start token manager ───────────────────────────────────────────────
+	// ── 6. Start token manager ───────────────────────────────────────────────
 	ctx := ctrl.SetupSignalHandler()
+	namespace := os.Getenv("POD_NAMESPACE")
+	tokenMgr.Namespace = namespace
+	tokenMgr.Metrics = m
 	tokenMgr.Start(ctx)
 
 	// Wait for the first token before starting the reconciler.
@@ -97,11 +101,12 @@ func run() error {
 		return fmt.Errorf("initial token fetch: %w", err)
 	}
 
-	// ── 6. Register reconciler ───────────────────────────────────────────────
+	// ── 7. Register reconciler ───────────────────────────────────────────────
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tokenMgr,
 		Registrar:    agentpool.NewStubRegistrar(),
+		Metrics:      m,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
 			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),

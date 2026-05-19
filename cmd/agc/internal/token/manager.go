@@ -27,6 +27,13 @@ var RealClock Clock = realClock{}
 
 const refreshLeadTime = 5 * time.Minute
 
+// MetricsRecorder is implemented by listener.Metrics to record token events.
+// nil-safe: all methods must check for nil before calling.
+type MetricsRecorder interface {
+	IncTokenRefreshes(namespace string)
+	IncTokenRefreshErrors(namespace string)
+}
+
 // Manager holds a thread-safe, proactively refreshed installation access token.
 // The background loop wakes at T-5min before expiry and swaps in a fresh token
 // while holding the write lock only for the pointer swap — never during the
@@ -38,6 +45,10 @@ type Manager struct {
 	clock     Clock
 	ready     chan struct{} // closed after the first successful fetch
 	readyOnce sync.Once
+
+	// Namespace and Metrics are optional; set after NewManager if desired.
+	Namespace string
+	Metrics   MetricsRecorder
 }
 
 // NewManager creates a Token Manager backed by the given ExpiringTokenProvider.
@@ -94,6 +105,9 @@ func (m *Manager) loop(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+			if m.Metrics != nil {
+				m.Metrics.IncTokenRefreshErrors(m.Namespace)
+			}
 			// Retry with exponential backoff; do not update ready or current.
 			select {
 			case <-ctx.Done():
@@ -112,6 +126,9 @@ func (m *Manager) loop(ctx context.Context) {
 		m.current = tok
 		m.mu.Unlock()
 		m.readyOnce.Do(func() { close(m.ready) })
+		if m.Metrics != nil {
+			m.Metrics.IncTokenRefreshes(m.Namespace)
+		}
 		backoff = baseBackoff
 
 		// Sleep until T-5min before expiry.

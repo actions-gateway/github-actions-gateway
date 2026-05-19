@@ -1,7 +1,9 @@
 go 1.24
 
 use (
-	.            // root shared library module
-	./cmd/probe  // Milestone 1
-	./cmd/agc    // Milestone 2
+	./cmd/agc // Milestone 2
+	./cmd/probe // Milestone 1
 )
+
+replace github.com/karlkfi/github-actions-gateway => ./
+

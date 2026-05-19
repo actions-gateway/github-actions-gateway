@@ -2,9 +2,11 @@ package listener
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,6 +60,9 @@ type Config struct {
 	Clock         Clock
 	Log           *slog.Logger
 
+	// RunnerOS is passed to AcquireJob (e.g. "Linux").
+	RunnerOS string
+
 	// IsLastListener returns true if this goroutine is the only running listener
 	// for its RunnerGroup. When true, idle shutdown is suppressed.
 	IsLastListener func() bool
@@ -87,15 +92,12 @@ func Run(ctx context.Context, cfg Config) error {
 		"agentIndex", cfg.Agent.Index)
 
 	// 1. Fetch broker OAuth token for this agent.
-	brokerToken, err := githubapp.FetchRunnerOAuthToken(ctx, cfg.Agent.Creds, cfg.Agent.PrivateKey, cfg.HTTPClient)
-	if err != nil {
-		return fmt.Errorf("fetch runner OAuth token: %w", err)
+	if err := refreshBrokerToken(ctx, cfg); err != nil {
+		return err
 	}
-	cfg.Broker.Token = brokerToken
 
 	// 2. Create a session.
-	var sessionID string
-	sessionID, err = createSession(ctx, cfg, log)
+	sessionID, err := createSession(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
@@ -104,7 +106,6 @@ func Run(ctx context.Context, cfg Config) error {
 		// Best-effort session cleanup on exit.
 		dCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cfg.Broker.Token = brokerToken // token may have been refreshed above
 		if delErr := cfg.Broker.DeleteSession(dCtx, sessionID); delErr != nil {
 			log.Warn("DeleteSession failed on goroutine exit", "error", delErr)
 		}
@@ -121,6 +122,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// 3. Poll loop.
 	consecutiveEmpty := 0
 	pollErrors := 0
+	var firstRateLimitAt time.Time
 
 	for {
 		if ctx.Err() != nil {
@@ -138,6 +140,13 @@ func Run(ctx context.Context, cfg Config) error {
 				if cfg.Metrics != nil {
 					cfg.Metrics.MessagePollErrorsTotal.WithLabelValues(cfg.Namespace, "rate_limited").Inc()
 				}
+				// Track sustained rate limiting; surface condition after 10 min.
+				if firstRateLimitAt.IsZero() {
+					firstRateLimitAt = cfg.Clock.Now()
+				} else if cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
+					setCondition(cfg, "RateLimited", metav1.ConditionTrue,
+						"SustainedRateLimit", "GetMessage returning 429 for >10 minutes")
+				}
 				wait := rlErr.RetryAfter
 				if wait < 0 {
 					wait = 30 * time.Second
@@ -154,12 +163,17 @@ func Run(ctx context.Context, cfg Config) error {
 			if isSessionExpired(pollErr) {
 				log.Info("session expired; recreating", "sessionId", sessionID)
 				_ = cfg.Broker.DeleteSession(ctx, sessionID) // best-effort
+				// Refresh token before recreating session.
+				if err := refreshBrokerToken(ctx, cfg); err != nil {
+					return err
+				}
 				sessionID, err = createSession(ctx, cfg, log)
 				if err != nil {
 					return err
 				}
 				consecutiveEmpty = 0
 				pollErrors = 0
+				firstRateLimitAt = time.Time{}
 				continue
 			}
 
@@ -177,7 +191,9 @@ func Run(ctx context.Context, cfg Config) error {
 			continue
 		}
 
+		// Successful poll — reset rate-limit tracking and error counter.
 		pollErrors = 0
+		firstRateLimitAt = time.Time{}
 
 		if msg == nil {
 			// 202 — no job queued.
@@ -199,9 +215,6 @@ func Run(ctx context.Context, cfg Config) error {
 		// Reset idle counter on job delivery.
 		consecutiveEmpty = 0
 
-		// 4. Parse the job request body. In M2 we don't decrypt (no session key
-		// management in the listener); treat body as opaque and pass through.
-		// TODO(milestone-3): decrypt message body using session key.
 		log.Info("job message received", "messageId", msg.MessageID)
 
 		if err := handleJob(ctx, cfg, log, sessionID, msg); err != nil {
@@ -209,6 +222,16 @@ func Run(ctx context.Context, cfg Config) error {
 			// Recoverable: continue polling on the same session.
 		}
 	}
+}
+
+// refreshBrokerToken fetches a fresh OAuth token and sets it on cfg.Broker.
+func refreshBrokerToken(ctx context.Context, cfg Config) error {
+	token, err := githubapp.FetchRunnerOAuthToken(ctx, cfg.Agent.Creds, cfg.Agent.PrivateKey, cfg.HTTPClient)
+	if err != nil {
+		return fmt.Errorf("refresh broker token: %w", err)
+	}
+	cfg.Broker.Token = token
+	return nil
 }
 
 // createSession calls CreateSession and handles non-retriable errors.
@@ -235,12 +258,38 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (string, e
 // handleJob acquires a job, notifies the multiplexer, starts the renew loop,
 // calls the job handler, and returns. The session is NOT closed after the job.
 func handleJob(ctx context.Context, cfg Config, log *slog.Logger, _ string, msg *broker.TaskAgentMessage) error {
-	// Treat the message body as the job request payload for M2 stub purposes.
-	// A real implementation would decrypt and parse RunnerJobRequestBody here.
-	// For M2 the JobHandler receives the raw body bytes and planID="stub".
-	payload := []byte(msg.Body)
-	planID := "stub"
-	runServiceURL := ""
+	// Parse RunnerJobRequestBody from the message body.
+	// TODO(milestone-3): decrypt body using session key before parsing.
+	var jobBody broker.RunnerJobRequestBody
+	if err := json.Unmarshal([]byte(msg.Body), &jobBody); err != nil {
+		log.Warn("could not parse job body; skipping AcquireJob", "error", err)
+	}
+
+	var (
+		payload       []byte
+		planID        = "stub"
+		runServiceURL = jobBody.RunServiceURL
+	)
+
+	// Call AcquireJob if we have a runServiceURL.
+	if runServiceURL != "" {
+		resp, rawBytes, err := cfg.Broker.AcquireJob(ctx, runServiceURL, broker.JobAcquisitionRequest{
+			JobMessageID:   jobBody.RunnerRequestID,
+			RunnerOS:       cfg.RunnerOS,
+			BillingOwnerID: jobBody.BillingOwnerID,
+		})
+		if err != nil {
+			if cfg.Metrics != nil {
+				cfg.Metrics.JobAcquisitionErrors.WithLabelValues(cfg.Namespace, "acquirejob_failed").Inc()
+			}
+			log.Error("AcquireJob failed", "error", err)
+			return err
+		}
+		planID = resp.Plan.PlanID
+		payload = rawBytes
+	} else {
+		payload = []byte(msg.Body)
+	}
 
 	// Notify multiplexer to spawn a replacement listener before blocking on job handler.
 	if cfg.SpawnReplacement != nil {
@@ -248,32 +297,10 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, _ string, msg 
 	}
 
 	// Start renew loop for this job.
-	renewCtx, stopRenew := context.WithCancel(ctx)
-	defer stopRenew()
-	go func() {
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-renewCtx.Done():
-				return
-			case <-ticker.C:
-				if runServiceURL == "" {
-					continue // M2 stub: no real run service URL
-				}
-				_, err := cfg.Broker.RenewJob(renewCtx, runServiceURL, broker.RenewJobRequest{
-					PlanID: planID,
-					JobID:  strconv.FormatInt(msg.MessageID, 10),
-				})
-				if err != nil {
-					if cfg.Metrics != nil {
-						cfg.Metrics.RenewJobErrorsTotal.WithLabelValues(cfg.Namespace).Inc()
-					}
-					log.Warn("RenewJob error (non-fatal)", "error", err)
-				}
-			}
-		}
-	}()
+	jobID := strconv.FormatInt(msg.MessageID, 10)
+	stop := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
+		cfg.Metrics, cfg.Namespace, cfg.Clock, log)
+	defer stop()
 
 	if cfg.Metrics != nil {
 		cfg.Metrics.JobsAcquiredTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
@@ -283,6 +310,48 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, _ string, msg 
 		return cfg.JobHandler(ctx, runServiceURL, planID, payload)
 	}
 	return nil
+}
+
+// StartRenewLoop starts a per-job renewal goroutine that ticks every 60 s.
+// The returned stop function cancels the loop and blocks until it exits;
+// callers must call it when the job completes to avoid goroutine leaks.
+func StartRenewLoop(
+	ctx context.Context,
+	client *broker.BrokerClient,
+	runServiceURL, planID, jobID string,
+	metrics *Metrics,
+	namespace string,
+	clk Clock,
+	log *slog.Logger,
+) (stop func()) {
+	stopCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stopCtx.Done():
+				return
+			case <-clk.After(60 * time.Second):
+				if runServiceURL == "" {
+					continue // M2 stub: no real run service URL
+				}
+				_, err := client.RenewJob(stopCtx, runServiceURL, broker.RenewJobRequest{
+					PlanID: planID,
+					JobID:  jobID,
+				})
+				if err != nil {
+					if metrics != nil {
+						metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
+					}
+					if log != nil {
+						log.Warn("RenewJob error (non-fatal)", "error", err)
+					}
+				}
+			}
+		}
+	}()
+	return func() { cancel(); <-done }
 }
 
 func setCondition(cfg Config, condType string, status metav1.ConditionStatus, reason, msg string) {
@@ -312,15 +381,17 @@ func isSessionExpired(err error) bool {
 		return false
 	}
 	s := err.Error()
-	return strings.Contains(s, "session") &&
-		(strings.Contains(s, "expired") || strings.Contains(s, "404") || strings.Contains(s, "410"))
+	// GetMessage returns "unexpected status 404/410" when the session no longer exists.
+	// Also match explicit "session expired" messages from any broker variant.
+	return strings.Contains(s, "404") || strings.Contains(s, "410") ||
+		(strings.Contains(s, "session") && strings.Contains(s, "expired"))
 }
 
 // backoffDelay returns a jittered delay matching the two-tier policy from
 // MessageListener.cs: up to 5 errors → [15s,30s]; beyond 5 → [30s,60s].
 func backoffDelay(consecutiveErrors int, _ Clock) time.Duration {
 	if consecutiveErrors <= 5 {
-		return 15 * time.Second
+		return 15*time.Second + time.Duration(rand.Int63n(int64(15*time.Second)))
 	}
-	return 30 * time.Second
+	return 30*time.Second + time.Duration(rand.Int63n(int64(30*time.Second)))
 }
