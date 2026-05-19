@@ -6,11 +6,29 @@
 
 ## Executive Summary
 
-GPU compute is the most expensive resource in a shared Kubernetes cluster, and today it sits idle while CPU runner pods claim the namespace quota ahead of it. Teams lose GPU time to a scheduling race they cannot control, and existing solutions — including Actions Runner Controller — provide no mechanism to fix it. At scale, each idle runner pod also holds a cluster IP and a ~256 MiB memory reservation even when it has nothing to do, so the waste compounds as runner counts grow.
+### For Executive Leadership: GPU Utilization & Cost Justification
 
-This project delivers a **four-tier GitHub Actions Gateway** that solves both problems. GPU runners are guaranteed a preemptive scheduling floor: they displace lower-priority CPU pods when quota is contended, then scale opportunistically beyond that floor without evicting anything. Worker pods are ephemeral — provisioned on-demand per job and garbage-collected the moment the job finishes — so GPU nodes return to the cluster scheduler between jobs instead of sitting allocated and idle. Virtual runner sessions are lightweight goroutines (~60 KiB each) rather than full pods, cutting per-session memory overhead by over 4,000× and eliminating the IP-exhaustion pressure that limits runner density today. Each tenant gets isolated egress IPs for GitHub traffic, enabling per-team allowlisting and clean audit trails with no cluster-admin involvement beyond the initial install.
+**Every idle GPU runner pod is burning money with nothing to show for it.** ARC's minimum replica count is 1, so a tenant with 10 GPU runner sets holds at least 10 GPUs allocated at all times — whether jobs are running or not. At 1–8 GPUs per runner, a single tenant can idle 80 GPUs between pull requests and scheduled tests, paying full cloud rates for hardware that isn't doing work.
 
-The ask is engineering investment to build and operate this system. Hardware savings from eliminating idle GPU allocation alone are expected to exceed the build cost within the first quarter of production operation.
+- **Utilization jumps to near 100% of allocated time.** This system provisions worker pods only when a job is acquired and releases them the moment it finishes. Between jobs the GPU returns to the pool — no idle allocation, no wasted spend.
+- **Lower cost per unit of CI work** makes current and future GPU quota straightforward to justify.
+- **The ask:** engineering investment to build and operate this system. Reduction in idle GPU hours is expected to recover that cost within the first quarter of production operation.
+
+### For Tenant Teams: Self-Service & Cost Ownership
+
+**Tenants today depend on the platform team for every runner set change.** Adding a test suite, rebalancing GPU quota between runner sets, or adjusting scale limits requires filing a request and waiting. Teams iterating quickly — especially those adding new GPU test suites frequently — are blocked by this overhead and can't move at their own pace.
+
+- **Full self-service via a single custom resource.** Teams declare all their runner sets, GPU allocations, and scale limits in one `ActionsGateway` CR they own and manage in their own namespace. No platform team involvement after initial onboarding.
+- **Rebalancing is a one-line config change.** Shifting GPU quota between runner sets to make room for a new test suite is a self-managed edit, not a ticket.
+- **Utilization data to compete for scarce quota.** Tenants need to show high utilization to be approved for more GPU quota. This system makes utilization a first-class per-tenant metric, giving teams the data to make their case.
+
+### For Platform Engineering: Operational Leverage & Shift Left
+
+**The platform team is the bottleneck for every tenant runner change.** Each new test suite, quota adjustment, or scaling tweak lands as a ticket. First-line debugging — why isn't my runner scaling? — escalates to platform instead of being ownable by the tenant who knows their workload.
+
+- **A clear multi-tenant abstraction shifts ownership to tenants.** The Gateway Manager Controller provisions a fully isolated gateway instance per tenant from a single namespace-scoped custom resource. Once deployed, tenants manage their own runner sets end-to-end.
+- **Fewer escalations.** Tenants who own their own configuration can diagnose their own runner behavior. Platform's job shrinks to operating the controller — not hand-holding individual runner configs.
+- **One operator to manage, not N per-tenant deployments.** The platform team deploys the Gateway Manager Controller once at the cluster level. Tenants handle everything beneath it.
 
 ---
 

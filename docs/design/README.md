@@ -7,8 +7,10 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 ## Table of Contents
 
 1. [Executive Summary & Problem Statement](01-executive-summary.md)
-   - [1.1 Executive Summary](01-executive-summary.md#executive-summary) *(leadership pitch)*
-   - [1.2 Overview for Architects & Engineers](01-executive-summary.md#overview-for-architects--engineers)
+   - [For Executive Leadership: GPU Utilization & Cost Justification](01-executive-summary.md#for-executive-leadership-gpu-utilization--cost-justification)
+   - [For Tenant Teams: Self-Service & Cost Ownership](01-executive-summary.md#for-tenant-teams-self-service--cost-ownership)
+   - [For Platform Engineering: Operational Leverage & Shift Left](01-executive-summary.md#for-platform-engineering-operational-leverage--shift-left)
+   - [Overview for Architects & Engineers](01-executive-summary.md#overview-for-architects--engineers)
 2. [Core Architectural Components](02-architecture.md)
    - [2.1 Tier 1 — Gateway Manager Controller (GMC)](02-architecture.md#21-tier-1--gateway-manager-controller-gmc)
    - [2.2 Tier 2 — Actions Gateway Controller (AGC)](02-architecture.md#22-tier-2--actions-gateway-controller-agc)
