@@ -1,8 +1,6 @@
 module github.com/karlkfi/github-actions-gateway/agc
 
-go 1.22.0
-
-toolchain go1.24.3
+go 1.24
 
 require (
 	github.com/prometheus/client_golang v1.19.1
