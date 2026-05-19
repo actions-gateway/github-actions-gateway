@@ -62,9 +62,17 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 			upstream.Close()
 			return
 		}
-		clientConn, _, err := hj.Hijack()
+		// Hijack returns the raw conn plus the buffered writer that still holds
+		// the "200 Connection established" response. Flush before copying so the
+		// client actually receives the 200 before we start tunnelling TLS bytes.
+		clientConn, brw, err := hj.Hijack()
 		if err != nil {
 			upstream.Close()
+			return
+		}
+		if err := brw.Flush(); err != nil {
+			upstream.Close()
+			clientConn.Close()
 			return
 		}
 		go func() {
