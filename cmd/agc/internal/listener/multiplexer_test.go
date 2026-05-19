@@ -224,6 +224,33 @@ func TestMultiplexer_RestartOnCrash(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+func TestMultiplexer_NonRetriableNoRestart(t *testing.T) {
+	// Broker always returns VersionTooOld on CreateSession.
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "runner version too old, minimum required", http.StatusBadRequest)
+	})
+	m, oauthSrv, brokerSrv := newMuxWithServers(t, 3, mux)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+
+	// The permanent goroutine exits with NonRetriableError; count should reach 0.
+	assert.Eventually(t, func() bool { return m.ActiveCount() == 0 }, 2*time.Second, 10*time.Millisecond,
+		"permanent goroutine should exit after non-retriable error")
+
+	// Hold past the 1s restart backoff — no restart should occur.
+	assert.Never(t, func() bool { return m.ActiveCount() > 0 }, 2*time.Second, 50*time.Millisecond,
+		"permanent goroutine must NOT restart after a non-retriable error")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 // newMuxWithServersWithThreshold creates a Multiplexer with a custom idleThreshold.
 func newMuxWithServersWithThreshold(t *testing.T, maxListeners int32, mux *brokerMux, idleThreshold int) (*listener.Multiplexer, *httptest.Server, *httptest.Server) {
 	t.Helper()
