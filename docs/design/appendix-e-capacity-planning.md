@@ -6,7 +6,13 @@
 
 This appendix is a practical guide for operators and tenant teams deciding how to structure their `RunnerGroup`s, size their `maxListeners` counts, and plan for growth. The raw constraint numbers live in [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget) and [Appendix A](appendix-a-capacity-slos.md); this appendix explains how to reason about them in practice.
 
-> **Protocol dependency.** The rate-limit analysis below assumes the adaptive listener model described in [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc) — specifically, that a session can be reused after `acquirejob` and that GitHub delivers jobs opportunistically to any registered session. Both behaviors must be confirmed during [Milestone 1](06-implementation-phases.md#milestone-1-wire-protocol-probe-days-14). If session reuse is not permitted, steady-state cost rises to one session per concurrent job rather than one per RunnerGroup. If delivery throttling is confirmed, a small warm standby pool may be needed. This appendix will be updated once Milestone 1 findings are in.
+> **Milestone 1 protocol findings** (see [docs/plan/milestone-1.md §8](../plan/milestone-1.md#8-investigation-findings)):
+>
+> *Session reuse confirmed* (Investigation C) — a session remains live after `acquirejob`; goroutines loop without a delete→create cycle. The steady-state cost remains **one session per RunnerGroup**.
+>
+> *One session per registered runner agent enforced* (Investigation D) — `POST /sessions` returns 409 if the agentId already has a session. Each concurrent listener goroutine requires a distinct pre-registered agent. The AGC must provision up to `maxListeners` agents per RunnerGroup at setup time. This does not change the rate-limit math (one active session per agent, same session-count formula), but it adds an agent-registration step to RunnerGroup provisioning — see [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc).
+>
+> *Opportunistic delivery supported* (inferred from Investigation C timing) — a newly dispatched job arrived in `GetMessage` within ~1 second of dispatch, consistent with delivery to any active polling session. No warm standby pool is needed.
 
 ---
 

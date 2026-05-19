@@ -306,6 +306,23 @@ func run(logger *slog.Logger) error {
 	acknowledgeResult := probeAcknowledge(ctx, logger, bc, msg.MessageID, sessionID)
 	logger.Info("AcknowledgeRunnerRequest result", "status", acknowledgeResult)
 
+	// ── Investigation C: Session Reuse After acquirejob ──────────────────────
+	// Set PROBE_SESSION_REUSE_TEST=true and queue a second workflow job before
+	// running. The probe re-enters GetMessage on the same sessionId and reports
+	// whether the session is still valid. Findings feed §8.C of milestone-1.md.
+	if os.Getenv("PROBE_SESSION_REUSE_TEST") == "true" {
+		investigateSessionReuse(ctx, logger, bc, sessionID)
+	}
+
+	// ── Investigation D: Job Delivery Throttling by Session Count ────────────
+	// Set PROBE_JOB_DELIVERY_TEST=true and queue a second workflow job before
+	// running. The probe registers a second session after the first job is
+	// acquired and checks whether the second job is delivered. Findings feed
+	// §8.D of milestone-1.md.
+	if os.Getenv("PROBE_JOB_DELIVERY_TEST") == "true" {
+		investigateJobDelivery(ctx, logger, bc, agentID, agentName, runnerVersion)
+	}
+
 	// ── 10. Block until interrupted ──────────────────────────────────────────
 	<-ctx.Done()
 	logger.Info("shutdown signal received; waiting for renew goroutine")
@@ -350,6 +367,128 @@ func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Broke
 	)
 	// Return a compact status string for the top-level log line.
 	return fmt.Sprintf("HTTP-%d", resp.StatusCode)
+}
+
+// investigateSessionReuse tests whether a session remains valid for GetMessage
+// polling immediately after a successful AcquireJob call (Investigation C).
+//
+// Before running with PROBE_SESSION_REUSE_TEST=true, queue a second workflow
+// job so it is waiting when the probe re-enters the poll loop. The probe polls
+// for up to 3 minutes and logs a clear CONFIRMED or inconclusive result.
+func investigateSessionReuse(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, sessionID string) {
+	logger.Info("INVESTIGATION-C: re-entering GetMessage on same sessionId after AcquireJob",
+		"sessionId", sessionID,
+		"instruction", "queue a second workflow job NOW if not already queued")
+
+	deadline, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	for pollCount := 1; ; pollCount++ {
+		if deadline.Err() != nil {
+			logger.Warn("INVESTIGATION-C: timeout — no second job received within 3 minutes",
+				"pollCount", pollCount,
+				"finding", "inconclusive: no second job arrived; repeat with job pre-queued before re-entry")
+			return
+		}
+		got, err := bc.GetMessage(deadline, sessionID)
+		if err != nil {
+			// Distinguish between a context cancellation (deadline/SIGINT — the
+			// session itself was live) and a protocol-level rejection (404/410 —
+			// the session was invalidated server-side after AcquireJob).
+			if deadline.Err() != nil {
+				logger.Info("INVESTIGATION-C: polling deadline reached — session was live throughout (202 responses; no session error)",
+					"pollCount", pollCount,
+					"finding", "session reuse supported: session remained valid; no second job arrived before timeout")
+			} else {
+				logger.Error("INVESTIGATION-C: GetMessage returned protocol error — session invalidated after AcquireJob",
+					"error", err,
+					"pollCount", pollCount,
+					"finding", "session reuse NOT supported; delete+create cycle required between jobs")
+			}
+			return
+		}
+		if got == nil {
+			logger.Debug("INVESTIGATION-C: 202 no-job — session still live", "pollCount", pollCount)
+			continue
+		}
+		if got.MessageType == "RunnerJobRequest" {
+			logger.Info("INVESTIGATION-C: second RunnerJobRequest received — SESSION REUSE CONFIRMED",
+				"messageId", got.MessageID,
+				"pollCount", pollCount,
+				"finding", "session remains valid after AcquireJob; goroutine can loop without delete+create")
+			return
+		}
+		logger.Debug("INVESTIGATION-C: ignoring non-job message", "type", got.MessageType)
+	}
+}
+
+// investigateJobDelivery tests whether GitHub delivers a queued job to a
+// session that was registered *after* the job was queued (Investigation D).
+//
+// Before running with PROBE_JOB_DELIVERY_TEST=true, queue a second workflow
+// job after the first job is acquired. The probe registers a second session
+// and polls to see whether the second job is delivered. Polls for 3 minutes.
+func investigateJobDelivery(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, agentID int64, agentName, runnerVersion string) {
+	logger.Info("INVESTIGATION-D: registering second session after first job acquired",
+		"instruction", "queue a SECOND workflow job NOW if not already queued")
+
+	bc2 := &broker.BrokerClient{
+		BrokerURL:     bc.BrokerURL,
+		PoolID:        bc.PoolID,
+		Token:         bc.Token,
+		UseV2Flow:     bc.UseV2Flow,
+		RunnerVersion: bc.RunnerVersion,
+		RunnerOS:      bc.RunnerOS,
+		RunnerArch:    bc.RunnerArch,
+		HTTPClient:    bc.HTTPClient,
+	}
+
+	sess2, err := bc2.CreateSession(ctx, agentID, agentName, runnerVersion)
+	if err != nil {
+		logger.Error("INVESTIGATION-D: CreateSession for second session failed", "error", err)
+		return
+	}
+	bc2.BrokerURL = sess2.BrokerURL
+	logger.Info("INVESTIGATION-D: second session created", "sessionId2", sess2.SessionID)
+
+	defer func() {
+		dCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if delErr := bc2.DeleteSession(dCtx, sess2.SessionID); delErr != nil {
+			logger.Error("INVESTIGATION-D: DeleteSession for second session failed", "error", delErr)
+		} else {
+			logger.Info("INVESTIGATION-D: second session deleted", "sessionId2", sess2.SessionID)
+		}
+	}()
+
+	deadline, cancel := context.WithTimeout(ctx, 3*time.Minute)
+	defer cancel()
+
+	for pollCount := 1; ; pollCount++ {
+		if deadline.Err() != nil {
+			logger.Warn("INVESTIGATION-D: timeout — no job delivered to second session within 3 minutes",
+				"pollCount", pollCount,
+				"finding", "possible throttling: delivery may be bound to sessions present at queue time")
+			return
+		}
+		got, err := bc2.GetMessage(deadline, sess2.SessionID)
+		if err != nil {
+			logger.Error("INVESTIGATION-D: GetMessage on second session error", "error", err, "pollCount", pollCount)
+			return
+		}
+		if got == nil {
+			logger.Debug("INVESTIGATION-D: 202 — second session sees no job yet", "pollCount", pollCount)
+			continue
+		}
+		if got.MessageType == "RunnerJobRequest" {
+			logger.Info("INVESTIGATION-D: second session received job — OPPORTUNISTIC DELIVERY CONFIRMED",
+				"messageId", got.MessageID,
+				"pollCount", pollCount,
+				"finding", "GitHub delivers to any ready session; adaptive model is safe; no standby pool needed")
+			return
+		}
+		logger.Debug("INVESTIGATION-D: non-job message on second session", "type", got.MessageType)
+	}
 }
 
 // backoffDelay returns a randomised delay for GetMessage retries based on the

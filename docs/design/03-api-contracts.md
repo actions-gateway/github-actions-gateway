@@ -410,9 +410,13 @@ These endpoints are called by each AGC instance. The GMC has no direct relations
 | **GET** | `{broker_url}/message?sessionId={id}` | AGC Goroutine | Opens a 50-second long-poll connection. Returns `202 Accepted` with empty body when no job is queued; returns a `RunnerJobRequest` message when a job is available. |
 | **POST** | `{run_service_url}/acquirejob` | AGC Goroutine | Claims the job within the 2-minute delivery window. Must be called before pod creation. On success returns the full job instructions payload; `planId` is in both the `x-plan-id` response header (primary) and `.plan.planId` in the body (fallback). |
 | **POST** | `{run_service_url}/renewjob` | AGC per-job background goroutine | Renews the job lock every 60 seconds. Each renewal extends the lock by ~10 minutes. Must run continuously from after `acquirejob` until the job completes or is cancelled — failure to renew causes GitHub to cancel the job. |
-| **POST** | `{broker_url}/acknowledge` *(unconfirmed)* | AGC Goroutine | Post-dispatch acknowledgment observed in the official runner source (`AcknowledgeRunnerRequestAsync`), called with `runnerRequestId` and `sessionId` after the job is handed to the worker. Role is undocumented. See [Milestone 1](06-implementation-phases.md#milestone-1-wire-protocol-probe-days-14) investigation note. |
+| **POST** | `{broker_url}/acknowledge` | AGC Goroutine | Post-dispatch telemetry notification to the broker (`AcknowledgeRunnerRequestAsync` in the official runner source). Confirmed in Milestone 1 (Investigation A) as **not required for correct job delivery** — `acquirejob` alone is the atomic claim. The v2 broker host does not expose the v1 VSTS delete-message endpoint; the correct v2 path is `POST {brokerURL}acknowledge?sessionId={sessionId}` with body `{"runnerRequestId": "…"}`. Callers MAY skip this call; it has no effect on job delivery semantics. |
 
 **Retry policy for `GET /message`:** Based on `MessageListener.cs` in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s]. After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. **Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. **Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
+
+**Session reuse after `acquirejob`.** Confirmed in Milestone 1 (Investigation C): a goroutine may call `GET /message` again on the same `sessionId` immediately after a successful `acquirejob` — the session remains live and returns `202` without error. The AGC does not need a delete→create cycle between jobs.
+
+**One active session per registered runner agent.** `POST /sessions` returns `409 Conflict` if the supplied `agentId` already has an active session (confirmed in Milestone 1, Investigation D). The AGC must assign a distinct pre-registered agent to each concurrent listener goroutine. Agent provisioning (runner registration) is a RunnerGroup setup concern, not a per-session concern — see [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc) for the agent pool model.
 
 ---
 
@@ -482,7 +486,7 @@ Each GitHub App installation receives **15,000 requests per hour** against the b
 **Per-active-job steady-state cost** (one goroutine with a running job):
 
 * `POST /renewjob` — every 60s for the duration of the job, so ~60 requests/hour while the job runs.
-* One-shot calls (`POST /sessions` once per session create, `POST /acquirejob` once per job, `POST /acknowledge` if confirmed in Milestone 1) are negligible against the hourly budget.
+* One-shot calls (`POST /sessions` once per session create, `POST /acquirejob` once per job) are negligible against the hourly budget. `POST /acknowledge` is confirmed optional (Investigation A) and is not counted.
 
 **Steady-state ceiling.** A reasonable safe target is **≤ 250 concurrent sessions per installation**, leaving headroom for bursts:
 
