@@ -4,7 +4,19 @@
 
 ---
 
-## The Problem: Scheduling Fairness in a Shared Namespace
+## Executive Summary
+
+GPU compute is the most expensive resource in a shared Kubernetes cluster, and today it sits idle while CPU runner pods claim the namespace quota ahead of it. Teams lose GPU time to a scheduling race they cannot control, and existing solutions — including Actions Runner Controller — provide no mechanism to fix it. At scale, each idle runner pod also holds a cluster IP and a ~256 MiB memory reservation even when it has nothing to do, so the waste compounds as runner counts grow.
+
+This project delivers a **four-tier GitHub Actions Gateway** that solves both problems. GPU runners are guaranteed a preemptive scheduling floor: they displace lower-priority CPU pods when quota is contended, then scale opportunistically beyond that floor without evicting anything. Worker pods are ephemeral — provisioned on-demand per job and garbage-collected the moment the job finishes — so GPU nodes return to the cluster scheduler between jobs instead of sitting allocated and idle. Virtual runner sessions are lightweight goroutines (~60 KiB each) rather than full pods, cutting per-session memory overhead by over 4,000× and eliminating the IP-exhaustion pressure that limits runner density today. Each tenant gets isolated egress IPs for GitHub traffic, enabling per-team allowlisting and clean audit trails with no cluster-admin involvement beyond the initial install.
+
+The ask is engineering investment to build and operate this system. Hardware savings from eliminating idle GPU allocation alone are expected to exceed the build cost within the first quarter of production operation.
+
+---
+
+## Overview for Architects & Engineers
+
+### The Problem: Scheduling Fairness in a Shared Namespace
 
 In a multi-tenant Kubernetes cluster, teams running multiple types of GitHub Actions self-hosted runners face a scheduling fairness problem that existing solutions — including Actions Runner Controller (ARC) — cannot address. When a namespace's `ResourceQuota` is shared across runner groups, smaller and cheaper runner pods can exhaust available quota before larger pods have a chance to schedule. The result is that GPU runners — which carry the most expensive hardware requirements and the longest queue times — are systematically starved by a flood of small CPU runner pods claiming quota first.
 
@@ -14,13 +26,13 @@ This design addresses the problem through a `priorityTiers` field on each `Runne
 
 When eviction does occur — either from the floor tier preempting lower-priority pods, or from external pressure such as node memory exhaustion — the AGC automatically re-queues the affected job without user intervention. The Job Lock Renewer detects the `Evicted` pod status, immediately stops renewal to prompt a fast GitHub cancellation, and calls GitHub's rerun API to reschedule the job. A configurable retry budget prevents infinite loops on persistently failing workloads. Jobs that exhaust their retry budget surface via a dedicated metric rather than silently disappearing.
 
-## GPU Node Utilization
+### GPU Node Utilization
 
 For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization. GPU runner pods hold GPU node allocations while waiting for work — even between jobs. Those GPU resources are unavailable to other workloads during the wait, wasting some of the most expensive capacity in the cluster.
 
 This design eliminates idle GPU allocation entirely. Worker pods are provisioned on-demand after a job is acquired and garbage-collected immediately on completion. The AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. GPU nodes are returned to the cluster scheduler the moment each job completes and remain available for other workloads until the next job arrives. Across a shared GPU node pool, this translates directly into higher effective utilization without requiring additional hardware.
 
-## For Teams Migrating from Host-Machine or VM Runners
+### For Teams Migrating from Host-Machine or VM Runners
 
 The arguments above apply equally to teams already running Kubernetes-native runners. For teams migrating from runners on host machines or virtual machines — where runners are registered as persistent processes rather than Kubernetes pods — the Kubernetes model itself introduces an additional overhead worth quantifying.
 
@@ -28,7 +40,7 @@ Each idle runner pod carries the full weight of the `Runner.Listener` process: a
 
 The IP address problem compounds this. Every runner pod consumes a cluster IP. In clusters already dense with application workloads, 1,000 idle runner pods exhaust a significant fraction of the available address space — a hard limit that cannot be worked around without re-addressing the cluster. Each pod's long-poll connection also generates sustained polling noise through network firewalls, adding to the operational burden of teams managing cluster egress.
 
-## Design Goals
+### Design Goals
 
 The system is designed to satisfy four requirements that existing solutions do not address together:
 
@@ -38,7 +50,7 @@ The system is designed to satisfy four requirements that existing solutions do n
 4. **Per-tenant egress IP isolation.** Each tenant's GitHub traffic exits through a dedicated proxy pool, enabling IP-based allowlisting, clean audit trails, and contained blast radius.
 5. **Self-service multi-tenant onboarding.** A team creates one `ActionsGateway` CR in their existing namespace and receives a fully isolated gateway instance. No cluster-admin involvement is required after initial GMC installation.
 
-## The Solution: A Four-Tier Virtualized Gateway
+### The Solution: A Four-Tier Virtualized Gateway
 
 This document outlines the design for a **four-tier system** that addresses these problems at their root:
 
@@ -50,7 +62,7 @@ This document outlines the design for a **four-tier system** that addresses thes
 
 * **Tier 4 — Ephemeral Worker Pod:** A short-lived, single-use pod that executes exactly one workflow job. Provisioned on-demand by the AGC after a job is acquired and garbage-collected immediately on completion. Because worker pods exist only while a job is running, there are zero idle compute resources between jobs — the cluster pays only for work actually being done.
 
-## Operational Model
+### Operational Model
 
 This architecture makes it practical to operate GitHub Actions self-hosted runners in a multi-tenant Kubernetes cluster: a platform team deploys the GMC once at the cluster level, while individual teams create an `ActionsGateway` resource in their own existing namespace and receive fully isolated runner capacity — no cluster-admin involvement required after initial GMC installation.
 
