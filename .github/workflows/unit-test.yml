@@ -11,4 +11,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: run unit tests
-        run: go test ./...
+        run: |
+          GOWORK=off go test ./...
+          (cd cmd/agc && go test ./...)
+          (cd cmd/probe && go test ./...)
