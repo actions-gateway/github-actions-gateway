@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -22,6 +23,65 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
+
+// ── fakeClock ────────────────────────────────────────────────────────────────
+
+// fakeClock is an injectable Clock for deterministic time tests.
+// Call Stop() before goleak.VerifyNone so all After goroutines exit.
+type fakeClock struct {
+	mu       sync.Mutex
+	now      time.Time
+	done     chan struct{}
+	stopOnce sync.Once
+}
+
+func newFakeClock(t time.Time) *fakeClock {
+	return &fakeClock{now: t, done: make(chan struct{})}
+}
+
+func (c *fakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *fakeClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	c.now = c.now.Add(d)
+	c.mu.Unlock()
+}
+
+// Stop signals all pending After goroutines to exit.
+func (c *fakeClock) Stop() {
+	c.stopOnce.Do(func() { close(c.done) })
+}
+
+// After returns a channel that fires once the clock is advanced past the
+// target time. The polling goroutine exits when Stop() is called.
+func (c *fakeClock) After(d time.Duration) <-chan time.Time {
+	ch := make(chan time.Time, 1)
+	target := c.Now().Add(d)
+	go func() {
+		for {
+			select {
+			case <-c.done:
+				return
+			case <-time.After(time.Millisecond):
+				now := c.Now()
+				if !now.Before(target) {
+					select {
+					case ch <- now:
+					default:
+					}
+					return
+				}
+			}
+		}
+	}()
+	return ch
+}
+
+// ── oauthStub ────────────────────────────────────────────────────────────────
 
 // oauthStub is a minimal OAuth2 token endpoint stub.
 func oauthStub() *httptest.Server {
@@ -51,17 +111,21 @@ func makeAgent(t *testing.T, oauthSrvURL string) *agentpool.Agent {
 	}
 }
 
+// ── brokerMux ────────────────────────────────────────────────────────────────
+
 // brokerMux routes broker API calls to per-endpoint handlers.
 type brokerMux struct {
 	mu        sync.Mutex
 	onCreate  func(http.ResponseWriter, *http.Request)
 	onMessage func(http.ResponseWriter, *http.Request)
 	onDelete  func(http.ResponseWriter, *http.Request)
+	onAcquire func(http.ResponseWriter, *http.Request)
+	onRenew   func(http.ResponseWriter, *http.Request)
 }
 
 func (m *brokerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
-	cr, gm, del := m.onCreate, m.onMessage, m.onDelete
+	cr, gm, del, acq, ren := m.onCreate, m.onMessage, m.onDelete, m.onAcquire, m.onRenew
 	m.mu.Unlock()
 
 	switch {
@@ -83,6 +147,18 @@ func (m *brokerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			w.WriteHeader(http.StatusAccepted)
 		}
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/acquirejob"):
+		if acq != nil {
+			acq(w, r)
+		} else {
+			defaultAcquireJob(w)
+		}
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/renewjob"):
+		if ren != nil {
+			ren(w, r)
+		} else {
+			defaultRenewJob(w)
+		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -100,10 +176,37 @@ func (m *brokerMux) SetCreate(fn func(http.ResponseWriter, *http.Request)) {
 	m.mu.Unlock()
 }
 
+func (m *brokerMux) SetAcquire(fn func(http.ResponseWriter, *http.Request)) {
+	m.mu.Lock()
+	m.onAcquire = fn
+	m.mu.Unlock()
+}
+
+func (m *brokerMux) SetRenew(fn func(http.ResponseWriter, *http.Request)) {
+	m.mu.Lock()
+	m.onRenew = fn
+	m.mu.Unlock()
+}
+
 func defaultSession(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"sessionId": "sess-test"})
 }
+
+func defaultAcquireJob(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("x-plan-id", "plan-stub")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"plan": map[string]string{"planId": "plan-stub"},
+	})
+}
+
+func defaultRenewJob(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"lockedUntil": time.Now().Add(time.Minute).Format(time.RFC3339)})
+}
+
+// ── condRecorder ─────────────────────────────────────────────────────────────
 
 // condRecorder records SetCondition calls and is safe for concurrent use.
 type condRecorder struct {
@@ -127,6 +230,8 @@ func (r *condRecorder) Has(condType string) bool {
 	}
 	return false
 }
+
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 // makeCfg builds a listener.Config backed by the given stub servers.
 func makeCfg(t *testing.T, oauthSrv, brokerSrv *httptest.Server) listener.Config {
@@ -167,6 +272,22 @@ func closeHTTP(srv *httptest.Server) {
 	}
 	time.Sleep(50 * time.Millisecond)
 }
+
+// jobMsgWithURL returns a TaskAgentMessage whose Body contains a RunnerJobRequestBody
+// with RunServiceURL set to brokerSrvURL (so AcquireJob hits the stub server).
+func jobMsgWithURL(brokerSrvURL string) broker.TaskAgentMessage {
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: "req-1",
+		RunServiceURL:   brokerSrvURL,
+	})
+	return broker.TaskAgentMessage{
+		MessageID:   1,
+		MessageType: "RunnerJobRequest",
+		Body:        string(body),
+	}
+}
+
+// ── listener goroutine tests ─────────────────────────────────────────────────
 
 func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	oauthSrv := oauthStub()
@@ -317,25 +438,59 @@ func TestListener_RateLimitBackoff(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+func TestListener_RateLimitedConditionAfter10Min(t *testing.T) {
+	oauthSrv := oauthStub()
+	clk := newFakeClock(time.Now())
+	mux := &brokerMux{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	conds := &condRecorder{}
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Conditions = conds
+	cfg.IsLastListener = func() bool { return true }
+	cfg.Clock = clk
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	// Advance the fake clock past 10 minutes; the listener will see it on next iteration.
+	assert.Eventually(t, func() bool {
+		clk.Advance(11 * time.Minute)
+		return conds.Has("RateLimited")
+	}, 8*time.Second, 50*time.Millisecond, "expected RateLimited condition after 10 min of 429s")
+
+	cancel()
+	<-done
+	clk.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 func TestListener_AcquireJobThenReuse(t *testing.T) {
 	oauthSrv := oauthStub()
 	var delivered atomic.Bool
 	var pollsAfter atomic.Int32
 	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
 	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
 		if !delivered.Swap(true) {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
-				MessageID:   1,
-				MessageType: "RunnerJobRequest",
-				Body:        `{}`,
-			})
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
 			return
 		}
 		pollsAfter.Add(1)
 		w.WriteHeader(http.StatusAccepted)
 	})
-	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastListener = func() bool { return true }
@@ -360,19 +515,16 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	var spawnCalls atomic.Int32
 	var delivered atomic.Bool
 	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
 	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
 		if !delivered.Swap(true) {
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
-				MessageID:   1,
-				MessageType: "RunnerJobRequest",
-				Body:        `{}`,
-			})
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
 	})
-	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastListener = func() bool { return true }
@@ -389,5 +541,176 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+func TestListener_SessionExpiredRecreates(t *testing.T) {
+	oauthSrv := oauthStub()
+	var createCalls atomic.Int32
+	var pollCount atomic.Int32
+	mux := &brokerMux{}
+
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		createCalls.Add(1)
+		defaultSession(w)
+	})
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		n := pollCount.Add(1)
+		if n == 1 {
+			// First poll: return session-expired error.
+			http.Error(w, "session not found: 404", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.IsLastListener = func() bool { return true }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+	// Wait for at least 2 CreateSession calls (initial + re-create after expiry).
+	assert.Eventually(t, func() bool { return createCalls.Load() >= 2 }, 4*time.Second, 10*time.Millisecond,
+		"expected session re-creation after expiry")
+	cancel()
+	<-done
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// ── StartRenewLoop tests ─────────────────────────────────────────────────────
+
+func TestRenewLoop_TicksAt60s(t *testing.T) {
+	var renewCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			renewCalls.Add(1)
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil)
+
+	// Advance the clock by 1s increments until each RenewJob call is observed.
+	// This avoids a race where the goroutine hasn't registered its clk.After yet.
+	for i := 0; i < 3; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(time.Second)
+			return renewCalls.Load() >= int32(i+1)
+		}, 5*time.Second, 10*time.Millisecond, "expected RenewJob call %d", i+1)
+	}
+
+	stop()
+	clk.Stop()
+	// Close server and drain connections before goleak.
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+func TestRenewLoop_StopsOnStop(t *testing.T) {
+	clk := newFakeClock(time.Now())
+	bc := &broker.BrokerClient{BrokerURL: "http://127.0.0.1:0"} // unreachable
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stop := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil)
+	stop() // should not hang
+	clk.Stop()
+	time.Sleep(30 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+func TestRenewLoop_NonOKContinues(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			n := calls.Add(1)
+			if n <= 2 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil)
+
+	// Advance clock by 1s increments until 3 RenewJob calls are observed.
+	for i := 0; i < 3; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(time.Second)
+			return calls.Load() >= int32(i+1)
+		}, 5*time.Second, 10*time.Millisecond, "expected RenewJob call %d", i+1)
+	}
+	assert.Equal(t, int32(3), calls.Load(), "loop must not exit on non-OK responses")
+
+	stop()
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+func TestRenewLoop_NoCallAfterStop(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			calls.Add(1)
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil)
+
+	// Stop before any tick fires.
+	stop()
+	clk.Stop()
+
+	// Give any in-flight requests time to complete, then verify no calls.
+	time.Sleep(20 * time.Millisecond)
+	assert.Equal(t, int32(0), calls.Load(), "no RenewJob calls expected after stop")
+
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
 }

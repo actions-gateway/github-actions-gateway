@@ -166,7 +166,8 @@ func TestMultiplexer_StopCleanly(t *testing.T) {
 
 func TestMultiplexer_SetMaxListenersDown(t *testing.T) {
 	mux := &brokerMux{} // always 202
-	m, oauthSrv, brokerSrv := newMuxWithServers(t, 5, mux)
+	// Use a low idle threshold so non-permanent goroutines exit quickly.
+	m, oauthSrv, brokerSrv := newMuxWithServersWithThreshold(t, 5, mux, 5)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -181,9 +182,41 @@ func TestMultiplexer_SetMaxListenersDown(t *testing.T) {
 	// No new goroutines should be spawnable above the ceiling.
 	m.SpawnReplacement(ctx)
 	m.SpawnReplacement(ctx)
-	time.Sleep(50 * time.Millisecond)
 
-	assert.LessOrEqual(t, m.ActiveCount(), int32(5), "count should not exceed original value")
+	// Goroutines above the new ceiling idle-exit when they hit the threshold.
+	assert.Eventually(t, func() bool { return m.ActiveCount() <= 2 }, 4*time.Second, 10*time.Millisecond,
+		"goroutines above new ceiling should idle-exit")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+func TestMultiplexer_RestartOnCrash(t *testing.T) {
+	var createCount atomic.Int32
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		n := createCount.Add(1)
+		if n == 1 {
+			// First CreateSession fails — simulates a crash on startup.
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defaultSession(w)
+	})
+
+	m, oauthSrv, brokerSrv := newMuxWithServers(t, 3, mux)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+
+	// The permanent goroutine fails on first CreateSession, restarts after 1 s,
+	// then succeeds. ActiveCount should settle at 1.
+	assert.Eventually(t, func() bool { return m.ActiveCount() == 1 }, 4*time.Second, 10*time.Millisecond,
+		"permanent goroutine should restart after initial crash and be running")
 
 	cancel()
 	m.Stop()

@@ -53,6 +53,7 @@ type RunnerGroupReconciler struct {
 	TokenManager *token.Manager
 	Registrar    agentpool.Registrar
 	BrokerConfig BrokerConfig
+	Metrics      *listener.Metrics
 	Log          *slog.Logger
 
 	// in-process state; rebuilt from Secrets on restart.
@@ -207,7 +208,7 @@ func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namesp
 	if p, ok := r.pools[key]; ok {
 		return p
 	}
-	p := agentpool.NewPool(r.Client, namespace, groupName, r.Registrar)
+	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, r.Registrar)
 	r.pools[key] = p
 	return p
 }
@@ -254,6 +255,8 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			Agent:      agent,
 			Broker:     bc,
 			Conditions: condUpdater,
+			Metrics:    r.Metrics,
+			RunnerOS:   brokerCfg.RunnerOS,
 			JobHandler: stubJobHandler,
 		}
 	}
@@ -267,21 +270,28 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 }
 
 // drainConditions reads pending condition updates and merges them into rg.Status.
+// Updates for other RunnerGroups are collected and re-enqueued after the loop
+// to avoid re-processing them in the current iteration.
 func (r *RunnerGroupReconciler) drainConditions(_ context.Context, rg *v1alpha1.RunnerGroup) {
+	var skipped []conditionUpdate
 	for {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rg.Namespace && upd.name == rg.Name {
 				r.mergeCondition(rg, upd.condition)
 			} else {
-				// Put back for the right RunnerGroup's reconcile cycle.
-				select {
-				case r.conditionCh <- upd:
-				default:
-				}
+				skipped = append(skipped, upd)
 			}
 		default:
-			return
+			goto done
+		}
+	}
+done:
+	for _, upd := range skipped {
+		select {
+		case r.conditionCh <- upd:
+		default:
+			// channel full — condition dropped (best-effort)
 		}
 	}
 }
@@ -320,4 +330,16 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 func stubJobHandler(_ context.Context, _, planID string, payload []byte) error {
 	slog.Info("job acquired (stub handler)", "planID", planID, "payloadLen", len(payload))
 	return nil
+}
+
+// SetConditionForTest enqueues a condition update as if it came from a listener
+// goroutine. Intended for use in unit tests only.
+func (r *RunnerGroupReconciler) SetConditionForTest(ns, name string, cond metav1.Condition) {
+	if r.conditionCh == nil {
+		return
+	}
+	select {
+	case r.conditionCh <- conditionUpdate{namespace: ns, name: name, condition: cond}:
+	default:
+	}
 }

@@ -20,7 +20,10 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"sync"
@@ -41,11 +44,12 @@ const (
 
 // RegisterParams is the input to Registrar.Register.
 type RegisterParams struct {
-	Name          string
-	Version       string
-	Labels        []string
-	GroupName     string
-	PublicKeyPEM  []byte // RSA public key DER bytes
+	Name         string
+	Version      string
+	Labels       []string
+	GroupName    string
+	GroupID      int
+	PublicKeyPEM []byte // DER-encoded PKIX public key, PEM-wrapped
 }
 
 // AgentCredentials is returned by Registrar.Register and stored in a Secret.
@@ -53,6 +57,7 @@ type AgentCredentials struct {
 	AgentID          int64
 	ClientID         string
 	AuthorizationURL string
+	BrokerURL        string
 }
 
 // Registrar abstracts the runner agent registration API.
@@ -75,10 +80,11 @@ type Agent struct {
 // Pool manages the lifecycle of pre-registered runner agents for one RunnerGroup.
 // It creates, loads, and deregisters agent Secrets.
 type Pool struct {
-	client    client.Client
-	namespace string
-	groupName string
-	registrar Registrar
+	client        client.Client
+	namespace     string
+	groupName     string
+	runnerVersion string
+	registrar     Registrar
 
 	mu        sync.Mutex
 	agents    []*Agent // sorted by index; populated by LoadAgents or EnsureAgents
@@ -86,12 +92,13 @@ type Pool struct {
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
-func NewPool(c client.Client, namespace, groupName string, registrar Registrar) *Pool {
+func NewPool(c client.Client, namespace, groupName, runnerVersion string, registrar Registrar) *Pool {
 	return &Pool{
-		client:    c,
-		namespace: namespace,
-		groupName: groupName,
-		registrar: registrar,
+		client:        c,
+		namespace:     namespace,
+		groupName:     groupName,
+		runnerVersion: runnerVersion,
+		registrar:     registrar,
 	}
 }
 
@@ -136,9 +143,13 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 			continue
 		}
 		if int32(idx) >= count {
+			// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
+			// claimed this agent; deleting its Secret while it is in use will cause the
+			// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
 			agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
-			if deregErr := p.registrar.Deregister(ctx, token, agentID); deregErr != nil {
-				// Log and continue; Secret deletion is the authoritative cleanup.
+			a := agentFromSecret(s, agentID, idx)
+			if err := p.registrar.Deregister(ctx, token, a.AgentID); err != nil {
+				slog.Warn("failed to deregister agent; continuing", "index", a.Index, "agentID", a.AgentID, "error", err)
 			}
 			sec := s // capture
 			if delErr := p.client.Delete(ctx, &sec); delErr != nil && !errors.IsNotFound(delErr) {
@@ -157,9 +168,18 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 		return fmt.Errorf("generate RSA key: %w", err)
 	}
 
+	pubDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return fmt.Errorf("marshal public key: %w", err)
+	}
+	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
 	params := RegisterParams{
-		Name:      fmt.Sprintf("%s-%d", p.groupName, index),
-		GroupName: p.groupName,
+		Name:         agentName,
+		Version:      p.runnerVersion,
+		Labels:       []string{},
+		GroupName:    p.groupName,
+		GroupID:      1,
+		PublicKeyPEM: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}),
 	}
 	creds, err := p.registrar.Register(ctx, token, params)
 	if err != nil {
@@ -187,6 +207,8 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 			"authorizationUrl": []byte(creds.AuthorizationURL),
 			"privateKeyPEM":    privKeyPEM,
 			"agentIndex":       []byte(strconv.Itoa(index)),
+			"runnerVersion":    []byte(p.runnerVersion),
+			"brokerURL":        []byte(creds.BrokerURL),
 		},
 	}
 	return p.client.Create(ctx, sec)
@@ -290,6 +312,14 @@ func (p *Pool) listSecrets(ctx context.Context) ([]corev1.Secret, error) {
 		return nil, err
 	}
 	return list.Items, nil
+}
+
+// agentFromSecret creates a minimal Agent with only the fields needed for deregistration.
+func agentFromSecret(s corev1.Secret, agentID int64, index int) *Agent {
+	return &Agent{
+		Index:   index,
+		AgentID: agentID,
+	}
 }
 
 func secretToAgent(s corev1.Secret) (*Agent, error) {

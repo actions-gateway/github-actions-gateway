@@ -21,7 +21,7 @@ func scheme() *runtime.Scheme {
 
 func newPool(c *fake.ClientBuilder, ns, group string) *agentpool.Pool {
 	registrar := agentpool.NewStubRegistrar()
-	return agentpool.NewPool(c.Build(), ns, group, registrar)
+	return agentpool.NewPool(c.Build(), ns, group, "2.327.1", registrar)
 }
 
 func TestPool_EnsureAgents_Creates(t *testing.T) {
@@ -40,6 +40,8 @@ func TestPool_EnsureAgents_Creates(t *testing.T) {
 		assert.NotZero(t, a.AgentID)
 		assert.NotNil(t, a.PrivateKey)
 		assert.NotEmpty(t, a.Creds.ClientID)
+		assert.Equal(t, "2.327.1", a.RunnerVersion, "runnerVersion should be stored in Secret")
+		assert.Equal(t, "https://stub.example.com/broker", a.BrokerURL, "brokerURL should be stored in Secret")
 	}
 }
 
@@ -156,7 +158,7 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 	}
 
 	fb := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingSecret)
-	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", agentpool.NewStubRegistrar())
+	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", "2.327.1", agentpool.NewStubRegistrar())
 
 	// EnsureAgents(1) — index 0 already exists, should be idempotent.
 	err := pool.EnsureAgents(ctx, 1, "token")

@@ -198,6 +198,78 @@ func TestReconcile_Delete(t *testing.T) {
 	assert.Empty(t, secrets.Items)
 }
 
+func TestReconcile_VersionTooOldCondition(t *testing.T) {
+	rg := newRunnerGroup("default", "versionold-rg", 1)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	key := types.NamespacedName{Namespace: "default", Name: "versionold-rg"}
+
+	reconcile(t, r, key) // add finalizer; initialises conditionCh
+	reconcile(t, r, key) // provision agents
+
+	// Simulate a listener goroutine reporting a non-retriable version error.
+	r.SetConditionForTest("default", "versionold-rg", metav1.Condition{
+		Type:    "RunnerVersionTooOld",
+		Status:  metav1.ConditionTrue,
+		Reason:  "VersionTooOld",
+		Message: "runner version too old",
+	})
+
+	reconcile(t, r, key) // drain conditions → status update
+
+	var updated v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(context.Background(), key, &updated))
+
+	found := false
+	for _, c := range updated.Status.Conditions {
+		if c.Type == "RunnerVersionTooOld" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected RunnerVersionTooOld condition to appear in status")
+}
+
+func TestReconcile_RateLimitedCondition(t *testing.T) {
+	rg := newRunnerGroup("default", "ratelimited-rg", 1)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	key := types.NamespacedName{Namespace: "default", Name: "ratelimited-rg"}
+
+	reconcile(t, r, key) // add finalizer; initialises conditionCh
+	reconcile(t, r, key) // provision agents
+
+	// Simulate a listener goroutine reporting sustained rate-limiting.
+	r.SetConditionForTest("default", "ratelimited-rg", metav1.Condition{
+		Type:    "RateLimited",
+		Status:  metav1.ConditionTrue,
+		Reason:  "SustainedRateLimit",
+		Message: "GetMessage returning 429 for >10 minutes",
+	})
+
+	reconcile(t, r, key) // drain conditions → status update
+
+	var updated v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(context.Background(), key, &updated))
+
+	found := false
+	for _, c := range updated.Status.Conditions {
+		if c.Type == "RateLimited" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected RateLimited condition to appear in status")
+}
+
 func TestReconcile_StatusActiveSessions(t *testing.T) {
 	rg := newRunnerGroup("default", "status-rg", 3)
 	fb := fake.NewClientBuilder().WithScheme(testScheme()).

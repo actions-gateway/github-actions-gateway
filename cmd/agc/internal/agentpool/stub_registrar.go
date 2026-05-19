@@ -31,6 +31,7 @@ func (r *StubRegistrar) Register(_ context.Context, _ string, _ RegisterParams) 
 		AgentID:          id,
 		ClientID:         "stub-client-id",
 		AuthorizationURL: "https://stub.example.com/token",
+		BrokerURL:        "https://stub.example.com/broker",
 	}, nil
 }
 
