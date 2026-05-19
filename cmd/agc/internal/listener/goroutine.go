@@ -234,6 +234,16 @@ func refreshBrokerToken(ctx context.Context, cfg Config) error {
 	return nil
 }
 
+// NonRetriableError wraps an error from Run that indicates a permanent failure
+// condition for this goroutine (e.g. version too old, unauthorized). The
+// Multiplexer uses this to suppress automatic restart of the permanent baseline.
+type NonRetriableError struct {
+	Cause error
+}
+
+func (e *NonRetriableError) Error() string { return "non-retriable: " + e.Cause.Error() }
+func (e *NonRetriableError) Unwrap() error { return e.Cause }
+
 // createSession calls CreateSession and handles non-retriable errors.
 func createSession(ctx context.Context, cfg Config, log *slog.Logger) (string, error) {
 	agentName := fmt.Sprintf("%s-%d", cfg.Group, cfg.Agent.Index)
@@ -243,12 +253,12 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (string, e
 		if errors.As(err, &vtooOld) {
 			setCondition(cfg, "RunnerVersionTooOld", metav1.ConditionTrue,
 				"VersionTooOld", vtooOld.Message)
-			return "", fmt.Errorf("non-retriable: %w", err)
+			return "", &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
 			setCondition(cfg, "Degraded", metav1.ConditionTrue,
 				"Unauthorized", err.Error())
-			return "", fmt.Errorf("non-retriable: %w", err)
+			return "", &NonRetriableError{Cause: err}
 		}
 		return "", err // retriable
 	}

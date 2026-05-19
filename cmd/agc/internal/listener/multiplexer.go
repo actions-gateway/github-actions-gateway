@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -119,28 +120,33 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 
 	go func() {
 		defer close(state.done)
-		defer func() {
-			m.mu.Lock()
-			delete(m.active, idx)
-			m.activeCount.Add(-1)
-			shouldRestart := isPerm && lCtx.Err() == nil
-			m.mu.Unlock()
 
-			if shouldRestart {
-				// Permanent baseline goroutine exited for a recoverable reason.
-				// Restart it after a brief backoff.
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(time.Second):
-				}
-				m.mu.Lock()
-				m.spawn(ctx, true)
-				m.mu.Unlock()
+		runErr := Run(lCtx, cfg)
+		if runErr != nil {
+			m.log.Warn("listener goroutine exited with error", "error", runErr, "index", idx)
+		}
+
+		m.mu.Lock()
+		delete(m.active, idx)
+		m.activeCount.Add(-1)
+		var nre *NonRetriableError
+		// Only restart the permanent baseline for recoverable exits. A
+		// NonRetriableError (VersionTooOld, unauthorized) means the goroutine
+		// should not loop — the condition is already surfaced on the RunnerGroup.
+		shouldRestart := isPerm && lCtx.Err() == nil && !errors.As(runErr, &nre)
+		m.mu.Unlock()
+
+		if shouldRestart {
+			// Permanent baseline goroutine exited for a recoverable reason.
+			// Restart it after a brief backoff.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
 			}
-		}()
-		if err := Run(lCtx, cfg); err != nil {
-			m.log.Warn("listener goroutine exited with error", "error", err, "index", idx)
+			m.mu.Lock()
+			m.spawn(ctx, true)
+			m.mu.Unlock()
 		}
 	}()
 }
