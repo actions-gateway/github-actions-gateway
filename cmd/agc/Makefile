@@ -8,7 +8,7 @@ all: generate build test
 
 .PHONY: build
 build:
-	go build -o .build/agc .
+	go build -o ../../.build/agc .
 
 .PHONY: test
 test:
