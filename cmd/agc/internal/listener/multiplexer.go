@@ -1,0 +1,144 @@
+package listener
+
+import (
+	"context"
+	"log/slog"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+// listenerState tracks one running listener goroutine.
+type listenerState struct {
+	cancel  context.CancelFunc
+	done    chan struct{}
+	isPerm  bool // permanent baseline goroutine; always restarted on exit
+}
+
+// ConfigFactory creates a Config for a new listener goroutine at the given
+// index. The Multiplexer passes IsLastListener and SpawnReplacement closures
+// before handing the Config to Run.
+type ConfigFactory func(index int) Config
+
+// Multiplexer manages the adaptive pool of listener goroutines for one RunnerGroup.
+// It ensures at least one goroutine is always running (the permanent baseline)
+// and spawns additional goroutines on demand up to maxListeners.
+type Multiplexer struct {
+	mu           sync.Mutex
+	active       map[int]*listenerState
+	nextIndex    int
+	maxListeners atomic.Int32
+	factory      ConfigFactory
+	log          *slog.Logger
+}
+
+// NewMultiplexer creates a Multiplexer for one RunnerGroup.
+func NewMultiplexer(factory ConfigFactory, maxListeners int32, log *slog.Logger) *Multiplexer {
+	if log == nil {
+		log = slog.Default()
+	}
+	m := &Multiplexer{
+		active:  make(map[int]*listenerState),
+		factory: factory,
+		log:     log,
+	}
+	m.maxListeners.Store(maxListeners)
+	return m
+}
+
+// Start launches the permanent baseline listener. Must be called once when
+// the RunnerGroup is first reconciled. ctx must remain live for the duration
+// of the Multiplexer's operation.
+func (m *Multiplexer) Start(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.spawn(ctx, true)
+	return nil
+}
+
+// SetMaxListeners updates the ceiling. If the new ceiling is lower than the
+// current active count, excess idle goroutines shut down at their next 202.
+func (m *Multiplexer) SetMaxListeners(max int32) {
+	if max < 1 {
+		max = 1
+	}
+	m.maxListeners.Store(max)
+}
+
+// SpawnReplacement spawns one additional listener goroutine if the active
+// count is below maxListeners. Called by a listener goroutine after it acquires
+// a job to maintain polling capacity.
+func (m *Multiplexer) SpawnReplacement(ctx context.Context) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if int32(len(m.active)) >= m.maxListeners.Load() {
+		return
+	}
+	m.spawn(ctx, false)
+}
+
+// ActiveCount returns the current number of running listener goroutines.
+func (m *Multiplexer) ActiveCount() int32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return int32(len(m.active))
+}
+
+// Stop cancels all listener goroutines and waits for them to exit cleanly.
+func (m *Multiplexer) Stop() {
+	m.mu.Lock()
+	states := make([]*listenerState, 0, len(m.active))
+	for _, s := range m.active {
+		s.cancel()
+		states = append(states, s)
+	}
+	m.mu.Unlock()
+
+	for _, s := range states {
+		<-s.done
+	}
+}
+
+// spawn starts a new listener goroutine. Must be called with m.mu held.
+func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
+	idx := m.nextIndex
+	m.nextIndex++
+
+	lCtx, cancel := context.WithCancel(ctx)
+	state := &listenerState{
+		cancel: cancel,
+		done:   make(chan struct{}),
+		isPerm: isPerm,
+	}
+	m.active[idx] = state
+
+	cfg := m.factory(idx)
+	cfg.IsLastListener = func() bool { return m.ActiveCount() <= 1 }
+	cfg.SpawnReplacement = func(ctx context.Context) { m.SpawnReplacement(ctx) }
+
+	go func() {
+		defer close(state.done)
+		defer func() {
+			m.mu.Lock()
+			delete(m.active, idx)
+			shouldRestart := isPerm && lCtx.Err() == nil
+			m.mu.Unlock()
+
+			if shouldRestart {
+				// Permanent baseline goroutine exited for a recoverable reason.
+				// Restart it after a brief backoff.
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(time.Second):
+				}
+				m.mu.Lock()
+				m.spawn(ctx, true)
+				m.mu.Unlock()
+			}
+		}()
+		if err := Run(lCtx, cfg); err != nil {
+			m.log.Warn("listener goroutine exited with error", "error", err, "index", idx)
+		}
+	}()
+}

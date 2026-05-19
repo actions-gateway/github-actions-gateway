@@ -1,0 +1,161 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.15.0
+  name: runnergroups.actions-gateway.github.com
+spec:
+  group: actions-gateway.github.com
+  names:
+    kind: RunnerGroup
+    listKind: RunnerGroupList
+    plural: runnergroups
+    shortNames:
+    - rg
+    singular: runnergroup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.maxListeners
+      name: MaxListeners
+      type: integer
+    - jsonPath: .status.activeSessions
+      name: ActiveSessions
+      type: integer
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RunnerGroup is a namespace-scoped CRD managed by the AGC.
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RunnerGroupSpec defines the desired state of a RunnerGroup.
+            properties:
+              maxListeners:
+                default: 10
+                description: MaxListeners is the maximum number of concurrent listener
+                  goroutines.
+                format: int32
+                minimum: 1
+                type: integer
+              maxWorkers:
+                description: MaxWorkers caps the number of worker pods this RunnerGroup
+                  may run concurrently.
+                format: int32
+                minimum: 1
+                type: integer
+              podTemplate:
+                description: PodTemplate is the standard Kubernetes PodTemplateSpec
+                  for worker pods.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              priorityTiers:
+                description: PriorityTiers defines PriorityClass assignments and
+                  cumulative pod-count thresholds.
+                items:
+                  description: PriorityTier maps a Kubernetes PriorityClass to a
+                    cumulative pod-count threshold.
+                  properties:
+                    preemptionPolicy:
+                      default: Never
+                      description: PreemptionPolicy controls whether pods in this
+                        tier may evict lower-priority pods.
+                      enum:
+                      - PreemptLowerPriority
+                      - Never
+                      type: string
+                    priorityClassName:
+                      description: PriorityClassName is the name of an existing cluster-scoped
+                        PriorityClass.
+                      type: string
+                    threshold:
+                      description: Threshold is the cumulative active-pod count at
+                        which this tier is exhausted.
+                      format: int32
+                      minimum: 1
+                      type: integer
+                  required:
+                  - priorityClassName
+                  - threshold
+                  type: object
+                maxItems: 10
+                type: array
+              runnerLabels:
+                description: RunnerLabels is the label set matched against workflow
+                  runs-on values.
+                items:
+                  type: string
+                type: array
+              workerImage:
+                description: WorkerImage is the fully-qualified container image for
+                  the runner container.
+                type: string
+            required:
+            - podTemplate
+            - runnerLabels
+            type: object
+            x-kubernetes-validations:
+            - message: maxWorkers must equal the last priorityTiers threshold when
+                both are set
+              rule: '!has(self.maxWorkers) || self.priorityTiers.size() == 0 || self.maxWorkers
+                == self.priorityTiers[self.priorityTiers.size()-1].threshold'
+          status:
+            description: RunnerGroupStatus defines the observed state of a RunnerGroup.
+            properties:
+              activeSessions:
+                description: ActiveSessions is the number of currently open long-poll
+                  sessions.
+                format: int32
+                type: integer
+              conditions:
+                description: Conditions contains the current observed conditions of
+                  the runner group.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    observedGeneration:
+                      format: int64
+                      type: integer
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                format: int64
+                type: integer
+            required:
+            - activeSessions
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
