@@ -358,6 +358,44 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 
 **Document findings:** Add a `## Investigation Findings` section at the bottom of this file before closing the milestone.
 
+### 3.C Investigation — Session Reuse After `acquirejob`
+
+**Context:** The adaptive listener model in [§2.2](../design/02-architecture.md#22-tier-2--actions-gateway-controller-agc) requires that a goroutine can call `GET /message` again on the same `sessionId` immediately after a successful `POST /acquirejob`, without tearing down and re-creating the session. If GitHub does not permit this, the AGC must call `DELETE /sessions` followed by `POST /sessions` between each job, adding a full registration round-trip of latency to every acquisition cycle and complicating the goroutine lifecycle.
+
+**How to investigate:**
+1. Run the probe through the normal sequence: `CreateSession` → `GetMessage` → `AcquireJob`.
+2. Without calling `DeleteSession`, immediately re-enter the `GetMessage` long-poll loop on the same `sessionId`.
+3. Queue a second workflow job and observe the response:
+   - 200 with a new `RunnerJobRequest` message → session reuse is supported.
+   - 202 (long-poll times out, no second job delivered) → inconclusive; repeat with a second job already queued before re-entering the poll.
+   - 404, 410, or any non-2xx → session is invalidated after job acquisition; reuse not supported.
+4. If reuse appears to work, renew the acquired job's lock (via the existing `renewjob` loop) while simultaneously polling for the second job to confirm the two operations do not interfere.
+
+**Expected outcomes:**
+- If session reuse is permitted: document as confirmed. The Milestone 2 Session Multiplexer design proceeds as specified — one goroutine holds one session and loops indefinitely. Update [§3.3](../design/03-api-contracts.md) to record this as a confirmed behavior.
+- If session reuse is not permitted: the AGC goroutine must tear down and re-create the session after each `AcquireJob`. Add a `TODO(session-reuse)` note to the Milestone 2 plan flagging the extra latency and the need for a delete→create cycle between jobs.
+
+**Document findings:** Add §8.C to the Investigation Findings section at the bottom of this file before closing the milestone.
+
+### 3.D Investigation — Job Delivery Throttling by Session Count
+
+**Context:** The design assumes GitHub will deliver a queued job to any session that is polling when the job arrives. If GitHub instead binds delivery to the set of sessions registered at the moment the job was *queued*, the adaptive spawn-on-acquire model has a race: a job can arrive while the replacement listener's `POST /sessions` call is still in flight, leaving no ready session to receive it. This would cause silent job drops during bursts.
+
+**How to investigate:**
+1. Register a single session and start its `GetMessage` long-poll.
+2. Queue two workflow jobs simultaneously (trigger two parallel workflow runs).
+3. After the first session acquires the first job, register a second session and start its `GetMessage` poll.
+4. Observe whether the second session receives the second job:
+   - If it does: GitHub delivers opportunistically to any ready session. The adaptive model is safe.
+   - If the second job is never delivered (times out in the queue or is requeued elsewhere): throttling is tied to the registered session count at queue time. The adaptive model has a delivery gap.
+5. As a secondary data point, invert the order: register two sessions, queue two jobs, confirm both jobs are delivered — this establishes the baseline that two simultaneous sessions do each receive a job.
+
+**Expected outcomes:**
+- If delivery is opportunistic: document as confirmed. Proceed with the adaptive listener model. No standby pool is needed.
+- If throttling is confirmed: document the gap. Evaluate pre-spawning 2–3 warm standby sessions per `RunnerGroup` as a mitigation. Update [Appendix E](../design/appendix-e-capacity-planning.md) with the revised warm-pool sizing guidance before beginning Milestone 2.
+
+**Document findings:** Add §8.D to the Investigation Findings section at the bottom of this file before closing the milestone.
+
 ---
 
 ## 4. Test Plan
@@ -422,6 +460,8 @@ These are not automated in CI for Milestone 1 — they require real GitHub crede
 | Graceful shutdown | SIGINT causes `DeleteSession` to be called. GitHub session is gone (verify via a second probe run that sees no "session already exists" error). |
 | AcknowledgeRunnerRequest (Investigation A) | Result documented per §3.A above. |
 | IP variance across proxy pool (Investigation B) | Result documented per §3.B above. |
+| Session reuse after acquirejob (Investigation C) | Second `GetMessage` poll on the same `sessionId` after `AcquireJob` either succeeds (reuse confirmed) or returns a session error (reuse not permitted). Result documented per §3.C above. |
+| Job delivery throttling by session count (Investigation D) | Second session registered mid-queue either receives the second job (opportunistic delivery confirmed) or does not (throttling confirmed). Result documented per §3.D above. |
 
 ### 4.3 Test Fixture Commitment
 
@@ -442,6 +482,8 @@ After a successful live probe run:
 - [x] `testdata/crypto_fixture.json` committed.
 - [x] Investigation A finding documented.
 - [x] Investigation B finding documented.
+- [ ] Investigation C finding documented.
+- [ ] Investigation D finding documented.
 - [x] No `TODO(milestone-2+)` items left untracked — each deferred item has a corresponding note in the Milestone 2 plan or a filed issue.
 
 ---
@@ -452,6 +494,8 @@ After a successful live probe run:
 |---|---|---|---|
 | `AcknowledgeRunnerRequest` turns out to be required for correct delivery | Medium | Medium | Investigation A resolves this in days 1–2. If required, add to `BrokerClient` and update §3.3 and §4.2 of design docs before proceeding. |
 | IP variance causes GitHub to reject sessions or flag abuse | Low–Unknown | High | Investigation B resolves this in days 3–4. If triggered: `sessionAffinity: ClientIP` on the proxy Service is the immediate fallback; per-goroutine proxy assignment is the higher-fidelity fix. Both are implementable before Milestone 4. |
+| Session reuse not permitted after `AcquireJob` | Unknown | Medium | Investigation C resolves this before Milestone 2. If not permitted: AGC goroutine must delete+recreate session between each job; flag latency impact in the Milestone 2 plan. |
+| Job delivery throttles to registered session count at queue time | Unknown | High | Investigation D resolves this before Milestone 2. If confirmed: add 2–3 warm standby sessions per RunnerGroup and update Appendix E sizing guidance before Milestone 2 begins. |
 | `TaskAgentMessage.Body` encryption scheme differs from documented AES-256 | Low | High | Discover during live probe run. The `Runner` source code (C#) is authoritative; reference `MessageListener.cs` and `RSAParameters` usage in the runner source if decryption fails. |
 | GitHub minimum runner version has advanced past the pinned version | Low | Medium | Surface as a `VersionTooOldError` from `CreateSession`. Update `GITHUB_RUNNER_VERSION` env var. |
 | Rate-limit budget hit during investigation runs | Low | Low | Use a dedicated test GitHub App installation, not the production one. |
@@ -548,3 +592,30 @@ from a test harness without duplicating the probe's main.go orchestration.
 **Recommendation.** Deploy the Milestone 4 proxy pool without `sessionAffinity: ClientIP`. If
 unexpected 401/403 responses appear in production under proxy rotation, add affinity as the
 low-effort fallback before investigating per-goroutine proxy assignment.
+
+---
+
+### 8.C — Session Reuse After `acquirejob`
+
+*Not yet investigated. Run the probe sequence described in §3.C and record findings here before closing Milestone 1.*
+
+Questions to answer:
+- Does `GET /message` on the same `sessionId` succeed (200 or 202) immediately after a successful `AcquireJob`?
+- If 200: does the delivered message represent a new job, confirming the session remained valid?
+- If any error status (404, 410, other): what is the exact status and response body?
+- Does the `renewjob` loop for the acquired job interfere with the concurrent `GetMessage` poll?
+
+**Impact on Milestone 2:** If reuse is confirmed, the Session Multiplexer design proceeds as written. If not, add a delete→create cycle to the goroutine's post-acquisition path and note the added latency in the Milestone 2 plan.
+
+---
+
+### 8.D — Job Delivery Throttling by Session Count
+
+*Not yet investigated. Run the probe sequence described in §3.D and record findings here before closing Milestone 1.*
+
+Questions to answer:
+- Does a session registered after two jobs are queued receive the second job?
+- Does the inverse test (two sessions, two jobs queued simultaneously) deliver one job to each session?
+- Is there any observable delay or error when a second job is queued with no second session ready?
+
+**Impact on Milestone 2:** If delivery is opportunistic, no standby pool is needed. If throttling is confirmed, update [Appendix E](../design/appendix-e-capacity-planning.md) with warm-pool sizing (2–3 sessions per RunnerGroup) before Milestone 2 design is finalized.
