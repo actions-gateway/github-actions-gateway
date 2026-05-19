@@ -19,3 +19,5 @@ This document has been reorganized into focused files for easier navigation on G
 | Appendix A — Capacity Targets & SLOs | [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) |
 | Appendix B — Worker Isolation Runtime | [docs/design/appendix-b-worker-isolation.md](docs/design/appendix-b-worker-isolation.md) |
 | Appendix C — AI-Assisted Implementation Notes | [docs/design/appendix-c-ai-implementation.md](docs/design/appendix-c-ai-implementation.md) |
+| Appendix D — Alternatives Considered | [docs/design/appendix-d-alternatives-considered.md](docs/design/appendix-d-alternatives-considered.md) |
+| Appendix E — Capacity Planning & RunnerGroup Design | [docs/design/appendix-e-capacity-planning.md](docs/design/appendix-e-capacity-planning.md) |
