@@ -193,15 +193,58 @@ type PriorityTier struct {
 }
 
 // RunnerGroup is a namespace-scoped CRD managed by the AGC.
-// Each instance maps to a pool of virtual runner sessions.
-// The GMC names RunnerGroup CRs as "{actionsgateway-name}-{runnergroup.name}".
+// Each instance maps to an adaptive pool of listener goroutines backed by
+// ephemeral worker pods. The GMC names RunnerGroup CRs as
+// "{actionsgateway-name}-{runnergroup.name}".
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 type RunnerGroupSpec struct {
     // Name is a stable identifier for this RunnerGroup within the ActionsGateway.
     // The GMC constructs the RunnerGroup CR name as "{actionsgateway-name}-{name}".
     // Must be unique within the ActionsGateway and must not change after creation.
-    Name         string                      `json:"name"`
-    Replicas     int32                       `json:"replicas"`
-    RunnerLabels []string                    `json:"runnerLabels"`
+    Name string `json:"name"`
+
+    // MaxListeners is the maximum number of concurrent listener goroutines the AGC
+    // will maintain for this RunnerGroup during a burst. The AGC always keeps at
+    // least one listener goroutine running; additional goroutines are spawned as
+    // jobs arrive (each spawning a replacement before handing off to a worker pod)
+    // and shut themselves down once the queue is idle.
+    //
+    // This field caps burst job-acquisition concurrency, not the number of running
+    // worker pods (which is bounded by PriorityTiers and the namespace
+    // ResourceQuota). Steady-state rate-limit cost is one session per RunnerGroup
+    // regardless of this value; peak cost is at most MaxListeners sessions.
+    //
+    // Set this to the maximum number of jobs expected to arrive simultaneously for
+    // this RunnerGroup. For most RunnerGroups the default is sufficient; increase
+    // it only if jobs are being lost during acquisition bursts.
+    //
+    // +kubebuilder:default=10
+    // +kubebuilder:validation:Minimum=1
+    MaxListeners int32 `json:"maxListeners,omitempty"`
+
+    // MaxWorkers caps the number of worker pods this RunnerGroup may run
+    // concurrently. When set without priorityTiers, the AGC enforces this
+    // as a simple pod-count ceiling with no PriorityClass assignment —
+    // no cluster-scoped PriorityClass objects are required, making this
+    // the self-service option for teams that need a concurrency limit but
+    // not scheduling priority control.
+    //
+    // When set alongside priorityTiers, MaxWorkers must equal the last
+    // tier's Threshold (the effective concurrent-pod ceiling already
+    // expressed by the tier list). Mismatches are rejected at admission
+    // to prevent the two mechanisms from silently disagreeing about which
+    // value the AGC enforces.
+    //
+    // When neither MaxWorkers nor PriorityTiers is set, the only active
+    // ceiling is the namespace ResourceQuota — the RunnerGroup can consume
+    // all available pod quota.
+    //
+    // +optional
+    // +kubebuilder:validation:Minimum=1
+    MaxWorkers *int32 `json:"maxWorkers,omitempty"`
+
+    RunnerLabels []string `json:"runnerLabels"`
 
     // PriorityTiers defines a list of PriorityClass assignments and their
     // cumulative pod-count thresholds. When a job is acquired, the AGC counts

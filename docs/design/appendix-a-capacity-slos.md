@@ -21,8 +21,8 @@ The following targets are conservative defaults derived from the architectural c
 
 | Resource | Target | Rationale |
 | --- | --- | --- |
-| Concurrent virtual sessions | ≤ 1,000 | Memory-bound: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident; 1,000 sessions ≈ 60 MiB working set plus heap. Headroom for bursts in goroutine count. |
-| Memory request | 2 GiB | 4x safety margin over steady-state working set at the 1,000-session ceiling, plus Go runtime overhead. |
+| Concurrent virtual sessions (peak burst) | ≤ 1,000 | Memory-bound burst ceiling: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident; 1,000 sessions ≈ 60 MiB at peak. Steady-state cost is 1 session per RunnerGroup (~60 KiB each), far below this ceiling for typical deployments. |
+| Memory request | 2 GiB | Sized for the peak burst ceiling of 1,000 concurrent goroutines (~60 MiB) with 4× safety margin for Go runtime overhead, heap churn, and reconcile storms. Actual steady-state resident size will be much smaller. |
 | Memory limit | 4 GiB | Allows transient bursts during reconcile storms without triggering OOM. |
 | CPU request | 500m | Predominantly I/O-bound; request reflects baseline scheduling weight rather than steady CPU draw. |
 | CPU limit | 2 (cores) | Permits short bursts during reconcile churn or token refresh contention without throttling. |
@@ -52,7 +52,7 @@ The following targets are conservative defaults derived from the architectural c
 
 | Resource | Target | Note |
 | --- | --- | --- |
-| Active jobs (worker pods) | ≤ 250 | Matches the per-installation session ceiling so steady-state job throughput is rate-limit-bounded, not goroutine-bounded. |
+| Active jobs (worker pods) | ≤ 250 | Conservative default governed by `namespaceQuota`, `maxWorkers`, or the last `priorityTiers` threshold — whichever is most restrictive. Not rate-limit-bounded under the adaptive listener model; increase this ceiling by adjusting namespace ResourceQuota and per-`RunnerGroup` concurrency controls. |
 | Aggregate NamespaceQuota | 20 CPU / 40Gi memory / 50 pods | Conservative starting allocation. Adjust against observed job CPU/memory profiles. |
 
 ---

@@ -4,7 +4,9 @@
 
 ---
 
-This appendix is a practical guide for operators and tenant teams deciding how to structure their `RunnerGroup`s, size their replica counts, and plan for growth. The raw constraint numbers live in [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget) and [Appendix A](appendix-a-capacity-slos.md); this appendix explains how to reason about them in practice.
+This appendix is a practical guide for operators and tenant teams deciding how to structure their `RunnerGroup`s, size their `maxListeners` counts, and plan for growth. The raw constraint numbers live in [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget) and [Appendix A](appendix-a-capacity-slos.md); this appendix explains how to reason about them in practice.
+
+> **Protocol dependency.** The rate-limit analysis below assumes the adaptive listener model described in [§2.2](02-architecture.md#22-tier-2--actions-gateway-controller-agc) — specifically, that a session can be reused after `acquirejob` and that GitHub delivers jobs opportunistically to any registered session. Both behaviors must be confirmed during [Milestone 1](06-implementation-phases.md#milestone-1-wire-protocol-probe-days-14). If session reuse is not permitted, steady-state cost rises to one session per concurrent job rather than one per RunnerGroup. If delivery throttling is confirmed, a small warm standby pool may be needed. This appendix will be updated once Milestone 1 findings are in.
 
 ---
 
@@ -12,27 +14,28 @@ This appendix is a practical guide for operators and tenant teams deciding how t
 
 Every capacity decision is governed by three independent ceilings. Hitting any one of them limits throughput regardless of the others.
 
-| Constraint | Ceiling | Where it comes from |
-| --- | --- | --- |
-| GitHub App rate limit | ~250 concurrent sessions per installation | [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget): each idle session polls `GET /message` ~72 times/hour against a 15,000/hour budget |
-| AGC pod memory | ~1,000 sessions per AGC pod | [Appendix A](appendix-a-capacity-slos.md): ~60 KiB per goroutine; 1,000 sessions ≈ 60 MiB working set |
-| Namespace ResourceQuota | Operator-configured | `ActionsGateway.spec.namespaceQuota` caps aggregate worker pod resources and pod count |
+| Constraint | Steady-state cost | Peak cost | Where it comes from |
+| --- | --- | --- | --- |
+| GitHub App rate limit | 1 session per RunnerGroup (~72 req/hr each) | Up to `maxListeners` sessions per RunnerGroup | [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget): each active session polls `GET /message` ~72 times/hour against a 15,000/hour budget |
+| AGC pod memory | ~60 KiB per active listener goroutine | Negligible at realistic listener counts | [Appendix A](appendix-a-capacity-slos.md): goroutine stack + HTTP buffer |
+| Namespace ResourceQuota | — | Caps concurrent running worker pods | `ActionsGateway.spec.namespaceQuota` |
 
-In practice the **GitHub App rate limit is almost always the binding constraint** at the per-installation level. The AGC memory budget allows 4× more sessions than the rate limit permits, so the rate limit bites first. The `namespaceQuota` is the binding constraint on how many jobs can run concurrently — it is a separate ceiling from how many sessions can wait for work.
+With the adaptive listener model, **the GitHub App rate limit is no longer a steady-state concern for most tenants.** One session per RunnerGroup means 10 RunnerGroups consume ~720 req/hour against a 15,000/hour budget — 5% utilization at rest. The rate limit becomes relevant only at sustained peak burst when many RunnerGroups are simultaneously at their `maxListeners` ceiling.
 
-The key formula:
+The key formulas:
 
 ```
-total concurrent sessions = sum of (RunnerGroup.replicas) across all RunnerGroups in the ActionsGateway
+Steady-state sessions   = number of RunnerGroups in the ActionsGateway
+Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 ```
 
-Keep this sum at or below 250 per `ActionsGateway` CR to stay within the rate limit budget.
+The `namespaceQuota` remains the binding constraint on how many jobs run concurrently — it is independent of listener count.
 
 ---
 
 ## E.2. What RunnerGroups Are (and Aren't) For
 
-A `RunnerGroup` represents a **pool of virtual runner sessions sharing a common pod shape**. It is not a per-repo, per-team, or per-workflow construct.
+A `RunnerGroup` represents a **pool of listener goroutines sharing a common pod shape**. It is not a per-repo, per-team, or per-workflow construct.
 
 GitHub routes jobs to a RunnerGroup by matching the job's `runs-on` labels against the RunnerGroup's `runnerLabels`. Any workflow in any repository with access to the GitHub App installation can target a RunnerGroup — repo boundaries are invisible to the routing layer.
 
@@ -46,44 +49,40 @@ This means:
 
 ## E.3. The Per-Workflow RunnerGroup Question
 
-Because virtual runner sessions are goroutines rather than pods, the marginal cost of adding a new RunnerGroup is low: a small amount of configuration and a handful of additional goroutines in the AGC. This raises a natural question: should each workflow get its own RunnerGroup so that its pod shape can be optimized exactly?
+Because the steady-state rate-limit cost of a RunnerGroup is one session (~72 req/hour), adding a new RunnerGroup is genuinely cheap. This makes fine-grained RunnerGroup topologies much more practical than they would be under a fixed-session model.
 
-The argument for it is real:
+The argument for per-workflow RunnerGroups is now strong:
 
 - Each workflow gets the minimum GPU count it actually needs, eliminating over-provisioning at the pod level.
 - Teams own their runner shapes independently without coordinating with other teams.
 - Metrics are naturally scoped per workflow via the `runner_group` label.
+- Adding a new RunnerGroup for a new test suite is a self-service config change with negligible operational cost.
 
-The argument against is also real, and it is rooted in the rate limit ceiling:
+The remaining constraints are practical rather than rate-limit-driven:
 
-**Each additional RunnerGroup consumes sessions from the 250-session budget.** A RunnerGroup with `replicas: 5` consumes 5 of those 250 sessions even when it has no jobs running. Multiply across many fine-grained RunnerGroups and the budget fills quickly:
+**`maxListeners` must be sized per RunnerGroup.** A RunnerGroup that receives large simultaneous job bursts needs a higher `maxListeners` ceiling to acquire them all within the 2-minute window. Misconfigured ceilings can cause missed acquisitions during bursts, not just queuing delays.
 
-| RunnerGroups | Replicas each | Total sessions | Headroom remaining |
-| --- | --- | --- | --- |
-| 10 | 5 | 50 | 200 |
-| 25 | 5 | 125 | 125 |
-| 50 | 5 | 250 | 0 — at ceiling |
-| 50 | 10 | 500 | Over — must shard |
+**Peak rate-limit consumption scales with RunnerGroup count × `maxListeners`.** At extreme scale — many RunnerGroups all bursting simultaneously — the peak session count can approach the installation budget. For most tenants this is not a practical concern; see [E.6](#e6-when-to-shard-across-installations) for shard triggers.
 
-A tenant with 50 distinct workflow types, each wanting 5 concurrent slots, is already at the ceiling. Every RunnerGroup beyond that point requires sharding to a new GitHub App installation — which means a new `ActionsGateway` CR, new credentials, and new operational overhead. The per-workflow RunnerGroup model trades away the budget headroom that would otherwise absorb growth.
+**Configuration overhead grows with RunnerGroup count.** Each RunnerGroup requires a pod shape definition, label assignment, and `maxListeners` tuning. At very high RunnerGroup counts this becomes a maintenance surface.
 
-**The practical guidance:** prefer per-pod-shape RunnerGroups rather than per-workflow. Workflows that happen to need the same GPU count, memory, and tooling can share a RunnerGroup freely — GitHub's label routing handles the targeting. Reserve finer granularity for cases where the resource difference is real and meaningful (a 1-GPU training job genuinely cannot share a pod shape with an 8-GPU job).
+**The practical guidance:** per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows. Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.
 
 ---
 
-## E.4. Choosing Replica Counts
+## E.4. Sizing `maxListeners`
 
-`RunnerGroup.replicas` controls how many goroutines stand ready to accept jobs at any moment. A job that arrives when all sessions are busy must wait for a session to free up before it can be acquired.
+`RunnerGroup.maxListeners` caps the number of listener goroutines that can run concurrently during a burst. The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.
 
-Sizing replicas is a throughput problem, not a resource problem — goroutines are cheap. The goal is to avoid jobs queueing for a session when the cluster has spare capacity to run them.
+This field is a **burst ceiling, not a steady-state count.** Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist. The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and `maxListeners` is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.
 
 A practical starting approach:
 
-1. **Measure peak concurrent jobs** for this runner shape across a representative week of CI traffic.
-2. **Set replicas to peak + 20% headroom** to absorb spikes without session starvation.
-3. **Monitor `actions_gateway_active_sessions`** relative to `replicas`. If it consistently hits the ceiling during working hours, increase replicas. If it rarely exceeds 30% of replicas, decrease them to recover session budget.
+1. **Estimate peak simultaneous job arrivals** for this RunnerGroup. A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.
+2. **Set `maxListeners` to cover that peak** with a small margin (e.g. peak + 2–3).
+3. **Monitor `actions_gateway_active_sessions`** relative to `maxListeners`. If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it. If it never exceeds 3–4, the default of 10 is more than sufficient.
 
-Keep in mind that replicas count against the 250-session installation budget regardless of whether jobs are running. Under-provisioning wastes job throughput; over-provisioning wastes session budget.
+For most RunnerGroups the default of 10 is the right starting point and requires no tuning.
 
 ---
 
@@ -104,12 +103,14 @@ The only case that requires separate `ActionsGateway` CRs for repo-boundary reas
 
 ## E.6. When to Shard Across Installations
 
-Shard to a new `ActionsGateway` CR (and therefore a new GitHub App installation) when:
+With the adaptive listener model, sharding is a much rarer need than under a fixed-session design. Shard to a new `ActionsGateway` CR (and therefore a new GitHub App installation) when:
 
-- The `RateLimited` condition appears on any `RunnerGroup` for more than a few minutes — the installation is over budget.
-- You need more than ~250 total concurrent sessions within a single tenant namespace.
-- Repos in a different GitHub organization need to share the same Kubernetes tenant namespace.
-- A team wants fully isolated credentials — a separate GitHub App installation with no shared rate-limit budget.
+- The `RateLimited` condition appears on any `RunnerGroup` during sustained peak load — the installation's 15,000 req/hour budget is being exhausted by simultaneous burst activity across many RunnerGroups.
+- You need more than ~200 RunnerGroups in a single `ActionsGateway` (steady-state sessions approach the rate limit budget even at one session each).
+- Repos in a different GitHub organization need access to the same Kubernetes tenant namespace.
+- A team wants fully isolated credentials — a separate GitHub App installation with an independent rate-limit budget.
+
+As a rough check: `number of RunnerGroups × 72 req/hr` should stay well below 15,000/hr at rest. At 200 RunnerGroups that is 14,400 req/hr — already tight, with no headroom for burst. Keep steady-state RunnerGroup count comfortably below 150 per installation to preserve burst headroom.
 
 Each `ActionsGateway` CR requires its own namespace. If multiple shards are needed within a single team, the standard pattern is one namespace per installation:
 
@@ -126,9 +127,9 @@ Label the RunnerGroups consistently across installations (`gpu-2x`, `gpu-8x`, et
 
 The GMC's multi-tenant model provisions one `ActionsGateway` per namespace. Within an organization, two common partitioning patterns emerge:
 
-**One gateway per team.** Each team owns a namespace and an `ActionsGateway` CR. Runner shapes, replica counts, and quota are fully self-managed per team. This is the recommended default — it aligns operational ownership with the team boundary, keeps the session budget independent, and eliminates cross-team coordination on RunnerGroup configuration.
+**One gateway per team.** Each team owns a namespace and an `ActionsGateway` CR. Runner shapes, `maxListeners` counts, and quota are fully self-managed per team. This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.
 
-**One gateway per environment (shared by multiple teams).** A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. `team-a-gpu-2x`, `team-b-gpu-4x`). This reduces total AGC instances and GitHub App installations but reintroduces the coordination cost the self-service model is designed to avoid. The shared session budget becomes a point of contention if any team's replica count grows without regard for the others. Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration.
+**One gateway per environment (shared by multiple teams).** A single tenant namespace serves multiple teams, with RunnerGroups differentiated by label convention (e.g. `team-a-gpu-2x`, `team-b-gpu-4x`). This reduces total AGC instances and GitHub App installations at the cost of reintroducing the coordination the self-service model is designed to avoid. Use this pattern only when the number of teams is small and the platform team is comfortable arbitrating RunnerGroup configuration and quota allocation.
 
 ---
 
@@ -139,22 +140,50 @@ New runner requirement arriving:
 │
 ├─ Does an existing RunnerGroup have the same GPU count, memory,
 │  and tooling requirements?
-│   ├─ Yes → Add the new workflow's label to the existing RunnerGroup,
-│   │         or just target the existing label from the workflow.
+│   ├─ Yes → Target the existing RunnerGroup's label from the workflow.
 │   │         No new RunnerGroup needed.
-│   └─ No  → Create a new RunnerGroup with the appropriate pod shape.
-│             Check that total replicas across the ActionsGateway
-│             stays below 250.
+│   └─ No  → Create a new RunnerGroup with the appropriate pod shape
+│             and set maxListeners to cover the expected burst size.
+│             Check that total steady-state RunnerGroup count across
+│             the ActionsGateway stays below ~150.
 │
-├─ Will adding replicas push the installation over 250 sessions?
-│   ├─ No  → Increase replicas on the relevant RunnerGroup.
-│   └─ Yes → Shard: create a new namespace + ActionsGateway CR +
-│             GitHub App installation for the overflow capacity.
+├─ Are simultaneous job bursts being lost (acquisition timeout)?
+│   ├─ No  → Default maxListeners (10) is sufficient.
+│   └─ Yes → Increase maxListeners on the affected RunnerGroup to
+│             cover the observed peak simultaneous arrival rate.
+│
+├─ Is the RateLimited condition appearing during peak periods?
+│   ├─ No  → No action needed.
+│   └─ Yes → Either reduce RunnerGroup count, reduce maxListeners on
+│             high-burst groups, or shard to a second ActionsGateway
+│             CR with a separate GitHub App installation.
 │
 └─ Are the repos in a different GitHub organization?
     ├─ No  → Same ActionsGateway CR can serve them all.
     └─ Yes → Separate ActionsGateway CR required (separate installation).
 ```
+
+---
+
+## E.9. Scaling the AGC Itself
+
+The AGC is a single-pod controller that holds all listener goroutine state in memory. It cannot be horizontally scaled to multiple replicas without distributing that state — a significant complexity increase that is not in scope for this design. The scaling levers available to operators are vertical scaling, optional VPA right-sizing, and sharding across multiple `ActionsGateway` CRs.
+
+**Vertical scaling (manual).** The primary tuning surface is the AGC pod's memory limit. The working memory consumed by listener goroutines at peak burst is:
+
+```
+peak_goroutine_memory ≈ sum(maxListeners across all RunnerGroups) × 60 KiB
+```
+
+For example, 50 RunnerGroups each with `maxListeners: 10` → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The 2 GiB default memory request (see [Appendix A](appendix-a-capacity-slos.md)) is deliberately generous to absorb Go runtime overhead, heap churn during reconcile storms, and headroom for growth. If an operator adds many RunnerGroups with high `maxListeners` values and begins observing `container OOMKilled` events or high GC pressure (visible via `go_gc_duration_seconds` in Prometheus), increasing the AGC pod's `resources.limits.memory` is the correct first response.
+
+CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on `GET /message` long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The 2-core CPU limit default is sufficient for most deployments; increase it only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile activity.
+
+**Optional VPA right-sizing.** A [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) in `Auto` mode will observe the AGC's actual CPU and memory usage over time and adjust its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via `DELETE /sessions`, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see [§4.2](04-operational-flows.md#42-job-execution-flow-agc) and the `SessionReacquisition` SLO in [Appendix A](appendix-a-capacity-slos.md)).
+
+> **Note:** No `agcResources` field is currently defined on `ActionsGatewaySpec` for tenant-controlled AGC resource overrides. If tenant teams consistently need different AGC sizing, consider adding this field in a future revision. For now, the platform team manages AGC resource limits as part of the Helm chart or Kustomize overlay.
+
+**Horizontal sharding.** When the number of RunnerGroups or their aggregate `maxListeners` exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see [E.6](#e6-when-to-shard-across-installations)) — the correct scale path is to shard into a second `ActionsGateway` CR in a new namespace with a separate GitHub App installation. Each shard has its own AGC pod, its own rate-limit budget, and its own independent listener goroutine pool. See [E.6](#e6-when-to-shard-across-installations) for shard triggers and the standard namespace partitioning pattern.
 
 ---
 
