@@ -10,9 +10,8 @@
 
 **Every idle GPU runner pod is burning money with nothing to show for it.** ARC's minimum replica count is 1, so a tenant with 10 GPU runner sets holds at least 10 GPUs allocated at all times — whether jobs are running or not. At 1–8 GPUs per runner, a single tenant can idle 80 GPUs between pull requests and scheduled tests, paying full cloud rates for hardware that isn't doing work.
 
-- **Utilization jumps to near 100% of allocated time.** This system provisions worker pods only when a job is acquired and releases them the moment it finishes. Between jobs the GPU returns to the pool — no idle allocation, no wasted spend.
-- **Lower cost per unit of CI work** makes current and future GPU quota straightforward to justify.
-- **The ask:** engineering investment to build and operate this system. Reduction in idle GPU hours is expected to recover that cost within the first quarter of production operation.
+- **Idle runner allocation — GPUs held by runner pods between jobs — drops to zero.** At ARC's minimum of 1 pod per runner set, 10 clusters with 5 tenants and 5 runner sets each holds 250 GPUs allocated around the clock. At a conservative 50% idle time and 1 GPU per runner, that's ~90,000 wasted GPU-hours per month. At typical on-demand rates, this system eliminates roughly **$180K–$360K in monthly idle GPU spend** — over $2M annually. *(Estimate based on 1–2 GPUs per runner set at $2/GPU-hour; to be validated with observed utilization data.)*
+- **The ask:** engineering investment to build and operate this system. At this scale of idle spend, the build cost is expected to pay back within weeks of production operation.
 
 ### For Tenant Teams: Self-Service & Cost Ownership
 
