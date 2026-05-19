@@ -1,6 +1,6 @@
 # Appendix D — Alternatives Considered
 
-← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md)
+← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md) | Next: [Appendix E — Capacity Planning →](appendix-e-capacity-planning.md)
 
 ---
 

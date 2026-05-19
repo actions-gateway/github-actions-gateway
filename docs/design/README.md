@@ -45,6 +45,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix B — Worker Isolation Runtime (Optional)](appendix-b-worker-isolation.md)
 - [Appendix C — AI-Assisted Implementation Notes (Optional)](appendix-c-ai-implementation.md)
 - [Appendix D — Alternatives Considered](appendix-d-alternatives-considered.md)
+- [Appendix E — Capacity Planning & RunnerGroup Design](appendix-e-capacity-planning.md)
 
 ---
 
