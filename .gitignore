@@ -2,5 +2,4 @@
 .claude
 CLAUDE.md
 # binary build output
-.build/
-/agc
+/.build/
