@@ -1,6 +1,9 @@
 package broker_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1" //nolint:gosec // SHA-1 required by .NET RSA.Decrypt OAEP default
 	"encoding/base64"
 	"encoding/json"
 	"os"
@@ -71,4 +74,44 @@ func TestDecryptMessageBody_InvalidBase64(t *testing.T) {
 	_, err := broker.DecryptMessageBody("!!!not-valid-base64!!!", key)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "base64")
+}
+
+// ── DecryptSessionKey ─────────────────────────────────────────────────────────
+
+func TestDecryptSessionKey_RoundTrip(t *testing.T) {
+	// Generate a fresh key pair, encrypt a synthetic AES-256 session key using
+	// RSA-OAEP with SHA-1 (the same parameters the .NET broker uses), then verify
+	// DecryptSessionKey recovers the original bytes.
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	aesKey := make([]byte, 32)
+	_, err = rand.Read(aesKey)
+	require.NoError(t, err)
+
+	//nolint:gosec // SHA-1 is the hash required by the .NET broker; this is intentional
+	encrypted, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, &privKey.PublicKey, aesKey, nil)
+	require.NoError(t, err)
+
+	decrypted, err := broker.DecryptSessionKey(encrypted, privKey)
+	require.NoError(t, err)
+	assert.Equal(t, aesKey, decrypted)
+}
+
+func TestDecryptSessionKey_WrongKey(t *testing.T) {
+	keyA, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	keyB, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	aesKey := make([]byte, 32)
+	_, err = rand.Read(aesKey)
+	require.NoError(t, err)
+
+	//nolint:gosec
+	encrypted, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, &keyA.PublicKey, aesKey, nil)
+	require.NoError(t, err)
+
+	_, err = broker.DecryptSessionKey(encrypted, keyB)
+	require.Error(t, err)
 }

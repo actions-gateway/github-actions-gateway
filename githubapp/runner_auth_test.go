@@ -148,3 +148,41 @@ func TestFetchRunnerOAuthToken_ServerError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
 }
+
+func TestFetchRunnerOAuthToken_MissingAccessToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"token_type":"Bearer"}`))
+	}))
+	defer srv.Close()
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	creds := &githubapp.RunnerCredentials{
+		ClientID:         "test-client",
+		AuthorizationURL: srv.URL + "/token",
+	}
+	_, err = githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing access_token")
+}
+
+func TestParseRunnerRSAKey_BOM(t *testing.T) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	// Write params to temp file, then re-write with a leading UTF-8 BOM.
+	paramPath := writeDotNetRSAParams(t, priv)
+	data, err := os.ReadFile(paramPath)
+	require.NoError(t, err)
+
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	bomPath := filepath.Join(t.TempDir(), ".credentials_rsaparams")
+	require.NoError(t, os.WriteFile(bomPath, append(bom, data...), 0600))
+
+	parsed, err := githubapp.ParseRunnerRSAKey(bomPath)
+	require.NoError(t, err)
+	require.NoError(t, parsed.Validate())
+	assert.Equal(t, 0, priv.N.Cmp(parsed.N), "Modulus must survive BOM stripping")
+}
