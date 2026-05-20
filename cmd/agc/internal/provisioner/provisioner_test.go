@@ -598,54 +598,73 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	}
 }
 
+// TestProvisioner_EvictionRetryBudgetExhausted verifies that a second eviction
+// for the same run_id on the same Provisioner instance does not trigger another
+// rerun API call once MaxEvictionRetries is reached.
 func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
 
+	var rerunCount int
 	rerunCalls := make(chan struct{}, 10)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCount++
 		rerunCalls <- struct{}{}
 		w.WriteHeader(http.StatusCreated)
 	}))
 	defer srv.Close()
 
-	// MaxEvictionRetries=1 means: retry once, then exhaust.
-	runProvisioner := func() error {
-		fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-		p := newProvisioner(fc)
-		p.MaxEvictionRetries = 1
-		p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-		p.GitHubAPIURL = srv.URL
-		p.HTTPClient = srv.Client()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
 
-		rg := newRG("mygroup", "ns")
-		payload := stubPayloadFull("org", "repo", 7)
+	// MaxEvictionRetries=1: first eviction retries, second exhausts the budget.
+	p := newProvisioner(fc)
+	p.MaxEvictionRetries = 1
+	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "ns")
+	payload := stubPayloadFull("org", "repo", 7)
+
+	// Helper: run one provision cycle with unique planID; returns after pod eviction.
+	runCycle := func(planID string) {
+		t.Helper()
+		// Mirror the pod name formula from provisioner.buildPod so we can target
+		// the exact pod rather than relying on findPod (which may return the old
+		// already-evicted pod from the prior cycle).
+		podName := fmt.Sprintf("runner-%s-%s", "mygroup", planID)
+		if len(podName) > 63 {
+			podName = podName[:63]
+		}
 
 		done := make(chan error, 1)
-		go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-x", payload) }()
+		go func() { done <- p.HandlerFor(rg)(ctx, "", planID, payload) }()
 
 		require.Eventually(t, func() bool {
-			return findPod(ctx, t, fc, "ns") != nil
+			var pod corev1.Pod
+			return fc.Get(ctx, types.NamespacedName{Namespace: "ns", Name: podName}, &pod) == nil
 		}, 2*time.Second, 5*time.Millisecond)
-		evictPod(ctx, t, fc, "ns", findPod(ctx, t, fc, "ns").Name)
-		return <-done
+		evictPod(ctx, t, fc, "ns", podName)
+		require.NoError(t, <-done)
 	}
 
-	// First eviction: rerun API called (attempt 1).
-	require.NoError(t, runProvisioner())
+	// First eviction (count 0 → 1): rerun API must be called.
+	runCycle("plan-evict-1")
 	select {
 	case <-rerunCalls:
 	case <-time.After(2 * time.Second):
-		t.Fatal("expected rerun on first eviction")
+		t.Fatal("expected rerun API call on first eviction")
 	}
 
-	// Second eviction with same provisioner instance would exhaust budget.
-	// We verify no extra calls arrive after the first.
+	// Second eviction (count 1 >= MaxEvictionRetries=1): budget exhausted, no API call.
+	runCycle("plan-evict-2")
 	select {
 	case <-rerunCalls:
-		t.Fatal("unexpected second rerun call")
-	case <-time.After(50 * time.Millisecond):
-		// correct: no further calls
+		t.Fatal("unexpected rerun API call after budget exhausted")
+	case <-time.After(100 * time.Millisecond):
+		// correct: budget was exhausted, no call made
 	}
+
+	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
 }
 
