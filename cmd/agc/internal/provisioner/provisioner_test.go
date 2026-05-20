@@ -281,21 +281,22 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 		done <- p.HandlerFor(rg)(ctx, "", "plan-tier", stubPayload(1))
 	}()
 
-	require.Eventually(t, func() bool {
-		return findPod(ctx, t, fc, "team-a") != nil
-	}, 2*time.Second, 5*time.Millisecond)
-
-	// Find the newly created pod (not one of existing-0..2).
-	var list corev1.PodList
-	require.NoError(t, fc.List(ctx, &list, client.InNamespace("team-a")))
+	// Wait specifically for a pod that is NOT one of the pre-existing ones.
 	var newPod *corev1.Pod
-	for i := range list.Items {
-		name := list.Items[i].Name
-		if name != "existing-0" && name != "existing-1" && name != "existing-2" {
-			newPod = &list.Items[i]
-			break
+	require.Eventually(t, func() bool {
+		var list corev1.PodList
+		if err := fc.List(ctx, &list, client.InNamespace("team-a")); err != nil {
+			return false
 		}
-	}
+		for i := range list.Items {
+			name := list.Items[i].Name
+			if name != "existing-0" && name != "existing-1" && name != "existing-2" {
+				newPod = &list.Items[i]
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 5*time.Millisecond)
 	require.NotNil(t, newPod, "a new pod should have been created")
 	assert.Equal(t, "runner-critical", newPod.Spec.PriorityClassName)
 
@@ -991,5 +992,76 @@ func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	// Secret must be cleaned up.
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	assert.Nil(t, secret, "job Secret should be deleted after external pod deletion")
+}
+
+func TestBuildPod_InjectsProxyEnv(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.HTTPProxy = "http://proxy.example.com:8080"
+	p.HTTPSProxy = "http://proxy.example.com:8080"
+	p.NoProxy = "localhost,127.0.0.1"
+
+	rg := newRG("mygroup", "team-a")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-proxy", stubPayload(1))
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	envMap := make(map[string]string)
+	for _, e := range pod.Spec.Containers[0].Env {
+		envMap[e.Name] = e.Value
+	}
+	assert.Equal(t, "http://proxy.example.com:8080", envMap["HTTP_PROXY"])
+	assert.Equal(t, "http://proxy.example.com:8080", envMap["HTTPS_PROXY"])
+	assert.Equal(t, "localhost,127.0.0.1", envMap["NO_PROXY"])
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.HTTPProxy = "http://real-proxy.example.com:8080"
+
+	rg := newRG("mygroup", "team-a")
+	// Tenant sets a bad HTTP_PROXY — provisioner must overwrite it.
+	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{
+		Name: "runner",
+		Env:  []corev1.EnvVar{{Name: "HTTP_PROXY", Value: "http://bad-proxy.example.com"}},
+	}}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-overwrite", stubPayload(1))
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	envMap := make(map[string]string)
+	for _, e := range pod.Spec.Containers[0].Env {
+		envMap[e.Name] = e.Value
+	}
+	assert.Equal(t, "http://real-proxy.example.com:8080", envMap["HTTP_PROXY"], "tenant HTTP_PROXY must be overwritten")
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
 }
 

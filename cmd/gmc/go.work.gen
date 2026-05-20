@@ -1,0 +1,6 @@
+go 1.26
+
+use .
+
+replace github.com/karlkfi/github-actions-gateway => ../..
+replace github.com/karlkfi/github-actions-gateway/agc => ../agc

@@ -1,0 +1,9 @@
+apiVersion: actions-gateway.github.com.actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  labels:
+    app.kubernetes.io/name: gmc
+    app.kubernetes.io/managed-by: kustomize
+  name: actionsgateway-sample
+spec:
+  # TODO(user): Add fields here

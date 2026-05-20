@@ -1,0 +1,132 @@
+/*
+Copyright 2022 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package hack
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"sigs.k8s.io/kubebuilder/v4/pkg/machinery"
+)
+
+// DefaultBoilerplatePath is the default path to the boilerplate file
+var DefaultBoilerplatePath = filepath.Join("hack", "boilerplate.go.txt")
+
+var _ machinery.Template = &Boilerplate{}
+
+// Boilerplate scaffolds a file that defines the common header for the rest of the files
+type Boilerplate struct {
+	machinery.TemplateMixin
+	machinery.BoilerplateMixin
+
+	// License is the License type to write
+	License string
+
+	// Licenses maps License types to their actual string
+	Licenses map[string]string
+
+	// Owner is the copyright owner - e.g. "The Kubernetes Authors"
+	Owner string
+
+	// CustomBoilerplateContent is the content from a custom boilerplate file
+	CustomBoilerplateContent string
+
+	// HasCustomBoilerplate indicates whether a custom boilerplate file was explicitly provided
+	HasCustomBoilerplate bool
+}
+
+// Validate implements file.RequiresValidation
+func (f *Boilerplate) Validate() error {
+	// Skip validation if using custom boilerplate content (--license-file overrides --license)
+	if f.HasCustomBoilerplate {
+		return nil
+	}
+
+	if f.License != "" {
+		if _, foundKnown := knownLicenses[f.License]; !foundKnown {
+			if _, found := f.Licenses[f.License]; !found {
+				return fmt.Errorf("unknown specified license %s", f.License)
+			}
+		}
+	}
+	return nil
+}
+
+// SetTemplateDefaults implements machinery.Template
+func (f *Boilerplate) SetTemplateDefaults() error {
+	if f.Path == "" {
+		f.Path = DefaultBoilerplatePath
+	}
+
+	if f.License == "" {
+		f.License = "apache2"
+	}
+
+	if f.Licenses == nil {
+		f.Licenses = make(map[string]string, len(knownLicenses))
+	}
+
+	for key, value := range knownLicenses {
+		if _, hasLicense := f.Licenses[key]; !hasLicense {
+			f.Licenses[key] = value
+		}
+	}
+
+	// Custom boilerplate file content takes precedence (even if empty)
+	// HasCustomBoilerplate is set when --license-file is explicitly provided
+	if f.HasCustomBoilerplate {
+		f.TemplateBody = f.CustomBoilerplateContent
+		return nil
+	}
+
+	// Boilerplate given
+	if len(f.Boilerplate) > 0 {
+		f.TemplateBody = f.Boilerplate
+		return nil
+	}
+
+	f.TemplateBody = boilerplateTemplate
+
+	return nil
+}
+
+const boilerplateTemplate = `/*
+{{ if .Owner -}}
+Copyright YEAR {{ .Owner }}.
+{{- else -}}
+Copyright YEAR.
+{{- end }}
+{{ index .Licenses .License }}*/`
+
+var knownLicenses = map[string]string{
+	"apache2":   apache2,
+	"copyright": "",
+}
+
+const apache2 = `
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+`
