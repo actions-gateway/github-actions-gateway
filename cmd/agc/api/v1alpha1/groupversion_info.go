@@ -1,4 +1,6 @@
 // Package v1alpha1 contains the RunnerGroup CRD types for the AGC.
+//
+// +groupName=actions-gateway.github.com
 package v1alpha1
 
 import (

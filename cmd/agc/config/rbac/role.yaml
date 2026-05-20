@@ -1,0 +1,54 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agc-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - runnergroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - runnergroups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - runnergroups/status
+  verbs:
+  - get
+  - patch
+  - update

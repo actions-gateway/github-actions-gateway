@@ -97,10 +97,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	// 2. Create a session.
-	sessionID, err := createSession(ctx, cfg, log)
+	sess, err := createSession(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
+	sessionID := sess.sessionID
+	aesKey := sess.aesKey
 
 	defer func() {
 		// Best-effort session cleanup on exit.
@@ -167,10 +169,12 @@ func Run(ctx context.Context, cfg Config) error {
 				if err := refreshBrokerToken(ctx, cfg); err != nil {
 					return err
 				}
-				sessionID, err = createSession(ctx, cfg, log)
+				newSess, err := createSession(ctx, cfg, log)
 				if err != nil {
 					return err
 				}
+				sessionID = newSess.sessionID
+				aesKey = newSess.aesKey
 				consecutiveEmpty = 0
 				pollErrors = 0
 				firstRateLimitAt = time.Time{}
@@ -217,7 +221,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 		log.Info("job message received", "messageId", msg.MessageID)
 
-		if err := handleJob(ctx, cfg, log, sessionID, msg); err != nil {
+		if err := handleJob(ctx, cfg, log, aesKey, msg); err != nil {
 			log.Error("job handling error", "error", err)
 			// Recoverable: continue polling on the same session.
 		}
@@ -244,8 +248,16 @@ type NonRetriableError struct {
 func (e *NonRetriableError) Error() string { return "non-retriable: " + e.Cause.Error() }
 func (e *NonRetriableError) Unwrap() error { return e.Cause }
 
-// createSession calls CreateSession and handles non-retriable errors.
-func createSession(ctx context.Context, cfg Config, log *slog.Logger) (string, error) {
+// sessionState bundles the session ID and its derived AES message-decryption key.
+// aesKey is nil when the server did not return an encryption key.
+type sessionState struct {
+	sessionID string
+	aesKey    []byte
+}
+
+// createSession calls CreateSession, handles non-retriable errors, and derives
+// the AES-256-CBC message key from the server's RSA-encrypted session key.
+func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionState, error) {
 	agentName := fmt.Sprintf("%s-%d", cfg.Group, cfg.Agent.Index)
 	sess, err := cfg.Broker.CreateSession(ctx, cfg.Agent.AgentID, agentName, cfg.Agent.RunnerVersion)
 	if err != nil {
@@ -253,25 +265,56 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (string, e
 		if errors.As(err, &vtooOld) {
 			setCondition(cfg, "RunnerVersionTooOld", metav1.ConditionTrue,
 				"VersionTooOld", vtooOld.Message)
-			return "", &NonRetriableError{Cause: err}
+			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
 			setCondition(cfg, "Degraded", metav1.ConditionTrue,
 				"Unauthorized", err.Error())
-			return "", &NonRetriableError{Cause: err}
+			return sessionState{}, &NonRetriableError{Cause: err}
 		}
-		return "", err // retriable
+		return sessionState{}, err // retriable
 	}
-	return sess.SessionID, nil
+
+	state := sessionState{sessionID: sess.SessionID}
+
+	if len(sess.EncryptionKey) > 0 {
+		if sess.EncryptionKeyEncrypted {
+			if cfg.Agent.PrivateKey != nil {
+				aesKey, decErr := broker.DecryptSessionKey(sess.EncryptionKey, cfg.Agent.PrivateKey)
+				if decErr != nil {
+					log.Warn("failed to decrypt session key; messages will be parsed as plaintext", "error", decErr)
+				} else {
+					state.aesKey = aesKey
+				}
+			} else {
+				log.Warn("server returned encrypted session key but agent has no RSA private key")
+			}
+		} else {
+			state.aesKey = sess.EncryptionKey
+		}
+	}
+
+	return state, nil
 }
 
 // handleJob acquires a job, notifies the multiplexer, starts the renew loop,
 // calls the job handler, and returns. The session is NOT closed after the job.
-func handleJob(ctx context.Context, cfg Config, log *slog.Logger, _ string, msg *broker.TaskAgentMessage) error {
-	// Parse RunnerJobRequestBody from the message body.
-	// TODO(milestone-3): decrypt body using session key before parsing.
+// aesKey is the AES-256-CBC key derived from the session's encryptionKey; nil
+// means no encryption and the body is parsed as plaintext JSON.
+func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte, msg *broker.TaskAgentMessage) error {
+	// Decrypt message body with the session key, then parse as RunnerJobRequestBody.
+	bodyBytes := []byte(msg.Body)
+	if aesKey != nil {
+		decrypted, err := broker.DecryptMessageBody(msg.Body, aesKey)
+		if err != nil {
+			log.Warn("failed to decrypt message body; falling back to plaintext parse", "error", err)
+		} else {
+			bodyBytes = decrypted
+		}
+	}
+
 	var jobBody broker.RunnerJobRequestBody
-	if err := json.Unmarshal([]byte(msg.Body), &jobBody); err != nil {
+	if err := json.Unmarshal(bodyBytes, &jobBody); err != nil {
 		log.Warn("could not parse job body; skipping AcquireJob", "error", err)
 	}
 
