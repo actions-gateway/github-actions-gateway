@@ -12,10 +12,13 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -57,6 +60,17 @@ type Provisioner struct {
 	// WorkerSA is the ServiceAccount name assigned to worker pods.
 	WorkerSA string
 
+	// TokenFunc returns a valid GitHub App installation token for API calls.
+	// If nil, eviction auto-retry is logged but the rerun API is not called.
+	TokenFunc func(ctx context.Context) (string, error)
+
+	// GitHubAPIURL is the base URL for the GitHub REST API.
+	// Defaults to "https://api.github.com"; override in tests.
+	GitHubAPIURL string
+
+	// HTTPClient is used for GitHub API calls. Defaults to http.DefaultClient.
+	HTTPClient *http.Client
+
 	// evictionCounts tracks per run_id eviction retry counts.
 	evictionCounts sync.Map // key: run_id (string) → value: int
 }
@@ -82,9 +96,36 @@ func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFu
 	}
 }
 
-// acquirePayload is used to extract run_id for eviction retry.
+// acquirePayload extracts eviction-retry fields from the raw AcquireJob response.
+// GitHub Actions embeds workflow context in the "variables" map as
+// {"system.github.run_id": {"value":"12345"}, "system.github.repository": {"value":"owner/repo"}}.
 type acquirePayload struct {
-	RunID int64 `json:"run_id"` // GitHub workflow run ID; may be absent in some responses
+	RunID     int64                       `json:"run_id"` // top-level field; may be absent
+	Variables map[string]variableEnvValue `json:"variables"`
+}
+
+type variableEnvValue struct {
+	Value string `json:"value"`
+}
+
+// repoInfo extracts the owner, repo, and run ID from the parsed payload.
+// Returns empty strings/zero if the fields are not present.
+func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
+	if ap.Variables != nil {
+		if v, ok := ap.Variables["system.github.repository"]; ok {
+			parts := strings.SplitN(v.Value, "/", 2)
+			if len(parts) == 2 {
+				owner, repo = parts[0], parts[1]
+			}
+		}
+		if v, ok := ap.Variables["system.github.run_id"]; ok {
+			fmt.Sscanf(v.Value, "%d", &runID)
+		}
+	}
+	if runID == 0 {
+		runID = ap.RunID
+	}
+	return
 }
 
 func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte) error {
@@ -99,10 +140,11 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 		podName = podName[:63]
 	}
 
-	// Extract run_id for eviction retry (best-effort; missing is fine).
+	// Extract owner/repo/run_id for eviction retry (best-effort; missing is fine).
 	var ap acquirePayload
 	_ = json.Unmarshal(payload, &ap)
-	runID := fmt.Sprintf("%d", ap.RunID)
+	owner, repo, runIDInt := ap.repoInfo()
+	runID := fmt.Sprintf("%d", runIDInt)
 
 	// 1. Stage the job Secret.
 	secret := p.buildSecret(rg, secretName, planID, payload)
@@ -150,7 +192,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, rg, runID, log)
+		p.handleEviction(ctx, rg, owner, repo, runID, log)
 	}
 
 	// 7. Cleanup.
@@ -158,7 +200,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	return nil
 }
 
-func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, runID string, log *slog.Logger) {
+func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, owner, repo, runID string, log *slog.Logger) {
 	if runID == "0" || runID == "" {
 		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
 		return
@@ -177,19 +219,72 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 	}
 
 	p.evictionCounts.Store(runID, count+1)
-	log.Info("pod evicted; auto-retry queued", "runID", runID, "attempt", count+1)
+	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", count+1)
 	if p.Metrics != nil {
 		p.Metrics.EvictionRetries.WithLabelValues(rg.Namespace, rg.Name).Inc()
 	}
 
-	// TODO(milestone-3): call POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs
-	// using the AGC installation token. Requires extracting owner+repo from the payload.
-	// For now, log the intent so the behaviour is visible in tests.
+	// Brief delay before calling GitHub so any in-flight state settles.
 	select {
 	case <-ctx.Done():
+		return
 	case <-time.After(p.EvictionRetryDelay):
-		log.Info("eviction retry delay elapsed; GitHub rerun API call needed", "runID", runID)
 	}
+
+	if err := p.rerunFailedJobs(ctx, owner, repo, runID, log); err != nil {
+		log.Error("eviction auto-retry failed; manual rerun may be required",
+			"runID", runID, "error", err)
+	} else {
+		log.Info("eviction auto-retry triggered", "runID", runID, "attempt", count+1)
+	}
+}
+
+// rerunFailedJobs calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs.
+func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID string, log *slog.Logger) error {
+	if owner == "" || repo == "" {
+		log.Warn("owner/repo unknown; cannot trigger rerun", "runID", runID)
+		return nil
+	}
+	if p.TokenFunc == nil {
+		log.Warn("TokenFunc not configured; cannot trigger rerun", "runID", runID)
+		return nil
+	}
+
+	token, err := p.TokenFunc(ctx)
+	if err != nil {
+		return fmt.Errorf("get installation token: %w", err)
+	}
+
+	apiBase := p.GitHubAPIURL
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	url := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs", apiBase, owner, repo, runID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return fmt.Errorf("build rerun request: %w", err)
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+
+	hc := p.HTTPClient
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("rerun API call: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	// GitHub returns 201 Created on success.
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("rerun API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
 }
 
 // activePodCount returns the number of Running or Pending worker pods for the given group.
