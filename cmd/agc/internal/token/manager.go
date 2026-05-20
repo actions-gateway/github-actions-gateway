@@ -85,6 +85,19 @@ func (m *Manager) Token(ctx context.Context) (string, error) {
 	return current.Token, nil
 }
 
+// NewManagerWithExpiredToken returns a Manager whose token appears expired so
+// Token() returns an error immediately without blocking. The background goroutine
+// is not started; do not call Start on the returned manager. Intended for tests.
+func NewManagerWithExpiredToken() *Manager {
+	m := &Manager{
+		clock:   RealClock,
+		ready:   make(chan struct{}),
+		current: &githubapp.InstallationToken{Token: "", ExpiresAt: time.Unix(0, 0)},
+	}
+	close(m.ready)
+	return m
+}
+
 // Start begins the background refresh loop. Refresh fires at T-5 minutes before
 // the current token's ExpiresAt. The loop exits when ctx is cancelled.
 // Must be called once before Token() is used.

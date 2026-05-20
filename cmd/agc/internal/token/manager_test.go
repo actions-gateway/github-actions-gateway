@@ -239,6 +239,50 @@ func TestManager_TokenExpiredAfterFailure(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+func TestManager_TokenCancelledBeforeReady(t *testing.T) {
+	release := make(chan struct{})
+	bp := &blockingTokenProvider{releaseCh: release}
+	clk := newFakeClock(epoch)
+
+	mgr := token.NewManager(bp, clk)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	mgr.Start(ctx)
+
+	// Cancel before the first fetch completes (provider blocks on release).
+	cancel()
+
+	// Token() must return a non-nil error, not block.
+	_, err := mgr.Token(ctx)
+	assert.Error(t, err, "Token() should return error when context cancelled before ready")
+
+	close(release) // unblock the provider goroutine so it can exit
+	clk.Stop()
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// blockingTokenProvider blocks TokenWithExpiry until releaseCh is closed or ctx is cancelled.
+type blockingTokenProvider struct {
+	releaseCh chan struct{}
+}
+
+func (p *blockingTokenProvider) Token(ctx context.Context) (string, error) {
+	tok, err := p.TokenWithExpiry(ctx)
+	if err != nil {
+		return "", err
+	}
+	return tok.Token, nil
+}
+
+func (p *blockingTokenProvider) TokenWithExpiry(ctx context.Context) (*githubapp.InstallationToken, error) {
+	select {
+	case <-p.releaseCh:
+		return &githubapp.InstallationToken{Token: "tok", ExpiresAt: epoch.Add(time.Hour)}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func TestManager_NoLeakOnCancel(t *testing.T) {
 	expiry := epoch.Add(time.Hour)
 	tok := &githubapp.InstallationToken{Token: "tok", ExpiresAt: expiry}

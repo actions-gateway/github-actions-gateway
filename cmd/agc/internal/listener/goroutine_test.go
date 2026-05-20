@@ -17,6 +17,8 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	"github.com/karlkfi/github-actions-gateway/broker"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/stretchr/testify/assert"
@@ -713,4 +715,170 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	}
 	time.Sleep(50 * time.Millisecond)
 	goleak.VerifyNone(t)
+}
+
+// ── Gap 6: refreshBrokerToken failure ────────────────────────────────────────
+
+func TestListener_OAuthTokenFetchError(t *testing.T) {
+	// OAuth stub always returns 500 — refreshBrokerToken will fail.
+	oauthSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	var createCalled atomic.Bool
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		createCalled.Store(true)
+		defaultSession(w)
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := listener.Run(ctx, cfg)
+	assert.Error(t, err, "Run should return error when OAuth token fetch fails")
+	assert.False(t, createCalled.Load(), "CreateSession must not be called when OAuth fails")
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// ── Gap 7: AcquireJob failure increments metrics counter ─────────────────────
+
+// newTestMetrics builds a Metrics with unregistered counters safe for per-test use.
+func newTestMetrics() *listener.Metrics {
+	return &listener.Metrics{
+		ActiveSessions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "t_active_sessions",
+		}, []string{"namespace", "runner_group"}),
+		JobsAcquiredTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_jobs_acquired_total",
+		}, []string{"namespace", "runner_group"}),
+		JobAcquisitionErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_job_acquisition_errors_total",
+		}, []string{"namespace", "reason"}),
+		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_token_refreshes_total",
+		}, []string{"namespace"}),
+		TokenRefreshErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_token_refresh_errors_total",
+		}, []string{"namespace"}),
+		RenewJobErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_renewjob_errors_total",
+		}, []string{"namespace"}),
+		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_message_poll_errors_total",
+		}, []string{"namespace", "reason"}),
+	}
+}
+
+func TestListener_AcquireJobError(t *testing.T) {
+	oauthSrv := oauthStub()
+	var delivered atomic.Bool
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	m := newTestMetrics()
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Metrics = m
+	cfg.IsLastListener = func() bool { return true }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	// Wait for the AcquireJob error counter to be incremented.
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobAcquisitionErrors.WithLabelValues("default", "acquirejob_failed")) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "JobAcquisitionErrors counter should be incremented")
+
+	cancel()
+	<-done
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// ── Gap 8: Generic poll-error backoff ────────────────────────────────────────
+
+func TestListener_PollErrorBackoff(t *testing.T) {
+	oauthSrv := oauthStub()
+	var pollCount atomic.Int32
+	mux := &brokerMux{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		pollCount.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable) // generic 503, not rate-limit
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	clk := newFakeClock(time.Now())
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Clock = clk
+	cfg.IsLastListener = func() bool { return true }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	// Wait for the first poll to hit the 503.
+	assert.Eventually(t, func() bool { return pollCount.Load() >= 1 }, 2*time.Second, 10*time.Millisecond)
+
+	// Advance the clock to release the backoff timer.
+	clk.Advance(30 * time.Second)
+
+	// Goroutine should poll again after the backoff.
+	assert.Eventually(t, func() bool { return pollCount.Load() >= 2 }, 2*time.Second, 10*time.Millisecond,
+		"goroutine should retry after backoff, not exit")
+
+	// Confirm goroutine is still alive (has not returned).
+	select {
+	case err := <-done:
+		t.Fatalf("goroutine exited unexpectedly with: %v", err)
+	default:
+	}
+
+	cancel()
+	<-done
+	clk.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+func TestBackoffDelay_HighErrorCount(t *testing.T) {
+	clk := listener.RealClock
+	// With >5 consecutive errors the delay must be in [30s, 60s).
+	for i := 0; i < 20; i++ {
+		d := listener.BackoffDelay(6, clk)
+		assert.GreaterOrEqual(t, d, 30*time.Second, "high-error backoff must be ≥30s")
+		assert.Less(t, d, 60*time.Second, "high-error backoff must be <60s")
+	}
+	// With ≤5 consecutive errors the delay must be in [15s, 30s).
+	for i := 0; i < 20; i++ {
+		d := listener.BackoffDelay(3, clk)
+		assert.GreaterOrEqual(t, d, 15*time.Second, "low-error backoff must be ≥15s")
+		assert.Less(t, d, 30*time.Second, "low-error backoff must be <30s")
+	}
+
 }

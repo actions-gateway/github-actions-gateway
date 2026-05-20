@@ -85,7 +85,7 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.Log = slog.Default()
 	}
 	if cfg.Agent == nil {
-		return fmt.Errorf("listener: no agent available (pool exhausted)")
+		return &NonRetriableError{Cause: fmt.Errorf("pool exhausted: no agent available")}
 	}
 
 	log := cfg.Log.With("group", cfg.Group, "namespace", cfg.Namespace,
@@ -181,7 +181,7 @@ func Run(ctx context.Context, cfg Config) error {
 			if cfg.Metrics != nil {
 				cfg.Metrics.MessagePollErrorsTotal.WithLabelValues(cfg.Namespace, "other").Inc()
 			}
-			wait := backoffDelay(pollErrors, cfg.Clock)
+			wait := BackoffDelay(pollErrors, cfg.Clock)
 			log.Warn("GetMessage error", "error", pollErr, "backoff", wait)
 			select {
 			case <-ctx.Done():
@@ -397,9 +397,9 @@ func isSessionExpired(err error) bool {
 		(strings.Contains(s, "session") && strings.Contains(s, "expired"))
 }
 
-// backoffDelay returns a jittered delay matching the two-tier policy from
-// MessageListener.cs: up to 5 errors → [15s,30s]; beyond 5 → [30s,60s].
-func backoffDelay(consecutiveErrors int, _ Clock) time.Duration {
+// BackoffDelay returns a jittered delay matching the two-tier policy from
+// MessageListener.cs: up to 5 errors → [15s,30s); beyond 5 → [30s,60s).
+func BackoffDelay(consecutiveErrors int, _ Clock) time.Duration {
 	if consecutiveErrors <= 5 {
 		return 15*time.Second + time.Duration(rand.Int63n(int64(15*time.Second)))
 	}
