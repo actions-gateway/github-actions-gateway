@@ -24,5 +24,4 @@ manifests: $(CONTROLLER_GEN)
 		output:rbac:artifacts:config=config/rbac
 
 $(CONTROLLER_GEN):
-	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/controller-tools/cmd/controller-gen
+	$(MAKE) -C $(REPO_ROOT) tools

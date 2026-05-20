@@ -1,0 +1,151 @@
+/*
+Copyright 2022 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers
+
+import (
+	log "log/slog"
+	"path/filepath"
+
+	"sigs.k8s.io/kubebuilder/v4/pkg/machinery"
+	"sigs.k8s.io/kubebuilder/v4/pkg/model/resource"
+)
+
+var _ machinery.Template = &Controller{}
+
+// Controller scaffolds the file that defines the controller for a CRD or a builtin resource
+//
+
+type Controller struct {
+	machinery.TemplateMixin
+	machinery.MultiGroupMixin
+	machinery.BoilerplateMixin
+	machinery.ResourceMixin
+	machinery.ProjectNameMixin
+	machinery.NamespacedMixin
+
+	ControllerRuntimeVersion string
+
+	Force bool
+
+	// ControllerName is the specific name for this controller.
+	// If empty, a default name based on the resource kind will be used.
+	ControllerName string
+}
+
+// SetTemplateDefaults implements machinery.Template
+func (f *Controller) SetTemplateDefaults() error {
+	if f.Path == "" {
+		fileName := "%[kind]_controller.go"
+		if f.ControllerName != "" {
+			// Normalize controller name for file naming (hyphens to underscores)
+			normalizedName := resource.NormalizeFileName(f.ControllerName)
+			fileName = normalizedName + "_controller.go"
+		}
+
+		if f.MultiGroup && f.Resource.Group != "" {
+			f.Path = filepath.Join("internal", "controller", "%[group]", fileName)
+		} else {
+			f.Path = filepath.Join("internal", "controller", fileName)
+		}
+	}
+
+	f.Path = f.Resource.Replacer().Replace(f.Path)
+	log.Info(f.Path)
+
+	f.TemplateBody = controllerTemplate
+
+	if f.Force {
+		f.IfExistsAction = machinery.OverwriteFile
+	} else {
+		f.IfExistsAction = machinery.Error
+	}
+
+	return nil
+}
+
+// ReconcilerName returns the name for the reconciler struct.
+func (f *Controller) ReconcilerName() string {
+	return resource.NormalizeReconcilerName(f.ControllerName, f.Resource.Kind)
+}
+
+// ControllerRuntimeName returns the controller runtime name used in Named().
+func (f *Controller) ControllerRuntimeName() string {
+	return resource.GetControllerName(f.ControllerName, f.Resource.Kind, f.Resource.Group, f.MultiGroup)
+}
+
+//nolint:lll
+const controllerTemplate = `{{ .Boilerplate }}
+
+package {{ if and .MultiGroup .Resource.Group }}{{ .Resource.PackageName }}{{ else }}controller{{ end }}
+
+import (
+	"context"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	{{ if not (isEmptyStr .Resource.Path) -}}
+	{{ .Resource.ImportAlias }} "{{ .Resource.Path }}"
+	{{- end }}
+)
+
+// {{ .ReconcilerName }} reconciles a {{ .Resource.Kind }} object
+type {{ .ReconcilerName }} struct {
+	client.Client
+	Scheme *runtime.Scheme
+}
+
+{{ if .Namespaced -}}
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},namespace={{ .ProjectName }}-system,resources={{ .Resource.Plural }},verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},namespace={{ .ProjectName }}-system,resources={{ .Resource.Plural }}/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},namespace={{ .ProjectName }}-system,resources={{ .Resource.Plural }}/finalizers,verbs=update
+{{- else -}}
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},resources={{ .Resource.Plural }},verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},resources={{ .Resource.Plural }}/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups={{ .Resource.QualifiedGroup }},resources={{ .Resource.Plural }}/finalizers,verbs=update
+{{- end }}
+
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
+// move the current state of the cluster closer to the desired state.
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the {{ .Resource.Kind }} object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@{{ .ControllerRuntimeVersion }}/pkg/reconcile
+func (r *{{ .ReconcilerName }}) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	_ = logf.FromContext(ctx)
+
+	// TODO(user): your logic here
+
+	return ctrl.Result{}, nil
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *{{ .ReconcilerName }}) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		{{ if not (isEmptyStr .Resource.Path) -}}
+		For(&{{ .Resource.ImportAlias }}.{{ .Resource.Kind }}{}).
+		{{- else -}}
+		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
+		// For().
+		{{- end }}
+		Named("{{ .ControllerRuntimeName }}").
+		Complete(r)
+}
+`

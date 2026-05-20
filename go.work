@@ -1,8 +1,10 @@
 go 1.26
 
 use (
-	./cmd/agc // Milestone 2
+	./cmd/agc   // Milestone 2
+	./cmd/gmc   // Milestone 4
 	./cmd/probe // Milestone 1
+	./cmd/proxy // Milestone 4
 	./cmd/worker
 )
 

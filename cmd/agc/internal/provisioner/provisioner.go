@@ -59,6 +59,11 @@ type Provisioner struct {
 	DefaultWorkerImage string
 	// WorkerSA is the ServiceAccount name assigned to worker pods.
 	WorkerSA string
+	// HTTPProxy, HTTPSProxy, and NoProxy are injected into the runner container
+	// env of every worker pod. Set from the AGC's own environment by main.go.
+	HTTPProxy  string
+	HTTPSProxy string
+	NoProxy    string
 
 	// TokenFunc returns a valid GitHub App installation token for API calls.
 	// If nil, eviction auto-retry is logged but the rerun API is not called.
@@ -391,6 +396,14 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 		Value: payloadMountPath,
 	})
 
+	// Inject proxy env vars into the runner container (controller-enforced invariants).
+	proxyEnvs := []corev1.EnvVar{
+		{Name: "HTTP_PROXY", Value: p.HTTPProxy},
+		{Name: "HTTPS_PROXY", Value: p.HTTPSProxy},
+		{Name: "NO_PROXY", Value: p.NoProxy},
+	}
+	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
+
 	// Overwrite reserved fields (controller-enforced invariants).
 	sa := p.WorkerSA
 	autoMount := false
@@ -474,6 +487,22 @@ func (p *Provisioner) logFor(rg *v1alpha1.RunnerGroup) *slog.Logger {
 		return log.With("namespace", rg.Namespace, "runnerGroup", rg.Name)
 	}
 	return log
+}
+
+// mergeEnvOverride appends or replaces env vars in base with those in overrides.
+// Entries in overrides take precedence; base entries with the same Name are dropped.
+func mergeEnvOverride(base, overrides []corev1.EnvVar) []corev1.EnvVar {
+	names := make(map[string]struct{}, len(overrides))
+	for _, e := range overrides {
+		names[e.Name] = struct{}{}
+	}
+	result := make([]corev1.EnvVar, 0, len(base)+len(overrides))
+	for _, e := range base {
+		if _, drop := names[e.Name]; !drop {
+			result = append(result, e)
+		}
+	}
+	return append(result, overrides...)
 }
 
 // dnsLabelRe matches characters not allowed in Kubernetes DNS labels.

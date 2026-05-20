@@ -105,6 +105,9 @@ func run() error {
 	// ── 7. Register reconciler ───────────────────────────────────────────────
 	prov := provisioner.NewProvisioner(mgr.GetClient(), m, nil)
 	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")
+	prov.HTTPProxy = os.Getenv("HTTP_PROXY")
+	prov.HTTPSProxy = os.Getenv("HTTPS_PROXY")
+	prov.NoProxy = os.Getenv("NO_PROXY")
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img
 	}

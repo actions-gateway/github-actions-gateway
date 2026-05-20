@@ -1,0 +1,289 @@
+/*
+Copyright 2022 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	"errors"
+	"fmt"
+	log "log/slog"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/spf13/pflag"
+
+	"sigs.k8s.io/kubebuilder/v4/pkg/config"
+	"sigs.k8s.io/kubebuilder/v4/pkg/machinery"
+	"sigs.k8s.io/kubebuilder/v4/pkg/model/resource"
+	"sigs.k8s.io/kubebuilder/v4/pkg/plugin"
+	"sigs.k8s.io/kubebuilder/v4/pkg/plugin/util"
+	goPlugin "sigs.k8s.io/kubebuilder/v4/pkg/plugins/golang"
+	"sigs.k8s.io/kubebuilder/v4/pkg/plugins/golang/deploy-image/v1alpha1/scaffolds"
+)
+
+var _ plugin.CreateAPISubcommand = &createAPISubcommand{}
+
+type createAPISubcommand struct {
+	config config.Config
+
+	options *goPlugin.Options
+
+	resource *resource.Resource
+
+	// image indicates the image that will be used to scaffold the deployment
+	image string
+
+	// runMake indicates whether to run make or not after scaffolding APIs
+	runMake bool
+
+	// runManifests indicates whether to run manifests or not after scaffolding APIs
+	runManifests bool
+
+	// imageCommand indicates the command that we should use to init the deployment
+	imageContainerCommand string
+
+	// imageContainerPort indicates the port that we should use in the scaffold
+	imageContainerPort string
+
+	// runAsUser indicates the user-id used for running the container
+	runAsUser string
+}
+
+func (p *createAPISubcommand) UpdateMetadata(cliMeta plugin.CLIMetadata, subcmdMeta *plugin.SubcommandMetadata) {
+	//nolint:lll
+	subcmdMeta.Description = `Scaffold the code implementation to deploy and manage your Operand which is represented by the API informed and will be reconciled by its controller. This plugin will generate the code implementation to help you out.
+
+	Note: In general, it’s recommended to have one controller responsible for managing each API created for the project to properly follow the design goals set by Controller Runtime(https://github.com/kubernetes-sigs/controller-runtime).
+
+	This plugin will work as the common behaviour of the flag --force and will scaffold the API and controller always. Use core types or external APIs is not officially support by default with.
+`
+	//nolint:lll
+	subcmdMeta.Examples = fmt.Sprintf(`  # Create a frigates API with Group: ship, Version: v1beta1, Kind: Frigate to represent the
+	Image: example.com/frigate:v0.0.1 and its controller with a code to deploy and manage this Operand.
+
+	Note that in the following example we are also adding the optional options to let you inform the command which should be used to create the container and initialize itvia the flag --image-container-command as the Port that should be used
+
+	- By informing the command (--image-container-command="memcached,--memory-limit=64,-o,modern,-v") your deployment will be scaffold with, i.e.:
+
+		Command: []string{"memcached","--memory-limit=64","-o","modern","-v"},
+
+	- By informing the Port (--image-container-port) will deployment will be scaffold with, i.e:
+
+		Ports: []corev1.ContainerPort{
+			ContainerPort: Memcached.Spec.ContainerPort,
+			Name:          "Memcached",
+		},
+
+	Therefore, the default values informed will be used to scaffold specs for the API.
+
+  %[1]s create api --group example.com --version v1alpha1 --kind Memcached --image=memcached:1.6.15-alpine --image-container-command="memcached --memory-limit=64 modern -v" --image-container-port="11211" --plugins="%[2]s" --make=false --namespaced=false
+
+  # Generate the manifests
+  make manifests
+
+  # Install CRDs into the Kubernetes cluster using kubectl apply
+  make install
+
+  # Regenerate code and run against the Kubernetes cluster configured by ~/.kube/config
+  make run
+`, cliMeta.CommandName, plugin.KeyFor(Plugin{}))
+}
+
+func (p *createAPISubcommand) BindFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&p.image, "image", "", "Operand image name (e.g., memcached:1.6.15-alpine). "+
+		"The controller will be scaffolded with example code to deploy and manage this image")
+
+	fs.StringVar(&p.imageContainerCommand, "image-container-command", "",
+		"[Optional] Container command to use for image initialization "+
+			"(e.g., --image-container-command=\"memcached,--memory-limit=64,modern,-o,-v\"). "+
+			"Used to scaffold the container command in the controller and its spec in the API (CRD/CR)")
+	fs.StringVar(&p.imageContainerPort, "image-container-port", "",
+		"[Optional] Container port used by the container image "+
+			"(e.g., --image-container-port=\"11211\"). "+
+			"Used to scaffold the container port in the controller and its spec in the API (CRD/CR)")
+	fs.StringVar(&p.runAsUser, "run-as-user", "",
+		"User ID for the container (e.g., 1000); sets the securityContext.runAsUser field")
+
+	fs.BoolVar(&p.runMake, "make", true,
+		"Run 'make generate' after generating files (enabled by default; use --make=false to disable)")
+	fs.BoolVar(&p.runManifests, "manifests", true,
+		"Run 'make manifests' after generating files (enabled by default; use --manifests=false to disable)")
+
+	p.options = &goPlugin.Options{}
+
+	fs.StringVar(&p.options.Plural, "plural", "",
+		"Resource irregular plural form (e.g., 'people' for 'Person'); auto-detected if not provided")
+}
+
+func (p *createAPISubcommand) InjectConfig(c config.Config) error {
+	p.config = c
+
+	return nil
+}
+
+func (p *createAPISubcommand) InjectResource(res *resource.Resource) error {
+	p.resource = res
+	p.options.DoAPI = true
+	p.options.DoController = true
+	p.options.Namespaced = true
+
+	p.options.UpdateResource(p.resource, p.config)
+
+	if err := p.resource.Validate(); err != nil {
+		return fmt.Errorf("error validating resource: %w", err)
+	}
+
+	// Check that the provided group can be added to the project
+	if !p.config.IsMultiGroup() && p.config.ResourcesLength() != 0 && !p.config.HasGroup(p.resource.Group) {
+		return fmt.Errorf("multiple groups are not allowed by default, " +
+			"to enable multi-group visit https://kubebuilder.io/migration/multi-group.html")
+	}
+
+	return nil
+}
+
+func (p *createAPISubcommand) PreScaffold(machinery.Filesystem) error {
+	if len(p.image) == 0 {
+		return fmt.Errorf("you MUST inform the image that will be used in the reconciliation")
+	}
+
+	// Validate imageContainerPort is a valid integer if provided
+	if len(p.imageContainerPort) > 0 {
+		port, err := strconv.Atoi(p.imageContainerPort)
+		if err != nil {
+			return fmt.Errorf("--image-container-port must be a valid integer, got %q: %w", p.imageContainerPort, err)
+		}
+		if port < 1 || port > 65535 {
+			return fmt.Errorf("--image-container-port must be between 1 and 65535, got %d", port)
+		}
+	}
+
+	// Validate runAsUser is a valid int64 if provided
+	if len(p.runAsUser) > 0 {
+		userID, err := strconv.ParseInt(p.runAsUser, 10, 64)
+		if err != nil {
+			return fmt.Errorf("--run-as-user must be a valid integer, got %q: %w", p.runAsUser, err)
+		}
+		if userID < 0 {
+			return fmt.Errorf("--run-as-user must be non-negative, got %d", userID)
+		}
+	}
+
+	isGoV3 := false
+	for _, pluginKey := range p.config.GetPluginChain() {
+		if strings.Contains(pluginKey, "go.kubebuilder.io/v3") {
+			isGoV3 = true
+		}
+	}
+
+	defaultMainPath := "cmd/main.go"
+	if isGoV3 {
+		defaultMainPath = "main.go"
+	}
+	// check if main.go is present in the cmd/ directory
+	if _, err := os.Stat(defaultMainPath); os.IsNotExist(err) {
+		return fmt.Errorf("main.go file should be present in %s", defaultMainPath)
+	}
+
+	return nil
+}
+
+func (p *createAPISubcommand) Scaffold(fs machinery.Filesystem) error {
+	log.Info("updating scaffold with deploy-image/v1alpha1 plugin...")
+
+	scaffolder := scaffolds.NewDeployImageScaffolder(p.config,
+		*p.resource,
+		p.image,
+		p.imageContainerCommand,
+		p.imageContainerPort,
+		p.runAsUser)
+	scaffolder.InjectFS(fs)
+	err := scaffolder.Scaffold()
+	if err != nil {
+		return fmt.Errorf("error scaffolding deploy-image plugin: %w", err)
+	}
+
+	// Save resource info to PROJECT file
+	key := plugin.GetPluginKeyForConfig(p.config.GetPluginChain(), Plugin{})
+	canonicalKey := plugin.KeyFor(Plugin{})
+	cfg := PluginConfig{}
+	if err = p.config.DecodePluginConfig(key, &cfg); err != nil {
+		switch {
+		case errors.As(err, &config.UnsupportedFieldError{}):
+			// Config version doesn't support plugin metadata
+			return nil
+		case errors.As(err, &config.PluginKeyNotFoundError{}):
+			if key != canonicalKey {
+				if decodeErr := p.config.DecodePluginConfig(canonicalKey, &cfg); decodeErr != nil {
+					if errors.As(decodeErr, &config.UnsupportedFieldError{}) {
+						return nil
+					}
+					if !errors.As(decodeErr, &config.PluginKeyNotFoundError{}) {
+						return fmt.Errorf("error decoding plugin configuration: %w", decodeErr)
+					}
+				}
+			}
+		default:
+			return fmt.Errorf("error decoding plugin configuration: %w", err)
+		}
+	}
+
+	configDataOptions := options{
+		Image:            p.image,
+		ContainerCommand: p.imageContainerCommand,
+		ContainerPort:    p.imageContainerPort,
+		RunAsUser:        p.runAsUser,
+	}
+	cfg.Resources = append(cfg.Resources, ResourceData{
+		Group:   p.resource.Group,
+		Domain:  p.resource.Domain,
+		Version: p.resource.Version,
+		Kind:    p.resource.Kind,
+		Options: configDataOptions,
+	})
+
+	if err = p.config.EncodePluginConfig(key, cfg); err != nil {
+		return fmt.Errorf("error encoding plugin configuration: %w", err)
+	}
+
+	return nil
+}
+
+func (p *createAPISubcommand) PostScaffold() error {
+	err := util.RunCmd("Update dependencies", "go", "mod", "tidy")
+	if err != nil {
+		return fmt.Errorf("error updating go dependencies: %w", err)
+	}
+	if p.runMake && p.resource.HasAPI() {
+		err = util.RunCmd("Running make", "make", "generate")
+		if err != nil {
+			return fmt.Errorf("ailed running make generate: %w", err)
+		}
+	}
+
+	if p.runManifests && p.resource.HasAPI() {
+		err = util.RunCmd("Running make", "make", "manifests")
+		if err != nil {
+			return fmt.Errorf("failed running make manifests: %w", err)
+		}
+	}
+
+	fmt.Print("Next: check the implementation of your new API and controller. " +
+		"If you do changes in the API run the manifests with:\n$ make manifests\n")
+
+	return nil
+}
