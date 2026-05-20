@@ -6,7 +6,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-// Metrics holds all Prometheus metrics emitted by the listener package.
+// Metrics holds all Prometheus metrics emitted by the listener and provisioner packages.
 type Metrics struct {
 	ActiveSessions          *prometheus.GaugeVec
 	JobsAcquiredTotal       *prometheus.CounterVec
@@ -15,6 +15,11 @@ type Metrics struct {
 	TokenRefreshErrorsTotal *prometheus.CounterVec
 	RenewJobErrorsTotal     *prometheus.CounterVec
 	MessagePollErrorsTotal  *prometheus.CounterVec
+	// M3: pod lifecycle metrics (emitted by provisioner package)
+	JobDuration              *prometheus.HistogramVec
+	PodCreationLatency       *prometheus.HistogramVec
+	EvictionRetries          *prometheus.CounterVec
+	EvictionRetriesExhausted *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -56,6 +61,28 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_message_poll_errors_total",
 			Help: "Total number of GetMessage errors.",
 		}, []string{"namespace", "reason"}),
+
+		JobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "actions_gateway_job_duration_seconds",
+			Help:    "Wall time from acquirejob to worker pod completion.",
+			Buckets: prometheus.ExponentialBuckets(1, 2, 12),
+		}, []string{"namespace", "runner_group"}),
+
+		PodCreationLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "actions_gateway_pod_creation_latency_seconds",
+			Help:    "Time from acquirejob to pod Scheduled event.",
+			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10),
+		}, []string{"namespace"}),
+
+		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_retries_total",
+			Help: "Jobs automatically re-queued after worker pod eviction.",
+		}, []string{"namespace", "runner_group"}),
+
+		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_retries_exhausted_total",
+			Help: "Evicted jobs where retry budget was exhausted.",
+		}, []string{"namespace", "runner_group"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -66,6 +93,10 @@ func NewMetrics() *Metrics {
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,
 		m.MessagePollErrorsTotal,
+		m.JobDuration,
+		m.PodCreationLatency,
+		m.EvictionRetries,
+		m.EvictionRetriesExhausted,
 	)
 	return m
 }

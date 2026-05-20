@@ -11,6 +11,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
 	"github.com/karlkfi/github-actions-gateway/broker"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +49,7 @@ func (u *channelConditionUpdater) SetCondition(namespace, name string, cond meta
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
 type RunnerGroupReconciler struct {
 	client.Client
 	TokenManager *token.Manager
@@ -55,6 +57,7 @@ type RunnerGroupReconciler struct {
 	BrokerConfig BrokerConfig
 	Metrics      *listener.Metrics
 	Log          *slog.Logger
+	Provisioner  *provisioner.Provisioner
 
 	// in-process state; rebuilt from Secrets on restart.
 	multiplexersMu sync.Mutex
@@ -158,8 +161,6 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	rg.Status.ObservedGeneration = rg.Generation
 	r.setReadyCondition(&rg, mux.ActiveCount() > 0)
 
-	// TODO(milestone-3): enforce maxWorkers ceiling in pod provisioner.
-
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -249,6 +250,10 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			UseV2Flow:     brokerCfg.UseV2Flow,
 			HTTPClient:    brokerCfg.HTTPClient,
 		}
+		jobHandler := listener.JobHandlerFunc(nil)
+		if r.Provisioner != nil {
+			jobHandler = r.Provisioner.HandlerFor(rg)
+		}
 		return listener.Config{
 			Group:      rg.Name,
 			Namespace:  rg.Namespace,
@@ -257,7 +262,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			Conditions: condUpdater,
 			Metrics:    r.Metrics,
 			RunnerOS:   brokerCfg.RunnerOS,
-			JobHandler: stubJobHandler,
+			JobHandler: jobHandler,
 		}
 	}
 
@@ -323,13 +328,6 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 		ObservedGeneration: rg.Generation,
 		LastTransitionTime: metav1.Now(),
 	})
-}
-
-// stubJobHandler is the M2 placeholder for the pod provisioner.
-// It logs job acquisition and returns immediately.
-func stubJobHandler(_ context.Context, _, planID string, payload []byte) error {
-	slog.Info("job acquired (stub handler)", "planID", planID, "payloadLen", len(payload))
-	return nil
 }
 
 // SetConditionForTest enqueues a condition update as if it came from a listener
