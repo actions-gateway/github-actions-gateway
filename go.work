@@ -3,6 +3,7 @@ go 1.26
 use (
 	./cmd/agc // Milestone 2
 	./cmd/probe // Milestone 1
+	./cmd/worker
 )
 
 // replace is required instead of a "use ." entry because Go's workspace
@@ -12,4 +13,3 @@ use (
 // packages under .../agc/... are routed to the root module directory instead
 // of cmd/agc/. Providing the root module via replace avoids the ambiguity.
 replace github.com/karlkfi/github-actions-gateway => ./
-

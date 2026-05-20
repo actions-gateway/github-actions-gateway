@@ -19,6 +19,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/controller"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -102,11 +103,18 @@ func run() error {
 	}
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
+	prov := provisioner.NewProvisioner(mgr.GetClient(), m, nil)
+	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")
+	if img := os.Getenv("WORKER_IMAGE"); img != "" {
+		prov.DefaultWorkerImage = img
+	}
+
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tokenMgr,
 		Registrar:    agentpool.NewStubRegistrar(),
 		Metrics:      m,
+		Provisioner:  prov,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
 			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),
