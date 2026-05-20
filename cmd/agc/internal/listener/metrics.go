@@ -17,7 +17,6 @@ type Metrics struct {
 	MessagePollErrorsTotal  *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
 	JobDuration              *prometheus.HistogramVec
-	PodCreationLatency       *prometheus.HistogramVec
 	EvictionRetries          *prometheus.CounterVec
 	EvictionRetriesExhausted *prometheus.CounterVec
 }
@@ -68,12 +67,6 @@ func NewMetrics() *Metrics {
 			Buckets: prometheus.ExponentialBuckets(1, 2, 12),
 		}, []string{"namespace", "runner_group"}),
 
-		PodCreationLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "actions_gateway_pod_creation_latency_seconds",
-			Help:    "Time from acquirejob to pod Scheduled event.",
-			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10),
-		}, []string{"namespace"}),
-
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
 			Help: "Jobs automatically re-queued after worker pod eviction.",
@@ -94,7 +87,6 @@ func NewMetrics() *Metrics {
 		m.RenewJobErrorsTotal,
 		m.MessagePollErrorsTotal,
 		m.JobDuration,
-		m.PodCreationLatency,
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,
 	)

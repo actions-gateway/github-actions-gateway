@@ -9,10 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -22,6 +25,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// newTestMetrics builds a Metrics with unregistered counters/histograms safe
+// for per-test use (not added to the global Prometheus registry).
+func newTestMetrics() *listener.Metrics {
+	return &listener.Metrics{
+		JobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "t_prov_job_duration_seconds",
+		}, []string{"namespace", "runner_group"}),
+		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_eviction_retries_total",
+		}, []string{"namespace", "runner_group"}),
+		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_eviction_retries_exhausted_total",
+		}, []string{"namespace", "runner_group"}),
+	}
+}
 
 func newScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
@@ -111,6 +130,8 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
 	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
 
 	rg := newRG("mygroup", "team-a")
 	payload := stubPayload(42)
@@ -138,6 +159,9 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
+
+	// H1: JobDuration must have been observed after pod completion.
+	assert.Equal(t, 1, testutil.CollectAndCount(m.JobDuration), "JobDuration histogram should have one observation")
 }
 
 func TestProvisioner_DeletesSecretOnCompletion(t *testing.T) {
@@ -569,6 +593,8 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	defer srv.Close()
 
 	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
 	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
 	p.GitHubAPIURL = srv.URL
 	p.HTTPClient = srv.Client()
@@ -596,6 +622,9 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("rerun API was not called within timeout")
 	}
+
+	// H1: EvictionRetries counter must be incremented once.
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
 }
 
 // TestProvisioner_EvictionRetryBudgetExhausted verifies that a second eviction
@@ -618,6 +647,8 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 
 	// MaxEvictionRetries=1: first eviction retries, second exhausts the budget.
 	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
 	p.MaxEvictionRetries = 1
 	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
 	p.GitHubAPIURL = srv.URL
@@ -657,14 +688,308 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	}
 
 	// Second eviction (count 1 >= MaxEvictionRetries=1): budget exhausted, no API call.
+	// H5: provision returns only after handleEviction finishes, so these assertions
+	// are race-free — no sleep needed.
 	runCycle("plan-evict-2")
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup")))
+	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
+}
+
+// TestProvisioner_EvictionRerunAPI5xx verifies that a 5xx response from the
+// rerun API is non-fatal: provision still returns nil and the EvictionRetries
+// counter is incremented.
+func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rerunPaths := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunPaths <- r.URL.Path
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.TokenFunc = func(context.Context) (string, error) { return "tok-5xx", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	payload := stubPayloadFull("org5xx", "repo5xx", 55)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-5xx", payload) }()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	evictPod(ctx, t, fc, "team-a", pod.Name)
+
+	// H2: 5xx response is non-fatal — provision must return nil.
+	require.NoError(t, <-done)
+
+	// Rerun was attempted.
 	select {
-	case <-rerunCalls:
-		t.Fatal("unexpected rerun API call after budget exhausted")
-	case <-time.After(100 * time.Millisecond):
-		// correct: budget was exhausted, no call made
+	case path := <-rerunPaths:
+		assert.Equal(t, "/repos/org5xx/repo5xx/actions/runs/55/rerun-failed-jobs", path)
+	case <-time.After(2 * time.Second):
+		t.Fatal("rerun API was not called within timeout")
 	}
 
-	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
+	// EvictionRetries counter incremented even when the API returns 5xx.
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
+}
+
+// TestProvisioner_PriorityTiersSecondTier verifies that the second priority tier
+// is assigned when active pods exceed the first tier's threshold.
+func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+		{PriorityClassName: "runner-critical", Threshold: 5},
+		{PriorityClassName: "runner-standard", Threshold: 10},
+	}
+
+	// 6 active pods — above first threshold (5) but below second (10).
+	existingPods := make([]client.Object, 6)
+	for i := 0; i < 6; i++ {
+		existingPods[i] = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("existing-%d", i),
+				Namespace: "team-a",
+				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+	fc := fake.NewClientBuilder().
+		WithScheme(newScheme()).
+		WithStatusSubresource(&corev1.Pod{}).
+		WithObjects(existingPods...).
+		WithStatusSubresource(existingPods...).
+		Build()
+	for i := 0; i < 6; i++ {
+		var pod corev1.Pod
+		_ = fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: fmt.Sprintf("existing-%d", i)}, &pod)
+		pod.Status.Phase = corev1.PodRunning
+		_ = fc.Status().Update(ctx, &pod)
+	}
+
+	p := newProvisioner(fc)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-tier2", stubPayload(1)) }()
+
+	require.Eventually(t, func() bool {
+		var list corev1.PodList
+		_ = fc.List(ctx, &list, client.InNamespace("team-a"))
+		return len(list.Items) > 6
+	}, 2*time.Second, 5*time.Millisecond)
+
+	var list corev1.PodList
+	require.NoError(t, fc.List(ctx, &list, client.InNamespace("team-a")))
+	var newPod *corev1.Pod
+	existingNames := map[string]bool{}
+	for i := 0; i < 6; i++ {
+		existingNames[fmt.Sprintf("existing-%d", i)] = true
+	}
+	for i := range list.Items {
+		if !existingNames[list.Items[i].Name] {
+			newPod = &list.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, newPod, "a new pod should have been created")
+	// H4: 6 active pods is above threshold 5, so second tier "runner-standard" applies.
+	assert.Equal(t, "runner-standard", newPod.Spec.PriorityClassName)
+
+	completePod(ctx, t, fc, "team-a", newPod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+// TestProvisioner_PriorityTiersBoundary pins the comparison semantics: exactly
+// activePods == threshold falls through to the next tier (not the current one).
+func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+		{PriorityClassName: "runner-critical", Threshold: 5},
+		{PriorityClassName: "runner-standard", Threshold: 10},
+	}
+
+	// Exactly 5 active pods — equal to first tier threshold, should fall to second tier.
+	existingPods := make([]client.Object, 5)
+	for i := 0; i < 5; i++ {
+		existingPods[i] = &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("boundary-%d", i),
+				Namespace: "team-a",
+				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		}
+	}
+	fc := fake.NewClientBuilder().
+		WithScheme(newScheme()).
+		WithStatusSubresource(&corev1.Pod{}).
+		WithObjects(existingPods...).
+		WithStatusSubresource(existingPods...).
+		Build()
+	for i := 0; i < 5; i++ {
+		var pod corev1.Pod
+		_ = fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: fmt.Sprintf("boundary-%d", i)}, &pod)
+		pod.Status.Phase = corev1.PodRunning
+		_ = fc.Status().Update(ctx, &pod)
+	}
+
+	p := newProvisioner(fc)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-boundary", stubPayload(1)) }()
+
+	require.Eventually(t, func() bool {
+		var list corev1.PodList
+		_ = fc.List(ctx, &list, client.InNamespace("team-a"))
+		return len(list.Items) > 5
+	}, 2*time.Second, 5*time.Millisecond)
+
+	var list corev1.PodList
+	require.NoError(t, fc.List(ctx, &list, client.InNamespace("team-a")))
+	var newPod *corev1.Pod
+	for i := range list.Items {
+		name := list.Items[i].Name
+		if len(name) < 8 || name[:8] != "boundary" {
+			newPod = &list.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, newPod, "a new pod should have been created at boundary")
+	// H4: activePods == threshold (5 == 5) uses strict <, so it falls to second tier.
+	assert.Equal(t, "runner-standard", newPod.Spec.PriorityClassName)
+
+	completePod(ctx, t, fc, "team-a", newPod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+// TestProvisioner_PendingPodsCountTowardCeiling verifies that Pending pods are
+// counted against the MaxWorkers ceiling, preventing over-provisioning.
+func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	maxW := int32(3)
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.MaxWorkers = &maxW
+
+	// 2 Running + 1 Pending = 3 active pods, which equals MaxWorkers.
+	existingPods := []client.Object{
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "running-0", Namespace: "team-a",
+				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "running-1", Namespace: "team-a",
+				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "pending-0", Namespace: "team-a",
+				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+			},
+			Status: corev1.PodStatus{Phase: corev1.PodPending},
+		},
+	}
+	fc := fake.NewClientBuilder().
+		WithScheme(newScheme()).
+		WithStatusSubresource(&corev1.Pod{}).
+		WithObjects(existingPods...).
+		WithStatusSubresource(existingPods...).
+		Build()
+	phases := []corev1.PodPhase{corev1.PodRunning, corev1.PodRunning, corev1.PodPending}
+	names := []string{"running-0", "running-1", "pending-0"}
+	for i, name := range names {
+		var pod corev1.Pod
+		_ = fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: name}, &pod)
+		pod.Status.Phase = phases[i]
+		_ = fc.Status().Update(ctx, &pod)
+	}
+
+	p := newProvisioner(fc)
+	err := p.HandlerFor(rg)(ctx, "", "plan-pending-ceil", stubPayload(1))
+	// M3: ceiling is enforced because Pending pods count as active.
+	assert.ErrorContains(t, err, "ceiling")
+
+	var podList corev1.PodList
+	require.NoError(t, fc.List(ctx, &podList, client.InNamespace("team-a")))
+	assert.Len(t, podList.Items, 3, "no new pod should be created when Pending pods fill the ceiling")
+}
+
+// TestProvisioner_PodDeletedExternallySucceeds verifies that an operator
+// manually deleting the pod mid-run is treated as successful completion:
+// provision returns nil and the rerun API is not called.
+func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	// Stub server to detect any unexpected rerun API calls.
+	rerunCalls := make(chan struct{}, 5)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalls <- struct{}{}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.TokenFunc = func(context.Context) (string, error) { return "tok-del", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	// Use a payload with run_id so eviction handling would fire if triggered.
+	payload := stubPayloadFull("org-del", "repo-del", 77)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-extdel", payload) }()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	// Simulate operator deleting the pod externally.
+	require.NoError(t, fc.Delete(ctx, pod))
+
+	// M4: provision must return nil (external deletion is treated as success).
+	require.NoError(t, <-done)
+
+	// The rerun API must not be called (not-found is not an eviction).
+	select {
+	case <-rerunCalls:
+		t.Fatal("rerun API must not be called when pod is deleted externally")
+	default:
+	}
+
+	// Secret must be cleaned up.
+	secret := findSecret(ctx, t, fc, "team-a", "job-")
+	assert.Nil(t, secret, "job Secret should be deleted after external pod deletion")
 }
 

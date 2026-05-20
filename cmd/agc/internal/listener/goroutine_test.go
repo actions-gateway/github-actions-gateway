@@ -271,14 +271,14 @@ func runAndWait(ctx context.Context, cfg listener.Config) <-chan error {
 	return ch
 }
 
-// closeHTTP closes an httptest server and drains idle client connections so that
-// goleak does not report net/http transport goroutines as false positives.
+// closeHTTP closes an httptest server and drains connections so that goleak
+// does not report net/http transport goroutines as false positives.
 func closeHTTP(srv *httptest.Server) {
+	srv.CloseClientConnections() // close in-flight connections before shutdown
 	srv.Close()
 	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
 		tr.CloseIdleConnections()
 	}
-	time.Sleep(50 * time.Millisecond)
 }
 
 // jobMsgWithURL returns a TaskAgentMessage whose Body contains a RunnerJobRequestBody
@@ -1050,7 +1050,7 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
-// ── TestListener_SessionKeyPassedToHandleJob ──────────────────────────────────
+// ── TestListener_SessionKeyPassedToHandleJob ─────────────────────────────────
 
 // TestListener_SessionKeyPassedToHandleJob verifies that after a session
 // expires and is recreated with a new encryption key K2, the listener uses K2
@@ -1198,4 +1198,324 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)
+}
+
+// TestListener_DecryptFailureFallsBackToPlaintext verifies the decryption-failure
+// fallback path (H3): when the session key cannot decrypt the body, the listener
+// falls back to the raw body bytes. AcquireJob is NOT called (JSON parse of
+// ciphertext fails), but the JobHandler IS called with the raw payload.
+func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	oauthSrv := oauthStub()
+	defer oauthSrv.Close()
+	agent := makeAgent(t, oauthSrv.URL)
+
+	// Session key K; body encrypted with a different key K2.
+	aesKey := make([]byte, 32)
+	wrongKey := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, aesKey)
+	require.NoError(t, err)
+	_, err = io.ReadFull(rand.Reader, wrongKey)
+	require.NoError(t, err)
+
+	encryptedKey := encryptSessionKey(t, &agent.PrivateKey.PublicKey, aesKey)
+
+	mux := &brokerMux{}
+
+	var acquireCalled atomic.Bool
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		acquireCalled.Store(true)
+		defaultAcquireJob(w)
+	})
+
+	brokerSrv := httptest.NewServer(mux)
+	defer brokerSrv.Close()
+
+	// Encrypt with wrong key — decryption with aesKey will produce bad PKCS#7 padding.
+	bodyPlain, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: "req-wrongkey",
+		RunServiceURL:   brokerSrv.URL,
+	})
+	wrongBody := encryptBody(t, wrongKey, bodyPlain)
+
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionId": "sess-wrongkey",
+			"encryptionKey": map[string]any{
+				"value":     base64.StdEncoding.EncodeToString(encryptedKey),
+				"encrypted": true,
+			},
+		})
+	})
+
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        wrongBody,
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newFakeClock(time.Now())
+
+	bc := &broker.BrokerClient{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	var handlerCalled atomic.Bool
+	cfg := listener.Config{
+		Group:          "grp",
+		Namespace:      "ns",
+		Agent:          agent,
+		Broker:         bc,
+		Clock:          clk,
+		IsLastListener: func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+			handlerCalled.Store(true)
+			cancel()
+			return nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for listener to exit")
+	}
+
+	// H3: AcquireJob must not be called — garbled JSON after decrypt failure → no RunServiceURL.
+	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called when decryption fails")
+	// JobHandler is called via the fallback path with the raw (encrypted) body.
+	assert.True(t, handlerCalled.Load(), "JobHandler must be called on the fallback plaintext path")
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+}
+
+// TestListener_PlaintextSessionKey verifies branch (b) of createSession (M1):
+// when the server returns encryptionKey.encrypted == false, the raw key bytes are
+// used directly for AES-CBC decryption without any RSA step.
+func TestListener_PlaintextSessionKey(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	oauthSrv := oauthStub()
+	defer oauthSrv.Close()
+	agent := makeAgent(t, oauthSrv.URL)
+
+	rawKey := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, rawKey)
+	require.NoError(t, err)
+
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+	defer brokerSrv.Close()
+
+	const wantJobMsgID = "req-plaintext-key-789"
+	bodyPlain, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobMsgID,
+		RunServiceURL:   brokerSrv.URL,
+		BillingOwnerID:  "owner-plain",
+	})
+	encryptedBody := encryptBody(t, rawKey, bodyPlain)
+
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionId": "sess-plain-key",
+			"encryptionKey": map[string]any{
+				// encrypted: false → raw bytes used directly (no RSA step).
+				"value":     base64.StdEncoding.EncodeToString(rawKey),
+				"encrypted": false,
+			},
+		})
+	})
+
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        encryptedBody,
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	jobMsgIDReceived := make(chan string, 1)
+	mux.SetAcquire(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.JobAcquisitionRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		jobMsgIDReceived <- req.JobMessageID
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-plain")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-plain"},
+		})
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newFakeClock(time.Now())
+
+	bc := &broker.BrokerClient{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	cfg := listener.Config{
+		Group:          "grp",
+		Namespace:      "ns",
+		Agent:          agent,
+		Broker:         bc,
+		Clock:          clk,
+		IsLastListener: func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+			cancel()
+			return nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// M1: AcquireJob must receive the correct jobMessageId proving the raw key worked.
+	select {
+	case got := <-jobMsgIDReceived:
+		assert.Equal(t, wantJobMsgID, got, "AcquireJob must receive correct jobMessageId with plaintext session key")
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for AcquireJob call with plaintext session key")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+}
+
+// TestListener_NoSessionKey verifies branch (c) of createSession (M1): when the
+// server returns no encryptionKey field, aesKey stays nil and messages are parsed
+// as plaintext JSON directly.
+func TestListener_NoSessionKey(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	oauthSrv := oauthStub()
+	defer oauthSrv.Close()
+	agent := makeAgent(t, oauthSrv.URL)
+
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+	defer brokerSrv.Close()
+
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"sessionId": "sess-nokey"})
+	})
+
+	const wantJobMsgID = "req-nokey-101"
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			body, _ := json.Marshal(broker.RunnerJobRequestBody{
+				RunnerRequestID: wantJobMsgID,
+				RunServiceURL:   brokerSrv.URL,
+			})
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        string(body),
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	jobMsgIDReceived := make(chan string, 1)
+	mux.SetAcquire(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.JobAcquisitionRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		jobMsgIDReceived <- req.JobMessageID
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-nokey")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-nokey"},
+		})
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newFakeClock(time.Now())
+
+	bc := &broker.BrokerClient{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	cfg := listener.Config{
+		Group:          "grp",
+		Namespace:      "ns",
+		Agent:          agent,
+		Broker:         bc,
+		Clock:          clk,
+		IsLastListener: func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+			cancel()
+			return nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// M1: no session key → plaintext body delivered directly to AcquireJob.
+	select {
+	case got := <-jobMsgIDReceived:
+		assert.Equal(t, wantJobMsgID, got, "AcquireJob must receive correct jobMessageId with no session key")
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for AcquireJob call with no session key")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
 }
