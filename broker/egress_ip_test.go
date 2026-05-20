@@ -97,6 +97,12 @@ func roundRobinProxyClient(proxies []*httptest.Server, skipVerify bool) *http.Cl
 	return &http.Client{
 		Transport: &http.Transport{
 			Proxy: proxyFunc,
+			// DisableKeepAlives forces a new TCP connection (and a new CONNECT
+			// tunnel) for each request. Without this the transport reuses the
+			// first tunnel for subsequent requests, so the Proxy function is
+			// not called on every request and the hijack goroutine's closed
+			// conn causes EOF on the reused connection.
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: skipVerify, //nolint:gosec // intentional for tests
 			},
