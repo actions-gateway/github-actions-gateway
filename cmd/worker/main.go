@@ -50,7 +50,7 @@ func run() error {
 	pipeDir := envOr("RUNNER_PIPE_DIR", defaultPipeDir)
 
 	// 1. Read payload from Secret mount.
-	payload, err := os.ReadFile(filepath.Join(payloadDir, payloadFile))
+	payload, err := readPayload(payloadDir)
 	if err != nil {
 		return fmt.Errorf("read payload: %w", err)
 	}
@@ -128,6 +128,10 @@ func writePayloadToPipe(path string, payload []byte) error {
 		return fmt.Errorf("write payload: %w", err)
 	}
 	return nil
+}
+
+func readPayload(dir string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(dir, payloadFile))
 }
 
 func envOr(key, fallback string) string {

@@ -1049,3 +1049,153 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)
 }
+
+// ── TestListener_SessionKeyPassedToHandleJob ──────────────────────────────────
+
+// TestListener_SessionKeyPassedToHandleJob verifies that after a session
+// expires and is recreated with a new encryption key K2, the listener uses K2
+// (not the old K1) to decrypt subsequent messages.
+//
+// Structure:
+//  1. Session 1 created with key K1; GetMessage immediately returns 404 (session expired).
+//  2. Session 2 created with key K2; GetMessage delivers a message encrypted with K2.
+//  3. AcquireJob must be called with the correct jobMessageId, proving K2 was used.
+//
+// If the listener cached K1 and never updated it, DecryptMessageBody(body_K2, K1)
+// would produce garbage, JSON unmarshal would fail, and AcquireJob would never fire.
+func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	oauthSrv := oauthStub()
+	defer oauthSrv.Close()
+	agent := makeAgent(t, oauthSrv.URL)
+
+	// Two distinct AES-256 keys, one per session.
+	k1, k2 := make([]byte, 32), make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, k1)
+	require.NoError(t, err)
+	_, err = io.ReadFull(rand.Reader, k2)
+	require.NoError(t, err)
+	k2[0] ^= 0xFF // guarantee k1 ≠ k2
+
+	encK1 := encryptSessionKey(t, &agent.PrivateKey.PublicKey, k1)
+	encK2 := encryptSessionKey(t, &agent.PrivateKey.PublicKey, k2)
+
+	var createCalls atomic.Int32
+	mux := &brokerMux{}
+
+	// CreateSession: first call returns K1, all subsequent calls return K2.
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		n := createCalls.Add(1)
+		key := encK1
+		if n >= 2 {
+			key = encK2
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionId": "sess-renewed",
+			"encryptionKey": map[string]any{
+				"value":     base64.StdEncoding.EncodeToString(key),
+				"encrypted": true,
+			},
+		})
+	})
+
+	jobMsgIDReceived := make(chan string, 1)
+	brokerSrv := httptest.NewServer(mux)
+	defer brokerSrv.Close()
+
+	// Body encrypted with K2 (the key from session 2).
+	const wantJobMsgID = "req-renewed-key-456"
+	bodyPlain, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobMsgID,
+		RunServiceURL:   brokerSrv.URL,
+		BillingOwnerID:  "owner-renewed",
+	})
+	encryptedBody := encryptBody(t, k2, bodyPlain)
+
+	var pollCount atomic.Int32
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		n := pollCount.Add(1)
+		if n == 1 {
+			// Expire session 1 immediately.
+			http.Error(w, "session not found: 404", http.StatusNotFound)
+			return
+		}
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        encryptedBody,
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	mux.SetAcquire(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.JobAcquisitionRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		jobMsgIDReceived <- req.JobMessageID
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-renewed")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-renewed"},
+		})
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newFakeClock(time.Now())
+
+	bc := &broker.BrokerClient{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	var handlerCalled atomic.Bool
+	cfg := listener.Config{
+		Group:          "grp",
+		Namespace:      "ns",
+		Agent:          agent,
+		Broker:         bc,
+		Clock:          clk,
+		RunnerOS:       "Linux",
+		IsLastListener: func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+			handlerCalled.Store(true)
+			cancel()
+			return nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	select {
+	case got := <-jobMsgIDReceived:
+		assert.Equal(t, wantJobMsgID, got,
+			"AcquireJob must receive jobMessageId decrypted with the renewed session key K2")
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for AcquireJob call after session key renewal")
+	}
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	assert.True(t, handlerCalled.Load(), "JobHandler must be called after decryption with renewed key")
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
