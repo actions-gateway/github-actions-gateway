@@ -1,10 +1,16 @@
 package listener_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1" //nolint:gosec // SHA-1 required by RSA-OAEP to match server side
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -881,4 +887,165 @@ func TestBackoffDelay_HighErrorCount(t *testing.T) {
 		assert.Less(t, d, 30*time.Second, "low-error backoff must be <30s")
 	}
 
+}
+
+// ── decryption helpers ────────────────────────────────────────────────────────
+
+// encryptSessionKey RSA-OAEP (SHA-1) encrypts rawKey with pub, matching the
+// server-side encryption that broker.DecryptSessionKey reverses.
+func encryptSessionKey(t *testing.T, pub *rsa.PublicKey, rawKey []byte) []byte {
+	t.Helper()
+	enc, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, pub, rawKey, nil) //nolint:gosec
+	require.NoError(t, err)
+	return enc
+}
+
+// encryptBody AES-256-CBC encrypts plaintext with key, producing
+// base64(IV || PKCS7-padded-ciphertext) — the wire format that
+// broker.DecryptMessageBody reverses.
+func encryptBody(t *testing.T, key, plaintext []byte) string {
+	t.Helper()
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+
+	// PKCS7 pad to block boundary.
+	bs := block.BlockSize()
+	pad := bs - len(plaintext)%bs
+	padded := append(plaintext, bytes.Repeat([]byte{byte(pad)}, pad)...)
+
+	iv := make([]byte, bs)
+	_, err = io.ReadFull(rand.Reader, iv)
+	require.NoError(t, err)
+
+	ciphertext := make([]byte, len(padded))
+	cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, padded)
+
+	return base64.StdEncoding.EncodeToString(append(iv, ciphertext...))
+}
+
+// ── TestListener_DecryptsMessageBody ─────────────────────────────────────────
+
+// TestListener_DecryptsMessageBody verifies the end-to-end decryption path:
+// CreateSession returns an RSA-encrypted AES key; GetMessage returns an
+// AES-CBC-encrypted body; AcquireJob receives the correct jobMessageId from
+// the decrypted RunnerJobRequestBody.
+func TestListener_DecryptsMessageBody(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	oauthSrv := oauthStub()
+	defer oauthSrv.Close()
+	agent := makeAgent(t, oauthSrv.URL)
+
+	// Generate a 32-byte session AES key and encrypt it with the agent's public key.
+	aesKey := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, aesKey)
+	require.NoError(t, err)
+	encryptedKey := encryptSessionKey(t, &agent.PrivateKey.PublicKey, aesKey)
+
+	// Create the broker server first so we can embed its URL in the encrypted body.
+	jobMsgIDReceived := make(chan string, 1)
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+	defer brokerSrv.Close()
+
+	// Encrypt a RunnerJobRequestBody whose RunServiceURL points at the test server.
+	const wantJobMsgID = "req-decrypt-123"
+	bodyPlain, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobMsgID,
+		RunServiceURL:   brokerSrv.URL, // must resolve so AcquireJob succeeds
+		BillingOwnerID:  "owner-1",
+	})
+	encryptedBody := encryptBody(t, aesKey, bodyPlain)
+
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionId": "sess-enc",
+			"encryptionKey": map[string]any{
+				"value":     base64.StdEncoding.EncodeToString(encryptedKey),
+				"encrypted": true,
+			},
+		})
+	})
+
+	jobDelivered := atomic.Bool{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        encryptedBody,
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	mux.SetAcquire(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.JobAcquisitionRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		jobMsgIDReceived <- req.JobMessageID
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-enc")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-enc"},
+		})
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	clk := newFakeClock(time.Now())
+
+	bc := &broker.BrokerClient{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	var handlerCalled atomic.Bool
+	cfg := listener.Config{
+		Group:          "grp",
+		Namespace:      "ns",
+		Agent:          agent,
+		Broker:         bc,
+		Clock:          clk,
+		RunnerOS:       "Linux",
+		IsLastListener: func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+			handlerCalled.Store(true)
+			cancel()
+			return nil
+		},
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// Verify AcquireJob received the jobMessageId from the decrypted body.
+	select {
+	case got := <-jobMsgIDReceived:
+		assert.Equal(t, wantJobMsgID, got, "AcquireJob must receive jobMessageId from decrypted body")
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("timed out waiting for AcquireJob call")
+	}
+
+	// Wait for goroutine exit (JobHandler calls cancel, which drains the goroutine).
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	// JobHandler must have been called — safe to check after goroutine exited.
+	assert.True(t, handlerCalled.Load(), "JobHandler must be called after successful AcquireJob")
+
+	// Stop clock before goleak so fakeClock.After goroutines exit.
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
 }
