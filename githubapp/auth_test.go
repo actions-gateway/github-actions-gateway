@@ -2,6 +2,8 @@ package githubapp_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -178,4 +180,59 @@ func (rt *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error
 	}
 	cloned.URL.Host = host
 	return http.DefaultTransport.RoundTrip(cloned)
+}
+
+// ── parseRSAPrivateKey PKCS#8 paths ──────────────────────────────────────────
+
+func TestToken_PKCS8Key(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"token":      "ghs_pkcs8",
+			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		testClientRedirectingTo(srv.URL),
+	)
+	require.NoError(t, err)
+
+	tok, err := provider.Token(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "ghs_pkcs8", tok)
+}
+
+func TestToken_PKCS8NonRSAKey(t *testing.T) {
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(ecKey)
+	require.NoError(t, err)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+
+	_, err = githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not RSA")
+}
+
+func TestToken_UnsupportedPEMType(t *testing.T) {
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("fake")})
+
+	_, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported PEM block type")
 }

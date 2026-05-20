@@ -404,6 +404,155 @@ func TestRenewJob_Interval(t *testing.T) {
 	}
 }
 
+// ── RenewJobLoop error propagation ───────────────────────────────────────────
+
+func TestRenewJobLoop_ErrorPropagated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("job expired"))
+	}))
+	defer srv.Close()
+
+	tickCh := make(chan time.Time, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	c := newTestClient(srv)
+	errCh := c.RenewJobLoop(ctx, srv.URL, broker.RenewJobRequest{PlanID: "p", JobID: "j"}, tickCh)
+
+	tickCh <- time.Now()
+
+	select {
+	case err := <-errCh:
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "500")
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected error from RenewJobLoop; timed out")
+	}
+}
+
+// ── v2 flow ───────────────────────────────────────────────────────────────────
+
+// newV2TestClient returns a BrokerClient with UseV2Flow enabled, pointed at srv.
+func newV2TestClient(srv *httptest.Server) *broker.BrokerClient {
+	return &broker.BrokerClient{
+		BrokerURL:     srv.URL,
+		UseV2Flow:     true,
+		RunnerVersion: "2.327.1",
+		RunnerOS:      "linux",
+		RunnerArch:    "x64",
+		HTTPClient:    srv.Client(),
+		Token:         "test-token",
+	}
+}
+
+func TestCreateSession_V2Flow_URL(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{"sessionId": "sess-v2"})
+	}))
+	defer srv.Close()
+
+	c := newV2TestClient(srv)
+	sess, err := c.CreateSession(context.Background(), 1, "test-agent", "2.327.1")
+	require.NoError(t, err)
+	assert.Equal(t, "sess-v2", sess.SessionID)
+	assert.Equal(t, "/session", gotPath, "v2 must use /session, not a VSTS pool path")
+	assert.NotContains(t, gotQuery, "api-version", "v2 must not send api-version")
+}
+
+func TestGetMessage_V2Flow_URL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/message", r.URL.Path)
+		q := r.URL.Query()
+		assert.Equal(t, "sess-v2", q.Get("sessionId"))
+		assert.Equal(t, "online", q.Get("status"))
+		assert.Equal(t, "2.327.1", q.Get("runnerVersion"))
+		assert.Equal(t, "linux", q.Get("os"))
+		assert.Equal(t, "x64", q.Get("architecture"))
+		assert.Equal(t, "false", q.Get("disableUpdate"))
+		assert.NotContains(t, r.URL.RawQuery, "api-version")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	c := newV2TestClient(srv)
+	msg, err := c.GetMessage(context.Background(), "sess-v2")
+	require.NoError(t, err)
+	assert.Nil(t, msg)
+}
+
+func TestGetMessage_V2Flow_NoOptionalParams(t *testing.T) {
+	// When RunnerVersion/RunnerOS/RunnerArch are empty, their query params
+	// must be absent (not present as empty strings).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assert.Empty(t, q.Get("runnerVersion"), "runnerVersion must be absent when not configured")
+		assert.Empty(t, q.Get("os"), "os must be absent when not configured")
+		assert.Empty(t, q.Get("architecture"), "architecture must be absent when not configured")
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	c := &broker.BrokerClient{
+		BrokerURL:  srv.URL,
+		UseV2Flow:  true,
+		HTTPClient: srv.Client(),
+		Token:      "test-token",
+	}
+	_, err := c.GetMessage(context.Background(), "sess-1")
+	require.NoError(t, err)
+}
+
+func TestDeleteSession_V2Flow_URL(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := newV2TestClient(srv)
+	// The sessionID argument must be ignored in v2 mode.
+	err := c.DeleteSession(context.Background(), "ignored-session-id")
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodDelete, gotMethod)
+	assert.Equal(t, "/session", gotPath)
+}
+
+// ── Misc error status codes ───────────────────────────────────────────────────
+
+func TestCreateSession_UnexpectedStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("service unavailable"))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	_, err := c.CreateSession(context.Background(), 1, "test-agent", "2.327.1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "503")
+}
+
+func TestAcquireJob_NonOKStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte("job already acquired"))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	_, _, err := c.AcquireJob(context.Background(), srv.URL, broker.JobAcquisitionRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "409")
+	assert.Contains(t, err.Error(), "job already acquired")
+}
+
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
 // stubPollMetrics is a test-only PollMetricsRecorder that counts calls by label.
