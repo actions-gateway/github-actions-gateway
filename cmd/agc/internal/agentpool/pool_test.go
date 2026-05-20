@@ -2,6 +2,7 @@ package agentpool_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
@@ -10,8 +11,23 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// deregErrRegistrar delegates Register to a StubRegistrar but always errors on Deregister.
+type deregErrRegistrar struct {
+	stub *agentpool.StubRegistrar
+	err  error
+}
+
+func (r *deregErrRegistrar) Register(ctx context.Context, tok string, params agentpool.RegisterParams) (*agentpool.AgentCredentials, error) {
+	return r.stub.Register(ctx, tok, params)
+}
+
+func (r *deregErrRegistrar) Deregister(_ context.Context, _ string, _ int64) error {
+	return r.err
+}
 
 func scheme() *runtime.Scheme {
 	s := runtime.NewScheme()
@@ -126,6 +142,65 @@ func TestPool_DeleteAll(t *testing.T) {
 	agents, err := pool.LoadAgents(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, agents)
+}
+
+func TestPool_EnsureAgents_DeregisterErrorContinues(t *testing.T) {
+	ctx := context.Background()
+	reg := &deregErrRegistrar{
+		stub: agentpool.NewStubRegistrar(),
+		err:  fmt.Errorf("deregistration failed: temporary error"),
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", reg)
+
+	// Create 3 agents.
+	require.NoError(t, pool.EnsureAgents(ctx, 3, "token"))
+
+	// Scale down to 1; Deregister will error but EnsureAgents should still return nil.
+	err := pool.EnsureAgents(ctx, 1, "token")
+	assert.NoError(t, err, "EnsureAgents should return nil even when Deregister errors")
+
+	// Excess Secrets should be deleted despite the Deregister error.
+	var secrets corev1.SecretList
+	require.NoError(t, c.List(ctx, &secrets,
+		client.InNamespace("default"),
+		client.MatchingLabels{"actions-gateway/runner-group": "my-rg"},
+	))
+	assert.Len(t, secrets.Items, 1, "only 1 Secret should remain after scale-down")
+}
+
+func TestPool_LoadAgents_SkipsCorruptSecret(t *testing.T) {
+	ctx := context.Background()
+	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", agentpool.NewStubRegistrar())
+
+	// Create 2 valid agents via EnsureAgents.
+	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
+
+	// Manually inject a corrupt Secret with valid labels but invalid PEM.
+	corruptSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "agentpool-my-rg-99",
+			Namespace: "default",
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "actions-gateway-agc",
+				"actions-gateway/runner-group": "my-rg",
+				"actions-gateway/agent-index":  "99",
+			},
+		},
+		Data: map[string][]byte{
+			"agentId":       []byte("9999"),
+			"clientId":      []byte("bad-client"),
+			"privateKeyPEM": []byte("not-valid-pem"),
+			"agentIndex":    []byte("99"),
+		},
+	}
+	require.NoError(t, c.Create(ctx, corruptSecret))
+
+	// LoadAgents must return only the 2 valid agents and no error.
+	agents, err := pool.LoadAgents(ctx)
+	require.NoError(t, err, "LoadAgents should not return error for a corrupt Secret")
+	assert.Len(t, agents, 2, "corrupt Secret should be silently skipped")
 }
 
 func TestPool_CreateSecretFailure(t *testing.T) {
