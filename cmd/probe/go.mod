@@ -1,6 +1,6 @@
 module github.com/karlkfi/github-actions-gateway/probe
 
-go 1.24
+go 1.26
 
 require (
 	github.com/stretchr/testify v1.9.0
