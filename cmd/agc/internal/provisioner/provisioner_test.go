@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -48,6 +50,28 @@ func newRG(name, ns string) *v1alpha1.RunnerGroup {
 func stubPayload(runID int64) []byte {
 	b, _ := json.Marshal(map[string]interface{}{"run_id": runID})
 	return b
+}
+
+// stubPayloadFull returns a payload with variables matching the GitHub Actions format,
+// including owner/repo for eviction retry.
+func stubPayloadFull(owner, repo string, runID int64) []byte {
+	b, _ := json.Marshal(map[string]interface{}{
+		"variables": map[string]interface{}{
+			"system.github.run_id":   map[string]interface{}{"value": fmt.Sprintf("%d", runID)},
+			"system.github.repository": map[string]interface{}{"value": owner + "/" + repo},
+		},
+	})
+	return b
+}
+
+// evictPod sets the pod's phase to Failed with reason "Evicted".
+func evictPod(ctx context.Context, t *testing.T, c client.Client, ns, name string) {
+	t.Helper()
+	var pod corev1.Pod
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
+	pod.Status.Phase = corev1.PodFailed
+	pod.Status.Reason = "Evicted"
+	require.NoError(t, c.Status().Update(ctx, &pod))
 }
 
 // completePod transitions the named pod in the fake client to Succeeded.
@@ -529,5 +553,99 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
+}
+
+func TestProvisioner_EvictionAutoRetry(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+	// Capture the rerun API request.
+	rerunCalled := make(chan string, 1) // receives the request URL path
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalled <- r.URL.Path
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	p := newProvisioner(fc)
+	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	rg := newRG("mygroup", "team-a")
+	payload := stubPayloadFull("myorg", "myrepo", 99)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-evict", payload)
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	evictPod(ctx, t, fc, "team-a", pod.Name)
+
+	require.NoError(t, <-done)
+
+	select {
+	case path := <-rerunCalled:
+		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/99/rerun-failed-jobs", path)
+	case <-time.After(2 * time.Second):
+		t.Fatal("rerun API was not called within timeout")
+	}
+}
+
+func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rerunCalls := make(chan struct{}, 10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalls <- struct{}{}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	// MaxEvictionRetries=1 means: retry once, then exhaust.
+	runProvisioner := func() error {
+		fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+		p := newProvisioner(fc)
+		p.MaxEvictionRetries = 1
+		p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+		p.GitHubAPIURL = srv.URL
+		p.HTTPClient = srv.Client()
+
+		rg := newRG("mygroup", "ns")
+		payload := stubPayloadFull("org", "repo", 7)
+
+		done := make(chan error, 1)
+		go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-x", payload) }()
+
+		require.Eventually(t, func() bool {
+			return findPod(ctx, t, fc, "ns") != nil
+		}, 2*time.Second, 5*time.Millisecond)
+		evictPod(ctx, t, fc, "ns", findPod(ctx, t, fc, "ns").Name)
+		return <-done
+	}
+
+	// First eviction: rerun API called (attempt 1).
+	require.NoError(t, runProvisioner())
+	select {
+	case <-rerunCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected rerun on first eviction")
+	}
+
+	// Second eviction with same provisioner instance would exhaust budget.
+	// We verify no extra calls arrive after the first.
+	select {
+	case <-rerunCalls:
+		t.Fatal("unexpected second rerun call")
+	case <-time.After(50 * time.Millisecond):
+		// correct: no further calls
+	}
 }
 

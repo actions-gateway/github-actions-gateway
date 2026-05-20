@@ -108,6 +108,7 @@ func run() error {
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img
 	}
+	prov.TokenFunc = tokenMgr.Token
 
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
