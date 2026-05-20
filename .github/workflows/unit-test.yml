@@ -13,5 +13,6 @@ jobs:
       - name: run unit tests
         run: |
           GOWORK=off go test ./...
-          (cd cmd/agc && go test ./...)
-          (cd cmd/probe && go test ./...)
+          for dir in $(find cmd -mindepth 1 -maxdepth 1 -type d | sort); do
+            [ -f "$dir/go.mod" ] && (cd "$dir" && go test ./...)
+          done
