@@ -63,6 +63,7 @@ func buildNoProxy(userCIDRs []string) string {
 | `TestBuildNetworkPolicy_AGCWorkerEgressToProxy` | Pass `proxyClusterIP="10.96.0.1"` → egress rule exists with peer `10.96.0.1/32` on port 8080 |
 | `TestBuildNetworkPolicy_DNSEgressAlwaysPresent` | Both `managedNetworkPolicy=true` and `managedNetworkPolicy=false` → egress rules include port 53 UDP and TCP |
 | `TestBuildNetworkPolicy_NoProxyEgressWhenClusterIPEmpty` | Pass empty `proxyClusterIP` → no AGC/worker egress rule exists |
+| `TestBuildNetworkPolicy_IngressFromNamespaceOnly` | `Ingress` has exactly one rule; its single peer is an empty `PodSelector` (all pods in namespace) with no `IPBlock` |
 
 ---
 
@@ -81,6 +82,7 @@ func buildNoProxy(userCIDRs []string) string {
 | `TestHTTPFetcher_InvalidJSON` | Server returns malformed body → error |
 | `TestHTTPFetcher_MalformedCIDRSkipped` | Response contains one valid and one malformed CIDR → returns only the valid one (no error) |
 | `TestHTTPFetcher_EmptyActions` | Response contains `{"actions":[]}` → returns empty slice, no error |
+| `TestHTTPFetcher_ContextCancelled` | Pre-cancelled context → `FetchIPRanges` returns an error (context propagates to HTTP request) |
 
 ---
 
@@ -95,7 +97,7 @@ func buildNoProxy(userCIDRs []string) string {
 | Test | Assertion |
 |---|---|
 | `TestBuildProxyServiceAddr_Format` | `buildProxyServiceAddr` for namespace `"team-a"` returns `"http://actions-gateway-proxy.team-a.svc.cluster.local:8080"` |
-| `TestBuildAGCDeployment_NoProxyNotEmpty` | (existing `TestBuildAGCDeployment_ProxyEnv` already checks `NO_PROXY` is non-empty — update it to also assert the format after the `buildNoProxy` fix) |
+| `TestBuildAGCDeployment_ProxyEnv` (update existing) | Strengthen the existing test: assert that `NO_PROXY` contains each entry from `defaultNoProxy`, not merely that it is non-empty |
 
 ---
 
@@ -146,7 +148,8 @@ Several builder functions have no direct tests. Most are simple but some have no
 
 | Test | Assertion |
 |---|---|
-| `TestIPRangeReconciler_Start_RunsImmediately` | Set a short `Interval` and a stub that counts calls; after `Start` returns the first reconcile has already run before the first tick |
+| `TestIPRangeReconciler_Start_RunsImmediately` | Set a long `Interval` and a stub that counts calls; verify the first reconcile occurs before any tick fires |
+| `TestIPRangeReconciler_Start_TickerFiresOnInterval` | Set a 10 ms `Interval`; verify the call count reaches ≥ 2 (immediate + at least one tick) |
 | `TestIPRangeReconciler_Start_CancelExitsCleanly` | `Start` with a cancelled context returns `nil` without blocking (timeout the test at 1s) |
 
 ---
@@ -170,13 +173,13 @@ Several builder functions have no direct tests. Most are simple but some have no
 | Priority | Area | Tests to add |
 |---|---|---|
 | **High — bug** | `buildNoProxy` merge-vs-replace | 4 |
-| **High** | `buildNetworkPolicy` DNS + AGC/worker egress | 3 |
-| **High** | `HTTPGitHubIPRangeFetcher` | 5 |
-| **Medium** | `buildProxyServiceAddr` format | 2 |
+| **High** | `buildNetworkPolicy` DNS + AGC/worker egress + ingress | 4 |
+| **High** | `HTTPGitHubIPRangeFetcher` | 6 |
+| **Medium** | `buildProxyServiceAddr` format + `ProxyEnv` update | 2 |
 | **Medium** | Untested resource builders | 11 |
 | **Medium** | `ListenAndServe` lifecycle | 2 |
-| **Medium** | `IPRangeReconciler.Start` loop | 2 |
+| **Medium** | `IPRangeReconciler.Start` loop | 3 |
 | **Low** | `ValidateDelete` explicit | 1 |
-| **Total** | | **30** |
+| **Total** | | **33** |
 
 The `buildNoProxy` bug (§1) should be fixed before the other tests are written, since several builder tests assert `NO_PROXY` values that will change once the fix lands.

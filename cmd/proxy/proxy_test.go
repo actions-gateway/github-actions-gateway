@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -220,4 +221,88 @@ func metricsHandler(reg *prometheus.Registry) http.Handler {
 			io.WriteString(w, mf.String())
 		}
 	})
+}
+
+// §6 — ListenAndServe lifecycle
+
+// freeAddr returns an available 127.0.0.1 address by briefly binding then releasing it.
+func freeAddr(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	ln.Close()
+	return addr
+}
+
+func TestServer_ListenAndServeShutdown(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	reg := prometheus.NewRegistry()
+	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.ListenAndServe(ctx) }()
+
+	// Wait for proxy port to accept connections before cancelling.
+	require.Eventually(t, func() bool {
+		c, err := net.DialTimeout("tcp", srv.Addr, 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		c.Close()
+		return true
+	}, 2*time.Second, 10*time.Millisecond)
+
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("ListenAndServe did not return within 2s after context cancellation")
+	}
+}
+
+func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
+	// goleak registered first → runs last, after server and echo listener are cleaned up.
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	reg := prometheus.NewRegistry()
+	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- srv.ListenAndServe(ctx) }()
+	// cancel registered after goleak and echo ln.Close → runs before them (LIFO).
+	t.Cleanup(func() {
+		cancel()
+		<-serverDone
+	})
+
+	// Wait for proxy port to be ready.
+	require.Eventually(t, func() bool {
+		c, err := net.DialTimeout("tcp", srv.Addr, 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		c.Close()
+		return true
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Health endpoint returns 200.
+	resp, err := http.Get("http://" + srv.HealthAddr + "/healthz")
+	require.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// CONNECT request through the proxy succeeds.
+	conn, err := net.Dial("tcp", srv.Addr)
+	require.NoError(t, err)
+	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	connectResp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	conn.Close()
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, connectResp.StatusCode)
 }

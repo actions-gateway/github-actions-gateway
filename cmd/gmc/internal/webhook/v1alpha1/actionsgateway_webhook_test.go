@@ -68,3 +68,9 @@ func TestWebhook_UpdateNoOp(t *testing.T) {
 	_, err := v.ValidateUpdate(context.Background(), newAG("kube-system"), newAG("kube-system"))
 	require.NoError(t, err)
 }
+
+func TestWebhook_DeleteNoOp(t *testing.T) {
+	v := &ActionsGatewayCustomValidator{}
+	_, err := v.ValidateDelete(context.Background(), newAG("team-a"))
+	require.NoError(t, err)
+}
