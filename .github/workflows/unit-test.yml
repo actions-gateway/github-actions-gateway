@@ -13,6 +13,6 @@ jobs:
       - name: run unit tests
         run: |
           GOWORK=off go test ./...
-          for dir in $(find cmd -mindepth 1 -maxdepth 1 -type d | sort); do
-            [ -f "$dir/go.mod" ] && (cd "$dir" && go test ./...)
+          go work edit -json | jq -r '.Use[].DiskPath' | while read -r dir; do
+            (cd "$dir" && go test ./...)
           done
