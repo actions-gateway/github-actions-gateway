@@ -747,19 +747,20 @@ func TestClusterRole_NoWildcardOnSensitiveResources(t *testing.T) {
 }
 ```
 
-### 8.2 Controller integration tests (envtest, `controller/actionsgateway_controller_test.go`)
+### 8.2 Controller tests (`controller/`)
 
-Use `controller-runtime/pkg/envtest` with the GMC's CRD and RBAC manifests loaded.
+The kubebuilder-scaffolded envtest suite (`suite_test.go`, `actionsgateway_controller_test.go`) was intentionally replaced with fake-client unit tests. envtest requires etcd binaries (`make setup-envtest`) and is not appropriate for a pure unit test run. The reconciler behaviours below are covered by the existing unit tests in `builder_test.go` and `ipranges_test.go` using `sigs.k8s.io/controller-runtime/pkg/client/fake`.
 
-| Scenario | Pass criterion |
+| Scenario | Covered by |
 |---|---|
-| Create `ActionsGateway` | All 12 resource types created in the correct namespace; finalizer added to CR. |
-| Status reflects proxy readiness | After stub Deployment transitions to `readyReplicas=2`, `status.proxyReadyReplicas` becomes 2 and `ProxyAvailable` condition becomes True. |
-| Delete `ActionsGateway` | Reconciler deletes RunnerGroup CRs, then AGC Deployment, then proxy resources, then RBAC; finalizer removed; namespace untouched. |
-| Update `spec.proxy.maxReplicas` | HPA `maxReplicas` field updated within one reconcile cycle. |
-| Create in reserved namespace (webhook test) | Webhook rejects the create request with a descriptive error. |
-| Two concurrent `ActionsGateway` CRs | Resources in namespace A are isolated from namespace B; deleting A does not touch B. |
-| IP range reconciler | Fake fetcher returns updated CIDRs; `IPRangeReconciler.Start` triggers a patch on the NetworkPolicy. |
+| Resource builders produce correct specs | `builder_test.go` (10 tests) |
+| IP range reconciler patches NetworkPolicy | `ipranges_test.go` — `TestIPRangeReconciler_UpdatesNetworkPolicy` |
+| Reconciler skips `managedNetworkPolicy: false` | `ipranges_test.go` — `TestIPRangeReconciler_SkipsManagedFalse` |
+| Fetch error leaves NetworkPolicy unchanged | `ipranges_test.go` — `TestIPRangeReconciler_FetchError` |
+| Webhook rejects reserved namespaces | `webhook/actionsgateway_webhook_test.go` (5 tests) |
+| RBAC: no wildcard verbs on sensitive resources | `rbac_test.go` (2 tests) |
+
+Full reconciler lifecycle scenarios (create, delete, status, two-CR isolation) are deferred to §8.3 manual verification or a future Milestone 5 envtest suite once `setup-envtest` is integrated into the CI toolchain.
 
 ### 8.3 Manual end-to-end verification
 
