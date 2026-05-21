@@ -339,7 +339,7 @@ func fieldRef(path string) *corev1.EnvVarSource {
 // buildNoProxy merges user-provided CIDRs with mandatory cluster-internal exclusions.
 func buildNoProxy(userCIDRs []string) string {
 	if len(userCIDRs) > 0 {
-		return strings.Join(userCIDRs, ",")
+		return strings.Join(userCIDRs, ",") + "," + defaultNoProxy
 	}
 	return defaultNoProxy
 }
