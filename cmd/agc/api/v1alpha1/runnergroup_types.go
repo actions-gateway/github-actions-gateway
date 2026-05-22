@@ -9,6 +9,7 @@ import (
 // Thresholds must be in strictly ascending order.
 type PriorityTier struct {
 	// PriorityClassName is the name of an existing cluster-scoped PriorityClass.
+	// +kubebuilder:validation:MaxLength=253
 	PriorityClassName string `json:"priorityClassName"`
 
 	// Threshold is the cumulative active-pod count at which this tier is exhausted.
@@ -17,6 +18,7 @@ type PriorityTier struct {
 
 	// PreemptionPolicy controls whether pods in this tier may evict lower-priority pods.
 	// +kubebuilder:validation:Enum=PreemptLowerPriority;Never
+	// +kubebuilder:validation:MaxLength=30
 	// +kubebuilder:default=Never
 	// +optional
 	PreemptionPolicy string `json:"preemptionPolicy,omitempty"`
