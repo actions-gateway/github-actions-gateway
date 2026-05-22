@@ -249,7 +249,7 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	s.acquireCount.Add(1)
+	n := s.acquireCount.Add(1)
 	w.Header().Set("Content-Type", "application/json")
 
 	s.mu.Lock()
@@ -263,6 +263,6 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(broker.AcquireJobResponse{
 		Plan: struct {
 			PlanID string `json:"planId"`
-		}{PlanID: "test-plan-123"},
+		}{PlanID: fmt.Sprintf("test-plan-%d", n)},
 	})
 }

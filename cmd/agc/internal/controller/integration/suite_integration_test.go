@@ -154,7 +154,7 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.Cance
 			// High idle threshold so burst goroutines don't shut down before the
 			// test can detect and enqueue on them. The stub returns 202 instantly,
 			// so the default (50) would idle-shut a burst session in ~50 ms.
-			IdleThreshold: 500,
+			IdleThreshold: 50000,
 		},
 	}
 
