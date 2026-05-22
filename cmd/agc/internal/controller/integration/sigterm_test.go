@@ -17,7 +17,8 @@ import (
 func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// Detect goroutine leaks after this test.
 	defer goleak.VerifyNone(t,
-		goleak.IgnoreTopFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*Process).Start.func1"),
+		// envtest process-watcher goroutine (type name changed Process→State in ctrl-runtime v0.23).
+		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
