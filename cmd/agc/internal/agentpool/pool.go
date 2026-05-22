@@ -1,19 +1,4 @@
 // Package agentpool manages pre-registered runner agent credentials for a RunnerGroup.
-//
-// # Runner Agent Registration API (Investigation A — M2)
-//
-// The exact GitHub API endpoint for programmatic runner agent registration is
-// determined by Investigation A (§4.A of the M2 milestone plan). The current
-// implementation uses a Registrar interface so the real implementation can be
-// plugged in once the API is confirmed via mitmproxy capture of config.sh.
-//
-// Based on config.sh reverse engineering, the expected flow is:
-//   1. POST /orgs/{org}/actions/runners/registration-token → short-lived reg token
-//   2. POST {broker_url}agent with runner name, version, labels, groupName, and RSA
-//      public key → returns agentId, clientId, authorizationUrl (OAuth2 endpoint)
-//
-// The Registrar interface below matches this expected shape. Update this comment
-// and the StubRegistrar when Investigation A is complete.
 package agentpool
 
 import (
@@ -61,7 +46,6 @@ type AgentCredentials struct {
 }
 
 // Registrar abstracts the runner agent registration API.
-// Implementations are determined by Investigation A (§4.A of the M2 plan).
 type Registrar interface {
 	Register(ctx context.Context, token string, params RegisterParams) (*AgentCredentials, error)
 	Deregister(ctx context.Context, token string, agentID int64) error

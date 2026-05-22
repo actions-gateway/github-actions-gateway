@@ -26,10 +26,6 @@
 // The public_key field is base64-standard-encoded DER of the RSA public key in
 // SubjectPublicKeyInfo format (equivalent to Go's x509.MarshalPKIXPublicKey).
 //
-// TODO(investigation-a): Confirm exact request/response schema against a live
-// config.sh --debug capture before replacing StubRegistrar in production main.go.
-// The schema above is sourced from the open-source runner code and may differ
-// for enterprise GitHub instances or future runner versions.
 package agentpool
 
 import (
@@ -227,12 +223,13 @@ func isHostedServer(githubURL string) bool {
 }
 
 func extractOrgPath(githubURL string) string {
-	// e.g. "https://github.com/myorg" → "myorg"
-	// e.g. "https://github.com/myorg/myrepo" → "myorg" (we use only the org)
+	// "https://github.com/myorg" → "myorg"
+	// "https://github.com/myorg/myrepo" → "myorg" (use only the org segment)
+	// parts: ["https:", "", "host", "org", "repo"(optional)]
 	trimmed := strings.TrimRight(githubURL, "/")
 	parts := strings.Split(trimmed, "/")
-	if len(parts) >= 1 {
-		return parts[len(parts)-1]
+	if len(parts) >= 4 {
+		return parts[3]
 	}
 	return ""
 }

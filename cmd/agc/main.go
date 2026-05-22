@@ -113,12 +113,28 @@ func run() error {
 	}
 	prov.TokenFunc = tokenMgr.Token
 
-	// STUB_AUTH_URL / STUB_BROKER_URL redirect the StubRegistrar to a local
-	// fake server. These are no-ops when unset (defaults remain).
-	stubAuthURL := os.Getenv("STUB_AUTH_URL")
-	stubBrokerURL := os.Getenv("STUB_BROKER_URL")
+	// Choose registrar:
+	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
+	//   STUB_AUTH_URL / STUB_BROKER_URL set  → StubRegistrar with those URLs (testing)
+	//   neither                              → error: GITHUB_ORG_URL is required
 	var registrar agentpool.Registrar
-	if stubAuthURL != "" || stubBrokerURL != "" {
+	if orgURL := os.Getenv("GITHUB_ORG_URL"); orgURL != "" {
+		groupID := 1
+		if raw := os.Getenv("GITHUB_RUNNER_GROUP_ID"); raw != "" {
+			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+				groupID = parsed
+			}
+		}
+		registrar = &agentpool.GithubRegistrar{
+			OrgURL:  orgURL,
+			GroupID: groupID,
+		}
+	} else {
+		stubAuthURL := os.Getenv("STUB_AUTH_URL")
+		stubBrokerURL := os.Getenv("STUB_BROKER_URL")
+		if stubAuthURL == "" && stubBrokerURL == "" {
+			return fmt.Errorf("GITHUB_ORG_URL is required (set STUB_AUTH_URL and STUB_BROKER_URL for testing)")
+		}
 		if stubAuthURL == "" {
 			stubAuthURL = "https://stub.example.com/token"
 		}
@@ -126,8 +142,6 @@ func run() error {
 			stubBrokerURL = "https://stub.example.com/broker"
 		}
 		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
-	} else {
-		registrar = agentpool.NewStubRegistrar()
 	}
 
 	r := &controller.RunnerGroupReconciler{
