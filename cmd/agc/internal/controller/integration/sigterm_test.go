@@ -28,6 +28,9 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		// Broker stub server: accept loop + per-connection serve goroutines (global throughout suite).
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
+		// k8s client HTTP/2 connection to the kube-apiserver — suite-level, lives on the
+		// k8s client's own transport which we have no handle on from the test.
+		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 	)
 
 	const nsName = "agc-sigterm-test"
