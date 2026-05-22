@@ -154,6 +154,65 @@ Then confirm sessions are re-established and job acquisition resumes.
 
 ---
 
+## Proxy Upgrade
+
+The proxy pool is HPA-managed and stateless. Rolling updates are non-disruptive as long as the `PodDisruptionBudget` (`minAvailable: 1`) is respected during the rollout.
+
+### Step 1: Pre-Upgrade Checks
+
+```sh
+# Confirm the PodDisruptionBudget is in place
+kubectl get pdb -n <namespace> actions-gateway-proxy
+
+# Confirm current replica count
+kubectl get deploy -n <namespace> actions-gateway-proxy
+
+# Confirm the HPA is healthy (TARGETS should show a percentage, not <unknown>)
+kubectl get hpa -n <namespace>
+```
+
+### Step 2: Update the Proxy Image
+
+The GMC manages the proxy Deployment. Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC (which will reconcile the updated image into all tenant proxy Deployments). To patch a single namespace:
+
+```sh
+kubectl set image deploy/actions-gateway-proxy \
+  proxy=<registry>/proxy:<new-tag> \
+  -n <namespace>
+```
+
+### Step 3: Watch the Rollout
+
+The rolling update replaces one proxy pod at a time. Kubernetes honours the `PodDisruptionBudget` and only terminates a pod once its replacement is `Ready`.
+
+```sh
+kubectl rollout status deploy/actions-gateway-proxy -n <namespace>
+```
+
+In-flight `CONNECT` tunnels through the old proxy pod will be interrupted when that pod is terminated. The AGC and worker pods will reconnect through the remaining proxy pods automatically. For high-concurrency tenants, schedule the upgrade during a low-traffic window to minimise connection resets.
+
+### Step 4: Post-Upgrade Validation
+
+```sh
+# All proxy pods on the new image
+kubectl get pods -n <namespace> -l app=actions-gateway-proxy -o wide
+
+# HPA still computing utilization (not <unknown>)
+kubectl get hpa -n <namespace>
+
+# No spike in token or renewjob errors after the rollout
+# Metrics: token_refresh_errors_total, renewjob_errors_total
+```
+
+### Rollback
+
+```sh
+kubectl rollout undo deploy/actions-gateway-proxy -n <namespace>
+kubectl rollout status deploy/actions-gateway-proxy -n <namespace>
+```
+
+---
+
 ## Worker Image Upgrade
 
 Worker image upgrades are non-disruptive: the new image takes effect on future jobs; running pods complete on the old image.
