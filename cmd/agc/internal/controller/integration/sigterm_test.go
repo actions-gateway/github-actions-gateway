@@ -64,18 +64,23 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	require.GreaterOrEqual(t, len(sessionIDs), 2,
 		"at least 2 sessions must be active before SIGTERM")
 
-	// Simulate SIGTERM: cancel the manager context and wait for full shutdown
-	// before goleak's defer runs. Then drain idle keep-alive connections so
-	// persistConn goroutines exit before goleak checks.
+	// Simulate SIGTERM: cancel the manager context and wait for full shutdown.
 	cancelMgr()
 	<-mgrDone
-	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 
 	// Assert all registered sessions are deleted via DELETE /session.
+	// WaitForSessionDelete ensures the broker has received and processed each
+	// DELETE, so by the time the loop finishes all HTTP responses have been
+	// (or are about to be) sent and the connections are idle in the transport.
 	for _, sid := range sessionIDs {
 		deleted := brokerStub.WaitForSessionDelete(sid, 10*time.Second)
 		assert.Truef(t, deleted, "session %q should be deleted on SIGTERM", sid)
 	}
+
+	// Close idle keep-alive connections so persistConn goroutines exit before
+	// goleak's defer runs. Called after WaitForSessionDelete so all DELETE
+	// responses have been processed and the connections are now idle.
+	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 }
 
 // Ensure broker import is used.
