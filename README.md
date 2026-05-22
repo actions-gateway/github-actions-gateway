@@ -1,8 +1,8 @@
 # GitHub Actions Gateway
 
-A Kubernetes operator for managing self-hosted GitHub Actions runners on multi-tenant clusters that scales to zero when the job queue is empty. 
+A Kubernetes operator for managing self-hosted GitHub Actions runners on multi-tenant clusters that scales to zero when the job queue is empty.
 
-Unlike Actions Runner Controller (ARC), which co-locates the queue listener and the job worker, GitHub Actions Gateway (GAG) runs listeners as goroutines in a seperate pod and only creates worker pods when a job is acquired from the queue. This reduces waste from idle workers, especially when they need expensive GPUs or lots of memory.
+Unlike Actions Runner Controller (ARC), which co-locates the queue listener and the job worker, GitHub Actions Gateway (GAG) runs listeners as goroutines in a separate pod and only creates worker pods when a job is acquired from the queue. This reduces waste from idle workers, especially when they need expensive GPUs or lots of memory.
 
 Each tenant gets dedicated egress IPs, configurable scheduling priority for GPU workloads, and automatic eviction retry — all managed via a single `ActionsGateway` Custom Resource (CR), no platform team ticket required.
 
@@ -16,7 +16,19 @@ Running GitHub Actions self-hosted runners in a shared Kubernetes cluster create
 
 **Platform team bottleneck.** Every runner set change — new test suite, quota adjustment, scaling tweak — lands as a ticket to the platform team. Teams can't move at their own pace.
 
-## How It Works
+## The Solution
+
+**Zero idle GPU allocation.** GPU nodes are only consumed while a job is actively running. The Actions Gateway Controller (AGC) itself runs on CPU-only nodes.
+
+**Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
+
+**Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
+
+**Self-service tenant management.** Teams declare all their runner sets in one `ActionsGateway` CR they own in their own namespace — no cluster-admin involvement after initial setup. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
+
+**Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
+
+## Architecture
 
 A four-tier system:
 
@@ -38,31 +50,13 @@ A four-tier system:
   +------------------------------------------------------------+
 ```
 
-**Tier 1 — Gateway Manager Controller (GMC).** A cluster-scoped operator deployed once by the platform team. It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant — role-based access control (RBAC), network policies, resource quotas, egress proxy, and Actions Gateway Controller (AGC) — entirely within the tenant's existing namespace.
+**Tier 1 — Gateway Manager Controller (GMC).** A cluster-scoped operator deployed once by the platform team. It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant — role-based access control (RBAC), network policies, resource quotas, egress proxy, and AGC — entirely within the tenant's existing namespace.
 
 **Tier 2 — AGC.** A Go-based operator deployed once per tenant. Instead of one pod per runner slot, it multiplexes thousands of virtual runner sessions as goroutines. Compute is provisioned only when a job is acquired and garbage-collected immediately on completion. At steady state each goroutine costs ~60 KiB resident — a reduction of over 4,000× compared to a full .NET `Runner.Listener` process.
 
 **Tier 3 — Egress Proxy Pool.** A Horizontal Pod Autoscaler (HPA)-managed pool of stateless HTTPS CONNECT proxy pods per tenant. All GitHub traffic from the AGC and worker pods routes through this pool, giving each tenant a dedicated set of egress IPs never shared with other tenants. Supports per-team IP allowlisting, clean audit trails, and contained blast radius.
 
 **Tier 4 — Ephemeral Worker Pod.** A short-lived pod that executes exactly one workflow job and is immediately deleted on completion. Because worker pods exist only while a job is running, zero compute is idle between jobs — GPU nodes return to the cluster scheduler the moment a job finishes.
-
-## Key Properties
-
-**Zero idle GPU allocation.** GPU nodes are only consumed while a job is actively running. The Actions Gateway Controller (AGC) itself runs on CPU-only nodes.
-
-**Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
-
-**Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
-
-**Self-service tenant management.** Teams declare all their runner sets in one `ActionsGateway` CR they own in their own namespace — no cluster-admin involvement after initial setup. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
-
-**Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
-
-## Quick Start
-
-See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
-
-## Architecture
 
 For the full design, see [docs/design/](docs/design/README.md).
 
@@ -75,6 +69,10 @@ For the full design, see [docs/design/](docs/design/README.md).
 | Security & Threat Risk Assessment | [05-security.md](docs/design/05-security.md) |
 | Capacity Targets & SLOs | [appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) |
 | Alternatives Considered | [appendix-d-alternatives-considered.md](docs/design/appendix-d-alternatives-considered.md) |
+
+## Quick Start
+
+See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
 
 ## Observability
 
