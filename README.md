@@ -1,20 +1,20 @@
 # GitHub Actions Gateway
 
-A high-scale, virtualized GitHub Actions self-hosted runner system for multi-tenant Kubernetes clusters. It replaces per-tenant runner pods with lightweight goroutine sessions, eliminates idle GPU allocation, and gives every tenant a fully isolated egress identity — without involving the platform team after initial setup.
+A self-hosted runner system for multi-tenant Kubernetes clusters that scales to zero between jobs. Unlike ARC, runner sessions are goroutines rather than pods; worker pods are created on job acquire and deleted on completion. Each tenant gets dedicated egress IPs, configurable scheduling priority for GPU workloads, and automatic eviction retry — all managed via a single `ActionsGateway` CR, no platform team ticket required.
 
 ## The Problem
 
-Running GitHub Actions self-hosted runners in a shared Kubernetes cluster creates two compounding problems:
+Running GitHub Actions self-hosted runners in a shared Kubernetes cluster creates three compounding problems:
 
-**Idle resource waste.** ARC (Actions Runner Controller) keeps at least one runner pod per scale set alive at all times. A tenant with ten GPU runner sets holds ten GPU-backed pods perpetually — whether or not a job is queued. At typical on-demand GPU rates, a modest deployment can idle $180K–$360K/month in hardware that isn't doing work.
+**Idle resource waste.** ARC (Actions Runner Controller) keeps at least one runner pod per scale set alive at all times. A tenant with ten GPU runner sets holds ten GPU-backed pods perpetually — whether or not a job is queued.
 
 **Scheduling starvation.** In a namespace with a shared `ResourceQuota`, cheap CPU runner pods can exhaust quota before GPU runner pods have a chance to schedule. ARC provides no mechanism to express minimum scheduling guarantees across runner sets, so the most expensive hardware reliably loses the race.
 
 **Platform team bottleneck.** Every runner set change — new test suite, quota adjustment, scaling tweak — lands as a ticket to the platform team. Teams can't move at their own pace.
 
-## The Solution
+## How It Works
 
-A four-tier system that addresses these problems at their root:
+A four-tier system:
 
 ```
   Tenant namespace                           System namespace
@@ -44,13 +44,9 @@ A four-tier system that addresses these problems at their root:
 
 ## Key Properties
 
-**Zero idle GPU allocation.** GPU nodes are only consumed while a job is actively running. The AGC itself runs on CPU-only nodes.
-
 **Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
 
 **Automatic eviction retry.** When a worker pod is evicted (preemption or OOM), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
-
-**Self-service tenant onboarding.** A team creates one `ActionsGateway` CR in their existing namespace and manages all their runner sets from that single resource. No cluster-admin involvement after initial GMC installation.
 
 ## Quick Start
 
