@@ -21,6 +21,8 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
+		// The global broker stub HTTP server holds keep-alive connections throughout the suite.
+		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
 	)
 
 	const nsName = "agc-sigterm-test"
