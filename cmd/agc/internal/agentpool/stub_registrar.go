@@ -7,8 +7,8 @@ import (
 )
 
 // StubRegistrar is a Registrar that simulates registration without calling GitHub.
-// Used in M2 while Investigation A (runner registration API) is pending.
-// Each Register call returns a unique agent ID with a placeholder OAuth endpoint.
+// Used in tests and in deployments that point at a fake GitHub server.
+// Each Register call returns a unique agent ID with the configured OAuth endpoint.
 type StubRegistrar struct {
 	nextID     atomic.Int64
 	mu         sync.Mutex
