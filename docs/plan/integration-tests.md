@@ -580,33 +580,33 @@ These scenarios are deliberately out of scope for the integration layer and belo
 | GMC provisioning | `TestGMC_TenantProvisioning_AllResourcesCreated` | ✅ |
 | GMC provisioning | `TestGMC_TenantProvisioning_BootstrapRunnerGroups` | ✅ |
 | GMC provisioning | `TestGMC_TenantProvisioning_NoProxyMergesDefaults` | ✅ |
-| GMC provisioning | `TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace` | ☐ |
-| GMC provisioning | `TestGMC_TenantProvisioning_CredentialRotation` | ☐ |
+| GMC provisioning | `TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace` | ✅ |
+| GMC provisioning | `TestGMC_TenantProvisioning_CredentialRotation` | ✅ |
 | GMC teardown | `TestGMC_TenantTeardown_RemovesOnlyOwnedResources` | ✅ |
-| GMC teardown | `TestGMC_TenantTeardown_ReapplyAfterDelete` | ☐ |
+| GMC teardown | `TestGMC_TenantTeardown_ReapplyAfterDelete` | ✅ |
 | GMC HPA update | `TestGMC_HPABoundsUpdate` | ✅ |
 | GMC HPA update | `TestGMC_HPABoundsUpdate_MinReplicasClamped` | ✅ |
 | GMC NetworkPolicy | `TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs` | ✅ |
-| GMC NetworkPolicy | `TestGMC_NetworkPolicy_AGCWorkerEgressToProxy` | ☐ |
+| GMC NetworkPolicy | `TestGMC_NetworkPolicy_AGCWorkerEgressToProxy` | ✅ |
 | GMC NetworkPolicy | `TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs` | ✅ |
-| GMC NetworkPolicy | `TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy` | ☐ |
+| GMC NetworkPolicy | `TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy` | ✅ |
 | GMC RBAC scope | `TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied` | ✅ |
 | GMC RBAC scope | `TestGMC_AGCRole_PermitsOwnNamespace` | ✅ |
-| CRD admission | `TestCRD_ValidActionsGateway_Accepted` | ☐ |
-| CRD admission | `TestCRD_ActionsGateway_WebhookRejectsKubeSystem` | ☐ |
-| CRD admission | `TestCRD_RunnerGroup_CELValidation_PriorityTierOrder` | ☐ |
-| CRD admission | `TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict` | ☐ |
+| CRD admission | `TestCRD_ValidActionsGateway_Accepted` | ✅ |
+| CRD admission | `TestCRD_ActionsGateway_WebhookRejectsKubeSystem` | ✅ |
+| CRD admission | `TestCRD_RunnerGroup_CELValidation_PriorityTierOrder` | ✅ |
+| CRD admission | `TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict` | ✅ |
 | AGC reconciler lifecycle | `TestAGC_Reconciler_CreateStartsOneListener` | ✅ |
-| AGC reconciler lifecycle | `TestAGC_Reconciler_BurstSpawnsAdditionalListeners` | ☐ |
-| AGC reconciler lifecycle | `TestAGC_Reconciler_ScaleMaxListeners` | ☐ |
+| AGC reconciler lifecycle | `TestAGC_Reconciler_BurstSpawnsAdditionalListeners` | ✅ |
+| AGC reconciler lifecycle | `TestAGC_Reconciler_ScaleMaxListeners` | ✅ |
 | AGC reconciler lifecycle | `TestAGC_Reconciler_Delete_AllGoroutinesExit` | ✅ |
-| AGC Secret lifecycle | `TestAGC_SecretLifecycle_CreatedOnJobAcquire` | ☐ |
-| AGC Secret lifecycle | `TestAGC_SecretLifecycle_DeletedAfterPodCompletes` | ☐ |
-| AGC pod provisioning | `TestAGC_PodProvisioning_CorrectSpec` | ☐ |
-| AGC pod provisioning | `TestAGC_PodProvisioning_PriorityTiers` | ☐ |
-| AGC pod provisioning | `TestAGC_PodProvisioning_MaxWorkersCeiling` | ☐ |
-| AGC failure recovery | `TestAGC_FailureRecovery_PodCrash_NoSecretLeak` | ☐ |
-| AGC failure recovery | `TestAGC_FailureRecovery_EvictionTriggersRequeue` | ☐ |
-| AGC failure recovery | `TestAGC_FailureRecovery_EvictionBudgetExhausted` | ☐ |
-| AGC SIGTERM cleanup | `TestAGC_SIGTERM_DeletesAllSessions` | ☐ |
-| **Total** | **13 / 32 implemented** | |
+| AGC Secret lifecycle | `TestAGC_SecretLifecycle_CreatedOnJobAcquire` | ✅ |
+| AGC Secret lifecycle | `TestAGC_SecretLifecycle_DeletedAfterPodCompletes` | ✅ |
+| AGC pod provisioning | `TestAGC_PodProvisioning_CorrectSpec` | ✅ |
+| AGC pod provisioning | `TestAGC_PodProvisioning_PriorityTiers` | ✅ |
+| AGC pod provisioning | `TestAGC_PodProvisioning_MaxWorkersCeiling` | ✅ |
+| AGC failure recovery | `TestAGC_FailureRecovery_PodCrash_NoSecretLeak` | ✅ |
+| AGC failure recovery | `TestAGC_FailureRecovery_EvictionTriggersRequeue` | ✅ |
+| AGC failure recovery | `TestAGC_FailureRecovery_EvictionBudgetExhausted` | ✅ |
+| AGC SIGTERM cleanup | `TestAGC_SIGTERM_DeletesAllSessions` | ✅ |
+| **Total** | **32 / 32 implemented** | |

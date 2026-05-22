@@ -189,6 +189,94 @@ func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 	require.Contains(t, noProxy, "kubernetes.default.svc.cluster.local")
 }
 
+func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T) {
+	const nsName = "team-appref-default"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "my-secret")
+
+	ag := newActionsGateway("appref-gateway", nsName, "my-secret")
+	// Namespace field intentionally omitted — should default to the CR's own namespace.
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for the AGC Deployment to be created.
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+			&appsv1.Deployment{})
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
+	require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
+
+	// The secretKeyRef must reference "my-secret" (not an empty or cluster-level name).
+	var foundAppID bool
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "GITHUB_APP_ID" {
+			require.NotNil(t, e.ValueFrom)
+			require.NotNil(t, e.ValueFrom.SecretKeyRef)
+			require.Equal(t, "my-secret", e.ValueFrom.SecretKeyRef.Name,
+				"GITHUB_APP_ID secretKeyRef must reference the CR's own secret by name")
+			foundAppID = true
+		}
+	}
+	require.True(t, foundAppID, "GITHUB_APP_ID env var must be present on the AGC Deployment")
+}
+
+func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
+	const nsName = "team-cred-rotation"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "secret-v1")
+	createGitHubAppSecret(t, nsName, "secret-v2")
+
+	ag := newActionsGateway("rotation-gateway", nsName, "secret-v1")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for initial reconcile — AGC Deployment references secret-v1.
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+			&appsv1.Deployment{})
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+
+	// Update gitHubAppRef to secret-v2.
+	var fetched gmcv1alpha1.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "rotation-gateway"}, &fetched))
+	fetched.Spec.GitHubAppRef.Name = "secret-v2"
+	require.NoError(t, k8sClient.Update(ctx, &fetched))
+
+	// Wait for AGC Deployment to reference secret-v2.
+	g.Eventually(func() bool {
+		var dep appsv1.Deployment
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
+			return false
+		}
+		if len(dep.Spec.Template.Spec.Containers) == 0 {
+			return false
+		}
+		for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+			if e.Name == "GITHUB_APP_ID" && e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+				return e.ValueFrom.SecretKeyRef.Name == "secret-v2"
+			}
+		}
+		return false
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+		"AGC Deployment must reference secret-v2 after credential rotation")
+
+	// The old secret must NOT be deleted by the GMC.
+	var oldSecret corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "secret-v1"}, &oldSecret),
+		"secret-v1 must not be deleted by the GMC during credential rotation")
+}
+
 func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
 	const nsName = "team-runnergroups"
 	createNamespace(t, nsName)

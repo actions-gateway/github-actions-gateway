@@ -124,12 +124,6 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
 
-	// 5. NetworkPolicy.
-	np := buildNetworkPolicy(ag, "", githubCIDRs)
-	if err := r.applyNetworkPolicy(ctx, np); err != nil {
-		return fmt.Errorf("NetworkPolicy: %w", err)
-	}
-
 	// 6. ResourceQuota (only if spec.namespaceQuota is set).
 	if len(ag.Spec.NamespaceQuota) > 0 {
 		if err := r.applyResourceQuota(ctx, buildResourceQuota(ag)); err != nil {
@@ -137,12 +131,23 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		}
 	}
 
-	// 7 & 8. Proxy Deployment + Service.
+	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
 	if err := r.applyDeployment(ctx, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
 	}
 	if err := r.applyService(ctx, buildProxyService(ag)); err != nil {
 		return fmt.Errorf("proxy Service: %w", err)
+	}
+
+	// 5. NetworkPolicy — built after Service creation so we can embed the ClusterIP.
+	proxyClusterIP := ""
+	var proxySvc corev1.Service
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, &proxySvc); err == nil {
+		proxyClusterIP = proxySvc.Spec.ClusterIP
+	}
+	np := buildNetworkPolicy(ag, proxyClusterIP, githubCIDRs)
+	if err := r.applyNetworkPolicy(ctx, np); err != nil {
+		return fmt.Errorf("NetworkPolicy: %w", err)
 	}
 
 	// 9. PDB.

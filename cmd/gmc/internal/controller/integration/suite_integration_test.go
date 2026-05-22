@@ -64,7 +64,8 @@ func TestMain(m *testing.M) {
 }
 
 // startGMCReconciler starts an ActionsGatewayReconciler for the duration of a test.
-func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher) {
+// Returns the IPRangeReconciler so tests that need to trigger manual reconciles can do so.
+func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher) *controller.IPRangeReconciler {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -90,9 +91,16 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 
+	ipRangeReconciler := &controller.IPRangeReconciler{
+		Client:  mgr.GetClient(),
+		Fetcher: ipFetcher,
+	}
+
 	go func() {
 		_ = mgr.Start(mgrCtx)
 	}()
+
+	return ipRangeReconciler
 }
 
 type stubIPFetcher struct {

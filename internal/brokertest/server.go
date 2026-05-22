@@ -20,13 +20,14 @@ type Server struct {
 	URL    string
 	server *httptest.Server
 
-	mu              sync.Mutex
-	sessionCounter  int
-	sessions        map[string]bool          // sessionID → active
-	deletedSessions map[string]chan struct{}  // sessionID → closed on DELETE
-	jobQueues       map[string]chan broker.TaskAgentMessage // sessionID → messages
-	acquireCount    atomic.Int64
-	msgCounter      atomic.Int64
+	mu                 sync.Mutex
+	sessionCounter     int
+	sessions           map[string]bool                      // sessionID → active
+	deletedSessions    map[string]chan struct{}              // sessionID → closed on DELETE
+	jobQueues          map[string]chan broker.TaskAgentMessage // sessionID → messages
+	acquireJobResponse interface{}                          // custom AcquireJob response; nil uses default
+	acquireCount       atomic.Int64
+	msgCounter         atomic.Int64
 }
 
 // New creates and starts a new broker Stub. Call Close when done.
@@ -109,6 +110,14 @@ func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) b
 // AcquireJobCalls returns the number of times /acquirejob was called.
 func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
+}
+
+// SetAcquireJobResponse configures the JSON body returned by the next /acquirejob call.
+// Pass nil to reset to the default response. The value is serialised with json.Marshal.
+func (s *Server) SetAcquireJobResponse(v interface{}) {
+	s.mu.Lock()
+	s.acquireJobResponse = v
+	s.mu.Unlock()
 }
 
 // Close shuts down the stub server.
@@ -221,6 +230,15 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	}
 	s.acquireCount.Add(1)
 	w.Header().Set("Content-Type", "application/json")
+
+	s.mu.Lock()
+	custom := s.acquireJobResponse
+	s.mu.Unlock()
+
+	if custom != nil {
+		_ = json.NewEncoder(w).Encode(custom)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(broker.AcquireJobResponse{
 		Plan: struct {
 			PlanID string `json:"planId"`
