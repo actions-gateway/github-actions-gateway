@@ -21,12 +21,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -184,12 +186,30 @@ func main() {
 	agcImage := mustEnv("AGC_IMAGE")
 	proxyImage := mustEnv("PROXY_IMAGE")
 
+	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
+	// each AGC Deployment the controller creates. Intended for test/debug use only.
+	var agcExtraEnv []corev1.EnvVar
+	for _, kv := range os.Environ() {
+		const prefix = "AGC_EXTRA_"
+		if !strings.HasPrefix(kv, prefix) {
+			continue
+		}
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) == 2 {
+			agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{
+				Name:  strings.TrimPrefix(parts[0], prefix),
+				Value: parts[1],
+			})
+		}
+	}
+
 	if err := (&controller.ActionsGatewayReconciler{
-		Client:     mgr.GetClient(),
-		Scheme:     mgr.GetScheme(),
-		IPFetcher:  &controller.HTTPGitHubIPRangeFetcher{},
-		AGCImage:   agcImage,
-		ProxyImage: proxyImage,
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		IPFetcher:   &controller.HTTPGitHubIPRangeFetcher{},
+		AGCImage:    agcImage,
+		ProxyImage:  proxyImage,
+		AGCExtraEnv: agcExtraEnv,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
 		os.Exit(1)

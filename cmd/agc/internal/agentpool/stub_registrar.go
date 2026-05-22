@@ -2,6 +2,7 @@ package agentpool
 
 import (
 	"context"
+	"os"
 	"sync"
 	"sync/atomic"
 )
@@ -27,11 +28,21 @@ func (r *StubRegistrar) Register(_ context.Context, _ string, _ RegisterParams) 
 	r.mu.Lock()
 	r.registered[id] = true
 	r.mu.Unlock()
+
+	// STUB_AUTH_URL / STUB_BROKER_URL let tests redirect credentials to a fake server.
+	authURL := os.Getenv("STUB_AUTH_URL")
+	if authURL == "" {
+		authURL = "https://stub.example.com/token"
+	}
+	brokerURL := os.Getenv("STUB_BROKER_URL")
+	if brokerURL == "" {
+		brokerURL = "https://stub.example.com/broker"
+	}
 	return &AgentCredentials{
 		AgentID:          id,
 		ClientID:         "stub-client-id",
-		AuthorizationURL: "https://stub.example.com/token",
-		BrokerURL:        "https://stub.example.com/broker",
+		AuthorizationURL: authURL,
+		BrokerURL:        brokerURL,
 	}, nil
 }
 

@@ -58,11 +58,12 @@ import (
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 type ActionsGatewayReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	IPFetcher  GitHubIPRangeFetcher
-	AGCImage   string
-	ProxyImage string
-	Log        *slog.Logger
+	Scheme      *runtime.Scheme
+	IPFetcher   GitHubIPRangeFetcher
+	AGCImage    string
+	ProxyImage  string
+	Log         *slog.Logger
+	AGCExtraEnv []corev1.EnvVar // extra env vars forwarded to AGC pods (e.g. for tests)
 }
 
 // Reconcile reconciles an ActionsGateway CR.
@@ -161,7 +162,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	}
 
 	// 11. AGC Deployment.
-	if err := r.applyDeployment(ctx, buildAGCDeployment(ag, r.AGCImage, proxyAddr)); err != nil {
+	if err := r.applyDeployment(ctx, buildAGCDeployment(ag, r.AGCImage, proxyAddr, r.AGCExtraEnv)); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}
 

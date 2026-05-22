@@ -4,10 +4,14 @@ LOCALBIN       := $(REPO_ROOT)/.build
 ENVTEST        := $(LOCALBIN)/setup-envtest
 YEAR           ?= $(shell date +%Y)
 
+IMG        ?= gmc:e2e
+AGC_IMAGE  ?= agc:e2e
+PROXY_IMAGE ?= proxy:e2e
+
 ENVTEST_VERSION    ?= release-0.23
 ENVTEST_K8S_VERSION ?= 1.35
 
-.PHONY: all generate manifests build test
+.PHONY: all generate manifests build test docker-build install uninstall deploy undeploy
 
 all: generate build test
 
@@ -25,6 +29,31 @@ manifests: $(CONTROLLER_GEN)
 
 generate: $(CONTROLLER_GEN)
 	GOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
+
+# Build the GMC Docker image. Build context is cmd/gmc/ (self-contained module).
+docker-build:
+	docker build -f Dockerfile -t $(IMG) .
+
+# Install CRDs into the cluster.
+install:
+	kubectl apply -k config/crd
+
+# Uninstall CRDs from the cluster.
+uninstall:
+	kubectl delete -k config/crd --ignore-not-found
+
+# Deploy the controller to the cluster.
+# After kustomize apply, override the image and inject AGC/proxy image env vars.
+deploy:
+	kubectl apply -k config/default
+	kubectl set image deployment/gmc-controller-manager manager=$(IMG) -n gmc-system
+	kubectl set env deployment/gmc-controller-manager -c manager \
+		AGC_IMAGE=$(AGC_IMAGE) PROXY_IMAGE=$(PROXY_IMAGE) \
+		-n gmc-system
+
+# Undeploy the controller from the cluster.
+undeploy:
+	kubectl delete -k config/default --ignore-not-found
 
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(REPO_ROOT) tools

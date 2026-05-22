@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -109,7 +110,12 @@ func (p *installationTokenProvider) fetchToken(ctx context.Context) (*Installati
 		return nil, fmt.Errorf("githubapp: sign JWT: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", p.creds.InstallationID)
+	// GITHUB_API_BASE_URL lets tests redirect token exchange to a fake server.
+	apiBase := os.Getenv("GITHUB_API_BASE_URL")
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", apiBase, p.creds.InstallationID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: build request: %w", err)

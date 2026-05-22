@@ -50,7 +50,7 @@ func envMap(envs []corev1.EnvVar) map[string]corev1.EnvVar {
 
 func TestBuildAGCDeployment_SecretRefs(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
 	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
 	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
 
@@ -69,7 +69,7 @@ func TestBuildAGCDeployment_SecretRefs(t *testing.T) {
 func TestBuildAGCDeployment_ProxyEnv(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	proxyAddr := "http://actions-gateway-proxy.team-a.svc.cluster.local:8080"
-	dep := buildAGCDeployment(ag, "agc:latest", proxyAddr)
+	dep := buildAGCDeployment(ag, "agc:latest", proxyAddr, nil)
 	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
 
 	assert.Equal(t, proxyAddr, env["HTTP_PROXY"].Value)
@@ -83,7 +83,7 @@ func TestBuildAGCDeployment_ProxyEnv(t *testing.T) {
 
 func TestBuildAGCDeployment_WorkerSA(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
 	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
 	assert.Equal(t, workerSAName, env["WORKER_SERVICE_ACCOUNT"].Value)
 }
@@ -212,7 +212,7 @@ func TestBuildNoProxy_AlwaysContainsKubeAPIServer(t *testing.T) {
 func TestBuildAGCDeployment_NoProxyContainsDefaults(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	ag.Spec.Proxy.NoProxyCIDRs = []string{"172.16.0.0/12"}
-	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
 	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
 	noProxy := env["NO_PROXY"].Value
 	assert.Contains(t, noProxy, "172.16.0.0/12")

@@ -1,0 +1,55 @@
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install kind
+        run: |
+          go install sigs.k8s.io/kind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Create kind cluster
+        run: make e2e-cluster KIND_CLUSTER=actions-gateway-e2e
+
+      - name: Build Docker images
+        run: make e2e-images
+
+      - name: Load images into kind cluster
+        run: make e2e-load-images KIND_CLUSTER=actions-gateway-e2e
+
+      - name: Run e2e tests (excluding local-only)
+        run: |
+          cd cmd/gmc
+          KIND_CLUSTER=actions-gateway-e2e \
+            GMC_IMG=gmc:e2e \
+            AGC_IMG=agc:e2e \
+            PROXY_IMG=proxy:e2e \
+            FAKEGITHUB_IMG=fakegithub:e2e \
+            go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... -- \
+              --label-filter '!local-only'
+
+      - name: Collect diagnostic info on failure
+        if: failure()
+        run: |
+          echo "=== GMC pods ===" && kubectl get pods -n gmc-system -o wide || true
+          echo "=== e2e-infra pods ===" && kubectl get pods -n e2e-infra -o wide || true
+          echo "=== tenant namespaces ===" && kubectl get pods --all-namespaces -l 'actions-gateway.github.com/owner-name' -o wide || true
+          echo "=== GMC controller logs ===" && kubectl logs -n gmc-system -l control-plane=controller-manager --tail=100 || true
+          echo "=== fakegithub logs ===" && kubectl logs -n e2e-infra -l app=fakegithub --tail=100 || true
+          echo "=== events ===" && kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -50 || true
+
+      - name: Delete kind cluster
+        if: always()
+        run: make e2e-cluster-delete KIND_CLUSTER=actions-gateway-e2e
