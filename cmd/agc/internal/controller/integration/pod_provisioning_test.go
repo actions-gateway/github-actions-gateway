@@ -281,4 +281,32 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	}
 	assert.Equal(t, 0, newPods,
 		"no new runner pods should be created when maxWorkers ceiling is reached")
+
+	// Ceiling-lifts: advance one pre-existing pod to Succeeded to free a slot.
+	var preexisting corev1.Pod
+	require.NoError(t, k8sClient.Get(ctx,
+		client.ObjectKey{Namespace: nsName, Name: "preexisting-worker-0"}, &preexisting))
+	preexisting.Status.Phase = corev1.PodSucceeded
+	require.NoError(t, k8sClient.Status().Update(ctx, &preexisting))
+
+	// Enqueue a second job now that active pod count dropped to 1 (< maxWorkers=2).
+	// The provisioner drops ceiling-blocked jobs, so we enqueue a fresh job.
+	currentSessions := brokerStub.RegisteredSessions()
+	brokerStub.EnqueueJob(currentSessions[len(currentSessions)-1], broker.RunnerJobRequestBody{})
+
+	// A new runner pod should now be created since the ceiling is no longer saturated.
+	assert.Eventually(t, func() bool {
+		var pl corev1.PodList
+		_ = k8sClient.List(ctx, &pl,
+			client.InNamespace(nsName),
+			client.MatchingLabels{"actions-gateway/runner-group": "ceiling-rg"},
+		)
+		for _, p := range pl.Items {
+			if strings.HasPrefix(p.Name, "runner-") {
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 200*time.Millisecond,
+		"a runner pod should be created once the maxWorkers ceiling is lifted")
 }
