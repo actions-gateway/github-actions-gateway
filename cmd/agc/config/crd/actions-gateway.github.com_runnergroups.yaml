@@ -7901,10 +7901,12 @@ spec:
                       enum:
                       - PreemptLowerPriority
                       - Never
+                      maxLength: 30
                       type: string
                     priorityClassName:
                       description: PriorityClassName is the name of an existing cluster-scoped
                         PriorityClass.
+                      maxLength: 253
                       type: string
                     threshold:
                       description: Threshold is the cumulative active-pod count at
