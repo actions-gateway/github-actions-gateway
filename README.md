@@ -2,9 +2,9 @@
 
 A Kubernetes operator for managing self-hosted GitHub Actions runners on multi-tenant clusters that scales to zero when the job queue is empty.
 
-Unlike Actions Runner Controller (ARC), which co-locates the queue listener and the job worker, GitHub Actions Gateway (GAG) runs listeners as goroutines in a separate pod and only creates worker pods when a job is acquired from the queue. This reduces waste from idle workers, especially when they need expensive GPUs or lots of memory.
+Unlike Actions Runner Controller (ARC), which co-locates the queue listener and the job worker, GitHub Actions Gateway (GAG) runs listeners as goroutines in a separate pod and only creates worker pods when a job is acquired from the queue. This reduces waste from idle workers, especially when they need expensive GPUs or lots of resources.
 
-Each tenant gets dedicated egress IPs, configurable scheduling priority for GPU workloads, and automatic eviction retry — all managed via a single `ActionsGateway` Custom Resource (CR), no platform team ticket required.
+In addition to saving money, GAG uses its unique architecture to solve several other problems encountered when using ARC at scale in production enterprise environments, like consolidating egress IPs for allowlisting, tollerating eviction with auto-retries, and gradually reducing priority as horizontal scale increases to ensure fair use of limited resources across multiple runner groups.
 
 ## The Problem
 
