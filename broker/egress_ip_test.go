@@ -78,13 +78,19 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 		go func() {
 			defer upstream.Close()
 			defer clientConn.Close()
-			// Wait for both directions before closing so the client can
-			// fully drain its receive buffer. Closing clientConn while
-			// the client is still reading causes EOF / RST on newer TLS.
+			// brw.Reader may have pre-buffered bytes from the client (e.g. a TLS
+			// ClientHello pipelined before we sent the 200 response). Read from
+			// brw.Reader, not clientConn, so those bytes reach the upstream.
+			//
+			// When the client-to-upstream direction finishes (client closed the
+			// connection), close upstream to unblock the upstream-to-client
+			// io.Copy below; without this, a keep-alive target never sends EOF
+			// and the goroutine deadlocks.
 			clientDone := make(chan struct{})
 			go func() {
 				defer close(clientDone)
-				io.Copy(upstream, clientConn) //nolint:errcheck
+				io.Copy(upstream, brw.Reader) //nolint:errcheck
+				upstream.Close()
 			}()
 			io.Copy(clientConn, upstream) //nolint:errcheck
 			<-clientDone
