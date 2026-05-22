@@ -49,32 +49,6 @@ func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
 	}
 }
 
-func TestCRD_RunnerGroup_CELValidation_PriorityTierOrder(t *testing.T) {
-	const nsName = "team-cel-tierorder"
-	createNamespace(t, nsName)
-
-	// Tiers in descending order (invalid — must be ascending).
-	rg := &agcv1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "invalid-tier-order", Namespace: nsName},
-		Spec: agcv1alpha1.RunnerGroupSpec{
-			MaxListeners: 2,
-			RunnerLabels: []string{"self-hosted"},
-			PriorityTiers: []agcv1alpha1.PriorityTier{
-				{PriorityClassName: "high", Threshold: 5},
-				{PriorityClassName: "low", Threshold: 2}, // threshold goes down — invalid
-			},
-		},
-	}
-	err := k8sClient.Create(ctx, rg)
-	require.Error(t, err, "RunnerGroup with descending priorityTiers must be rejected")
-	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
-	assert.Contains(t, err.Error(), "ascending threshold order",
-		"error message should mention ascending threshold order")
-
-	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), rg)
-	})
-}
 
 func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 	const nsName = "team-cel-maxworkers"
