@@ -98,8 +98,14 @@ func (s *Server) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBod
 
 // WaitForSessionDelete blocks until the given sessionID is deleted via DELETE /session
 // or the timeout elapses. Returns true if the session was deleted in time.
+// If the DELETE already arrived before this call, returns true immediately.
 func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) bool {
 	s.mu.Lock()
+	// Fast path: DELETE already received before this call.
+	if active, registered := s.sessions[sessionID]; registered && !active {
+		s.mu.Unlock()
+		return true
+	}
 	ch, ok := s.deletedSessions[sessionID]
 	if !ok {
 		ch = make(chan struct{})
