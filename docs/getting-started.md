@@ -87,3 +87,59 @@ spec:
 The GMC will provision the AGC, proxy pool, RBAC, and network policies in `team-a` automatically.
 
 Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation. See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.
+
+## Rotating GitHub App Credentials
+
+When your GitHub App private key expires or is compromised, follow these steps to rotate credentials without downtime:
+
+1. **Generate a new private key** in the GitHub App settings (Settings → Developer settings → GitHub Apps → `<app>` → Private keys → Generate a private key). Download the `.pem` file.
+
+2. **Create a new Secret** with the new key. Use a distinct name from the old Secret:
+
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: my-github-app-v2   # new name
+     namespace: team-a
+   type: Opaque
+   stringData:
+     appId: "123456"
+     installationId: "78901234"
+     privateKey: |
+       -----BEGIN RSA PRIVATE KEY-----
+       ...new key...
+       -----END RSA PRIVATE KEY-----
+   ```
+
+3. **Update the `ActionsGateway` CR** to reference the new Secret name:
+
+   ```sh
+   kubectl patch actionsgateway -n team-a team-a-gateway \
+     --type=merge -p '{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'
+   ```
+
+   The GMC detects the Secret reference change and triggers a rolling update of the AGC Deployment. The new pod mounts the new Secret and immediately begins using the new credentials.
+
+4. **Confirm the rollout completed:**
+
+   ```sh
+   kubectl rollout status deploy/actions-gateway-controller -n team-a
+   ```
+
+5. **Verify the new token is working:**
+
+   ```sh
+   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
+   # Look for: "token refresh successful" or no token refresh errors
+   ```
+
+6. **Delete the old Secret** once the rollout is confirmed healthy:
+
+   ```sh
+   kubectl delete secret my-github-app -n team-a
+   ```
+
+7. **Revoke the old key** in the GitHub App settings.
+
+**Important:** Do not update the Secret in-place. The GMC watches the `gitHubAppRef.name` reference, not the Secret's contents. Changing the Secret data without changing the reference name does not trigger an AGC rollout — the AGC will continue using the cached token derived from the old key until it restarts or the token expires. Creating a new Secret and updating the reference is the correct rotation path.
