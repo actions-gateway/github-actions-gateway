@@ -15,8 +15,8 @@ import (
 	"github.com/karlkfi/github-actions-gateway/broker"
 )
 
-// Stub is a test HTTP server that implements the broker v2 protocol endpoints.
-type Stub struct {
+// Server is a test HTTP server that implements the broker v2 protocol endpoints.
+type Server struct {
 	URL    string
 	server *httptest.Server
 
@@ -30,8 +30,8 @@ type Stub struct {
 }
 
 // New creates and starts a new broker Stub. Call Close when done.
-func New() *Stub {
-	s := &Stub{
+func New() *Server {
+	s := &Server{
 		sessions:        make(map[string]bool),
 		deletedSessions: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
@@ -48,12 +48,12 @@ func New() *Stub {
 
 // HTTPClient returns an *http.Client suitable for use with the stub server.
 // Since the stub uses a real TCP listener via httptest, the default client works.
-func (s *Stub) HTTPClient() *http.Client {
+func (s *Server) HTTPClient() *http.Client {
 	return http.DefaultClient
 }
 
 // RegisteredSessions returns the IDs of all sessions that have been created.
-func (s *Stub) RegisteredSessions() []string {
+func (s *Server) RegisteredSessions() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]string, 0, len(s.sessions))
@@ -66,7 +66,7 @@ func (s *Stub) RegisteredSessions() []string {
 // EnqueueJob places a job message onto the given session's queue.
 // The RunServiceURL in the payload is overridden to point back to the stub
 // so that /acquirejob calls come back here.
-func (s *Stub) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBody) {
+func (s *Server) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBody) {
 	payload.RunServiceURL = strings.TrimRight(s.URL, "/")
 	bodyBytes, _ := json.Marshal(payload)
 
@@ -89,7 +89,7 @@ func (s *Stub) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBody)
 
 // WaitForSessionDelete blocks until the given sessionID is deleted via DELETE /session
 // or the timeout elapses. Returns true if the session was deleted in time.
-func (s *Stub) WaitForSessionDelete(sessionID string, timeout time.Duration) bool {
+func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) bool {
 	s.mu.Lock()
 	ch, ok := s.deletedSessions[sessionID]
 	if !ok {
@@ -107,17 +107,17 @@ func (s *Stub) WaitForSessionDelete(sessionID string, timeout time.Duration) boo
 }
 
 // AcquireJobCalls returns the number of times /acquirejob was called.
-func (s *Stub) AcquireJobCalls() int {
+func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
 }
 
 // Close shuts down the stub server.
-func (s *Stub) Close() {
+func (s *Server) Close() {
 	s.server.Close()
 }
 
 // handleToken serves POST /token — OAuth2 client credentials response.
-func (s *Stub) handleToken(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -130,7 +130,7 @@ func (s *Stub) handleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSession serves POST /session (create) and DELETE /session (delete).
-func (s *Stub) handleSession(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		s.mu.Lock()
@@ -187,7 +187,7 @@ func (s *Stub) handleSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleMessage serves GET /message — returns 202 (no job) or 200+JSON (job).
-func (s *Stub) handleMessage(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -214,7 +214,7 @@ func (s *Stub) handleMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAcquireJob serves POST /acquirejob — returns a synthetic AcquireJob response.
-func (s *Stub) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
