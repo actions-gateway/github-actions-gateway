@@ -25,9 +25,10 @@ type Server struct {
 	sessions           map[string]bool                      // sessionID → active
 	deletedSessions    map[string]chan struct{}              // sessionID → closed on DELETE
 	jobQueues          map[string]chan broker.TaskAgentMessage // sessionID → messages
-	acquireJobResponse interface{}                          // custom AcquireJob response; nil uses default
-	acquireCount       atomic.Int64
-	msgCounter         atomic.Int64
+	acquireJobResponse  interface{}                          // custom AcquireJob response; nil uses default
+	acquireCount        atomic.Int64
+	msgCounter          atomic.Int64
+	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
 }
 
 // New creates and starts a new broker Stub. Call Close when done.
@@ -112,6 +113,13 @@ func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
 }
 
+// ActiveSessionCount returns the number of goroutines that have registered a session
+// but not yet called DELETE /session. It is computed as (#POST /session − #DELETE /session)
+// so each listener goroutine contributes +1 on start and −1 on exit, regardless of v2 mode.
+func (s *Server) ActiveSessionCount() int {
+	return int(s.activeSessionsCount.Load())
+}
+
 // SetAcquireJobResponse configures the JSON body returned by the next /acquirejob call.
 // Pass nil to reset to the default response. The value is serialised with json.Marshal.
 func (s *Server) SetAcquireJobResponse(v interface{}) {
@@ -148,12 +156,18 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		s.sessions[sessionID] = true
 		s.mu.Unlock()
 
+		s.activeSessionsCount.Add(1)
+
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"sessionId": sessionID,
 		})
 
 	case http.MethodDelete:
+		// Each goroutine calls DELETE exactly once on exit; decrement the per-goroutine
+		// counter regardless of v2 vs v1 mode.
+		s.activeSessionsCount.Add(-1)
+
 		// In v2 flow the server identifies the session from the bearer token;
 		// the stub marks any active session as deleted. We read the sessionId
 		// from the URL query param if present (non-v2 path), otherwise close

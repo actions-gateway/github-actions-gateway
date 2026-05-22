@@ -196,9 +196,18 @@ func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	seen[secondID] = true
 
 	// Wait for the third session to appear (another spawned replacement).
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 3
 	}, 15*time.Second, 200*time.Millisecond, "third session should spawn after second job delivery")
+
+	// Wait for extra goroutines to drain. The broker fake returns 202 immediately
+	// so after IdleThreshold (50) consecutive empty polls the extra goroutines exit
+	// and call DELETE /session. ActiveSessionCount tracks #POST − #DELETE across all
+	// goroutines, so it reaches 1 when only the permanent baseline remains.
+	assert.Eventually(t, func() bool {
+		return brokerStub.ActiveSessionCount() == 1
+	}, 30*time.Second, 200*time.Millisecond,
+		"extra listener goroutines should drain to 1 after jobs are delivered")
 }
 
 // TestAGC_Reconciler_ScaleMaxListeners verifies that updating maxListeners on a RunnerGroup
