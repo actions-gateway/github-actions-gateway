@@ -7,7 +7,16 @@ CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 
-.PHONY: all build build-agc build-probe tools setup-envtest
+KIND_CLUSTER  ?= actions-gateway-e2e
+KIND_CONFIG   ?= test/kind-config.yaml
+GMC_IMG       ?= gmc:e2e
+AGC_IMG       ?= agc:e2e
+PROXY_IMG     ?= proxy:e2e
+FAKEGITHUB_IMG ?= fakegithub:e2e
+
+.PHONY: all build build-agc build-probe tools setup-envtest \
+        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-all e2e-clean \
+        docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub
 
 all: build
 
@@ -18,6 +27,56 @@ build-agc:
 
 build-probe:
 	go build -C cmd/probe -o ../../.build/probe .
+
+# ── e2e cluster management ─────────────────────────────────────────────────────
+
+# Create a multi-node kind cluster for e2e tests.
+e2e-cluster:
+	kind create cluster --name $(KIND_CLUSTER) --config $(KIND_CONFIG) || true
+
+# Delete the e2e kind cluster.
+e2e-cluster-delete:
+	kind delete cluster --name $(KIND_CLUSTER) || true
+
+# Build all four Docker images required for e2e tests.
+e2e-images: docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub
+
+docker-build-gmc:
+	docker build -f cmd/gmc/Dockerfile -t $(GMC_IMG) cmd/gmc
+
+docker-build-agc:
+	docker build -f cmd/agc/Dockerfile -t $(AGC_IMG) .
+
+docker-build-proxy:
+	docker build -f cmd/proxy/Dockerfile -t $(PROXY_IMG) cmd/proxy
+
+docker-build-fakegithub:
+	docker build -f test/fakegithub/Dockerfile -t $(FAKEGITHUB_IMG) .
+
+# Load images into the kind cluster.
+e2e-load-images:
+	kind load docker-image $(GMC_IMG) --name $(KIND_CLUSTER)
+	kind load docker-image $(AGC_IMG) --name $(KIND_CLUSTER)
+	kind load docker-image $(PROXY_IMG) --name $(KIND_CLUSTER)
+	kind load docker-image $(FAKEGITHUB_IMG) --name $(KIND_CLUSTER)
+
+# Run Tier A + Tier B e2e tests (excludes local-only tests).
+e2e:
+	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
+		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
+		go test -v -tags e2e -count=1 ./test/e2e/... -- \
+		--label-filter '!local-only'
+
+# Run all e2e tests including local-only (HPA load, PDB drain).
+e2e-all:
+	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
+		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
+		go test -v -tags e2e -count=1 ./test/e2e/...
+
+# Tear down the e2e cluster.
+e2e-clean: e2e-cluster-delete
+
+# ── tools ──────────────────────────────────────────────────────────────────────
 
 tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST)
 

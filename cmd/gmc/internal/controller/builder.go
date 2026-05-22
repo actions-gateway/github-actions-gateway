@@ -285,7 +285,18 @@ func buildHPA(ag *gmcv1alpha1.ActionsGateway) *autoscalingv2.HorizontalPodAutosc
 }
 
 // buildAGCDeployment builds the AGC Deployment in the tenant namespace.
-func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAddr string) *appsv1.Deployment {
+func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAddr string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
+	env := []corev1.EnvVar{
+		{Name: "GITHUB_APP_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "appId")},
+		{Name: "GITHUB_APP_PRIVATE_KEY", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "privateKey")},
+		{Name: "GITHUB_APP_INSTALLATION_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "installationId")},
+		{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
+		{Name: "WORKER_SERVICE_ACCOUNT", Value: workerSAName},
+		{Name: "HTTP_PROXY", Value: proxyServiceAddr},
+		{Name: "HTTPS_PROXY", Value: proxyServiceAddr},
+		{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},
+	}
+	env = append(env, extraEnv...)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: appsv1.DeploymentSpec{
@@ -298,16 +309,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 					Containers: []corev1.Container{{
 						Name:  "agc",
 						Image: agcImage,
-						Env: []corev1.EnvVar{
-							{Name: "GITHUB_APP_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "appId")},
-							{Name: "GITHUB_APP_PRIVATE_KEY", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "privateKey")},
-							{Name: "GITHUB_APP_INSTALLATION_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "installationId")},
-							{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
-							{Name: "WORKER_SERVICE_ACCOUNT", Value: workerSAName},
-							{Name: "HTTP_PROXY", Value: proxyServiceAddr},
-							{Name: "HTTPS_PROXY", Value: proxyServiceAddr},
-							{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},
-						},
+						Env:   env,
 					}},
 				},
 			},

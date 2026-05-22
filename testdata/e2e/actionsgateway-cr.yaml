@@ -1,0 +1,10 @@
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: test-ag
+spec:
+  gitHubAppRef:
+    name: github-app-secret
+  proxy:
+    minReplicas: 1
+    maxReplicas: 3
