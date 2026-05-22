@@ -50,6 +50,10 @@ A four-tier system:
 
 **Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
 
+**Self-service tenant management.** Teams declare all their runner sets in one `ActionsGateway` CR they own in their own namespace — no cluster-admin involvement after initial setup. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
+
+**Per-tenant utilization metrics.** Both the Gateway Manager Controller (GMC) and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
+
 ## Quick Start
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
