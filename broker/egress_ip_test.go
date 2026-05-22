@@ -78,8 +78,16 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 		go func() {
 			defer upstream.Close()
 			defer clientConn.Close()
-			go io.Copy(upstream, clientConn) //nolint:errcheck
-			io.Copy(clientConn, upstream)    //nolint:errcheck
+			// Wait for both directions before closing so the client can
+			// fully drain its receive buffer. Closing clientConn while
+			// the client is still reading causes EOF / RST on newer TLS.
+			clientDone := make(chan struct{})
+			go func() {
+				defer close(clientDone)
+				io.Copy(upstream, clientConn) //nolint:errcheck
+			}()
+			io.Copy(clientConn, upstream) //nolint:errcheck
+			<-clientDone
 		}()
 	}))
 }
