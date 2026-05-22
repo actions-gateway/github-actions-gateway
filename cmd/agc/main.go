@@ -113,10 +113,27 @@ func run() error {
 	}
 	prov.TokenFunc = tokenMgr.Token
 
+	// STUB_AUTH_URL / STUB_BROKER_URL redirect the StubRegistrar to a local
+	// fake server. These are no-ops when unset (defaults remain).
+	stubAuthURL := os.Getenv("STUB_AUTH_URL")
+	stubBrokerURL := os.Getenv("STUB_BROKER_URL")
+	var registrar agentpool.Registrar
+	if stubAuthURL != "" || stubBrokerURL != "" {
+		if stubAuthURL == "" {
+			stubAuthURL = "https://stub.example.com/token"
+		}
+		if stubBrokerURL == "" {
+			stubBrokerURL = "https://stub.example.com/broker"
+		}
+		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
+	} else {
+		registrar = agentpool.NewStubRegistrar()
+	}
+
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tokenMgr,
-		Registrar:    agentpool.NewStubRegistrar(),
+		Registrar:    registrar,
 		Metrics:      m,
 		Provisioner:  prov,
 		BrokerConfig: controller.BrokerConfig{
