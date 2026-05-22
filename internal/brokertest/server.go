@@ -54,13 +54,17 @@ func (s *Server) HTTPClient() *http.Client {
 	return http.DefaultClient
 }
 
-// RegisteredSessions returns the IDs of all sessions that have been created.
+// RegisteredSessions returns the IDs of sessions that are currently active
+// (i.e. POST /session was called but DELETE /session has not been called yet).
+// Deleted sessions from prior tests are not included.
 func (s *Server) RegisteredSessions() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]string, 0, len(s.sessions))
-	for id := range s.sessions {
-		out = append(out, id)
+	for id, active := range s.sessions {
+		if active {
+			out = append(out, id)
+		}
 	}
 	return out
 }
