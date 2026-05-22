@@ -8769,12 +8769,21 @@ spec:
                         - priorityClassName
                         - threshold
                         type: object
-                        x-kubernetes-validations:
-                        - message: priorityTiers must be in strictly ascending threshold
-                            order
-                          rule: self == self.sorted(x, y, x.threshold < y.threshold)
                       maxItems: 10
                       type: array
+                      x-kubernetes-validations:
+                      - message: priorityTiers must be in strictly ascending threshold
+                          order
+                        rule: self.size() <= 1 || (self.size() < 2 || self[0].threshold
+                          < self[1].threshold) && (self.size() < 3 || self[1].threshold
+                          < self[2].threshold) && (self.size() < 4 || self[2].threshold
+                          < self[3].threshold) && (self.size() < 5 || self[3].threshold
+                          < self[4].threshold) && (self.size() < 6 || self[4].threshold
+                          < self[5].threshold) && (self.size() < 7 || self[5].threshold
+                          < self[6].threshold) && (self.size() < 8 || self[6].threshold
+                          < self[7].threshold) && (self.size() < 9 || self[7].threshold
+                          < self[8].threshold) && (self.size() < 10 || self[8].threshold
+                          < self[9].threshold)
                     runnerLabels:
                       description: RunnerLabels is the label set matched against workflow
                         runs-on values.
