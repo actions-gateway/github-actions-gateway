@@ -1,0 +1,23 @@
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install envtest binaries
+        run: |
+          KUBEBUILDER_ASSETS=$(go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest use --bin-dir /tmp/envtest-bins -p path)
+          echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> "$GITHUB_ENV"
+        working-directory: cmd/gmc
+      - name: Run GMC integration tests
+        run: go test -tags integration -timeout 5m -count=1 ./internal/controller/integration/...
+        working-directory: cmd/gmc
+      - name: Run AGC integration tests
+        run: go test -tags integration -timeout 5m -count=1 ./internal/controller/integration/...
+        working-directory: cmd/agc

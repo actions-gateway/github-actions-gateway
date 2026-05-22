@@ -1,0 +1,137 @@
+//go:build integration
+
+package integration_test
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/controller"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
+	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/karlkfi/github-actions-gateway/internal/brokertest"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+)
+
+var (
+	testEnv    *envtest.Environment
+	k8sClient  client.Client
+	testScheme *runtime.Scheme
+	ctx        context.Context
+	cancel     context.CancelFunc
+	brokerStub *brokertest.Stub
+)
+
+func TestMain(m *testing.M) {
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	brokerStub = brokertest.New()
+	defer brokerStub.Close()
+
+	testScheme = runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(testScheme)
+	_ = v1alpha1.AddToScheme(testScheme)
+
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths: []string{
+			"../../../config/crd",
+		},
+		ErrorIfCRDPathMissing: true,
+		Scheme:                testScheme,
+	}
+
+	cfg, err := testEnv.Start()
+	if err != nil {
+		panic(err)
+	}
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: testScheme})
+	if err != nil {
+		panic(err)
+	}
+
+	exitCode := m.Run()
+	_ = testEnv.Stop()
+	cancel()
+	os.Exit(exitCode)
+}
+
+// stubProvider always returns a hardcoded installation token.
+type stubProvider struct{}
+
+func (stubProvider) Token(_ context.Context) (string, error) { return "inst-token", nil }
+func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationToken, error) {
+	return &githubapp.InstallationToken{
+		Token:     "inst-token",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}, nil
+}
+
+// brokerRegistrar returns credentials pointing to the stub server.
+type brokerRegistrar struct {
+	stub   *brokertest.Stub
+	nextID atomic.Int64
+}
+
+func (r *brokerRegistrar) Register(_ context.Context, _ string, _ agentpool.RegisterParams) (*agentpool.AgentCredentials, error) {
+	id := r.nextID.Add(1)
+	return &agentpool.AgentCredentials{
+		AgentID:          id,
+		ClientID:         fmt.Sprintf("client-%d", id),
+		AuthorizationURL: r.stub.URL + "token",
+		BrokerURL:        r.stub.URL,
+	}, nil
+}
+
+func (r *brokerRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
+
+// startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
+func startAGCReconciler(t *testing.T) {
+	t.Helper()
+	mgrCtx, mgrCancel := context.WithCancel(ctx)
+	t.Cleanup(mgrCancel)
+
+	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
+		Scheme:                 testScheme,
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "0",
+		LeaderElection:         false,
+	})
+	require.NoError(t, err)
+
+	tm := token.NewManager(stubProvider{}, nil)
+	go tm.Start(mgrCtx)
+	_, _ = tm.Token(mgrCtx)
+
+	registrar := &brokerRegistrar{stub: brokerStub}
+
+	r := &controller.RunnerGroupReconciler{
+		Client:       mgr.GetClient(),
+		TokenManager: tm,
+		Registrar:    registrar,
+		BrokerConfig: controller.BrokerConfig{
+			BrokerURL:     brokerStub.URL,
+			RunnerVersion: "2.334.0",
+			RunnerOS:      "linux",
+			UseV2Flow:     true,
+			HTTPClient:    brokerStub.HTTPClient(),
+		},
+	}
+	err = r.SetupWithManager(mgr)
+	require.NoError(t, err)
+
+	go func() { _ = mgr.Start(mgrCtx) }()
+}
