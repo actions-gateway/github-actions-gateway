@@ -283,14 +283,17 @@ func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
 	createGitHubAppSecret(t, nsName, "github-app")
 
 	ag := newActionsGateway("rg-gateway", nsName, "github-app")
+	minimalContainer := corev1.Container{Name: "runner", Image: "runner:test"}
 	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
 		{
 			RunnerLabels: []string{"self-hosted", "linux"},
 			MaxListeners: 5,
+			PodTemplate:  corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{minimalContainer}}},
 		},
 		{
 			RunnerLabels: []string{"gpu"},
 			MaxListeners: 2,
+			PodTemplate:  corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{minimalContainer}}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ag))
