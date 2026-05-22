@@ -165,6 +165,134 @@ groups:
 
 ---
 
+## SLO Recording Rules
+
+These recording rules pre-compute the metrics needed for burn-rate alerting against the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md). Apply them alongside the alert rules above.
+
+```yaml
+groups:
+  - name: actions-gateway-slos
+    interval: 30s
+    rules:
+
+      # Pod creation latency — p95 and p99 per namespace
+      - record: actions_gateway:pod_creation_latency_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (namespace, le) (
+              rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+            )
+          )
+
+      - record: actions_gateway:pod_creation_latency_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (namespace, le) (
+              rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+            )
+          )
+
+      # Job duration — p50, p95, p99 per namespace and runner_group
+      - record: actions_gateway:job_duration_seconds:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (namespace, runner_group, le) (
+              rate(actions_gateway_job_duration_seconds_bucket[5m])
+            )
+          )
+
+      - record: actions_gateway:job_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (namespace, runner_group, le) (
+              rate(actions_gateway_job_duration_seconds_bucket[5m])
+            )
+          )
+
+      # Token refresh error rate (hourly) — compare against the <1/hr SLO
+      - record: actions_gateway:token_refresh_errors:rate1h
+        expr: |
+          sum by (namespace) (
+            increase(actions_gateway_token_refresh_errors_total[1h])
+          )
+
+      # Job acquisition success rate — fraction of acquisitions that succeed
+      - record: actions_gateway:job_acquisition_success_rate:rate5m
+        expr: |
+          sum by (namespace, runner_group) (
+            rate(actions_gateway_jobs_acquired_total[5m])
+          )
+          /
+          (
+            sum by (namespace, runner_group) (
+              rate(actions_gateway_jobs_acquired_total[5m])
+            )
+            +
+            sum by (namespace, runner_group) (
+              rate(actions_gateway_job_acquisition_errors_total[5m])
+            )
+          )
+```
+
+---
+
+## Grafana Dashboard
+
+The following panels cover the key health and performance signals. Use the recording rules above as data sources where applicable.
+
+### Suggested Panel Layout
+
+**Row 1 — Gateway Health (per namespace)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Active sessions | `actions_gateway_active_sessions` | Stat / Time series |
+| Jobs acquired/min | `rate(actions_gateway_jobs_acquired_total[5m]) * 60` | Time series |
+| Token refresh errors | `rate(actions_gateway_token_refresh_errors_total[5m])` | Stat (threshold: >0 = red) |
+| RenewJob errors | `rate(actions_gateway_renewjob_errors_total[5m])` | Stat (threshold: >0 = yellow) |
+
+**Row 2 — Pod Creation Latency SLO**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| p95 latency | `actions_gateway:pod_creation_latency_seconds:p95` | Gauge (green <15s, yellow <60s, red >60s) |
+| p99 latency | `actions_gateway:pod_creation_latency_seconds:p99` | Gauge |
+| Latency heatmap | `rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])` | Heatmap |
+
+**Row 3 — Job Throughput (per runner_group)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Jobs acquired total | `increase(actions_gateway_jobs_acquired_total[1h])` | Bar chart by runner_group |
+| Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series |
+| Eviction retries | `increase(actions_gateway_eviction_retries_total[1h])` | Bar chart |
+| Eviction budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
+
+**Row 4 — Proxy and Quota**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Proxy replica count | `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series |
+| HPA desired vs. current | HPA metrics from `kube_horizontalpodautoscaler_*` | Time series |
+| ResourceQuota usage | `kube_resourcequota` filtered by namespace | Bar gauge |
+
+**Row 5 — GMC Overview**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Managed gateways | `actions_gateway_managed_gateways` | Stat |
+| Reconcile errors | `rate(actions_gateway_reconcile_errors_total[5m])` | Time series by controller |
+| IP range refreshes | `increase(actions_gateway_ip_range_updates_total[24h])` | Stat |
+
+### Dashboard Variables
+
+Add these template variables to make the dashboard multi-tenant:
+
+- `$namespace` — `label_values(actions_gateway_active_sessions, namespace)` — allows filtering to a single tenant
+- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — allows filtering to a specific RunnerGroup
+
+---
+
 ## Label Cardinality Warning
 
 Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardinality explosion:

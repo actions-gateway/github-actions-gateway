@@ -1,0 +1,157 @@
+# Appendix F — Cost Model
+
+← [Appendix E](appendix-e-capacity-planning.md) | [Back to index](README.md)
+
+---
+
+Audience: budget owners, platform team leads. This appendix provides a framework for estimating and allocating compute costs under this system, and compares it to a representative Actions Runner Controller (ARC) deployment.
+
+Cost figures use placeholder rates to show structure; substitute your cloud provider's actual GPU and CPU node pricing.
+
+---
+
+## F.1. Per-Job Cost Breakdown
+
+Each workflow job consumes resources from three components for distinct time windows:
+
+| Component | When it runs | Cost driver |
+|-----------|-------------|-------------|
+| AGC goroutine | From session open through job completion | ~60 KiB RSS per goroutine; negligible at any reasonable rate |
+| Proxy pod | Always running (HPA-managed, ≥ `minReplicas`) | CPU + memory of the minimum replica pool, plus burst capacity |
+| Worker pod | Job duration only | The full cost of the pod's requested CPU, memory, and GPU |
+
+### Worker Pod (Dominant Cost)
+
+For most jobs, the worker pod dominates total cost — especially GPU jobs.
+
+```
+worker_cost_per_job = (job_duration_seconds / 3600) × hourly_node_rate × resource_fraction
+```
+
+Where `resource_fraction` is the fraction of a node the pod's resource requests consume.
+
+**Example — GPU job:**
+- Job duration: 30 minutes (0.5 hr)
+- Node type: 8-GPU node at $25/hr
+- Pod requests: 1 GPU (⅛ of the node)
+- Worker cost: `0.5 × $25 × (1/8) = $1.56 per job`
+
+**Example — CPU job:**
+- Job duration: 10 minutes (0.167 hr)
+- Node type: 16-core CPU node at $1.50/hr
+- Pod requests: 2 CPU (⅛ of the node)
+- Worker cost: `0.167 × $1.50 × (1/8) = $0.031 per job`
+
+### Proxy Pod (Fixed Overhead, Amortized)
+
+The proxy pool runs continuously at `minReplicas`. At low job volumes this is a meaningful cost; at high job volumes it amortizes to near-zero per job.
+
+```
+proxy_overhead_per_job = (proxy_monthly_cost) / (jobs_per_month)
+```
+
+**Example:** 2 proxy pods at 10m CPU / 32Mi memory on a shared node pool ≈ $5/month. At 10,000 jobs/month: $0.0005 per job — negligible.
+
+### AGC (Negligible)
+
+The AGC is a single pod running on a CPU-only node with modest resources (500m CPU / 2Gi memory request). At $0.05/hr, the monthly cost is ~$36/month, amortized across all jobs for that tenant. At 1,000 jobs/month: $0.036 per job. At 10,000 jobs/month: $0.0036 per job.
+
+---
+
+## F.2. Cost Comparison: This System vs. ARC
+
+The fundamental difference is idle GPU allocation:
+
+| Scenario | ARC | This system |
+|----------|-----|-------------|
+| 10 GPU runner sets, 0 jobs running | 10 GPU pods alive | 0 GPU pods; only AGC goroutines (~600 KiB total) |
+| 10 GPU runner sets, 5 jobs running | 10+ GPU pods (≥1 per set + active) | 5 GPU pods |
+| 10 GPU runner sets, 10 jobs running | 10+ GPU pods | 10 GPU pods |
+
+**Idle-state cost example.**
+
+ARC keeps at least one runner pod per scale set alive to handle incoming jobs. For 10 GPU runner sets, each requiring a dedicated 8-GPU node:
+
+- ARC idle cost: `10 nodes × $25/hr = $250/hr` — even when no jobs are running.
+- This system idle cost: AGC + proxy pool ≈ `$0.05/hr` — no GPU nodes held.
+
+Over a 16-hour off-peak window (nights and weekends at a typical org): ARC idles away `16 × $250 = $4,000` per day in GPU charges. This system incurs essentially $0 in GPU charges during that window.
+
+**At 100% utilization** (jobs running 24/7 at full concurrency), both systems hold the same number of GPU pods and the cost difference approaches zero. The advantage of this system is proportional to how often the GPU fleet is idle — which for most teams is the majority of the time.
+
+---
+
+## F.3. Tenant Cost Allocation
+
+Because each tenant has a dedicated namespace with a scoped `ResourceQuota`, per-tenant costs can be attributed precisely.
+
+### Worker Pod Attribution
+
+Label worker pods with the tenant namespace and RunnerGroup at creation time. Query your cloud provider's node usage metrics or use Kubernetes cost attribution tooling (e.g. OpenCost, Kubecost) scoped to the tenant namespace:
+
+```sh
+# Approximate: sum of worker pod CPU × memory × duration in namespace
+kubectl top pods -n <tenant-namespace> --containers
+```
+
+For more precise attribution, use the `actions_gateway_job_duration_seconds` histogram to calculate per-tenant, per-RunnerGroup GPU-time consumed:
+
+```
+tenant_gpu_hours = sum(
+  rate(actions_gateway_job_duration_seconds_sum[30d])
+) by (namespace, runner_group)
+/ 3600
+```
+
+Multiply by the GPU fraction from the RunnerGroup's pod template to convert to GPU-hours.
+
+### Proxy and AGC Attribution
+
+These are per-tenant fixed costs. Attribute them entirely to the tenant namespace since each tenant has a dedicated proxy pool and AGC. They are small relative to worker pod costs for active tenants.
+
+### Showback vs. Chargeback
+
+- **Showback** (recommended initially): publish per-tenant metrics (GPU-hours, job counts, pod-creation latency) to a shared Grafana dashboard so teams can see their own costs. No billing integration required.
+- **Chargeback**: multiply GPU-hours by the cloud rate per GPU-hour, then apply any discount or overhead factor, and invoice the business unit. This requires integrating `job_duration_seconds` with the RunnerGroup's resource request profile and cloud billing data.
+
+---
+
+## F.4. Cost Optimization Levers
+
+### Proxy Autoscaling Aggressiveness
+
+The proxy pool's `minReplicas` is the primary fixed overhead. Set it as low as your availability requirements permit:
+
+- `minReplicas: 1` — single point of failure during updates, but minimizes idle cost.
+- `minReplicas: 2` — survives one proxy pod restart without dropped connections (recommended default).
+- Higher values — warranted only for tenants with very high sustained job concurrency (hundreds of simultaneous connections).
+
+The `HorizontalPodAutoscaler` handles burst capacity automatically; `minReplicas` only affects the floor.
+
+### Worker Resource Right-Sizing
+
+Oversized resource requests are the most common source of wasted spend. If a job's workflow steps use 2 CPU but the pod requests 4 CPU, the other 2 CPU are reserved but idle.
+
+Remediation:
+1. Monitor `container_cpu_usage_seconds_total` for worker pods to measure actual usage.
+2. Reduce `requests.cpu` in the RunnerGroup's `podTemplate` to match the observed p95 usage.
+3. Apply the same analysis to memory: compare `container_memory_working_set_bytes` to `requests.memory`.
+
+For GPU jobs, ensure the GPU count in `resources.limits.nvidia.com/gpu` matches the job's actual GPU parallelism — requesting 2 GPUs for a single-GPU workload doubles the job cost.
+
+### Job Duration Reduction
+
+Reducing job duration directly reduces worker pod cost. Common levers:
+- Cache build artifacts and dependencies across jobs (GitHub Actions cache, persistent volumes).
+- Use smaller, targeted runner images with pre-installed tooling.
+- Parallelize test steps using a matrix strategy.
+
+The `actions_gateway_job_duration_seconds` histogram per RunnerGroup helps identify which runner shapes have the highest average duration and therefore the highest cost-reduction potential.
+
+### Priority Tier Tuning
+
+For tenants using `priorityTiers`, the first tier (with `PreemptLowerPriority`) guarantees GPU floor pods will schedule even under cluster contention — at the cost of potentially evicting lower-priority CPU workloads. Evicted CPU jobs are cheap to re-run; the GPU floor guarantee is typically worth it. Keep the first tier's `threshold` small (the minimum number of GPU pods that must schedule immediately) and use `preemptionPolicy: Never` for higher tiers to avoid unnecessary disruption.
+
+---
+
+← [Appendix E](appendix-e-capacity-planning.md) | [Back to index](README.md)

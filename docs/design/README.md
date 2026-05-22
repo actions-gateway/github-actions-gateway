@@ -46,6 +46,8 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix C — AI-Assisted Implementation Notes (Optional)](appendix-c-ai-implementation.md)
 - [Appendix D — Alternatives Considered](appendix-d-alternatives-considered.md)
 - [Appendix E — Capacity Planning & RunnerGroup Design](appendix-e-capacity-planning.md)
+- [Appendix F — Cost Model](appendix-f-cost-model.md)
+- [Network Architecture](network-architecture.md)
 
 **Operations**
 
@@ -54,6 +56,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Troubleshooting](../operations/troubleshooting.md) — symptom → diagnosis → resolution
 - [Runbook](../operations/runbook.md) — day-2 operations, incident response
 - [Upgrade & Rollback](../operations/upgrade.md) — per-component upgrade procedures
+- [Tenant Onboarding](../operations/tenant-onboarding.md) — checklist for onboarding a new tenant team
 
 ---
 
