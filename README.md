@@ -54,89 +54,7 @@ A four-tier system that addresses these problems at their root:
 
 ## Quick Start
 
-### Prerequisites
-
-- Kubernetes 1.11.3+
-- Go 1.24+
-- A GitHub App with a private key and installation ID
-
-### Create a GitHub App credential Secret
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: my-github-app
-  namespace: team-a
-type: Opaque
-stringData:
-  appId: "123456"
-  installationId: "78901234"
-  privateKey: |
-    -----BEGIN RSA PRIVATE KEY-----
-    ...
-    -----END RSA PRIVATE KEY-----
-```
-
-### Create an ActionsGateway resource
-
-```yaml
-apiVersion: actions.gateway/v1alpha1
-kind: ActionsGateway
-metadata:
-  name: team-a-gateway
-  namespace: team-a
-spec:
-  gitHubAppRef:
-    name: my-github-app
-  proxy:
-    minReplicas: 2
-    maxReplicas: 10
-  namespaceQuota:
-    requests.cpu: "20"
-    requests.memory: "40Gi"
-    pods: "50"
-  runnerGroups:
-    - name: gpu-runners
-      runnerLabels: ["self-hosted", "gpu"]
-      maxListeners: 10
-      priorityTiers:
-        - priorityClassName: runner-critical
-          threshold: 5
-          preemptionPolicy: PreemptLowerPriority
-        - priorityClassName: runner-standard
-          threshold: 20
-          preemptionPolicy: Never
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-              resources:
-                limits:
-                  nvidia.com/gpu: "1"
-    - name: cpu-runners
-      runnerLabels: ["self-hosted", "linux"]
-      maxWorkers: 30
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-```
-
-The GMC will provision the AGC, proxy pool, RBAC, and network policies in `team-a` automatically.
-
-### Deploy the GMC
-
-```sh
-# Build and push the GMC image
-make docker-build docker-push IMG=<registry>/gmc:tag
-
-# Install CRDs
-make install
-
-# Deploy the GMC
-make deploy IMG=<registry>/gmc:tag
-```
+See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
 
 ## Architecture
 
@@ -154,29 +72,11 @@ For the full design, see [docs/design/](docs/design/README.md).
 
 ## Observability
 
-Both the GMC and AGC expose Prometheus metrics at `/metrics`. Key metrics for production operation:
-
-| Metric | Description |
-| --- | --- |
-| `actions_gateway_active_sessions` | Currently open long-poll sessions per runner group |
-| `actions_gateway_jobs_acquired_total` | Jobs successfully acquired |
-| `actions_gateway_job_duration_seconds` | Wall time from acquire to pod completion |
-| `actions_gateway_pod_creation_latency_seconds` | Time from acquire to pod scheduled |
-| `actions_gateway_eviction_retries_total` | Jobs automatically re-queued after eviction |
-| `actions_gateway_eviction_retries_exhausted_total` | Evicted jobs where retry budget was exhausted |
-| `actions_gateway_token_refresh_errors_total` | Failed GitHub App token refreshes |
-| `actions_gateway_renewjob_errors_total` | RenewJob failures (leading indicator for cancelled jobs) |
+Both the GMC and AGC expose Prometheus metrics at `/metrics`. See [docs/operations/observability.md](docs/operations/observability.md) for the full metrics reference.
 
 ## Capacity Reference
 
-| Limit | Value | Notes |
-| --- | --- | --- |
-| Concurrent sessions per AGC pod (peak) | ≤ 1,000 | ~60 KiB resident per goroutine; 1,000 sessions ≈ 60 MiB |
-| Concurrent sessions per GitHub App installation | ≤ 250 | Bounded by GitHub's 15,000 requests/hr rate limit |
-| Pod-creation latency (p95) | ≤ 15s | Sub-second on warm nodes; dominated by image pull on cold |
-| AGC recovery after restart | ≤ 2 min | GitHub redelivers unacquired jobs within this window |
-
-Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation.
+See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) for per-AGC, per-installation, and per-proxy limits and SLO targets.
 
 ## Development
 
