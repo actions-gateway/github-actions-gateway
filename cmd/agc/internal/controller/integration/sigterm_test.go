@@ -16,14 +16,20 @@ import (
 // (simulating SIGTERM) causes all registered sessions to be deleted via DELETE /session.
 func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// Detect goroutine leaks after this test.
+	// Note: IgnoreAnyFunction/IgnoreTopFunction use exact function-name matching.
 	defer goleak.VerifyNone(t,
-		// envtest process-watcher goroutine (type name changed Process→State in ctrl-runtime v0.23).
-		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process"),
+		// envtest process-watcher goroutines (kube-apiserver + etcd; live for the whole suite).
+		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*State).Start.func1"),
+		// client-go informer goroutines managed by the controller-runtime manager.
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
-		// The global broker stub HTTP server holds keep-alive connections throughout the suite.
+		// Broker stub server: accept loop + per-connection serve goroutines (global throughout suite).
+		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
+		// k8s client HTTP/2 connection reader — may still be active when goleak defers run,
+		// before t.Cleanup completes the <-mgrDone wait.
+		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 	)
 
 	const nsName = "agc-sigterm-test"
