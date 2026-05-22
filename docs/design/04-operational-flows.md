@@ -73,4 +73,124 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
 
 ---
 
+## 4.3. Failure Paths
+
+The happy-path flows above are sufficient for most operations. The following diagrams cover the four most operationally significant failure modes.
+
+### Provisioning Failure (GMC Cannot Create Resources)
+
+```
+Tenant                 GMC                    K8s API Server
+      |                  |                           |
+      |-- 1. Apply CR --> |                           |
+      |                  |-- 2. Create ServiceAccount --> |
+      |                  |<-- 3. Error: "forbidden" --|
+      |                  |                           |
+      |                  | [GMC sets Condition:       |
+      |                  |  Ready=False               |
+      |                  |  Reason: ProvisionFailed]  |
+      |                  |                           |
+      |<- 4. Condition: Ready=False (ProvisionFailed) |
+      |                  |                           |
+      |                  | [Retry with exponential    |
+      |                  |  backoff via controller-   |
+      |                  |  runtime requeue]          |
+```
+
+The GMC reconciler is a standard `controller-runtime` reconciler. Errors are returned from `Reconcile()` and trigger automatic requeue with exponential back-off. The GMC sets a `Ready=False` condition with reason `ProvisionFailed` and a message containing the specific error on each failed attempt.
+
+**What the tenant observes:** The `ActionsGateway` CR exists but has `Ready=False`. No AGC, proxy, or RunnerGroup resources are present. The condition message includes the underlying error.
+
+**Resolution:** See [Troubleshooting — GMC Not Provisioning Tenant Resources](../../docs/operations/troubleshooting.md#gmc-not-provisioning-tenant-resources).
+
+---
+
+### Job Acquisition Failure (Broker Returns Error)
+
+```
+AGC Goroutine     Proxy Pool    GitHub Edge
+      |               |               |
+      |--1. GetMessage─>──────────────>|
+      |<─2. RunnerJobRequest          |
+      |               |               |
+      |--3. AcquireJob >──────────────>|
+      |<─4. 409 Conflict (already claimed by another session) |
+      |               |               |
+      | [Goroutine increments          |
+      |  job_acquisition_errors_total  |
+      |  {reason="already_claimed"}]  |
+      |               |               |
+      |--5. GetMessage─>──────────────>| (loop continues)
+```
+
+`AcquireJob` can fail with:
+- `409 Conflict` — job was claimed by another session (benign race in multi-listener scenarios; the job is executing elsewhere).
+- `404 Not Found` — the delivery window expired before `acquirejob` was called; GitHub will redeliver.
+- `422 Unprocessable Entity` — job payload is malformed or the runner version is incompatible.
+
+In all cases the goroutine increments `actions_gateway_job_acquisition_errors_total{reason="..."}` and continues polling on the next `GetMessage` loop iteration. A replacement listener goroutine is not spawned (no job was acquired to spawn it for), so the listener count stays the same.
+
+---
+
+### Worker Pod Eviction and Auto-Retry
+
+```
+AGC Goroutine     K8s API Server    Worker Pod      GitHub Edge
+      |                |               |               |
+      |==RenewJob loop running ========================>|
+      |                |               |               |
+      |                |<─ Evicted (node pressure) ────|
+      |                |  pod.status.reason="Evicted"  |
+      |                |               |               |
+      | [Pod watch observes Evicted state]              |
+      |                |               |               |
+      | [RenewJob loop STOPS immediately]               |
+      |   (GitHub cancels the run as lock lapses)       |
+      |                |               |               |
+      | [Wait evictionRetryDelay (default 5s)]          |
+      |                |               |               |
+      | [Check retry budget: retries < maxEvictionRetries?] |
+      |                |               |               |
+      |──── Yes ──>  POST /repos/.../actions/runs/{run_id}/rerun-failed-jobs ─>|
+      |                |               |               |
+      |                |               |               |
+      |──── No ──> log warning, increment              |
+      |            eviction_retries_exhausted_total     |
+      |            (manual re-run required)             |
+```
+
+The AGC stops renewal immediately on detecting `Evicted` (rather than waiting for lock expiry) so that GitHub cancels the run quickly and the re-queued job enters the delivery queue as soon as possible. The `evictionRetryDelay` default of 5 seconds gives GitHub time to process the cancellation before the rerun API is called.
+
+---
+
+### AGC Crash Mid-Job
+
+```
+AGC               K8s               GitHub
+  |                |                   |
+  |==RenewJob loop running ===========>|
+  |                |                   |
+  | [AGC OOMKilled / SIGKILL]          |
+  |                |                   |
+  | [All in-memory state lost:         |
+  |  sessions, renew loops, run IDs]   |
+  |                |                   |
+  |                |<─ Pod restarted   |
+  |                |                   |
+  | [AGC re-registers sessions ──────>]|
+  | [new sessions polling]             |
+  |                |                   |
+  |                |       (unacquired jobs redelivered within ~2 min)
+  |                |                   |
+  |  (in-flight jobs whose lock lapsed: GitHub cancels them)
+```
+
+**What GitHub observes:** Sessions are dropped (no `DELETE /sessions` sent — the process was killed). GitHub waits for session TTL before redelivering unacquired jobs. For jobs whose `renewjob` lock window expires before the AGC restarts, GitHub cancels the run. These require manual re-run.
+
+**What the AGC does on restart:** Reconnects sessions from scratch. The in-memory retry counter state for evictions is lost; the `maxEvictionRetries` budget resets for all jobs.
+
+**Recovery target:** Sessions restored within ~seconds of pod startup. Unacquired jobs redelivered within ~2 minutes. See the `SessionReacquisition` SLO in [Appendix A](appendix-a-capacity-slos.md).
+
+---
+
 ← [API & Data Contracts](03-api-contracts.md) | [Back to index](README.md) | Next: [Security →](05-security.md)

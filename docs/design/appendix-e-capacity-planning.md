@@ -193,4 +193,130 @@ CPU consumption is predominantly I/O-bound — goroutines spend nearly all of th
 
 ---
 
+## E.10. Worked Examples
+
+The following concrete scenarios show how to apply the formulas and decision guide above to real configurations.
+
+### Scenario 1: Team with 3 RunnerGroups and 20 Concurrent GPU Jobs at Peak
+
+**Context.** A machine learning team runs three workload shapes: model training (8-GPU pods, up to 10 concurrent), model evaluation (2-GPU pods, up to 20 concurrent), and CPU-based preprocessing (no GPU, up to 50 concurrent).
+
+**Configuration.**
+
+```yaml
+spec:
+  namespaceQuota:
+    requests.cpu: "80"
+    requests.memory: "320Gi"
+    pods: "85"           # 10 + 20 + 50 + 5 headroom
+  runnerGroups:
+    - name: train-gpu8x
+      runnerLabels: ["self-hosted", "gpu-8x"]
+      maxListeners: 12   # peak 10, +2 margin
+      maxWorkers: 10
+      podTemplate:
+        spec:
+          containers:
+            - name: runner
+              resources:
+                limits:
+                  nvidia.com/gpu: "8"
+
+    - name: eval-gpu2x
+      runnerLabels: ["self-hosted", "gpu-2x"]
+      maxListeners: 22   # peak 20, +2 margin
+      priorityTiers:
+        - priorityClassName: runner-critical
+          threshold: 5
+          preemptionPolicy: PreemptLowerPriority
+        - priorityClassName: runner-standard
+          threshold: 20
+          preemptionPolicy: Never
+      podTemplate:
+        spec:
+          containers:
+            - name: runner
+              resources:
+                limits:
+                  nvidia.com/gpu: "2"
+
+    - name: cpu-preprocess
+      runnerLabels: ["self-hosted", "cpu-preprocess"]
+      maxListeners: 10   # rarely bursts, default is fine
+      maxWorkers: 50
+```
+
+**Rate-limit check.** Steady-state: 3 sessions × 72 req/hr = 216 req/hr — negligible against the 15,000/hr budget. Peak burst: (12 + 22 + 10) = 44 sessions × 72 req/hr = 3,168 req/hr — well within budget. No sharding needed.
+
+**Peak goroutine memory.** 44 concurrent goroutines × 60 KiB ≈ 2.6 MiB — trivial.
+
+**Namespace quota.** Sized to the maximum simultaneous pod count (10 + 20 + 50 = 80) plus 5 AGC/proxy headroom. The `requests.cpu` and `requests.memory` fields must sum to cover the worker pod requests for all concurrent jobs.
+
+---
+
+### Scenario 2: CPU-Only Team, 100 Jobs/Day, Bursty (Up to 10 Concurrent)
+
+**Context.** A backend team runs integration tests. Jobs arrive in bursts at the start of PRs — up to 10 jobs may land simultaneously — but total daily volume is modest.
+
+**Configuration.** Minimal; no GPU, no priority tiers.
+
+```yaml
+spec:
+  namespaceQuota:
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    pods: "15"           # 10 workers + 3 proxy + 1 AGC + 1 headroom
+  runnerGroups:
+    - name: integration-tests
+      runnerLabels: ["self-hosted", "linux"]
+      maxListeners: 12   # peak burst 10, +2 margin
+      maxWorkers: 10
+      podTemplate:
+        spec:
+          containers:
+            - name: runner
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "4Gi"
+```
+
+**Rate-limit check.** 1 session × 72 req/hr = 72 req/hr at rest. Burst: 12 × 72 = 864 req/hr — well within budget.
+
+**Note on simplicity.** Because there is no `priorityTiers`, no `PriorityClass` objects need to be pre-created. `maxWorkers` alone is sufficient for a flat concurrency ceiling. This is the recommended starting point for teams that do not have competing priority requirements.
+
+---
+
+### Scenario 3: Large Tenant Hitting the 250-Session Ceiling — Sharding Walkthrough
+
+**Context.** A platform team provides shared runners across 200 repositories in the same organization. They have 180 RunnerGroups (one per workflow shape), each with `maxListeners: 10`. At peak load, 60 RunnerGroups are simultaneously bursting.
+
+**Problem.** The burst peak is 60 RunnerGroups × 10 sessions × 72 req/hr = 43,200 req/hr — nearly 3× the 15,000/hr installation budget. The `RateLimited` condition appears during business hours.
+
+**Steady-state check.** 180 RunnerGroups × 72 req/hr = 12,960 req/hr. Even at rest, this is 86% of the budget — no headroom for any burst.
+
+**Solution: shard to two ActionsGateway CRs.**
+
+```
+namespace: platform-runners-1   → GitHub App installation 1
+  RunnerGroups: 90 (the first half)
+
+namespace: platform-runners-2   → GitHub App installation 2
+  RunnerGroups: 90 (the second half)
+```
+
+Split strategy: partition RunnerGroups by workflow class. If model-training workflows always burst together, put them in the same shard so their burst pressure is contained within one budget. If CPU and GPU workflows burst independently, split them across shards to spread peak load.
+
+After sharding, each installation has 90 × 72 = 6,480 req/hr at rest — 43% of the 15,000/hr budget with headroom for burst.
+
+**Steps.**
+
+1. Create a second GitHub App installation in the same organization.
+2. Apply a second `ActionsGateway` CR in a new namespace (`platform-runners-2`) referencing the new installation's Secret.
+3. Move 90 RunnerGroup definitions from the first CR to the second.
+4. Update workflow files to target the correct label sets.
+5. Confirm `RateLimited` condition clears on both CRs.
+
+---
+
 ← [Appendix D](appendix-d-alternatives-considered.md) | [Back to index](README.md)
