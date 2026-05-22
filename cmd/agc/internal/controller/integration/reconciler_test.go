@@ -60,7 +60,7 @@ func enqueueJobWhenSessionAvailable(timeout time.Duration, alreadySeen map[strin
 				return id
 			}
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 	return ""
 }

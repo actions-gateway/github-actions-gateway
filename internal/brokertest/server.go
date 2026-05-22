@@ -20,12 +20,14 @@ type Server struct {
 	URL    string
 	server *httptest.Server
 
-	mu                 sync.Mutex
-	sessionCounter     int
-	sessions           map[string]bool                      // sessionID → active
-	deletedSessions    map[string]chan struct{}              // sessionID → closed on DELETE
-	jobQueues          map[string]chan broker.TaskAgentMessage // sessionID → messages
-	acquireJobResponse  interface{}                          // custom AcquireJob response; nil uses default
+	mu                  sync.Mutex
+	tokenCounter        atomic.Int64
+	sessionCounter      int
+	sessions            map[string]bool                       // sessionID → active
+	deletedSessions     map[string]chan struct{}               // sessionID → closed on DELETE
+	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
+	bearerSessions      map[string]string                     // bearerToken → sessionID
+	acquireJobResponse  interface{}                           // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
@@ -37,6 +39,7 @@ func New() *Server {
 		sessions:        make(map[string]bool),
 		deletedSessions: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
+		bearerSessions:  make(map[string]string),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", s.handleToken)
@@ -138,14 +141,17 @@ func (s *Server) Close() {
 }
 
 // handleToken serves POST /token — OAuth2 client credentials response.
+// Each call returns a unique token so the v2 DELETE /session path can identify
+// which session belongs to the calling goroutine via the Authorization header.
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	token := fmt.Sprintf("token-%d", s.tokenCounter.Add(1))
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
-		"access_token": "test-token",
+		"access_token": token,
 		"token_type":   "Bearer",
 	})
 }
@@ -154,10 +160,15 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
+		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+
 		s.mu.Lock()
 		s.sessionCounter++
 		sessionID := fmt.Sprintf("session-%d", s.sessionCounter)
 		s.sessions[sessionID] = true
+		if bearer != "" {
+			s.bearerSessions[bearer] = sessionID
+		}
 		s.mu.Unlock()
 
 		s.activeSessionsCount.Add(1)
@@ -172,29 +183,21 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		// counter regardless of v2 vs v1 mode.
 		s.activeSessionsCount.Add(-1)
 
-		// In v2 flow the server identifies the session from the bearer token;
-		// the stub marks any active session as deleted. We read the sessionId
-		// from the URL query param if present (non-v2 path), otherwise close
-		// all active sessions' delete channels.
+		// Identify the session: use the sessionId query param (v1) or look up the
+		// Bearer token in the Authorization header (v2). The v2 path uses per-goroutine
+		// unique tokens so only the calling goroutine's session is marked deleted.
 		sessionID := r.URL.Query().Get("sessionId")
 		if sessionID == "" {
-			// v2 flow: close delete channels for all sessions (simple approach
-			// since our tests use one session per registrar per test).
+			bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			s.mu.Lock()
-			for id, active := range s.sessions {
-				if active {
-					s.sessions[id] = false
-					if ch, ok := s.deletedSessions[id]; ok {
-						select {
-						case <-ch:
-						default:
-							close(ch)
-						}
-					}
-				}
+			if sid, ok := s.bearerSessions[bearer]; ok {
+				sessionID = sid
+				delete(s.bearerSessions, bearer)
 			}
 			s.mu.Unlock()
-		} else {
+		}
+
+		if sessionID != "" {
 			s.mu.Lock()
 			s.sessions[sessionID] = false
 			if ch, ok := s.deletedSessions[sessionID]; ok {
