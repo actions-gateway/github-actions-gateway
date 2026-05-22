@@ -208,7 +208,3 @@ docs/plan/       Implementation milestone plans
 internal/        Shared test helpers
 tools/           Vendored build tools (controller-gen, setup-envtest)
 ```
-
-## License
-
-Apache 2.0
