@@ -7,8 +7,6 @@ import (
 
 // PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count threshold.
 // Thresholds must be in strictly ascending order.
-//
-// +kubebuilder:validation:XValidation:rule="self == self.sorted(x, y, x.threshold < y.threshold)",message="priorityTiers must be in strictly ascending threshold order"
 type PriorityTier struct {
 	// PriorityClassName is the name of an existing cluster-scoped PriorityClass.
 	PriorityClassName string `json:"priorityClassName"`
@@ -46,6 +44,7 @@ type RunnerGroupSpec struct {
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
+	// +kubebuilder:validation:XValidation:rule="self.size() <= 1 || (0..self.size()-2).all(i, self[i].threshold < self[i+1].threshold)",message="priorityTiers must be in strictly ascending threshold order"
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
