@@ -157,6 +157,9 @@ func TestAGC_PodProvisioning_PriorityTiers(t *testing.T) {
 		Spec: v1alpha1.RunnerGroupSpec{
 			MaxListeners: 5,
 			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+			},
 			PriorityTiers: []v1alpha1.PriorityTier{
 				{PriorityClassName: "critical-test", Threshold: 2},
 				{PriorityClassName: "standard-test", Threshold: 5},
@@ -222,6 +225,9 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 			MaxListeners: 3,
 			RunnerLabels: []string{"self-hosted"},
 			MaxWorkers:   &maxWorkers,
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+			},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, rg))

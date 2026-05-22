@@ -39,6 +39,11 @@ func newRunnerGroup(ns, name string, maxListeners int32) *v1alpha1.RunnerGroup {
 		Spec: v1alpha1.RunnerGroupSpec{
 			MaxListeners: maxListeners,
 			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}},
+				},
+			},
 		},
 	}
 }
