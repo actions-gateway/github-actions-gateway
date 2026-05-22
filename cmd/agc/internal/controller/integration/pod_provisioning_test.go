@@ -39,7 +39,7 @@ func waitForWorkerPod(t *testing.T, nsName, rgName string) corev1.Pod {
 			}
 		}
 		return false
-	}, 20*time.Second, 200*time.Millisecond, "worker Pod should be created in %s", nsName)
+	}, 20*time.Second, 50*time.Millisecond, "worker Pod should be created in %s", nsName)
 	return pod
 }
 
@@ -98,7 +98,7 @@ func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 	require.Eventually(t, func() bool {
 		sessions = brokerStub.RegisteredSessions()
 		return len(sessions) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
 	pod := waitForWorkerPod(t, nsName, "pod-spec-rg")
@@ -195,7 +195,7 @@ func TestAGC_PodProvisioning_PriorityTiers(t *testing.T) {
 			}
 		}
 		return count >= 2
-	}, 20*time.Second, 200*time.Millisecond, "2 worker pods should be created")
+	}, 20*time.Second, 50*time.Millisecond, "2 worker pods should be created")
 
 	var pods corev1.PodList
 	require.NoError(t, k8sClient.List(ctx, &pods,
@@ -266,7 +266,7 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	// Wait for a session.
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 
 	sessions := brokerStub.RegisteredSessions()
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
@@ -315,6 +315,6 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 			}
 		}
 		return false
-	}, 20*time.Second, 200*time.Millisecond,
+	}, 20*time.Second, 50*time.Millisecond,
 		"a runner pod should be created once the maxWorkers ceiling is lifted")
 }
