@@ -124,7 +124,6 @@ func startAGCReconcilerWithProvisioner(t *testing.T, opts provisionerOptions) co
 func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.CancelFunc {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
-	t.Cleanup(mgrCancel)
 
 	skipNameValidation := true
 	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
@@ -152,6 +151,10 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.Cance
 			RunnerOS:      "linux",
 			UseV2Flow:     true,
 			HTTPClient:    brokerStub.HTTPClient(),
+			// High idle threshold so burst goroutines don't shut down before the
+			// test can detect and enqueue on them. The stub returns 202 instantly,
+			// so the default (50) would idle-shut a burst session in ~50 ms.
+			IdleThreshold: 500,
 		},
 	}
 
@@ -170,6 +173,7 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.Cance
 			DefaultWorkerImage: "runner:test",
 			GitHubAPIURL:       opts.githubAPIURL,
 			HTTPClient:         brokerStub.HTTPClient(),
+			TokenFunc:          stubProvider{}.Token,
 		}
 		r.Provisioner = p
 	}
@@ -177,6 +181,16 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.Cance
 	err = r.SetupWithManager(mgr)
 	require.NoError(t, err)
 
-	go func() { _ = mgr.Start(mgrCtx) }()
+	mgrDone := make(chan struct{})
+	go func() {
+		defer close(mgrDone)
+		_ = mgr.Start(mgrCtx)
+	}()
+
+	t.Cleanup(func() {
+		mgrCancel()
+		<-mgrDone
+	})
+
 	return mgrCancel
 }

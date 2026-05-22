@@ -71,6 +71,9 @@ type BrokerConfig struct {
 	RunnerArch    string
 	UseV2Flow     bool
 	HTTPClient    *http.Client
+	// IdleThreshold is the number of consecutive empty polls before a burst
+	// listener goroutine shuts down. 0 means the default (50).
+	IdleThreshold int
 }
 
 // SetupWithManager registers the reconciler with the controller-runtime manager.
@@ -249,14 +252,15 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			jobHandler = r.Provisioner.HandlerFor(rg)
 		}
 		return listener.Config{
-			Group:      rg.Name,
-			Namespace:  rg.Namespace,
-			Agent:      agent,
-			Broker:     bc,
-			Conditions: condUpdater,
-			Metrics:    r.Metrics,
-			RunnerOS:   brokerCfg.RunnerOS,
-			JobHandler: jobHandler,
+			Group:         rg.Name,
+			Namespace:     rg.Namespace,
+			Agent:         agent,
+			Broker:        bc,
+			Conditions:    condUpdater,
+			Metrics:       r.Metrics,
+			RunnerOS:      brokerCfg.RunnerOS,
+			JobHandler:    jobHandler,
+			IdleThreshold: brokerCfg.IdleThreshold,
 		}
 	}
 
