@@ -52,7 +52,7 @@ A four-tier system:
 
 **Self-service tenant management.** Teams declare all their runner sets in one `ActionsGateway` CR they own in their own namespace — no cluster-admin involvement after initial setup. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
 
-**Per-tenant utilization metrics.** Both the Gateway Manager Controller (GMC) and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
+**Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
 
 ## Quick Start
 
