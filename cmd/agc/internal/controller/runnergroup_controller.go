@@ -150,7 +150,10 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// 7. Start or update the Multiplexer.
-	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, &rg, pool)
+	// Pass a deep copy so the factory closure captures a snapshot that is not
+	// subject to concurrent mutation by r.Status().Update below (which zeroes
+	// the struct before writing the API response back into it).
+	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rg.DeepCopy(), pool)
 	mux.SetMaxListeners(rg.Spec.MaxListeners)
 
 	// 8. Update status.

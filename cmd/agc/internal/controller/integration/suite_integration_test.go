@@ -151,10 +151,10 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 			RunnerOS:      "linux",
 			UseV2Flow:     true,
 			HTTPClient:    brokerStub.HTTPClient(),
-			// High idle threshold so burst goroutines don't shut down before the
-			// test can detect and enqueue on them. The stub returns 202 instantly,
-			// so the default (50) would idle-shut a burst session in ~50 ms.
-			IdleThreshold: 50000,
+			// Idle threshold for burst goroutines. Session detection polls at 1ms
+			// so 500 polls (~50ms on CI) is enough to reliably catch new sessions
+			// before they idle-shut.
+			IdleThreshold: 500,
 		},
 	}
 

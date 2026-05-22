@@ -89,7 +89,7 @@ func TestAGC_Reconciler_CreateStartsOneListener(t *testing.T) {
 			return false
 		}
 		return len(secrets.Items) >= 1
-	}, 15*time.Second, 500*time.Millisecond, "expected at least one agent Secret to be created")
+	}, 15*time.Second, 50*time.Millisecond, "expected at least one agent Secret to be created")
 
 	// Wait for the RunnerGroup status to show at least one active session.
 	assert.Eventually(t, func() bool {
@@ -98,12 +98,12 @@ func TestAGC_Reconciler_CreateStartsOneListener(t *testing.T) {
 			return false
 		}
 		return fetched.Status.ActiveSessions >= 1
-	}, 15*time.Second, 500*time.Millisecond, "expected at least one active session reported in status")
+	}, 15*time.Second, 50*time.Millisecond, "expected at least one active session reported in status")
 
 	// Verify that the broker stub received at least one CreateSession call.
 	assert.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 500*time.Millisecond, "expected broker stub to have at least one registered session")
+	}, 15*time.Second, 1*time.Millisecond, "expected broker stub to have at least one registered session")
 }
 
 // TestAGC_Reconciler_Delete_AllGoroutinesExit verifies that deleting a RunnerGroup
@@ -127,7 +127,7 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 			return false
 		}
 		return len(secrets.Items) >= 1
-	}, 15*time.Second, 500*time.Millisecond, "expected agent Secret before deletion")
+	}, 15*time.Second, 50*time.Millisecond, "expected agent Secret before deletion")
 
 	// Wait for the finalizer to be added.
 	require.Eventually(t, func() bool {
@@ -141,7 +141,7 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond, "finalizer should be added before deletion")
+	}, 15*time.Second, 50*time.Millisecond, "finalizer should be added before deletion")
 
 	// Delete the RunnerGroup.
 	require.NoError(t, k8sClient.Delete(ctx, rg))
@@ -156,14 +156,14 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 			return false
 		}
 		return len(secrets.Items) == 0
-	}, 20*time.Second, 500*time.Millisecond, "all agent Secrets should be deleted after RunnerGroup deletion")
+	}, 20*time.Second, 50*time.Millisecond, "all agent Secrets should be deleted after RunnerGroup deletion")
 
 	// The RunnerGroup CR itself should be gone (finalizer removed).
 	assert.Eventually(t, func() bool {
 		var fetched v1alpha1.RunnerGroup
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "delete-rg"}, &fetched)
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond, "RunnerGroup CR should be gone after teardown")
+	}, 20*time.Second, 50*time.Millisecond, "RunnerGroup CR should be gone after teardown")
 }
 
 // TestAGC_Reconciler_BurstSpawnsAdditionalListeners verifies that enqueueing jobs causes
@@ -181,7 +181,7 @@ func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	// Wait for the initial session (permanent baseline listener).
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond, "at least one session should be registered")
+	}, 15*time.Second, 1*time.Millisecond, "at least one session should be registered")
 
 	seen := map[string]bool{}
 
@@ -193,7 +193,7 @@ func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	// Wait for the second session to appear (spawned replacement).
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 2
-	}, 15*time.Second, 200*time.Millisecond, "second session should spawn after job delivery")
+	}, 15*time.Second, 1*time.Millisecond, "second session should spawn after job delivery")
 
 	// Enqueue a job on the second session → spawns a third goroutine.
 	secondID := enqueueJobWhenSessionAvailable(15*time.Second, seen, broker.RunnerJobRequestBody{})
@@ -203,7 +203,7 @@ func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	// Wait for the third session to appear (another spawned replacement).
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 3
-	}, 15*time.Second, 200*time.Millisecond, "third session should spawn after second job delivery")
+	}, 15*time.Second, 1*time.Millisecond, "third session should spawn after second job delivery")
 
 	// Wait for extra goroutines to drain. Burst goroutines idle-shut after
 	// IdleThreshold consecutive empty polls and call DELETE /session.
@@ -211,7 +211,7 @@ func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	// permanent baseline remains.
 	assert.Eventually(t, func() bool {
 		return brokerStub.ActiveSessionCount() == 1
-	}, 30*time.Second, 200*time.Millisecond,
+	}, 30*time.Second, 10*time.Millisecond,
 		"extra listener goroutines should drain to 1 after jobs are delivered")
 }
 
@@ -230,7 +230,7 @@ func TestAGC_Reconciler_ScaleMaxListeners(t *testing.T) {
 	// Wait for the initial session.
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond, "initial session should be registered")
+	}, 15*time.Second, 1*time.Millisecond, "initial session should be registered")
 
 	// Update maxListeners to 5.
 	var fetched v1alpha1.RunnerGroup
@@ -245,7 +245,7 @@ func TestAGC_Reconciler_ScaleMaxListeners(t *testing.T) {
 			return false
 		}
 		return rg.Status.ObservedGeneration >= rg.Generation
-	}, 15*time.Second, 500*time.Millisecond, "status ObservedGeneration should reflect the update")
+	}, 15*time.Second, 50*time.Millisecond, "status ObservedGeneration should reflect the update")
 
 	// Verify we can now burst to 5 sessions by enqueueing 4 more jobs.
 	seen := map[string]bool{}
@@ -260,6 +260,6 @@ func TestAGC_Reconciler_ScaleMaxListeners(t *testing.T) {
 	// After bursting, session count should reach at least 3 (greater than original ceiling of 2).
 	assert.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 3
-	}, 20*time.Second, 200*time.Millisecond,
+	}, 20*time.Second, 1*time.Millisecond,
 		"session count should exceed the old maxListeners=2 ceiling after scaling to 5")
 }

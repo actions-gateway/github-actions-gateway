@@ -45,7 +45,7 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// Wait for the initial session (permanent baseline listener).
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond, "initial session should register")
+	}, 15*time.Second, 1*time.Millisecond, "initial session should register")
 
 	// Burst to 3 sessions by sequentially enqueueing 2 jobs.
 	seen := map[string]bool{}
@@ -56,7 +56,7 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		// Wait for the next spawned session before enqueueing the next job.
 		require.Eventually(t, func() bool {
 			return len(brokerStub.RegisteredSessions()) >= i+2
-		}, 10*time.Second, 100*time.Millisecond)
+		}, 10*time.Second, 1*time.Millisecond)
 	}
 
 	// Capture the session IDs before cancellation.

@@ -60,7 +60,7 @@ func TestAGC_FailureRecovery_PodCrash_NoSecretLeak(t *testing.T) {
 	// Enqueue a job.
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 	sessions := brokerStub.RegisteredSessions()
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
@@ -85,7 +85,7 @@ func TestAGC_FailureRecovery_PodCrash_NoSecretLeak(t *testing.T) {
 			}
 		}
 		return true
-	}, 20*time.Second, 200*time.Millisecond, "job Secret should be deleted after pod failure")
+	}, 20*time.Second, 50*time.Millisecond, "job Secret should be deleted after pod failure")
 
 	// No rerun API call should have been made (non-eviction crash).
 	assert.Equal(t, int64(0), rerunCalls.Load(),
@@ -149,7 +149,7 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 	// The provisioner should call the rerun API and delete the job Secret.
 	assert.Eventually(t, func() bool {
 		return rerunCalls.Load() >= 1
-	}, 20*time.Second, 200*time.Millisecond,
+	}, 20*time.Second, 50*time.Millisecond,
 		"rerun API must be called after pod eviction")
 
 	assert.Eventually(t, func() bool {
@@ -164,7 +164,7 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 			}
 		}
 		return true
-	}, 20*time.Second, 200*time.Millisecond, "job Secret should be deleted after eviction")
+	}, 20*time.Second, 50*time.Millisecond, "job Secret should be deleted after eviction")
 }
 
 // TestAGC_FailureRecovery_EvictionBudgetExhausted verifies that with maxEvictionRetries=0
@@ -227,7 +227,7 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 			}
 		}
 		return true
-	}, 20*time.Second, 200*time.Millisecond, "job Secret should be deleted when budget is exhausted")
+	}, 20*time.Second, 50*time.Millisecond, "job Secret should be deleted when budget is exhausted")
 
 	// With maxEvictionRetries=0, the rerun API must NOT be called.
 	assert.Equal(t, int64(0), rerunCalls.Load(),

@@ -32,7 +32,7 @@ func TestAGC_SecretLifecycle_CreatedOnJobAcquire(t *testing.T) {
 	require.Eventually(t, func() bool {
 		sessions = brokerStub.RegisteredSessions()
 		return len(sessions) >= 1
-	}, 15*time.Second, 200*time.Millisecond, "a session must register before we can enqueue a job")
+	}, 15*time.Second, 1*time.Millisecond, "a session must register before we can enqueue a job")
 
 	// Enqueue a job — the provisioner will create a Secret and then a Pod.
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
@@ -52,7 +52,7 @@ func TestAGC_SecretLifecycle_CreatedOnJobAcquire(t *testing.T) {
 			}
 		}
 		return false
-	}, 20*time.Second, 200*time.Millisecond,
+	}, 20*time.Second, 50*time.Millisecond,
 		"a job Secret with non-empty payload must be created after job acquisition")
 }
 
@@ -73,7 +73,7 @@ func TestAGC_SecretLifecycle_DeletedAfterPodCompletes(t *testing.T) {
 	require.Eventually(t, func() bool {
 		sessions = brokerStub.RegisteredSessions()
 		return len(sessions) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
@@ -94,7 +94,7 @@ func TestAGC_SecretLifecycle_DeletedAfterPodCompletes(t *testing.T) {
 			}
 		}
 		return false
-	}, 20*time.Second, 200*time.Millisecond, "job Secret should be created")
+	}, 20*time.Second, 50*time.Millisecond, "job Secret should be created")
 
 	// Wait for the worker Pod to be created.
 	var podName string
@@ -113,7 +113,7 @@ func TestAGC_SecretLifecycle_DeletedAfterPodCompletes(t *testing.T) {
 			}
 		}
 		return false
-	}, 20*time.Second, 200*time.Millisecond, "worker Pod should be created")
+	}, 20*time.Second, 50*time.Millisecond, "worker Pod should be created")
 
 	// Advance the Pod to Succeeded (envtest has no kubelet to do this automatically).
 	var pod corev1.Pod
@@ -126,7 +126,7 @@ func TestAGC_SecretLifecycle_DeletedAfterPodCompletes(t *testing.T) {
 		var s corev1.Secret
 		err := k8sClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobSecretName}, &s)
 		return err != nil // deleted when Get returns an error
-	}, 20*time.Second, 200*time.Millisecond,
+	}, 20*time.Second, 50*time.Millisecond,
 		"job Secret %q should be deleted after pod Succeeded", jobSecretName)
 
 	// No orphaned job Secrets should remain.
