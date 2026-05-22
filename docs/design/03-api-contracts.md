@@ -307,11 +307,44 @@ type RunnerGroupSpec struct {
     // returns 400 Bad Request for versions below the threshold. Tenants are
     // responsible for keeping this image current.
     //
-    // Omitting this field causes the AGC to use its own built-in default,
-    // declared as a compile-time constant `DefaultWorkerImage` in the AGC
-    // binary and updated only in AGC release notes — auditable, not magic.
+    // Omitting this field causes the AGC to use its operator-configured default,
+    // set via the --worker-image flag at AGC startup (itself defaulting to a
+    // pinned release in the AGC binary). Tenants who need a different image can
+    // override per-RunnerGroup with this field without affecting other groups.
     // +optional
     WorkerImage string `json:"workerImage,omitempty"`
+
+    // MaxEvictionRetries is the maximum number of times the AGC will
+    // automatically requeue a job after its worker pod is evicted (preemption
+    // or OOM). On each eviction the AGC stops lock renewal — causing GitHub to
+    // cancel the run — and then calls the GitHub rerun API to reschedule it.
+    //
+    // Set to 0 to disable automatic eviction retry entirely (useful for
+    // GPU workloads where a failed job must be debugged before rerunning, or
+    // for short CI jobs where a re-queue is cheaper to trigger manually).
+    //
+    // Retries are tracked per run ID and reset when the RunnerGroup is
+    // reconciled. Once the budget is exhausted the eviction is logged and
+    // the metric actions_gateway_eviction_retries_exhausted_total is
+    // incremented but no further rerun attempt is made.
+    //
+    // +optional
+    // +kubebuilder:default=2
+    // +kubebuilder:validation:Minimum=0
+    // +kubebuilder:validation:Maximum=10
+    MaxEvictionRetries *int32 `json:"maxEvictionRetries,omitempty"`
+
+    // EvictionRetryDelay is how long the AGC waits after detecting a pod
+    // eviction before calling the GitHub rerun API. A short delay avoids
+    // hammering the API on thrashing workloads; the default of 5s is
+    // sufficient for most cases.
+    //
+    // Accepts standard Go duration strings: "5s", "30s", "2m". Values below
+    // "1s" are rejected at admission.
+    //
+    // +optional
+    // +kubebuilder:default="5s"
+    EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`
 }
 
 // WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration
