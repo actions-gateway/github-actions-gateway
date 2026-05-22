@@ -1,12 +1,12 @@
 # GitHub Actions Gateway
 
-A self-hosted runner system for multi-tenant Kubernetes clusters that scales to zero between jobs. Unlike ARC, runner sessions are goroutines rather than pods; worker pods are created on job acquire and deleted on completion. Each tenant gets dedicated egress IPs, configurable scheduling priority for GPU workloads, and automatic eviction retry — all managed via a single `ActionsGateway` CR, no platform team ticket required.
+A self-hosted runner system for multi-tenant Kubernetes clusters that scales to zero between jobs. Unlike Actions Runner Controller (ARC), runner sessions are goroutines rather than pods; worker pods are created on job acquire and deleted on completion. Each tenant gets dedicated egress IPs, configurable scheduling priority for GPU workloads, and automatic eviction retry — all managed via a single `ActionsGateway` Custom Resource (CR), no platform team ticket required.
 
 ## The Problem
 
 Running GitHub Actions self-hosted runners in a shared Kubernetes cluster creates three compounding problems:
 
-**Idle resource waste.** ARC (Actions Runner Controller) keeps at least one runner pod per scale set alive at all times. A tenant with ten GPU runner sets holds ten GPU-backed pods perpetually — whether or not a job is queued.
+**Idle resource waste.** ARC keeps at least one runner pod per scale set alive at all times. A tenant with ten GPU runner sets holds ten GPU-backed pods perpetually — whether or not a job is queued.
 
 **Scheduling starvation.** In a namespace with a shared `ResourceQuota`, cheap CPU runner pods can exhaust quota before GPU runner pods have a chance to schedule. ARC provides no mechanism to express minimum scheduling guarantees across runner sets, so the most expensive hardware reliably loses the race.
 
@@ -34,11 +34,11 @@ A four-tier system:
   +------------------------------------------------------------+
 ```
 
-**Tier 1 — Gateway Manager Controller (GMC).** A cluster-scoped operator deployed once by the platform team. It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant — RBAC, network policies, resource quotas, egress proxy, and AGC — entirely within the tenant's existing namespace.
+**Tier 1 — Gateway Manager Controller (GMC).** A cluster-scoped operator deployed once by the platform team. It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant — role-based access control (RBAC), network policies, resource quotas, egress proxy, and AGC — entirely within the tenant's existing namespace.
 
 **Tier 2 — Actions Gateway Controller (AGC).** A Go-based operator deployed once per tenant. Instead of one pod per runner slot, it multiplexes thousands of virtual runner sessions as goroutines. Compute is provisioned only when a job is acquired and garbage-collected immediately on completion. At steady state each goroutine costs ~60 KiB resident — a reduction of over 4,000× compared to a full .NET `Runner.Listener` process.
 
-**Tier 3 — Egress Proxy Pool.** A horizontally autoscaled pool of stateless HTTPS CONNECT proxy pods per tenant. All GitHub traffic from the AGC and worker pods routes through this pool, giving each tenant a dedicated set of egress IPs never shared with other tenants. Supports per-team IP allowlisting, clean audit trails, and contained blast radius.
+**Tier 3 — Egress Proxy Pool.** A Horizontal Pod Autoscaler (HPA)-managed pool of stateless HTTPS CONNECT proxy pods per tenant. All GitHub traffic from the AGC and worker pods routes through this pool, giving each tenant a dedicated set of egress IPs never shared with other tenants. Supports per-team IP allowlisting, clean audit trails, and contained blast radius.
 
 **Tier 4 — Ephemeral Worker Pod.** A short-lived pod that executes exactly one workflow job and is immediately deleted on completion. Because worker pods exist only while a job is running, zero compute is idle between jobs — GPU nodes return to the cluster scheduler the moment a job finishes.
 
@@ -46,7 +46,7 @@ A four-tier system:
 
 **Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
 
-**Automatic eviction retry.** When a worker pod is evicted (preemption or OOM), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
+**Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
 
 ## Quick Start
 
@@ -72,7 +72,7 @@ Both the GMC and AGC expose Prometheus metrics at `/metrics`. See [docs/operatio
 
 ## Capacity Reference
 
-See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) for per-AGC, per-installation, and per-proxy limits and SLO targets.
+See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) for per-AGC, per-installation, and per-proxy limits and Service Level Objective (SLO) targets.
 
 ## Development
 
