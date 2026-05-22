@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -27,9 +28,6 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		// Broker stub server: accept loop + per-connection serve goroutines (global throughout suite).
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
-		// k8s client HTTP/2 connection reader — may still be active when goleak defers run,
-		// before t.Cleanup completes the <-mgrDone wait.
-		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 	)
 
 	const nsName = "agc-sigterm-test"
@@ -39,7 +37,7 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rg) })
 
-	cancelMgr := startAGCReconciler(t)
+	cancelMgr, mgrDone := startAGCReconciler(t)
 
 	// Wait for the initial session (permanent baseline listener).
 	require.Eventually(t, func() bool {
@@ -63,8 +61,12 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	require.GreaterOrEqual(t, len(sessionIDs), 2,
 		"at least 2 sessions must be active before SIGTERM")
 
-	// Simulate SIGTERM: cancel the manager context.
+	// Simulate SIGTERM: cancel the manager context and wait for full shutdown
+	// before goleak's defer runs. Then drain idle keep-alive connections so
+	// persistConn goroutines exit before goleak checks.
 	cancelMgr()
+	<-mgrDone
+	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 
 	// Assert all registered sessions are deleted via DELETE /session.
 	for _, sid := range sessionIDs {

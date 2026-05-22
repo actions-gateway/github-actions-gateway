@@ -111,17 +111,17 @@ type provisionerOptions struct {
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
 // Returns a cancel func that tests can call to simulate SIGTERM before cleanup.
-func startAGCReconciler(t *testing.T) context.CancelFunc {
+func startAGCReconciler(t *testing.T) (context.CancelFunc, <-chan struct{}) {
 	return startAGCReconcilerOpts(t, provisionerOptions{})
 }
 
 // startAGCReconcilerWithProvisioner starts the reconciler with a real Provisioner attached.
-func startAGCReconcilerWithProvisioner(t *testing.T, opts provisionerOptions) context.CancelFunc {
+func startAGCReconcilerWithProvisioner(t *testing.T, opts provisionerOptions) (context.CancelFunc, <-chan struct{}) {
 	opts.enabled = true
 	return startAGCReconcilerOpts(t, opts)
 }
 
-func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.CancelFunc {
+func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.CancelFunc, <-chan struct{}) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -192,5 +192,5 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.Cance
 		<-mgrDone
 	})
 
-	return mgrCancel
+	return mgrCancel, mgrDone
 }
