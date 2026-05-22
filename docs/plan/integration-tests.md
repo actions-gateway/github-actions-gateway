@@ -34,11 +34,11 @@ go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest use --print env
 - `cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml`
 - `cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml`
 
-### 2.2 GitHub Broker Stub — `httptest.Server`
+### 2.2 GitHub Broker Fake — `httptest.Server`
 
-A shared `httptest.Server` replays broker responses. Unlike the unit test stubs (which serve static responses), the integration broker stub needs to be stateful: it tracks session registrations, delivers job messages on demand, and records which sessions issued `DELETE /sessions/{id}` on shutdown.
+A shared `httptest.Server` implements the broker protocol with real stateful behaviour. Unlike the unit test stubs (which serve static canned responses), the integration broker fake tracks session registrations, delivers job messages on demand, and records which sessions issued `DELETE /sessions/{id}` on shutdown.
 
-The stub is implemented in a shared `internal/brokertest` package (see §3.1 for its interface). Tests control it by calling methods like `stub.EnqueueJob(sessionID, payload)` and `stub.WaitForDelete(sessionID, timeout)`.
+The fake is implemented in a shared `internal/brokertest` package (see §3.1 for its interface). Tests control it by calling methods like `server.EnqueueJob(sessionID, payload)` and `server.WaitForSessionDelete(sessionID, timeout)`.
 
 ### 2.3 Test Framework
 
@@ -79,49 +79,49 @@ Both `suite_integration_test.go` files declare the same `//go:build integration`
 2. A package-level `k8sClient client.Client` initialized from the envtest REST config
 3. A `startReconciler(t)` helper that runs the reconciler under test in a background goroutine, cancelled by `t.Cleanup`
 
-### 3.1 Shared Broker Stub
+### 3.1 Shared Broker Fake
 
 ```
 internal/
 └── brokertest/
-    ├── stub.go          # Stub broker server and control interface
-    └── stub_test.go     # Self-tests for the stub
+    ├── server.go        # Fake broker server and control interface
+    └── server_test.go   # Self-tests for the fake
 ```
 
-The stub provides:
+The fake provides:
 
 ```go
 package brokertest
 
-// Stub is a controllable in-process broker server.
-type Stub struct {
+// Server is a controllable in-process broker fake.
+type Server struct {
     URL string // base URL of the httptest.Server
     // ...
 }
 
-// New starts a new stub broker. Call Close when done.
-func New() *Stub
+// New starts a new fake broker. Call Close when done.
+func New() *Server
 
-// RegisterSession records a session and returns the session ID.
-// Called by the stub's POST /sessions handler automatically.
-func (s *Stub) RegisteredSessions() []string
+// RegisteredSessions returns the IDs of all sessions that have been created.
+// Called by the fake's POST /session handler automatically.
+func (s *Server) RegisteredSessions() []string
 
-// EnqueueJob causes the stub's GET /message long-poll to return
+// EnqueueJob causes the fake's GET /message long-poll to return
 // a job message to the next caller polling on sessionID.
-func (s *Stub) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBody)
+func (s *Server) EnqueueJob(sessionID string, payload broker.RunnerJobRequestBody)
 
 // WaitForSessionDelete blocks until the given sessionID is deleted
-// via DELETE /sessions/{id}, or until timeout expires.
-func (s *Stub) WaitForSessionDelete(sessionID string, timeout time.Duration) bool
+// via DELETE /session, or until timeout expires.
+func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) bool
 
 // AcquireJobCalls returns the number of POST /acquirejob calls received.
-func (s *Stub) AcquireJobCalls() int
+func (s *Server) AcquireJobCalls() int
 
 // Close shuts down the httptest.Server.
-func (s *Stub) Close()
+func (s *Server) Close()
 ```
 
-The stub broker lives in the shared (non-module) `broker/` package area or can be a test-only package under `internal/brokertest/` within the root module. Because the `cmd/agc` module imports the root module's `broker` package, `brokertest` can live alongside it and be imported by AGC integration tests via the workspace replace directive.
+The fake broker lives in a test-only package under `internal/brokertest/` within the root module. Because the `cmd/agc` module imports the root module's `broker` package, `brokertest` can live alongside it and be imported by AGC integration tests via the workspace replace directive.
 
 ---
 
@@ -314,7 +314,7 @@ Assert: the API server returns `200 OK` (no error), since the Role grants pod ac
 
 ## 5. AGC Integration Tests (`cmd/agc/internal/controller/integration/`)
 
-These tests start the `RunnerGroupReconciler` against an envtest API server with a stub broker, exercising the goroutine lifecycle, Secret management, and pod creation (verified via the API server, not actual scheduling).
+These tests start the `RunnerGroupReconciler` against an envtest API server with a fake broker, exercising the goroutine lifecycle, Secret management, and pod creation (verified via the API server, not actual scheduling).
 
 ### 5.1 Suite Setup (`suite_integration_test.go`)
 
@@ -322,14 +322,14 @@ These tests start the `RunnerGroupReconciler` against an envtest API server with
 //go:build integration
 
 var (
-    k8sClient  client.Client
-    brokerStub *brokertest.Stub
-    testEnv    *envtest.Environment
+    k8sClient   client.Client
+    brokerServer *brokertest.Server
+    testEnv     *envtest.Environment
 )
 
 func TestMain(m *testing.M) {
-    brokerStub = brokertest.New()
-    defer brokerStub.Close()
+    brokerServer = brokertest.New()
+    defer brokerServer.Close()
 
     testEnv = &envtest.Environment{
         CRDDirectoryPaths:     []string{"../../../../config/crd"},
@@ -343,11 +343,11 @@ func TestMain(m *testing.M) {
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler using the envtest
-// REST config and the stub broker's URL. Cancelled by t.Cleanup.
+// REST config and the fake broker's URL. Cancelled by t.Cleanup.
 func startAGCReconciler(t *testing.T) *controller.RunnerGroupReconciler
 ```
 
-The stub broker URL is injected into the `BrokerConfig` so listener goroutines talk to the stub rather than real GitHub.
+The fake broker URL is injected into the `BrokerConfig` so listener goroutines talk to the fake rather than real GitHub.
 
 ### 5.2 Reconciler Lifecycle (`reconciler_test.go`)
 
@@ -355,15 +355,15 @@ The stub broker URL is injected into the `BrokerConfig` so listener goroutines t
 
 Setup: apply a `RunnerGroup` CR with `maxListeners: 3`. Reconcile twice (once for finalizer, once for provisioning).
 
-Assert: exactly 1 listener goroutine is running (the permanent baseline). The stub broker records 1 active session.
+Assert: exactly 1 listener goroutine is running (the permanent baseline). The fake broker records 1 active session.
 
 ---
 
 **TestAGC_Reconciler_BurstSpawnsAdditionalListeners**
 
-Setup: apply a `RunnerGroup` with `maxListeners: 3`. Start the reconciler. Enqueue 3 jobs via `brokerStub.EnqueueJob`.
+Setup: apply a `RunnerGroup` with `maxListeners: 3`. Start the reconciler. Enqueue 3 jobs via `brokerServer.EnqueueJob`.
 
-Assert via `gomega.Eventually`: the active session count reaches 3 (one per enqueued job), then drains back to 1 as the queue empties (simulated by the stub returning 202s after the jobs are delivered). Use `brokerStub.RegisteredSessions()` to count.
+Assert via `gomega.Eventually`: the active session count reaches 3 (one per enqueued job), then drains back to 1 as the queue empties (simulated by the fake returning 202s after the jobs are delivered). Use `brokerServer.RegisteredSessions()` to count.
 
 ---
 
@@ -388,7 +388,7 @@ Assert via `gomega.Eventually`:
 
 **TestAGC_SecretLifecycle_CreatedOnJobAcquire**
 
-Setup: apply a `RunnerGroup`. Wait for the listener goroutine to start. Call `brokerStub.EnqueueJob` with a synthetic payload.
+Setup: apply a `RunnerGroup`. Wait for the listener goroutine to start. Call `brokerServer.EnqueueJob` with a synthetic payload.
 
 Assert via `gomega.Eventually`:
 - A `Secret` with label `actions-gateway/runner-group: {rg-name}` is created in the namespace
@@ -464,7 +464,7 @@ Setup: provision a `RunnerGroup` with `maxEvictionRetries: 1`. Enqueue a job. Wa
 Exercise: simulate an eviction by updating the pod status to `Failed` with `reason: "Evicted"`.
 
 Assert via `gomega.Eventually`:
-- The stub broker records a `POST /rerun-failed-jobs` call for the job's `run_id` (the provisioner called the rerun API)
+- The fake broker records a `POST /rerun-failed-jobs` call for the job's `run_id` (the provisioner called the rerun API)
 - The job Secret is deleted
 - `actions_gateway_eviction_retries_total` counter is 1
 
@@ -474,21 +474,21 @@ Assert via `gomega.Eventually`:
 
 Setup: same as above but configure `maxEvictionRetries: 0`.
 
-Assert: the stub broker records NO `POST /rerun-failed-jobs` call. `actions_gateway_eviction_retries_exhausted_total` counter is 1.
+Assert: the fake broker records NO `POST /rerun-failed-jobs` call. `actions_gateway_eviction_retries_exhausted_total` counter is 1.
 
 ### 5.6 SIGTERM Session Cleanup (`sigterm_test.go`)
 
 **TestAGC_SIGTERM_DeletesAllSessions**
 
-Setup: apply a `RunnerGroup` with `maxListeners: 3`. Wait for 3 sessions to register with the stub broker (via `brokerStub.EnqueueJob` to burst the listener count to 3). Confirm `brokerStub.RegisteredSessions()` length is 3.
+Setup: apply a `RunnerGroup` with `maxListeners: 3`. Wait for 3 sessions to register with the fake broker (via `brokerServer.EnqueueJob` to burst the listener count to 3). Confirm `brokerServer.RegisteredSessions()` length is 3.
 
 Exercise: cancel the reconciler's context (simulating SIGTERM) and call the AGC's graceful shutdown path.
 
 Assert within 5 seconds:
-- `brokerStub.WaitForSessionDelete` returns true for each of the 3 registered session IDs
+- `brokerServer.WaitForSessionDelete` returns true for each of the 3 registered session IDs
 - No goroutine leak (verified via `goleak.VerifyNone(t)` in a `t.Cleanup` hook)
 
-Implementation note: the SIGTERM handler is the multiplexer's `Stop` method (called when the reconciler's context is cancelled). The test cancels the context and then polls the stub until all session deletes are confirmed.
+Implementation note: the SIGTERM handler is the multiplexer's `Stop` method (called when the reconciler's context is cancelled). The test cancels the context and then polls the fake until all session deletes are confirmed.
 
 ---
 
