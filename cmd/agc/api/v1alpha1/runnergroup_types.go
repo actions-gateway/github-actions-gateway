@@ -44,9 +44,10 @@ type RunnerGroupSpec struct {
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
+	// Tiers must be in strictly ascending threshold order; the controller sets a Degraded
+	// condition if they are not.
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
-	// +kubebuilder:validation:XValidation:rule="self.size() <= 1 || (self.size() < 2 || self[0].threshold < self[1].threshold) && (self.size() < 3 || self[1].threshold < self[2].threshold) && (self.size() < 4 || self[2].threshold < self[3].threshold) && (self.size() < 5 || self[3].threshold < self[4].threshold) && (self.size() < 6 || self[4].threshold < self[5].threshold) && (self.size() < 7 || self[5].threshold < self[6].threshold) && (self.size() < 8 || self[6].threshold < self[7].threshold) && (self.size() < 9 || self[7].threshold < self[8].threshold) && (self.size() < 10 || self[8].threshold < self[9].threshold)",message="priorityTiers must be in strictly ascending threshold order"
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
