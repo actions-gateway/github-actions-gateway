@@ -23,11 +23,12 @@ type Server struct {
 	mu                  sync.Mutex
 	tokenCounter        atomic.Int64
 	sessionCounter      int
-	sessions            map[string]bool                       // sessionID → active
-	deletedSessions     map[string]chan struct{}               // sessionID → closed on DELETE
+	sessions            map[string]bool                        // sessionID → active
+	deletedSessions     map[string]chan struct{}                // sessionID → closed on DELETE
+	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
 	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
-	bearerSessions      map[string]string                     // bearerToken → sessionID
-	acquireJobResponse  interface{}                           // custom AcquireJob response; nil uses default
+	bearerSessions      map[string]string                      // bearerToken → sessionID
+	acquireJobResponse  interface{}                            // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
@@ -38,6 +39,7 @@ func New() *Server {
 	s := &Server{
 		sessions:        make(map[string]bool),
 		deletedSessions: make(map[string]chan struct{}),
+		firstPollNotify: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
 		bearerSessions:  make(map[string]string),
 	}
@@ -110,6 +112,28 @@ func (s *Server) WaitForSessionDelete(sessionID string, timeout time.Duration) b
 	if !ok {
 		ch = make(chan struct{})
 		s.deletedSessions[sessionID] = ch
+	}
+	s.mu.Unlock()
+
+	select {
+	case <-ch:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// WaitForFirstPoll blocks until the session with the given ID sends its first
+// GET /message request, or until the timeout elapses. Returns true on success.
+// Use this to confirm a listener goroutine has fully started (passed createSession
+// and entered the poll loop) before simulating SIGTERM, so the goroutine is
+// guaranteed to have registered its cleanup defer and will send DELETE /session.
+func (s *Server) WaitForFirstPoll(sessionID string, timeout time.Duration) bool {
+	s.mu.Lock()
+	ch, ok := s.firstPollNotify[sessionID]
+	if !ok {
+		ch = make(chan struct{})
+		s.firstPollNotify[sessionID] = ch
 	}
 	s.mu.Unlock()
 
@@ -233,6 +257,18 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	ch, ok := s.jobQueues[sessionID]
+	// Notify WaitForFirstPoll on the first GET /message for this session.
+	if pollCh, known := s.firstPollNotify[sessionID]; known {
+		select {
+		case <-pollCh: // already closed — nothing to do
+		default:
+			close(pollCh)
+		}
+	} else {
+		closedCh := make(chan struct{})
+		close(closedCh)
+		s.firstPollNotify[sessionID] = closedCh
+	}
 	s.mu.Unlock()
 
 	if ok {
