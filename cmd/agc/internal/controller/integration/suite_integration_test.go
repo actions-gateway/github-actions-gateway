@@ -31,7 +31,7 @@ var (
 	testScheme *runtime.Scheme
 	ctx        context.Context
 	cancel     context.CancelFunc
-	brokerStub *brokertest.Stub
+	brokerStub *brokertest.Server
 )
 
 func TestMain(m *testing.M) {
@@ -82,7 +82,7 @@ func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationT
 
 // brokerRegistrar returns credentials pointing to the stub server.
 type brokerRegistrar struct {
-	stub   *brokertest.Stub
+	stub   *brokertest.Server
 	nextID atomic.Int64
 }
 
