@@ -26,7 +26,7 @@ type PriorityTier struct {
 
 // RunnerGroupSpec defines the desired state of a RunnerGroup.
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
+// +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
 	// The AGC always keeps at least one listener running; additional goroutines

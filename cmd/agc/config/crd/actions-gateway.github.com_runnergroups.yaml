@@ -7939,8 +7939,8 @@ spec:
             x-kubernetes-validations:
             - message: maxWorkers must equal the last priorityTiers threshold when
                 both are set
-              rule: '!has(self.maxWorkers) || self.priorityTiers.size() == 0 || self.maxWorkers
-                == self.priorityTiers[self.priorityTiers.size()-1].threshold'
+              rule: '!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size()
+                == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold'
           status:
             description: RunnerGroupStatus defines the observed state of a RunnerGroup.
             properties:
