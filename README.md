@@ -44,6 +44,8 @@ A four-tier system:
 
 ## Key Properties
 
+**Zero idle GPU allocation.** GPU nodes are only consumed while a job is actively running. The Actions Gateway Controller (AGC) itself runs on CPU-only nodes.
+
 **Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
 
 **Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
