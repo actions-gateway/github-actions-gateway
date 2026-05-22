@@ -64,6 +64,18 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	require.GreaterOrEqual(t, len(sessionIDs), 2,
 		"at least 2 sessions must be active before SIGTERM")
 
+	// Wait for every session to have sent its first GET /message before firing
+	// SIGTERM. RegisteredSessions() returns as soon as POST /session is processed
+	// server-side, but the goroutine may still be reading the HTTP response. If
+	// cancelMgr fires in that window the goroutine dies without running its
+	// cleanup defer, so DELETE /session is never sent. WaitForFirstPoll confirms
+	// the goroutine has fully started (passed createSession, registered the defer,
+	// and entered the poll loop) so SIGTERM is guaranteed to trigger cleanup.
+	for _, sid := range sessionIDs {
+		require.Truef(t, brokerStub.WaitForFirstPoll(sid, 5*time.Second),
+			"session %q should reach the poll loop before SIGTERM", sid)
+	}
+
 	// Simulate SIGTERM: cancel the manager context and wait for full shutdown.
 	cancelMgr()
 	<-mgrDone
