@@ -2,7 +2,6 @@ package agentpool
 
 import (
 	"context"
-	"os"
 	"sync"
 	"sync/atomic"
 )
@@ -14,11 +13,24 @@ type StubRegistrar struct {
 	nextID     atomic.Int64
 	mu         sync.Mutex
 	registered map[int64]bool
+	authURL    string
+	brokerURL  string
 }
 
 // NewStubRegistrar returns a StubRegistrar with a synthetic agent ID counter.
 func NewStubRegistrar() *StubRegistrar {
-	r := &StubRegistrar{registered: make(map[int64]bool)}
+	return NewStubRegistrarWithURLs("https://stub.example.com/token", "https://stub.example.com/broker")
+}
+
+// NewStubRegistrarWithURLs returns a StubRegistrar that returns the given
+// authURL and brokerURL as the OAuth and broker endpoints for every agent.
+// Used in e2e tests to point agents at a local fake server.
+func NewStubRegistrarWithURLs(authURL, brokerURL string) *StubRegistrar {
+	r := &StubRegistrar{
+		registered: make(map[int64]bool),
+		authURL:    authURL,
+		brokerURL:  brokerURL,
+	}
 	r.nextID.Store(1000)
 	return r
 }
@@ -28,21 +40,11 @@ func (r *StubRegistrar) Register(_ context.Context, _ string, _ RegisterParams) 
 	r.mu.Lock()
 	r.registered[id] = true
 	r.mu.Unlock()
-
-	// STUB_AUTH_URL / STUB_BROKER_URL let tests redirect credentials to a fake server.
-	authURL := os.Getenv("STUB_AUTH_URL")
-	if authURL == "" {
-		authURL = "https://stub.example.com/token"
-	}
-	brokerURL := os.Getenv("STUB_BROKER_URL")
-	if brokerURL == "" {
-		brokerURL = "https://stub.example.com/broker"
-	}
 	return &AgentCredentials{
 		AgentID:          id,
 		ClientID:         "stub-client-id",
-		AuthorizationURL: authURL,
-		BrokerURL:        brokerURL,
+		AuthorizationURL: r.authURL,
+		BrokerURL:        r.brokerURL,
 	}, nil
 }
 
