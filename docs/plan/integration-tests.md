@@ -238,6 +238,16 @@ Setup: apply an `ActionsGateway` CR, wait for reconcile, delete it, wait for cle
 
 Assert: all resources are re-created cleanly (no stale state, no `AlreadyExists` errors in the reconciler).
 
+---
+
+**TestGMC_Finalizer_BlocksImmediateDeletion**
+
+Setup: create an `ActionsGateway` CR. Wait for the reconciler to add the finalizer.
+
+Exercise: delete the CR.
+
+Assert: the CR does not disappear immediately (the finalizer blocks deletion). After the reconciler runs its teardown logic, the finalizer is removed and the CR is gone.
+
 ### 4.4 HPA Bounds Update (`hpa_update_test.go`)
 
 **TestGMC_HPABoundsUpdate**
@@ -584,10 +594,11 @@ These scenarios are deliberately out of scope for the integration layer and belo
 | GMC provisioning | `TestGMC_TenantProvisioning_CredentialRotation` | ✅ |
 | GMC teardown | `TestGMC_TenantTeardown_RemovesOnlyOwnedResources` | ✅ |
 | GMC teardown | `TestGMC_TenantTeardown_ReapplyAfterDelete` | ✅ |
+| GMC teardown | `TestGMC_Finalizer_BlocksImmediateDeletion` | ✅ |
 | GMC HPA update | `TestGMC_HPABoundsUpdate` | ✅ |
 | GMC HPA update | `TestGMC_HPABoundsUpdate_MinReplicasClamped` | ✅ |
 | GMC NetworkPolicy | `TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs` | ✅ |
-| GMC NetworkPolicy | `TestGMC_NetworkPolicy_AGCWorkerEgressToProxy` | ✅ |
+| GMC NetworkPolicy | `TestGMC_NetworkPolicy_AGCWorkerEgressToProxy` | ✅ ⚠️ |
 | GMC NetworkPolicy | `TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs` | ✅ |
 | GMC NetworkPolicy | `TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy` | ✅ |
 | GMC RBAC scope | `TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied` | ✅ |
@@ -597,16 +608,26 @@ These scenarios are deliberately out of scope for the integration layer and belo
 | CRD admission | `TestCRD_RunnerGroup_CELValidation_PriorityTierOrder` | ✅ |
 | CRD admission | `TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict` | ✅ |
 | AGC reconciler lifecycle | `TestAGC_Reconciler_CreateStartsOneListener` | ✅ |
-| AGC reconciler lifecycle | `TestAGC_Reconciler_BurstSpawnsAdditionalListeners` | ✅ |
+| AGC reconciler lifecycle | `TestAGC_Reconciler_BurstSpawnsAdditionalListeners` | ✅ ⚠️ |
 | AGC reconciler lifecycle | `TestAGC_Reconciler_ScaleMaxListeners` | ✅ |
 | AGC reconciler lifecycle | `TestAGC_Reconciler_Delete_AllGoroutinesExit` | ✅ |
 | AGC Secret lifecycle | `TestAGC_SecretLifecycle_CreatedOnJobAcquire` | ✅ |
 | AGC Secret lifecycle | `TestAGC_SecretLifecycle_DeletedAfterPodCompletes` | ✅ |
 | AGC pod provisioning | `TestAGC_PodProvisioning_CorrectSpec` | ✅ |
 | AGC pod provisioning | `TestAGC_PodProvisioning_PriorityTiers` | ✅ |
-| AGC pod provisioning | `TestAGC_PodProvisioning_MaxWorkersCeiling` | ✅ |
+| AGC pod provisioning | `TestAGC_PodProvisioning_MaxWorkersCeiling` | ✅ ⚠️ |
 | AGC failure recovery | `TestAGC_FailureRecovery_PodCrash_NoSecretLeak` | ✅ |
 | AGC failure recovery | `TestAGC_FailureRecovery_EvictionTriggersRequeue` | ✅ |
 | AGC failure recovery | `TestAGC_FailureRecovery_EvictionBudgetExhausted` | ✅ |
 | AGC SIGTERM cleanup | `TestAGC_SIGTERM_DeletesAllSessions` | ✅ |
-| **Total** | **32 / 32 implemented** | |
+| **Total** | **33 / 33 implemented** | |
+
+⚠️ = implemented but narrower than the description above; see notes below.
+
+**Implementation gaps vs plan descriptions:**
+
+- `TestAGC_Reconciler_BurstSpawnsAdditionalListeners`: the plan describes asserting that sessions drain back to 1 after jobs are delivered. `RegisteredSessions()` returns a cumulative ever-registered count, not a live active count, so the drain is not observable through the current broker fake API. The burst-to-3 assertion is implemented; the drain assertion requires adding an `ActiveSessionCount()` method to `brokertest.Server`.
+
+- `TestGMC_NetworkPolicy_AGCWorkerEgressToProxy`: the plan describes verifying the pod selectors (`app: actions-gateway-agc`, `app: actions-gateway-worker`) and the ClusterIP target specifically. The implementation only checks that an egress rule with port 8080 exists, which is sufficient to verify the fix (proxyClusterIP was always empty before) but does not verify selector granularity.
+
+- `TestAGC_PodProvisioning_MaxWorkersCeiling`: the plan describes verifying that after one active pod transitions to Succeeded, the previously blocked job's pod is created. The implementation only asserts the ceiling blocks pod creation (using `time.Sleep`). The ceiling-lifts scenario depends on whether the provisioner retains or discards ceiling-blocked jobs; if the provisioner drops them, the third assertion cannot be implemented as written and should be removed from this plan or moved to a separate retry test.
