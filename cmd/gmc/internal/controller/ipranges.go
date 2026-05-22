@@ -126,6 +126,12 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 	}
 }
 
+// ReconcileNow triggers an immediate reconciliation of all ActionsGateway CRs.
+// Intended for use in integration tests.
+func (r *IPRangeReconciler) ReconcileNow(ctx context.Context) {
+	r.reconcileAll(ctx, slog.Default())
+}
+
 func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) {
 	cidrs, err := r.Fetcher.FetchIPRanges(ctx)
 	if err != nil {

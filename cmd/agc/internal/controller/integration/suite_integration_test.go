@@ -5,6 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync/atomic"
 	"testing"
@@ -13,6 +14,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/controller"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 	"github.com/karlkfi/github-actions-gateway/internal/brokertest"
@@ -98,8 +100,27 @@ func (r *brokerRegistrar) Register(_ context.Context, _ string, _ agentpool.Regi
 
 func (r *brokerRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
 
+// provisionerOptions configures the optional Provisioner attached to the reconciler.
+type provisionerOptions struct {
+	enabled            bool
+	maxEvictionRetries int
+	githubAPIURL       string
+	pollInterval       time.Duration
+}
+
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
-func startAGCReconciler(t *testing.T) {
+// Returns a cancel func that tests can call to simulate SIGTERM before cleanup.
+func startAGCReconciler(t *testing.T) context.CancelFunc {
+	return startAGCReconcilerOpts(t, provisionerOptions{})
+}
+
+// startAGCReconcilerWithProvisioner starts the reconciler with a real Provisioner attached.
+func startAGCReconcilerWithProvisioner(t *testing.T, opts provisionerOptions) context.CancelFunc {
+	opts.enabled = true
+	return startAGCReconcilerOpts(t, opts)
+}
+
+func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) context.CancelFunc {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -130,8 +151,29 @@ func startAGCReconciler(t *testing.T) {
 			HTTPClient:    brokerStub.HTTPClient(),
 		},
 	}
+
+	if opts.enabled {
+		pollInterval := opts.pollInterval
+		if pollInterval == 0 {
+			pollInterval = 200 * time.Millisecond
+		}
+		maxRetries := opts.maxEvictionRetries
+		p := &provisioner.Provisioner{
+			Client:             mgr.GetClient(),
+			Log:                slog.Default(),
+			PollInterval:       pollInterval,
+			WorkerSA:           "actions-gateway-worker",
+			MaxEvictionRetries: maxRetries,
+			DefaultWorkerImage: "runner:test",
+			GitHubAPIURL:       opts.githubAPIURL,
+			HTTPClient:         brokerStub.HTTPClient(),
+		}
+		r.Provisioner = p
+	}
+
 	err = r.SetupWithManager(mgr)
 	require.NoError(t, err)
 
 	go func() { _ = mgr.Start(mgrCtx) }()
+	return mgrCancel
 }

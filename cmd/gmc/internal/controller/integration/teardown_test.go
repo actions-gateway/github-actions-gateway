@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+
 func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 	const nsA = "team-teardown-a"
 	const nsB = "team-teardown-b"
@@ -99,6 +100,61 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 	var npB networkingv1.NetworkPolicy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsB, Name: "actions-gateway"}, &npB),
 		"NetworkPolicy in team-b must still exist")
+}
+
+func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
+	const nsName = "team-reapply"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("reapply-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for initial reconcile.
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&appsv1.Deployment{})
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be created")
+
+	// Delete the CR and wait for full teardown.
+	require.NoError(t, k8sClient.Delete(ctx, ag))
+	g.Eventually(func() bool {
+		var fetched gmcv1alpha1.ActionsGateway
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "reapply-gateway"}, &fetched)
+		return apierrors.IsNotFound(err)
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "CR should be gone after teardown")
+
+	// Wait for owned resources to be cleaned up.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&appsv1.Deployment{})
+		return apierrors.IsNotFound(err)
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "proxy Deployment should be deleted")
+
+	// Re-apply the same CR.
+	ag2 := newActionsGateway("reapply-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag2))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag2) })
+
+	// Assert all resources are re-created cleanly.
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&appsv1.Deployment{})
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be re-created after re-apply")
+
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+			&appsv1.Deployment{})
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "AGC Deployment should be re-created after re-apply")
+
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
+			&networkingv1.NetworkPolicy{})
+	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "NetworkPolicy should be re-created after re-apply")
 }
 
 func TestGMC_Finalizer_BlocksImmediateDeletion(t *testing.T) {

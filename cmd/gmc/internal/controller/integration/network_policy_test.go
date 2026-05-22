@@ -56,6 +56,104 @@ func TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs(t *testing.T) {
 		"expected egress rule for 140.82.112.0/20 on port 443")
 }
 
+func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
+	const nsName = "team-np-agc-egress"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("agc-egress-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for the NetworkPolicy to include an egress rule on port 8080 (proxy).
+	// The controller embeds the proxy Service ClusterIP in the NetworkPolicy only after
+	// the Service is created, so this check waits for at least one reconcile cycle
+	// after Service creation.
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+			return false
+		}
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port != nil && port.Port.IntVal == 8080 {
+					return true
+				}
+			}
+		}
+		return false
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+		"expected egress rule on port 8080 (proxy) in NetworkPolicy")
+}
+
+func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T) {
+	const nsName = "team-np-iprange"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	_, cidr1, _ := net.ParseCIDR("140.82.112.0/20")
+	fetcher := &stubIPFetcher{cidrs: []net.IPNet{*cidr1}}
+
+	ag := newActionsGateway("iprange-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	ipRangeReconciler := startGMCReconciler(t, fetcher)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for the initial NetworkPolicy with the first CIDR.
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+			return false
+		}
+		for _, rule := range np.Spec.Egress {
+			for _, peer := range rule.To {
+				if peer.IPBlock != nil && peer.IPBlock.CIDR == "140.82.112.0/20" {
+					return true
+				}
+			}
+		}
+		return false
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "initial NetworkPolicy should contain 140.82.112.0/20")
+
+	// Update the fetcher to return a new CIDR.
+	_, cidr2, _ := net.ParseCIDR("1.2.3.0/24")
+	fetcher.SetCIDRs([]net.IPNet{*cidr1, *cidr2})
+
+	// Trigger an immediate reconcile via the IPRangeReconciler.
+	ipRangeReconciler.ReconcileNow(ctx)
+
+	// Assert the NetworkPolicy now includes the new CIDR.
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+			return false
+		}
+		found140, found1 := false, false
+		for _, rule := range np.Spec.Egress {
+			for _, peer := range rule.To {
+				if peer.IPBlock != nil {
+					if peer.IPBlock.CIDR == "140.82.112.0/20" {
+						found140 = true
+					}
+					if peer.IPBlock.CIDR == "1.2.3.0/24" {
+						found1 = true
+					}
+				}
+			}
+		}
+		return found140 && found1
+	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+		"NetworkPolicy should include both 140.82.112.0/20 and 1.2.3.0/24 after IP range update")
+
+}
+
 func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 	const nsName = "team-np-managed-false"
 	createNamespace(t, nsName)
