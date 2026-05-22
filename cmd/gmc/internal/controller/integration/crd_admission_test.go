@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,6 +55,10 @@ func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 	const nsName = "team-cel-maxworkers"
 	createNamespace(t, nsName)
 
+	minimalPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+	}
+
 	maxWorkers := int32(10)
 	// Last tier threshold is 5 but maxWorkers is 10 — they must be equal.
 	rg := &agcv1alpha1.RunnerGroup{
@@ -62,6 +67,7 @@ func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 			MaxListeners: 5,
 			RunnerLabels: []string{"self-hosted"},
 			MaxWorkers:   &maxWorkers,
+			PodTemplate:  minimalPodTemplate,
 			PriorityTiers: []agcv1alpha1.PriorityTier{
 				{PriorityClassName: "standard", Threshold: 5},
 			},
@@ -86,6 +92,7 @@ func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 			MaxListeners: 5,
 			RunnerLabels: []string{"self-hosted"},
 			MaxWorkers:   &maxWorkers2,
+			PodTemplate:  minimalPodTemplate,
 			PriorityTiers: []agcv1alpha1.PriorityTier{
 				{PriorityClassName: "standard", Threshold: 5},
 			},
