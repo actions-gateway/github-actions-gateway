@@ -135,6 +135,7 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 			"system.github.run_id":     map[string]string{"value": "12345"},
 		},
 	})
+	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
 	// Wait for the worker pod.
@@ -203,6 +204,7 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 			"system.github.run_id":     map[string]string{"value": "99999"},
 		},
 	})
+	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
 	pod := waitForWorkerPod(t, nsName, "budget-rg")

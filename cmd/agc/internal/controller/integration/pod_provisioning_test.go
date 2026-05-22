@@ -44,6 +44,8 @@ func waitForWorkerPod(t *testing.T, nsName, rgName string) corev1.Pod {
 }
 
 // enqueueOnNextSession waits for a new session (not in alreadySeen) and enqueues a job on it.
+// EnqueueJob is called inside the Eventually closure to avoid a TOCTOU race where the session
+// idle-shuts between detection and enqueue.
 func enqueueOnNextSession(t *testing.T, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
 	t.Helper()
 	var id string
@@ -51,12 +53,12 @@ func enqueueOnNextSession(t *testing.T, alreadySeen map[string]bool, payload bro
 		for _, s := range brokerStub.RegisteredSessions() {
 			if !alreadySeen[s] {
 				id = s
+				brokerStub.EnqueueJob(id, payload)
 				return true
 			}
 		}
 		return false
-	}, 15*time.Second, 100*time.Millisecond, "a new session should register")
-	brokerStub.EnqueueJob(id, payload)
+	}, 15*time.Second, 1*time.Millisecond, "a new session should register")
 	return id
 }
 
