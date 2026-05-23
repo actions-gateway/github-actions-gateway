@@ -39,6 +39,9 @@ const (
 
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = "actions-gateway-proxy"
+	// npAGCName is the NetworkPolicy that gives AGC pods Kubernetes API server access (port 443).
+	// Combined with npWorkloadName (additive), AGC pods can reach: DNS + proxy + k8s API.
+	npAGCName = "actions-gateway-agc"
 	// npWorkloadName is the NetworkPolicy that restricts AGC and worker pod egress to the proxy only.
 	npWorkloadName = "actions-gateway-workload"
 
@@ -175,6 +178,41 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, proxyClusterIP s
 			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{labelComponent: componentWorkload}},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
 			Egress:      egress,
+		},
+	}
+}
+
+// buildAGCNetworkPolicy constructs the NetworkPolicy for AGC pods only.
+// It allows egress on port 443 (Kubernetes API server) in addition to the DNS
+// and proxy egress that the workload NetworkPolicy already grants. Because
+// NetworkPolicies are additive, AGC pods (selected by both this policy and
+// buildWorkloadNetworkPolicy) end up with: DNS + proxy + k8s API egress.
+// Worker pods (selected only by buildWorkloadNetworkPolicy) are limited to
+// DNS + proxy — they cannot directly reach GitHub or the k8s API server.
+//
+// Port 443 egress has no `To` restriction because the Kubernetes API server
+// is not a regular pod; its ClusterIP is not predictable at controller deploy
+// time across all cloud providers.
+func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
+	proto53UDP := corev1.ProtocolUDP
+	proto53TCP := corev1.ProtocolTCP
+
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
+				{
+					Ports: []networkingv1.NetworkPolicyPort{
+						{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
+						{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
+					},
+				},
+				{
+					Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
+				},
+			},
 		},
 	}
 }

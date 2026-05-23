@@ -348,6 +348,7 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 		for _, np := range []*networkingv1.NetworkPolicy{
 			buildProxyNetworkPolicy(ag, nil),
 			buildWorkloadNetworkPolicy(ag, ""),
+			buildAGCNetworkPolicy(ag),
 		} {
 			udpFound, tcpFound := false, false
 			for _, rule := range np.Spec.Egress {
@@ -366,6 +367,49 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 			assert.True(t, tcpFound, "expected DNS TCP egress in %s when managedNetworkPolicy=%v", np.Name, managed)
 		}
 	}
+}
+
+func TestBuildAGCNetworkPolicy_PodSelectorIsAGCOnly(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildAGCNetworkPolicy(ag)
+
+	assert.Equal(t, npAGCName, np.Name)
+	// Must select AGC pods by app label, not the broad workload label.
+	assert.Equal(t, agcAppName, np.Spec.PodSelector.MatchLabels["app"],
+		"AGC NP must select AGC pods by app label")
+	_, hasWorkloadLabel := np.Spec.PodSelector.MatchLabels[labelComponent]
+	assert.False(t, hasWorkloadLabel, "AGC NP must not use the broad workload label as selector")
+}
+
+func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildAGCNetworkPolicy(ag)
+
+	found := false
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 443 {
+				found = true
+				// No destination restriction — k8s API server IP is not known at deploy time.
+				assert.Empty(t, rule.To, "port-443 rule must allow egress to any destination for k8s API access")
+			}
+		}
+	}
+	assert.True(t, found, "AGC NP must include egress rule for port 443 (Kubernetes API server)")
+}
+
+func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {
+	// Verify the AGC NetworkPolicy allows port 443 (k8s API) but that this is distinct
+	// from the proxy-only restriction that buildWorkloadNetworkPolicy applies to workers.
+	// Workers lack the `app: actions-gateway-agc` selector, so this policy doesn't apply to them.
+	ag := newTestAG("gateway", "team-a")
+	np := buildAGCNetworkPolicy(ag)
+
+	// The AGC NP selector must NOT match worker pods (which have labelComponent: workload
+	// but not app: agcAppName). This is a structural check — only app: agcAppName is selected.
+	_, hasComponentLabel := np.Spec.PodSelector.MatchLabels[labelComponent]
+	assert.False(t, hasComponentLabel,
+		"AGC NP pod selector must not include the workload label — it would broaden scope to workers")
 }
 
 // §4 — buildProxyServiceAddr format

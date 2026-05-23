@@ -174,6 +174,105 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 
 }
 
+func TestGMC_NetworkPolicy_AGCPolicyExists(t *testing.T) {
+	const nsName = "team-np-agc-policy"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("agc-policy-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for the AGC-specific NetworkPolicy to appear, selecting AGC pods by app label.
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &np); err != nil {
+			return false
+		}
+		// Selector must target AGC pods by app label (not the broad workload label).
+		if np.Spec.PodSelector.MatchLabels["app"] != "actions-gateway-agc" {
+			return false
+		}
+		// Must include port 443 egress for Kubernetes API server access.
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port != nil && port.Port.IntVal == 443 {
+					return true
+				}
+			}
+		}
+		return false
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"actions-gateway-agc NetworkPolicy must exist with AGC pod selector and port-443 egress")
+}
+
+func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) {
+	const nsName = "team-np-preserve"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	_, cidr, _ := net.ParseCIDR("140.82.112.0/20")
+	fetcher := &stubIPFetcher{cidrs: []net.IPNet{*cidr}}
+
+	ag := newActionsGateway("preserve-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	ipRangeReconciler := startGMCReconciler(t, fetcher)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for proxy Service ClusterIP.
+	var svc corev1.Service
+	g.Eventually(func() bool {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &svc); err != nil {
+			return false
+		}
+		return svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None"
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "proxy Service must have ClusterIP")
+
+	expectedCIDR := svc.Spec.ClusterIP + "/32"
+
+	// Wait for workload NetworkPolicy with proxy egress rule.
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np); err != nil {
+			return false
+		}
+		return workloadNPHasProxyRule(np, expectedCIDR)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"workload NP must have proxy egress rule before IP range refresh")
+
+	// Trigger an IP range refresh — this updates only the proxy NP, not the workload NP.
+	ipRangeReconciler.ReconcileNow(ctx)
+
+	// Workload NP must still have its proxy egress rule after the refresh.
+	var np networkingv1.NetworkPolicy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np))
+	require.True(t, workloadNPHasProxyRule(np, expectedCIDR),
+		"workload NP proxy egress rule must be preserved after IP range refresh")
+}
+
+// workloadNPHasProxyRule returns true if np contains an egress rule for port 8080 to expectedCIDR.
+func workloadNPHasProxyRule(np networkingv1.NetworkPolicy, expectedCIDR string) bool {
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 8080 {
+				for _, peer := range rule.To {
+					if peer.IPBlock != nil && peer.IPBlock.CIDR == expectedCIDR {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 	const nsName = "team-np-managed-false"
 	createNamespace(t, nsName)
