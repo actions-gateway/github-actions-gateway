@@ -3,6 +3,7 @@ package githubapp_test
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -11,6 +12,7 @@ import (
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,12 +236,80 @@ func TestToken_PKCS8NonRSAKey(t *testing.T) {
 	require.NoError(t, err)
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
 
-	_, err = githubapp.NewInstallationTokenProvider(
+	// EC keys parse successfully (they implement crypto.Signer) but fail at signing time.
+	provider, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		nil,
 	)
+	require.NoError(t, err)
+	_, err = provider.Token(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not RSA")
+	assert.Contains(t, err.Error(), "unsupported key type")
+}
+
+func TestToken_Ed25519Key(t *testing.T) {
+	t.Parallel()
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(edKey)
+	require.NoError(t, err)
+	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"token":      "ghs_ed25519",
+			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		testClientRedirectingTo(srv.URL),
+	)
+	require.NoError(t, err)
+	tok, err := provider.Token(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "ghs_ed25519", tok)
+}
+
+func TestToken_JTIIsUniquePerCall(t *testing.T) {
+	t.Parallel()
+	_, pemBytes := generateTestKey(t)
+
+	var bearerTokens []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		bearerTokens = append(bearerTokens, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"token":      "ghs_test",
+			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		})
+	}))
+	defer srv.Close()
+
+	provider, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		testClientRedirectingTo(srv.URL),
+	)
+	require.NoError(t, err)
+
+	_, err = provider.Token(context.Background())
+	require.NoError(t, err)
+	_, err = provider.Token(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, bearerTokens, 2)
+	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
+	var c1, c2 jwt.RegisteredClaims
+	_, _, err = parser.ParseUnverified(bearerTokens[0], &c1)
+	require.NoError(t, err)
+	_, _, err = parser.ParseUnverified(bearerTokens[1], &c2)
+	require.NoError(t, err)
+	assert.NotEmpty(t, c1.ID, "jti should be set")
+	assert.NotEmpty(t, c2.ID, "jti should be set")
+	assert.NotEqual(t, c1.ID, c2.ID, "jti must differ across calls")
 }
 
 func TestToken_UnsupportedPEMType(t *testing.T) {
