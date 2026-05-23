@@ -49,6 +49,18 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, func() {
 	})
 
 	It("E2E_GMC_HPADrivesScaleUp: HPA drives proxy Deployment replica count", func() {
+		// The HPA controller only enforces minReplicas when it can read metrics.
+		// Wait for ScalingActive=True before patching so the HPA is guaranteed to act.
+		By("waiting for HPA to be scaling-active (metrics available)")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "hpa", "actions-gateway-proxy",
+				"-n", tenantNS, "-o",
+				`jsonpath={.status.conditions[?(@.type=="ScalingActive")].status}`)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Equal("True"), "HPA not yet scaling-active")
+		}, 5*time.Minute, 10*time.Second).Should(Succeed())
+
 		By("patching HPA minReplicas to 2 to trigger scale-up")
 		cmd := exec.Command("kubectl", "patch", "hpa", "actions-gateway-proxy",
 			"-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":2}}`)
@@ -86,9 +98,10 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, func() {
 			cmd.Stdin = strings.NewReader(evictJSON)
 			out, err := utils.Run(cmd)
 			// Expect a 429 (TooManyRequests) response from the PDB.
+			// kubectl prints "TooManyRequests" rather than the numeric 429 code.
 			if err != nil {
-				Expect(out).To(ContainSubstring("429"),
-					"expected PDB to reject eviction with 429, got: %s", out)
+				Expect(out).To(ContainSubstring("TooManyRequests"),
+					"expected PDB to reject eviction with 429 TooManyRequests, got: %s", out)
 			} else {
 				// If no error, the eviction may have succeeded — only acceptable
 				// if minAvailable was already satisfied (replica count > 1).
