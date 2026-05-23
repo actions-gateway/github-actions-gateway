@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -83,8 +84,18 @@ func run() error {
 	}
 
 	// ── 5. Start the controller-runtime manager ──────────────────────────────
+	// Restrict the cache to POD_NAMESPACE so the AGC only watches resources in
+	// its own tenant namespace. A cluster-scoped cache would require a
+	// ClusterRole; a namespace-scoped cache works with the Role+RoleBinding
+	// that GMC creates per tenant.
+	namespace := os.Getenv("POD_NAMESPACE")
+	cacheOpts := cache.Options{}
+	if namespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{namespace: {}}
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
+		Cache:  cacheOpts,
 	})
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
@@ -92,7 +103,6 @@ func run() error {
 
 	// ── 6. Start token manager ───────────────────────────────────────────────
 	ctx := ctrl.SetupSignalHandler()
-	namespace := os.Getenv("POD_NAMESPACE")
 	tokenMgr.Namespace = namespace
 	tokenMgr.Metrics = m
 	tokenMgr.Start(ctx)

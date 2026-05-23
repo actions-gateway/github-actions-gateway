@@ -2,7 +2,11 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/actions-gateway.github.com.actions-gateway.github.com_actionsgateways.yaml
+- bases/actions-gateway.github.com_actionsgateways.yaml
+# RunnerGroup CRD is managed by AGC (cmd/agc/config/crd/) but must be installed
+# alongside GMC because the GMC controller creates RunnerGroup objects during
+# reconciliation and lists them during deletion. Keep in sync with the AGC copy.
+- bases/actions-gateway.github.com_runnergroups.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

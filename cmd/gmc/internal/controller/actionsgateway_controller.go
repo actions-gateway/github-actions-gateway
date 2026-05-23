@@ -133,7 +133,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	}
 
 	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
-	if err := r.applyDeployment(ctx, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
+	if err := r.applyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
 	}
 	if err := r.applyService(ctx, buildProxyService(ag)); err != nil {
@@ -162,7 +162,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	}
 
 	// 11. AGC Deployment.
-	if err := r.applyDeployment(ctx, buildAGCDeployment(ag, r.AGCImage, proxyAddr, r.AGCExtraEnv)); err != nil {
+	if err := r.applyDeployment(ctx, ag, buildAGCDeployment(ag, r.AGCImage, proxyAddr, r.AGCExtraEnv)); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}
 
@@ -283,6 +283,12 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
 		return ctrl.Result{}, err
 	}
+	// If not all components are ready yet, re-check after a short delay.
+	// The Owns(&appsv1.Deployment{}) watch will trigger a faster reconcile when
+	// Deployment status changes, but this requeue guards against missed events.
+	if !proxyAvailable || !agcAvailable {
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -366,7 +372,13 @@ func (r *ActionsGatewayReconciler) applyResourceQuota(ctx context.Context, desir
 	return r.Update(ctx, &existing)
 }
 
-func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, desired *appsv1.Deployment) error {
+// applyDeployment creates or updates a Deployment and sets an owner reference so
+// that the Owns(&appsv1.Deployment{}) watch on the controller fires when the
+// Deployment's status changes (e.g. ReadyReplicas increases after pod startup).
+func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *appsv1.Deployment) error {
+	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
+		return err
+	}
 	var existing appsv1.Deployment
 	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
 	if apierrors.IsNotFound(err) {
@@ -377,6 +389,7 @@ func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, desired 
 	}
 	existing.Labels = desired.Labels
 	existing.Spec = desired.Spec
+	existing.OwnerReferences = desired.OwnerReferences
 	return r.Update(ctx, &existing)
 }
 

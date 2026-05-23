@@ -6,6 +6,127 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: manager-role
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - actionsgateways
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - actionsgateways/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - actionsgateways/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - actions-gateway.github.com
+  resources:
+  - runnergroups
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - resourcequotas
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - rolebindings
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+  - bind
+  - escalate
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
