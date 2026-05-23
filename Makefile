@@ -9,7 +9,8 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 KIND_CONFIG   ?= test/kind-config.yaml
-GMC_IMG       ?= gmc:e2e
+GIT_SHA       := $(shell git rev-parse --short HEAD)
+GMC_IMG       ?= gmc:e2e-$(GIT_SHA)
 AGC_IMG       ?= agc:e2e
 PROXY_IMG     ?= proxy:e2e
 FAKEGITHUB_IMG ?= fakegithub:e2e
@@ -42,7 +43,7 @@ e2e-cluster-delete:
 e2e-images: docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub
 
 docker-build-gmc:
-	docker build -f cmd/gmc/Dockerfile -t $(GMC_IMG) cmd/gmc
+	docker build -f cmd/gmc/Dockerfile -t $(GMC_IMG) .
 
 docker-build-agc:
 	docker build -f cmd/agc/Dockerfile -t $(AGC_IMG) .
@@ -61,17 +62,20 @@ e2e-load-images:
 	kind load docker-image $(FAKEGITHUB_IMG) --name $(KIND_CLUSTER)
 
 # Run Tier A + Tier B e2e tests (excludes local-only tests).
+# Note: Ginkgo v2 flags must use -args with -ginkgo.<flag>=<value> syntax when
+# invoked via go test. The -- separator passes raw args to the test binary but
+# --label-filter is not recognized; only -ginkgo.label-filter= works.
 e2e:
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		go test -v -tags e2e -count=1 ./test/e2e/... -- \
-		--label-filter '!local-only'
+		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... \
+		-args -ginkgo.label-filter='!local-only'
 
 # Run all e2e tests including local-only (HPA load, PDB drain).
 e2e-all:
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		go test -v -tags e2e -count=1 ./test/e2e/...
+		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/...
 
 # Tear down the e2e cluster.
 e2e-clean: e2e-cluster-delete
