@@ -434,9 +434,22 @@ controls are warranted.
   forward-looking default. Since these keys can outlive the runner group
   in backup tape and there is no online rotation path, the longer key is
   cheap insurance.
-- **Mitigation:** Use 3072 bits or move to Ed25519. The GitHub runner
-  registration API documents RSA public keys, so a key-type change requires
-  validation against the runner's accepted formats.
+- **Mitigation:** Upgrade to RSA-3072 (the security fix). Ed25519 is a
+  **performance optimization**, not a security improvement in this
+  protocol: Ed25519 agents cannot decrypt the RSA-OAEP-encrypted session
+  key the broker sends, so job message bodies traverse the broker session
+  without the AES-256-CBC layer (TLS is the primary protection; the AES
+  layer is defense-in-depth). Ed25519 is offered as an explicit operator
+  opt-in via `--agent-key-type=ed25519` for deployments that prioritize
+  signing performance over defense-in-depth. RSA-3072 is and must remain
+  the secure default. See D-5 for decision rationale and
+  [Appendix G §G.6](../design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange)
+  for the broker-protocol change that would let Ed25519 become the default
+  without any security regression.
+- **Status (2026-05-23):** RSA-3072 is now the default
+  (`--agent-key-type=rsa`). Ed25519 available as opt-in via
+  `--agent-key-type=ed25519`. M-11a/c implemented; M-11b (real-GitHub
+  compatibility probe) still open.
 
 ### M-12. Proxy error response leaks upstream dial errors verbatim
 
@@ -663,7 +676,7 @@ assumption but should be confirmed).
 | D-2 | Does `restricted` profile actually work with `ghcr.io/actions/runner`? Verify, or drop `restricted` from v1 | W2 | **Resolved (2026-05-23)** | `restricted` confirmed compatible; keep enum value; require `runAsUser: 1001` in PodTemplate |
 | D-3 | W4 residual broad `secrets.create` — accept, or invest in per-job Secret alternative | W4 | Default if undecided | Accept with a code comment; revisit when a real exploit path is found |
 | D-4 | W7 cert source: cert-manager required, cert-manager opt-out, or GMC-managed self-signed cert with AGC pinning | W7 | Default if undecided | **GMC self-signed cert + AGC pinning** (no cert-manager dependency, secure by default) |
-| D-5 | M-11: RSA-3072 directly, or verify Ed25519 via probe first and fall back to RSA-3072 | M-11 | Default if undecided | **Verify Ed25519 via probe; ship Ed25519 if it works, RSA-3072 if not** |
+| D-5 | M-11: RSA-3072 as secure default; Ed25519 as performance opt-in | M-11 | **Decided** | **RSA-3072 default; Ed25519 opt-in via `--agent-key-type=ed25519`. Ed25519 loses AES session-key layer; X25519 ECDH (Appendix G §G.6) is the path to making Ed25519 the secure default.** |
 | D-6 | M-15: hard `MaxWorkers` (in-process counter) vs soft (document, rely on ResourceQuota) | M-15 (Phase 3) | Default if undecided | Soft ceiling; document and rely on ResourceQuota |
 | D-7 | C-1 belt-and-suspenders: ship CEL `XValidation` + `buildPod` zero-out, or rely on PSA alone | W2 | Default if undecided | Ship the CEL rule (cheap, better failure mode); skip `buildPod` zero-out (PSA already covers it) |
 | D-8 | Phase 1 parallelism — single contributor sequential, or parallel work streams | All Phase 1 | Default if undecided | Assume single contributor; sequence W3 → W4 → W1 → W2 → W5 (smallest blast radius first) |
@@ -732,38 +745,36 @@ assumption but should be confirmed).
   cert-manager — we are calling `x509.CreateCertificate` once per
   tenant per rotation cycle.
 
-- **D-5 (M-11):** Verification is cheap. The probe binary
-  (`cmd/probe`) already exercises the full broker auth flow
-  end-to-end; extending it with a `-key-type` flag is ~50 LoC. With
-  that flag we run register → OAuth assertion → CreateSession against
-  a real GitHub App and observe whether Ed25519 is accepted at every
-  step.
+- **D-5 (M-11):** RSA-3072 is the correct secure default because agent
+  keys serve two purposes in the protocol: JWT signing (for OAuth token
+  requests) and RSA-OAEP session key decryption (the broker encrypts an
+  AES-256-CBC key with the agent's public RSA key). Ed25519 can sign
+  JWTs but cannot participate in RSA-OAEP key exchange — Ed25519 agents
+  receive job messages without the AES encryption layer.
 
-  Decision criteria — Ed25519 is "supported" iff:
-  - `POST /actions/runners/register` returns `201` with the Ed25519
-    SPKI public key.
-  - The EdDSA-signed OAuth bearer assertion to `authorizationUrl`
-    returns `200` with a non-empty `access_token`.
-  - The first `CreateSession` call using that token returns `200`.
+  Ed25519 is offered as an operator opt-in (`--agent-key-type=ed25519`)
+  as a **performance optimization**: smaller keys, faster JWT signing,
+  deterministic signatures, no padding oracle surface. Operators who are
+  confident in their TLS stack and want to reduce signing overhead can
+  opt in, accepting the loss of the AES defense-in-depth layer.
 
-  Implementation plan splits M-11 into three sub-tasks:
-  - **M-11a** (Phase 2, this release): add `-key-type` to
-    `cmd/probe`; add Ed25519/EdDSA branches to `githubapp/runner_auth.go`
-    signing and `cmd/agc/internal/agentpool/crypto.go` PKCS8
-    marshal/parse. This is shippable work regardless of the probe
-    outcome.
-  - **M-11b** (between Phase 2 and Phase 3): run the probe against
-    a real GitHub App. Owner is whoever has the App credentials.
-    Output is one paragraph in this doc recording the result. Cannot
-    be done on a laptop — gates the final decision.
-  - **M-11c** (Phase 3): migrate `agentpool.createAgent`. If 11b
-    passes, switch to `ed25519.GenerateKey` + EdDSA signing. If 11b
-    fails, bump to `rsa.GenerateKey(rand.Reader, 3072)`.
+  **Ed25519 as a secure default requires broker-side changes.** If the
+  GitHub broker replaced RSA-OAEP session key delivery with
+  X25519 ECDH key exchange, Ed25519 agents could participate in session
+  encryption and Ed25519 would become the right default — a performance
+  win with no security regression. That is tracked as a future
+  enhancement in
+  [Appendix G §G.6](../design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange).
 
-  The probe code stays in the tree either way, so the result is
-  re-checkable when GitHub's broker is updated upstream — keeps
-  Ed25519 alive as a future-enhancement path without holding M-11
-  open indefinitely.
+  Implementation status:
+  - **M-11a (done):** Ed25519/EdDSA branches in `githubapp/runner_auth.go`
+    and PKCS#8 marshal/parse in `agentpool/crypto.go`.
+  - **M-11b (open):** real-GitHub compatibility probe — verifies that
+    the broker accepts Ed25519 SPKI registration and EdDSA JWT assertions
+    so that operators using `--agent-key-type=ed25519` get working agents.
+    Does not gate the default; gates operator documentation.
+  - **M-11c (done):** `agentpool.createAgent` uses RSA-3072 by default;
+    key type is configurable via `--agent-key-type`.
 
 - **D-6 (M-15):** Soft ceiling is simpler and matches the
   `ResourceQuota`-as-real-limit story already documented. Hard
@@ -991,34 +1002,28 @@ the rationale.
 - **Tests:** assert on container `SecurityContext` in
   `builder_test.go`.
 
-#### W9 — Probe Ed25519 support (closes M-11a; sets up M-11b and M-11c)
+#### W9 — Ed25519 opt-in and RSA-3072 default (closes M-11a/c; sets up M-11b) — **Done 2026-05-23**
 
-Shippable work regardless of probe outcome. The implementation lays
-the groundwork for either eventual Ed25519 adoption or a documented
-RSA-3072 migration.
+Ed25519 is implemented as an operator opt-in performance optimization.
+RSA-3072 is the secure default. The infrastructure code supports both
+key types; the real-GitHub compatibility probe (M-11b) remains open.
 
-- **Files:**
-  - `cmd/probe/main.go` — add `-key-type` flag accepting
-    `rsa-2048|rsa-3072|ed25519`. Default `rsa-2048` (current
-    behaviour). Generates the corresponding keypair, registers it,
-    runs the full broker auth flow, prints per-step results.
-  - `githubapp/runner_auth.go` — add an EdDSA signing branch. The
-    `golang-jwt/jwt/v5` library supports `SigningMethodEdDSA`. The
-    branch picks signing method based on the key type passed in.
-  - `cmd/agc/internal/agentpool/crypto.go` — replace
-    `MarshalPKCS1PrivateKey`/`ParsePKCS1PrivateKey` with PKCS#8
-    equivalents so Ed25519 keys can round-trip through Secrets.
-    Existing RSA keys still parse via PKCS#8 (this fixes L-5 in
-    passing).
-- **Tests:** unit tests for the EdDSA signing path and PKCS#8 round-
-  trip. The probe itself is the integration test, run manually.
-- **Out of W9 (becomes M-11b):** running the probe against a real
-  GitHub App and recording the result in this doc. Owner is whoever
-  has the App credentials. Until that runs, `agentpool.createAgent`
-  continues to generate RSA-2048 keys (current behaviour).
-- **Out of W9 (becomes M-11c):** the actual key-type migration in
-  `agentpool.createAgent` is gated on the M-11b outcome and lives in
-  Phase 3.
+- **Files changed:**
+  - `githubapp/runner_auth.go` — EdDSA signing branch (`SigningMethodEdDSA`
+    for Ed25519 keys, `SigningMethodRS256` for RSA). Key type dispatched
+    via type assertion on `crypto.Signer`.
+  - `cmd/agc/internal/agentpool/crypto.go` — `KeyType` type, PKCS#8
+    marshal/parse for both Ed25519 and RSA. Legacy PKCS#1 RSA parse
+    retained for backward compatibility with existing Secrets.
+  - `cmd/agc/internal/agentpool/pool.go` — `Agent.PrivateKey` typed as
+    `crypto.Signer`; `NewPool` accepts `KeyType`; `createAgent` uses RSA-3072
+    by default.
+  - `cmd/agc/main.go` — `--agent-key-type` flag, default `rsa`.
+- **Tests:** EdDSA signing path and PKCS#8 round-trip covered in
+  `githubapp/runner_auth_test.go`.
+- **M-11b (still open):** real-GitHub probe to verify the broker accepts
+  Ed25519 SPKI and EdDSA JWT assertions — documents that the opt-in path
+  works end-to-end. Does not affect the default.
 
 ### Phase 3 — Hardening backlog
 
@@ -1027,8 +1032,8 @@ Independent items, scheduled opportunistically.
 | Finding | Workstream | Notes |
 |---|---|---|
 | M-10 | Expand validating webhook *or* move to CRD CEL | Prefer CEL where possible — visible in `kubectl explain`. |
-| M-11b | Run probe (W9) against real GitHub App | Records whether Ed25519 is accepted. Owner: whoever has App credentials. Output: one-paragraph note in this doc. Gates M-11c. |
-| M-11c | Migrate `agentpool.createAgent` to chosen key type | If M-11b passes: `ed25519.GenerateKey` + EdDSA signing. If fails: `rsa.GenerateKey(rand.Reader, 3072)`. |
+| M-11b | Run probe against real GitHub App | Verifies broker accepts Ed25519 SPKI + EdDSA JWTs so `--agent-key-type=ed25519` opt-in is documented as working. Does not affect the RSA-3072 default. |
+| M-11c | ~~Migrate `agentpool.createAgent`~~ | **Done (2026-05-23).** RSA-3072 is the default; Ed25519 is opt-in via `--agent-key-type=ed25519`. |
 | M-12 | Generic 502 in `cmd/proxy/proxy.go:103-106` | Log detail server-side. |
 | M-13 | Cap broker error bodies (`body[:200]`) | Add debug env var to log full body. |
 | M-15 | In-process counter in `provisioner` for MaxWorkers | Or document MaxWorkers as a soft ceiling and rely on ResourceQuota. |
@@ -1149,14 +1154,20 @@ acceptance-criterion item above maps to one or more `It` blocks.
 Two verifications cannot be done without real GitHub credentials. Each
 records its outcome as a one-paragraph note in this document.
 
-**M-11b — Ed25519 broker compatibility probe**
+**M-11b — Ed25519 broker compatibility probe (opt-in verification)**
+
+**Purpose:** RSA-3072 is the secure default and is not gated on this
+probe. The probe verifies that operators using `--agent-key-type=ed25519`
+get a working agent end-to-end — that the broker accepts Ed25519 SPKI
+at registration and EdDSA-signed JWT assertions at token issuance. This
+documents the opt-in path rather than driving a default change.
 
 Prerequisites:
 - GitHub App with installation on a test org/repo
 - App ID, installation ID, private key PEM
 - Broker URL and runner version from a real `.runner` config
 
-Procedure (after M-11a / W9 lands):
+Procedure:
 
 ```sh
 export GITHUB_APP_ID=<id>
@@ -1171,15 +1182,17 @@ Outcomes:
 
 | Output | Verdict | Next step |
 |---|---|---|
-| `register OK / assertion OK / session OK` | Ed25519 fully supported | M-11c migrates to Ed25519 + EdDSA. |
-| `register OK / assertion 400 …` | Broker rejects EdDSA JWTs | M-11c ships RSA-3072. |
-| `register 400 "...key type..."` | Broker rejects Ed25519 SPKI | M-11c ships RSA-3072. |
+| `register OK / assertion OK / session OK` | Ed25519 opt-in fully working | Document as supported; note session messages arrive without AES layer. |
+| `register OK / assertion 400 …` | Broker rejects EdDSA JWTs | Document `--agent-key-type=ed25519` as unsupported; leave flag but warn in help text. |
+| `register 400 "...key type..."` | Broker rejects Ed25519 SPKI | Same as above. |
 | Any other failure | Network or App-config issue | Retry; not a key-type signal. |
 
 Owner: whoever has the GitHub App credentials. Record the outcome,
-GitHub-reported runner version, and date as a paragraph appended to
-D-5's detail block. The probe code stays in the tree; re-run later if
-the upstream runner SDK adds EdDSA support.
+GitHub-reported runner version, and date as a paragraph here. The probe
+code stays in the tree; re-run if GitHub's broker is updated to accept
+EdDSA. See also
+[Appendix G §G.6](../design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange)
+for the broker change that would make Ed25519 the secure default.
 
 **D-2 — `restricted` profile against the runner image (resolved 2026-05-23)**
 
