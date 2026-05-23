@@ -71,7 +71,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, func() {
 	})
 
 	It("E2E_GMC_PDBPreventsEvictionBelowMinAvailable: PDB blocks eviction when at minimum",
-		Label("local-only"), func() {
+		Label("multi-node"), func() {
 			By("getting proxy pod name")
 			podName := getPodName(tenantNS, "app=actions-gateway-proxy")
 			Expect(podName).NotTo(BeEmpty())
