@@ -37,6 +37,8 @@ type RunnerGroupSpec struct {
 	MaxListeners int32 `json:"maxListeners,omitempty"`
 
 	// MaxWorkers caps the number of worker pods this RunnerGroup may run concurrently.
+	// This is a soft ceiling enforced in-process; pair it with a Kubernetes ResourceQuota
+	// on the tenant namespace for a hard, cluster-enforced limit (D-6).
 	// +optional
 	// +kubebuilder:validation:Minimum=1
 	MaxWorkers *int32 `json:"maxWorkers,omitempty"`
@@ -52,6 +54,9 @@ type RunnerGroupSpec struct {
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
+	//
+	// +kubebuilder:validation:XValidation:rule="self.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || !c.securityContext.privileged)",message="privileged containers are not permitted in worker pods"
+	// +kubebuilder:validation:XValidation:rule="!has(self.spec.initContainers) || self.spec.initContainers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || !c.securityContext.privileged)",message="privileged init containers are not permitted in worker pods"
 	PodTemplate corev1.PodTemplateSpec `json:"podTemplate"`
 
 	// WorkerImage is the fully-qualified container image for the runner container.

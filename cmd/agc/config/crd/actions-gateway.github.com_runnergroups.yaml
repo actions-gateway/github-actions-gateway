@@ -67,8 +67,10 @@ spec:
                 minimum: 1
                 type: integer
               maxWorkers:
-                description: MaxWorkers caps the number of worker pods this RunnerGroup
-                  may run concurrently.
+                description: |-
+                  MaxWorkers caps the number of worker pods this RunnerGroup may run concurrently.
+                  This is a soft ceiling enforced in-process; pair it with a Kubernetes ResourceQuota
+                  on the tenant namespace for a hard, cluster-enforced limit (D-6).
                 format: int32
                 minimum: 1
                 type: integer
@@ -7887,6 +7889,15 @@ spec:
                     - containers
                     type: object
                 type: object
+                x-kubernetes-validations:
+                - message: privileged containers are not permitted in worker pods
+                  rule: self.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged)
+                    || !c.securityContext.privileged)
+                - message: privileged init containers are not permitted in worker
+                    pods
+                  rule: '!has(self.spec.initContainers) || self.spec.initContainers.all(c,
+                    !has(c.securityContext) || !has(c.securityContext.privileged)
+                    || !c.securityContext.privileged)'
               priorityTiers:
                 description: |-
                   PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
