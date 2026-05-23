@@ -82,7 +82,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		Expect(utils.ResourceExists("poddisruptionbudget", tenantNS, "actions-gateway-proxy")).To(BeTrue())
 	})
 
-	It("E2E_GMC_ProxyPodScheduledOnWorker: proxy pod runs on a worker node", Label("local-only"), func() {
+	It("E2E_GMC_ProxyPodScheduledOnWorker: proxy pod runs on a worker node", Label("multi-node"), func() {
 		By("finding proxy pod node")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",

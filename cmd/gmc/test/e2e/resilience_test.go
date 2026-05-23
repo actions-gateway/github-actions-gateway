@@ -54,7 +54,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, func() {
 		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-proxy", 3*time.Minute)
 	})
 
-	It("E2E_GMC_GMCRestartPreservesState: GMC restart does not re-provision existing resources", Label("local-only"), func() {
+	It("E2E_GMC_GMCRestartPreservesState: GMC restart does not re-provision existing resources", Label("multi-node"), func() {
 		By("restarting the GMC controller pod")
 		cmd := exec.Command("kubectl", "rollout", "restart",
 			"deployment/gmc-controller-manager",
