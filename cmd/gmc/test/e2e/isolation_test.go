@@ -53,9 +53,11 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
-	It("E2E_GMC_NetworkPolicyScopedToNamespace: NetworkPolicy exists in each namespace", func() {
-		Expect(utils.ResourceExists("networkpolicy", nsA, "actions-gateway")).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, "actions-gateway")).To(BeTrue())
+	It("E2E_GMC_NetworkPolicyScopedToNamespace: NetworkPolicies exist in each namespace", func() {
+		Expect(utils.ResourceExists("networkpolicy", nsA, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsA, "actions-gateway-workload")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsB, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsB, "actions-gateway-workload")).To(BeTrue())
 	})
 
 	It("E2E_GMC_CrossTenantNetworkBlocked: proxy in nsA cannot reach proxy in nsB", func() {
