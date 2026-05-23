@@ -58,9 +58,11 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
-	It("E2E_GMC_NetworkPoliciesCreated: NetworkPolicy is present in tenant namespace", func() {
-		By("verifying NetworkPolicy exists")
-		Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway")).To(BeTrue())
+	It("E2E_GMC_NetworkPoliciesCreated: NetworkPolicies are present in tenant namespace", func() {
+		By("verifying proxy NetworkPolicy exists")
+		Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		By("verifying workload NetworkPolicy exists")
+		Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-workload")).To(BeTrue())
 	})
 
 	It("E2E_GMC_ServiceAccountAndRBACCreated: ServiceAccount and RoleBinding are present", func() {

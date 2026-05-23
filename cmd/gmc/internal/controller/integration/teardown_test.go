@@ -77,10 +77,12 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "AGC ServiceAccount in team-a should be deleted")
 
 	g.Eventually(func() bool {
-		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway"},
-			&networkingv1.NetworkPolicy{})
-		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "NetworkPolicy in team-a should be deleted")
+		proxyGone := apierrors.IsNotFound(k8sClient.Get(ctx,
+			types.NamespacedName{Namespace: nsA, Name: "actions-gateway-proxy"}, &networkingv1.NetworkPolicy{}))
+		workloadGone := apierrors.IsNotFound(k8sClient.Get(ctx,
+			types.NamespacedName{Namespace: nsA, Name: "actions-gateway-workload"}, &networkingv1.NetworkPolicy{}))
+		return proxyGone && workloadGone
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "NetworkPolicies in team-a should be deleted")
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
@@ -98,8 +100,8 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 		"AGC ServiceAccount in team-b must still exist")
 
 	var npB networkingv1.NetworkPolicy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsB, Name: "actions-gateway"}, &npB),
-		"NetworkPolicy in team-b must still exist")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsB, Name: "actions-gateway-proxy"}, &npB),
+		"proxy NetworkPolicy in team-b must still exist after team-a deletion")
 }
 
 func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
@@ -152,9 +154,9 @@ func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
 	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "AGC Deployment should be re-created after re-apply")
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&networkingv1.NetworkPolicy{})
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "NetworkPolicy should be re-created after re-apply")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "proxy NetworkPolicy should be re-created after re-apply")
 }
 
 func TestGMC_Finalizer_BlocksImmediateDeletion(t *testing.T) {

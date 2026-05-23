@@ -63,8 +63,8 @@ func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"},
 		},
 	}
-	// Create a pre-existing NetworkPolicy that the reconciler should update.
-	np := buildNetworkPolicy(ag, "", nil)
+	// Create a pre-existing proxy NetworkPolicy that the reconciler should update.
+	np := buildProxyNetworkPolicy(ag, nil)
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(ag, np).
@@ -80,9 +80,9 @@ func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
 	// Run one tick synchronously.
 	r.reconcileAll(ctx, slogDefault())
 
-	// Check that the NetworkPolicy was updated with the new CIDRs.
+	// Check that the proxy NetworkPolicy was updated with the new CIDRs.
 	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "actions-gateway"}, &updated))
+	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
 
 	found := false
 	for _, rule := range updated.Spec.Egress {
@@ -96,7 +96,7 @@ func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
 			}
 		}
 	}
-	assert.True(t, found, "NetworkPolicy should contain the updated GitHub CIDR")
+	assert.True(t, found, "proxy NetworkPolicy should contain the updated GitHub CIDR")
 }
 
 func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
@@ -110,7 +110,7 @@ func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
 			Proxy:        gmcv1alpha1.ProxyConfig{ManagedNetworkPolicy: ptr(false)},
 		},
 	}
-	np := buildNetworkPolicy(ag, "", nil)
+	np := buildProxyNetworkPolicy(ag, nil)
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(ag, np).
@@ -120,9 +120,9 @@ func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
 	r.reconcileAll(ctx, slogDefault())
 
-	// NetworkPolicy should not contain the GitHub CIDR.
+	// Proxy NetworkPolicy should not contain the GitHub CIDR.
 	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "actions-gateway"}, &updated))
+	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
 
 	for _, rule := range updated.Spec.Egress {
 		for _, port := range rule.Ports {
@@ -145,7 +145,7 @@ func TestIPRangeReconciler_FetchError(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
 		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
 	}
-	np := buildNetworkPolicy(ag, "", nil)
+	np := buildProxyNetworkPolicy(ag, nil)
 	originalEgress := np.Spec.Egress
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
@@ -153,10 +153,53 @@ func TestIPRangeReconciler_FetchError(t *testing.T) {
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{err: errors.New("network error")}}
 	r.reconcileAll(ctx, slogDefault()) // must not panic
 
-	// NetworkPolicy should be unchanged.
+	// Proxy NetworkPolicy should be unchanged.
 	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "actions-gateway"}, &updated))
+	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
 	assert.Equal(t, len(originalEgress), len(updated.Spec.Egress))
+}
+
+// TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh is a regression test for M-9:
+// the IPRangeReconciler used to rebuild the (now-removed) single NetworkPolicy with an empty
+// proxyClusterIP, which dropped the worker→proxy egress rule on every refresh. With the split
+// into proxy and workload policies, the reconciler only patches the proxy NP; the workload NP
+// is untouched by IP range refreshes.
+func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
+	ctx := context.Background()
+	scheme := newIPRangeScheme(t)
+
+	ag := &gmcv1alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
+		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
+	}
+	proxyNP := buildProxyNetworkPolicy(ag, nil)
+	workloadNP := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
+
+	fc := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, proxyNP, workloadNP).
+		Build()
+
+	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
+	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
+	r.reconcileAll(ctx, slogDefault())
+
+	// Workload NP must still have the proxy ClusterIP egress rule — the reconciler must not touch it.
+	var updated networkingv1.NetworkPolicy
+	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npWorkloadName}, &updated))
+
+	found := false
+	for _, rule := range updated.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == proxyPort {
+				for _, peer := range rule.To {
+					if peer.IPBlock != nil && peer.IPBlock.CIDR == "10.96.0.1/32" {
+						found = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, found, "workload NP proxy egress rule must survive an IP range reconcile (M-9 regression)")
 }
 
 func slogDefault() *slog.Logger { return slog.Default() }

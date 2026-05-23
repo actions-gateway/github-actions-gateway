@@ -35,10 +35,10 @@ func TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 
-	// Wait for the NetworkPolicy to appear with the GitHub CIDR egress rule.
+	// Wait for the proxy NetworkPolicy to appear with the GitHub CIDR egress rule.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -70,7 +70,7 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 
-	// Wait for the NetworkPolicy to include an egress rule on port 8080 targeting the
+	// Wait for the workload NetworkPolicy to include an egress rule on port 8080 targeting the
 	// proxy Service ClusterIP as a /32 CIDR. The controller fetches the ClusterIP after
 	// creating the Service, so this check waits for at least one post-Service reconcile.
 	g.Eventually(func() bool {
@@ -85,7 +85,7 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 		expectedCIDR := svc.Spec.ClusterIP + "/32"
 
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -126,10 +126,10 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 
 	g := gomega.NewWithT(t)
 
-	// Wait for the initial NetworkPolicy with the first CIDR.
+	// Wait for the proxy NetworkPolicy to appear with the first CIDR.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -140,7 +140,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 			}
 		}
 		return false
-	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "initial NetworkPolicy should contain 140.82.112.0/20")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "initial proxy NetworkPolicy should contain 140.82.112.0/20")
 
 	// Update the fetcher to return a new CIDR.
 	_, cidr2, _ := net.ParseCIDR("1.2.3.0/24")
@@ -149,10 +149,10 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 	// Trigger an immediate reconcile via the IPRangeReconciler.
 	ipRangeReconciler.ReconcileNow(ctx)
 
-	// Assert the NetworkPolicy now includes the new CIDR.
+	// Assert the proxy NetworkPolicy now includes the new CIDR.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
 			return false
 		}
 		found140, found1 := false, false
@@ -170,7 +170,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 		}
 		return found140 && found1
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
-		"NetworkPolicy should include both 140.82.112.0/20 and 1.2.3.0/24 after IP range update")
+		"proxy NetworkPolicy should include both 140.82.112.0/20 and 1.2.3.0/24 after IP range update")
 
 }
 
@@ -202,12 +202,12 @@ func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&networkingv1.NetworkPolicy{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var np networkingv1.NetworkPolicy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np))
 
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {

@@ -145,11 +145,11 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 
 func (r *IPRangeReconciler) patchNetworkPolicy(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, cidrs []net.IPNet) error {
 	var np networkingv1.NetworkPolicy
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: "actions-gateway"}, &np); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: npProxyName}, &np); err != nil {
 		return client.IgnoreNotFound(err) // NetworkPolicy may not exist yet or is being removed
 	}
 
-	desired := buildNetworkPolicy(ag, "", cidrs)
+	desired := buildProxyNetworkPolicy(ag, cidrs)
 	np.Spec.Egress = desired.Spec.Egress
 	np.Spec.Ingress = desired.Spec.Ingress
 
