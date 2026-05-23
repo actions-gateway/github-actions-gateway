@@ -428,6 +428,11 @@ func isUnauthorized(err error) bool {
 	if err == nil {
 		return false
 	}
+	var typed *broker.UnauthorizedError
+	if errors.As(err, &typed) {
+		return true
+	}
+	// Fallback for errors from callers that don't yet return typed errors (e.g. CreateSession).
 	s := err.Error()
 	return strings.Contains(s, "401") || strings.Contains(s, "403") ||
 		strings.Contains(s, "unauthorized") || strings.Contains(s, "access denied")
@@ -437,9 +442,12 @@ func isSessionExpired(err error) bool {
 	if err == nil {
 		return false
 	}
+	var typed *broker.SessionExpiredError
+	if errors.As(err, &typed) {
+		return true
+	}
+	// Fallback for non-typed session-expired signals.
 	s := err.Error()
-	// GetMessage returns "unexpected status 404/410" when the session no longer exists.
-	// Also match explicit "session expired" messages from any broker variant.
 	return strings.Contains(s, "404") || strings.Contains(s, "410") ||
 		(strings.Contains(s, "session") && strings.Contains(s, "expired"))
 }
