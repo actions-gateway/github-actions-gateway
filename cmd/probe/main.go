@@ -54,22 +54,47 @@ func main() {
 
 func run(logger *slog.Logger) error {
 	// ── 1. Read credentials from environment ────────────────────────────────
-	appID, err := strconv.ParseInt(mustEnv("GITHUB_APP_ID"), 10, 64)
+	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	if err != nil {
+		return err
+	}
+	appID, err := strconv.ParseInt(appIDStr, 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse GITHUB_APP_ID: %w", err)
 	}
-	installID, err := strconv.ParseInt(mustEnv("GITHUB_APP_INSTALLATION_ID"), 10, 64)
+	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
+	if err != nil {
+		return err
+	}
+	installID, err := strconv.ParseInt(installIDStr, 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
 	}
-	pemBytes, err := loadPEM(mustEnv("GITHUB_APP_PRIVATE_KEY"))
+	pemPath, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
+	if err != nil {
+		return err
+	}
+	pemBytes, err := loadPEM(pemPath)
 	if err != nil {
 		return fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
 	}
-	brokerURL := mustEnv("GITHUB_BROKER_URL")
-	runnerVersion := mustEnv("GITHUB_RUNNER_VERSION")
-	agentName := mustEnv("GITHUB_AGENT_NAME")
-	agentID, err := strconv.ParseInt(mustEnv("GITHUB_AGENT_ID"), 10, 64)
+	brokerURL, err := mustEnv("GITHUB_BROKER_URL")
+	if err != nil {
+		return err
+	}
+	runnerVersion, err := mustEnv("GITHUB_RUNNER_VERSION")
+	if err != nil {
+		return err
+	}
+	agentName, err := mustEnv("GITHUB_AGENT_NAME")
+	if err != nil {
+		return err
+	}
+	agentIDStr, err := mustEnv("GITHUB_AGENT_ID")
+	if err != nil {
+		return err
+	}
+	agentID, err := strconv.ParseInt(agentIDStr, 10, 64)
 	if err != nil {
 		return fmt.Errorf("parse GITHUB_AGENT_ID: %w", err)
 	}
@@ -505,14 +530,13 @@ func jitter(lo, hi time.Duration) time.Duration {
 	return lo + time.Duration(rand.Int63n(int64(hi-lo+1)))
 }
 
-// mustEnv returns the value of the named environment variable or panics.
-func mustEnv(name string) string {
+// mustEnv returns the value of the named environment variable or an error.
+func mustEnv(name string) (string, error) {
 	v := os.Getenv(name)
 	if v == "" {
-		fmt.Fprintf(os.Stderr, "required environment variable %s is not set\n", name)
-		os.Exit(1)
+		return "", fmt.Errorf("required environment variable %s is not set", name)
 	}
-	return v
+	return v, nil
 }
 
 // loadPEM returns the PEM bytes from either a file path or a PEM literal.
