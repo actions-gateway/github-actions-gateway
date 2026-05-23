@@ -106,6 +106,53 @@ type ActionsGatewaySpec struct {
     // This field replaces the earlier ResourceLimits field; the rename
     // clarifies that the scope is the namespace quota, not a per-pod limit.
     NamespaceQuota corev1.ResourceList `json:"namespaceQuota,omitempty"`
+
+    // SecurityProfile selects the Pod Security Admission level the GMC
+    // stamps on the tenant namespace at provisioning time. The chosen
+    // level applies to every pod the AGC creates (workers, sidecars in
+    // the PodTemplate) and is enforced by the in-tree PodSecurity
+    // admission plugin built into the Kubernetes API server — no
+    // external policy engine (Kyverno, OPA Gatekeeper) is required.
+    //
+    //   - baseline   (default) — blocks privileged containers, host
+    //                  namespaces (PID/IPC/Network), hostPath volumes,
+    //                  dangerous capabilities (SYS_ADMIN, NET_ADMIN,
+    //                  etc.), hostPort, /proc mount manipulations.
+    //                  Suitable for normal CI workloads.
+    //   - restricted — all of baseline, plus requires runAsNonRoot,
+    //                  drops ALL capabilities, requires seccompProfile
+    //                  RuntimeDefault, forbids allowPrivilegeEscalation.
+    //                  Use for tenants with strict isolation requirements.
+    //   - privileged — no admission-level restrictions. Required for
+    //                  workloads that need privileged containers, host
+    //                  namespaces, or specific capabilities — most
+    //                  commonly docker-in-docker (DinD), Buildah without
+    //                  a sandbox runtime, or kernel-module workflows.
+    //                  Tenants choosing this level SHOULD pair it with
+    //                  runtimeClassName: kata-containers or gvisor on
+    //                  the RunnerGroup PodTemplate to recover isolation
+    //                  via sandboxed runtime (see Appendix B).
+    //
+    // Tenants needing both privileged and non-privileged workloads
+    // deploy two ActionsGateway CRs in two namespaces and route
+    // workflows to the appropriate one via runs-on: labels. Per-tenant
+    // namespaces are the unit at which the profile is chosen.
+    //
+    // The GMC writes these labels on the tenant namespace:
+    //   pod-security.kubernetes.io/enforce: <securityProfile>
+    //   pod-security.kubernetes.io/enforce-version: latest
+    //   pod-security.kubernetes.io/warn:    <securityProfile>
+    //   pod-security.kubernetes.io/audit:   <securityProfile>
+    //
+    // The AGC continues to enforce its own invariants regardless of the
+    // selected profile: hostPID/hostNetwork/hostIPC are forced to false
+    // and automountServiceAccountToken to false on every worker pod.
+    // PSA is the safety net; the AGC's invariants are the floor.
+    //
+    // +optional
+    // +kubebuilder:default=baseline
+    // +kubebuilder:validation:Enum=baseline;restricted;privileged
+    SecurityProfile string `json:"securityProfile,omitempty"`
 }
 
 // ActionsGatewayStatus uses standard Kubernetes Conditions for compatibility
