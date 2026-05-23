@@ -1095,3 +1095,136 @@ Kyverno, no OPA, no service mesh) satisfies all of the following:
 5. The `AGC_EXTRA_*` mechanism is either flag-gated and off in
    production, or removed entirely
    (verifies W5, M-14).
+
+### Verification & test plan
+
+Each finding lands in one of three verification venues. The table below
+maps the workstream/finding to its venue so reviewers and implementers
+can find the gating check without re-reading the whole document.
+
+| Venue | What goes here | When it runs |
+|---|---|---|
+| **Static checks** — `go test ./...` and `envtest`-backed integration | Anything verifiable from the in-process Kubernetes API or pure unit logic | Per PR, in CI |
+| **Kind-based e2e** — `cmd/gmc/test/e2e/` against `fakegithub` | Anything requiring a running cluster + the provisioner reacting | Per PR, in CI |
+| **Real-GitHub manual** — `cmd/gmc/test/e2e/github_e2e_test.go` or `cmd/probe` | Anything requiring real GitHub responses (broker key-type acceptance, registration token issuance) | Manual, gated on credentials |
+
+#### Static checks
+
+These run as Go tests with no cluster. Each is asserted on the *desired
+state objects* the GMC produces, not by observing a live cluster.
+
+| Workstream / finding | Test location | Assertion |
+|---|---|---|
+| W1, M-1, M-8 | `cmd/gmc/internal/controller/network_policy_test.go` | Two `NetworkPolicy` objects emitted; each has a non-empty `PodSelector`; egress rules match the expected per-selector shape. |
+| W2, C-1 | `cmd/gmc/internal/controller/builder_test.go` | Tenant namespace gets `pod-security.kubernetes.io/enforce: <profile>` plus the three companion labels; `securityProfile: privileged` produces `privileged` label. |
+| W2 belt-and-suspenders (D-7) | `cmd/gmc/internal/controller/integration/crd_admission_test.go` | `envtest` rejects a CR with `privileged: true` in PodTemplate when `securityProfile: baseline`. |
+| W3, H-1 | `cmd/gmc/internal/controller/builder_test.go` | AGC Deployment has no `GITHUB_APP_*` env entries; has a Secret volume mount at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`. |
+| W4, H-2 | `cmd/gmc/internal/controller/rbac_test.go` and `cmd/gmc/internal/controller/integration/rbac_scope_test.go` | AGC Role has `resourceNames` patterns on the agent-pool Secret rule; SAR check confirms the AGC SA cannot list cluster-wide and cannot `get` an unrelated Secret in-namespace. |
+| W7, M-5 | `cmd/gmc/internal/controller/builder_test.go` | Self-signed cert generated has the proxy DNS name as SAN and 1-year validity; AGC Deployment mounts only the cert (public part); proxy Deployment mounts cert + key. |
+| W8, M-7 | `cmd/gmc/internal/controller/builder_test.go` | AGC and proxy container `SecurityContext` has `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, `SeccompProfile: RuntimeDefault`. |
+| M-3 | `broker/crypto_test.go` | `pkcs7Unpad` returns the same sentinel error for empty, wrong-length, and wrong-byte padding inputs. Adversarial inputs do not panic. |
+| M-4 | `cmd/agc/internal/provisioner/provisioner_test.go` | Adversarial `system.github.repository` values (`../`, `;`, spaces) are rejected before the rerun URL is built. |
+| M-6 | `broker/client_test.go` | `GetMessage` URL with an adversarial `RunnerOS` value escapes the query parameter and does not smuggle additional parameters. |
+| W9, M-11a | `cmd/probe/main_test.go` (new), `githubapp/runner_auth_test.go` | EdDSA signing branch produces a valid JWT verifiable with the matching public key; PKCS#8 round-trip works for both RSA and Ed25519 keys. |
+
+#### Kind-based e2e
+
+These add Ginkgo `It` blocks to the existing e2e suite. The kind
+cluster, image builds, and `fakegithub` harness are reused. Each
+acceptance-criterion item above maps to one or more `It` blocks.
+
+| Workstream / finding | Test file | Assertion |
+|---|---|---|
+| W1 (acceptance criterion 1) | new `cmd/gmc/test/e2e/network_isolation_test.go` | Debug pod with worker labels: direct `curl https://api.github.com` times out; `curl -x http://actions-gateway-proxy:8080 …` succeeds. |
+| W1 (regression for M-9) | same file | Trigger the IPRange reconciler refresh; verify the worker→proxy egress rule survives. |
+| W2 (acceptance criterion 2) | new `cmd/gmc/test/e2e/security_profile_test.go` | Apply RunnerGroup with `privileged: true` PodTemplate under each profile; assert pod creation is rejected by PSA under `baseline`, accepted under `privileged`. Observed via Events containing `violates PodSecurity`. |
+| W3 (acceptance criterion 3) | extend `cmd/gmc/test/e2e/provisioning_test.go` | `kubectl exec` into AGC: `env | grep GITHUB_APP` returns nothing; `ls /etc/actions-gateway/github-app/` lists `appId`, `installationId`, `privateKey`. |
+| W4 (acceptance criterion 4) | new `cmd/gmc/test/e2e/rbac_isolation_test.go` | Create a user-managed Secret; spawn a pod with the AGC SA; `kubectl get secret <name>` fails with `forbidden`. |
+| W5 (acceptance criterion 5) | extend `cmd/gmc/test/e2e/e2e_suite_test.go` | If D-1 = Option A: assert `AGC_EXTRA_*` env vars on the GMC pod do not propagate without `--allow-agc-extra-env`. If D-1 = Option B: assert `AGC_EXTRA_*` is removed and `spec.endpointOverrides` populates the AGC env. |
+| W7 cert pinning | new `cmd/gmc/test/e2e/proxy_tls_test.go` | AGC reaches proxy over `https://`; rotating the proxy cert to an unrelated self-signed cert causes the AGC's CONNECT to fail until the AGC's trust file is updated. |
+
+#### Real-GitHub manual verifications
+
+Two verifications cannot be done without real GitHub credentials. Each
+records its outcome as a one-paragraph note in this document.
+
+**M-11b — Ed25519 broker compatibility probe**
+
+Prerequisites:
+- GitHub App with installation on a test org/repo
+- App ID, installation ID, private key PEM
+- Broker URL and runner version from a real `.runner` config
+
+Procedure (after M-11a / W9 lands):
+
+```sh
+export GITHUB_APP_ID=<id>
+export GITHUB_APP_PRIVATE_KEY=/path/to/key.pem
+export GITHUB_APP_INSTALLATION_ID=<id>
+export GITHUB_BROKER_URL=https://...
+export GITHUB_RUNNER_VERSION=2.327.1
+./cmd/probe -key-type ed25519 -register-test-runner
+```
+
+Outcomes:
+
+| Output | Verdict | Next step |
+|---|---|---|
+| `register OK / assertion OK / session OK` | Ed25519 fully supported | M-11c migrates to Ed25519 + EdDSA. |
+| `register OK / assertion 400 …` | Broker rejects EdDSA JWTs | M-11c ships RSA-3072. |
+| `register 400 "...key type..."` | Broker rejects Ed25519 SPKI | M-11c ships RSA-3072. |
+| Any other failure | Network or App-config issue | Retry; not a key-type signal. |
+
+Owner: whoever has the GitHub App credentials. Record the outcome,
+GitHub-reported runner version, and date as a paragraph appended to
+D-5's detail block. The probe code stays in the tree; re-run later if
+the upstream runner SDK adds EdDSA support.
+
+**D-2 — `restricted` profile against the runner image (only if D-2 is reversed)**
+
+Per the D-2 recommendation, `restricted` is deferred from v1. If that
+recommendation is overridden, the verification is:
+
+```sh
+kind create cluster --config test/kind-config-ci.yaml
+kubectl create ns runner-restricted-probe
+kubectl label ns runner-restricted-probe \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/enforce-version=latest
+
+# Apply a Pod with the minimum securityContext restricted requires
+kubectl apply -f - <<'YAML'
+apiVersion: v1
+kind: Pod
+metadata: { name: runner-probe, namespace: runner-restricted-probe }
+spec:
+  containers:
+    - name: runner
+      image: ghcr.io/actions/runner:2.327.1
+      command: ["sleep", "300"]
+      securityContext:
+        runAsNonRoot: true
+        allowPrivilegeEscalation: false
+        capabilities: { drop: [ALL] }
+        seccompProfile: { type: RuntimeDefault }
+YAML
+
+kubectl get pod -n runner-restricted-probe runner-probe
+kubectl exec  -n runner-restricted-probe runner-probe -- ./bin/runner --version
+```
+
+The pod-creation result is binary. If the pod doesn't admit, the
+runner image is fundamentally incompatible with `restricted` and the
+profile can't be offered. If it admits, the next question is which
+*workflows* break under `restricted` — that requires a real workflow
+suite and is the reason D-2's recommendation is to defer.
+
+#### CI gating
+
+- **PR pipeline:** runs static checks and kind-based e2e against
+  `fakegithub`. Phase 1 acceptance criteria become required checks.
+- **Pre-release (manual or scheduled):** runs
+  `cmd/gmc/test/e2e/github_e2e_test.go` against real GitHub to verify
+  the full broker protocol still works with all of Phase 1's changes
+  applied.
+- **One-shot, gated on credentials:** M-11b probe.
