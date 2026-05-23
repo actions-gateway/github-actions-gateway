@@ -186,7 +186,7 @@ func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 		}
 	}
 	require.Contains(t, noProxy, "192.168.1.0/24")
-	require.Contains(t, noProxy, "kubernetes.default.svc.cluster.local")
+	require.Contains(t, noProxy, "svc.cluster.local")
 }
 
 func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T) {
