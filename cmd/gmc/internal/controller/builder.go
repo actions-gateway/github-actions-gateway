@@ -49,7 +49,10 @@ const (
 
 	finalizerName = "actions-gateway.github.com/gmc-cleanup"
 
-	defaultNoProxy = "kubernetes.default.svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
+	// defaultNoProxy excludes cluster-internal traffic from the proxy. svc.cluster.local
+	// covers all Kubernetes Services (e.g. fakegithub.e2e-infra.svc.cluster.local) so
+	// the proxy is only used for external (GitHub.com) traffic as intended.
+	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
 )
 
 func ptr[T any](v T) *T { return &v }

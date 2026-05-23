@@ -147,6 +147,9 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 
 	for i := range agList.Items {
 		ag := &agList.Items[i]
+		if !ag.DeletionTimestamp.IsZero() {
+			continue // skip CRs being deleted; their NetworkPolicy is already being removed
+		}
 		if ag.Spec.Proxy.ManagedNetworkPolicy != nil && !*ag.Spec.Proxy.ManagedNetworkPolicy {
 			continue
 		}
@@ -159,7 +162,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 func (r *IPRangeReconciler) patchNetworkPolicy(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, cidrs []net.IPNet) error {
 	var np networkingv1.NetworkPolicy
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: "actions-gateway"}, &np); err != nil {
-		return fmt.Errorf("get NetworkPolicy: %w", err)
+		return client.IgnoreNotFound(err) // NetworkPolicy may not exist yet or is being removed
 	}
 
 	desired := buildNetworkPolicy(ag, "", cidrs)
