@@ -271,9 +271,35 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	sessions := brokerStub.RegisteredSessions()
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
-	// Give the provisioner time to attempt pod creation.
-	// Since the ceiling is hit, the Secret should be created and then immediately deleted.
-	time.Sleep(2 * time.Second)
+	// Wait for the provisioner to acquire the job (job Secret appears) and then
+	// back off due to the ceiling (job Secret is deleted without creating a pod).
+	require.Eventually(t, func() bool {
+		var secrets corev1.SecretList
+		_ = k8sClient.List(ctx, &secrets,
+			client.InNamespace(nsName),
+			client.MatchingLabels{"actions-gateway/runner-group": "ceiling-rg"},
+		)
+		for _, s := range secrets.Items {
+			if strings.HasPrefix(s.Name, "job-") {
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, 25*time.Millisecond, "provisioner should create job Secret when job is acquired")
+
+	require.Eventually(t, func() bool {
+		var secrets corev1.SecretList
+		_ = k8sClient.List(ctx, &secrets,
+			client.InNamespace(nsName),
+			client.MatchingLabels{"actions-gateway/runner-group": "ceiling-rg"},
+		)
+		for _, s := range secrets.Items {
+			if strings.HasPrefix(s.Name, "job-") {
+				return false
+			}
+		}
+		return true
+	}, 10*time.Second, 25*time.Millisecond, "provisioner should delete job Secret after ceiling check")
 
 	// Assert: only the 2 pre-existing pods exist; no new "runner-*" pods were created.
 	var pods corev1.PodList

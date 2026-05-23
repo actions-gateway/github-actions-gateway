@@ -82,37 +82,37 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&corev1.ServiceAccount{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// ServiceAccount: actions-gateway-worker
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-worker"},
 			&corev1.ServiceAccount{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Role: actions-gateway-agc
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&rbacv1.Role{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// RoleBinding: actions-gateway-agc
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&rbacv1.RoleBinding{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// NetworkPolicy: actions-gateway
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
 			&networkingv1.NetworkPolicy{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Deployment: actions-gateway-proxy
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Deployment: actions-gateway-agc with proxy env vars
 	g.Eventually(func() error {
@@ -121,7 +121,7 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 			return err
 		}
 		return nil
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Verify proxy env vars are present on the AGC Deployment.
 	var agcDep appsv1.Deployment
@@ -139,19 +139,19 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&corev1.Service{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// HPA: actions-gateway-proxy
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&autoscalingv2.HorizontalPodAutoscaler{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// PDB: actions-gateway-proxy
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&policyv1.PodDisruptionBudget{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 }
 
 func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
@@ -173,7 +173,7 @@ func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&appsv1.Deployment{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var dep appsv1.Deployment
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
@@ -207,7 +207,7 @@ func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T)
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&appsv1.Deployment{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var dep appsv1.Deployment
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
@@ -245,7 +245,7 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&appsv1.Deployment{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Update gitHubAppRef to secret-v2.
 	var fetched gmcv1alpha1.ActionsGateway
@@ -268,7 +268,7 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"AGC Deployment must reference secret-v2 after credential rotation")
 
 	// The old secret must NOT be deleted by the GMC.
@@ -311,7 +311,7 @@ func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
 			return false
 		}
 		return len(rgList.Items) >= 2
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "expected 2 RunnerGroup CRs to be created")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "expected 2 RunnerGroup CRs to be created")
 
 	var rgList agcv1alpha1.RunnerGroupList
 	require.NoError(t, k8sClient.List(ctx, &rgList, client.InNamespace(nsName)))

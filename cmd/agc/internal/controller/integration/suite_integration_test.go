@@ -161,7 +161,7 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 	if opts.enabled {
 		pollInterval := opts.pollInterval
 		if pollInterval == 0 {
-			pollInterval = 200 * time.Millisecond
+			pollInterval = 50 * time.Millisecond
 		}
 		maxRetries := opts.maxEvictionRetries
 		p := &provisioner.Provisioner{

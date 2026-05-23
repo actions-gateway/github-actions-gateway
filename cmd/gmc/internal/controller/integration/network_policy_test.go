@@ -53,7 +53,7 @@ func TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs(t *testing.T) {
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"expected egress rule for 140.82.112.0/20 on port 443")
 }
 
@@ -106,7 +106,7 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"egress rule on port 8080 must target the proxy Service ClusterIP as a /32 CIDR")
 }
 
@@ -140,7 +140,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "initial NetworkPolicy should contain 140.82.112.0/20")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "initial NetworkPolicy should contain 140.82.112.0/20")
 
 	// Update the fetcher to return a new CIDR.
 	_, cidr2, _ := net.ParseCIDR("1.2.3.0/24")
@@ -169,7 +169,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 			}
 		}
 		return found140 && found1
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(),
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"NetworkPolicy should include both 140.82.112.0/20 and 1.2.3.0/24 after IP range update")
 
 }
@@ -204,7 +204,7 @@ func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
 			&networkingv1.NetworkPolicy{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var np networkingv1.NetworkPolicy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &np))

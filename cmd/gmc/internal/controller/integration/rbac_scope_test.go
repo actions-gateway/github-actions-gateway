@@ -57,12 +57,12 @@ func TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
 			&corev1.ServiceAccount{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
 			&rbacv1.Role{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Use the AGC SA from nsA impersonated client.
 	impersonatedClient := newImpersonatedClient(t, nsA, "actions-gateway-agc")
@@ -102,7 +102,7 @@ func TestGMC_AGCRole_PermitsOwnNamespace(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&rbacv1.RoleBinding{})
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Create a test Secret in nsName that the AGC SA should be able to read.
 	testSecret := &corev1.Secret{

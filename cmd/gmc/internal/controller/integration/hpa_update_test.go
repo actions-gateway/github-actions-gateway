@@ -40,7 +40,7 @@ func TestGMC_HPABoundsUpdate(t *testing.T) {
 			return err
 		}
 		return nil
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var hpa autoscalingv2.HorizontalPodAutoscaler
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &hpa))
@@ -65,7 +65,7 @@ func TestGMC_HPABoundsUpdate(t *testing.T) {
 			return false
 		}
 		return *updatedHPA.Spec.MinReplicas == 3 && updatedHPA.Spec.MaxReplicas == 15
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "HPA should reflect updated min=3, max=15")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "HPA should reflect updated min=3, max=15")
 }
 
 func TestGMC_HPABoundsUpdate_MinReplicasClamped(t *testing.T) {
@@ -102,5 +102,5 @@ func TestGMC_HPABoundsUpdate_MinReplicasClamped(t *testing.T) {
 			return false
 		}
 		return *hpa.Spec.MinReplicas == 5 && hpa.Spec.MaxReplicas == 5
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "HPA should have min=5, max=5")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "HPA should have min=5, max=5")
 }
