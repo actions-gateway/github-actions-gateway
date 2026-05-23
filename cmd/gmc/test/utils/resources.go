@@ -84,9 +84,41 @@ spec:
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s", ns, name)
 }
 
-// DeleteActionsGatewayCR deletes an ActionsGateway CR.
+// ApplyActionsGatewayCRWithRunnerGroup applies an ActionsGateway CR that includes a
+// minimal RunnerGroup so that AGC has something to reconcile and can register broker
+// sessions (required for job-lifecycle e2e tests).
+func ApplyActionsGatewayCRWithRunnerGroup(ns, name, secretName, workerImage string) {
+	yaml := fmt.Sprintf(`apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  gitHubAppRef:
+    name: %s
+  proxy:
+    minReplicas: 1
+    maxReplicas: 3
+    noProxyCIDRs:
+    - svc.cluster.local
+  runnerGroups:
+  - runnerLabels: ["e2e"]
+    maxListeners: 2
+    workerImage: %s
+    podTemplate:
+      spec:
+        containers:
+        - name: runner
+          image: %s
+`, name, ns, secretName, workerImage, workerImage)
+
+	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with runner group", ns, name)
+}
+
+// DeleteActionsGatewayCR deletes an ActionsGateway CR and waits for the finalizer to clear.
+// A 5-minute timeout prevents hangs if the controller is unavailable.
 func DeleteActionsGatewayCR(ns, name string) {
-	cmd := exec.Command("kubectl", "delete", "actionsgateway", name, "-n", ns, "--ignore-not-found")
+	cmd := exec.Command("kubectl", "delete", "actionsgateway", name, "-n", ns, "--ignore-not-found", "--timeout=5m")
 	_, _ = Run(cmd)
 }
 

@@ -104,20 +104,33 @@ func setupGMC() {
 		fmt.Sprintf("AGC_EXTRA_GITHUB_BROKER_URL=%s", fakegithubBaseURL),
 		fmt.Sprintf("AGC_EXTRA_STUB_AUTH_URL=%s/token", fakegithubBaseURL),
 		fmt.Sprintf("AGC_EXTRA_STUB_BROKER_URL=%s", fakegithubBaseURL),
+		"AGC_EXTRA_GITHUB_USE_V2_FLOW=true",
 	)
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "inject AGC_EXTRA env vars")
+
+	// cert-manager takes ~30-60s to issue the webhook cert Secret on first install.
+	// The GMC pod mounts it as a volume; without it the pod can't start and the
+	// rollout stalls. Wait for the Secret before polling rollout status.
+	By("waiting for webhook cert Secret to be issued by cert-manager")
+	// cert-manager creates a Secret whose name matches Certificate.spec.secretName
+	// ("webhook-server-cert"), NOT the Certificate CR name ("gmc-serving-cert").
+	Eventually(func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "secret", "webhook-server-cert", "-n", gmcNamespace)
+		_, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred(), "webhook-server-cert not yet available")
+	}, 5*time.Minute, 5*time.Second).Should(Succeed())
 
 	By("waiting for GMC controller to be ready")
 	Eventually(func(g Gomega) {
 		cmd := exec.Command("kubectl", "rollout", "status",
 			"deployment/gmc-controller-manager",
 			"-n", gmcNamespace,
-			"--timeout=2m",
+			"--timeout=30s",
 		)
 		_, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
-	}, 3*time.Minute, 5*time.Second).Should(Succeed())
+	}, 5*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 func teardownGMC() {

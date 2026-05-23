@@ -88,16 +88,21 @@ func InstallCertManager() error {
 	if _, err := Run(cmd); err != nil {
 		return err
 	}
-	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
-	// was re-installed after uninstalling on a cluster.
-	cmd = exec.Command("kubectl", "wait", "deployment.apps/cert-manager-webhook",
-		"--for", "condition=Available",
-		"--namespace", "cert-manager",
-		"--timeout", "5m",
-	)
-
-	_, err := Run(cmd)
-	return err
+	// Wait for all three cert-manager components to be ready.
+	// The controller issues certs; the webhook validates resources; the cainjector
+	// injects CA bundles. All three must be Available before deploying workloads
+	// that rely on cert-manager Certificates.
+	for _, deploy := range []string{"cert-manager", "cert-manager-webhook", "cert-manager-cainjector"} {
+		cmd = exec.Command("kubectl", "wait", "deployment.apps/"+deploy,
+			"--for", "condition=Available",
+			"--namespace", "cert-manager",
+			"--timeout", "5m",
+		)
+		if _, err := Run(cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // IsCertManagerCRDsInstalled checks if any Cert Manager CRDs are installed
