@@ -48,12 +48,17 @@ func TestGMC_HPABoundsUpdate(t *testing.T) {
 	require.Equal(t, int32(2), *hpa.Spec.MinReplicas)
 	require.Equal(t, int32(8), hpa.Spec.MaxReplicas)
 
-	// Update the ActionsGateway with new HPA bounds.
-	var fetched gmcv1alpha1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "hpa-gateway"}, &fetched))
-	fetched.Spec.Proxy.MinReplicas = ptr32(3)
-	fetched.Spec.Proxy.MaxReplicas = ptr32(15)
-	require.NoError(t, k8sClient.Update(ctx, &fetched))
+	// Update the ActionsGateway with new HPA bounds (retry on conflict — the
+	// reconciler may still be writing the finalizer/status on first reconcile).
+	require.Eventually(t, func() bool {
+		var fetched gmcv1alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "hpa-gateway"}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.Proxy.MinReplicas = ptr32(3)
+		fetched.Spec.Proxy.MaxReplicas = ptr32(15)
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "update ActionsGateway HPA bounds")
 
 	// Wait for HPA to reflect the updated values.
 	g.Eventually(func() bool {
