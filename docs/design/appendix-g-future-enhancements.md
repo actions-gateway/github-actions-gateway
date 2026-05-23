@@ -170,4 +170,63 @@ single RunnerGroup's bursts.
 
 ---
 
+## G.6. X25519 ECDH Session Key Exchange
+
+**Current behavior.** The GitHub Actions broker sends each listener
+session an AES-256-CBC key encrypted with the agent's RSA public key
+(RSA-OAEP). The agent decrypts it and uses it to decrypt subsequent job
+message bodies. This requires the agent key to be RSA. Ed25519 agents
+cannot participate — they receive job messages without the AES layer and
+rely on TLS as the sole protection for the session payload.
+
+**Why it was left out.** This is a broker-protocol change, not an
+AGC-side change. We do not control the GitHub broker. The current code
+exposes Ed25519 as an operator opt-in (`--agent-key-type=ed25519`) for
+deployments that want faster JWT signing and accept the loss of the AES
+defense-in-depth layer, but the default is RSA-3072 specifically because
+of this limitation.
+
+**Gap.** Ed25519 is preferable for JWT signing: smaller keys, faster
+operations, deterministic signatures, no padding oracle surface. But
+making it the secure default requires the broker to support a key-
+exchange mechanism compatible with Curve25519 keys. X25519 ECDH
+(Diffie-Hellman over Curve25519) would allow the broker to establish a
+shared AES session key with an Ed25519 agent without RSA-OAEP: the
+broker generates an ephemeral X25519 keypair, the agent uses its
+Curve25519 key (derived from the Ed25519 private key via standard
+clamping), and both sides derive the same session secret. The AES
+message-encryption layer would be fully preserved for Ed25519 agents.
+
+**What "added" would look like.**
+
+This requires a change to the broker protocol, not to this codebase.
+On the GitHub side:
+
+- `CreateSession` response includes an ephemeral X25519 public key and
+  a nonce instead of (or in addition to) the RSA-OAEP-encrypted blob.
+- The client performs X25519 key agreement and derives the AES session
+  key via HKDF.
+
+On the AGC side, once the broker supports this:
+
+- `goroutine.go` `createSession` detects the X25519 key-agreement path
+  in the `CreateSession` response and performs ECDH derivation instead
+  of RSA-OAEP decryption. (~30 LoC using `golang.org/x/crypto/curve25519`.)
+- `cmd/agc/main.go` changes the default from `--agent-key-type=rsa` to
+  `--agent-key-type=ed25519`.
+- RSA key support is retained for backward compatibility with existing
+  Secrets.
+
+**What would trigger building it.** GitHub updates the broker protocol
+to include X25519 ECDH session key exchange, or publishes an API
+allowing Ed25519 agents to participate in encrypted sessions. The probe
+binary (`cmd/probe -key-type ed25519`) is the detection mechanism: a
+`session OK` result with a non-empty `EncryptionKey` for an Ed25519
+agent would indicate the broker is sending a key the agent can use.
+
+**Related finding.** [docs/plan/security.md](../plan/security.md) M-11,
+D-5.
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
