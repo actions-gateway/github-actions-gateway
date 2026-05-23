@@ -660,7 +660,7 @@ assumption but should be confirmed).
 | ID | Decision | Affects | Status | Default if undecided |
 |---|---|---|---|---|
 | D-1 | M-14: Option A (flag-gate `AGC_EXTRA_*`) vs Option B (typed `endpointOverrides` CR field) | W5 | **Blocks W5** | — must pick |
-| D-2 | Does `restricted` profile actually work with `ghcr.io/actions/runner`? Verify, or drop `restricted` from v1 | W2 | **Blocks v1 if shipped untested** | Ship `baseline` and `privileged` only; defer `restricted` to a follow-up |
+| D-2 | Does `restricted` profile actually work with `ghcr.io/actions/runner`? Verify, or drop `restricted` from v1 | W2 | **Resolved (2026-05-23)** | `restricted` confirmed compatible; keep enum value; require `runAsUser: 1001` in PodTemplate |
 | D-3 | W4 residual broad `secrets.create` — accept, or invest in per-job Secret alternative | W4 | Default if undecided | Accept with a code comment; revisit when a real exploit path is found |
 | D-4 | W7 cert source: cert-manager required, cert-manager opt-out, or GMC-managed self-signed cert with AGC pinning | W7 | Default if undecided | **GMC self-signed cert + AGC pinning** (no cert-manager dependency, secure by default) |
 | D-5 | M-11: RSA-3072 directly, or verify Ed25519 via probe first and fall back to RSA-3072 | M-11 | Default if undecided | **Verify Ed25519 via probe; ship Ed25519 if it works, RSA-3072 if not** |
@@ -676,15 +676,16 @@ assumption but should be confirmed).
   Option A is the lowest-churn fix for the immediate misconfiguration
   risk.
 
-- **D-2 (blocks v1 if `restricted` is shipped untested):** The
-  `restricted` PSA level requires `runAsNonRoot`, `Capabilities.Drop:
-  [ALL]`, `SeccompProfile: RuntimeDefault`, and forbids
-  `allowPrivilegeEscalation`. The GitHub Actions runner image
-  historically runs as the non-root `runner` user but its exact
-  capability and seccomp posture under `restricted` has not been
-  validated in this repo. Shipping the enum value without a passing
-  e2e test invites tenants to opt in and discover incompatibility at
-  runtime.
+- **D-2 (resolved 2026-05-23):** Probe run against
+  `ghcr.io/actions/actions-runner:latest` (v2.334.0) on a
+  kind/k8s-1.35 cluster with `restricted` PSA enforcement. Pod
+  admitted; runner binary executed and exited 0. One caveat: the image
+  declares USER as the non-numeric name `runner` (UID 1001). Kubernetes
+  requires a numeric `runAsUser` to verify non-root under `restricted`,
+  so tenants must set `runAsUser: 1001` (and `runAsGroup: 1001`)
+  explicitly in their `RunnerGroup.spec.podTemplate`. Without it the
+  pod is rejected at admission with "cannot verify user is non-root".
+  The enum value is kept; `restricted` is a valid production choice.
 
 - **D-3 (W4):** RBAC's `resourceNames` doesn't support globs. Tightening
   agent-pool Secret access is straightforward (names are deterministic
@@ -1180,44 +1181,56 @@ GitHub-reported runner version, and date as a paragraph appended to
 D-5's detail block. The probe code stays in the tree; re-run later if
 the upstream runner SDK adds EdDSA support.
 
-**D-2 — `restricted` profile against the runner image (only if D-2 is reversed)**
+**D-2 — `restricted` profile against the runner image (resolved 2026-05-23)**
 
-Per the D-2 recommendation, `restricted` is deferred from v1. If that
-recommendation is overridden, the verification is:
+Probe run on kind/k8s-1.35 with `restricted` PSA enforcement.
+Image: `ghcr.io/actions/actions-runner:latest` (v2.334.0, UID 1001).
 
 ```sh
-kind create cluster --config test/kind-config-ci.yaml
-kubectl create ns runner-restricted-probe
-kubectl label ns runner-restricted-probe \
+kind create cluster --name d2-probe --config test/kind-config-ci.yaml
+kubectl --context kind-d2-probe create ns runner-restricted-probe
+kubectl --context kind-d2-probe label ns runner-restricted-probe \
   pod-security.kubernetes.io/enforce=restricted \
-  pod-security.kubernetes.io/enforce-version=latest
+  pod-security.kubernetes.io/enforce-version=latest \
+  pod-security.kubernetes.io/warn=restricted \
+  pod-security.kubernetes.io/warn-version=latest \
+  pod-security.kubernetes.io/audit=restricted \
+  pod-security.kubernetes.io/audit-version=latest
 
-# Apply a Pod with the minimum securityContext restricted requires
-kubectl apply -f - <<'YAML'
+# runAsUser must be numeric; image USER "runner" = UID 1001
+kubectl --context kind-d2-probe apply -f - <<'YAML'
 apiVersion: v1
 kind: Pod
-metadata: { name: runner-probe, namespace: runner-restricted-probe }
+metadata:
+  name: runner-probe
+  namespace: runner-restricted-probe
 spec:
   containers:
     - name: runner
-      image: ghcr.io/actions/runner:2.327.1
+      image: ghcr.io/actions/actions-runner:latest
+      imagePullPolicy: Never
       command: ["sleep", "300"]
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
         allowPrivilegeEscalation: false
         capabilities: { drop: [ALL] }
         seccompProfile: { type: RuntimeDefault }
 YAML
 
-kubectl get pod -n runner-restricted-probe runner-probe
-kubectl exec  -n runner-restricted-probe runner-probe -- ./bin/runner --version
+kubectl --context kind-d2-probe wait --for=condition=Ready \
+  pod/runner-probe -n runner-restricted-probe --timeout=60s
+kubectl --context kind-d2-probe exec -n runner-restricted-probe runner-probe \
+  -- /home/runner/bin/Runner.Listener --version
+# → 2.334.0, exit 0
 ```
 
-The pod-creation result is binary. If the pod doesn't admit, the
-runner image is fundamentally incompatible with `restricted` and the
-profile can't be offered. If it admits, the next question is which
-*workflows* break under `restricted` — that requires a real workflow
-suite and is the reason D-2's recommendation is to defer.
+**Result:** pod admitted and runner binary executed successfully.
+`restricted` is a viable production profile. Tenants must set
+`runAsUser: 1001` and `runAsGroup: 1001` in their
+`RunnerGroup.spec.podTemplate`; without a numeric UID Kubernetes
+rejects the pod with "cannot verify user is non-root".
 
 #### CI gating
 
