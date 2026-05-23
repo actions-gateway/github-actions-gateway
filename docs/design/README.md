@@ -30,6 +30,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 5. [Security & Threat Risk Assessment](05-security.md)
    - [5.1 GMC-Level Threats (Cluster-Scoped)](05-security.md#51-gmc-level-threats-cluster-scoped)
    - [5.2 AGC & Proxy-Level Threats (Namespace-Scoped)](05-security.md#52-agc--proxy-level-threats-namespace-scoped)
+   - [5.3 Security Profiles and the Privileged Opt-In](05-security.md#53-security-profiles-and-the-privileged-opt-in)
 6. [Implementation Phasing & Delivery Milestones](06-implementation-phases.md)
    - [Milestone 1: Wire Protocol Probe (Days 1–4)](06-implementation-phases.md#milestone-1-wire-protocol-probe-days-14)
    - [Milestone 2: AGC Controller & Reconciler (Days 5–10)](06-implementation-phases.md#milestone-2-agc-controller--reconciler-days-510)
@@ -47,6 +48,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix D — Alternatives Considered](appendix-d-alternatives-considered.md)
 - [Appendix E — Capacity Planning & RunnerGroup Design](appendix-e-capacity-planning.md)
 - [Appendix F — Cost Model](appendix-f-cost-model.md)
+- [Appendix G — Optional Future Enhancements](appendix-g-future-enhancements.md)
 - [Network Architecture](network-architecture.md)
 
 **Operations**
