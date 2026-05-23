@@ -13,7 +13,7 @@
 //	GITHUB_RUNNER_VERSION      - Runner version string (e.g. 2.327.1)
 //	GITHUB_AGENT_ID            - Registered agent ID from the runner's .runner config (agentId field)
 //	GITHUB_AGENT_NAME          - Registered agent name from the runner's .runner config (agentName field)
-//	GITHUB_USE_V2_FLOW         - "true" to use broker v2 API (/session, /message); default: v1 VSTS pool API
+//	GITHUB_USE_VSTS_FLOW       - "true" to use the legacy VSTS pool API instead of broker v2; for GHES compatibility
 //	GITHUB_BROKER_URL_V2       - Broker v2 base URL (serverUrlV2 from .runner, e.g. https://broker.actions.githubusercontent.com/)
 //	GITHUB_RUNNER_OS           - OS string for v2 message polls (e.g. "osx", "linux")
 //	GITHUB_RUNNER_ARCH         - Arch string for v2 message polls (e.g. "x64", "arm64")
@@ -75,7 +75,7 @@ func run(logger *slog.Logger) error {
 	}
 	runnerOS := os.Getenv("GITHUB_RUNNER_OS")
 	runnerArch := os.Getenv("GITHUB_RUNNER_ARCH")
-	useV2Flow := os.Getenv("GITHUB_USE_V2_FLOW") == "true"
+	useV2Flow := os.Getenv("GITHUB_USE_VSTS_FLOW") != "true"
 	// In v2 flow, the broker API lives at serverUrlV2, not serverUrl.
 	if useV2Flow {
 		if v2URL := os.Getenv("GITHUB_BROKER_URL_V2"); v2URL != "" {

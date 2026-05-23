@@ -104,7 +104,6 @@ func setupGMC() {
 		fmt.Sprintf("AGC_EXTRA_GITHUB_BROKER_URL=%s", fakegithubBaseURL),
 		fmt.Sprintf("AGC_EXTRA_STUB_AUTH_URL=%s/token", fakegithubBaseURL),
 		fmt.Sprintf("AGC_EXTRA_STUB_BROKER_URL=%s", fakegithubBaseURL),
-		"AGC_EXTRA_GITHUB_USE_V2_FLOW=true",
 	)
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "inject AGC_EXTRA env vars")
