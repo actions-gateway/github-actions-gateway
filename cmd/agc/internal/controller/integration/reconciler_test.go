@@ -232,11 +232,15 @@ func TestAGC_Reconciler_ScaleMaxListeners(t *testing.T) {
 		return len(brokerStub.RegisteredSessions()) >= 1
 	}, 15*time.Second, 1*time.Millisecond, "initial session should be registered")
 
-	// Update maxListeners to 5.
-	var fetched v1alpha1.RunnerGroup
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "scale-rg"}, &fetched))
-	fetched.Spec.MaxListeners = 5
-	require.NoError(t, k8sClient.Update(ctx, &fetched))
+	// Update maxListeners to 5 (retry on conflict — reconciler may be writing finalizer concurrently).
+	require.Eventually(t, func() bool {
+		var fetched v1alpha1.RunnerGroup
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "scale-rg"}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.MaxListeners = 5
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "update RunnerGroup maxListeners to 5")
 
 	// Assert the RunnerGroup status reflects the updated generation.
 	assert.Eventually(t, func() bool {
