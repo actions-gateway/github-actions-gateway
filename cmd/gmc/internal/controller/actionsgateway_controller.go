@@ -36,6 +36,7 @@ import (
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;update;patch
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
@@ -93,6 +94,11 @@ func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet, proxyAddr string) error {
+	// 0. Stamp Pod Security Admission labels on the tenant namespace.
+	if err := r.applyNamespacePSA(ctx, ag); err != nil {
+		return fmt.Errorf("namespace PSA labels: %w", err)
+	}
+
 	// 1 & 2. ServiceAccounts.
 	if err := r.applyServiceAccount(ctx, buildAGCServiceAccount(ag)); err != nil {
 		return fmt.Errorf("AGC ServiceAccount: %w", err)
@@ -124,16 +130,20 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("proxy Service: %w", err)
 	}
 
-	// 5. NetworkPolicy — built after Service creation so we can embed the ClusterIP.
+	// 5. NetworkPolicies — built after Service creation so we can embed the ClusterIP.
 	proxyClusterIP := ""
 	var proxySvc corev1.Service
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, &proxySvc); err == nil {
 		proxyClusterIP = proxySvc.Spec.ClusterIP
 	}
-	np := buildNetworkPolicy(ag, proxyClusterIP, githubCIDRs)
-	if err := r.applyNetworkPolicy(ctx, np); err != nil {
-		return fmt.Errorf("NetworkPolicy: %w", err)
+	if err := r.applyNetworkPolicy(ctx, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
+		return fmt.Errorf("proxy NetworkPolicy: %w", err)
 	}
+	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag, proxyClusterIP)); err != nil {
+		return fmt.Errorf("workload NetworkPolicy: %w", err)
+	}
+	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous versions.
+	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
 
 	// 9. PDB.
 	if err := r.applyPDB(ctx, buildPDB(ag)); err != nil {
@@ -190,9 +200,11 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	r.deleteIfExists(ctx, &policyv1.PodDisruptionBudget{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &corev1.Service{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, proxyServiceName)
-	// 4. ResourceQuota, NetworkPolicy.
+	// 4. ResourceQuota, NetworkPolicies.
 	r.deleteIfExists(ctx, &corev1.ResourceQuota{}, ns, "actions-gateway")
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, "actions-gateway")
+	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
+	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npWorkloadName)
+	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, "actions-gateway") // legacy
 	// 5. RoleBinding, Role.
 	r.deleteIfExists(ctx, &rbacv1.RoleBinding{}, ns, agcSAName)
 	r.deleteIfExists(ctx, &rbacv1.Role{}, ns, agcSAName)
@@ -432,6 +444,30 @@ func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, desired
 	existing.Labels = desired.Labels
 	existing.Spec = desired.Spec
 	return r.Update(ctx, &existing)
+}
+
+// applyNamespacePSA stamps Pod Security Admission labels on the tenant namespace.
+// The enforce/warn/audit levels are set to the ActionsGateway's SecurityProfile
+// (defaulting to "baseline"). Callers must have namespaces get+update permission.
+func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	profile := ag.Spec.SecurityProfile
+	if profile == "" {
+		profile = "baseline"
+	}
+	var ns corev1.Namespace
+	if err := r.Get(ctx, types.NamespacedName{Name: ag.Namespace}, &ns); err != nil {
+		return err
+	}
+	if ns.Labels == nil {
+		ns.Labels = make(map[string]string)
+	}
+	ns.Labels["pod-security.kubernetes.io/enforce"] = profile
+	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "latest"
+	ns.Labels["pod-security.kubernetes.io/warn"] = profile
+	ns.Labels["pod-security.kubernetes.io/warn-version"] = "latest"
+	ns.Labels["pod-security.kubernetes.io/audit"] = profile
+	ns.Labels["pod-security.kubernetes.io/audit-version"] = "latest"
+	return r.Update(ctx, &ns)
 }
 
 // labelSafe converts a string to a safe label value segment.

@@ -19,6 +19,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -250,6 +251,9 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 		log.Warn("owner/repo unknown; cannot trigger rerun", "runID", runID)
 		return nil
 	}
+	if !repoSegmentRE.MatchString(owner) || !repoSegmentRE.MatchString(repo) {
+		return fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
+	}
 	if p.TokenFunc == nil {
 		log.Warn("TokenFunc not configured; cannot trigger rerun", "runID", runID)
 		return nil
@@ -264,9 +268,13 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 	if apiBase == "" {
 		apiBase = "https://api.github.com"
 	}
-	url := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs", apiBase, owner, repo, runID)
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/rerun-failed-jobs",
+		apiBase,
+		neturl.PathEscape(owner),
+		neturl.PathEscape(repo),
+		neturl.PathEscape(runID))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return fmt.Errorf("build rerun request: %w", err)
 	}
@@ -426,6 +434,9 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 				labelManagedBy:   managerName,
 				labelRunnerGroup: rg.Name,
 				labelPlanID:      safeName(podName), // use pod name fragment as stable label
+				// "actions-gateway/component: workload" matches the workload NetworkPolicy
+				// podSelector so worker egress is restricted to the per-tenant proxy only.
+				"actions-gateway/component": "workload",
 			},
 		},
 		Spec: template.Spec,
@@ -507,6 +518,10 @@ func mergeEnvOverride(base, overrides []corev1.EnvVar) []corev1.EnvVar {
 
 // dnsLabelRe matches characters not allowed in Kubernetes DNS labels.
 var dnsLabelRe = regexp.MustCompile(`[^a-z0-9-]`)
+
+// repoSegmentRE accepts only the characters GitHub allows in org/repo names.
+// Used to validate owner and repo before constructing API URLs.
+var repoSegmentRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // safeName converts an arbitrary string into a Kubernetes-safe DNS label
 // (lowercase, alphanumeric and hyphens only, max 40 chars so it can be

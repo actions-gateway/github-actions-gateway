@@ -6,9 +6,17 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1" //nolint:gosec // SHA-1 required by .NET RSA.Decrypt OAEP default
+	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 )
+
+// errInvalidPadding is the single sentinel error for any PKCS#7 padding
+// violation. Using one value prevents callers from distinguishing failure
+// modes and eliminates the timing side-channel that arises when different
+// error paths take different amounts of time.
+var errInvalidPadding = errors.New("broker: invalid padding")
 
 // DecryptSessionKey decrypts the RSA-encrypted AES session key returned in the
 // CreateSession response's encryptionKey.value field.
@@ -70,20 +78,23 @@ func DecryptMessageBody(encryptedBody string, key []byte) ([]byte, error) {
 	return unpadded, nil
 }
 
-// pkcs7Unpad removes PKCS#7 padding from a plaintext block. Returns an error
-// if the padding is malformed (catches wrong-key decryptions early).
+// pkcs7Unpad removes PKCS#7 padding from a plaintext block. Returns
+// errInvalidPadding for any malformed padding. The byte comparison loop runs
+// in constant time via crypto/subtle to avoid a timing side-channel.
 func pkcs7Unpad(data []byte, blockSize int) ([]byte, error) {
 	if len(data) == 0 {
-		return nil, fmt.Errorf("empty plaintext")
+		return nil, errInvalidPadding
 	}
 	padLen := int(data[len(data)-1])
 	if padLen == 0 || padLen > blockSize || padLen > len(data) {
-		return nil, fmt.Errorf("invalid padding length %d", padLen)
+		return nil, errInvalidPadding
 	}
+	ok := 1
 	for i := len(data) - padLen; i < len(data); i++ {
-		if data[i] != byte(padLen) {
-			return nil, fmt.Errorf("invalid padding byte at position %d", i)
-		}
+		ok &= subtle.ConstantTimeByteEq(data[i], byte(padLen))
+	}
+	if ok != 1 {
+		return nil, errInvalidPadding
 	}
 	return data[:len(data)-padLen], nil
 }

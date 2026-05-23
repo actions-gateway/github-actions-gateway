@@ -102,7 +102,12 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	upstream, err := net.DialTimeout("tcp", r.Host, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
-		http.Error(w, "upstream dial: "+err.Error(), http.StatusBadGateway)
+		log := s.Log
+		if log == nil {
+			log = slog.Default()
+		}
+		log.Error("upstream dial failed", "host", r.Host, "error", err)
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
 	defer upstream.Close()

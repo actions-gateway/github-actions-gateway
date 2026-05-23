@@ -48,6 +48,15 @@ type ActionsGatewaySpec struct {
 	RunnerGroups []agcv1alpha1.RunnerGroupSpec `json:"runnerGroups,omitempty"`
 	// +optional
 	NamespaceQuota corev1.ResourceList `json:"namespaceQuota,omitempty"`
+	// SecurityProfile controls the Pod Security Admission enforcement level
+	// applied to the tenant namespace. Allowed values: baseline (default),
+	// restricted, privileged. Use privileged only for workloads that run
+	// Docker-in-Docker or require host-level capabilities.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=baseline;restricted;privileged
+	// +kubebuilder:default=baseline
+	SecurityProfile string `json:"securityProfile,omitempty"`
 }
 
 // ActionsGatewayStatus is the observed state of an ActionsGateway.

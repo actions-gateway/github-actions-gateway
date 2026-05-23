@@ -2,18 +2,22 @@
 // It reconciles RunnerGroup CRDs into adaptive listener goroutine pools that
 // long-poll the GitHub Actions broker for incoming workflow jobs.
 //
-// Required environment variables:
+// GitHub App credentials are read from files under /etc/actions-gateway/github-app/
+// (projected from a Kubernetes Secret by the GMC). Keys:
 //
-//	GITHUB_APP_ID              - GitHub App numeric ID
-//	GITHUB_APP_PRIVATE_KEY     - Path to PEM file, or PEM literal
-//	GITHUB_APP_INSTALLATION_ID - Installation ID for the target org/repo
+//	appId          - GitHub App numeric ID
+//	installationId - Installation ID for the target org/repo
+//	privateKey     - RSA private key in PEM format
 package main
 
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
@@ -40,19 +44,31 @@ func main() {
 	}
 }
 
+const credsDir = "/etc/actions-gateway/github-app"
+
 func run() error {
-	// ── 1. Read credentials ──────────────────────────────────────────────────
-	appID, err := strconv.ParseInt(mustEnv("GITHUB_APP_ID"), 10, 64)
+	// ── 1. Read credentials from mounted Secret files ────────────────────────
+	appIDBytes, err := os.ReadFile(filepath.Join(credsDir, "appId"))
 	if err != nil {
-		return fmt.Errorf("parse GITHUB_APP_ID: %w", err)
+		return fmt.Errorf("read appId: %w", err)
 	}
-	installID, err := strconv.ParseInt(mustEnv("GITHUB_APP_INSTALLATION_ID"), 10, 64)
+	appID, err := strconv.ParseInt(strings.TrimSpace(string(appIDBytes)), 10, 64)
 	if err != nil {
-		return fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
+		return fmt.Errorf("parse appId: %w", err)
 	}
-	pemBytes, err := loadPEM(mustEnv("GITHUB_APP_PRIVATE_KEY"))
+
+	installIDBytes, err := os.ReadFile(filepath.Join(credsDir, "installationId"))
 	if err != nil {
-		return fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
+		return fmt.Errorf("read installationId: %w", err)
+	}
+	installID, err := strconv.ParseInt(strings.TrimSpace(string(installIDBytes)), 10, 64)
+	if err != nil {
+		return fmt.Errorf("parse installationId: %w", err)
+	}
+
+	pemBytes, err := os.ReadFile(filepath.Join(credsDir, "privateKey"))
+	if err != nil {
+		return fmt.Errorf("read privateKey: %w", err)
 	}
 
 	// ── 2. Build token provider and manager ─────────────────────────────────
@@ -118,11 +134,13 @@ func run() error {
 	}
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
+	httpClient := &http.Client{Timeout: 60 * time.Second}
 	prov := provisioner.NewProvisioner(mgr.GetClient(), m, nil)
 	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")
 	prov.HTTPProxy = os.Getenv("HTTP_PROXY")
 	prov.HTTPSProxy = os.Getenv("HTTPS_PROXY")
 	prov.NoProxy = os.Getenv("NO_PROXY")
+	prov.HTTPClient = httpClient
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img
 	}
@@ -147,14 +165,8 @@ func run() error {
 	} else {
 		stubAuthURL := os.Getenv("STUB_AUTH_URL")
 		stubBrokerURL := os.Getenv("STUB_BROKER_URL")
-		if stubAuthURL == "" && stubBrokerURL == "" {
-			return fmt.Errorf("GITHUB_ORG_URL is required (set STUB_AUTH_URL and STUB_BROKER_URL for testing)")
-		}
-		if stubAuthURL == "" {
-			stubAuthURL = "https://stub.example.com/token"
-		}
-		if stubBrokerURL == "" {
-			stubBrokerURL = "https://stub.example.com/broker"
+		if stubAuthURL == "" || stubBrokerURL == "" {
+			return fmt.Errorf("GITHUB_ORG_URL is required (for testing set both STUB_AUTH_URL and STUB_BROKER_URL)")
 		}
 		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
 	}
@@ -181,19 +193,3 @@ func run() error {
 	return mgr.Start(ctx)
 }
 
-func mustEnv(name string) string {
-	v := os.Getenv(name)
-	if v == "" {
-		fmt.Fprintf(os.Stderr, "required environment variable %s is not set\n", name)
-		os.Exit(1)
-	}
-	return v
-}
-
-func loadPEM(value string) ([]byte, error) {
-	const pemHeader = "-----"
-	if len(value) >= len(pemHeader) && value[:len(pemHeader)] == pemHeader {
-		return []byte(value), nil
-	}
-	return os.ReadFile(value)
-}
