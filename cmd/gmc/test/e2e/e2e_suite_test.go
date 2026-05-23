@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -49,37 +50,73 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "e2e suite")
 }
 
-var _ = BeforeSuite(func() {
-	gmcImage = envOrDefault("GMC_IMG", "gmc:e2e")
-	agcImage = envOrDefault("AGC_IMG", "agc:e2e")
-	proxyImage = envOrDefault("PROXY_IMG", "proxy:e2e")
-	fakegithubImage = envOrDefault("FAKEGITHUB_IMG", "fakegithub:e2e")
+// suiteData holds shared state that process 0 passes to all parallel processes.
+type suiteData struct {
+	GMCImage        string `json:"gmcImage"`
+	AGCImage        string `json:"agcImage"`
+	ProxyImage      string `json:"proxyImage"`
+	FakegithubImage string `json:"fakegithubImage"`
+	RSAKeyPEM       []byte `json:"rsaKeyPEM"`
+}
 
-	By("generating test RSA private key")
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	Expect(err).NotTo(HaveOccurred(), "generate test RSA key")
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	Expect(err).NotTo(HaveOccurred())
-	testRSAKeyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+var _ = SynchronizedBeforeSuite(
+	// Runs ONCE on process 0: cluster setup and shared-state marshaling.
+	func() []byte {
+		gmcImg := envOrDefault("GMC_IMG", "gmc:e2e")
+		agcImg := envOrDefault("AGC_IMG", "agc:e2e")
+		proxyImg := envOrDefault("PROXY_IMG", "proxy:e2e")
+		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "fakegithub:e2e")
 
-	By("loading images into kind cluster")
-	for _, img := range []string{gmcImage, agcImage, proxyImage, fakegithubImage} {
-		Expect(utils.LoadImageToKindClusterWithName(img)).To(Succeed(),
-			"load image %s", img)
-	}
+		By("generating test RSA private key")
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		Expect(err).NotTo(HaveOccurred(), "generate test RSA key")
+		keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+		Expect(err).NotTo(HaveOccurred())
+		rsaKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 
-	configureKubectlKubeRC()
-	setupCertManager()
-	setupMetricsServer()
-	setupFakegithub()
-	setupGMC()
-})
+		By("loading images into kind cluster")
+		for _, img := range []string{gmcImg, agcImg, proxyImg, fakegithubImg} {
+			Expect(utils.LoadImageToKindClusterWithName(img)).To(Succeed(),
+				"load image %s", img)
+		}
 
-var _ = AfterSuite(func() {
-	teardownGMC()
-	teardownFakegithub()
-	teardownCertManager()
-})
+		configureKubectlKubeRC()
+		setupCertManager()
+		setupMetricsServer()
+		setupFakegithub()
+		setupGMC()
+
+		data, err := json.Marshal(suiteData{
+			GMCImage:        gmcImg,
+			AGCImage:        agcImg,
+			ProxyImage:      proxyImg,
+			FakegithubImage: fakegithubImg,
+			RSAKeyPEM:       rsaKeyPEM,
+		})
+		Expect(err).NotTo(HaveOccurred())
+		return data
+	},
+	// Runs on ALL processes after process 0 finishes: populate package-level vars.
+	func(data []byte) {
+		var sd suiteData
+		Expect(json.Unmarshal(data, &sd)).To(Succeed())
+		gmcImage = sd.GMCImage
+		agcImage = sd.AGCImage
+		proxyImage = sd.ProxyImage
+		fakegithubImage = sd.FakegithubImage
+		testRSAKeyPEM = sd.RSAKeyPEM
+	},
+)
+
+var _ = SynchronizedAfterSuite(
+	func() { /* per-process teardown — nothing needed */ },
+	// Runs ONCE on process 0 after all processes finish.
+	func() {
+		teardownGMC()
+		teardownFakegithub()
+		teardownCertManager()
+	},
+)
 
 // setupGMC deploys the GMC controller and waits for it to be ready.
 func setupGMC() {
