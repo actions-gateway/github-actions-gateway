@@ -1104,55 +1104,92 @@ Kyverno, no OPA, no service mesh) satisfies all of the following:
 
 ### Verification & test plan
 
-Each finding lands in one of three verification venues. The table below
-maps the workstream/finding to its venue so reviewers and implementers
-can find the gating check without re-reading the whole document.
+Tests live at the cheapest level that gives real signal. If a unit test
+can verify the invariant, don't write a kind e2e for it. If an
+integration test catches it, don't wait for kind.
 
-| Venue | What goes here | When it runs |
+| Level | Tooling | CI |
 |---|---|---|
-| **Static checks** — `go test ./...` and `envtest`-backed integration | Anything verifiable from the in-process Kubernetes API or pure unit logic | Per PR, in CI |
-| **Kind-based e2e** — `cmd/gmc/test/e2e/` against `fakegithub` | Anything requiring a running cluster + the provisioner reacting | Per PR, in CI |
-| **Real-GitHub manual** — `cmd/gmc/test/e2e/github_e2e_test.go` or `cmd/probe` | Anything requiring real GitHub responses (broker key-type acceptance, registration token issuance) | Manual, gated on credentials |
+| **Unit** | `go test`, no cluster | ✓ per PR |
+| **Integration** | `envtest` (real API server, no CNI) | ✓ per PR |
+| **E2e** | kind + fakegithub | ✓ per PR |
+| **Manual** | Real GitHub App credentials or CNI cluster | ✗ on demand |
 
-#### Static checks
+#### Unit tests
 
-These run as Go tests with no cluster. Each is asserted on the *desired
-state objects* the GMC produces, not by observing a live cluster.
+Assert desired-state objects (structs the controller builds) and
+pure-logic properties. No cluster required.
 
-| Workstream / finding | Test location | Assertion |
-|---|---|---|
-| W1, M-1, M-8 | `cmd/gmc/internal/controller/network_policy_test.go` | Two `NetworkPolicy` objects emitted; each has a non-empty `PodSelector`; egress rules match the expected per-selector shape. |
-| W2, C-1 | `cmd/gmc/internal/controller/builder_test.go` | Tenant namespace gets `pod-security.kubernetes.io/enforce: <profile>` plus the three companion labels; `securityProfile: privileged` produces `privileged` label. |
-| W2 belt-and-suspenders (D-7) | `cmd/gmc/internal/controller/integration/crd_admission_test.go` | `envtest` rejects a CR with `privileged: true` in PodTemplate when `securityProfile: baseline`. |
-| W3, H-1 | `cmd/gmc/internal/controller/builder_test.go` | AGC Deployment has no `GITHUB_APP_*` env entries; has a Secret volume mount at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`. |
-| W4, H-2 | `cmd/gmc/internal/controller/rbac_test.go` and `cmd/gmc/internal/controller/integration/rbac_scope_test.go` | AGC Role has `resourceNames` patterns on the agent-pool Secret rule; SAR check confirms the AGC SA cannot list cluster-wide and cannot `get` an unrelated Secret in-namespace. |
-| W7, M-5 | `cmd/gmc/internal/controller/builder_test.go` | Self-signed cert generated has the proxy DNS name as SAN and 1-year validity; AGC Deployment mounts only the cert (public part); proxy Deployment mounts cert + key. |
-| W8, M-7 | `cmd/gmc/internal/controller/builder_test.go` | AGC and proxy container `SecurityContext` has `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, `SeccompProfile: RuntimeDefault`. |
-| M-3 | `broker/crypto_test.go` | `pkcs7Unpad` returns the same sentinel error for empty, wrong-length, and wrong-byte padding inputs. Adversarial inputs do not panic. |
-| M-4 | `cmd/agc/internal/provisioner/provisioner_test.go` | Adversarial `system.github.repository` values (`../`, `;`, spaces) are rejected before the rerun URL is built. |
-| M-6 | `broker/client_test.go` | `GetMessage` URL with an adversarial `RunnerOS` value escapes the query parameter and does not smuggle additional parameters. |
-| W9, M-11a | `cmd/probe/main_test.go` (new), `githubapp/runner_auth_test.go` | EdDSA signing branch produces a valid JWT verifiable with the matching public key; PKCS#8 round-trip works for both RSA and Ed25519 keys. |
+| Finding | Test file | Assertion | Status |
+|---|---|---|---|
+| W1 — NP shapes | `cmd/gmc/internal/controller/builder_test.go` | `buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`: correct `PodSelector`, PolicyTypes, and egress ports (proxy: DNS+8080; workload: DNS+proxy; AGC: DNS+443). DNS egress present in all three. | ✓ done |
+| W2 — PSA labels | `cmd/gmc/internal/controller/builder_test.go` | Tenant namespace gets `pod-security.kubernetes.io/enforce: <profile>` + companion labels; `privileged` profile produces `privileged` label. | ✓ done |
+| W3 — creds as files | `cmd/gmc/internal/controller/builder_test.go` | AGC Deployment has no `GITHUB_APP_*` env entries; Secret volume mount at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`. | ✓ done |
+| W4 — RBAC verbs | `cmd/gmc/internal/controller/rbac_test.go` | GMC ClusterRole has no wildcard verbs and no wildcard on sensitive resources. AGC Role's `get` on secrets is intentionally broad (D-3 accepted risk — see note below). | ✓ done |
+| W5 — extra env | `cmd/gmc/internal/controller/builder_test.go` | `buildAGCDeployment` with nil `extraEnv` produces no `AGC_EXTRA_*` env entries. | ⚠️ TODO |
+| W7 — cert mount | `cmd/gmc/internal/controller/builder_test.go` | Self-signed cert has proxy DNS SAN and 1-year validity; AGC Deployment mounts only the cert; proxy Deployment mounts cert + key. | ✓ done |
+| W8 — SecurityContext | `cmd/gmc/internal/controller/builder_test.go` | AGC and proxy containers have `RunAsNonRoot`, `ReadOnlyRootFilesystem`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, `SeccompProfile: RuntimeDefault`. | ✓ done |
+| M-3 — PKCS#7 | `broker/crypto_test.go` | `pkcs7Unpad` returns the same sentinel error for empty, wrong-length, and wrong-byte padding; no panic on adversarial input. | ✓ done |
+| M-4 — rerun URL path traversal | `cmd/agc/internal/provisioner/provisioner_test.go` | Adversarial `system.github.repository` values (`../`, `;`, spaces) are rejected before the rerun URL is built. | ⚠️ TODO |
+| M-6 — RunnerOS injection | `broker/client_test.go` | `GetMessage` with adversarial `RunnerOS` escapes the query parameter and does not smuggle additional parameters. | ⚠️ TODO |
+| W9, M-11a — EdDSA | `githubapp/runner_auth_test.go` | EdDSA signing branch produces a JWT verifiable with the matching Ed25519 public key; PKCS#8 round-trip works for RSA and Ed25519. | ✓ done |
+| L-1 — jti | existing JWT tests | `jti` claim is unique per-request and included in the signed assertion. | ✓ done |
 
-#### Kind-based e2e
+**W4 residual risk (D-3):** The AGC Role allows `get` on secrets without
+`resourceNames` because job-secret names are dynamically generated and
+cannot be statically enumerated at deploy time. `list` and `watch` are not
+granted. This is documented accepted risk — do not write a test asserting
+that `get` on an unrelated secret is denied, because it is currently
+allowed and the design knowingly accepts this.
 
-These add Ginkgo `It` blocks to the existing e2e suite. The kind
-cluster, image builds, and `fakegithub` harness are reused. Each
-acceptance-criterion item above maps to one or more `It` blocks.
+#### Integration tests
 
-| Workstream / finding | Test file | Assertion |
-|---|---|---|
-| W1 (acceptance criterion 1) | new `cmd/gmc/test/e2e/network_isolation_test.go` | Debug pod with worker labels: direct `curl https://api.github.com` times out; `curl -x http://actions-gateway-proxy:8080 …` succeeds. |
-| W1 (regression for M-9) | same file | Trigger the IPRange reconciler refresh; verify the worker→proxy egress rule survives. |
-| W2 (acceptance criterion 2) | new `cmd/gmc/test/e2e/security_profile_test.go` | Apply RunnerGroup with `privileged: true` PodTemplate under each profile; assert pod creation is rejected by PSA under `baseline`, accepted under `privileged`. Observed via Events containing `violates PodSecurity`. |
-| W3 (acceptance criterion 3) | extend `cmd/gmc/test/e2e/provisioning_test.go` | `kubectl exec` into AGC: `env | grep GITHUB_APP` returns nothing; `ls /etc/actions-gateway/github-app/` lists `appId`, `installationId`, `privateKey`. |
-| W4 (acceptance criterion 4) | new `cmd/gmc/test/e2e/rbac_isolation_test.go` | Create a user-managed Secret; spawn a pod with the AGC SA; `kubectl get secret <name>` fails with `forbidden`. |
-| W5 (acceptance criterion 5) | extend `cmd/gmc/test/e2e/e2e_suite_test.go` | If D-1 = Option A: assert `AGC_EXTRA_*` env vars on the GMC pod do not propagate without `--allow-agc-extra-env`. If D-1 = Option B: assert `AGC_EXTRA_*` is removed and `spec.endpointOverrides` populates the AGC env. |
-| W7 cert pinning | new `cmd/gmc/test/e2e/proxy_tls_test.go` | AGC reaches proxy over `https://`; rotating the proxy cert to an unrelated self-signed cert causes the AGC's CONNECT to fail until the AGC's trust file is updated. |
+Use `envtest` (real Kubernetes API server, no CNI). Verify that the
+controller correctly creates and updates objects in a live API.
 
-#### Real-GitHub manual verifications
+| Finding | Test file | Assertion | Status |
+|---|---|---|---|
+| W1 — AGC NP existence | `cmd/gmc/internal/controller/integration/network_policy_test.go` | `actions-gateway-agc` NetworkPolicy exists with `app: actions-gateway-agc` selector and a port-443 egress rule after reconcile. | ✓ done |
+| W1 — IPRange refresh | `cmd/gmc/internal/controller/integration/network_policy_test.go` | After `ipRangeReconciler.ReconcileNow(ctx)`, the workload NetworkPolicy's port-8080 proxy egress rule survives. | ✓ done |
+| W2 — CEL admission (D-7) | `cmd/gmc/internal/controller/integration/crd_admission_test.go` | `envtest` rejects a CR with `privileged: true` in PodTemplate when `securityProfile: baseline`. | ✓ done |
+| W4 — cross-namespace RBAC | `cmd/gmc/internal/controller/integration/rbac_scope_test.go` | AGC SA cannot perform actions outside its own namespace. | ✓ done |
 
-Two verifications cannot be done without real GitHub credentials. Each
-records its outcome as a one-paragraph note in this document.
+#### E2e tests
+
+Run the full GMC + fakegithub stack on a kind cluster. Verify live
+cluster behavior — resource creation, controller reactions, pod state.
+
+| Finding | Test file | Assertion | Status |
+|---|---|---|---|
+| W1 — NP exists in each tenant ns | `cmd/gmc/test/e2e/isolation_test.go` | `actions-gateway-proxy`, `actions-gateway-workload`, and `actions-gateway-agc` NetworkPolicies present in each tenant namespace (`E2E_GMC_NetworkPolicyScopedToNamespace`). | ⚠️ TODO — add `actions-gateway-agc` check |
+| W2 — PSA label on namespace | `cmd/gmc/test/e2e/security_profile_test.go` | Namespace has the correct `pod-security.kubernetes.io/enforce` label after GMC reconcile. | ⚠️ TODO — new test file |
+| W3 — no env creds in AGC pod | `cmd/gmc/test/e2e/provisioning_test.go` | `kubectl exec` into AGC: `env \| grep GITHUB_APP` returns nothing; `/etc/actions-gateway/github-app/` lists expected credential files. | ⚠️ TODO — extend existing test |
+| W4 — RBAC provisioned | `cmd/gmc/test/e2e/provisioning_test.go` | `E2E_GMC_ServiceAccountAndRBACCreated`: ServiceAccount and RoleBinding present in tenant namespace. | ✓ done |
+| W5 — no extra env without flag | `cmd/gmc/test/e2e/provisioning_test.go` | AGC pod has no `AGC_EXTRA_*` env vars when GMC started without the opt-in flag. | ⚠️ TODO |
+
+> **⚠️ W1 traffic-enforcement tests — not CI-safe (requires CNI enforcement)**
+>
+> The kind cluster in CI runs `kindnet`, which stores NetworkPolicies in
+> etcd but does **not** enforce them. Any test asserting "a curl from a
+> worker pod to GitHub times out" passes vacuously — making it worthless
+> as a correctness signal.
+>
+> These tests require a cluster with Calico or Cilium. They are not wired
+> into the standard CI pipeline. To run locally against a CNI-enforced
+> cluster:
+>
+> ```sh
+> # Create a kind cluster with Calico (not kindnet), then:
+> make e2e-netpol   # TODO: add this Makefile target
+> ```
+>
+> The NP *shape* tests (unit + integration) run in CI and catch
+> misconfiguration. The traffic-enforcement tests are a belt-and-suspenders
+> check for CNI-enforced clusters — run them before deploying to production.
+
+#### Manual verifications
+
+Two verifications require real credentials and cannot run in CI.
 
 **M-11b — Ed25519 broker compatibility probe (opt-in verification)**
 
@@ -1247,10 +1284,6 @@ rejects the pod with "cannot verify user is non-root".
 
 #### CI gating
 
-- **PR pipeline:** runs static checks and kind-based e2e against
-  `fakegithub`. Phase 1 acceptance criteria become required checks.
-- **Pre-release (manual or scheduled):** runs
-  `cmd/gmc/test/e2e/github_e2e_test.go` against real GitHub to verify
-  the full broker protocol still works with all of Phase 1's changes
-  applied.
-- **One-shot, gated on credentials:** M-11b probe.
+- **Per-PR:** unit tests + integration tests (envtest) + kind e2e (fakegithub).
+- **On-demand (CNI cluster):** W1 traffic-enforcement tests (`make e2e-netpol`).
+- **Manual (credentials required):** M-11b Ed25519 probe.
