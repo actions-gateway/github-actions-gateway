@@ -311,7 +311,7 @@ controls are warranted.
   3. Add a unit test that feeds adversarial `system.github.repository`
      values and asserts the call is rejected before HTTP.
 
-### M-5. AGC→proxy hop uses plaintext HTTP
+### M-5. AGC→proxy hop uses plaintext HTTP — **Fixed (W7, 2026-05-23)**
 
 - **Location:** [cmd/gmc/internal/controller/builder.go:243-245](../../cmd/gmc/internal/controller/builder.go),
   [cmd/gmc/internal/controller/builder.go:298-300](../../cmd/gmc/internal/controller/builder.go)
@@ -946,7 +946,7 @@ Blocked by D-1.
     with `net/url` instead of string concatenation.
 - **Tests:** unit tests with adversarial inputs in each affected file.
 
-#### W7 — Transport hardening: GMC-managed self-signed cert with AGC pinning (closes M-5)
+#### W7 — Transport hardening: GMC-managed self-signed cert with AGC pinning (closes M-5) — **Done 2026-05-23**
 
 No cert-manager dependency. The GMC generates a self-signed cert per
 tenant at provisioning time and rotates it on a schedule. The AGC's
