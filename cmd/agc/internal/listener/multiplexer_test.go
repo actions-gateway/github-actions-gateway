@@ -93,14 +93,40 @@ func TestMultiplexer_SpawnOnAcquire(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	m, oauthSrv, brokerSrv := newMuxWithServers(t, 5, mux)
+	oauthSrv := oauthStub()
+	brokerSrv := httptest.NewServer(mux)
+
+	// spawnCount tracks how many goroutines the factory has been asked to create.
+	// It monotonically increases and never drops back, unlike ActiveCount which can
+	// transiently dip between spawn and the assertion polling on slow CI runners.
+	var spawnCount atomic.Int32
+	factory := func(_ int) listener.Config {
+		spawnCount.Add(1)
+		agent := makeAgent(t, oauthSrv.URL)
+		bc := &broker.BrokerClient{
+			BrokerURL:  brokerSrv.URL,
+			UseV2Flow:  true,
+			HTTPClient: brokerSrv.Client(),
+		}
+		return listener.Config{
+			Group:         "test-rg",
+			Namespace:     "default",
+			Agent:         agent,
+			Broker:        bc,
+			HTTPClient:    oauthSrv.Client(),
+			IdleThreshold: 1_000_000,
+		}
+	}
+
+	m := listener.NewMultiplexer(factory, 5, nil)
+	m.RestartDelay = time.Millisecond
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	require.NoError(t, m.Start(ctx))
-	assert.Eventually(t, func() bool { return m.ActiveCount() >= 2 }, 4*time.Second, 10*time.Millisecond,
-		"expected replacement goroutine spawned after job acquisition")
+	assert.Eventually(t, func() bool { return spawnCount.Load() >= 2 }, 4*time.Second, 10*time.Millisecond,
+		"expected factory called twice: initial goroutine + replacement after job acquisition")
 
 	cancel()
 	m.Stop()
