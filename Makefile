@@ -6,6 +6,7 @@ REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
+GINKGO         := $(REPO_ROOT)/.build/ginkgo
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 3-node local config.
@@ -19,7 +20,8 @@ FAKEGITHUB_IMG ?= fakegithub:e2e
 
 .PHONY: all build build-agc build-probe tools setup-envtest \
         e2e-cluster e2e-cluster-delete e2e-images e2e e2e-multi-node e2e-all e2e-clean \
-        docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub
+        docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
+        ginkgo
 
 all: build
 
@@ -64,39 +66,44 @@ e2e-load-images:
 	kind load docker-image $(FAKEGITHUB_IMG) --name $(KIND_CLUSTER)
 
 # Run Tier A + Tier B e2e tests (excludes multi-node tests).
-# Note: Ginkgo v2 flags must use -args with -ginkgo.<flag>=<value> syntax when
-# invoked via go test. The -- separator passes raw args to the test binary but
-# --label-filter is not recognized; only -ginkgo.label-filter= works.
-e2e:
+# Uses the ginkgo CLI so --procs and --label-filter are recognised.
+e2e: $(GINKGO)
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... \
-		-args -ginkgo.label-filter='!multi-node' -ginkgo.procs=8 \
-		      -ginkgo.github-output -ginkgo.poll-progress-after=60s \
-		      -ginkgo.junit-report=/tmp/e2e-report.xml
+		$(GINKGO) run \
+		--tags e2e --timeout 30m \
+		--label-filter '!multi-node' --procs 8 \
+		--github-output --poll-progress-after 60s \
+		--junit-report /tmp/e2e-report.xml \
+		./test/e2e/...
 
 # Run multi-node e2e tests (requires 3-node cluster; see test/kind-config.yaml).
 # Uses --procs=3 so the three suites' BeforeAll deployment waits overlap.
-e2e-multi-node:
+e2e-multi-node: $(GINKGO)
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... \
-		-args -ginkgo.label-filter='multi-node' -ginkgo.procs=3 \
-		      -ginkgo.github-output -ginkgo.poll-progress-after=60s \
-		      -ginkgo.junit-report=/tmp/e2e-local-report.xml
+		$(GINKGO) run \
+		--tags e2e --timeout 30m \
+		--label-filter 'multi-node' --procs 3 \
+		--github-output --poll-progress-after 60s \
+		--junit-report /tmp/e2e-local-report.xml \
+		./test/e2e/...
 
 # Run all e2e tests including multi-node (HPA load, PDB drain).
-e2e-all:
+e2e-all: $(GINKGO)
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/...
+		$(GINKGO) run \
+		--tags e2e --timeout 30m \
+		--procs 8 \
+		./test/e2e/...
 
 # Tear down the e2e cluster.
 e2e-clean: e2e-cluster-delete
 
 # ── tools ──────────────────────────────────────────────────────────────────────
 
-tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST)
+tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO)
 
 $(CONTROLLER_GEN):
 	mkdir -p $(REPO_ROOT)/.build
@@ -111,3 +118,9 @@ setup-envtest: $(SETUP_ENVTEST)
 $(SETUP_ENVTEST):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/controller-runtime/tools/setup-envtest
+
+$(GINKGO):
+	mkdir -p $(REPO_ROOT)/.build
+	cd $(REPO_ROOT)/cmd/gmc && go build -o $@ github.com/onsi/ginkgo/v2/ginkgo
+
+ginkgo: $(GINKGO)
