@@ -35,17 +35,19 @@ docker-build:
 	docker build -f Dockerfile -t $(IMG) .
 
 # Install CRDs into the cluster.
+# Uses standalone kustomize (not kubectl -k) to support the replacements field.
+# Uses --server-side to avoid the 262144-byte last-applied-configuration limit on large CRDs.
 install:
-	kubectl apply -k config/crd
+	kustomize build config/crd | kubectl apply --server-side -f -
 
 # Uninstall CRDs from the cluster.
 uninstall:
-	kubectl delete -k config/crd --ignore-not-found
+	kustomize build config/crd | kubectl delete --ignore-not-found=true -f -
 
 # Deploy the controller to the cluster.
 # After kustomize apply, override the image and inject AGC/proxy image env vars.
 deploy:
-	kubectl apply -k config/default
+	kustomize build config/default | kubectl apply --server-side --force-conflicts -f -
 	kubectl set image deployment/gmc-controller-manager manager=$(IMG) -n gmc-system
 	kubectl set env deployment/gmc-controller-manager -c manager \
 		AGC_IMAGE=$(AGC_IMAGE) PROXY_IMAGE=$(PROXY_IMAGE) \
@@ -53,7 +55,7 @@ deploy:
 
 # Undeploy the controller from the cluster.
 undeploy:
-	kubectl delete -k config/default --ignore-not-found
+	kustomize build config/default | kubectl delete --ignore-not-found=true -f -
 
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(REPO_ROOT) tools

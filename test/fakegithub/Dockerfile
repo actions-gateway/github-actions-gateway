@@ -6,7 +6,8 @@ COPY go.work go.work.sum go.mod go.sum ./
 COPY cmd/agc/go.mod cmd/agc/go.sum cmd/agc/
 COPY cmd/gmc/go.mod cmd/gmc/go.sum cmd/gmc/
 COPY cmd/proxy/go.mod cmd/proxy/go.sum cmd/proxy/
-COPY cmd/worker/go.mod cmd/worker/go.sum cmd/worker/
+COPY cmd/worker/go.mod cmd/worker/
+COPY cmd/probe/go.mod cmd/probe/
 RUN go work sync 2>/dev/null || true
 # Copy source
 COPY . .
