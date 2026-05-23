@@ -18,7 +18,7 @@ PROXY_IMG     ?= proxy:e2e
 FAKEGITHUB_IMG ?= fakegithub:e2e
 
 .PHONY: all build build-agc build-probe tools setup-envtest \
-        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-all e2e-clean \
+        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-local-only e2e-all e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub
 
 all: build
@@ -74,6 +74,16 @@ e2e:
 		-args -ginkgo.label-filter='!local-only' -ginkgo.procs=8 \
 		      -ginkgo.github-output -ginkgo.poll-progress-after=60s \
 		      -ginkgo.junit-report=/tmp/e2e-report.xml
+
+# Run local-only e2e tests (requires 3-node cluster; see test/kind-config.yaml).
+# Uses --procs=3 so the three suites' BeforeAll deployment waits overlap.
+e2e-local-only:
+	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
+		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
+		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... \
+		-args -ginkgo.label-filter='local-only' -ginkgo.procs=3 \
+		      -ginkgo.github-output -ginkgo.poll-progress-after=60s \
+		      -ginkgo.junit-report=/tmp/e2e-local-report.xml
 
 # Run all e2e tests including local-only (HPA load, PDB drain).
 e2e-all:
