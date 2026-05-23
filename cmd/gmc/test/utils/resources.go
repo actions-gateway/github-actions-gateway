@@ -133,7 +133,7 @@ func WaitForDeploymentReady(ns, name string, timeout time.Duration) {
 		g.Expect(err).NotTo(HaveOccurred())
 		g.Expect(out).NotTo(BeEmpty(), "readyReplicas not yet set")
 		g.Expect(out).NotTo(Equal("0"), "no ready replicas yet")
-	}, timeout, 5*time.Second).Should(Succeed(), "deployment %s/%s not ready", ns, name)
+	}, timeout, 2*time.Second).Should(Succeed(), "deployment %s/%s not ready", ns, name)
 }
 
 // WaitForCondition waits until the given jsonpath expression on a resource equals expectedValue.

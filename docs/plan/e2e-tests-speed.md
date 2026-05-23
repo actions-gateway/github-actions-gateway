@@ -320,6 +320,257 @@ The first run of a branch after the cache is primed sees the full benefit. A col
 
 ---
 
+## 6. Fix `--procs` count: 8 suites, not 6
+
+**Estimated savings: ~2–3 min**
+
+### Problem
+
+The Makefile uses `--procs=6` but there are 8 `Describe` blocks that run in CI:
+`Manager`, `E2E_GMC_Provisioning`, `E2E_GMC_Isolation`, `E2E_GMC_RBAC`,
+`E2E_GMC_HPA_PDB`, `E2E_GMC_Resilience`, `E2E_AGC_JobLifecycle`, and
+`E2E_GMC_Teardown`. (`E2E_GitHub_RealDispatch` self-skips without credentials.)
+
+With fewer processes than ordered containers, Ginkgo places 2 suites on 2
+processes, serialising them and negating part of the parallelism benefit.
+
+### Implementation steps
+
+1. Change `-ginkgo.procs=6` to `-ginkgo.procs=8` in the `e2e` Makefile target.
+   Alternatively use `-ginkgo.procs=-1` (auto-detect based on CPU count) so the
+   count doesn't need to be updated when suites are added.
+
+### Files
+
+- `Makefile` — update `-ginkgo.procs=6` to `-ginkgo.procs=8`
+
+---
+
+## 7. Reduce `WaitForDeploymentReady` polling from 5 s to 2 s
+
+**Estimated savings: ~45 s**
+
+### Problem
+
+`WaitForDeploymentReady` in `cmd/gmc/test/utils/resources.go` has a hardcoded
+5 s polling interval. Improvement 3 reduced `SetDefaultEventuallyPollingInterval`
+to 2 s across all test files, but this utility function was missed. It is the
+most-called waiter in the suite — every `BeforeAll` invokes it.
+
+### Implementation steps
+
+1. Change the hardcoded `5*time.Second` interval in `WaitForDeploymentReady` to
+   `2*time.Second`.
+
+### Files
+
+- `cmd/gmc/test/utils/resources.go` — line with `}, timeout, 5*time.Second`
+
+---
+
+## 8. Parallel deployment waits in the isolation suite
+
+**Estimated savings: ~1–2 min**
+
+### Problem
+
+`E2E_GMC_TwoTenantsIndependentResources` in `isolation_test.go` calls
+`WaitForDeploymentReady` for `nsA` then `nsB` sequentially, even though both
+deployments were applied concurrently in `BeforeAll`:
+
+```go
+utils.WaitForDeploymentReady(nsA, "actions-gateway-proxy", 4*time.Minute)
+utils.WaitForDeploymentReady(nsB, "actions-gateway-proxy", 4*time.Minute)
+```
+
+The second wait starts only after the first completes, adding up to one full
+deployment-ready wait unnecessarily.
+
+### Implementation steps
+
+1. Check both deployments in a single `Eventually` that asserts ready replicas
+   for both `nsA` and `nsB` in one closure, so both are polled together:
+
+   ```go
+   It("E2E_GMC_TwoTenantsIndependentResources: each tenant has its own proxy deployment", func() {
+       Eventually(func(g Gomega) {
+           for _, ns := range []string{nsA, nsB} {
+               cmd := exec.Command("kubectl", "get", "deployment", "actions-gateway-proxy",
+                   "-n", ns, "-o", "jsonpath={.status.readyReplicas}")
+               out, err := utils.Run(cmd)
+               g.Expect(err).NotTo(HaveOccurred())
+               g.Expect(out).NotTo(BeEmpty())
+               g.Expect(out).NotTo(Equal("0"))
+           }
+       }, 4*time.Minute, 2*time.Second).Should(Succeed())
+   })
+   ```
+
+### Files
+
+- `cmd/gmc/test/e2e/isolation_test.go`
+
+---
+
+## 9. Merge sequential teardown checks into one `Eventually`
+
+**Estimated savings: ~30 s**
+
+### Problem
+
+`E2E_GMC_DeleteCRRemovesResources` in `teardown_test.go` uses four separate
+`Eventually` blocks to check that proxy Deployment, AGC Deployment,
+NetworkPolicy, and Service are removed after CR deletion. All four resources
+disappear at roughly the same time (when the finalizer clears). Running four
+separate polling loops serialises checks that could overlap.
+
+### Implementation steps
+
+1. Replace the four `Eventually` blocks with a single one that checks all four
+   resources in one closure:
+
+   ```go
+   Eventually(func(g Gomega) {
+       g.Expect(utils.ResourceExists("deployment",    tenantNS, "actions-gateway-proxy")).To(BeFalse())
+       g.Expect(utils.ResourceExists("deployment",    tenantNS, "actions-gateway-agc")).To(BeFalse())
+       g.Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway")).To(BeFalse())
+       g.Expect(utils.ResourceExists("service",       tenantNS, "actions-gateway-proxy")).To(BeFalse())
+   }, 3*time.Minute, 2*time.Second).Should(Succeed())
+   ```
+
+### Files
+
+- `cmd/gmc/test/e2e/teardown_test.go`
+
+---
+
+## 10. Isolate GMC controller restart from parallel suites
+
+**Estimated savings: variance reduction (not raw speed)**
+
+### Problem
+
+`E2E_GMC_GMCRestartPreservesState` in `resilience_test.go` calls
+`kubectl rollout restart deployment/gmc-controller-manager` against the shared
+`gmc-system` namespace. During the ~60 s the controller pod is cycling, every
+other parallel suite's reconcile loop stalls. Other suites have generous
+`Eventually` timeouts so they should survive, but this adds timing variance and
+can cause flakiness on a loaded CI runner.
+
+### Approach
+
+Label the resilience suite `Serial` (Ginkgo runs `Serial` specs only after all
+parallel specs complete) or add a `local-only` label to the restart test so it
+is excluded from CI. The pure-observation tests in `resilience_test.go`
+(`E2E_GMC_ProxyRecoversAfterPodDelete`) can remain parallel.
+
+### Files
+
+- `cmd/gmc/test/e2e/resilience_test.go` — add `Label("local-only")` to the
+  GMC restart `It` block, or wrap it in a `Serial` container
+
+---
+
+## 11. GitHub Actions log grouping (`--github-output`)
+
+**Estimated savings: readability improvement, not raw speed**
+
+### Problem
+
+With 8 parallel processes each emitting `By(...)` steps, spec start/end lines,
+and failure output, the Actions log is a stream of interleaved text from 8
+sources. It is difficult to find which suite failed or which step a slow spec
+is stuck on.
+
+### Approach
+
+Ginkgo v2's `--github-output` flag emits GitHub Actions workflow commands
+(`::group::` / `::endgroup::` / `::error::`) around each spec. In the Actions
+log viewer every suite collapses to a single line; failed suites expand
+automatically. This is the lowest-effort improvement to CI observability.
+
+### Implementation steps
+
+1. Add `-ginkgo.github-output` to the `-args` list in the `e2e` Makefile target.
+
+### Files
+
+- `Makefile` — add `-ginkgo.github-output` to the `e2e` target
+
+---
+
+## 12. Progress reporting for slow specs (`--poll-progress-after`)
+
+**Estimated savings: faster diagnosis, not raw speed**
+
+### Problem
+
+When a long-running spec (e.g. `WaitForDeploymentReady`) stalls in a parallel
+process, there is no signal in the log until the timeout fires — which can be
+3–4 minutes later. By that point other suites have already finished and the
+failure is hard to attribute to a specific `By(...)` step.
+
+### Approach
+
+Ginkgo v2's `--poll-progress-after=Xs` flag prints a progress report for any
+spec that has not completed within X seconds. The report shows the current
+`By(...)` step and a goroutine trace, making it immediately clear which step is
+hanging and in which process.
+
+A 60 s threshold catches genuine stalls (deployment waits should complete well
+under 3 min) without producing noise on healthy runs.
+
+### Implementation steps
+
+1. Add `-ginkgo.poll-progress-after=60s` to the `-args` list in the `e2e`
+   Makefile target.
+
+### Files
+
+- `Makefile` — add `-ginkgo.poll-progress-after=60s` to the `e2e` target
+
+---
+
+## 13. JUnit report for PR test summary
+
+**Estimated savings: readability improvement, not raw speed**
+
+### Problem
+
+After a parallel run there is no structured summary — pass/fail is buried in
+hundreds of lines of log output. Reviewers and authors have to scroll to find
+out which specific tests failed.
+
+### Approach
+
+Ginkgo v2's `-ginkgo.junit-report=e2e-report.xml` writes a JUnit XML file.
+GitHub Actions can render this as a test summary table in the PR sidebar using
+`actions/upload-artifact` and the built-in test reporter (no third-party action
+required as of GitHub Actions runner v2.308+).
+
+### Implementation steps
+
+1. Add `-ginkgo.junit-report=/tmp/e2e-report.xml` to the `e2e` Makefile target.
+
+2. Add an upload step to `.github/workflows/e2e-test.yml` after the `make e2e`
+   step (runs even on failure):
+
+   ```yaml
+   - name: Upload e2e test report
+     if: always()
+     uses: actions/upload-artifact@v4
+     with:
+       name: e2e-junit-report
+       path: /tmp/e2e-report.xml
+   ```
+
+### Files
+
+- `Makefile` — add `-ginkgo.junit-report=/tmp/e2e-report.xml` to the `e2e` target
+- `.github/workflows/e2e-test.yml` — add upload step
+
+---
+
 ## Recommended implementation order
 
 | # | Change | Effort | Savings | Status |
@@ -329,7 +580,11 @@ The first run of a branch after the cache is primed sees the full benefit. A col
 | 2 | Persistent port-forward | 1 hour | ~1–3 min | ✓ Done |
 | 5 | Docker layer cache | 2 hours | ~3–6 min (cached runs) | ✓ Done |
 | 1 | Ginkgo parallel execution | 4–6 hours | ~10–15 min | ✓ Done |
-
-Change 1 is the remaining item: replacing `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/`SynchronizedAfterSuite` and adding `--procs=6`. It deserves its own PR with careful testing.
-
-Changes 2–4 compound with 1: once parallel execution is in place, each suite's deployment wait overlaps with the others, making the polling interval savings multiply by the number of suites.
+| 7 | `WaitForDeploymentReady` polling 5s → 2s | 5 min | ~45 s | ✓ Done |
+| 6 | Fix `--procs` count (6 → 8) | 5 min | ~2–3 min | ✓ Done |
+| 11 | GitHub Actions log grouping | 5 min | readability | ✓ Done |
+| 12 | Progress reporting for slow specs | 5 min | faster diagnosis | ✓ Done |
+| 9 | Merge teardown `Eventually` blocks | 15 min | ~30 s | ✓ Done |
+| 8 | Parallel isolation deployment waits | 15 min | ~1–2 min | ✓ Done |
+| 13 | JUnit report for PR test summary | 30 min | readability | ✓ Done |
+| 10 | Isolate GMC restart from parallel run | 30 min | variance reduction | ✓ Done |
