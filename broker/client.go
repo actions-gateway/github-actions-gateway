@@ -39,6 +39,28 @@ func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("broker: rate limited, retry after %s", e.RetryAfter)
 }
 
+// UnauthorizedError is returned by GetMessage when the broker responds with
+// 401 Unauthorized or 403 Forbidden. Callers should treat this as a signal
+// to refresh the bearer token before retrying.
+type UnauthorizedError struct {
+	StatusCode int
+}
+
+func (e *UnauthorizedError) Error() string {
+	return fmt.Sprintf("broker: unauthorized (HTTP %d)", e.StatusCode)
+}
+
+// SessionExpiredError is returned by GetMessage when the broker responds with
+// 404 Not Found or 410 Gone, indicating the session no longer exists server-side.
+// Callers should delete and re-create the session.
+type SessionExpiredError struct {
+	StatusCode int
+}
+
+func (e *SessionExpiredError) Error() string {
+	return fmt.Sprintf("broker: session expired (HTTP %d)", e.StatusCode)
+}
+
 // BrokerClient is the low-level HTTP client for the GitHub broker protocol.
 // All methods are context-aware and propagate cancellation.
 //
@@ -308,6 +330,10 @@ func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskA
 	switch resp.StatusCode {
 	case http.StatusAccepted: // 202 — no job queued
 		return nil, nil
+	case http.StatusUnauthorized, http.StatusForbidden: // 401, 403
+		return nil, &UnauthorizedError{StatusCode: resp.StatusCode}
+	case http.StatusNotFound, http.StatusGone: // 404, 410 — session no longer exists
+		return nil, &SessionExpiredError{StatusCode: resp.StatusCode}
 	case http.StatusTooManyRequests: // 429
 		if c.PollMetrics != nil {
 			c.PollMetrics.IncPollError("rate_limited")
