@@ -8,6 +8,8 @@ KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 
 KIND_CLUSTER  ?= actions-gateway-e2e
+# KIND_CONFIG defaults to the 3-node local config.
+# CI uses KIND_CONFIG=test/kind-config-ci.yaml (2-node, no local-only tests).
 KIND_CONFIG   ?= test/kind-config.yaml
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 GMC_IMG       ?= gmc:e2e-$(GIT_SHA)

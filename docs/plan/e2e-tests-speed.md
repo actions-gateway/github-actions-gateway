@@ -120,9 +120,9 @@ The fix is to replace `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/
 
 ---
 
-## 2. Persistent port-forward for fakegithub control API
+## 2. Persistent port-forward for fakegithub control API ✓
 
-**Estimated savings: 1–3 min**
+**Estimated savings: 1–3 min** — **Implemented.**
 
 ### Problem
 
@@ -174,9 +174,9 @@ With parallel execution (§1), derive the port from `GinkgoParallelProcess()` to
 
 ---
 
-## 3. Reduce polling interval from 5 s to 2 s
+## 3. Reduce polling interval from 5 s to 2 s ✓
 
-**Estimated savings: 1–2 min**
+**Estimated savings: 1–2 min** — **Implemented.**
 
 ### Problem
 
@@ -203,9 +203,9 @@ Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a c
 
 ---
 
-## 4. Single-worker kind cluster for CI
+## 4. Single-worker kind cluster for CI ✓
 
-**Estimated savings: ~1 min**
+**Estimated savings: ~1 min** — **Implemented.**
 
 ### Problem
 
@@ -248,9 +248,9 @@ Every `SetDefaultEventuallyPollingInterval(5 * time.Second)` means that when a c
 
 ---
 
-## 5. Docker layer caching in CI
+## 5. Docker layer caching in CI ✓
 
-**Estimated savings: 3–6 min on repeated runs**
+**Estimated savings: 3–6 min on repeated runs** — **Implemented.**
 
 ### Problem
 
@@ -322,14 +322,14 @@ The first run of a branch after the cache is primed sees the full benefit. A col
 
 ## Recommended implementation order
 
-| # | Change | Effort | Savings |
-|---|---|---|---|
-| 3 | Reduce polling interval | 15 min | ~1–2 min |
-| 4 | Single-worker CI cluster | 15 min | ~1 min |
-| 2 | Persistent port-forward | 1 hour | ~1–3 min |
-| 5 | Docker layer cache | 2 hours | ~3–6 min (cached runs) |
-| 1 | Ginkgo parallel execution | 4–6 hours | ~10–15 min |
+| # | Change | Effort | Savings | Status |
+|---|---|---|---|---|
+| 3 | Reduce polling interval | 15 min | ~1–2 min | ✓ Done |
+| 4 | Single-worker CI cluster | 15 min | ~1 min | ✓ Done |
+| 2 | Persistent port-forward | 1 hour | ~1–3 min | ✓ Done |
+| 5 | Docker layer cache | 2 hours | ~3–6 min (cached runs) | ✓ Done |
+| 1 | Ginkgo parallel execution | 4–6 hours | ~10–15 min | Remaining |
 
-Start with 3 and 4 (trivial, no risk), then 2 (isolated to one file), then 5 (CI-only change), then 1 (largest refactor, deserves its own PR with careful testing).
+Change 1 is the remaining item: replacing `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/`SynchronizedAfterSuite` and adding `--procs=6`. It deserves its own PR with careful testing.
 
-Changes 1–4 compound: once parallel execution is in place, each suite's deployment wait overlaps with the others, making the polling interval savings multiply by the number of suites.
+Changes 2–4 compound with 1: once parallel execution is in place, each suite's deployment wait overlaps with the others, making the polling interval savings multiply by the number of suites.

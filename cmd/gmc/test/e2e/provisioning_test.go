@@ -33,7 +33,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	})
 
 	SetDefaultEventuallyTimeout(3 * time.Minute)
-	SetDefaultEventuallyPollingInterval(5 * time.Second)
+	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_GMC_ProvisionsProxyDeployment: proxy Deployment reaches ready", func() {
 		By("waiting for actions-gateway-proxy Deployment to have ready replicas")
@@ -55,7 +55,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("True"), "Ready condition not True yet: %q", out)
-		}, 4*time.Minute, 5*time.Second).Should(Succeed())
+		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_NetworkPoliciesCreated: NetworkPolicy is present in tenant namespace", func() {
@@ -95,7 +95,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 			g.Expect(out).NotTo(BeEmpty(), "proxy pod not yet scheduled")
 			g.Expect(out).NotTo(ContainSubstring("control-plane"),
 				"proxy pod scheduled on control-plane node")
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_ReconcileAfterUpdate: changing spec triggers reconcile", func() {
@@ -117,6 +117,6 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("2"), fmt.Sprintf("HPA minReplicas not updated yet: %q", out))
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })

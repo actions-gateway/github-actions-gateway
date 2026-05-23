@@ -19,6 +19,11 @@ import (
 	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
 )
 
+var (
+	fakegithubPFCmd     *exec.Cmd
+	fakegithubLocalPort = "19090"
+)
+
 var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	const (
 		tenantNS   = "tenant-job-lifecycle"
@@ -38,22 +43,41 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-agc", 4*time.Minute)
+
+		By("starting persistent port-forward to fakegithub control API")
+		fakegithubPFCmd = exec.Command("kubectl", "port-forward",
+			"-n", infraNamespace,
+			"service/"+fakegithubServiceName,
+			fakegithubLocalPort+":9090",
+		)
+		Expect(fakegithubPFCmd.Start()).To(Succeed())
+		Eventually(func() error {
+			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
+			if err != nil {
+				return err
+			}
+			resp.Body.Close()
+			return nil
+		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})
 
 	AfterAll(func() {
+		if fakegithubPFCmd != nil && fakegithubPFCmd.Process != nil {
+			_ = fakegithubPFCmd.Process.Kill()
+		}
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
 		utils.DeleteNamespace(tenantNS)
 	})
 
 	SetDefaultEventuallyTimeout(3 * time.Minute)
-	SetDefaultEventuallyPollingInterval(5 * time.Second)
+	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_AGC_SessionRegistered: AGC creates broker sessions after startup", func() {
 		By("waiting for at least one active session to appear in fakegithub")
 		Eventually(func(g Gomega) {
 			sessions := fakegithubActiveSessions(g)
 			g.Expect(sessions).NotTo(BeEmpty(), "no sessions registered yet")
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_AGC_JobDelivered: enqueuing a job triggers worker pod creation", func() {
@@ -63,7 +87,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			sessions := fakegithubActiveSessions(g)
 			g.Expect(sessions).NotTo(BeEmpty())
 			sessionID = sessions[0]
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		// run_service_url causes the listener to call /acquirejob on fakegithub,
 		// which returns a unique planId ("plan-N") so each job gets a distinct pod name.
@@ -72,8 +96,8 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 		By("enqueuing a job for that session")
 		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":          "e2e-job-1",
-			"jobName":        "e2e test job",
+			"jobId":           "e2e-job-1",
+			"jobName":         "e2e test job",
 			"run_service_url": fakegithubSvcURL,
 		})
 
@@ -87,7 +111,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(strings.TrimSpace(out)).NotTo(BeEmpty(), "no worker pod scheduled yet")
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_AGC_MultipleJobsQueued: multiple jobs result in multiple worker pods", func() {
@@ -96,7 +120,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		Eventually(func(g Gomega) {
 			sessions = fakegithubActiveSessions(g)
 			g.Expect(len(sessions)).To(BeNumerically(">=", 1))
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		// run_service_url causes /acquirejob to be called, yielding a unique planId
 		// per job so each gets a distinct pod name even when queued to the same session.
@@ -123,12 +147,11 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			lines := utils.GetNonEmptyLines(out)
 			g.Expect(len(lines)).To(BeNumerically(">=", 2),
 				"expected ≥2 worker pods, got %d: %s", len(lines), out)
-		}, 4*time.Minute, 5*time.Second).Should(Succeed())
+		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })
 
 // fakegithubActiveSessions queries the fakegithub control API for active sessions.
-// It forwards the HTTP request via kubectl port-forward so it works from outside the cluster.
 func fakegithubActiveSessions(g Gomega) []string {
 	out := fakegithubControlRequest(g, "GET", "/control/sessions", nil)
 	var sessions []string
@@ -146,39 +169,42 @@ func fakegithubEnqueueJob(sessionID string, payload map[string]interface{}) {
 	body, _ := json.Marshal(payload)
 	fakegithubControlRequest(nil, "POST",
 		fmt.Sprintf("/control/enqueue?sessionId=%s", sessionID),
-		bytes.NewReader(body),
+		body,
 	)
 }
 
 // fakegithubControlRequest executes an HTTP request against the fakegithub control API
-// by using kubectl port-forward to reach the control port (9090).
-func fakegithubControlRequest(g interface{ Expect(interface{}, ...interface{}) Assertion }, method, path string, body io.Reader) string {
-	// Port-forward fakegithub control port to localhost.
-	const localPort = "19090"
-	pfCmd := exec.Command("kubectl", "port-forward",
-		"-n", infraNamespace,
-		"service/"+fakegithubServiceName,
-		localPort+":9090",
+// using the persistent port-forward established in BeforeAll.
+// It retries once after 100 ms to handle transient port-forward interruptions.
+func fakegithubControlRequest(g interface{ Expect(interface{}, ...interface{}) Assertion }, method, path string, body []byte) string {
+	url := "http://localhost:" + fakegithubLocalPort + path
+
+	var (
+		resp *http.Response
+		err  error
 	)
-	err := pfCmd.Start()
-	if g != nil {
-		Expect(err).NotTo(HaveOccurred(), "start port-forward")
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewReader(body)
+		}
+		var req *http.Request
+		req, err = http.NewRequest(method, url, bodyReader)
+		if err != nil {
+			continue
+		}
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err = http.DefaultClient.Do(req)
+		if err == nil {
+			break
+		}
 	}
-	defer func() { _ = pfCmd.Process.Kill() }()
 
-	// Give port-forward a moment to establish.
-	time.Sleep(500 * time.Millisecond)
-
-	url := "http://localhost:" + localPort + path
-	req, err := http.NewRequest(method, url, body)
-	if g != nil {
-		Expect(err).NotTo(HaveOccurred())
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := http.DefaultClient.Do(req)
 	if g != nil {
 		Expect(err).NotTo(HaveOccurred(), "HTTP %s %s", method, path)
 		defer resp.Body.Close()

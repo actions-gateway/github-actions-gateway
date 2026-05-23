@@ -37,7 +37,7 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 	})
 
 	SetDefaultEventuallyTimeout(4 * time.Minute)
-	SetDefaultEventuallyPollingInterval(5 * time.Second)
+	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_GMC_TwoTenantsIndependentResources: each tenant has its own proxy deployment", func() {
 		By("waiting for both proxy deployments")
