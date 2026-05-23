@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -504,6 +505,37 @@ func TestGetMessage_V2Flow_URL(t *testing.T) {
 	msg, err := c.GetMessage(context.Background(), "sess-v2")
 	require.NoError(t, err)
 	assert.Nil(t, msg)
+}
+
+func TestGetMessage_V2Flow_AdversarialRunnerOSEscaped(t *testing.T) {
+	t.Parallel()
+	// Verify that a RunnerOS containing query-injection characters is properly
+	// percent-encoded and does not smuggle additional query parameters.
+	var gotRawQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRawQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	c := &broker.BrokerClient{
+		BrokerURL:  srv.URL,
+		UseV2Flow:  true,
+		RunnerOS:   "linux&admin=true",
+		HTTPClient: srv.Client(),
+		Token:      "test-token",
+	}
+	_, err := c.GetMessage(context.Background(), "sess-1")
+	require.NoError(t, err)
+
+	q, err := url.ParseQuery(gotRawQuery)
+	require.NoError(t, err)
+	// Adversarial value must be encoded as a single "os" parameter value.
+	assert.Equal(t, "linux&admin=true", q.Get("os"),
+		"RunnerOS must be a single encoded 'os' value, not split into separate params")
+	// The adversarial string must not inject a separate "admin" parameter.
+	assert.Empty(t, q.Get("admin"),
+		"adversarial RunnerOS must not smuggle an 'admin' query parameter")
 }
 
 func TestGetMessage_V2Flow_NoOptionalParams(t *testing.T) {

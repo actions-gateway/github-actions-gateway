@@ -630,6 +630,15 @@ func TestBuildProxyDeployment_TLSMount(t *testing.T) {
 	assert.Equal(t, proxyTLSMountPath+"/"+corev1.TLSPrivateKeyKey, env["PROXY_TLS_KEY_FILE"].Value)
 }
 
+func TestBuildAGCDeployment_NilExtraEnvNoLeaks(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		assert.False(t, strings.HasPrefix(e.Name, "AGC_EXTRA_"),
+			"nil extraEnv must not produce any AGC_EXTRA_* env var; got %q", e.Name)
+	}
+}
+
 func TestBuildAGCDeployment_ProxyCACertMount(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)

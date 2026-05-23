@@ -521,8 +521,9 @@ func mergeEnvOverride(base, overrides []corev1.EnvVar) []corev1.EnvVar {
 var dnsLabelRe = regexp.MustCompile(`[^a-z0-9-]`)
 
 // repoSegmentRE accepts only the characters GitHub allows in org/repo names.
-// Used to validate owner and repo before constructing API URLs.
-var repoSegmentRE = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+// Must start with an alphanumeric character so that ".." and other dot-leading
+// strings cannot produce path-traversal sequences in the API URL.
+var repoSegmentRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // safeName converts an arbitrary string into a Kubernetes-safe DNS label
 // (lowercase, alphanumeric and hyphens only). The output is at most 48 chars:
