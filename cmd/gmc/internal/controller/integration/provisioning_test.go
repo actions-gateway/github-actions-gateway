@@ -247,11 +247,15 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// Update gitHubAppRef to secret-v2.
-	var fetched gmcv1alpha1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "rotation-gateway"}, &fetched))
-	fetched.Spec.GitHubAppRef.Name = "secret-v2"
-	require.NoError(t, k8sClient.Update(ctx, &fetched))
+	// Update gitHubAppRef to secret-v2 (retry on conflict).
+	require.Eventually(t, func() bool {
+		var fetched gmcv1alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "rotation-gateway"}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.GitHubAppRef.Name = "secret-v2"
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "update ActionsGateway gitHubAppRef to secret-v2")
 
 	// Wait for AGC Deployment to reference secret-v2.
 	g.Eventually(func() bool {
