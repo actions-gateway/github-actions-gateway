@@ -209,6 +209,8 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 	false_ := false
 	true_ := true
 
+	tlsMode := int32(0o400)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: appsv1.DeploymentSpec{
@@ -228,6 +230,15 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 							}},
 						},
 					},
+					Volumes: []corev1.Volume{{
+						Name: proxyTLSVolumeName,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName:  proxyTLSSecretName,
+								DefaultMode: &tlsMode,
+							},
+						},
+					}},
 					Containers: []corev1.Container{{
 						Name:      "proxy",
 						Image:     proxyImage,
@@ -236,6 +247,15 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: proxyHealthPort, Protocol: corev1.ProtocolTCP},
 						},
+						Env: []corev1.EnvVar{
+							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
+							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+						},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      proxyTLSVolumeName,
+							MountPath: proxyTLSMountPath,
+							ReadOnly:  true,
+						}},
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(proxyHealthPort)},
@@ -272,7 +292,25 @@ func buildProxyService(ag *gmcv1alpha1.ActionsGateway) *corev1.Service {
 }
 
 func buildProxyServiceAddr(ag *gmcv1alpha1.ActionsGateway) string {
-	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", proxyServiceName, ag.Namespace, proxyPort)
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", proxyServiceName, ag.Namespace, proxyPort)
+}
+
+// buildProxyCertSecret constructs the Secret that holds the proxy's self-signed TLS cert+key.
+// The proxy Deployment mounts both; the AGC Deployment mounts only the cert (public part)
+// via an Items projection so the private key never reaches the AGC container.
+func buildProxyCertSecret(ag *gmcv1alpha1.ActionsGateway, certPEM, keyPEM []byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      proxyTLSSecretName,
+			Namespace: ag.Namespace,
+			Labels:    managedLabels(ag),
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       certPEM,
+			corev1.TLSPrivateKeyKey: keyPEM,
+		},
+	}
 }
 
 func buildPDB(ag *gmcv1alpha1.ActionsGateway) *policyv1.PodDisruptionBudget {
@@ -334,6 +372,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 
 	secretName := ag.Spec.GitHubAppRef.Name
 	credMode := int32(0o400)
+	caMode := int32(0o444)
 
 	false_ := false
 	true_ := true
@@ -347,24 +386,49 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
-					Volumes: []corev1.Volume{{
-						Name: agcCredsVolumeName,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName:  secretName,
-								DefaultMode: &credMode,
+					Volumes: []corev1.Volume{
+						{
+							Name: agcCredsVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName:  secretName,
+									DefaultMode: &credMode,
+								},
 							},
 						},
-					}},
+						{
+							// Proxy CA cert (public part only — private key excluded via Items).
+							// AGC uses this to pin the proxy's TLS cert rather than trusting
+							// the cluster CA, preventing MITM even from a compromised cluster CA.
+							Name: proxyCACertVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: proxyTLSSecretName,
+									Items: []corev1.KeyToPath{{
+										Key:  corev1.TLSCertKey,
+										Path: corev1.TLSCertKey,
+									}},
+									DefaultMode: &caMode,
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{{
 						Name:  "agc",
 						Image: agcImage,
 						Env:   env,
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      agcCredsVolumeName,
-							MountPath: agcCredsMountPath,
-							ReadOnly:  true,
-						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      agcCredsVolumeName,
+								MountPath: agcCredsMountPath,
+								ReadOnly:  true,
+							},
+							{
+								Name:      proxyCACertVolumeName,
+								MountPath: proxyCACertMountPath,
+								ReadOnly:  true,
+							},
+						},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:             &true_,
 							ReadOnlyRootFilesystem:   &true_,

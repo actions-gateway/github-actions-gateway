@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"net/http"
@@ -49,7 +51,10 @@ func main() {
 	}
 }
 
-const credsDir = "/etc/actions-gateway/github-app"
+const (
+	credsDir       = "/etc/actions-gateway/github-app"
+	proxyCACertDir = "/etc/actions-gateway/proxy-ca"
+)
 
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
@@ -61,6 +66,23 @@ func run() error {
 	case agentpool.KeyTypeEd25519, agentpool.KeyTypeRSA:
 	default:
 		return fmt.Errorf("invalid --agent-key-type %q: must be ed25519 or rsa", agentKeyType)
+	}
+
+	// ── 0.5. Configure proxy TLS cert pinning ───────────────────────────────
+	// The GMC mounts the proxy's self-signed TLS cert (public part only) at
+	// proxyCACertDir/tls.crt. Pinning to this specific cert — rather than
+	// trusting the cluster CA — prevents MITM on the AGC↔proxy hop even from a
+	// compromised cluster CA. If the file is absent (local dev, no TLS proxy)
+	// we fall through and the standard transport uses HTTP proxy as before.
+	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
+	if certPEM, err := os.ReadFile(proxyCACert); err == nil {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(certPEM) {
+			return fmt.Errorf("proxy CA cert at %s: no valid certificates", proxyCACert)
+		}
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.TLSClientConfig = &tls.Config{RootCAs: pool}
+		http.DefaultTransport = t
 	}
 
 	// ── 1. Read credentials from mounted Secret files ────────────────────────

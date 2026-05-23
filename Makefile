@@ -59,7 +59,7 @@ build-agc: ## Build the AGC binary
 
 .PHONY: build-gmc
 build-gmc: ## Build the GMC binary
-	go build -C cmd/gmc -o ../../.build/gmc .
+	go build -C cmd/gmc/cmd -o ../../../.build/gmc .
 
 .PHONY: build-probe
 build-probe: ## Build the probe binary

@@ -2,9 +2,11 @@
 //
 // Environment variables:
 //
-//	PROXY_PORT         - CONNECT listener port (default 8080)
-//	PROXY_HEALTH_PORT  - Health + metrics port (default 8081)
-//	PROXY_DIAL_TIMEOUT - Upstream TCP dial timeout (default 10s)
+//	PROXY_PORT          - CONNECT listener port (default 8080)
+//	PROXY_HEALTH_PORT   - Health + metrics port (default 8081)
+//	PROXY_DIAL_TIMEOUT  - Upstream TCP dial timeout (default 10s)
+//	PROXY_TLS_CERT_FILE - Path to TLS certificate; enables TLS when paired with PROXY_TLS_KEY_FILE
+//	PROXY_TLS_KEY_FILE  - Path to TLS private key;  enables TLS when paired with PROXY_TLS_CERT_FILE
 package main
 
 import (
@@ -43,8 +45,11 @@ func run(log *slog.Logger) error {
 		log,
 		nil,
 	)
+	srv.TLSCertFile = os.Getenv("PROXY_TLS_CERT_FILE")
+	srv.TLSKeyFile = os.Getenv("PROXY_TLS_KEY_FILE")
 
-	log.Info("proxy starting", "proxyPort", proxyPort, "healthPort", healthPort)
+	tlsEnabled := srv.TLSCertFile != "" && srv.TLSKeyFile != ""
+	log.Info("proxy starting", "proxyPort", proxyPort, "healthPort", healthPort, "tls", tlsEnabled)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	return srv.ListenAndServe(ctx)

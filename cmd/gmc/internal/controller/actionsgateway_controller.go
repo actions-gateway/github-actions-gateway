@@ -37,6 +37,7 @@ import (
 // +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
@@ -122,6 +123,11 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		}
 	}
 
+	// 7a. Proxy TLS cert Secret — must exist before the proxy Deployment references it.
+	if err := r.ensureProxyCert(ctx, ag); err != nil {
+		return fmt.Errorf("proxy TLS cert: %w", err)
+	}
+
 	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
 	if err := r.applyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
@@ -195,11 +201,12 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 
 	// 2. AGC Deployment.
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, agcAppName)
-	// 3. HPA, PDB, proxy Service, proxy Deployment.
+	// 3. HPA, PDB, proxy Service, proxy Deployment, proxy TLS cert Secret.
 	r.deleteIfExists(ctx, &autoscalingv2.HorizontalPodAutoscaler{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &policyv1.PodDisruptionBudget{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &corev1.Service{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, proxyServiceName)
+	r.deleteIfExists(ctx, &corev1.Secret{}, ns, proxyTLSSecretName)
 	// 4. ResourceQuota, NetworkPolicies.
 	r.deleteIfExists(ctx, &corev1.ResourceQuota{}, ns, "actions-gateway")
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
@@ -443,6 +450,41 @@ func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, desired
 	}
 	existing.Labels = desired.Labels
 	existing.Spec = desired.Spec
+	return r.Update(ctx, &existing)
+}
+
+// ensureProxyCert ensures the proxy TLS Secret exists and contains a cert valid for
+// at least proxyCertRenewBefore. It generates (or re-generates) a self-signed cert
+// when the Secret is missing, unparseable, or nearing expiry. RSA key generation is
+// done by the GMC so the private key never leaves the cluster — it is stored in the
+// Secret and mounted read-only into the proxy pod. The AGC receives only the public
+// cert (tls.crt) via a separate Items-projected volume mount.
+func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	var existing corev1.Secret
+	getErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: proxyTLSSecretName}, &existing)
+	if getErr != nil && !apierrors.IsNotFound(getErr) {
+		return getErr
+	}
+
+	if !apierrors.IsNotFound(getErr) {
+		if cert, err := parseCertPEM(existing.Data[corev1.TLSCertKey]); err == nil {
+			if time.Until(cert.NotAfter) > proxyCertRenewBefore {
+				return nil // cert is valid and not near expiry
+			}
+		}
+	}
+
+	certPEM, keyPEM, err := generateProxyCert(ag)
+	if err != nil {
+		return fmt.Errorf("generate proxy cert: %w", err)
+	}
+
+	desired := buildProxyCertSecret(ag, certPEM, keyPEM)
+	if apierrors.IsNotFound(getErr) {
+		return r.Create(ctx, desired)
+	}
+	existing.Data = desired.Data
+	existing.Labels = desired.Labels
 	return r.Update(ctx, &existing)
 }
 

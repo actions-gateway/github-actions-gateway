@@ -19,10 +19,14 @@ type Server struct {
 	// Addr is the listen address for CONNECT requests. Default ":8080".
 	Addr string
 	// HealthAddr is the listen address for /healthz and /metrics. Default ":8081".
-	HealthAddr  string
+	HealthAddr string
 	// DialTimeout is the upstream TCP dial timeout. Default 10s.
 	DialTimeout time.Duration
 	Log         *slog.Logger
+	// TLSCertFile and TLSKeyFile enable TLS on the CONNECT listener when both are set.
+	// The health port always remains plaintext.
+	TLSCertFile string
+	TLSKeyFile  string
 
 	connectionsActive *prometheus.GaugeVec
 	connectionsTotal  *prometheus.CounterVec
@@ -76,7 +80,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- healthSrv.ListenAndServe() }()
-	go func() { errCh <- proxySrv.ListenAndServe() }()
+	if s.TLSCertFile != "" && s.TLSKeyFile != "" {
+		go func() { errCh <- proxySrv.ListenAndServeTLS(s.TLSCertFile, s.TLSKeyFile) }()
+	} else {
+		go func() { errCh <- proxySrv.ListenAndServe() }()
+	}
 
 	select {
 	case <-ctx.Done():

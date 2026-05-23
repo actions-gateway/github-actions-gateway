@@ -4,6 +4,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -372,7 +373,7 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 func TestBuildProxyServiceAddr_Format(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	addr := buildProxyServiceAddr(ag)
-	assert.Equal(t, "http://actions-gateway-proxy.team-a.svc.cluster.local:8080", addr)
+	assert.Equal(t, "https://actions-gateway-proxy.team-a.svc.cluster.local:8080", addr)
 }
 
 // §5 — untested resource constructors
@@ -512,4 +513,108 @@ func TestManagedLabels_ContainsOwnerRef(t *testing.T) {
 	labels := managedLabels(ag)
 	assert.Equal(t, "my-gateway", labels["actions-gateway/owner-name"])
 	assert.Equal(t, "my-ns", labels["actions-gateway/owner-ns"])
+}
+
+// §W7 — proxy TLS cert generation, secret, and deployment mounts
+
+func TestGenerateProxyCert_SANsAndValidity(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	certPEM, keyPEM, err := generateProxyCert(ag)
+	require.NoError(t, err)
+	require.NotEmpty(t, certPEM)
+	require.NotEmpty(t, keyPEM)
+
+	cert, err := parseCertPEM(certPEM)
+	require.NoError(t, err)
+
+	// FQDN SAN must be present.
+	assert.Contains(t, cert.DNSNames, "actions-gateway-proxy.team-a.svc.cluster.local",
+		"cert must include the fully-qualified proxy Service DNS name as SAN")
+	// Short names must also be SANs so in-namespace lookups work.
+	assert.Contains(t, cert.DNSNames, "actions-gateway-proxy")
+
+	// Validity must be approximately 1 year.
+	remaining := cert.NotAfter.Sub(cert.NotBefore)
+	assert.GreaterOrEqual(t, remaining, 364*24*time.Hour, "cert must be valid for at least 364 days")
+	assert.Less(t, remaining, 366*24*time.Hour, "cert must not be valid for more than 366 days")
+}
+
+func TestBuildProxyCertSecret(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	certPEM, keyPEM, err := generateProxyCert(ag)
+	require.NoError(t, err)
+
+	s := buildProxyCertSecret(ag, certPEM, keyPEM)
+	assert.Equal(t, proxyTLSSecretName, s.Name)
+	assert.Equal(t, ag.Namespace, s.Namespace)
+	assert.Equal(t, corev1.SecretTypeTLS, s.Type)
+	assert.Equal(t, certPEM, s.Data[corev1.TLSCertKey])
+	assert.Equal(t, keyPEM, s.Data[corev1.TLSPrivateKeyKey])
+}
+
+func TestBuildProxyDeployment_TLSMount(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildProxyDeployment(ag, "proxy:latest")
+
+	// TLS volume must reference the proxy TLS Secret.
+	var tlsVol *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		if dep.Spec.Template.Spec.Volumes[i].Name == proxyTLSVolumeName {
+			tlsVol = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, tlsVol, "proxy TLS volume must be present")
+	require.NotNil(t, tlsVol.Secret, "proxy TLS volume source must be a Secret")
+	assert.Equal(t, proxyTLSSecretName, tlsVol.Secret.SecretName)
+	require.NotNil(t, tlsVol.Secret.DefaultMode)
+	assert.Equal(t, int32(0o400), *tlsVol.Secret.DefaultMode)
+
+	c := dep.Spec.Template.Spec.Containers[0]
+	var tlsMount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == proxyTLSVolumeName {
+			tlsMount = &c.VolumeMounts[i]
+		}
+	}
+	require.NotNil(t, tlsMount, "proxy TLS VolumeMount must be present")
+	assert.Equal(t, proxyTLSMountPath, tlsMount.MountPath)
+	assert.True(t, tlsMount.ReadOnly)
+
+	// Env vars must point to the mounted cert and key files.
+	env := envMap(c.Env)
+	assert.Equal(t, proxyTLSMountPath+"/"+corev1.TLSCertKey, env["PROXY_TLS_CERT_FILE"].Value)
+	assert.Equal(t, proxyTLSMountPath+"/"+corev1.TLSPrivateKeyKey, env["PROXY_TLS_KEY_FILE"].Value)
+}
+
+func TestBuildAGCDeployment_ProxyCACertMount(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)
+
+	// CA cert volume must project only tls.crt from the proxy TLS Secret —
+	// the private key must NOT reach the AGC container.
+	var caVol *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		if dep.Spec.Template.Spec.Volumes[i].Name == proxyCACertVolumeName {
+			caVol = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, caVol, "proxy CA cert volume must be present on AGC Deployment")
+	require.NotNil(t, caVol.Secret, "CA cert volume source must be a Secret")
+	assert.Equal(t, proxyTLSSecretName, caVol.Secret.SecretName)
+
+	// Items projection must expose only tls.crt — never tls.key.
+	require.Len(t, caVol.Secret.Items, 1, "only tls.crt must be projected into the AGC — not tls.key")
+	assert.Equal(t, corev1.TLSCertKey, caVol.Secret.Items[0].Key)
+	assert.Equal(t, corev1.TLSCertKey, caVol.Secret.Items[0].Path)
+
+	c := dep.Spec.Template.Spec.Containers[0]
+	var caMount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == proxyCACertVolumeName {
+			caMount = &c.VolumeMounts[i]
+		}
+	}
+	require.NotNil(t, caMount, "proxy CA cert VolumeMount must be present")
+	assert.Equal(t, proxyCACertMountPath, caMount.MountPath)
+	assert.True(t, caMount.ReadOnly)
 }
