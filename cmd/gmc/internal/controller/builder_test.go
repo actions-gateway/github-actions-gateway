@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -33,22 +34,59 @@ func envMap(envs []corev1.EnvVar) map[string]corev1.EnvVar {
 	return m
 }
 
-func TestBuildAGCDeployment_SecretRefs(t *testing.T) {
+func TestBuildAGCDeployment_CredentialMount(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
 	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
-	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+	c := dep.Spec.Template.Spec.Containers[0]
+	env := envMap(c.Env)
 
+	// GitHub App credentials must NOT appear as env var secretKeyRefs.
 	for _, key := range []string{"GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_APP_INSTALLATION_ID"} {
-		e, ok := env[key]
-		require.True(t, ok, "missing env %s", key)
-		require.NotNil(t, e.ValueFrom)
-		require.NotNil(t, e.ValueFrom.SecretKeyRef)
-		assert.Equal(t, "github-app", e.ValueFrom.SecretKeyRef.Name)
+		_, ok := env[key]
+		assert.False(t, ok, "credential env var %s must not be present; use file mount instead", key)
 	}
-	assert.Equal(t, "appId", env["GITHUB_APP_ID"].ValueFrom.SecretKeyRef.Key)
-	assert.Equal(t, "privateKey", env["GITHUB_APP_PRIVATE_KEY"].ValueFrom.SecretKeyRef.Key)
-	assert.Equal(t, "installationId", env["GITHUB_APP_INSTALLATION_ID"].ValueFrom.SecretKeyRef.Key)
+
+	// Secret must be mounted as a volume.
+	var credVol *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		if dep.Spec.Template.Spec.Volumes[i].Name == agcCredsVolumeName {
+			credVol = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, credVol, "github-app-credentials volume must be present")
+	require.NotNil(t, credVol.Secret, "volume source must be Secret")
+	assert.Equal(t, "github-app", credVol.Secret.SecretName)
+	require.NotNil(t, credVol.Secret.DefaultMode)
+	assert.Equal(t, int32(0o400), *credVol.Secret.DefaultMode, "credentials must be mounted read-only (0400)")
+
+	// VolumeMount must be present on the AGC container.
+	var credMount *corev1.VolumeMount
+	for i := range c.VolumeMounts {
+		if c.VolumeMounts[i].Name == agcCredsVolumeName {
+			credMount = &c.VolumeMounts[i]
+		}
+	}
+	require.NotNil(t, credMount, "github-app-credentials VolumeMount must be present")
+	assert.Equal(t, agcCredsMountPath, credMount.MountPath)
+	assert.True(t, credMount.ReadOnly, "credential mount must be read-only")
+}
+
+func TestBuildAGCDeployment_SecurityContext(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	sc := dep.Spec.Template.Spec.Containers[0].SecurityContext
+	require.NotNil(t, sc)
+	require.NotNil(t, sc.RunAsNonRoot)
+	assert.True(t, *sc.RunAsNonRoot)
+	require.NotNil(t, sc.ReadOnlyRootFilesystem)
+	assert.True(t, *sc.ReadOnlyRootFilesystem)
+	require.NotNil(t, sc.AllowPrivilegeEscalation)
+	assert.False(t, *sc.AllowPrivilegeEscalation)
+	require.NotNil(t, sc.Capabilities)
+	assert.Contains(t, sc.Capabilities.Drop, corev1.Capability("ALL"))
+	require.NotNil(t, sc.SeccompProfile)
+	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, sc.SeccompProfile.Type)
 }
 
 func TestBuildAGCDeployment_ProxyEnv(t *testing.T) {
@@ -107,16 +145,22 @@ func TestBuildProxyDeployment_SecurityContext(t *testing.T) {
 	assert.True(t, *sc.ReadOnlyRootFilesystem)
 	require.NotNil(t, sc.AllowPrivilegeEscalation)
 	assert.False(t, *sc.AllowPrivilegeEscalation)
+	require.NotNil(t, sc.Capabilities)
+	assert.Contains(t, sc.Capabilities.Drop, corev1.Capability("ALL"))
+	require.NotNil(t, sc.SeccompProfile)
+	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, sc.SeccompProfile.Type)
 }
 
-func TestBuildNetworkPolicy_ProxyEgress(t *testing.T) {
+func TestBuildProxyNetworkPolicy_GitHubEgress(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	_, cidr1, _ := net.ParseCIDR("140.82.112.0/20")
 	_, cidr2, _ := net.ParseCIDR("192.30.252.0/22")
 	cidrs := []net.IPNet{*cidr1, *cidr2}
 
-	np := buildNetworkPolicy(ag, "10.96.0.1", cidrs)
+	np := buildProxyNetworkPolicy(ag, cidrs)
 	require.NotNil(t, np)
+	assert.Equal(t, npProxyName, np.Name)
+	assert.Equal(t, proxyAppName, np.Spec.PodSelector.MatchLabels["app"], "proxy NP must select proxy pods")
 
 	// Find egress rule containing port 443 with GitHub CIDRs.
 	found := false
@@ -131,17 +175,16 @@ func TestBuildNetworkPolicy_ProxyEgress(t *testing.T) {
 	assert.True(t, found, "expected egress rule for port 443 with GitHub CIDRs")
 }
 
-func TestBuildNetworkPolicy_ManagedFalse(t *testing.T) {
+func TestBuildProxyNetworkPolicy_ManagedFalse(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	ag.Spec.Proxy.ManagedNetworkPolicy = ptr(false)
 	_, cidr1, _ := net.ParseCIDR("140.82.112.0/20")
 
-	np := buildNetworkPolicy(ag, "", []net.IPNet{*cidr1})
+	np := buildProxyNetworkPolicy(ag, []net.IPNet{*cidr1})
 
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
 			if port.Port != nil && port.Port.IntVal == 443 {
-				// Should not have GitHub CIDR peers when managedNetworkPolicy is false.
 				for _, peer := range rule.To {
 					if peer.IPBlock != nil {
 						assert.NotEqual(t, "140.82.112.0/20", peer.IPBlock.CIDR)
@@ -152,6 +195,23 @@ func TestBuildNetworkPolicy_ManagedFalse(t *testing.T) {
 	}
 }
 
+func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildProxyNetworkPolicy(ag, nil)
+
+	require.Len(t, np.Spec.Ingress, 1)
+	rule := np.Spec.Ingress[0]
+	require.Len(t, rule.From, 1)
+	peer := rule.From[0]
+	require.NotNil(t, peer.PodSelector)
+	assert.Equal(t, componentWorkload, peer.PodSelector.MatchLabels[labelComponent],
+		"proxy ingress must only allow workload-labeled pods")
+	assert.Nil(t, peer.IPBlock, "IPBlock must be nil — ingress must not allow arbitrary IPs")
+	// Must restrict to proxyPort only.
+	require.Len(t, rule.Ports, 1)
+	assert.Equal(t, proxyPort, rule.Ports[0].Port.IntVal)
+}
+
 func TestBuildRole_AGCPermissions(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	role := buildAGCRole(ag)
@@ -160,6 +220,27 @@ func TestBuildRole_AGCPermissions(t *testing.T) {
 	for _, rule := range role.Rules {
 		for _, verb := range rule.Verbs {
 			assert.NotEqual(t, "*", verb, "wildcard verb found in rule: %v", rule)
+		}
+	}
+}
+
+func TestBuildRole_SecretsVerbs_NoListWatch(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	role := buildAGCRole(ag)
+
+	for _, rule := range role.Rules {
+		isSecrets := false
+		for _, r := range rule.Resources {
+			if r == "secrets" {
+				isSecrets = true
+			}
+		}
+		if !isSecrets {
+			continue
+		}
+		for _, verb := range rule.Verbs {
+			assert.NotEqual(t, "list", verb, "secrets rule must not include 'list' verb")
+			assert.NotEqual(t, "watch", verb, "secrets rule must not include 'watch' verb")
 		}
 	}
 }
@@ -208,11 +289,14 @@ func TestBuildAGCDeployment_NoProxyContainsDefaults(t *testing.T) {
 	}
 }
 
-// §2 — buildNetworkPolicy DNS and AGC/worker egress
+// §2 — buildWorkloadNetworkPolicy egress and buildProxyNetworkPolicy DNS
 
-func TestBuildNetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
+func TestBuildWorkloadNetworkPolicy_EgressToProxy(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildNetworkPolicy(ag, "10.96.0.1", nil)
+	np := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
+	assert.Equal(t, npWorkloadName, np.Name)
+	assert.Equal(t, componentWorkload, np.Spec.PodSelector.MatchLabels[labelComponent],
+		"workload NP must select workload-labeled pods")
 
 	found := false
 	for _, rule := range np.Spec.Egress {
@@ -226,36 +310,25 @@ func TestBuildNetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 			}
 		}
 	}
-	assert.True(t, found, "expected AGC/worker egress rule to proxy ClusterIP on port 8080")
+	assert.True(t, found, "expected workload egress rule to proxy ClusterIP on port 8080")
 }
 
-func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
-	for _, managed := range []bool{true, false} {
-		ag := newTestAG("gateway", "team-a")
-		ag.Spec.Proxy.ManagedNetworkPolicy = ptr(managed)
-		np := buildNetworkPolicy(ag, "", nil)
+func TestBuildWorkloadNetworkPolicy_NoGitHubEgress(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
 
-		udpFound, tcpFound := false, false
-		for _, rule := range np.Spec.Egress {
-			for _, port := range rule.Ports {
-				if port.Port != nil && port.Port.IntVal == 53 {
-					if port.Protocol != nil && *port.Protocol == corev1.ProtocolUDP {
-						udpFound = true
-					}
-					if port.Protocol != nil && *port.Protocol == corev1.ProtocolTCP {
-						tcpFound = true
-					}
-				}
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 443 {
+				t.Errorf("workload NP must not allow direct egress on port 443")
 			}
 		}
-		assert.True(t, udpFound, "expected DNS UDP egress when managedNetworkPolicy=%v", managed)
-		assert.True(t, tcpFound, "expected DNS TCP egress when managedNetworkPolicy=%v", managed)
 	}
 }
 
-func TestBuildNetworkPolicy_NoProxyEgressWhenClusterIPEmpty(t *testing.T) {
+func TestBuildWorkloadNetworkPolicy_NoProxyEgressWhenClusterIPEmpty(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildNetworkPolicy(ag, "", nil)
+	np := buildWorkloadNetworkPolicy(ag, "")
 
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
@@ -266,19 +339,32 @@ func TestBuildNetworkPolicy_NoProxyEgressWhenClusterIPEmpty(t *testing.T) {
 	}
 }
 
-func TestBuildNetworkPolicy_IngressFromNamespaceOnly(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	np := buildNetworkPolicy(ag, "", nil)
+func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
+	for _, managed := range []bool{true, false} {
+		ag := newTestAG("gateway", "team-a")
+		ag.Spec.Proxy.ManagedNetworkPolicy = ptr(managed)
 
-	// Exactly one ingress rule with a single empty-PodSelector peer
-	// (allows all pods in the same namespace, denies external traffic).
-	require.Len(t, np.Spec.Ingress, 1)
-	rule := np.Spec.Ingress[0]
-	require.Len(t, rule.From, 1)
-	peer := rule.From[0]
-	require.NotNil(t, peer.PodSelector, "expected PodSelector peer for namespace-scoped ingress")
-	assert.Empty(t, peer.PodSelector.MatchLabels, "empty MatchLabels = all pods in namespace")
-	assert.Nil(t, peer.IPBlock, "IPBlock must be nil — ingress must not allow arbitrary IPs")
+		for _, np := range []*networkingv1.NetworkPolicy{
+			buildProxyNetworkPolicy(ag, nil),
+			buildWorkloadNetworkPolicy(ag, ""),
+		} {
+			udpFound, tcpFound := false, false
+			for _, rule := range np.Spec.Egress {
+				for _, port := range rule.Ports {
+					if port.Port != nil && port.Port.IntVal == 53 {
+						if port.Protocol != nil && *port.Protocol == corev1.ProtocolUDP {
+							udpFound = true
+						}
+						if port.Protocol != nil && *port.Protocol == corev1.ProtocolTCP {
+							tcpFound = true
+						}
+					}
+				}
+			}
+			assert.True(t, udpFound, "expected DNS UDP egress in %s when managedNetworkPolicy=%v", np.Name, managed)
+			assert.True(t, tcpFound, "expected DNS TCP egress in %s when managedNetworkPolicy=%v", np.Name, managed)
+		}
+	}
 }
 
 // §4 — buildProxyServiceAddr format

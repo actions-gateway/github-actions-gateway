@@ -444,7 +444,7 @@ func isSessionExpired(err error) bool {
 // MessageListener.cs: up to 5 errors → [15s,30s); beyond 5 → [30s,60s).
 func BackoffDelay(consecutiveErrors int, _ Clock) time.Duration {
 	if consecutiveErrors <= 5 {
-		return 15*time.Second + time.Duration(rand.Int63n(int64(15*time.Second)))
+		return 15*time.Second + time.Duration(rand.Int63n(int64(15*time.Second))) //nolint:gosec // jitter, not crypto
 	}
-	return 30*time.Second + time.Duration(rand.Int63n(int64(30*time.Second)))
+	return 30*time.Second + time.Duration(rand.Int63n(int64(30*time.Second))) //nolint:gosec // jitter, not crypto
 }

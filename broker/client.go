@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -213,7 +214,7 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 	rawBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusBadRequest {
-		msg := string(rawBody)
+		msg := capBody(rawBody, 200)
 		if strings.Contains(strings.ToLower(msg), "version") ||
 			strings.Contains(strings.ToLower(msg), "too old") ||
 			strings.Contains(strings.ToLower(msg), "minimum") {
@@ -223,7 +224,7 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",
-			resp.StatusCode, url, string(rawBody))
+			resp.StatusCode, url, capBody(rawBody, 200))
 	}
 
 	var respBody struct {
@@ -260,27 +261,40 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 // Callers are responsible for retrying on nil/nil with appropriate backoff.
 // Returns *RateLimitError on 429.
 func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
-	var url string
+	var reqURL string
 	if c.UseV2Flow {
 		// Broker v2 API: GET {serverUrl}message with status/version/os/arch params.
 		// Matches BrokerHttpClient.GetRunnerMessageAsync.
-		url = strings.TrimRight(c.BrokerURL, "/") + "/message" +
-			"?sessionId=" + sessionID +
-			"&status=online"
+		u, err := url.Parse(strings.TrimRight(c.BrokerURL, "/") + "/message")
+		if err != nil {
+			return nil, fmt.Errorf("broker: GetMessage: parse URL: %w", err)
+		}
+		q := u.Query()
+		q.Set("sessionId", sessionID)
+		q.Set("status", "online")
 		if c.RunnerVersion != "" {
-			url += "&runnerVersion=" + c.RunnerVersion
+			q.Set("runnerVersion", c.RunnerVersion)
 		}
 		if c.RunnerOS != "" {
-			url += "&os=" + c.RunnerOS
+			q.Set("os", c.RunnerOS)
 		}
 		if c.RunnerArch != "" {
-			url += "&architecture=" + c.RunnerArch
+			q.Set("architecture", c.RunnerArch)
 		}
-		url += "&disableUpdate=false"
+		q.Set("disableUpdate", "false")
+		u.RawQuery = q.Encode()
+		reqURL = u.String()
 	} else {
-		url = vstsURL(c.PoolBase()+"/messages?sessionId="+sessionID, vstsAPIVersionMessage)
+		u, err := url.Parse(c.PoolBase() + "/messages")
+		if err != nil {
+			return nil, fmt.Errorf("broker: GetMessage: parse URL: %w", err)
+		}
+		q := u.Query()
+		q.Set("sessionId", sessionID)
+		u.RawQuery = q.Encode()
+		reqURL = vstsURL(u.String(), vstsAPIVersionMessage)
 	}
-	req, err := c.newJSONRequest(ctx, http.MethodGet, url, nil)
+	req, err := c.newJSONRequest(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +353,7 @@ func (c *BrokerClient) AcquireJob(ctx context.Context, runServiceURL string, req
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("broker: AcquireJob: unexpected status %d: %s", resp.StatusCode, string(rawBody))
+		return nil, nil, fmt.Errorf("broker: AcquireJob: unexpected status %d: %s", resp.StatusCode, capBody(rawBody, 200))
 	}
 
 	var parsed AcquireJobResponse
@@ -372,7 +386,7 @@ func (c *BrokerClient) RenewJob(ctx context.Context, runServiceURL string, reqDa
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("broker: RenewJob: unexpected status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("broker: RenewJob: unexpected status %d: %s", resp.StatusCode, capBody(body, 200))
 	}
 
 	var result RenewJobResponse
@@ -441,6 +455,15 @@ func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) erro
 		return fmt.Errorf("broker: DeleteSession: unexpected status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// capBody returns at most n bytes of b as a string, preventing unbounded error
+// messages from being logged or returned when a server sends a large response.
+func capBody(b []byte, n int) string {
+	if len(b) > n {
+		return string(b[:n])
+	}
+	return string(b)
 }
 
 // parseRateLimitError builds a *RateLimitError from a 429 response, honoring

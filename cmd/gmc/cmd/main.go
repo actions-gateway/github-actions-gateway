@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -70,6 +71,9 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	var allowAgcExtraEnv bool
+	flag.BoolVar(&allowAgcExtraEnv, "allow-agc-extra-env", false,
+		"Forward AGC_EXTRA_* environment variables from the GMC pod to AGC Deployments. Intended for testing only.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -172,20 +176,25 @@ func main() {
 	agcImage := mustEnv("AGC_IMAGE")
 	proxyImage := mustEnv("PROXY_IMAGE")
 
+	httpClient := &http.Client{Timeout: 60 * time.Second}
+
 	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
-	// each AGC Deployment the controller creates. Intended for test/debug use only.
+	// each AGC Deployment the controller creates. Gate-flagged to prevent
+	// accidental capability escalation in production deployments.
 	var agcExtraEnv []corev1.EnvVar
-	for _, kv := range os.Environ() {
-		const prefix = "AGC_EXTRA_"
-		if !strings.HasPrefix(kv, prefix) {
-			continue
-		}
-		parts := strings.SplitN(kv, "=", 2)
-		if len(parts) == 2 {
-			agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{
-				Name:  strings.TrimPrefix(parts[0], prefix),
-				Value: parts[1],
-			})
+	if allowAgcExtraEnv {
+		for _, kv := range os.Environ() {
+			const prefix = "AGC_EXTRA_"
+			if !strings.HasPrefix(kv, prefix) {
+				continue
+			}
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) == 2 {
+				agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{
+					Name:  strings.TrimPrefix(parts[0], prefix),
+					Value: parts[1],
+				})
+			}
 		}
 	}
 
@@ -204,7 +213,7 @@ func main() {
 	ipInterval := 24 * time.Hour
 	if err := mgr.Add(&controller.IPRangeReconciler{
 		Client:   mgr.GetClient(),
-		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{},
+		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
 		Interval: ipInterval,
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")

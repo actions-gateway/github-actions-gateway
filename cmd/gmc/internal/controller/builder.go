@@ -27,9 +27,25 @@ const (
 	proxyAppName = "actions-gateway-proxy"
 	agcAppName   = "actions-gateway-agc"
 
+	// agcCredsVolumeName / agcCredsMountPath define how the GitHub App Secret is
+	// projected into the AGC pod. Keys (appId, installationId, privateKey) are
+	// mounted as read-only files; no credential ever appears in an env var.
+	agcCredsVolumeName = "github-app-credentials"
+	agcCredsMountPath  = "/etc/actions-gateway/github-app"
+
 	proxyServiceName = "actions-gateway-proxy"
 	proxyPort        = int32(8080)
 	proxyHealthPort  = int32(8081)
+
+	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
+	npProxyName = "actions-gateway-proxy"
+	// npWorkloadName is the NetworkPolicy that restricts AGC and worker pod egress to the proxy only.
+	npWorkloadName = "actions-gateway-workload"
+
+	// labelComponent / componentWorkload identify AGC and worker pods as "workload" for
+	// NetworkPolicy podSelector matching.
+	labelComponent    = "actions-gateway/component"
+	componentWorkload = "workload"
 
 	finalizerName = "actions-gateway.github.com/gmc-cleanup"
 
@@ -68,7 +84,9 @@ func buildAGCRole(ag *gmcv1alpha1.ActionsGateway) *rbacv1.Role {
 		Rules: []rbacv1.PolicyRule{
 			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
 			{APIGroups: []string{""}, Resources: []string{"pods/status"}, Verbs: []string{"get"}},
-			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
+			// list/watch removed: AGC only needs to get/create/delete the job Secrets it
+			// creates itself. Dynamic Secret names prevent resourceNames restriction.
+			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "create", "delete"}},
 			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups"}, Verbs: []string{"get", "list", "watch", "update", "patch"}},
 			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups/status", "runnergroups/finalizers"}, Verbs: []string{"get", "update", "patch"}},
 		},
@@ -83,13 +101,14 @@ func buildAGCRoleBinding(ag *gmcv1alpha1.ActionsGateway) *rbacv1.RoleBinding {
 	}
 }
 
-// buildNetworkPolicy constructs the tenant NetworkPolicy enforcing the two-tier egress model.
-func buildNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, proxyClusterIP string, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
+// buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
+// Proxy pods may reach GitHub CIDRs on 443 (for CONNECT tunneling) and DNS.
+// Only workload pods (AGC and workers) may initiate connections to the proxy.
+func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
 
-	// Proxy pod egress: DNS always, GitHub CIDRs on 443 when managedNetworkPolicy is true.
-	proxyEgress := []networkingv1.NetworkPolicyEgressRule{{
+	egress := []networkingv1.NetworkPolicyEgressRule{{
 		Ports: []networkingv1.NetworkPolicyPort{
 			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
 			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
@@ -102,34 +121,60 @@ func buildNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, proxyClusterIP string, g
 			c := cidr.String()
 			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
 		}
-		proxyEgress = append(proxyEgress, networkingv1.NetworkPolicyEgressRule{
+		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
 			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
 			To:    peers,
 		})
 	}
 
-	// AGC + worker egress: proxy Service ClusterIP on proxyPort.
-	var agcWorkerEgress []networkingv1.NetworkPolicyEgressRule
-	if proxyClusterIP != "" {
-		agcWorkerEgress = []networkingv1.NetworkPolicyEgressRule{{
-			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
-			To:    []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: proxyClusterIP + "/32"}}},
-		}}
-	}
-
-	// Ingress to proxy pods: from within the namespace only.
-	proxyIngress := []networkingv1.NetworkPolicyIngressRule{{
-		From: []networkingv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{}}},
+	// Ingress: only workload pods (AGC and workers) may connect to the proxy on proxyPort.
+	ingress := []networkingv1.NetworkPolicyIngressRule{{
+		From: []networkingv1.NetworkPolicyPeer{{
+			PodSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{labelComponent: componentWorkload},
+			},
+		}},
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
 	}}
 
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "actions-gateway", Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: npProxyName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
-			// NetworkPolicy applies per pod-selector; we use a single policy with multiple egress entries.
-			// The "proxy" selector egress rules are listed first; AGC/worker egress appended.
-			Egress:  append(proxyEgress, agcWorkerEgress...),
-			Ingress: proxyIngress,
+			Egress:      egress,
+			Ingress:     ingress,
+		},
+	}
+}
+
+// buildWorkloadNetworkPolicy constructs the NetworkPolicy for AGC and worker pods.
+// Workload pods may only reach the proxy service (not GitHub CIDRs directly) and DNS.
+// This enforces the design invariant that all GitHub-bound traffic routes through the
+// per-tenant proxy pool, preserving egress-IP attribution per tenant.
+func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, proxyClusterIP string) *networkingv1.NetworkPolicy {
+	proto53UDP := corev1.ProtocolUDP
+	proto53TCP := corev1.ProtocolTCP
+
+	egress := []networkingv1.NetworkPolicyEgressRule{{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
+			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
+		},
+	}}
+	if proxyClusterIP != "" {
+		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+			To:    []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: proxyClusterIP + "/32"}}},
+		})
+	}
+
+	return &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: npWorkloadName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{labelComponent: componentWorkload}},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			Egress:      egress,
 		},
 	}
 }
@@ -205,6 +250,8 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 							RunAsNonRoot:             &true_,
 							ReadOnlyRootFilesystem:   &true_,
 							AllowPrivilegeEscalation: &false_,
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 						},
 					}},
 				},
@@ -272,11 +319,11 @@ func buildHPA(ag *gmcv1alpha1.ActionsGateway) *autoscalingv2.HorizontalPodAutosc
 }
 
 // buildAGCDeployment builds the AGC Deployment in the tenant namespace.
+// GitHub App credentials are mounted from a Secret as files under agcCredsMountPath;
+// they never appear in environment variables (kubectl describe pod is safe to run in
+// the presence of an operator).
 func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAddr string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
 	env := []corev1.EnvVar{
-		{Name: "GITHUB_APP_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "appId")},
-		{Name: "GITHUB_APP_PRIVATE_KEY", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "privateKey")},
-		{Name: "GITHUB_APP_INSTALLATION_ID", ValueFrom: secretKeyRef(ag.Spec.GitHubAppRef, "installationId")},
 		{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
 		{Name: "WORKER_SERVICE_ACCOUNT", Value: workerSAName},
 		{Name: "HTTP_PROXY", Value: proxyServiceAddr},
@@ -284,19 +331,47 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},
 	}
 	env = append(env, extraEnv...)
+
+	secretName := ag.Spec.GitHubAppRef.Name
+	credMode := int32(0o400)
+
+	false_ := false
+	true_ := true
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr(int32(1)),
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue}},
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
+					Volumes: []corev1.Volume{{
+						Name: agcCredsVolumeName,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName:  secretName,
+								DefaultMode: &credMode,
+							},
+						},
+					}},
 					Containers: []corev1.Container{{
 						Name:  "agc",
 						Image: agcImage,
 						Env:   env,
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      agcCredsVolumeName,
+							MountPath: agcCredsMountPath,
+							ReadOnly:  true,
+						}},
+						SecurityContext: &corev1.SecurityContext{
+							RunAsNonRoot:             &true_,
+							ReadOnlyRootFilesystem:   &true_,
+							AllowPrivilegeEscalation: &false_,
+							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+							SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+						},
 					}},
 				},
 			},
@@ -309,15 +384,6 @@ func buildRunnerGroup(ag *gmcv1alpha1.ActionsGateway, spec agcv1alpha1.RunnerGro
 	return &agcv1alpha1.RunnerGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec:       spec,
-	}
-}
-
-func secretKeyRef(ref gmcv1alpha1.SecretReference, key string) *corev1.EnvVarSource {
-	return &corev1.EnvVarSource{
-		SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
-			Key:                  key,
-		},
 	}
 }
 

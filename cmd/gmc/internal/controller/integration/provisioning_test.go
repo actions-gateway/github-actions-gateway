@@ -102,9 +102,15 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 			&rbacv1.RoleBinding{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// NetworkPolicy: actions-gateway
+	// NetworkPolicy: actions-gateway-proxy (proxy pod egress to GitHub CIDRs)
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&networkingv1.NetworkPolicy{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	// NetworkPolicy: actions-gateway-workload (AGC and worker egress to proxy only)
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"},
 			&networkingv1.NetworkPolicy{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -279,6 +285,60 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 	var oldSecret corev1.Secret
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "secret-v1"}, &oldSecret),
 		"secret-v1 must not be deleted by the GMC during credential rotation")
+}
+
+func TestGMC_TenantProvisioning_PSALabelsStamped(t *testing.T) {
+	const nsName = "team-psa-baseline"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("psa-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for the proxy Deployment to be created (reconcile completed).
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&appsv1.Deployment{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	// The tenant namespace must have PSA enforce=baseline labels.
+	var ns corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: nsName}, &ns))
+	require.Equal(t, "baseline", ns.Labels["pod-security.kubernetes.io/enforce"],
+		"enforce label must be set to baseline by default")
+	require.Equal(t, "latest", ns.Labels["pod-security.kubernetes.io/enforce-version"])
+	require.Equal(t, "baseline", ns.Labels["pod-security.kubernetes.io/warn"])
+	require.Equal(t, "baseline", ns.Labels["pod-security.kubernetes.io/audit"])
+}
+
+func TestGMC_TenantProvisioning_PSALabels_CustomProfile(t *testing.T) {
+	const nsName = "team-psa-privileged"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("priv-gateway", nsName, "github-app")
+	ag.Spec.SecurityProfile = "privileged"
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+			&appsv1.Deployment{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	var ns corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: nsName}, &ns))
+	require.Equal(t, "privileged", ns.Labels["pod-security.kubernetes.io/enforce"],
+		"enforce label must reflect the custom SecurityProfile")
 }
 
 func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
