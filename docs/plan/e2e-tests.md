@@ -645,10 +645,17 @@ e2e-clean:
 Typical local usage:
 
 ```bash
-make e2e-cluster    # once per session
-make e2e-images     # after any code change
-make e2e            # run tests
+make e2e-up         # create cluster (if missing), build+load images, run tests
 make e2e-clean      # when done
+```
+
+Or step-by-step if you want finer control:
+
+```bash
+make e2e-cluster        # once per session
+make e2e-load-images    # builds images then loads them; re-run after a code change
+make e2e                # run tests
+make e2e-clean          # when done
 ```
 
 ---

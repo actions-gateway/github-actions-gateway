@@ -84,12 +84,20 @@ See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-sl
 
 ## Development
 
+Run `make` (or `make help`) for the full list of targets. The most common ones:
+
 ```sh
 # Build AGC and probe binaries
 make build
 
-# Build tool binaries (controller-gen, setup-envtest)
+# Build tool binaries (controller-gen, setup-envtest, ginkgo, kubebuilder)
 make tools
+
+# Bring up a kind cluster, build+load images, and run the standard e2e suite
+make e2e-up
+
+# Tear down the kind cluster when done
+make e2e-clean
 
 # Run unit tests
 go test ./...
