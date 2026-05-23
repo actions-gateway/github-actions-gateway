@@ -25,6 +25,9 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
+		// controller-runtime priority queue (replaces client-go workqueue in ≥ v0.23).
+		// The btree traversal goroutine can be mid-send when the manager exits.
+		goleak.IgnoreTopFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleReadyItems.func1.1"),
 		// Broker stub server: accept loop + per-connection serve goroutines (global throughout suite).
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
