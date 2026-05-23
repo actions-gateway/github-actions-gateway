@@ -57,11 +57,12 @@ spec:
             description: RunnerGroupSpec defines the desired state of a RunnerGroup.
             properties:
               maxListeners:
-                default: 10
+                default: 1
                 description: |-
                   MaxListeners is the maximum number of concurrent listener goroutines.
-                  The AGC always keeps at least one listener running; additional goroutines
-                  spawn as jobs arrive and shut down once the queue drains.
+                  Each listener holds one open broker session; additional goroutines spawn
+                  as jobs arrive (up to this ceiling) and shut down once the queue drains.
+                  Raise this for high-throughput groups where multiple jobs arrive concurrently.
                 format: int32
                 minimum: 1
                 type: integer

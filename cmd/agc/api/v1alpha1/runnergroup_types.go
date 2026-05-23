@@ -29,9 +29,10 @@ type PriorityTier struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
-	// The AGC always keeps at least one listener running; additional goroutines
-	// spawn as jobs arrive and shut down once the queue drains.
-	// +kubebuilder:default=10
+	// Each listener holds one open broker session; additional goroutines spawn
+	// as jobs arrive (up to this ceiling) and shut down once the queue drains.
+	// Raise this for high-throughput groups where multiple jobs arrive concurrently.
+	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1
 	MaxListeners int32 `json:"maxListeners,omitempty"`
 
