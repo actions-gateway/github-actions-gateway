@@ -18,6 +18,15 @@ import (
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 )
 
+// testRunnerRSAKey is a shared 2048-bit RSA key generated once per test binary run.
+var testRunnerRSAKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
 // encodeBase64 converts a big.Int to standard Base64 (as .NET writes it).
 func encodeBase64(n *big.Int) string {
 	return base64.StdEncoding.EncodeToString(n.Bytes())
@@ -45,10 +54,10 @@ func writeDotNetRSAParams(t *testing.T, priv *rsa.PrivateKey) string {
 }
 
 func TestParseRunnerRSAKey_RoundTrip(t *testing.T) {
-	// Generate a 2048-bit key, encode it as .NET RSAParameters, parse it back,
-	// and verify the public and private key components are identical.
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	t.Parallel()
+	// Encode the shared test key as .NET RSAParameters, parse it back, and
+	// verify the public and private key components are identical.
+	priv := testRunnerRSAKey
 
 	path := writeDotNetRSAParams(t, priv)
 
@@ -64,6 +73,7 @@ func TestParseRunnerRSAKey_RoundTrip(t *testing.T) {
 }
 
 func TestParseRunnerCredentials_HappyPath(t *testing.T) {
+	t.Parallel()
 	content := `{
 		"scheme": "OAuth",
 		"data": {
@@ -82,6 +92,7 @@ func TestParseRunnerCredentials_HappyPath(t *testing.T) {
 }
 
 func TestParseRunnerCredentials_DOTNETBOM(t *testing.T) {
+	t.Parallel()
 	// .NET's JSON serializer writes a UTF-8 BOM prefix (\xEF\xBB\xBF).
 	// Verify we strip it before parsing.
 	bom := []byte{0xEF, 0xBB, 0xBF}
@@ -95,6 +106,7 @@ func TestParseRunnerCredentials_DOTNETBOM(t *testing.T) {
 }
 
 func TestParseRunnerCredentials_MissingFields(t *testing.T) {
+	t.Parallel()
 	content := `{"scheme": "OAuth", "data": {}}`
 	path := filepath.Join(t.TempDir(), ".credentials")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0600))
@@ -105,6 +117,7 @@ func TestParseRunnerCredentials_MissingFields(t *testing.T) {
 }
 
 func TestFetchRunnerOAuthToken_HappyPath(t *testing.T) {
+	t.Parallel()
 	// Stub token endpoint returns a fixed access token.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPost, r.Method)
@@ -118,8 +131,7 @@ func TestFetchRunnerOAuthToken_HappyPath(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	priv := testRunnerRSAKey
 
 	creds := &githubapp.RunnerCredentials{
 		ClientID:         "test-client",
@@ -131,46 +143,46 @@ func TestFetchRunnerOAuthToken_HappyPath(t *testing.T) {
 }
 
 func TestFetchRunnerOAuthToken_ServerError(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
 	}))
 	defer srv.Close()
 
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	priv := testRunnerRSAKey
 
 	creds := &githubapp.RunnerCredentials{
 		ClientID:         "test-client",
 		AuthorizationURL: srv.URL + "/token",
 	}
-	_, err = githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
+	_, err := githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "401")
 }
 
 func TestFetchRunnerOAuthToken_MissingAccessToken(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"token_type":"Bearer"}`))
 	}))
 	defer srv.Close()
 
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	priv := testRunnerRSAKey
 
 	creds := &githubapp.RunnerCredentials{
 		ClientID:         "test-client",
 		AuthorizationURL: srv.URL + "/token",
 	}
-	_, err = githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
+	_, err := githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing access_token")
 }
 
 func TestParseRunnerRSAKey_BOM(t *testing.T) {
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	t.Parallel()
+	priv := testRunnerRSAKey
 
 	// Write params to temp file, then re-write with a leading UTF-8 BOM.
 	paramPath := writeDotNetRSAParams(t, priv)

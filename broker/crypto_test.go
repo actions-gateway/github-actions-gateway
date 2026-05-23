@@ -15,6 +15,25 @@ import (
 	"github.com/karlkfi/github-actions-gateway/broker"
 )
 
+// testRSAKeyA and testRSAKeyB are shared 2048-bit RSA key pairs generated once
+// to avoid per-test key generation overhead.
+var (
+	testRSAKeyA = func() *rsa.PrivateKey {
+		k, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			panic(err)
+		}
+		return k
+	}()
+	testRSAKeyB = func() *rsa.PrivateKey {
+		k, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			panic(err)
+		}
+		return k
+	}()
+)
+
 // cryptoFixture mirrors the shape of testdata/crypto_fixture.json.
 type cryptoFixture struct {
 	KeyBase64     string          `json:"key_base64"`
@@ -35,6 +54,7 @@ func loadFixture(t *testing.T) cryptoFixture {
 }
 
 func TestDecryptMessageBody_HappyPath(t *testing.T) {
+	t.Parallel()
 	f := loadFixture(t)
 	key, err := base64.StdEncoding.DecodeString(f.KeyBase64)
 	require.NoError(t, err)
@@ -47,6 +67,7 @@ func TestDecryptMessageBody_HappyPath(t *testing.T) {
 }
 
 func TestDecryptMessageBody_WrongKey(t *testing.T) {
+	t.Parallel()
 	f := loadFixture(t)
 	wrongKey := make([]byte, 32) // all-zero key
 	_, err := broker.DecryptMessageBody(f.EncryptedBody, wrongKey)
@@ -55,6 +76,7 @@ func TestDecryptMessageBody_WrongKey(t *testing.T) {
 }
 
 func TestDecryptMessageBody_TruncatedPayload(t *testing.T) {
+	t.Parallel()
 	f := loadFixture(t)
 	key, err := base64.StdEncoding.DecodeString(f.KeyBase64)
 	require.NoError(t, err)
@@ -70,6 +92,7 @@ func TestDecryptMessageBody_TruncatedPayload(t *testing.T) {
 }
 
 func TestDecryptMessageBody_InvalidBase64(t *testing.T) {
+	t.Parallel()
 	key := make([]byte, 32)
 	_, err := broker.DecryptMessageBody("!!!not-valid-base64!!!", key)
 	require.Error(t, err)
@@ -79,14 +102,14 @@ func TestDecryptMessageBody_InvalidBase64(t *testing.T) {
 // ── DecryptSessionKey ─────────────────────────────────────────────────────────
 
 func TestDecryptSessionKey_RoundTrip(t *testing.T) {
-	// Generate a fresh key pair, encrypt a synthetic AES-256 session key using
-	// RSA-OAEP with SHA-1 (the same parameters the .NET broker uses), then verify
-	// DecryptSessionKey recovers the original bytes.
-	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	t.Parallel()
+	// Encrypt a synthetic AES-256 session key using RSA-OAEP with SHA-1 (the
+	// same parameters the .NET broker uses), then verify DecryptSessionKey
+	// recovers the original bytes.
+	privKey := testRSAKeyA
 
 	aesKey := make([]byte, 32)
-	_, err = rand.Read(aesKey)
+	_, err := rand.Read(aesKey)
 	require.NoError(t, err)
 
 	//nolint:gosec // SHA-1 is the hash required by the .NET broker; this is intentional
@@ -99,13 +122,12 @@ func TestDecryptSessionKey_RoundTrip(t *testing.T) {
 }
 
 func TestDecryptSessionKey_WrongKey(t *testing.T) {
-	keyA, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-	keyB, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
+	t.Parallel()
+	keyA := testRSAKeyA
+	keyB := testRSAKeyB
 
 	aesKey := make([]byte, 32)
-	_, err = rand.Read(aesKey)
+	_, err := rand.Read(aesKey)
 	require.NoError(t, err)
 
 	//nolint:gosec

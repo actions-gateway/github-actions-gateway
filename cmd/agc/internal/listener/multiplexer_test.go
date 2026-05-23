@@ -51,6 +51,7 @@ func newMuxWithServers(t *testing.T, maxListeners int32, mux *brokerMux) (*liste
 	}
 
 	m := listener.NewMultiplexer(factory, maxListeners, nil)
+	m.RestartDelay = time.Millisecond
 	return m, oauthSrv, brokerSrv
 }
 
@@ -241,8 +242,8 @@ func TestMultiplexer_NonRetriableNoRestart(t *testing.T) {
 	assert.Eventually(t, func() bool { return m.ActiveCount() == 0 }, 2*time.Second, 10*time.Millisecond,
 		"permanent goroutine should exit after non-retriable error")
 
-	// Hold past the 1s restart backoff — no restart should occur.
-	assert.Never(t, func() bool { return m.ActiveCount() > 0 }, 2*time.Second, 50*time.Millisecond,
+	// Hold past the restart delay — no restart should occur.
+	assert.Never(t, func() bool { return m.ActiveCount() > 0 }, 50*time.Millisecond, 5*time.Millisecond,
 		"permanent goroutine must NOT restart after a non-retriable error")
 
 	cancel()
@@ -275,5 +276,6 @@ func newMuxWithServersWithThreshold(t *testing.T, maxListeners int32, mux *broke
 	}
 
 	m := listener.NewMultiplexer(factory, maxListeners, nil)
+	m.RestartDelay = time.Millisecond
 	return m, oauthSrv, brokerSrv
 }

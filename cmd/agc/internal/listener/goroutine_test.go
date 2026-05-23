@@ -32,6 +32,16 @@ import (
 	"go.uber.org/goleak"
 )
 
+// testRSAKey is a shared 2048-bit RSA key for tests that need a valid key
+// but do not care about key uniqueness. Generated once to avoid per-test overhead.
+var testRSAKey = func() *rsa.PrivateKey {
+	k, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return k
+}()
+
 // ── fakeClock ────────────────────────────────────────────────────────────────
 
 // fakeClock is an injectable Clock for deterministic time tests.
@@ -105,13 +115,11 @@ func oauthStub() *httptest.Server {
 // makeAgent creates a test agent whose AuthorizationURL points to oauthSrvURL.
 func makeAgent(t *testing.T, oauthSrvURL string) *agentpool.Agent {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
 	return &agentpool.Agent{
 		Index:         0,
 		AgentID:       42,
 		RunnerVersion: "2.327.1",
-		PrivateKey:    key,
+		PrivateKey:    testRSAKey,
 		Creds: &githubapp.RunnerCredentials{
 			ClientID:         "stub-client",
 			AuthorizationURL: oauthSrvURL + "/token",
@@ -612,13 +620,14 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 
 	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil)
 
-	// Advance the clock by 1s increments until each RenewJob call is observed.
-	// This avoids a race where the goroutine hasn't registered its clk.After yet.
+	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
+	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
+	// a race where the goroutine hasn't registered clk.After yet.
 	for i := 0; i < 3; i++ {
 		assert.Eventually(t, func() bool {
-			clk.Advance(time.Second)
+			clk.Advance(5 * time.Second)
 			return renewCalls.Load() >= int32(i+1)
-		}, 5*time.Second, 10*time.Millisecond, "expected RenewJob call %d", i+1)
+		}, 2*time.Second, time.Millisecond, "expected RenewJob call %d", i+1)
 	}
 
 	stop()
@@ -669,12 +678,14 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 
 	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil)
 
-	// Advance clock by 1s increments until 3 RenewJob calls are observed.
+	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
+	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
+	// a race where the goroutine hasn't registered clk.After yet.
 	for i := 0; i < 3; i++ {
 		assert.Eventually(t, func() bool {
-			clk.Advance(time.Second)
+			clk.Advance(5 * time.Second)
 			return calls.Load() >= int32(i+1)
-		}, 5*time.Second, 10*time.Millisecond, "expected RenewJob call %d", i+1)
+		}, 2*time.Second, time.Millisecond, "expected RenewJob call %d", i+1)
 	}
 	assert.Equal(t, int32(3), calls.Load(), "loop must not exit on non-OK responses")
 

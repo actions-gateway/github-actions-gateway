@@ -21,19 +21,31 @@ import (
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 )
 
-// generateTestKey creates a throwaway RSA key for testing.
+// pkgTestRSAKey is a shared 2048-bit RSA key generated once per test binary run.
+var (
+	pkgTestRSAKey = func() *rsa.PrivateKey {
+		k, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			panic(err)
+		}
+		return k
+	}()
+	pkgTestRSAKeyPEM = func() []byte {
+		return pem.EncodeToMemory(&pem.Block{
+			Type:  "RSA PRIVATE KEY",
+			Bytes: x509.MarshalPKCS1PrivateKey(pkgTestRSAKey),
+		})
+	}()
+)
+
+// generateTestKey returns the shared package-level RSA test key and its PEM encoding.
 func generateTestKey(t *testing.T) (*rsa.PrivateKey, []byte) {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-	pemBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(key),
-	})
-	return key, pemBytes
+	return pkgTestRSAKey, pkgTestRSAKeyPEM
 }
 
 func TestToken_HappyPath(t *testing.T) {
+	t.Parallel()
 	_, pemBytes := generateTestKey(t)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +77,7 @@ func TestToken_HappyPath(t *testing.T) {
 }
 
 func TestToken_BadPrivateKey(t *testing.T) {
+	t.Parallel()
 	creds := githubapp.Credentials{
 		AppID:          1,
 		PrivateKeyPEM:  []byte("not a valid pem"),
@@ -76,6 +89,7 @@ func TestToken_BadPrivateKey(t *testing.T) {
 }
 
 func TestToken_NonOKResponse(t *testing.T) {
+	t.Parallel()
 	_, pemBytes := generateTestKey(t)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +107,7 @@ func TestToken_NonOKResponse(t *testing.T) {
 }
 
 func TestToken_ClockSkewBuffer(t *testing.T) {
+	t.Parallel()
 	_, pemBytes := generateTestKey(t)
 
 	var receivedIAT int64
@@ -131,6 +146,7 @@ func TestToken_ClockSkewBuffer(t *testing.T) {
 }
 
 func TestToken_ExpiresAtParsed(t *testing.T) {
+	t.Parallel()
 	_, pemBytes := generateTestKey(t)
 	wantExpiry := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 
@@ -185,9 +201,8 @@ func (rt *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error
 // ── parseRSAPrivateKey PKCS#8 paths ──────────────────────────────────────────
 
 func TestToken_PKCS8Key(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
+	t.Parallel()
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(pkgTestRSAKey)
 	require.NoError(t, err)
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
 
@@ -212,6 +227,7 @@ func TestToken_PKCS8Key(t *testing.T) {
 }
 
 func TestToken_PKCS8NonRSAKey(t *testing.T) {
+	t.Parallel()
 	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(ecKey)
@@ -227,6 +243,7 @@ func TestToken_PKCS8NonRSAKey(t *testing.T) {
 }
 
 func TestToken_UnsupportedPEMType(t *testing.T) {
+	t.Parallel()
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("fake")})
 
 	_, err := githubapp.NewInstallationTokenProvider(
