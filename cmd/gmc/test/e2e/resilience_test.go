@@ -35,7 +35,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, func() {
 	})
 
 	SetDefaultEventuallyTimeout(4 * time.Minute)
-	SetDefaultEventuallyPollingInterval(5 * time.Second)
+	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_GMC_ProxyRecoversAfterPodDelete: proxy pod recovers after manual deletion", func() {
 		By("getting the current proxy pod name")
@@ -85,6 +85,6 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("True"))
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })

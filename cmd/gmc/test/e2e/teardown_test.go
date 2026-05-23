@@ -34,7 +34,7 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 	})
 
 	SetDefaultEventuallyTimeout(3 * time.Minute)
-	SetDefaultEventuallyPollingInterval(5 * time.Second)
+	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_GMC_DeleteCRRemovesResources: deleting ActionsGateway removes managed resources", func() {
 		By("deleting the ActionsGateway CR")
@@ -44,23 +44,23 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 		Eventually(func(g Gomega) {
 			g.Expect(utils.ResourceExists("deployment", tenantNS, "actions-gateway-proxy")).To(BeFalse(),
 				"proxy Deployment still exists after CR deletion")
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 
 		By("waiting for AGC Deployment to be removed")
 		Eventually(func(g Gomega) {
 			g.Expect(utils.ResourceExists("deployment", tenantNS, "actions-gateway-agc")).To(BeFalse(),
 				"AGC Deployment still exists after CR deletion")
-		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 
 		By("verifying NetworkPolicy is removed")
 		Eventually(func(g Gomega) {
 			g.Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway")).To(BeFalse())
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		By("verifying Service is removed")
 		Eventually(func(g Gomega) {
 			g.Expect(utils.ResourceExists("service", tenantNS, "actions-gateway-proxy")).To(BeFalse())
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_FinalizerRemovedAfterCleanup: ActionsGateway CR is fully gone after deletion", func() {
@@ -72,6 +72,6 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(BeEmpty(), "ActionsGateway still exists: %q", out)
-		}, 2*time.Minute, 5*time.Second).Should(Succeed())
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })
