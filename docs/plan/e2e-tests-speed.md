@@ -571,6 +571,77 @@ required as of GitHub Actions runner v2.308+).
 
 ---
 
+## 14. Replace CPU-burn HPA scale-up test with deterministic minReplicas patch
+
+**Estimated savings: removes flakiness; unlocks running in CI**
+
+### Problem
+
+`E2E_GMC_HPAScalesUpUnderLoad` burns CPU inside the proxy pod and waits for
+HPA to observe utilisation above its threshold and scale up. This is inherently
+flaky because it depends on two independent scrape windows (metrics-server at
+15 s, kube-controller-manager HPA sync at 15 s) both seeing high-enough CPU at
+the same time — which is not guaranteed on a loaded CI runner where the `yes`
+loop competes with everything else.
+
+The test also loses the CPU-threshold coverage that justified it. That gap
+belongs in a unit test on `buildHPA`, not in a slow integration loop.
+
+### Approach
+
+Patch `HPA.spec.minReplicas` from 1 to 2 directly. This bypasses the
+metrics-server loop entirely and drives the HPA→Deployment control path
+deterministically. Restore to 1 in `DeferCleanup`. Remove the `local-only`
+label so it runs in CI.
+
+Add unit tests in `builder_test.go` to cover the HPA spec fields the e2e test
+no longer exercises: `ScaleTargetRef`, `Resource.Name`, `Target.Type`, and the
+default min/max replica values.
+
+### Implementation steps
+
+1. **Replace the `It` block in `hpa_pdb_test.go`**:
+
+   ```go
+   It("E2E_GMC_HPADrivesScaleUp: HPA drives proxy Deployment replica count", func() {
+       By("patching HPA minReplicas to 2 to trigger scale-up")
+       cmd := exec.Command("kubectl", "patch", "hpa", "actions-gateway-proxy",
+           "-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":2}}`)
+       _, err := utils.Run(cmd)
+       Expect(err).NotTo(HaveOccurred())
+       DeferCleanup(func() {
+           cmd := exec.Command("kubectl", "patch", "hpa", "actions-gateway-proxy",
+               "-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":1}}`)
+           _, _ = utils.Run(cmd)
+       })
+
+       By("waiting for HPA to report 2 current replicas")
+       Eventually(func(g Gomega) {
+           cmd := exec.Command("kubectl", "get", "hpa", "actions-gateway-proxy",
+               "-n", tenantNS, "-o", "jsonpath={.status.currentReplicas}")
+           out, err := utils.Run(cmd)
+           g.Expect(err).NotTo(HaveOccurred())
+           g.Expect(out).To(Equal("2"), "HPA has not driven scale-up yet")
+       }, 2*time.Minute, 2*time.Second).Should(Succeed())
+   })
+   ```
+
+2. **Add unit tests to `builder_test.go`** covering the fields no longer
+   exercised by the e2e test:
+
+   ```go
+   func TestBuildHPA_ScaleTargetRef(t *testing.T) { ... }
+   func TestBuildHPA_MetricTypeAndResourceName(t *testing.T) { ... }
+   func TestBuildHPA_DefaultMinMaxReplicas(t *testing.T) { ... }
+   ```
+
+### Files
+
+- `cmd/gmc/test/e2e/hpa_pdb_test.go` — replace CPU-burn `It`, remove `local-only`
+- `cmd/gmc/internal/controller/builder_test.go` — add three HPA unit tests
+
+---
+
 ## Recommended implementation order
 
 | # | Change | Effort | Savings | Status |
@@ -588,3 +659,4 @@ required as of GitHub Actions runner v2.308+).
 | 8 | Parallel isolation deployment waits | 15 min | ~1–2 min | ✓ Done |
 | 13 | JUnit report for PR test summary | 30 min | readability | ✓ Done |
 | 10 | Isolate GMC restart from parallel run | 30 min | variance reduction | ✓ Done |
+| 14 | Deterministic HPA scale-up test | 1 hour | removes flakiness; CI-safe | ✓ Done |

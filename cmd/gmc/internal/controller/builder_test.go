@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -369,6 +370,34 @@ func TestBuildHPA_CustomCPUTarget(t *testing.T) {
 	hpa := buildHPA(ag)
 	require.NotNil(t, hpa.Spec.Metrics[0].Resource.Target.AverageUtilization)
 	assert.Equal(t, int32(80), *hpa.Spec.Metrics[0].Resource.Target.AverageUtilization)
+}
+
+func TestBuildHPA_ScaleTargetRef(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	hpa := buildHPA(ag)
+	ref := hpa.Spec.ScaleTargetRef
+	assert.Equal(t, "apps/v1", ref.APIVersion)
+	assert.Equal(t, "Deployment", ref.Kind)
+	assert.Equal(t, proxyServiceName, ref.Name)
+}
+
+func TestBuildHPA_MetricTypeAndResourceName(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	hpa := buildHPA(ag)
+	require.Len(t, hpa.Spec.Metrics, 1)
+	m := hpa.Spec.Metrics[0]
+	assert.Equal(t, autoscalingv2.ResourceMetricSourceType, m.Type)
+	require.NotNil(t, m.Resource)
+	assert.Equal(t, corev1.ResourceCPU, m.Resource.Name)
+	assert.Equal(t, autoscalingv2.UtilizationMetricType, m.Resource.Target.Type)
+}
+
+func TestBuildHPA_DefaultMinMaxReplicas(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	hpa := buildHPA(ag)
+	require.NotNil(t, hpa.Spec.MinReplicas)
+	assert.Equal(t, int32(2), *hpa.Spec.MinReplicas)
+	assert.Equal(t, int32(10), hpa.Spec.MaxReplicas)
 }
 
 func TestBuildProxyDeployment_InitialReplicas(t *testing.T) {
