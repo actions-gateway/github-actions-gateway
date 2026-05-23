@@ -165,7 +165,7 @@ func run() error {
 			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),
 			RunnerOS:      os.Getenv("GITHUB_RUNNER_OS"),
 			RunnerArch:    os.Getenv("GITHUB_RUNNER_ARCH"),
-			UseV2Flow:     os.Getenv("GITHUB_USE_V2_FLOW") == "true",
+			UseV2Flow:     os.Getenv("GITHUB_USE_VSTS_FLOW") != "true",
 		},
 	}
 	if err := r.SetupWithManager(mgr); err != nil {
