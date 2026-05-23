@@ -11,7 +11,7 @@
 //
 // Flags:
 //
-//	--agent-key-type  ed25519 (default) | rsa
+//	--agent-key-type  rsa (default) | ed25519 (opt-in; loses session-key encryption)
 package main
 
 import (
@@ -53,8 +53,8 @@ const credsDir = "/etc/actions-gateway/github-app"
 
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
-	agentKeyTypeFlag := flag.String("agent-key-type", "ed25519",
-		"Key type for new agent registrations: ed25519 (default) or rsa")
+	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
+		"Key type for new agent registrations: rsa (default) or ed25519 (opt-in; loses session-key encryption)")
 	flag.Parse()
 	agentKeyType := agentpool.KeyType(*agentKeyTypeFlag)
 	switch agentKeyType {
