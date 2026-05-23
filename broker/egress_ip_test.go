@@ -130,6 +130,7 @@ func roundRobinProxyClient(proxies []*httptest.Server, skipVerify bool) *http.Cl
 //
 // This test requires no GitHub credentials.
 func TestCONNECTProxy_TunnelsHTTPS(t *testing.T) {
+	t.Parallel()
 	// Target: a local TLS server representing the GitHub broker / run service.
 	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -158,6 +159,7 @@ func TestCONNECTProxy_TunnelsHTTPS(t *testing.T) {
 // TestCONNECTProxy_RejectsNonCONNECT verifies that the proxy returns 405 for
 // non-CONNECT methods, ensuring it cannot be used as an open forward proxy.
 func TestCONNECTProxy_RejectsNonCONNECT(t *testing.T) {
+	t.Parallel()
 	proxy := newCONNECTProxy(t)
 	defer proxy.Close()
 

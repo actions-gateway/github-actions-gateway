@@ -32,6 +32,9 @@ type Multiplexer struct {
 	maxListeners atomic.Int32
 	factory      ConfigFactory
 	log          *slog.Logger
+	// RestartDelay is the backoff before restarting a crashed permanent listener
+	// goroutine. Zero defaults to one second. Override to a smaller value in tests.
+	RestartDelay time.Duration
 }
 
 // NewMultiplexer creates a Multiplexer for one RunnerGroup.
@@ -139,10 +142,14 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		if shouldRestart {
 			// Permanent baseline goroutine exited for a recoverable reason.
 			// Restart it after a brief backoff.
+			delay := m.RestartDelay
+			if delay == 0 {
+				delay = time.Second
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
+			case <-time.After(delay):
 			}
 			m.mu.Lock()
 			m.spawn(ctx, true)

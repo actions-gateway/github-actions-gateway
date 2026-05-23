@@ -37,6 +37,7 @@ func newTestClient(srv *httptest.Server) *broker.BrokerClient {
 // ── CreateSession ────────────────────────────────────────────────────────────
 
 func TestCreateSession_HappyPath(t *testing.T) {
+	t.Parallel()
 	// Declare srv before the closure so the handler can reference it.
 	// `:=` scope begins after the statement, so a forward reference inside
 	// the RHS would be undefined at compile time.
@@ -73,6 +74,7 @@ func TestCreateSession_HappyPath(t *testing.T) {
 }
 
 func TestCreateSession_VersionTooOld(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`{"message":"runner version too old, minimum required version is 2.300.0"}`))
@@ -87,6 +89,7 @@ func TestCreateSession_VersionTooOld(t *testing.T) {
 }
 
 func TestCreateSession_FallsBackToBrokerURL(t *testing.T) {
+	t.Parallel()
 	// When the response body omits brokerURL, fall back to BrokerClient.BrokerURL.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -103,6 +106,7 @@ func TestCreateSession_FallsBackToBrokerURL(t *testing.T) {
 // ── GetMessage ───────────────────────────────────────────────────────────────
 
 func TestGetMessage_NoJob(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted) // 202 = no job queued
 	}))
@@ -115,6 +119,7 @@ func TestGetMessage_NoJob(t *testing.T) {
 }
 
 func TestGetMessage_JobAvailable(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
@@ -134,6 +139,7 @@ func TestGetMessage_JobAvailable(t *testing.T) {
 }
 
 func TestGetMessage_UsesSessionID(t *testing.T) {
+	t.Parallel()
 	var gotPath, gotSessionID string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -151,6 +157,7 @@ func TestGetMessage_UsesSessionID(t *testing.T) {
 // ── AcquireJob ───────────────────────────────────────────────────────────────
 
 func TestAcquireJob_UsesPlanIDFromHeader(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/acquirejob", r.URL.Path)
 		w.Header().Set("x-plan-id", "plan-from-header")
@@ -172,6 +179,7 @@ func TestAcquireJob_UsesPlanIDFromHeader(t *testing.T) {
 }
 
 func TestAcquireJob_FallsBackToPlanIDFromBody(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// No x-plan-id header.
 		w.WriteHeader(http.StatusOK)
@@ -188,6 +196,7 @@ func TestAcquireJob_FallsBackToPlanIDFromBody(t *testing.T) {
 }
 
 func TestAcquireJob_UsesRunServiceURL(t *testing.T) {
+	t.Parallel()
 	// runServiceSrv is a separate server from the broker — AcquireJob must
 	// target the runServiceURL parameter, not BrokerClient.BrokerURL.
 	var acquireJobHit bool
@@ -210,6 +219,7 @@ func TestAcquireJob_UsesRunServiceURL(t *testing.T) {
 }
 
 func TestAcquireJob_ReturnsRawBody(t *testing.T) {
+	t.Parallel()
 	want := `{"plan":{"planId":"p123"},"extra":"data"}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -226,6 +236,7 @@ func TestAcquireJob_ReturnsRawBody(t *testing.T) {
 // ── RenewJob ─────────────────────────────────────────────────────────────────
 
 func TestRenewJob_UsesRunServiceURL(t *testing.T) {
+	t.Parallel()
 	var renewHit bool
 	runServiceSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		renewHit = true
@@ -247,6 +258,7 @@ func TestRenewJob_UsesRunServiceURL(t *testing.T) {
 }
 
 func TestRenewJob_NonOKResponse(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -259,6 +271,7 @@ func TestRenewJob_NonOKResponse(t *testing.T) {
 }
 
 func TestRenewJob_StopsOnCancel(t *testing.T) {
+	t.Parallel()
 	// Start a renew loop in a goroutine and cancel the context; verify the
 	// goroutine exits cleanly (goleak.VerifyTestMain handles the leak check).
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -298,6 +311,7 @@ func TestRenewJob_StopsOnCancel(t *testing.T) {
 // ── DeleteSession ─────────────────────────────────────────────────────────────
 
 func TestDeleteSession_IssuesDELETE(t *testing.T) {
+	t.Parallel()
 	var gotMethod, gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
@@ -316,6 +330,7 @@ func TestDeleteSession_IssuesDELETE(t *testing.T) {
 // ── Rate-limit / backoff ──────────────────────────────────────────────────────
 
 func TestGetMessage_Retry429_HonorsRetryAfter(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -332,6 +347,7 @@ func TestGetMessage_Retry429_HonorsRetryAfter(t *testing.T) {
 }
 
 func TestGetMessage_Retry429_ExponentialFallback(t *testing.T) {
+	t.Parallel()
 	// No Retry-After header — RetryAfter should be -1 indicating fallback.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -348,6 +364,7 @@ func TestGetMessage_Retry429_ExponentialFallback(t *testing.T) {
 }
 
 func TestGetMessage_Retry429_CounterIncremented(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
@@ -371,6 +388,7 @@ func TestGetMessage_Retry429_CounterIncremented(t *testing.T) {
 // per tick with no drift. A manually-driven channel replaces time.Ticker so the
 // test advances time without sleeping and gets a deterministic call count.
 func TestRenewJob_Interval(t *testing.T) {
+	t.Parallel()
 	// renewed is signalled by the server handler after each successful renewjob.
 	renewed := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -407,6 +425,7 @@ func TestRenewJob_Interval(t *testing.T) {
 // ── RenewJobLoop error propagation ───────────────────────────────────────────
 
 func TestRenewJobLoop_ErrorPropagated(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte("job expired"))
@@ -447,6 +466,7 @@ func newV2TestClient(srv *httptest.Server) *broker.BrokerClient {
 }
 
 func TestCreateSession_V2Flow_URL(t *testing.T) {
+	t.Parallel()
 	var gotPath, gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
@@ -465,6 +485,7 @@ func TestCreateSession_V2Flow_URL(t *testing.T) {
 }
 
 func TestGetMessage_V2Flow_URL(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/message", r.URL.Path)
 		q := r.URL.Query()
@@ -486,6 +507,7 @@ func TestGetMessage_V2Flow_URL(t *testing.T) {
 }
 
 func TestGetMessage_V2Flow_NoOptionalParams(t *testing.T) {
+	t.Parallel()
 	// When RunnerVersion/RunnerOS/RunnerArch are empty, their query params
 	// must be absent (not present as empty strings).
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -508,6 +530,7 @@ func TestGetMessage_V2Flow_NoOptionalParams(t *testing.T) {
 }
 
 func TestDeleteSession_V2Flow_URL(t *testing.T) {
+	t.Parallel()
 	var gotMethod, gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotMethod = r.Method
@@ -527,6 +550,7 @@ func TestDeleteSession_V2Flow_URL(t *testing.T) {
 // ── Misc error status codes ───────────────────────────────────────────────────
 
 func TestCreateSession_UnexpectedStatus(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte("service unavailable"))
@@ -540,6 +564,7 @@ func TestCreateSession_UnexpectedStatus(t *testing.T) {
 }
 
 func TestAcquireJob_NonOKStatus(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusConflict)
 		_, _ = w.Write([]byte("job already acquired"))
