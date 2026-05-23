@@ -148,6 +148,9 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag, proxyClusterIP)); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
+	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag)); err != nil {
+		return fmt.Errorf("AGC NetworkPolicy: %w", err)
+	}
 	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous versions.
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
 
@@ -210,6 +213,7 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	// 4. ResourceQuota, NetworkPolicies.
 	r.deleteIfExists(ctx, &corev1.ResourceQuota{}, ns, "actions-gateway")
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
+	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npAGCName)
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npWorkloadName)
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, "actions-gateway") // legacy
 	// 5. RoleBinding, Role.
