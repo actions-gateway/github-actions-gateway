@@ -2,6 +2,7 @@ package listener
 
 import (
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -279,15 +280,18 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 
 	if len(sess.EncryptionKey) > 0 {
 		if sess.EncryptionKeyEncrypted {
-			if cfg.Agent.PrivateKey != nil {
-				aesKey, decErr := broker.DecryptSessionKey(sess.EncryptionKey, cfg.Agent.PrivateKey)
+			// Session key is RSA-OAEP encrypted; only decryptable with an RSA key.
+			// Ed25519 agents receive it unencrypted (EncryptionKeyEncrypted=false)
+			// or the broker omits encryption entirely.
+			if rsaKey, ok := cfg.Agent.PrivateKey.(*rsa.PrivateKey); ok {
+				aesKey, decErr := broker.DecryptSessionKey(sess.EncryptionKey, rsaKey)
 				if decErr != nil {
 					log.Warn("failed to decrypt session key; messages will be parsed as plaintext", "error", decErr)
 				} else {
 					state.aesKey = aesKey
 				}
 			} else {
-				log.Warn("server returned encrypted session key but agent has no RSA private key")
+				log.Warn("server returned RSA-encrypted session key but agent key is not RSA; messages will be parsed as plaintext")
 			}
 		} else {
 			state.aesKey = sess.EncryptionKey
