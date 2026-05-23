@@ -72,13 +72,16 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, func() {
 			_, _ = utils.Run(cmd)
 		})
 
-		By("waiting for HPA to report 2 current replicas")
+		// desiredReplicas reflects the HPA's computed target (min-clamped).
+		// currentReplicas requires the pod to actually start; in a resource-
+		// constrained CI cluster the pod may be Pending, making it unreliable.
+		By("waiting for HPA desiredReplicas to reach 2")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "hpa", "actions-gateway-proxy",
-				"-n", tenantNS, "-o", "jsonpath={.status.currentReplicas}")
+				"-n", tenantNS, "-o", "jsonpath={.status.desiredReplicas}")
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(out).To(Equal("2"), "HPA has not driven scale-up yet")
+			g.Expect(out).To(Equal("2"), "HPA desired replicas have not reached 2 yet")
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
