@@ -121,7 +121,7 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 	// Enqueue a job with owner/repo/runID so the provisioner can call rerun.
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 	sessions := brokerStub.RegisteredSessions()
 
 	// The job body in the broker will come back via AcquireJob; the payload to the
@@ -193,7 +193,7 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 200*time.Millisecond)
+	}, 15*time.Second, 1*time.Millisecond)
 	sessions := brokerStub.RegisteredSessions()
 
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{

@@ -47,12 +47,12 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsB, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed())
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Delete team-a gateway.
 	require.NoError(t, k8sClient.Delete(ctx, agA))
@@ -62,31 +62,31 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "proxy Deployment in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "proxy Deployment in team-a should be deleted")
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
 			&appsv1.Deployment{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "agc Deployment in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "agc Deployment in team-a should be deleted")
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
 			&corev1.ServiceAccount{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "AGC ServiceAccount in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "AGC ServiceAccount in team-a should be deleted")
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway"},
 			&networkingv1.NetworkPolicy{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "NetworkPolicy in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "NetworkPolicy in team-a should be deleted")
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
 			&rbacv1.Role{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "Role in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "Role in team-a should be deleted")
 
 	// Assert team-b resources are untouched.
 	var depB appsv1.Deployment
@@ -118,7 +118,7 @@ func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be created")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be created")
 
 	// Delete the CR and wait for full teardown.
 	require.NoError(t, k8sClient.Delete(ctx, ag))
@@ -126,14 +126,14 @@ func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
 		var fetched gmcv1alpha1.ActionsGateway
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "reapply-gateway"}, &fetched)
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "CR should be gone after teardown")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "CR should be gone after teardown")
 
 	// Wait for owned resources to be cleaned up.
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "proxy Deployment should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "proxy Deployment should be deleted")
 
 	// Re-apply the same CR.
 	ag2 := newActionsGateway("reapply-gateway", nsName, "github-app")
@@ -144,17 +144,17 @@ func TestGMC_TenantTeardown_ReapplyAfterDelete(t *testing.T) {
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
 			&appsv1.Deployment{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be re-created after re-apply")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "proxy Deployment should be re-created after re-apply")
 
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
 			&appsv1.Deployment{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "AGC Deployment should be re-created after re-apply")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "AGC Deployment should be re-created after re-apply")
 
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"},
 			&networkingv1.NetworkPolicy{})
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.Succeed(), "NetworkPolicy should be re-created after re-apply")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "NetworkPolicy should be re-created after re-apply")
 }
 
 func TestGMC_Finalizer_BlocksImmediateDeletion(t *testing.T) {
@@ -181,7 +181,7 @@ func TestGMC_Finalizer_BlocksImmediateDeletion(t *testing.T) {
 			}
 		}
 		return false
-	}, 15*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "finalizer should be added")
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "finalizer should be added")
 
 	// Delete — object won't disappear until reconciler removes finalizer.
 	require.NoError(t, k8sClient.Delete(ctx, ag))
@@ -191,5 +191,5 @@ func TestGMC_Finalizer_BlocksImmediateDeletion(t *testing.T) {
 		var fetched gmcv1alpha1.ActionsGateway
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "finalizer-gateway"}, &fetched)
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 500*time.Millisecond).Should(gomega.BeTrue(), "ActionsGateway CR should be gone after teardown")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "ActionsGateway CR should be gone after teardown")
 }
