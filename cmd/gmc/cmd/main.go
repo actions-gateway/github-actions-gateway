@@ -173,8 +173,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	agcImage := mustEnv("AGC_IMAGE")
-	proxyImage := mustEnv("PROXY_IMAGE")
+	agcImage, err := mustEnv("AGC_IMAGE")
+	if err != nil {
+		setupLog.Error(err, "missing required environment variable")
+		os.Exit(1)
+	}
+	proxyImage, err := mustEnv("PROXY_IMAGE")
+	if err != nil {
+		setupLog.Error(err, "missing required environment variable")
+		os.Exit(1)
+	}
 
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 
@@ -244,11 +252,10 @@ func main() {
 	}
 }
 
-func mustEnv(name string) string {
+func mustEnv(name string) (string, error) {
 	v := os.Getenv(name)
 	if v == "" {
-		fmt.Fprintf(os.Stderr, "required environment variable %s is not set\n", name)
-		os.Exit(1)
+		return "", fmt.Errorf("required environment variable %s is not set", name)
 	}
-	return v
+	return v, nil
 }
