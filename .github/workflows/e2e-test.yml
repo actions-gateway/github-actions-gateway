@@ -30,15 +30,7 @@ jobs:
         run: make e2e-load-images KIND_CLUSTER=actions-gateway-e2e
 
       - name: Run e2e tests (excluding local-only)
-        run: |
-          cd cmd/gmc
-          KIND_CLUSTER=actions-gateway-e2e \
-            GMC_IMG=gmc:e2e \
-            AGC_IMG=agc:e2e \
-            PROXY_IMG=proxy:e2e \
-            FAKEGITHUB_IMG=fakegithub:e2e \
-            go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... -- \
-              --label-filter '!local-only'
+        run: make e2e KIND_CLUSTER=actions-gateway-e2e
 
       - name: Collect diagnostic info on failure
         if: failure()

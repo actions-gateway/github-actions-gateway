@@ -204,9 +204,11 @@ func TestBuildNoProxy_UserCIDRsPrependedToDefaults(t *testing.T) {
 	}
 }
 
-func TestBuildNoProxy_AlwaysContainsKubeAPIServer(t *testing.T) {
+func TestBuildNoProxy_AlwaysContainsClusterLocal(t *testing.T) {
 	result := buildNoProxy([]string{"10.0.0.0/8"})
-	assert.Contains(t, result, "kubernetes.default.svc.cluster.local")
+	// svc.cluster.local covers all Kubernetes Services, including
+	// kubernetes.default.svc.cluster.local (the kube-apiserver).
+	assert.Contains(t, result, "svc.cluster.local")
 }
 
 func TestBuildAGCDeployment_NoProxyContainsDefaults(t *testing.T) {
