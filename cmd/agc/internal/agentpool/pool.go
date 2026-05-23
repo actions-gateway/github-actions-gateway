@@ -3,8 +3,7 @@ package agentpool
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -56,7 +55,7 @@ type Agent struct {
 	Index         int
 	AgentID       int64
 	Creds         *githubapp.RunnerCredentials
-	PrivateKey    *rsa.PrivateKey
+	PrivateKey    crypto.Signer
 	RunnerVersion string
 	BrokerURL     string
 }
@@ -69,6 +68,7 @@ type Pool struct {
 	groupName     string
 	runnerVersion string
 	registrar     Registrar
+	keyType       KeyType
 
 	mu        sync.Mutex
 	agents    []*Agent // sorted by index; populated by LoadAgents or EnsureAgents
@@ -76,13 +76,15 @@ type Pool struct {
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
-func NewPool(c client.Client, namespace, groupName, runnerVersion string, registrar Registrar) *Pool {
+// keyType selects the algorithm for newly-generated agent keys; empty defaults to KeyTypeEd25519.
+func NewPool(c client.Client, namespace, groupName, runnerVersion string, registrar Registrar, keyType KeyType) *Pool {
 	return &Pool{
 		client:        c,
 		namespace:     namespace,
 		groupName:     groupName,
 		runnerVersion: runnerVersion,
 		registrar:     registrar,
+		keyType:       keyType,
 	}
 }
 
@@ -147,12 +149,12 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 }
 
 func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := generateKey(p.keyType)
 	if err != nil {
-		return fmt.Errorf("generate RSA key: %w", err)
+		return fmt.Errorf("generate agent key: %w", err)
 	}
 
-	pubDER, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	pubDER, err := x509.MarshalPKIXPublicKey(privateKey.Public())
 	if err != nil {
 		return fmt.Errorf("marshal public key: %w", err)
 	}
@@ -317,7 +319,7 @@ func secretToAgent(s corev1.Secret) (*Agent, error) {
 	}
 	agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
 
-	privKey, err := parsePrivateKeyPEM(s.Data["privateKeyPEM"])
+	privKey, err := parsePrivateKeySigner(s.Data["privateKeyPEM"])
 	if err != nil {
 		return nil, fmt.Errorf("parse private key: %w", err)
 	}

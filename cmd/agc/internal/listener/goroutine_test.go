@@ -902,6 +902,15 @@ func TestBackoffDelay_HighErrorCount(t *testing.T) {
 
 // ── decryption helpers ────────────────────────────────────────────────────────
 
+// agentRSAPublicKey returns the RSA public key from an agent whose PrivateKey
+// was generated as *rsa.PrivateKey (used only in session-key decryption tests).
+func agentRSAPublicKey(t *testing.T, a *agentpool.Agent) *rsa.PublicKey {
+	t.Helper()
+	k, ok := a.PrivateKey.(*rsa.PrivateKey)
+	require.True(t, ok, "test agent key must be *rsa.PrivateKey for this test")
+	return &k.PublicKey
+}
+
 // encryptSessionKey RSA-OAEP (SHA-1) encrypts rawKey with pub, matching the
 // server-side encryption that broker.DecryptSessionKey reverses.
 func encryptSessionKey(t *testing.T, pub *rsa.PublicKey, rawKey []byte) []byte {
@@ -951,7 +960,7 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 	aesKey := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, aesKey)
 	require.NoError(t, err)
-	encryptedKey := encryptSessionKey(t, &agent.PrivateKey.PublicKey, aesKey)
+	encryptedKey := encryptSessionKey(t, agentRSAPublicKey(t, agent), aesKey)
 
 	// Create the broker server first so we can embed its URL in the encrypted body.
 	jobMsgIDReceived := make(chan string, 1)
@@ -1089,8 +1098,8 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 	require.NoError(t, err)
 	k2[0] ^= 0xFF // guarantee k1 ≠ k2
 
-	encK1 := encryptSessionKey(t, &agent.PrivateKey.PublicKey, k1)
-	encK2 := encryptSessionKey(t, &agent.PrivateKey.PublicKey, k2)
+	encK1 := encryptSessionKey(t, agentRSAPublicKey(t, agent), k1)
+	encK2 := encryptSessionKey(t, agentRSAPublicKey(t, agent), k2)
 
 	var createCalls atomic.Int32
 	mux := &brokerMux{}
@@ -1230,7 +1239,7 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 	_, err = io.ReadFull(rand.Reader, wrongKey)
 	require.NoError(t, err)
 
-	encryptedKey := encryptSessionKey(t, &agent.PrivateKey.PublicKey, aesKey)
+	encryptedKey := encryptSessionKey(t, agentRSAPublicKey(t, agent), aesKey)
 
 	mux := &brokerMux{}
 

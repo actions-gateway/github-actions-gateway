@@ -1,6 +1,7 @@
 package githubapp_test
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -197,4 +198,26 @@ func TestParseRunnerRSAKey_BOM(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, parsed.Validate())
 	assert.Equal(t, 0, priv.N.Cmp(parsed.N), "Modulus must survive BOM stripping")
+}
+
+func TestFetchRunnerOAuthToken_Ed25519(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, r.ParseForm())
+		assert.Equal(t, "client_credentials", r.FormValue("grant_type"))
+		assert.NotEmpty(t, r.FormValue("client_assertion"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"ed25519-token","token_type":"Bearer"}`))
+	}))
+	defer srv.Close()
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	creds := &githubapp.RunnerCredentials{
+		ClientID:         "test-client",
+		AuthorizationURL: srv.URL + "/token",
+	}
+	token, err := githubapp.FetchRunnerOAuthToken(t.Context(), creds, priv, srv.Client())
+	require.NoError(t, err)
+	assert.Equal(t, "ed25519-token", token)
 }

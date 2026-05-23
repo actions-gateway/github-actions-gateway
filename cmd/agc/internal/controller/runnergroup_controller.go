@@ -52,6 +52,7 @@ type RunnerGroupReconciler struct {
 	Metrics      *listener.Metrics
 	Log          *slog.Logger
 	Provisioner  *provisioner.Provisioner
+	AgentKeyType agentpool.KeyType // defaults to KeyTypeEd25519 when empty
 
 	// in-process state; rebuilt from Secrets on restart.
 	multiplexersMu sync.Mutex
@@ -209,7 +210,7 @@ func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namesp
 	if p, ok := r.pools[key]; ok {
 		return p
 	}
-	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, r.Registrar)
+	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, r.Registrar, r.AgentKeyType)
 	r.pools[key] = p
 	return p
 }

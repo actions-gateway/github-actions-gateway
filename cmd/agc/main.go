@@ -7,11 +7,16 @@
 //
 //	appId          - GitHub App numeric ID
 //	installationId - Installation ID for the target org/repo
-//	privateKey     - RSA private key in PEM format
+//	privateKey     - GitHub App private key in PEM format
+//
+// Flags:
+//
+//	--agent-key-type  ed25519 (default) | rsa
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -47,6 +52,17 @@ func main() {
 const credsDir = "/etc/actions-gateway/github-app"
 
 func run() error {
+	// ── 0. Parse flags ───────────────────────────────────────────────────────
+	agentKeyTypeFlag := flag.String("agent-key-type", "ed25519",
+		"Key type for new agent registrations: ed25519 (default) or rsa")
+	flag.Parse()
+	agentKeyType := agentpool.KeyType(*agentKeyTypeFlag)
+	switch agentKeyType {
+	case agentpool.KeyTypeEd25519, agentpool.KeyTypeRSA:
+	default:
+		return fmt.Errorf("invalid --agent-key-type %q: must be ed25519 or rsa", agentKeyType)
+	}
+
 	// ── 1. Read credentials from mounted Secret files ────────────────────────
 	appIDBytes, err := os.ReadFile(filepath.Join(credsDir, "appId"))
 	if err != nil {
@@ -177,6 +193,7 @@ func run() error {
 		Registrar:    registrar,
 		Metrics:      m,
 		Provisioner:  prov,
+		AgentKeyType: agentKeyType,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
 			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),
