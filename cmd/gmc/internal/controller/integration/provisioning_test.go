@@ -217,20 +217,17 @@ func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T)
 
 	var dep appsv1.Deployment
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
-	require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
+	require.NotEmpty(t, dep.Spec.Template.Spec.Volumes)
 
-	// The secretKeyRef must reference "my-secret" (not an empty or cluster-level name).
-	var foundAppID bool
-	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
-		if e.Name == "GITHUB_APP_ID" {
-			require.NotNil(t, e.ValueFrom)
-			require.NotNil(t, e.ValueFrom.SecretKeyRef)
-			require.Equal(t, "my-secret", e.ValueFrom.SecretKeyRef.Name,
-				"GITHUB_APP_ID secretKeyRef must reference the CR's own secret by name")
-			foundAppID = true
+	// Credentials are mounted from a Secret volume (not env vars). The volume
+	// must reference "my-secret" (not an empty or cluster-level name).
+	var foundCredVol bool
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		if v.Secret != nil && v.Secret.SecretName == "my-secret" {
+			foundCredVol = true
 		}
 	}
-	require.True(t, foundAppID, "GITHUB_APP_ID env var must be present on the AGC Deployment")
+	require.True(t, foundCredVol, "AGC Deployment must mount 'my-secret' as a Secret volume")
 }
 
 func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
@@ -263,18 +260,15 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 		return k8sClient.Update(ctx, &fetched) == nil
 	}, 5*time.Second, 25*time.Millisecond, "update ActionsGateway gitHubAppRef to secret-v2")
 
-	// Wait for AGC Deployment to reference secret-v2.
+	// Wait for AGC Deployment to reference secret-v2 via the credential volume.
 	g.Eventually(func() bool {
 		var dep appsv1.Deployment
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
 			return false
 		}
-		if len(dep.Spec.Template.Spec.Containers) == 0 {
-			return false
-		}
-		for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
-			if e.Name == "GITHUB_APP_ID" && e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
-				return e.ValueFrom.SecretKeyRef.Name == "secret-v2"
+		for _, v := range dep.Spec.Template.Spec.Volumes {
+			if v.Secret != nil && v.Secret.SecretName == "secret-v2" {
+				return true
 			}
 		}
 		return false
