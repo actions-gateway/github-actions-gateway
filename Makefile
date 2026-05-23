@@ -32,6 +32,11 @@ FAKEGITHUB_IMG ?= $(IMAGE_REGISTRY)/fakegithub:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
+.PHONY: all build build-agc build-gmc build-probe build-proxy tools setup-envtest \
+        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-multi-node e2e-all e2e-clean \
+        docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
+        ginkgo
+
 ##@ General
 
 .PHONY: help
@@ -46,15 +51,23 @@ help: ## Display this help message
 all: build ## Alias for `build`
 
 .PHONY: build
-build: build-agc build-probe ## Build the agc and probe binaries into .build/
+build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
 
 .PHONY: build-agc
 build-agc: ## Build the AGC binary
 	go build -C cmd/agc -o ../../.build/agc .
 
+.PHONY: build-gmc
+build-gmc: ## Build the GMC binary
+	go build -C cmd/gmc -o ../../.build/gmc .
+
 .PHONY: build-probe
 build-probe: ## Build the probe binary
 	go build -C cmd/probe -o ../../.build/probe .
+
+.PHONY: build-proxy
+build-proxy: ## Build the proxy binary
+	go build -C cmd/proxy -o ../../.build/proxy .
 
 ##@ e2e
 

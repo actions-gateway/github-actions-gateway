@@ -6,3 +6,8 @@ CLAUDE.md
 # Local-build of the fakegithub helper (`make` at repo root drops it here);
 # root-anchored so it doesn't shadow the test/fakegithub/ source directory.
 /fakegithub
+# stray binaries — always build via make build-* into .build/ instead
+/cmd/agc/agc
+/cmd/gmc/gmc
+/cmd/probe/probe
+/cmd/proxy/proxy
