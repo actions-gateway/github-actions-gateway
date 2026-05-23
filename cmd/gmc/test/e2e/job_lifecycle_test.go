@@ -29,7 +29,12 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
+		// Use a RunnerGroup so AGC has something to reconcile and can register
+		// broker sessions with fakegithub. The worker image is the agc image
+		// (already loaded into the cluster); it acts as a placeholder since
+		// job-lifecycle tests only verify session registration and pod creation,
+		// not that runner pods complete successfully.
+		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, agcImage)
 
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-agc", 4*time.Minute)
@@ -60,17 +65,23 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			sessionID = sessions[0]
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
+		// run_service_url causes the listener to call /acquirejob on fakegithub,
+		// which returns a unique planId ("plan-N") so each job gets a distinct pod name.
+		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
+			fakegithubServiceName, infraNamespace, fakegithubServicePort)
+
 		By("enqueuing a job for that session")
 		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":   "e2e-job-1",
-			"jobName": "e2e test job",
+			"jobId":          "e2e-job-1",
+			"jobName":        "e2e test job",
+			"run_service_url": fakegithubSvcURL,
 		})
 
 		By("waiting for a worker pod to appear in the tenant namespace")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app=actions-gateway-worker",
+				"-l", "app.kubernetes.io/managed-by=actions-gateway-agc",
 				"-o", "jsonpath={.items[*].metadata.name}",
 			)
 			out, err := utils.Run(cmd)
@@ -87,19 +98,24 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			g.Expect(len(sessions)).To(BeNumerically(">=", 1))
 		}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
+		// run_service_url causes /acquirejob to be called, yielding a unique planId
+		// per job so each gets a distinct pod name even when queued to the same session.
+		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
+			fakegithubServiceName, infraNamespace, fakegithubServicePort)
+
 		By("enqueuing two jobs")
-		fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2a"})
+		fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2a", "run_service_url": fakegithubSvcURL})
 		if len(sessions) > 1 {
-			fakegithubEnqueueJob(sessions[1], map[string]interface{}{"jobId": "e2e-job-2b"})
+			fakegithubEnqueueJob(sessions[1], map[string]interface{}{"jobId": "e2e-job-2b", "run_service_url": fakegithubSvcURL})
 		} else {
-			fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2b"})
+			fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2b", "run_service_url": fakegithubSvcURL})
 		}
 
 		By("waiting for at least 2 worker pods")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app=actions-gateway-worker",
+				"-l", "app.kubernetes.io/managed-by=actions-gateway-agc",
 				"--no-headers",
 			)
 			out, err := utils.Run(cmd)
