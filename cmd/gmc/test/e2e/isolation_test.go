@@ -41,8 +41,16 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 
 	It("E2E_GMC_TwoTenantsIndependentResources: each tenant has its own proxy deployment", func() {
 		By("waiting for both proxy deployments")
-		utils.WaitForDeploymentReady(nsA, "actions-gateway-proxy", 4*time.Minute)
-		utils.WaitForDeploymentReady(nsB, "actions-gateway-proxy", 4*time.Minute)
+		Eventually(func(g Gomega) {
+			for _, ns := range []string{nsA, nsB} {
+				cmd := exec.Command("kubectl", "get", "deployment", "actions-gateway-proxy",
+					"-n", ns, "-o", "jsonpath={.status.readyReplicas}")
+				out, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).NotTo(BeEmpty(), "%s: readyReplicas not yet set", ns)
+				g.Expect(out).NotTo(Equal("0"), "%s: no ready replicas yet", ns)
+			}
+		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_NetworkPolicyScopedToNamespace: NetworkPolicy exists in each namespace", func() {

@@ -71,7 +71,9 @@ e2e:
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
 		go test -v -tags e2e -count=1 -timeout 30m ./test/e2e/... \
-		-args -ginkgo.label-filter='!local-only' -ginkgo.procs=6
+		-args -ginkgo.label-filter='!local-only' -ginkgo.procs=8 \
+		      -ginkgo.github-output -ginkgo.poll-progress-after=60s \
+		      -ginkgo.junit-report=/tmp/e2e-report.xml
 
 # Run all e2e tests including local-only (HPA load, PDB drain).
 e2e-all:
