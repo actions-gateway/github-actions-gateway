@@ -421,34 +421,29 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// failPodCreateClient wraps a client.Client and returns an error for Pod creates,
+// simulating a Kubernetes admission rejection without depending on pod naming internals.
+type failPodCreateClient struct {
+	client.Client
+}
+
+func (f failPodCreateClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if _, ok := obj.(*corev1.Pod); ok {
+		return fmt.Errorf("injected pod create failure")
+	}
+	return f.Client.Create(ctx, obj, opts...)
+}
+
 func TestProvisioner_SecretCleanupOnPodCreateFailure(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
-
-	// Use a scheme that doesn't include Pods so pod creation returns an error.
-	s := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(s)
-	// Register RunnerGroup but NOT pods explicitly — fake client still handles
-	// core types, so we need a different approach: create a pod that conflicts.
 	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
+	// Wrap to fail all Pod creates; provisioner should still clean up the Secret.
+	p := newProvisioner(failPodCreateClient{fc})
 
 	rg := newRG("mygroup", "team-a")
 
-	// Pre-create a pod with the name that the provisioner will try to use,
-	// causing a conflict on creation.
-	planID := "plan-conflict"
-	safePlan := "plan-conflict"
-	podName := fmt.Sprintf("runner-%s-%s", "mygroup", safePlan)
-	if len(podName) > 63 {
-		podName = podName[:63]
-	}
-	conflictPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: "team-a"},
-	}
-	require.NoError(t, fc.Create(ctx, conflictPod))
-
-	err := p.HandlerFor(rg)(ctx, "", planID, stubPayload(1))
+	err := p.HandlerFor(rg)(ctx, "", "plan-conflict", stubPayload(1))
 	assert.Error(t, err)
 
 	// Secret must be cleaned up even though pod creation failed.
@@ -659,24 +654,28 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	payload := stubPayloadFull("org", "repo", 7)
 
 	// Helper: run one provision cycle with unique planID; returns after pod eviction.
+	// Uses phase-based lookup to find the current active pod (ignoring prior-cycle
+	// evicted pods that remain in the fake client with Phase=Failed).
 	runCycle := func(planID string) {
 		t.Helper()
-		// Mirror the pod name formula from provisioner.buildPod so we can target
-		// the exact pod rather than relying on findPod (which may return the old
-		// already-evicted pod from the prior cycle).
-		podName := fmt.Sprintf("runner-%s-%s", "mygroup", planID)
-		if len(podName) > 63 {
-			podName = podName[:63]
-		}
-
 		done := make(chan error, 1)
 		go func() { done <- p.HandlerFor(rg)(ctx, "", planID, payload) }()
 
+		var podToEvict *corev1.Pod
 		require.Eventually(t, func() bool {
-			var pod corev1.Pod
-			return fc.Get(ctx, types.NamespacedName{Namespace: "ns", Name: podName}, &pod) == nil
-		}, 2*time.Second, 5*time.Millisecond)
-		evictPod(ctx, t, fc, "ns", podName)
+			var list corev1.PodList
+			if err := fc.List(ctx, &list, client.InNamespace("ns")); err != nil {
+				return false
+			}
+			for i := range list.Items {
+				if list.Items[i].Status.Phase != corev1.PodFailed {
+					podToEvict = &list.Items[i]
+					return true
+				}
+			}
+			return false
+		}, 2*time.Second, 5*time.Millisecond, "active pod should appear for planID %s", planID)
+		evictPod(ctx, t, fc, "ns", podToEvict.Name)
 		require.NoError(t, <-done)
 	}
 
