@@ -80,6 +80,12 @@ var _ = SynchronizedBeforeSuite(
 				"load image %s", img)
 		}
 
+		// Populate package-level vars so setup helpers can reference them.
+		gmcImage = gmcImg
+		agcImage = agcImg
+		proxyImage = proxyImg
+		fakegithubImage = fakegithubImg
+
 		configureKubectlKubeRC()
 		setupCertManager()
 		setupMetricsServer()
