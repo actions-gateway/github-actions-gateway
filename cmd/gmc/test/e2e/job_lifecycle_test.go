@@ -21,7 +21,7 @@ import (
 
 var (
 	fakegithubPFCmd     *exec.Cmd
-	fakegithubLocalPort = "19090"
+	fakegithubLocalPort string
 )
 
 var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
@@ -45,6 +45,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-agc", 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
+		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())
 		fakegithubPFCmd = exec.Command("kubectl", "port-forward",
 			"-n", infraNamespace,
 			"service/"+fakegithubServiceName,

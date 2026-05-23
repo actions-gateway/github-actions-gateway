@@ -328,7 +328,7 @@ The first run of a branch after the cache is primed sees the full benefit. A col
 | 4 | Single-worker CI cluster | 15 min | ~1 min | ✓ Done |
 | 2 | Persistent port-forward | 1 hour | ~1–3 min | ✓ Done |
 | 5 | Docker layer cache | 2 hours | ~3–6 min (cached runs) | ✓ Done |
-| 1 | Ginkgo parallel execution | 4–6 hours | ~10–15 min | Remaining |
+| 1 | Ginkgo parallel execution | 4–6 hours | ~10–15 min | ✓ Done |
 
 Change 1 is the remaining item: replacing `BeforeSuite`/`AfterSuite` with `SynchronizedBeforeSuite`/`SynchronizedAfterSuite` and adding `--procs=6`. It deserves its own PR with careful testing.
 
