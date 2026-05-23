@@ -1126,12 +1126,12 @@ pure-logic properties. No cluster required.
 | W2 — PSA labels | `cmd/gmc/internal/controller/builder_test.go` | Tenant namespace gets `pod-security.kubernetes.io/enforce: <profile>` + companion labels; `privileged` profile produces `privileged` label. | ✓ done |
 | W3 — creds as files | `cmd/gmc/internal/controller/builder_test.go` | AGC Deployment has no `GITHUB_APP_*` env entries; Secret volume mount at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`. | ✓ done |
 | W4 — RBAC verbs | `cmd/gmc/internal/controller/rbac_test.go` | GMC ClusterRole has no wildcard verbs and no wildcard on sensitive resources. AGC Role's `get` on secrets is intentionally broad (D-3 accepted risk — see note below). | ✓ done |
-| W5 — extra env | `cmd/gmc/internal/controller/builder_test.go` | `buildAGCDeployment` with nil `extraEnv` produces no `AGC_EXTRA_*` env entries. | ⚠️ TODO |
+| W5 — extra env | `cmd/gmc/internal/controller/builder_test.go` | `buildAGCDeployment` with nil `extraEnv` produces no `AGC_EXTRA_*` env entries. | ✓ done |
 | W7 — cert mount | `cmd/gmc/internal/controller/builder_test.go` | Self-signed cert has proxy DNS SAN and 1-year validity; AGC Deployment mounts only the cert; proxy Deployment mounts cert + key. | ✓ done |
 | W8 — SecurityContext | `cmd/gmc/internal/controller/builder_test.go` | AGC and proxy containers have `RunAsNonRoot`, `ReadOnlyRootFilesystem`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, `SeccompProfile: RuntimeDefault`. | ✓ done |
 | M-3 — PKCS#7 | `broker/crypto_test.go` | `pkcs7Unpad` returns the same sentinel error for empty, wrong-length, and wrong-byte padding; no panic on adversarial input. | ✓ done |
-| M-4 — rerun URL path traversal | `cmd/agc/internal/provisioner/provisioner_test.go` | Adversarial `system.github.repository` values (`../`, `;`, spaces) are rejected before the rerun URL is built. | ⚠️ TODO |
-| M-6 — RunnerOS injection | `broker/client_test.go` | `GetMessage` with adversarial `RunnerOS` escapes the query parameter and does not smuggle additional parameters. | ⚠️ TODO |
+| M-4 — rerun URL path traversal | `cmd/agc/internal/provisioner/provisioner_test.go` | Adversarial `system.github.repository` values (`../`, `;`, spaces) are rejected before the rerun URL is built. Also fixed `repoSegmentRE` to require alphanumeric-first (previously `..` passed the old `^[A-Za-z0-9._-]+$` regex). | ✓ done |
+| M-6 — RunnerOS injection | `broker/client_test.go` | `GetMessage` with adversarial `RunnerOS` (`"linux&admin=true"`) encodes to a single `os` value and does not smuggle additional parameters. | ✓ done |
 | W9, M-11a — EdDSA | `githubapp/runner_auth_test.go` | EdDSA signing branch produces a JWT verifiable with the matching Ed25519 public key; PKCS#8 round-trip works for RSA and Ed25519. | ✓ done |
 | L-1 — jti | existing JWT tests | `jti` claim is unique per-request and included in the signed assertion. | ✓ done |
 
@@ -1161,11 +1161,11 @@ cluster behavior — resource creation, controller reactions, pod state.
 
 | Finding | Test file | Assertion | Status |
 |---|---|---|---|
-| W1 — NP exists in each tenant ns | `cmd/gmc/test/e2e/isolation_test.go` | `actions-gateway-proxy`, `actions-gateway-workload`, and `actions-gateway-agc` NetworkPolicies present in each tenant namespace (`E2E_GMC_NetworkPolicyScopedToNamespace`). | ⚠️ TODO — add `actions-gateway-agc` check |
-| W2 — PSA label on namespace | `cmd/gmc/test/e2e/security_profile_test.go` | Namespace has the correct `pod-security.kubernetes.io/enforce` label after GMC reconcile. | ⚠️ TODO — new test file |
-| W3 — no env creds in AGC pod | `cmd/gmc/test/e2e/provisioning_test.go` | `kubectl exec` into AGC: `env \| grep GITHUB_APP` returns nothing; `/etc/actions-gateway/github-app/` lists expected credential files. | ⚠️ TODO — extend existing test |
+| W1 — NP exists in each tenant ns | `cmd/gmc/test/e2e/isolation_test.go` | `actions-gateway-proxy`, `actions-gateway-workload`, and `actions-gateway-agc` NetworkPolicies present in each tenant namespace (`E2E_GMC_NetworkPolicyScopedToNamespace`). | ✓ done |
+| W2 — PSA label on namespace | `cmd/gmc/test/e2e/security_profile_test.go` | Namespace gets `pod-security.kubernetes.io/enforce=baseline` (and warn/audit) after reconcile; patching to `privileged` profile updates the label. | ✓ done |
+| W3 — no env creds in AGC pod | `cmd/gmc/test/e2e/provisioning_test.go` | `kubectl exec` into AGC (`E2E_GMC_AGCNoCredentialEnvVars`): `env \| grep GITHUB_APP` returns nothing; `/etc/actions-gateway/github-app/` lists `appId`, `installationId`, `privateKey`. | ✓ done |
 | W4 — RBAC provisioned | `cmd/gmc/test/e2e/provisioning_test.go` | `E2E_GMC_ServiceAccountAndRBACCreated`: ServiceAccount and RoleBinding present in tenant namespace. | ✓ done |
-| W5 — no extra env without flag | `cmd/gmc/test/e2e/provisioning_test.go` | AGC pod has no `AGC_EXTRA_*` env vars when GMC started without the opt-in flag. | ⚠️ TODO |
+| W5 — no extra env without flag | unit test covers the builder invariant; e2e is skipped because the suite itself injects `AGC_EXTRA_*` to redirect AGC to fakegithub — testing "no flag" requires a separate GMC deployment. | n/a — covered by unit test | ✓ done (unit) |
 
 > **⚠️ W1 traffic-enforcement tests — not CI-safe (requires CNI enforcement)**
 >

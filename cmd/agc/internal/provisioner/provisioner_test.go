@@ -1028,6 +1028,66 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// TestProvisioner_RerunURLRejectsAdversarialRepository verifies that adversarial
+// system.github.repository values do not reach the GitHub API. The rerun path
+// is exercised end-to-end via pod eviction so the full owner/repo extraction and
+// validation chain is covered.
+func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {
+	cases := []struct {
+		name  string
+		owner string
+		repo  string
+	}{
+		// ".." passes the old regex (dots are allowed) but must be rejected by
+		// the alphanumeric-first requirement to prevent path traversal.
+		{"path traversal via dot-dot owner", "..", "myrepo"},
+		{"path traversal via dot-dot repo", "myorg", ".."},
+		{"semicolon in owner", "my;org", "myrepo"},
+		{"space in repo name", "myorg", "my repo"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer goleak.VerifyNone(t)
+			ctx := context.Background()
+
+			rerunCalled := make(chan struct{}, 1)
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				rerunCalled <- struct{}{}
+				w.WriteHeader(http.StatusCreated)
+			}))
+			defer srv.Close()
+
+			fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+			p := newProvisioner(fc)
+			p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+			p.GitHubAPIURL = srv.URL
+			p.HTTPClient = srv.Client()
+
+			rg := newRG("mygroup", "team-a")
+			payload := stubPayloadFull(tc.owner, tc.repo, 42)
+
+			done := make(chan error, 1)
+			go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-adv-repo", payload) }()
+
+			require.Eventually(t, func() bool {
+				return findPod(ctx, t, fc, "team-a") != nil
+			}, 2*time.Second, 5*time.Millisecond)
+
+			pod := findPod(ctx, t, fc, "team-a")
+			evictPod(ctx, t, fc, "team-a", pod.Name)
+			require.NoError(t, <-done) // eviction is non-fatal
+
+			// Rerun API must not be called for adversarial owner/repo values.
+			select {
+			case <-rerunCalled:
+				t.Errorf("rerun API must not be called for adversarial owner=%q repo=%q", tc.owner, tc.repo)
+			default:
+			}
+		})
+	}
+}
+
 func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()

@@ -100,6 +100,46 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
+	It("E2E_GMC_AGCNoCredentialEnvVars: AGC pod does not expose GitHub App credentials as env vars", func() {
+		By("finding a ready AGC pod")
+		var agcPodName string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pods",
+				"-n", tenantNS,
+				"-l", "app=actions-gateway-agc",
+				"--field-selector=status.phase=Running",
+				"-o", "jsonpath={.items[0].metadata.name}",
+			)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).NotTo(BeEmpty(), "AGC pod not yet running")
+			agcPodName = out
+		}, 3*time.Minute, 2*time.Second).Should(Succeed())
+
+		By("checking no GITHUB_APP_* env vars are present in the AGC container")
+		cmd := exec.Command("kubectl", "exec", agcPodName,
+			"-n", tenantNS,
+			"-c", "manager",
+			"--", "sh", "-c", "env | grep -i GITHUB_APP || true",
+		)
+		out, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(BeEmpty(),
+			"AGC container must not expose GITHUB_APP_* env vars; credentials must be file-mounted only")
+
+		By("verifying credential files are present at the mount path")
+		cmd = exec.Command("kubectl", "exec", agcPodName,
+			"-n", tenantNS,
+			"-c", "manager",
+			"--", "sh", "-c", "ls /etc/actions-gateway/github-app/",
+		)
+		out, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(ContainSubstring("appId"))
+		Expect(out).To(ContainSubstring("installationId"))
+		Expect(out).To(ContainSubstring("privateKey"))
+	})
+
 	It("E2E_GMC_ReconcileAfterUpdate: changing spec triggers reconcile", func() {
 		By("patching ActionsGateway proxy.minReplicas to 2")
 		cmd := exec.Command("kubectl", "patch", "actionsgateway", agName,
