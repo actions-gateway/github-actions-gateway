@@ -80,6 +80,22 @@ rules:
   - patch
   - delete
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - create
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - rbac.authorization.k8s.io
   resources:
   - roles
