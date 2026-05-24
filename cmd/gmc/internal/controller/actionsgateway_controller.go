@@ -5,7 +5,7 @@
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete;bind;escalate
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -204,12 +204,14 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 
 	// 2. AGC Deployment.
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, agcAppName)
-	// 3. HPA, PDB, proxy Service, proxy Deployment, proxy TLS cert Secret.
+	// 3. HPA, PDB, proxy Service, proxy Deployment.
+	// The proxy TLS cert Secret has an owner reference on the ActionsGateway CR; GC
+	// handles its cleanup automatically when the CR is deleted, so no explicit delete
+	// is needed here (and GMC does not have delete permission on secrets).
 	r.deleteIfExists(ctx, &autoscalingv2.HorizontalPodAutoscaler{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &policyv1.PodDisruptionBudget{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &corev1.Service{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, proxyServiceName)
-	r.deleteIfExists(ctx, &corev1.Secret{}, ns, proxyTLSSecretName)
 	// 4. ResourceQuota, NetworkPolicies.
 	r.deleteIfExists(ctx, &corev1.ResourceQuota{}, ns, "actions-gateway")
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
@@ -484,11 +486,15 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 	}
 
 	desired := buildProxyCertSecret(ag, certPEM, keyPEM)
+	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set owner reference on proxy cert secret: %w", err)
+	}
 	if apierrors.IsNotFound(getErr) {
 		return r.Create(ctx, desired)
 	}
 	existing.Data = desired.Data
 	existing.Labels = desired.Labels
+	existing.OwnerReferences = desired.OwnerReferences
 	return r.Update(ctx, &existing)
 }
 
