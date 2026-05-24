@@ -769,10 +769,13 @@ assumption but should be confirmed).
   Implementation status:
   - **M-11a (done):** Ed25519/EdDSA branches in `githubapp/runner_auth.go`
     and PKCS#8 marshal/parse in `agentpool/crypto.go`.
-  - **M-11b (open):** real-GitHub compatibility probe — verifies that
-    the broker accepts Ed25519 SPKI registration and EdDSA JWT assertions
-    so that operators using `--agent-key-type=ed25519` get working agents.
-    Does not gate the default; gates operator documentation.
+  - **M-11b (open, deferred):** real-GitHub compatibility probe —
+    verifies that the broker accepts Ed25519 SPKI registration and EdDSA
+    JWT assertions so that operators using `--agent-key-type=ed25519` get
+    working agents. Blocked on probe-extension code (`-key-type` and
+    `-register-test-runner` flags do not exist yet) plus a manual run
+    with real credentials. Does not gate the default; gates operator
+    documentation.
   - **M-11c (done):** `agentpool.createAgent` uses RSA-3072 by default;
     key type is configurable via `--agent-key-type`.
 
@@ -1021,9 +1024,12 @@ key types; the real-GitHub compatibility probe (M-11b) remains open.
   - `cmd/agc/main.go` — `--agent-key-type` flag, default `rsa`.
 - **Tests:** EdDSA signing path and PKCS#8 round-trip covered in
   `githubapp/runner_auth_test.go`.
-- **M-11b (still open):** real-GitHub probe to verify the broker accepts
-  Ed25519 SPKI and EdDSA JWT assertions — documents that the opt-in path
-  works end-to-end. Does not affect the default.
+- **M-11b (still open, deferred):** real-GitHub probe to verify the
+  broker accepts Ed25519 SPKI and EdDSA JWT assertions. Blocked on two
+  things: (1) extending `cmd/probe` with `-key-type` and
+  `-register-test-runner` flags, and (2) a manual run with real GitHub
+  App credentials. Does not affect the RSA-3072 default. Details under
+  Manual verifications below.
 
 ### Phase 3 — Hardening backlog
 
@@ -1032,7 +1038,7 @@ Independent items, scheduled opportunistically.
 | Finding | Workstream | Notes |
 |---|---|---|
 | M-10 | Expand validating webhook *or* move to CRD CEL | Prefer CEL where possible — visible in `kubectl explain`. |
-| M-11b | Run probe against real GitHub App | Verifies broker accepts Ed25519 SPKI + EdDSA JWTs so `--agent-key-type=ed25519` opt-in is documented as working. Does not affect the RSA-3072 default. |
+| M-11b | Extend `cmd/probe` (add `-key-type`/`-register-test-runner` flags) then run against real GitHub App | Verifies broker accepts Ed25519 SPKI + EdDSA JWTs so `--agent-key-type=ed25519` opt-in is documented as working. Does not affect the RSA-3072 default. |
 | M-11c | ~~Migrate `agentpool.createAgent`~~ | **Done (2026-05-23).** RSA-3072 is the default; Ed25519 is opt-in via `--agent-key-type=ed25519`. |
 | M-12 | Generic 502 in `cmd/proxy/proxy.go:103-106` | Log detail server-side. |
 | M-13 | Cap broker error bodies (`body[:200]`) | Add debug env var to log full body. |
@@ -1193,18 +1199,37 @@ Two verifications require real credentials and cannot run in CI.
 
 **M-11b — Ed25519 broker compatibility probe (opt-in verification)**
 
-**Purpose:** RSA-3072 is the secure default and is not gated on this
-probe. The probe verifies that operators using `--agent-key-type=ed25519`
-get a working agent end-to-end — that the broker accepts Ed25519 SPKI
-at registration and EdDSA-signed JWT assertions at token issuance. This
-documents the opt-in path rather than driving a default change.
+**Status (2026-05-23): deferred — not blocked on attention, blocked on a
+probe extension plus real GitHub App credentials.** Two pieces of work
+have to happen before a verdict can be recorded:
+
+1. **Probe extension (code, not yet written).** `cmd/probe/main.go`
+   currently consumes `GITHUB_AGENT_ID`/`GITHUB_AGENT_NAME` from an
+   already-registered runner and signs with the App's RSA private key. To
+   verify Ed25519 specifically, the probe needs:
+   - a `-key-type {rsa,ed25519}` flag selecting the key generated for the
+     synthetic runner agent;
+   - a `-register-test-runner` mode that POSTs to GitHub's runner-
+     registration API with the generated SPKI public key, captures the
+     returned `agentId`/`agentName`, signs the next assertion with the
+     matching private key, exchanges it for a session, then cleans up the
+     registration on exit.
+2. **Manual run with real credentials.** Once the probe supports the flag,
+   someone with a test GitHub App installation runs it and records the
+   verdict here.
+
+RSA-3072 is the secure default and is not gated on this probe — it stays
+the default regardless of the outcome. M-11b only documents whether
+`--agent-key-type=ed25519` is a working opt-in. See
+[Appendix G §G.6](../design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange)
+for the broker-side change that would make Ed25519 the secure default.
+
+**Intended procedure (once the probe is extended):**
 
 Prerequisites:
 - GitHub App with installation on a test org/repo
 - App ID, installation ID, private key PEM
 - Broker URL and runner version from a real `.runner` config
-
-Procedure:
 
 ```sh
 export GITHUB_APP_ID=<id>
@@ -1212,7 +1237,7 @@ export GITHUB_APP_PRIVATE_KEY=/path/to/key.pem
 export GITHUB_APP_INSTALLATION_ID=<id>
 export GITHUB_BROKER_URL=https://...
 export GITHUB_RUNNER_VERSION=2.327.1
-./cmd/probe -key-type ed25519 -register-test-runner
+./.build/probe -key-type ed25519 -register-test-runner
 ```
 
 Outcomes:
@@ -1224,12 +1249,10 @@ Outcomes:
 | `register 400 "...key type..."` | Broker rejects Ed25519 SPKI | Same as above. |
 | Any other failure | Network or App-config issue | Retry; not a key-type signal. |
 
-Owner: whoever has the GitHub App credentials. Record the outcome,
+Owner: whoever picks up the probe extension. Record the outcome,
 GitHub-reported runner version, and date as a paragraph here. The probe
 code stays in the tree; re-run if GitHub's broker is updated to accept
-EdDSA. See also
-[Appendix G §G.6](../design/appendix-g-future-enhancements.md#g6-x25519-ecdh-session-key-exchange)
-for the broker change that would make Ed25519 the secure default.
+EdDSA.
 
 **D-2 — `restricted` profile against the runner image (resolved 2026-05-23)**
 
