@@ -85,27 +85,34 @@ e2e-registry-delete: ## Stop and remove the local OCI registry container
 		echo "==> registry container $(REGISTRY_NAME) does not exist"; \
 	fi
 
-# e2e-images builds each image with `--push` so the registry is the
-# distribution path; kind nodes pull on demand. There is no separate "load"
-# step — pushing to the registry is the load.
+# e2e-images builds and pushes all four images in parallel via docker-bake.hcl.
+# Bake runs them concurrently bounded by the slowest target instead of summing
+# four sequential `docker build` calls. Pushing to the local registry IS the
+# load step — kind nodes pull from there on demand.
 .PHONY: e2e-images
-e2e-images: docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub ## Build and push all four e2e images to the local registry
+e2e-images: ## Build and push all four e2e images in parallel via docker buildx bake
+	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
+		docker buildx bake --file docker-bake.hcl
 
 .PHONY: docker-build-gmc
-docker-build-gmc: ## Build and push the GMC Docker image
-	docker buildx build --push -f cmd/gmc/Dockerfile -t $(GMC_IMG) .
+docker-build-gmc: ## Build and push only the GMC image (bake target `gmc`)
+	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
+		docker buildx bake --file docker-bake.hcl gmc
 
 .PHONY: docker-build-agc
-docker-build-agc: ## Build and push the AGC Docker image
-	docker buildx build --push -f cmd/agc/Dockerfile -t $(AGC_IMG) .
+docker-build-agc: ## Build and push only the AGC image (bake target `agc`)
+	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
+		docker buildx bake --file docker-bake.hcl agc
 
 .PHONY: docker-build-proxy
-docker-build-proxy: ## Build and push the egress proxy Docker image
-	docker buildx build --push -f cmd/proxy/Dockerfile -t $(PROXY_IMG) .
+docker-build-proxy: ## Build and push only the egress proxy image (bake target `proxy`)
+	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
+		docker buildx bake --file docker-bake.hcl proxy
 
 .PHONY: docker-build-fakegithub
-docker-build-fakegithub: ## Build and push the fakegithub test-fixture Docker image
-	docker buildx build --push -f test/fakegithub/Dockerfile -t $(FAKEGITHUB_IMG) .
+docker-build-fakegithub: ## Build and push only the fakegithub image (bake target `fakegithub`)
+	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
+		docker buildx bake --file docker-bake.hcl fakegithub
 
 # Run Tier A + Tier B e2e tests (excludes multi-node tests).
 # Uses the ginkgo CLI so --procs and --label-filter are recognised.
