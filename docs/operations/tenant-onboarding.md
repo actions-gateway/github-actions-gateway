@@ -11,13 +11,14 @@ This checklist walks from pre-conditions through first successful job. For the f
 Before beginning, confirm all of the following:
 
 - [ ] **Namespace exists.** The tenant's Kubernetes namespace has been created: `kubectl get namespace <tenant-namespace>`.
-- [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n actions-gateway-system gateway-manager-controller`.
+- [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
 - [ ] **Quota is approved.** The tenant's resource requirements have been reviewed and a `namespaceQuota` has been agreed: CPU, memory, and pod count.
 - [ ] **PriorityClass objects exist** (GPU tenants only). Any `priorityClassName` values referenced in `priorityTiers` are pre-created at the cluster level: `kubectl get priorityclass`.
 - [ ] **Cluster service CIDR is known.** Needed if the tenant's `noProxyCIDRs` must be customized: `kubectl cluster-info dump | grep -m1 service-cluster-ip-range`.
+- [ ] **Security profile decided.** Default `baseline` is correct for normal CI workloads (builds, tests). Confirm with the tenant whether they need `restricted` (compliance / high-isolation) or `privileged` (docker-in-docker, kernel-module workflows). Tenants with both needs deploy two `ActionsGateway` CRs in two namespaces. See [§5.3 — Security Profiles](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
 
 ---
 
@@ -68,6 +69,10 @@ metadata:
 spec:
   gitHubAppRef:
     name: github-app-v1
+  # Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.
+  # Set to "restricted" for stricter isolation, or "privileged" only if the workload
+  # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).
+  securityProfile: baseline
   proxy:
     minReplicas: 2
     maxReplicas: 10
@@ -113,7 +118,7 @@ kubectl get actionsgateway -n <tenant-namespace> <name> \
 
 ```sh
 # Confirm the AGC Deployment is running
-kubectl get deploy -n <tenant-namespace> actions-gateway-controller
+kubectl get deploy -n <tenant-namespace> actions-gateway-agc
 # Expected: READY 1/1
 
 # Confirm the proxy pool is running
@@ -126,8 +131,17 @@ kubectl get runnergroup -n <tenant-namespace>
 # Confirm RBAC was created
 kubectl get serviceaccount,role,rolebinding -n <tenant-namespace> | grep actions-gateway
 
-# Confirm NetworkPolicy and ResourceQuota were applied
+# Confirm NetworkPolicies and ResourceQuota were applied
 kubectl get networkpolicy,resourcequota -n <tenant-namespace>
+# Expected NetworkPolicies (3):
+#   actions-gateway-workload — restricts AGC and worker pods to proxy + DNS
+#   actions-gateway-agc      — adds Kubernetes API server egress for the AGC only
+#   actions-gateway-proxy    — restricts proxy pods to GitHub CIDRs + DNS
+
+# Confirm the Pod Security Admission label matches the chosen securityProfile
+kubectl get namespace <tenant-namespace> \
+  -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}{"\n"}'
+# Expected: baseline (default), or restricted / privileged if explicitly chosen
 ```
 
 **If `TARGETS: <unknown>` on the HPA:** `resources.requests.cpu` is not set on proxy pods. Add it to `spec.proxy.resources.requests.cpu` in the `ActionsGateway` spec. See [Troubleshooting — Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling).
@@ -140,7 +154,7 @@ The AGC should begin polling GitHub within seconds of starting.
 
 ```sh
 # Check AGC logs for session registration
-kubectl logs -n <tenant-namespace> deploy/actions-gateway-controller --tail=30
+kubectl logs -n <tenant-namespace> deploy/actions-gateway-agc --tail=30
 # Look for: "session registered" or "starting listener goroutine"
 
 # Check the active sessions metric

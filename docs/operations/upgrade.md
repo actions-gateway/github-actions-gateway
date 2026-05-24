@@ -15,7 +15,7 @@ Before upgrading any component, confirm the system is healthy:
 kubectl get actionsgateway --all-namespaces
 
 # 2. All AGC pods healthy
-kubectl get pods --all-namespaces -l app=actions-gateway-controller
+kubectl get pods --all-namespaces -l app=actions-gateway-agc
 
 # 3. All proxy pools healthy
 kubectl get pods --all-namespaces -l app=actions-gateway-proxy
@@ -52,15 +52,15 @@ CRD changes are additive (new optional fields) by default. If a release includes
 
 ```sh
 make deploy IMG=<registry>/gmc:<new-tag>
-# or: kubectl set image deploy/gateway-manager-controller \
+# or: kubectl set image deploy/gmc-controller-manager \
 #       manager=<registry>/gmc:<new-tag> \
-#       -n actions-gateway-system
+#       -n gmc-system
 ```
 
 Watch the rollout:
 
 ```sh
-kubectl rollout status deploy/gateway-manager-controller -n actions-gateway-system
+kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
 The rolling update replaces one replica at a time. Leadership transfers before the old leader is deleted. The total rollout time is typically < 30 seconds.
@@ -69,10 +69,10 @@ The rolling update replaces one replica at a time. Leadership transfers before t
 
 ```sh
 # Confirm both replicas are on the new image
-kubectl get pods -n actions-gateway-system -o wide
+kubectl get pods -n gmc-system -o wide
 
 # Confirm the GMC has re-elected a leader
-kubectl get lease -n actions-gateway-system
+kubectl get lease -n gmc-system
 
 # Confirm no new reconcile errors appeared
 # Metric: actions_gateway_reconcile_errors_total
@@ -84,8 +84,8 @@ kubectl describe actionsgateway -n <namespace> <name>
 ### Rollback
 
 ```sh
-kubectl rollout undo deploy/gateway-manager-controller -n actions-gateway-system
-kubectl rollout status deploy/gateway-manager-controller -n actions-gateway-system
+kubectl rollout undo deploy/gmc-controller-manager -n gmc-system
+kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
 If the rollback targets a different CRD schema version, re-apply the previous CRDs before rolling back the operator binary.
@@ -118,7 +118,7 @@ The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before 
 The GMC manages the AGC Deployment. To update the AGC image, update the GMC's configuration (Helm values or Kustomize overlay) with the new AGC image tag and re-deploy the GMC, which will then roll each tenant's AGC Deployment. Alternatively, patch per-namespace:
 
 ```sh
-kubectl set image deploy/actions-gateway-controller \
+kubectl set image deploy/actions-gateway-agc \
   agc=<registry>/agc:<new-tag> \
   -n <namespace>
 ```
@@ -126,7 +126,7 @@ kubectl set image deploy/actions-gateway-controller \
 **Step 3: Watch the rollout**
 
 ```sh
-kubectl rollout status deploy/actions-gateway-controller -n <namespace>
+kubectl rollout status deploy/actions-gateway-agc -n <namespace>
 ```
 
 **Step 4: Confirm session recovery**
@@ -146,8 +146,8 @@ After the rollout, verify that jobs active during the restart have either comple
 ### Rollback
 
 ```sh
-kubectl rollout undo deploy/actions-gateway-controller -n <namespace>
-kubectl rollout status deploy/actions-gateway-controller -n <namespace>
+kubectl rollout undo deploy/actions-gateway-agc -n <namespace>
+kubectl rollout status deploy/actions-gateway-agc -n <namespace>
 ```
 
 Then confirm sessions are re-established and job acquisition resumes.
