@@ -40,45 +40,11 @@ jobs:
       - name: Create kind cluster (3-node, with local registry)
         run: make e2e-cluster KIND_CLUSTER=${{ env.KIND_CLUSTER }} KIND_CONFIG=test/kind-config.yaml
 
-      - name: Build and push GMC image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cmd/gmc/Dockerfile
-          tags: ${{ env.GMC_IMG }}
-          push: true
-          cache-from: type=gha,scope=gmc
-          cache-to: type=gha,mode=max,scope=gmc
-
-      - name: Build and push AGC image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cmd/agc/Dockerfile
-          tags: ${{ env.AGC_IMG }}
-          push: true
-          cache-from: type=gha,scope=agc
-          cache-to: type=gha,mode=max,scope=agc
-
-      - name: Build and push proxy image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: cmd/proxy/Dockerfile
-          tags: ${{ env.PROXY_IMG }}
-          push: true
-          cache-from: type=gha,scope=proxy
-          cache-to: type=gha,mode=max,scope=proxy
-
-      - name: Build and push fakegithub image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: test/fakegithub/Dockerfile
-          tags: ${{ env.FAKEGITHUB_IMG }}
-          push: true
-          cache-from: type=gha,scope=fakegithub
-          cache-to: type=gha,mode=max,scope=fakegithub
+      - name: Build and push all four images in parallel (bake)
+        run: docker buildx bake --file docker-bake.hcl
+        env:
+          GIT_SHA: ${{ github.sha }}
+          GHA_CACHE: "true"
 
       - name: Run multi-node e2e tests
         run: make e2e-multi-node KIND_CLUSTER=${{ env.KIND_CLUSTER }}
