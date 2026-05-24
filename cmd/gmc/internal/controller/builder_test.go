@@ -230,10 +230,21 @@ func TestBuildRole_AGCPermissions(t *testing.T) {
 	}
 }
 
-func TestBuildRole_SecretsVerbs_NoListWatch(t *testing.T) {
+// TestBuildRole_SecretsVerbs_IncludesListWatch verifies the AGC's Role has the
+// list/watch verbs the agent pool needs to enumerate per-runner Secrets. An
+// earlier revision removed these to "tighten" RBAC, which broke
+// agentpool.Pool.listSecrets() and stalled session registration in e2e.
+//
+// The "don't hold Secret bodies in the controller cache" property that
+// removing list/watch was trying to provide is now enforced separately at the
+// AGC's manager via Client.Cache.DisableFor[*corev1.Secret] (in cmd/agc/main.go) —
+// Secret reads go direct to the API server instead of being held in the
+// controller-runtime cache.
+func TestBuildRole_SecretsVerbs_IncludesListWatch(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	role := buildAGCRole(ag)
 
+	var verbs []string
 	for _, rule := range role.Rules {
 		isSecrets := false
 		for _, r := range rule.Resources {
@@ -244,10 +255,11 @@ func TestBuildRole_SecretsVerbs_NoListWatch(t *testing.T) {
 		if !isSecrets {
 			continue
 		}
-		for _, verb := range rule.Verbs {
-			assert.NotEqual(t, "list", verb, "secrets rule must not include 'list' verb")
-			assert.NotEqual(t, "watch", verb, "secrets rule must not include 'watch' verb")
-		}
+		verbs = append(verbs, rule.Verbs...)
+	}
+	require.NotEmpty(t, verbs, "AGC Role must include a secrets rule")
+	for _, expected := range []string{"get", "list", "watch", "create", "delete"} {
+		assert.Contains(t, verbs, expected, "AGC secrets rule must include %q", expected)
 	}
 }
 
