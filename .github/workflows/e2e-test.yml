@@ -52,6 +52,12 @@ jobs:
           GHA_CACHE: "true"
 
       - name: Run e2e tests (excluding multi-node)
+        # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive
+        # after the suite finishes so the next step can dump real cluster state
+        # on failure. The kind cluster itself is still deleted by the final
+        # cleanup step regardless.
+        env:
+          E2E_SKIP_TEARDOWN: "true"
         run: make e2e KIND_CLUSTER=actions-gateway-e2e
 
       - name: Upload e2e test report
@@ -62,14 +68,47 @@ jobs:
           path: /tmp/e2e-report.xml
 
       - name: Collect diagnostic info on failure
-        if: failure()
+        # Also fire on cancellation so a manually-cancelled run still produces
+        # cluster state; the previous `if: failure()` skipped this entirely
+        # when the user clicked Cancel.
+        if: always() && (failure() || cancelled())
         run: |
-          echo "=== GMC pods ===" && kubectl get pods -n gmc-system -o wide || true
-          echo "=== e2e-infra pods ===" && kubectl get pods -n e2e-infra -o wide || true
-          echo "=== tenant namespaces ===" && kubectl get pods --all-namespaces -l 'actions-gateway.github.com/owner-name' -o wide || true
-          echo "=== GMC controller logs ===" && kubectl logs -n gmc-system -l control-plane=controller-manager --tail=100 || true
-          echo "=== fakegithub logs ===" && kubectl logs -n e2e-infra -l app=fakegithub --tail=100 || true
-          echo "=== events ===" && kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -50 || true
+          set +e
+          echo "=== nodes ==="
+          kubectl get nodes -o wide
+          echo
+          echo "=== GMC pods ==="
+          kubectl get pods -n gmc-system -o wide
+          echo
+          echo "=== GMC pod describe ==="
+          kubectl describe pods -n gmc-system
+          echo
+          echo "=== GMC controller logs ==="
+          kubectl logs -n gmc-system -l control-plane=controller-manager --tail=300
+          echo
+          echo "=== e2e-infra pods ==="
+          kubectl get pods -n e2e-infra -o wide
+          echo
+          echo "=== fakegithub logs ==="
+          kubectl logs -n e2e-infra -l app=fakegithub --tail=100
+          echo
+          echo "=== ALL pods (every namespace) ==="
+          kubectl get pods --all-namespaces -o wide
+          echo
+          echo "=== ActionsGateway CRs ==="
+          kubectl get actionsgateway --all-namespaces -o yaml
+          echo
+          echo "=== proxy Deployments ==="
+          kubectl get deploy --all-namespaces -l app=actions-gateway-proxy -o yaml
+          echo
+          echo "=== tenant pod descriptions ==="
+          for ns in $(kubectl get ns -o jsonpath='{range .items[?(@.metadata.name=~"tenant-.*")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            echo "--- namespace: $ns ---"
+            kubectl describe pods -n "$ns"
+            echo
+          done
+          echo "=== events (last 100) ==="
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -100
 
       - name: Delete kind cluster
         if: always()

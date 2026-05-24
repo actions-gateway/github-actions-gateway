@@ -119,6 +119,19 @@ var _ = SynchronizedAfterSuite(
 	func() { /* per-process teardown — nothing needed */ },
 	// Runs ONCE on process 0 after all processes finish.
 	func() {
+		// E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager in
+		// place so the workflow's diagnostic step can dump real cluster state
+		// before the kind cluster is deleted. Without this, teardownGMC's
+		// `make undeploy` deletes everything before the workflow can inspect
+		// it on failure, producing "No resources found" output that hides the
+		// real cause of any test failure.
+		//
+		// The full kind cluster is still torn down by the workflow's
+		// `Delete kind cluster` step regardless of this flag.
+		if os.Getenv("E2E_SKIP_TEARDOWN") == "true" {
+			_, _ = fmt.Fprintln(GinkgoWriter, "E2E_SKIP_TEARDOWN=true; leaving GMC/fakegithub/cert-manager in place for diagnostics")
+			return
+		}
 		teardownGMC()
 		teardownFakegithub()
 		teardownCertManager()
