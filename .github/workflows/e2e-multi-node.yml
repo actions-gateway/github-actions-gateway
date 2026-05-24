@@ -107,8 +107,18 @@ jobs:
             kubectl describe pods -n "$ns"
             echo
           done
-          echo "=== events (last 100) ==="
-          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -100
+          echo "=== tenant container logs (current + previous) ==="
+          for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            for pod in $(kubectl get pods -n "$ns" -o name); do
+              echo "--- LOGS $ns/$pod (current) ---"
+              kubectl logs -n "$ns" "$pod" --all-containers --tail=200
+              echo "--- LOGS $ns/$pod (previous, if crashed) ---"
+              kubectl logs -n "$ns" "$pod" --all-containers --tail=200 --previous
+              echo
+            done
+          done
+          echo "=== events (last 200) ==="
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -200
 
       - name: Delete kind cluster
         if: always()
