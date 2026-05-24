@@ -87,9 +87,14 @@ func buildAGCRole(ag *gmcv1alpha1.ActionsGateway) *rbacv1.Role {
 		Rules: []rbacv1.PolicyRule{
 			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
 			{APIGroups: []string{""}, Resources: []string{"pods/status"}, Verbs: []string{"get"}},
-			// list/watch removed: AGC only needs to get/create/delete the job Secrets it
-			// creates itself. Dynamic Secret names prevent resourceNames restriction.
-			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "create", "delete"}},
+			// list/watch are required: the agent pool enumerates its own per-runner
+			// Secrets to reconcile pool state (agentpool.Pool.listSecrets). RBAC does
+			// not support glob resourceNames and the agent Secret names are dynamic,
+			// so we cannot constrain by name. The "don't hold Secret bodies in process
+			// memory" property from W3 is preserved at the AGC's manager level by
+			// Client.Cache.DisableFor[*corev1.Secret] — reads go direct to the API
+			// server rather than being held in the controller-runtime cache.
+			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
 			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups"}, Verbs: []string{"get", "list", "watch", "update", "patch"}},
 			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups/status", "runnergroups/finalizers"}, Verbs: []string{"get", "update", "patch"}},
 		},
