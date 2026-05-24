@@ -190,13 +190,46 @@ controls are warranted.
   Secret in the tenant namespace (e.g. a developer's `ghcr-pull-token` or
   `slack-webhook`). The broad `create` would let it stage a Secret that another
   workload mounts.
-- **Mitigation:** Split into two narrower rules with `resourceNames` listing
-  the agent-pool Secret names *or* a label-selector-restricted Role. The
-  path-of-least-resistance fix is `resourceNames` since the secret names are
-  deterministic: `agentpool-<group>-<index>` and `job-<safePlanID>`. Use two
-  Role rules with `resourceNames` patterns, or restrict to label selector
-  via `controller-runtime`'s cache filter (the in-process AGC cache already
-  filters; the *RBAC* surface does not).
+- **Mitigation (implemented, partially):** Two controls landed:
+
+  1. **`list`/`watch` were initially removed** (commit where W4 first
+     shipped), but this broke `agentpool.Pool.listSecrets` — the agent
+     pool must enumerate its own per-runner Secrets to reconcile state
+     (`EnsureAgents`). `list` was restored (dc80293).
+
+  2. **Secret cache disabled on the AGC manager** (`Client.Cache.DisableFor
+     [*corev1.Secret]`, commit 8ea6f5f) — all Secret reads bypass the
+     controller-runtime in-process cache and go direct to the API server.
+     A compromised AGC cannot silently drain Secret bodies from memory;
+     any exfiltration requires live API server calls that appear in the
+     audit log.
+
+- **Residual risk (accepted):** The AGC Role still grants `list`/`watch`
+  on all Secrets in the tenant namespace. A compromised AGC can enumerate
+  user-managed Secrets (e.g. `ghcr-pull-token`, `slack-webhook`). Two
+  paths to closing this were evaluated and rejected for v1:
+
+  - **`resourceNames` restriction** — not viable: RBAC doesn't support
+    glob patterns and agent Secret names are dynamic (created per
+    acquisition). Static enumeration would require the GMC to update the
+    Role on every agent-pool resize.
+
+  - **Label-selector-restricted RBAC (KEP-4601)** — KEP-4601 ("Authorize
+    with Field and Label Selectors") reached GA in Kubernetes 1.34 and
+    is enabled by default in 1.35 (the cluster version used here), but it
+    extends the *authorizer* layer, not the `rbacv1.PolicyRule` API.
+    `PolicyRule` has no `LabelSelector` field even in k8s.io/api v0.35.
+    The feature benefits webhook authorizers (OPA, Kyverno) but does not
+    let standard RBAC roles scope `list` to label-filtered resources.
+
+  - **Split ServiceAccount** — a second SA with `list`/`watch`/`get` for
+    the agent pool; the main AGC SA keeps `create`/`delete`. Viable but
+    ~100 LoC, and a compromised AGC already controls the credentials it
+    minted (the accepted D-3 reasoning extends here).
+
+  **Decision:** accept the broad `list`/`watch` in combination with the
+  cache-disable control. Revisit if a real exploit path surfaces or if
+  Kubernetes adds label-selector support to `PolicyRule`.
 
 ---
 
@@ -890,32 +923,27 @@ full rationale and acceptance criteria.
 
 #### W4 — Tighten AGC RBAC (closes H-2)
 
-- **Files:**
-  - `cmd/gmc/internal/controller/builder.go` `buildAGCRole` — split
-    the `secrets` rule into two `resourceNames`-restricted rules:
-    - `verbs: [get,create,delete]`, `resourceNames: [agentpool-*]`
-      — *but* RBAC doesn't support glob `resourceNames`, so this
-      requires either listing exact names (driven by reconciler) or
-      using a label-selector cache filter and accepting that the RBAC
-      surface is broader than the in-process filter.
-  - In practice the cleanest fix is two rules: one with
-    `resourceNames` explicitly enumerated for the agent-pool Secrets
-    (the GMC knows the names) and a separate cache filter in the AGC.
-    Job-payload Secrets are short-lived (created/deleted per job) so
-    they need `create`/`delete` without `resourceNames` — accept that
-    `create` on `secrets` remains broad, but constrain it via OPA/
-    Kyverno only if available (not required for v1).
-  - Document the residual broadness as a comment so future readers
-    don't think the loose `create` is a bug.
-- **Tests:**
-  - `cmd/gmc/internal/controller/rbac_test.go` — assert the new rule
-    shape.
-  - `cmd/gmc/internal/controller/integration/rbac_scope_test.go` —
-    assert the AGC's SA cannot `list secrets` cluster-wide and cannot
-    `get` an unmanaged Secret in the tenant namespace.
-- **Done when:** an attacker-controlled pod with the AGC SA cannot
-  read a user-created Secret (e.g. `kubectl create secret generic
-  developer-secret`) in the same namespace.
+- **Status (2026-05-24): Partially implemented — residual risk accepted.**
+
+  Two controls implemented:
+
+  - **Secret cache disabled** (`cmd/agc/main.go` — `Client.Cache.DisableFor
+    [*corev1.Secret]`): Secret reads bypass the controller-runtime
+    in-process cache; no Secret bodies are silently accumulated in the
+    AGC process. Exfiltration requires live API calls visible in the
+    audit log.
+
+  - **Role comment updated** (`cmd/gmc/internal/controller/builder.go`
+    `buildAGCRole`): documents why `list`/`watch` are required and points
+    to the cache-disable as the substitute control.
+
+  `list`/`watch` on all Secrets in the tenant namespace remain in the
+  Role. `resourceNames` restriction is not viable (dynamic names, no glob
+  support). KEP-4601 (GA in k8s 1.34) does not extend `rbacv1.PolicyRule`
+  — it helps webhook authorizers, not standard RBAC. Split-SA was
+  evaluated and declined (D-3 reasoning: AGC compromise already implies
+  access to credentials it minted). The residual enumeration risk is
+  accepted for v1 and documented in the H-2 finding above.
 
 #### W5 — `AGC_EXTRA_*` mechanism (closes M-14)
 
@@ -1131,7 +1159,7 @@ pure-logic properties. No cluster required.
 | W1 — NP shapes | `cmd/gmc/internal/controller/builder_test.go` | `buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`: correct `PodSelector`, PolicyTypes, and egress ports (proxy: DNS+8080; workload: DNS+proxy; AGC: DNS+443). DNS egress present in all three. | ✓ done |
 | W2 — PSA labels | `cmd/gmc/internal/controller/builder_test.go` | Tenant namespace gets `pod-security.kubernetes.io/enforce: <profile>` + companion labels; `privileged` profile produces `privileged` label. | ✓ done |
 | W3 — creds as files | `cmd/gmc/internal/controller/builder_test.go` | AGC Deployment has no `GITHUB_APP_*` env entries; Secret volume mount at `/etc/actions-gateway/github-app/` with `defaultMode: 0o400`. | ✓ done |
-| W4 — RBAC verbs | `cmd/gmc/internal/controller/rbac_test.go` | GMC ClusterRole has no wildcard verbs and no wildcard on sensitive resources. AGC Role's `get` on secrets is intentionally broad (D-3 accepted risk — see note below). | ✓ done |
+| W4 — RBAC verbs | `cmd/gmc/internal/controller/rbac_test.go` | GMC ClusterRole has no wildcard verbs and no wildcard on sensitive resources. AGC Role includes `list`/`watch` on secrets (required by agent pool; see H-2 residual risk note). | ✓ done |
 | W5 — extra env | `cmd/gmc/internal/controller/builder_test.go` | `buildAGCDeployment` with nil `extraEnv` produces no `AGC_EXTRA_*` env entries. | ✓ done |
 | W7 — cert mount | `cmd/gmc/internal/controller/builder_test.go` | Self-signed cert has proxy DNS SAN and 1-year validity; AGC Deployment mounts only the cert; proxy Deployment mounts cert + key. | ✓ done |
 | W8 — SecurityContext | `cmd/gmc/internal/controller/builder_test.go` | AGC and proxy containers have `RunAsNonRoot`, `ReadOnlyRootFilesystem`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, `SeccompProfile: RuntimeDefault`. | ✓ done |
@@ -1141,12 +1169,16 @@ pure-logic properties. No cluster required.
 | W9, M-11a — EdDSA | `githubapp/runner_auth_test.go` | EdDSA signing branch produces a JWT verifiable with the matching Ed25519 public key; PKCS#8 round-trip works for RSA and Ed25519. | ✓ done |
 | L-1 — jti | existing JWT tests | `jti` claim is unique per-request and included in the signed assertion. | ✓ done |
 
-**W4 residual risk (D-3):** The AGC Role allows `get` on secrets without
-`resourceNames` because job-secret names are dynamically generated and
-cannot be statically enumerated at deploy time. `list` and `watch` are not
-granted. This is documented accepted risk — do not write a test asserting
-that `get` on an unrelated secret is denied, because it is currently
-allowed and the design knowingly accepts this.
+**W4 residual risk (H-2 accepted):** The AGC Role grants `get`, `list`,
+`watch`, `create`, and `delete` on all Secrets in the tenant namespace.
+`list`/`watch` are required by `agentpool.Pool.listSecrets`; narrowing them
+by label is not possible through standard `rbacv1.PolicyRule` (no
+`LabelSelector` field even in k8s.io/api v0.35 / KEP-4601 GA). The
+substitute control is `Client.Cache.DisableFor[*corev1.Secret]` in the AGC
+manager — Secret bodies are never held in-process. Do not write a test
+asserting that `list` or `get` on an unrelated Secret is denied; both are
+currently allowed and the design knowingly accepts this. See H-2 for full
+rationale.
 
 #### Integration tests
 
