@@ -44,8 +44,19 @@ import (
 // ActionsGatewayReconciler reconciles ActionsGateway objects.
 type ActionsGatewayReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	IPFetcher   GitHubIPRangeFetcher
+	Scheme *runtime.Scheme
+	// IPCache supplies cached GitHub IP CIDRs for the proxy NetworkPolicy
+	// egress rule. It is populated and refreshed by IPRangeReconciler;
+	// reads here are non-blocking and never perform network I/O. A nil
+	// cache or an empty snapshot is tolerated — the periodic reconciler
+	// will patch any NetworkPolicies that were created without CIDRs once
+	// it completes its first fetch.
+	//
+	// Earlier revisions did a network fetch on every reconcile, which
+	// serialised behind a single goroutine (MaxConcurrentReconciles=1)
+	// and stalled the reconciler queue whenever the GitHub API was slow
+	// or unreachable. The cache removes that blocking call.
+	IPCache     *IPRangeCache
 	AGCImage    string
 	ProxyImage  string
 	Log         *slog.Logger
@@ -54,8 +65,6 @@ type ActionsGatewayReconciler struct {
 
 // Reconcile reconciles an ActionsGateway CR.
 func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
 	var ag gmcv1alpha1.ActionsGateway
 	if err := r.Get(ctx, req.NamespacedName, &ag); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -74,15 +83,12 @@ func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
-	// Fetch GitHub IP ranges (best-effort; empty on error).
+	// Read GitHub IP ranges from the in-memory cache. Empty until the
+	// periodic IPRangeReconciler completes its first fetch; tolerated
+	// because IPRangeReconciler will patch the NetworkPolicy when it does.
 	var githubCIDRs []net.IPNet
-	if r.IPFetcher != nil {
-		cidrs, err := r.IPFetcher.FetchIPRanges(ctx)
-		if err != nil {
-			log.Error(err, "failed to fetch GitHub IP ranges; proceeding without CIDR egress rules")
-		} else {
-			githubCIDRs = cidrs
-		}
+	if r.IPCache != nil {
+		githubCIDRs = r.IPCache.Snapshot()
 	}
 
 	proxyAddr := buildProxyServiceAddr(&ag)

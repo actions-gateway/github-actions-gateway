@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
@@ -14,6 +15,45 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// IPRangeCache holds the most recently fetched GitHub IP CIDRs.
+//
+// The cache decouples reads from network I/O: the ActionsGatewayReconciler
+// reads from the cache on every reconcile (non-blocking, in-memory) while
+// IPRangeReconciler refreshes the cache periodically. Without this split,
+// per-reconcile fetches of api.github.com/meta serialise behind a single
+// goroutine and can stall the entire reconciler queue when the GitHub API
+// is slow or unreachable — a real failure observed in e2e where multiple
+// tenant CRs created at once would time out waiting for proxy readiness.
+//
+// Reconcile paths must tolerate an empty Snapshot. At startup the cache
+// is empty until IPRangeReconciler.Start completes its initial fetch;
+// any NetworkPolicies created with the empty snapshot will be patched
+// by the periodic reconciler on its next tick.
+type IPRangeCache struct {
+	mu    sync.RWMutex
+	cidrs []net.IPNet
+}
+
+// Snapshot returns a copy of the currently cached CIDRs. Safe to call
+// concurrently; the returned slice is owned by the caller.
+func (c *IPRangeCache) Snapshot() []net.IPNet {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([]net.IPNet, len(c.cidrs))
+	copy(out, c.cidrs)
+	return out
+}
+
+// Set replaces the cached CIDRs with a copy of the provided slice.
+// Called by IPRangeReconciler after each successful fetch.
+func (c *IPRangeCache) Set(cidrs []net.IPNet) {
+	out := make([]net.IPNet, len(cidrs))
+	copy(out, cidrs)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cidrs = out
+}
 
 // GitHubIPRangeFetcher fetches the current GitHub IP ranges.
 // The default implementation calls https://api.github.com/meta.
@@ -77,9 +117,13 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 
 // IPRangeReconciler is a controller-runtime Runnable that periodically
 // refreshes NetworkPolicy egress rules for all managed ActionsGateway CRs.
+//
+// If Cache is non-nil, each successful fetch updates it. ActionsGatewayReconciler
+// reads from the same cache instead of fetching on every reconcile.
 type IPRangeReconciler struct {
 	client.Client
 	Fetcher  GitHubIPRangeFetcher
+	Cache    *IPRangeCache
 	Interval time.Duration
 	Log      *slog.Logger
 }
@@ -121,6 +165,9 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	if err != nil {
 		log.Error("failed to fetch GitHub IP ranges", "error", err)
 		return
+	}
+	if r.Cache != nil {
+		r.Cache.Set(cidrs)
 	}
 
 	var agList gmcv1alpha1.ActionsGatewayList
