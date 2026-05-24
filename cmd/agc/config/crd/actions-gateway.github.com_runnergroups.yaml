@@ -75,8 +75,9 @@ spec:
                 minimum: 1
                 type: integer
               podTemplate:
-                description: PodTemplate is the standard Kubernetes PodTemplateSpec
-                  for worker pods.
+                description: |-
+                  PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
+                  Privileged containers are rejected by the GMC admission webhook.
                 properties:
                   metadata:
                     description: |-
@@ -7889,15 +7890,6 @@ spec:
                     - containers
                     type: object
                 type: object
-                x-kubernetes-validations:
-                - message: privileged containers are not permitted in worker pods
-                  rule: self.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged)
-                    || !c.securityContext.privileged)
-                - message: privileged init containers are not permitted in worker
-                    pods
-                  rule: '!has(self.spec.initContainers) || self.spec.initContainers.all(c,
-                    !has(c.securityContext) || !has(c.securityContext.privileged)
-                    || !c.securityContext.privileged)'
               priorityTiers:
                 description: |-
                   PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
