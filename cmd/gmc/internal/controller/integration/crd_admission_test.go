@@ -37,9 +37,11 @@ func TestCRD_ValidActionsGateway_Accepted(t *testing.T) {
 // In envtest the webhook server is not wired up with TLS, so we call the validator
 // function directly — this tests the validation logic without the HTTP transport.
 func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
-	validator := &webhookv1alpha1.ActionsGatewayCustomValidator{}
+	// Pass "gmc-system" as the custom install namespace too — exercises both
+	// the default and runtime-derived reservation paths in one loop.
+	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("gmc-system")
 
-	for _, ns := range []string{"kube-system", "kube-public", "actions-gateway-system"} {
+	for _, ns := range []string{"kube-system", "kube-public", "gmc-system"} {
 		ag := &gmcv1alpha1.ActionsGateway{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-ag", Namespace: ns},
 			Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},

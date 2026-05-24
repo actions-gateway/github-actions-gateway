@@ -33,7 +33,7 @@ Testing is structured in three layers. Each layer has a distinct scope, speed co
 * **Runner version rejection** — Unit-test the session goroutine's handling of a `400 Bad Request` from `POST /sessions` containing a version-too-old message. Assert the goroutine surfaces the error as a `RunnerGroup` condition rather than silently retrying in a tight loop.
 * **GMC RBAC boundary assertions** — Enumerate the generated ClusterRole rules and assert that no rule grants `*` verbs on `secrets`, `pods`, or `nodes` at the cluster level. This is a regression guard against accidental privilege escalation during development.
 * **`gitHubAppRef` namespace defaulting** — Unit-test the defaulting logic: when `Namespace` is omitted, assert it resolves to the `ActionsGateway` CR's own namespace; when set explicitly, assert that value is used instead.
-* **Reserved namespace blocklist validation** — Unit-test the admission webhook logic that rejects `ActionsGateway` CRs created in reserved namespaces (`kube-system`, `kube-public`, `actions-gateway-system`, etc.).
+* **Reserved namespace blocklist validation** — Unit-test the admission webhook logic that rejects `ActionsGateway` CRs created in reserved namespaces. The static defaults are `kube-system`, `kube-public`, and `gmc-system`. The webhook also reads `POD_NAMESPACE` (downward API) at setup time and adds it to the set, so installs into a non-default namespace are protected. Tests cover the static defaults plus a custom-install namespace driven by the constructor.
 
 ---
 

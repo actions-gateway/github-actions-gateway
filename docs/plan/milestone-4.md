@@ -453,7 +453,7 @@ func (v *ActionsGatewayValidator) ValidateUpdate(ctx context.Context, oldObj, ne
 func (v *ActionsGatewayValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error)
 ```
 
-Reserved namespaces: `kube-system`, `kube-public`, `actions-gateway-system`.
+Reserved namespaces (default static set): `kube-system`, `kube-public`, `gmc-system`. The GMC's actual install namespace is also added at setup time via the `POD_NAMESPACE` downward-API env var, so custom installs are protected without code changes.
 
 `ValidateCreate` checks `obj.(*v1alpha1.ActionsGateway).Namespace` against the reserved list. If matched, returns a `field.Invalid` error with a human-readable message.
 
@@ -669,9 +669,10 @@ The `run()` function:
 |---|---|
 | `TestWebhook_RejectsKubeSystem` | CR in `kube-system` → admission error returned. |
 | `TestWebhook_RejectsKubePublic` | CR in `kube-public` → admission error. |
-| `TestWebhook_RejectsGMCSystem` | CR in `actions-gateway-system` → admission error. |
+| `TestWebhook_RejectsDefaultGMCNamespace` | CR in `gmc-system` → admission error. Default install namespace, rejected even when POD_NAMESPACE is unset. |
+| `TestWebhook_RejectsCustomInstallNamespace` | CR in a non-default install namespace passed to the validator constructor → admission error. Covers downward-API-driven reservation. |
 | `TestWebhook_AllowsTenantNamespace` | CR in `team-a` → no error. |
-| `TestWebhook_UpdateNoOp` | Update call returns no error regardless of content. |
+| `TestWebhook_UpdateAllowsSafe` | Update call returns no error when neither old nor new contains a privileged container. |
 
 #### Resource builders (`controller/builder_test.go`)
 
@@ -766,7 +767,7 @@ Full reconciler lifecycle scenarios (create, delete, status, two-CR isolation) a
 
 After integration tests pass, deploy the full stack to a `kind` cluster:
 
-1. Apply the GMC Deployment in `actions-gateway-system`.
+1. Apply the GMC Deployment in `gmc-system`.
 2. Apply an `ActionsGateway` CR in namespace `team-a`; wait for `status.conditions[Ready]=True`.
 3. `kubectl get all,networkpolicy,resourcequota,rolebinding -n team-a` — confirm all 12 resource types are present.
 4. Dispatch a real GitHub Actions workflow job to a runner with the matching `runs-on` label.
@@ -784,7 +785,7 @@ After integration tests pass, deploy the full stack to a `kind` cluster:
 - [ ] Two `ActionsGateway` CRs in a `kind` cluster produce two independent, functional tenant setups.
 - [ ] Deleting one CR removes only that tenant's resources.
 - [ ] `spec.proxy.maxReplicas` change reflected in HPA within one reconcile cycle.
-- [ ] Admission webhook rejects CRs in `kube-system`, `kube-public`, and `actions-gateway-system`.
+- [ ] Admission webhook rejects CRs in `kube-system`, `kube-public`, and `gmc-system` (plus the GMC's install namespace via the `POD_NAMESPACE` downward-API env var when non-default).
 - [ ] End-to-end job completes with green checkmark via proxy (confirmed by `HTTPS_PROXY` in worker pod env).
 - [ ] RBAC regression tests pass: no `*` verbs on `secrets`, `pods`, or `nodes` in the GMC ClusterRole.
 - [ ] `go test -race ./...` passes across all four modules (root, agc, gmc, proxy).

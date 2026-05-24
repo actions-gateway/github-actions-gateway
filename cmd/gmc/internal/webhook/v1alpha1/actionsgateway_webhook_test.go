@@ -23,34 +23,48 @@ func newAG(namespace string) *gmcv1alpha1.ActionsGateway {
 }
 
 func TestWebhook_RejectsKubeSystem(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), newAG("kube-system"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "kube-system")
 }
 
 func TestWebhook_RejectsKubePublic(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), newAG("kube-public"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "kube-public")
 }
 
-func TestWebhook_RejectsGMCSystem(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
-	_, err := v.ValidateCreate(context.Background(), newAG("actions-gateway-system"))
+// TestWebhook_RejectsDefaultGMCNamespace covers the default install namespace.
+// Even when the GMC has no POD_NAMESPACE env var (e.g. `make run` outside a
+// pod, or a misconfigured Deployment that drops the downward-API mapping),
+// `gmc-system` must still be reserved as a backstop.
+func TestWebhook_RejectsDefaultGMCNamespace(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	_, err := v.ValidateCreate(context.Background(), newAG("gmc-system"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "actions-gateway-system")
+	assert.Contains(t, err.Error(), "gmc-system")
+}
+
+// TestWebhook_RejectsCustomInstallNamespace covers a non-default install
+// (e.g. an operator deployed to `actions-gateway-operator`). The downward
+// API supplies the install namespace and the webhook must reject CRs in it.
+func TestWebhook_RejectsCustomInstallNamespace(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("actions-gateway-operator")
+	_, err := v.ValidateCreate(context.Background(), newAG("actions-gateway-operator"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "actions-gateway-operator")
 }
 
 func TestWebhook_AllowsTenantNamespace(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), newAG("team-a"))
 	require.NoError(t, err)
 }
 
 func TestWebhook_UpdateAllowsSafe(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), newAG("team-a"))
 	require.NoError(t, err)
 }
@@ -106,34 +120,34 @@ func agWithPrivilegedInitContainer() *gmcv1alpha1.ActionsGateway {
 }
 
 func TestWebhook_RejectsPrivilegedContainer(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedContainer(true))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
 func TestWebhook_AllowsNonPrivilegedContainer(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedContainer(false))
 	require.NoError(t, err)
 }
 
 func TestWebhook_RejectsPrivilegedInitContainer(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedInitContainer())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "privileged init containers are not permitted")
 }
 
 func TestWebhook_UpdateRejectsPrivilegedContainer(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), agWithPrivilegedContainer(true))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
 func TestWebhook_DeleteNoOp(t *testing.T) {
-	v := &ActionsGatewayCustomValidator{}
+	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateDelete(context.Background(), newAG("team-a"))
 	require.NoError(t, err)
 }
