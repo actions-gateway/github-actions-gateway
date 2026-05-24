@@ -247,7 +247,14 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 	false_ := false
 	true_ := true
 
-	tlsMode := int32(0o400)
+	// The proxy container image is gcr.io/distroless/static:nonroot which runs
+	// as UID 65532. Mode 0o440 (rw-r-----) plus fsGroup 65532 below means the
+	// non-root container reads the cert via group ownership without making it
+	// world-readable. Mode 0o400 alone leaves files owned by root:root and the
+	// container can't open them at all — that was the regression that surfaced
+	// in e2e: `open /etc/actions-gateway/proxy-tls/tls.crt: permission denied`.
+	tlsMode := int32(0o440)
+	nonrootGID := int64(65532)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
@@ -257,6 +264,9 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": proxyAppName, labelManagedBy: labelManagerValue}},
 				Spec: corev1.PodSpec{
+					SecurityContext: &corev1.PodSecurityContext{
+						FSGroup: &nonrootGID,
+					},
 					Affinity: &corev1.Affinity{
 						PodAntiAffinity: &corev1.PodAntiAffinity{
 							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
@@ -409,8 +419,11 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env = append(env, extraEnv...)
 
 	secretName := ag.Spec.GitHubAppRef.Name
-	credMode := int32(0o400)
+	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment
+	// for why 0o400 alone leaves the file unreadable to the non-root AGC user.
+	credMode := int32(0o440)
 	caMode := int32(0o444)
+	nonrootGID := int64(65532)
 
 	false_ := false
 	true_ := true
@@ -424,6 +437,9 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
+					SecurityContext: &corev1.PodSecurityContext{
+						FSGroup: &nonrootGID,
+					},
 					Volumes: []corev1.Volume{
 						{
 							Name: agcCredsVolumeName,
