@@ -59,7 +59,12 @@ func TestBuildAGCDeployment_CredentialMount(t *testing.T) {
 	require.NotNil(t, credVol.Secret, "volume source must be Secret")
 	assert.Equal(t, "github-app", credVol.Secret.SecretName)
 	require.NotNil(t, credVol.Secret.DefaultMode)
-	assert.Equal(t, int32(0o400), *credVol.Secret.DefaultMode, "credentials must be mounted read-only (0400)")
+	// 0o440 paired with fsGroup so the non-root distroless AGC user reads
+	// credentials via group ownership; 0o400 alone is unreadable for non-root.
+	assert.Equal(t, int32(0o440), *credVol.Secret.DefaultMode, "credentials must be mounted group-readable (0440)")
+	require.NotNil(t, dep.Spec.Template.Spec.SecurityContext, "PodSpec must set fsGroup")
+	require.NotNil(t, dep.Spec.Template.Spec.SecurityContext.FSGroup)
+	assert.Equal(t, int64(65532), *dep.Spec.Template.Spec.SecurityContext.FSGroup)
 
 	// VolumeMount must be present on the AGC container.
 	var credMount *corev1.VolumeMount
@@ -611,7 +616,15 @@ func TestBuildProxyDeployment_TLSMount(t *testing.T) {
 	require.NotNil(t, tlsVol.Secret, "proxy TLS volume source must be a Secret")
 	assert.Equal(t, proxyTLSSecretName, tlsVol.Secret.SecretName)
 	require.NotNil(t, tlsVol.Secret.DefaultMode)
-	assert.Equal(t, int32(0o400), *tlsVol.Secret.DefaultMode)
+	// 0o440 (group readable) plus fsGroup 65532 on the PodSpec so the
+	// distroless nonroot container reads the cert via group ownership.
+	// 0o400 alone left files as root:root and the non-root user couldn't
+	// open them — the proxy crashed at startup with "permission denied".
+	assert.Equal(t, int32(0o440), *tlsVol.Secret.DefaultMode)
+	require.NotNil(t, dep.Spec.Template.Spec.SecurityContext, "PodSpec must set fsGroup")
+	require.NotNil(t, dep.Spec.Template.Spec.SecurityContext.FSGroup)
+	assert.Equal(t, int64(65532), *dep.Spec.Template.Spec.SecurityContext.FSGroup,
+		"fsGroup must match the distroless nonroot GID so kubelet chgrp's the mount")
 
 	c := dep.Spec.Template.Spec.Containers[0]
 	var tlsMount *corev1.VolumeMount
