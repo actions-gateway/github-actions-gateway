@@ -34,10 +34,12 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -151,6 +153,21 @@ func run() error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Cache:  cacheOpts,
+		// Secrets are fetched directly from the API server rather than cached.
+		// W4 removed list/watch from the AGC's Role (only get/create/delete
+		// remain), but controller-runtime's default client establishes a
+		// cache-backed reader for every type the reconciler touches — which
+		// requires list+watch. Without DisableFor here, every Secret Get
+		// against this manager's client triggers a watch attempt that the
+		// API server forbids, and controller-runtime logs a steady stream
+		// of "secrets is forbidden: cannot list resource secrets" errors.
+		// Direct fetches sidestep the watch entirely (only get permission
+		// needed) and keep secret bodies out of the AGC's in-memory cache.
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{&corev1.Secret{}},
+			},
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
