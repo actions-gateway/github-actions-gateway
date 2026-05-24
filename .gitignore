@@ -1,6 +1,8 @@
 .context
-.claude
-CLAUDE.md
+# Claude local state — ephemeral, machine-local
+.claude/worktrees/
+.claude/settings.local.json
+CLAUDE.local.md
 # binary build output
 /.build/
 # Local-build of the fakegithub helper (`make` at repo root drops it here);
