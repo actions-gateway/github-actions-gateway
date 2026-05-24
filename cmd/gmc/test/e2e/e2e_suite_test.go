@@ -139,7 +139,18 @@ func setupGMC() {
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "deploy GMC")
 
-	By("injecting AGC_EXTRA env vars so AGC pods point to fakegithub")
+	By("enabling AGC_EXTRA_* forwarding and injecting fakegithub env vars")
+	// --allow-agc-extra-env=true tells GMC to forward AGC_EXTRA_* env vars from its
+	// own pod to the AGC Deployments it creates. This is required for e2e tests so
+	// that AGC pods can reach fakegithub instead of real GitHub.
+	cmd = exec.Command("kubectl", "patch", "deployment", "gmc-controller-manager",
+		"-n", gmcNamespace,
+		"--type=json",
+		`-p=[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-agc-extra-env=true"}]`,
+	)
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "patch GMC args to enable allow-agc-extra-env")
+
 	cmd = exec.Command("kubectl", "set", "env",
 		"deployment/gmc-controller-manager",
 		"-c", "manager",
