@@ -16,10 +16,19 @@ KIND_CLUSTER  ?= actions-gateway-e2e
 # or `e2e-all`.
 KIND_CONFIG   ?= test/kind-config-ci.yaml
 GIT_SHA       := $(shell git rev-parse --short HEAD)
-GMC_IMG       ?= gmc:e2e-$(GIT_SHA)
-AGC_IMG       ?= agc:e2e
-PROXY_IMG     ?= proxy:e2e
-FAKEGITHUB_IMG ?= fakegithub:e2e
+
+# Local OCI registry that kind nodes pull from. scripts/kind-with-registry.sh
+# runs a registry:2 container on REGISTRY_PORT and wires each kind node's
+# containerd to resolve IMAGE_REGISTRY/* against it. All four e2e image tags
+# are SHA-suffixed so kubelet's IfNotPresent cache cannot serve a stale image
+# when the same tag is rebuilt.
+REGISTRY_NAME  ?= kind-registry
+REGISTRY_PORT  ?= 5000
+IMAGE_REGISTRY ?= localhost:$(REGISTRY_PORT)
+GMC_IMG        ?= $(IMAGE_REGISTRY)/gmc:e2e-$(GIT_SHA)
+AGC_IMG        ?= $(IMAGE_REGISTRY)/agc:e2e-$(GIT_SHA)
+PROXY_IMG      ?= $(IMAGE_REGISTRY)/proxy:e2e-$(GIT_SHA)
+FAKEGITHUB_IMG ?= $(IMAGE_REGISTRY)/fakegithub:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
@@ -50,16 +59,13 @@ build-probe: ## Build the probe binary
 ##@ e2e
 
 .PHONY: e2e-up
-e2e-up: e2e-cluster e2e-load-images e2e ## One-shot: create cluster, build+load images, run the standard e2e suite
+e2e-up: e2e-cluster e2e-images e2e ## One-shot: create cluster, build+push images, run the standard e2e suite
 
 .PHONY: e2e-cluster
-e2e-cluster: ## Create the local e2e kind cluster (no-op if it already exists)
-	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \
-		echo "==> kind cluster $(KIND_CLUSTER) already exists"; \
-	else \
-		echo "==> creating kind cluster $(KIND_CLUSTER) ($(KIND_CONFIG))"; \
-		kind create cluster --name $(KIND_CLUSTER) --config $(KIND_CONFIG); \
-	fi
+e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
+	KIND_CLUSTER=$(KIND_CLUSTER) KIND_CONFIG=$(KIND_CONFIG) \
+		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
+		scripts/kind-with-registry.sh
 
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
@@ -70,31 +76,36 @@ e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not e
 		echo "==> kind cluster $(KIND_CLUSTER) does not exist"; \
 	fi
 
+.PHONY: e2e-registry-delete
+e2e-registry-delete: ## Stop and remove the local OCI registry container
+	@if docker inspect -f '{{.State.Running}}' $(REGISTRY_NAME) >/dev/null 2>&1; then \
+		echo "==> removing registry container $(REGISTRY_NAME)"; \
+		docker rm -f $(REGISTRY_NAME) >/dev/null; \
+	else \
+		echo "==> registry container $(REGISTRY_NAME) does not exist"; \
+	fi
+
+# e2e-images builds each image with `--push` so the registry is the
+# distribution path; kind nodes pull on demand. There is no separate "load"
+# step — pushing to the registry is the load.
 .PHONY: e2e-images
-e2e-images: docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub ## Build all four e2e Docker images
+e2e-images: docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub ## Build and push all four e2e images to the local registry
 
 .PHONY: docker-build-gmc
-docker-build-gmc: ## Build the GMC Docker image
-	docker build -f cmd/gmc/Dockerfile -t $(GMC_IMG) .
+docker-build-gmc: ## Build and push the GMC Docker image
+	docker buildx build --push -f cmd/gmc/Dockerfile -t $(GMC_IMG) .
 
 .PHONY: docker-build-agc
-docker-build-agc: ## Build the AGC Docker image
-	docker build -f cmd/agc/Dockerfile -t $(AGC_IMG) .
+docker-build-agc: ## Build and push the AGC Docker image
+	docker buildx build --push -f cmd/agc/Dockerfile -t $(AGC_IMG) .
 
 .PHONY: docker-build-proxy
-docker-build-proxy: ## Build the egress proxy Docker image
-	docker build -f cmd/proxy/Dockerfile -t $(PROXY_IMG) cmd/proxy
+docker-build-proxy: ## Build and push the egress proxy Docker image
+	docker buildx build --push -f cmd/proxy/Dockerfile -t $(PROXY_IMG) cmd/proxy
 
 .PHONY: docker-build-fakegithub
-docker-build-fakegithub: ## Build the fakegithub test-fixture Docker image
-	docker build -f test/fakegithub/Dockerfile -t $(FAKEGITHUB_IMG) .
-
-.PHONY: e2e-load-images
-e2e-load-images: e2e-images ## Build and load the four e2e images into the kind cluster
-	kind load docker-image $(GMC_IMG) --name $(KIND_CLUSTER)
-	kind load docker-image $(AGC_IMG) --name $(KIND_CLUSTER)
-	kind load docker-image $(PROXY_IMG) --name $(KIND_CLUSTER)
-	kind load docker-image $(FAKEGITHUB_IMG) --name $(KIND_CLUSTER)
+docker-build-fakegithub: ## Build and push the fakegithub test-fixture Docker image
+	docker buildx build --push -f test/fakegithub/Dockerfile -t $(FAKEGITHUB_IMG) .
 
 # Run Tier A + Tier B e2e tests (excludes multi-node tests).
 # Uses the ginkgo CLI so --procs and --label-filter are recognised.

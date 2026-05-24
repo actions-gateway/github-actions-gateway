@@ -7,9 +7,14 @@ LOCALBIN       := $(REPO_ROOT)/.build
 ENVTEST        := $(LOCALBIN)/setup-envtest
 YEAR           ?= $(shell date +%Y)
 
-IMG        ?= gmc:e2e
-AGC_IMAGE  ?= agc:e2e
-PROXY_IMAGE ?= proxy:e2e
+# e2e image defaults reference the local registry that scripts/kind-with-registry.sh
+# stands up alongside the kind cluster. The root Makefile passes
+# `IMG=$(GMC_IMG) AGC_IMAGE=$(AGC_IMG) PROXY_IMAGE=$(PROXY_IMG)` (registry-
+# prefixed, SHA-suffixed) when invoking `make deploy`. These defaults exist for
+# the standalone-module invocation path.
+IMG         ?= localhost:5000/gmc:e2e
+AGC_IMAGE   ?= localhost:5000/agc:e2e
+PROXY_IMAGE ?= localhost:5000/proxy:e2e
 
 ENVTEST_VERSION    ?= release-0.23
 ENVTEST_K8S_VERSION ?= 1.35
@@ -50,10 +55,12 @@ generate: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder mark
 
 ##@ Docker
 
-# Build the GMC Docker image. Build context is cmd/gmc/ (self-contained module).
+# Build the GMC Docker image and push it to the local registry. Used for
+# standalone-module workflows; the root Makefile's docker-build-gmc target is
+# the canonical e2e path.
 .PHONY: docker-build
-docker-build: ## Build the GMC Docker image
-	docker build -f Dockerfile -t $(IMG) .
+docker-build: ## Build and push the GMC Docker image to the local registry
+	docker buildx build --push -f Dockerfile -t $(IMG) .
 
 ##@ Deploy
 

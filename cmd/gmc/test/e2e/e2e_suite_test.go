@@ -62,10 +62,13 @@ type suiteData struct {
 var _ = SynchronizedBeforeSuite(
 	// Runs ONCE on process 0: cluster setup and shared-state marshaling.
 	func() []byte {
-		gmcImg := envOrDefault("GMC_IMG", "gmc:e2e")
-		agcImg := envOrDefault("AGC_IMG", "agc:e2e")
-		proxyImg := envOrDefault("PROXY_IMG", "proxy:e2e")
-		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "fakegithub:e2e")
+		// Fallback defaults match the local-registry naming the root Makefile
+		// emits; `make e2e-up` overrides via env. Kind nodes pull these names
+		// via scripts/kind-with-registry.sh's containerd config.
+		gmcImg := envOrDefault("GMC_IMG", "localhost:5000/gmc:e2e")
+		agcImg := envOrDefault("AGC_IMG", "localhost:5000/agc:e2e")
+		proxyImg := envOrDefault("PROXY_IMG", "localhost:5000/proxy:e2e")
+		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "localhost:5000/fakegithub:e2e")
 
 		By("generating test RSA private key")
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -74,11 +77,9 @@ var _ = SynchronizedBeforeSuite(
 		Expect(err).NotTo(HaveOccurred())
 		rsaKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 
-		By("loading images into kind cluster")
-		for _, img := range []string{gmcImg, agcImg, proxyImg, fakegithubImg} {
-			Expect(utils.LoadImageToKindClusterWithName(img)).To(Succeed(),
-				"load image %s", img)
-		}
+		// Images are distributed via the local registry stood up by
+		// scripts/kind-with-registry.sh; kind nodes pull on demand. No
+		// per-image kind load step is needed here.
 
 		// Populate package-level vars so setup helpers can reference them.
 		gmcImage = gmcImg
@@ -298,7 +299,7 @@ spec:
       containers:
       - name: fakegithub
         image: %s
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
           name: http
