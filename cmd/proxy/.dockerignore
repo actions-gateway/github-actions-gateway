@@ -1,0 +1,15 @@
+# See https://docs.docker.com/engine/reference/builder/#dockerignore-file.
+#
+# Applied to the proxy image build, whose context is cmd/proxy (not the
+# repo root, so the root .dockerignore does not apply).
+#
+# Excludes proxy_test.go so test edits do not invalidate the build layer
+# and force a Go rebuild.
+
+**
+
+!**/*.go
+**/*_test.go
+
+!go.mod
+!go.sum
