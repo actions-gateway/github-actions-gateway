@@ -26,6 +26,8 @@ package githubapp
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -160,26 +162,46 @@ func ParseRunnerRSAKey(path string) (*rsa.PrivateKey, error) {
 	return priv, nil
 }
 
-// FetchRunnerOAuthToken exchanges the runner's RSA credentials for a VSTS Task
+// FetchRunnerOAuthToken exchanges the runner's credentials for a VSTS Task
 // Agent OAuth2 access token using the JWT bearer assertion grant (RFC 7523).
+//
+// privateKey may be an ed25519.PrivateKey (EdDSA / OKP JWT) or an
+// *rsa.PrivateKey (RS256).  The signing algorithm is chosen automatically.
 //
 // The returned token is used as Authorization: Bearer for broker API calls
 // (CreateSession, GetMessage, DeleteSession).
-func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privateKey *rsa.PrivateKey, httpClient *http.Client) (string, error) {
+func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privateKey crypto.Signer, httpClient *http.Client) (string, error) {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
 
-	// Build a JWT client assertion signed with the runner's RSA private key.
-	//
-	// The .NET runner uses VssOAuthJwtBearerClientCredential which mirrors the
-	// OAuth 2.0 Private Key JWT client authentication profile (RFC 7523 §2.2):
-	//   - Header: {"alg":"RS256","typ":"JWT"}  — no "kid"
+	// Choose signing method and the key value jwt.SignedString expects.
+	// golang-jwt/jwt/v5:
+	//   - SigningMethodRS256.Sign expects *rsa.PrivateKey
+	//   - SigningMethodEdDSA.Sign expects ed25519.PrivateKey or crypto.Signer
+	var (
+		signingMethod jwt.SigningMethod
+		signingKey    interface{}
+	)
+	switch k := privateKey.(type) {
+	case ed25519.PrivateKey:
+		signingMethod = jwt.SigningMethodEdDSA
+		signingKey = k
+	case *rsa.PrivateKey:
+		signingMethod = jwt.SigningMethodRS256
+		signingKey = k
+	default:
+		return "", fmt.Errorf("unsupported private key type %T; want ed25519.PrivateKey or *rsa.PrivateKey", privateKey)
+	}
+
+	// Build a JWT client assertion matching the OAuth 2.0 Private Key JWT
+	// client authentication profile (RFC 7523 §2.2):
+	//   - Header: {"alg":"<RS256|EdDSA>","typ":"JWT"}  — no "kid"
 	//   - Claims: iss=clientId, sub=clientId, aud=authorizationUrl,
 	//             nbf=now, exp=now+5m, jti=<unique GUID>
 	//             No "iat" claim (the .NET SDK explicitly omits it unless set).
 	now := time.Now()
-	tok := jwt.New(jwt.SigningMethodRS256)
+	tok := jwt.New(signingMethod)
 	// Do NOT add a "kid" header — the runner SDK does not set one.
 	delete(tok.Header, "kid")
 	tok.Claims = jwt.MapClaims{
@@ -191,7 +213,7 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		"jti": newUUID(), // required by VSTS token service
 		// No "iat" — the .NET runner SDK omits it for client assertions.
 	}
-	assertion, err := tok.SignedString(privateKey)
+	assertion, err := tok.SignedString(signingKey)
 	if err != nil {
 		return "", fmt.Errorf("sign runner JWT assertion: %w", err)
 	}

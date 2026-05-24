@@ -5,6 +5,8 @@ package githubapp
 
 import (
 	"context"
+	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
@@ -52,7 +54,7 @@ type InstallationToken struct {
 // installation access token on every call.
 type installationTokenProvider struct {
 	creds      Credentials
-	privateKey *rsa.PrivateKey
+	privateKey crypto.Signer // *rsa.PrivateKey (RS256) or ed25519.PrivateKey (EdDSA)
 	httpClient *http.Client
 }
 
@@ -64,7 +66,7 @@ type installationTokenProvider struct {
 // so callers surface bad-credential failures at startup rather than on the
 // first call.
 func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client) (TokenProvider, error) {
-	key, err := parseRSAPrivateKey(creds.PrivateKeyPEM)
+	key, err := parsePrivateKey(creds.PrivateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: parse private key: %w", err)
 	}
@@ -97,14 +99,27 @@ func (p *installationTokenProvider) TokenWithExpiry(ctx context.Context) (*Insta
 // fetchToken is the shared implementation for Token and TokenWithExpiry.
 func (p *installationTokenProvider) fetchToken(ctx context.Context) (*InstallationToken, error) {
 	now := time.Now()
+
+	// Choose signing method based on key type.
+	var signingMethod jwt.SigningMethod
+	switch p.privateKey.(type) {
+	case *rsa.PrivateKey:
+		signingMethod = jwt.SigningMethodRS256
+	case ed25519.PrivateKey:
+		signingMethod = jwt.SigningMethodEdDSA
+	default:
+		return nil, fmt.Errorf("githubapp: unsupported key type %T", p.privateKey)
+	}
+
 	// iat is set 60 seconds in the past to absorb clock skew between this host
 	// and GitHub's servers. GitHub rejects JWTs whose iat is in the future.
 	claims := jwt.RegisteredClaims{
 		IssuedAt:  jwt.NewNumericDate(now.Add(-60 * time.Second)),
 		ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
 		Issuer:    fmt.Sprintf("%d", p.creds.AppID),
+		ID:        newUUID(), // jti: prevents replay of intercepted JWTs
 	}
-	jwtToken := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	jwtToken := jwt.NewWithClaims(signingMethod, claims)
 	signed, err := jwtToken.SignedString(p.privateKey)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: sign JWT: %w", err)
@@ -144,8 +159,11 @@ func (p *installationTokenProvider) fetchToken(ctx context.Context) (*Installati
 	return &InstallationToken{Token: body.Token, ExpiresAt: body.ExpiresAt}, nil
 }
 
-// parseRSAPrivateKey decodes a PEM-encoded PKCS#1 or PKCS#8 RSA private key.
-func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
+// parsePrivateKey decodes a PEM-encoded private key and returns it as a
+// crypto.Signer. Accepted formats:
+//   - PKCS#1 "RSA PRIVATE KEY" — RSA (legacy GitHub App key format)
+//   - PKCS#8 "PRIVATE KEY"     — RSA or Ed25519
+func parsePrivateKey(pemBytes []byte) (crypto.Signer, error) {
 	block, _ := pem.Decode(pemBytes)
 	if block == nil {
 		return nil, fmt.Errorf("no PEM block found")
@@ -158,11 +176,11 @@ func parseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 		if err != nil {
 			return nil, err
 		}
-		rsaKey, ok := key.(*rsa.PrivateKey)
+		signer, ok := key.(crypto.Signer)
 		if !ok {
-			return nil, fmt.Errorf("PKCS#8 key is not RSA")
+			return nil, fmt.Errorf("PKCS#8 key type %T does not implement crypto.Signer", key)
 		}
-		return rsaKey, nil
+		return signer, nil
 	default:
 		return nil, fmt.Errorf("unsupported PEM block type: %s", block.Type)
 	}
