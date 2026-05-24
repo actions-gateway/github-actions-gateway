@@ -85,10 +85,20 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 		ipFetcher = &stubIPFetcher{cidrs: []net.IPNet{}}
 	}
 
+	// Shared cache between the per-CR reconciler (reads) and the periodic
+	// IPRangeReconciler (writes). Pre-populated so tests that assert on
+	// proxy-NetworkPolicy CIDRs see them immediately on the very first
+	// reconcile, mirroring the steady-state production behavior where
+	// IPRangeReconciler's startup fetch has already run.
+	ipCache := &controller.IPRangeCache{}
+	if cidrs, fetchErr := ipFetcher.FetchIPRanges(ctx); fetchErr == nil {
+		ipCache.Set(cidrs)
+	}
+
 	err = (&controller.ActionsGatewayReconciler{
 		Client:     mgr.GetClient(),
 		Scheme:     mgr.GetScheme(),
-		IPFetcher:  ipFetcher,
+		IPCache:    ipCache,
 		AGCImage:   "agc:test",
 		ProxyImage: "proxy:test",
 	}).SetupWithManager(mgr)
@@ -97,6 +107,7 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	ipRangeReconciler := &controller.IPRangeReconciler{
 		Client:  mgr.GetClient(),
 		Fetcher: ipFetcher,
+		Cache:   ipCache,
 	}
 
 	go func() {

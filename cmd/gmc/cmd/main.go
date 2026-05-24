@@ -216,10 +216,17 @@ func main() {
 		}
 	}
 
+	// IPRangeCache is shared between the per-CR reconciler (read path) and
+	// the periodic IPRangeReconciler (write path). This keeps the per-CR
+	// reconcile from doing network I/O — previously every reconcile fetched
+	// api.github.com/meta, serialised behind MaxConcurrentReconciles=1, and
+	// could stall the queue when the API was slow.
+	ipCache := &controller.IPRangeCache{}
+
 	if err := (&controller.ActionsGatewayReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
-		IPFetcher:   &controller.HTTPGitHubIPRangeFetcher{},
+		IPCache:     ipCache,
 		AGCImage:    agcImage,
 		ProxyImage:  proxyImage,
 		AGCExtraEnv: agcExtraEnv,
@@ -232,6 +239,7 @@ func main() {
 	if err := mgr.Add(&controller.IPRangeReconciler{
 		Client:   mgr.GetClient(),
 		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
+		Cache:    ipCache,
 		Interval: ipInterval,
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")

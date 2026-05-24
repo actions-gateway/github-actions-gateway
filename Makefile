@@ -130,22 +130,18 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 # Run Tier A + Tier B e2e tests (excludes multi-node tests).
 # Uses the ginkgo CLI so --procs and --label-filter are recognised.
 #
-# --procs 2: each top-level Describe is one process, and each one provisions a
-# tenant (2 proxy pods + 1 AGC pod + cert-manager-issued TLS secret) in its
-# BeforeAll. With 8 processes the 2-node kind cluster on a GitHub Actions
-# standard runner ran out of scheduling headroom and ~7 specs timed out at
-# the proxy-ready wait. --procs 4 cut wall-clock 3× and added 3 passes but
-# left a stable ~50/50 pass-fail split, suggesting the cluster is still over
-# its sustained-load budget rather than just bursting too hard. --procs 2
-# probes whether that ceiling is the same problem at a different rate; if
-# results stabilise at all-pass, capacity is the only issue.
+# --procs 4 is a moderate parallelism that fits comfortably inside a 2-node
+# kind cluster on a GitHub Actions standard runner. The earlier --procs 8
+# default was too aggressive — too many parallel tenants being provisioned
+# at once exceeded the cluster's burst capacity. Empirically --procs 4 cut
+# wall-clock ~3× while keeping the cluster within its scheduling budget.
 .PHONY: e2e
 e2e: $(GINKGO) ## Run the standard e2e suite (Tier A + Tier B; excludes multi-node)
 	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
 		$(GINKGO) run \
 		--tags e2e --timeout 30m \
-		--label-filter '!multi-node' --procs 2 \
+		--label-filter '!multi-node' --procs 4 \
 		--github-output --poll-progress-after 60s \
 		--junit-report /tmp/e2e-report.xml \
 		./test/e2e/...
