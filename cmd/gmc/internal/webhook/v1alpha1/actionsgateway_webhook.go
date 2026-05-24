@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"os"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -11,18 +12,50 @@ import (
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
 )
 
-// reservedNamespaces lists namespaces where ActionsGateway CRs are forbidden.
-var reservedNamespaces = map[string]bool{
-	"kube-system":              true,
-	"kube-public":              true,
-	"actions-gateway-system":   true,
+// defaultReservedNamespaces are namespaces in which an ActionsGateway CR is
+// forbidden regardless of where the GMC is installed. `kube-system` and
+// `kube-public` are universal; `gmc-system` is the default install namespace
+// shipped by the project. Custom installs add their own namespace at setup
+// time via the downward API (see SetupActionsGatewayWebhookWithManager).
+var defaultReservedNamespaces = []string{
+	"kube-system",
+	"kube-public",
+	"gmc-system",
 }
 
-// SetupActionsGatewayWebhookWithManager registers the webhook for ActionsGateway in the manager.
+// newReservedNamespaces returns the full set of forbidden namespaces. The
+// defaults always apply; podNamespace is added when non-empty so that a
+// non-default install (e.g. `actions-gateway-operator`) is also protected.
+func newReservedNamespaces(podNamespace string) map[string]bool {
+	s := make(map[string]bool, len(defaultReservedNamespaces)+1)
+	for _, ns := range defaultReservedNamespaces {
+		s[ns] = true
+	}
+	if podNamespace != "" {
+		s[podNamespace] = true
+	}
+	return s
+}
+
+// SetupActionsGatewayWebhookWithManager registers the webhook for
+// ActionsGateway in the manager. The GMC's own install namespace is read
+// from the POD_NAMESPACE env var (which the Deployment populates via the
+// downward API) and added to the reserved-namespace set so tenants cannot
+// create an ActionsGateway in the operator's own namespace.
 func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &gmcv1alpha1.ActionsGateway{}).
-		WithValidator(&ActionsGatewayCustomValidator{}).
+		WithValidator(NewActionsGatewayCustomValidator(os.Getenv("POD_NAMESPACE"))).
 		Complete()
+}
+
+// NewActionsGatewayCustomValidator returns a validator whose reserved-namespace
+// set includes the universal Kubernetes reserved namespaces, the GMC's default
+// install namespace, and the supplied podNamespace if non-empty. Tests use this
+// to drive the reservation behavior without relying on the global environment.
+func NewActionsGatewayCustomValidator(podNamespace string) *ActionsGatewayCustomValidator {
+	return &ActionsGatewayCustomValidator{
+		reservedNamespaces: newReservedNamespaces(podNamespace),
+	}
 }
 
 // +kubebuilder:webhook:path=/validate-actions-gateway-github-com-v1alpha1-actionsgateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.github.com,resources=actionsgateways,verbs=create;update,versions=v1alpha1,name=vactionsgateway-v1alpha1.kb.io,admissionReviewVersions=v1
@@ -30,11 +63,18 @@ func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager) error {
 // ActionsGatewayCustomValidator validates ActionsGateway resources.
 //
 // +kubebuilder:object:generate=false
-type ActionsGatewayCustomValidator struct{}
+type ActionsGatewayCustomValidator struct {
+	// reservedNamespaces is the set of namespaces where ActionsGateway CRs
+	// are forbidden. Populated by NewActionsGatewayCustomValidator. If nil
+	// (e.g. a test that constructs the struct directly), the reservation
+	// check is a no-op — those tests are responsible for not relying on it.
+	// Production paths go through the constructor.
+	reservedNamespaces map[string]bool
+}
 
 // ValidateCreate rejects CRs created in reserved namespaces and with privileged containers.
 func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
-	if reservedNamespaces[obj.Namespace] {
+	if v.reservedNamespaces[obj.Namespace] {
 		return nil, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace)
 	}
 	if err := validateRunnerGroups(obj); err != nil {

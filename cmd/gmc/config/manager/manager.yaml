@@ -66,6 +66,14 @@ spec:
         image: controller:latest
         imagePullPolicy: IfNotPresent
         name: manager
+        env:
+        # POD_NAMESPACE is read by the admission webhook to add the GMC's own
+        # install namespace to the set of namespaces in which ActionsGateway
+        # CRs are forbidden. Downward API so custom installs are covered.
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         ports:
         - containerPort: 8081
           name: health
