@@ -93,17 +93,22 @@ make build
 # Build tool binaries (controller-gen, setup-envtest, ginkgo, kubebuilder)
 make tools
 
-# Bring up a kind cluster, build+load images, and run the standard e2e suite
+# Bring up a kind cluster + local registry, build+push images, and run the standard e2e suite
 make e2e-up
 
 # Tear down the kind cluster when done
 make e2e-clean
 
-# Run unit tests
-go test ./...
+# Run unit tests (per-module — `go test ./...` from the repo root does not
+# work; see CLAUDE.md "Go workspaces" section for the workspace mechanics)
+GOWORK=off go test ./...        # root: broker, githubapp
+(cd cmd/agc && go test ./...)
+(cd cmd/gmc && go test ./...)
 
-# Run integration tests
-go test -race -tags integration ./...
+# Run integration tests (envtest-backed; requires KUBEBUILDER_ASSETS)
+make setup-envtest
+export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x --bin-dir /tmp/envtest-bins -p path)
+(cd cmd/agc && go test -tags integration ./internal/controller/integration/...)
 ```
 
 ## Repository Layout
@@ -118,5 +123,7 @@ cmd/probe/       Diagnostic probe for live investigations
 docs/design/     Full system design documentation
 docs/plan/       Implementation milestone plans
 internal/        Shared test helpers
+test/            E2E test infrastructure (fakegithub stub, kind configs)
 tools/           Vendored build tools (controller-gen, setup-envtest)
+vendor/          Workspace-vendored runtime dependencies (`go work vendor`)
 ```
