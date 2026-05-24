@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
@@ -108,7 +109,11 @@ func run() error {
 	tokenMgr.Start(ctx)
 
 	// Wait for the first token before starting the reconciler.
-	if _, err := tokenMgr.Token(context.Background()); err != nil {
+	// Use a short-lived context so a GitHub outage at startup fails fast
+	// rather than blocking indefinitely.
+	tokenCtx, tokenCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer tokenCancel()
+	if _, err := tokenMgr.Token(tokenCtx); err != nil {
 		return fmt.Errorf("initial token fetch: %w", err)
 	}
 

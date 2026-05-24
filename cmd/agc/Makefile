@@ -25,7 +25,7 @@ build: ## Build the agc binary into .build/
 
 .PHONY: test
 test: ## Run unit tests
-	go test -race ./...
+	go test -race -timeout 2m ./...
 
 .PHONY: generate
 generate: manifests ## Alias for `manifests`

@@ -11,6 +11,7 @@ on:
 jobs:
   unit-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -18,7 +19,7 @@ jobs:
           go-version-file: go.mod
       - name: run unit tests
         run: |
-          GOWORK=off go test ./...
+          GOWORK=off go test -timeout 2m ./...
           go work edit -json | jq -r '.Use[].DiskPath' | while read -r dir; do
-            (cd "$dir" && go test ./...)
+            (cd "$dir" && go test -timeout 2m ./...)
           done
