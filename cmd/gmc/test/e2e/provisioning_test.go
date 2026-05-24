@@ -116,22 +116,35 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 			agcPodName = out
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 
-		By("checking no GITHUB_APP_* env vars are present in the AGC container")
-		cmd := exec.Command("kubectl", "exec", agcPodName,
+		// The AGC container is distroless (no shell), so we inspect the pod spec
+		// rather than using kubectl exec.
+
+		By("checking no GITHUB_APP_* env vars are present in the AGC container spec")
+		cmd := exec.Command("kubectl", "get", "pod", agcPodName,
 			"-n", tenantNS,
-			"-c", "manager",
-			"--", "sh", "-c", "env | grep -i GITHUB_APP || true",
+			"-o", `jsonpath={range .spec.containers[?(@.name=="agc")].env[*]}{.name}{"\n"}{end}`,
 		)
 		out, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(BeEmpty(),
-			"AGC container must not expose GITHUB_APP_* env vars; credentials must be file-mounted only")
+		Expect(out).NotTo(ContainSubstring("GITHUB_APP"),
+			"AGC container spec must not include GITHUB_APP_* env vars; credentials must be file-mounted only")
 
-		By("verifying credential files are present at the mount path")
-		cmd = exec.Command("kubectl", "exec", agcPodName,
+		By("verifying credential volume is mounted at the expected path in the AGC container spec")
+		cmd = exec.Command("kubectl", "get", "pod", agcPodName,
 			"-n", tenantNS,
-			"-c", "manager",
-			"--", "sh", "-c", "ls /etc/actions-gateway/github-app/",
+			"-o", `jsonpath={range .spec.containers[?(@.name=="agc")].volumeMounts[*]}{.mountPath}{"\n"}{end}`,
+		)
+		out, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(ContainSubstring("/etc/actions-gateway/github-app"),
+			"AGC container must have credential volume mounted at /etc/actions-gateway/github-app")
+
+		By("verifying GitHub App secret keys are present (they become filenames when mounted)")
+		// Secret data keys become filenames in the pod's volume mount — checking the
+		// secret itself is sufficient since the Secret volume mounts all keys by default.
+		cmd = exec.Command("kubectl", "get", "secret", secretName,
+			"-n", tenantNS,
+			"-o", "jsonpath={.data}",
 		)
 		out, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
