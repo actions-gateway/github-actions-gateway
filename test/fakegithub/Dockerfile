@@ -8,7 +8,6 @@ COPY cmd/gmc/go.mod cmd/gmc/go.sum cmd/gmc/
 COPY cmd/proxy/go.mod cmd/proxy/go.sum cmd/proxy/
 COPY cmd/worker/go.mod cmd/worker/
 COPY cmd/probe/go.mod cmd/probe/
-RUN go work sync 2>/dev/null || true
 # Copy source
 COPY . .
 RUN CGO_ENABLED=0 go build -o /bin/fakegithub ./test/fakegithub
