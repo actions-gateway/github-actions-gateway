@@ -101,7 +101,7 @@ docker-build-agc: ## Build and push the AGC Docker image
 
 .PHONY: docker-build-proxy
 docker-build-proxy: ## Build and push the egress proxy Docker image
-	docker buildx build --push -f cmd/proxy/Dockerfile -t $(PROXY_IMG) cmd/proxy
+	docker buildx build --push -f cmd/proxy/Dockerfile -t $(PROXY_IMG) .
 
 .PHONY: docker-build-fakegithub
 docker-build-fakegithub: ## Build and push the fakegithub test-fixture Docker image

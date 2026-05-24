@@ -1,0 +1,4 @@
+# Tell GitHub's Linguist to ignore vendored Go dependencies when computing
+# language stats, file-tree summaries, and "Files changed" PR diffs.
+vendor/** linguist-vendored
+tools/vendor/** linguist-vendored

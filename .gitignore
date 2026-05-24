@@ -3,4 +3,6 @@
 CLAUDE.md
 # binary build output
 /.build/
-fakegithub
+# Local-build of the fakegithub helper (`make` at repo root drops it here);
+# root-anchored so it doesn't shadow the test/fakegithub/ source directory.
+/fakegithub

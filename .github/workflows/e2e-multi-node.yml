@@ -69,7 +69,7 @@ jobs:
       - name: Build and push proxy image
         uses: docker/build-push-action@v6
         with:
-          context: cmd/proxy
+          context: .
           file: cmd/proxy/Dockerfile
           tags: ${{ env.PROXY_IMG }}
           push: true
