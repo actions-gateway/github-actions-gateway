@@ -7,6 +7,9 @@ COPY cmd/gmc/go.mod cmd/gmc/go.sum cmd/gmc/
 COPY cmd/proxy/go.mod cmd/proxy/go.sum cmd/proxy/
 COPY cmd/worker/go.mod cmd/worker/
 COPY cmd/probe/go.mod cmd/probe/
+# Predownload modules in their own layer so source changes don't re-trigger
+# the download. Layer key depends only on the *.mod / *.sum files above.
+RUN cd cmd/agc && go mod download
 # Copy source
 COPY . .
 RUN CGO_ENABLED=0 go build -C cmd/agc -o /bin/agc .
