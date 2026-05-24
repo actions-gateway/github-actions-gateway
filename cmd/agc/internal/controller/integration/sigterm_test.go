@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"maps"
 	"net/http"
 	"testing"
 	"time"
@@ -22,8 +23,13 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		// envtest process-watcher goroutines (kube-apiserver + etcd; live for the whole suite).
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*State).Start.func1"),
 		// client-go informer goroutines managed by the controller-runtime manager.
+		// mgr.Start() returns before these fully exit — they shut down asynchronously.
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
+		// handleAnyWatch and startResync were added in newer client-go versions;
+		// same category as ListAndWatch/watchHandler above.
+		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.handleAnyWatch"),
+		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).startResync"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
 		// controller-runtime priority queue (replaces client-go workqueue in ≥ v0.23).
 		// The btree traversal goroutine can be mid-send when the manager exits.
@@ -31,9 +37,11 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		// Broker stub server: accept loop + per-connection serve goroutines (global throughout suite).
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
-		// k8s client HTTP/2 connection to the kube-apiserver — suite-level, lives on the
-		// k8s client's own transport which we have no handle on from the test.
+		// k8s client HTTP/2 and HTTP/1.1 connection goroutines to the kube-apiserver —
+		// suite-level, tied to the envtest REST client; we have no handle on them from the test.
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
+		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientStream).writeRequest"),
+		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
 	)
 
 	const nsName = "agc-sigterm-test"
@@ -43,27 +51,56 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rg) })
 
+	// Snapshot sessions from previous tests. We only want to operate on sessions
+	// created by THIS test's reconciler so that WaitForFirstPoll and the DELETE
+	// assertions don't block on sessions whose goroutines have already exited.
+	seenBefore := map[string]bool{}
+	for _, id := range brokerStub.RegisteredSessions() {
+		seenBefore[id] = true
+	}
+
 	cancelMgr, mgrDone := startAGCReconciler(t)
 
-	// Wait for the initial session (permanent baseline listener).
+	// Wait for the initial session from this test's reconciler.
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
+		for _, id := range brokerStub.RegisteredSessions() {
+			if !seenBefore[id] {
+				return true
+			}
+		}
+		return false
 	}, 15*time.Second, 1*time.Millisecond, "initial session should register")
 
 	// Burst to 3 sessions by sequentially enqueueing 2 jobs.
-	seen := map[string]bool{}
+	// seen tracks which sessions we have already enqueued on (to avoid re-using
+	// them). It starts as a deep copy of seenBefore so we also skip any
+	// pre-existing sessions; mutations to seen must not affect seenBefore because
+	// the require.Eventually closure below uses seenBefore to count only sessions
+	// created by this test's reconciler.
+	seen := maps.Clone(seenBefore)
 	for i := 0; i < 2; i++ {
 		id := enqueueJobWhenSessionAvailable(15*time.Second, seen, broker.RunnerJobRequestBody{})
 		require.NotEmpty(t, id, "new session must appear to enqueue job %d", i+1)
 		seen[id] = true
 		// Wait for the next spawned session before enqueueing the next job.
 		require.Eventually(t, func() bool {
-			return len(brokerStub.RegisteredSessions()) >= i+2
+			newCount := 0
+			for _, s := range brokerStub.RegisteredSessions() {
+				if !seenBefore[s] {
+					newCount++
+				}
+			}
+			return newCount >= i+2
 		}, 10*time.Second, 1*time.Millisecond)
 	}
 
-	// Capture the session IDs before cancellation.
-	sessionIDs := brokerStub.RegisteredSessions()
+	// Capture only this test's session IDs before cancellation.
+	var sessionIDs []string
+	for _, id := range brokerStub.RegisteredSessions() {
+		if !seenBefore[id] {
+			sessionIDs = append(sessionIDs, id)
+		}
+	}
 	require.GreaterOrEqual(t, len(sessionIDs), 2,
 		"at least 2 sessions must be active before SIGTERM")
 

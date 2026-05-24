@@ -25,17 +25,19 @@ func TestAGC_SecretLifecycle_CreatedOnJobAcquire(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 
+	// Snapshot sessions from previous tests so we only operate on this test's sessions.
+	alreadySeen := map[string]bool{}
+	for _, id := range brokerStub.RegisteredSessions() {
+		alreadySeen[id] = true
+	}
+
 	startAGCReconcilerWithProvisioner(t, provisionerOptions{})
 
-	// Wait for at least one session to register (listener is ready to receive jobs).
-	var sessions []string
-	require.Eventually(t, func() bool {
-		sessions = brokerStub.RegisteredSessions()
-		return len(sessions) >= 1
-	}, 15*time.Second, 1*time.Millisecond, "a session must register before we can enqueue a job")
-
-	// Enqueue a job — the provisioner will create a Secret and then a Pod.
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	// Enqueue a job on the first NEW session (listener is ready to receive jobs).
+	// enqueueJobWhenSessionAvailable skips sessions from prior tests, avoiding the
+	// race where a dead session is still visible in RegisteredSessions.
+	sessionID := enqueueJobWhenSessionAvailable(15*time.Second, alreadySeen, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sessionID, "a new session must register before we can enqueue a job")
 
 	// Assert a job Secret is created in the namespace.
 	assert.Eventually(t, func() bool {
@@ -66,16 +68,18 @@ func TestAGC_SecretLifecycle_DeletedAfterPodCompletes(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 
+	// Snapshot sessions from previous tests so we only operate on this test's sessions.
+	alreadySeen := map[string]bool{}
+	for _, id := range brokerStub.RegisteredSessions() {
+		alreadySeen[id] = true
+	}
+
 	startAGCReconcilerWithProvisioner(t, provisionerOptions{})
 
-	// Wait for a session, then enqueue a job.
-	var sessions []string
-	require.Eventually(t, func() bool {
-		sessions = brokerStub.RegisteredSessions()
-		return len(sessions) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	// Enqueue a job on the first NEW session, skipping any leftover sessions from
+	// prior tests whose listener goroutines may still be mid-cleanup.
+	sessionID := enqueueJobWhenSessionAvailable(15*time.Second, alreadySeen, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sessionID, "a new session must register")
 
 	// Wait for the job Secret and worker Pod to be created.
 	var jobSecretName string
