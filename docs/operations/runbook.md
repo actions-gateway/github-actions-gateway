@@ -104,8 +104,8 @@ Reference the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md)
 
 ### `active_sessions` Flatlining at Zero
 
-1. Check AGC pod status: `kubectl get pod -n <namespace> -l app=actions-gateway-controller`.
-2. Check AGC logs: `kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100`.
+1. Check AGC pod status: `kubectl get pod -n <namespace> -l app=actions-gateway-agc`.
+2. Check AGC logs: `kubectl logs -n <namespace> deploy/actions-gateway-agc --tail=100`.
 3. Check RunnerGroup conditions: `kubectl get runnergroup -n <namespace> -o yaml`.
 4. If pod is `CrashLoopBackOff` or `Error`: see [Troubleshooting — AGC CrashLoopBackOff](troubleshooting.md#agc-crashloopbackoff-or-not-acquiring-jobs).
 5. If pod is running but sessions are zero: check for token errors (see [Token Refresh Errors](troubleshooting.md#token-refresh-errors-spiking)) and network connectivity (see [Network Connectivity Failures](troubleshooting.md#network-connectivity-failures)).
@@ -147,7 +147,7 @@ Reference the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md)
    ```
 6. Confirm the AGC Deployment has rolled and the new pod is healthy:
    ```sh
-   kubectl rollout status deploy/actions-gateway-controller -n <namespace>
+   kubectl rollout status deploy/actions-gateway-agc -n <namespace>
    ```
 7. Confirm `actions_gateway_token_refresh_errors_total` is no longer incrementing.
 8. Delete the old Secret once confirmed healthy.
@@ -162,7 +162,7 @@ If the AGC pod is destroyed and cannot restart (e.g. node failure without resche
 
 1. **In-flight jobs** whose `renewjob` loop has lapsed will be cancelled by GitHub. There is no automatic recovery for these — they require manual re-run.
 2. **Queued jobs** (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.
-3. **To force restart:** `kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`.
+3. **To force restart:** `kubectl rollout restart deploy/actions-gateway-agc -n <namespace>`.
 4. Monitor `actions_gateway_active_sessions` — it should reach 1 per RunnerGroup within a few seconds of the pod starting.
 
 **State that persists:** All RunnerGroup CRs, Secrets, and Kubernetes resources are durable. The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart. The only non-recoverable state is in-flight job locks that expire during the blackout window.
@@ -176,7 +176,7 @@ If the GMC pod is unavailable:
 1. **Existing tenant gateways continue operating normally.** The GMC is not in the data plane; it only responds to `ActionsGateway` CR changes. Provisioned AGCs, proxies, and RunnerGroups are not affected.
 2. **New `ActionsGateway` CRs will not be provisioned** until the GMC recovers.
 3. **Spec changes to existing `ActionsGateway` CRs will not be reconciled** until the GMC recovers.
-4. To restore: `kubectl rollout restart deploy/gateway-manager-controller -n actions-gateway-system`.
+4. To restore: `kubectl rollout restart deploy/gmc-controller-manager -n gmc-system`.
 5. On recovery, the GMC reconciles all `ActionsGateway` CRs idempotently — it compares desired vs. actual state and only applies changes. No resources are duplicated or deleted.
 
 ---

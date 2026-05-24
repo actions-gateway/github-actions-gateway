@@ -50,6 +50,14 @@ metadata:
 spec:
   gitHubAppRef:
     name: my-github-app
+  # securityProfile selects the Pod Security Admission level the GMC stamps
+  # on the tenant namespace. Defaults to "baseline" — blocks privileged
+  # containers, host namespaces, hostPath, and dangerous capabilities, with
+  # no external policy engine required. Use "restricted" for stricter
+  # isolation (runAsNonRoot, drop ALL caps, seccomp RuntimeDefault) or
+  # "privileged" for workloads like docker-in-docker that need an unrestricted
+  # PodSpec. See docs/design/05-security.md §5.3 for the full semantics.
+  securityProfile: baseline
   proxy:
     minReplicas: 2
     maxReplicas: 10
@@ -124,13 +132,13 @@ When your GitHub App private key expires or is compromised, follow these steps t
 4. **Confirm the rollout completed:**
 
    ```sh
-   kubectl rollout status deploy/actions-gateway-controller -n team-a
+   kubectl rollout status deploy/actions-gateway-agc -n team-a
    ```
 
 5. **Verify the new token is working:**
 
    ```sh
-   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
+   kubectl logs -n team-a deploy/actions-gateway-agc --tail=20
    # Look for: "token refresh successful" or no token refresh errors
    ```
 

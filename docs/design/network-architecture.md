@@ -11,7 +11,7 @@ This document covers the network topology of a deployed gateway: which component
 ## Component Connection Map
 
 ```
-  System namespace (actions-gateway-system)
+  System namespace (gmc-system)
   ─────────────────────────────────────────
   GMC ──(1)──── K8s API Server (in-cluster) ──────────────────────
                                                                    │
@@ -35,9 +35,11 @@ All GitHub-bound traffic — from both the AGC and worker pods — is routed thr
 |---|-----------|-------------|----------|-------------|------------|
 | 1 | GMC | K8s API server | HTTPS (443) | Yes | No |
 | 2 | AGC | K8s API server | HTTPS (443) | Yes | No |
-| 3 | AGC | Proxy ClusterIP Service | HTTP CONNECT | Yes | — |
+| 3 | AGC | Proxy ClusterIP Service | HTTPS CONNECT (8080) | Yes | — |
 | 4 | Proxy pod | GitHub API endpoints (see below) | HTTPS (443) | No (egress) | — |
-| 5 | Worker pod | Proxy ClusterIP Service | HTTP CONNECT | Yes | — |
+| 5 | Worker pod | Proxy ClusterIP Service | HTTPS CONNECT (8080) | Yes | — |
+
+Connections (3) and (5) to the proxy are HTTPS, not plain HTTP. The GMC generates a per-tenant self-signed cert for the proxy at provisioning time and pins it into the AGC's trust store (W7 / M-5). This protects the AGC↔proxy hop from in-cluster eavesdropping or impersonation by any tenant whose pods can reach the Service ClusterIP.
 
 The GMC also makes one additional outbound call: `GET https://api.github.com/meta` every 24 hours to refresh the GitHub IP ranges used in tenant `NetworkPolicy` egress rules. This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.
 
@@ -56,9 +58,11 @@ GitHub publishes its current IP ranges at `https://api.github.com/meta` under th
 
 ## NetworkPolicy Rules
 
-The GMC creates two `NetworkPolicy` objects per tenant in the tenant namespace.
+The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace. The split (over a single combined policy) closes M-12 — worker pods inherit egress to the proxy and DNS only, not the Kubernetes API server. Only the AGC Deployment has API-server egress.
 
-### Policy 1: Default Deny + Selective Egress for AGC and Worker Pods
+### Policy 1: `actions-gateway-workload` — AGC and worker pods → proxy + DNS
+
+Selects all "workload" pods (AGC and worker) by the `actions-gateway/component: workload` label. Allows egress to the proxy ClusterIP (port 8080) and DNS only. Denies all ingress.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -69,57 +73,93 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/managed-by: actions-gateway
+      actions-gateway/component: workload
   policyTypes:
     - Ingress
     - Egress
   ingress: []  # no ingress permitted
   egress:
-    # Allow AGC and worker pods to reach the proxy pool
-    - to:
-        - podSelector:
-            matchLabels:
-              app: actions-gateway-proxy
-      ports:
-        - port: 3128
-          protocol: TCP
-    # Allow AGC to reach the Kubernetes API server
-    # (NO_PROXY routes these calls directly; NetworkPolicy must also permit them)
-    - to:
-        - namespaceSelector: {}
-          podSelector:
-            matchLabels:
-              component: kube-apiserver
-      ports:
-        - port: 443
-          protocol: TCP
-    # Fallback for clusters where the API server is a ClusterIP Service
-    # rather than a pod (e.g. managed Kubernetes, kubeadm with service proxy)
+    # DNS — needed for resolving the proxy Service name
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Proxy ClusterIP — selected by stable IP (not pod label) so the rule survives
+    # proxy pod churn from rolling updates and HPA scaling.
     - to:
         - ipBlock:
-            cidr: <cluster-service-cidr>  # e.g. 10.96.0.0/12 (kubeadm default)
+            cidr: <proxy-cluster-ip>/32
       ports:
-        - port: 443
+        - port: 8080
           protocol: TCP
 ```
 
-The `podSelector` matches all pods created by the AGC (both the AGC Deployment and ephemeral worker pods share the `app.kubernetes.io/managed-by: actions-gateway` label). Worker pods do not call the Kubernetes API (`automountServiceAccountToken: false`), but they share the policy — the K8s API egress rule has no effect on them because they hold no credentials.
+### Policy 2: `actions-gateway-agc` — AGC → Kubernetes API server
 
-### Policy 2: Proxy Pod Egress to GitHub
+Selects the AGC Deployment pods by `app: actions-gateway-agc`. Adds (additively) egress to the Kubernetes API server on port 443. Worker pods do not match this selector and so have no API-server egress.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: actions-gateway-proxy-egress
+  name: actions-gateway-agc
+  namespace: <tenant>
+spec:
+  podSelector:
+    matchLabels:
+      app: actions-gateway-agc
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes API server — port 443 to any destination. The exact CIDR
+    # depends on the cluster's apiserver placement (control-plane node IPs
+    # or kubernetes Service ClusterIP); the policy allows port 443 broadly
+    # rather than tracking a moving target.
+    - ports:
+        - port: 443
+          protocol: TCP
+```
+
+### Policy 3: `actions-gateway-proxy` — Proxy pods → GitHub
+
+Selects proxy pods by `app: actions-gateway-proxy`. Allows ingress only from "workload" pods on port 8080, and egress only to GitHub IP ranges (port 443) and DNS.
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: actions-gateway-proxy
   namespace: <tenant>
 spec:
   podSelector:
     matchLabels:
       app: actions-gateway-proxy
   policyTypes:
+    - Ingress
     - Egress
+  ingress:
+    # Only workload pods (AGC and workers) may CONNECT to the proxy
+    - from:
+        - podSelector:
+            matchLabels:
+              actions-gateway/component: workload
+      ports:
+        - port: 8080
+          protocol: TCP
   egress:
+    # DNS — proxy resolves GitHub hostnames on behalf of clients
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
     # GitHub IP ranges — populated from api.github.com/meta, refreshed every 24h
     - to:
         - ipBlock:
@@ -128,8 +168,6 @@ spec:
             cidr: 185.199.108.0/22
         - ipBlock:
             cidr: 140.82.112.0/20
-        - ipBlock:
-            cidr: 143.55.64.0/20
         # ... additional ranges from api.github.com/meta .actions
       ports:
         - port: 443
@@ -137,6 +175,8 @@ spec:
 ```
 
 The actual IP ranges are fetched at provisioning time and refreshed every 24 hours. The example CIDRs above are illustrative; the authoritative list is at `https://api.github.com/meta`.
+
+If `spec.proxy.managedNetworkPolicy: false` is set, the GMC omits the GitHub-CIDR egress rule from Policy 3 — operators using FQDN-based egress policies (Cilium, Calico) provide their own equivalent rule and the GMC stops fighting them on every IP range refresh.
 
 ### DNS Resolution
 
@@ -148,62 +188,78 @@ External DNS resolution (for GitHub hostnames) is performed by the proxy pods th
 
 ## How to Validate Network Isolation
 
-Run these commands from within the tenant namespace to confirm that isolation is enforced as expected.
+The AGC and proxy container images are distroless (no shell, no curl), so `kubectl exec` against the running pods can only inspect process state, not run probes. Instead, schedule a short-lived `curlimages/curl` pod and apply the same labels as the workload you want to simulate — Kubernetes selects NetworkPolicies by label, so a curl pod with `actions-gateway/component: workload` is governed by the same rules as the AGC and worker pods.
 
-### Confirm AGC Can Reach GitHub via Proxy
-
-```sh
-kubectl exec -n <namespace> deploy/actions-gateway-controller -- \
-  curl -x $HTTPS_PROXY -sI https://api.github.com
-# Expected: HTTP/2 200
-```
-
-### Confirm AGC Cannot Reach GitHub Directly (Bypassing Proxy)
+### Confirm a workload pod can reach GitHub via the proxy
 
 ```sh
-kubectl exec -n <namespace> deploy/actions-gateway-controller -- \
-  curl --noproxy '*' -sI --connect-timeout 5 https://api.github.com
-# Expected: connection timeout or connection refused (NetworkPolicy blocks direct egress)
-```
-
-### Confirm Worker Pod Cannot Reach External Hosts Directly
-
-```sh
-# Spawn a debug pod with the worker SA (automountServiceAccountToken: false)
-kubectl run nettest --image=curlimages/curl --rm -it \
+kubectl run nettest-workload -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='actions-gateway/component=workload' \
   --overrides='{"spec":{"automountServiceAccountToken":false}}' \
-  -n <namespace> -- \
-  curl --noproxy '*' -sI --connect-timeout 5 https://api.github.com
-# Expected: connection timeout (NetworkPolicy blocks direct egress from non-proxy pods)
-```
-
-### Confirm Proxy Pod Can Reach GitHub
-
-```sh
-kubectl exec -n <namespace> \
-  $(kubectl get pod -n <namespace> -l app=actions-gateway-proxy -o jsonpath='{.items[0].metadata.name}') -- \
-  curl -sI --connect-timeout 5 https://api.github.com
+  -- curl -x https://actions-gateway-proxy:8080 -sI https://api.github.com
 # Expected: HTTP/2 200
 ```
 
-### Confirm Proxy Pod Cannot Reach K8s API Server
+### Confirm a workload pod cannot reach GitHub directly (bypassing proxy)
 
 ```sh
-kubectl exec -n <namespace> \
-  $(kubectl get pod -n <namespace> -l app=actions-gateway-proxy -o jsonpath='{.items[0].metadata.name}') -- \
-  curl -sI --connect-timeout 5 https://kubernetes.default.svc.cluster.local
-# Expected: connection timeout or no route (proxy pods have no K8s API egress rule)
+kubectl run nettest-workload -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='actions-gateway/component=workload' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 https://api.github.com
+# Expected: connection timeout (actions-gateway-workload NetworkPolicy blocks direct egress)
 ```
 
-### Confirm Cross-Tenant Isolation
+### Confirm a worker-like pod cannot reach the Kubernetes API server
 
-From one tenant's AGC, confirm it cannot reach another tenant's proxy:
+The `actions-gateway-agc` NetworkPolicy only matches pods labelled `app=actions-gateway-agc`, so worker pods (labelled `actions-gateway/component=workload` but not the AGC `app` label) have no API-server egress.
 
 ```sh
-kubectl exec -n <tenant-a-namespace> deploy/actions-gateway-controller -- \
-  curl -sI --connect-timeout 5 \
-  http://actions-gateway-proxy.<tenant-b-namespace>.svc.cluster.local:3128
-# Expected: connection refused or timeout (namespace NetworkPolicy blocks cross-tenant egress)
+kubectl run nettest-worker -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='actions-gateway/component=workload' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 https://kubernetes.default.svc
+# Expected: connection timeout
+```
+
+### Confirm a proxy-labelled pod can reach GitHub
+
+```sh
+kubectl run nettest-proxy -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='app=actions-gateway-proxy' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 https://api.github.com
+# Expected: HTTP/2 200
+```
+
+### Confirm a proxy-labelled pod cannot reach the K8s API server
+
+```sh
+kubectl run nettest-proxy -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='app=actions-gateway-proxy' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 https://kubernetes.default.svc
+# Expected: connection timeout (proxy pods have no K8s API egress rule)
+```
+
+### Confirm cross-tenant isolation
+
+From tenant A's namespace, confirm a workload-labelled pod cannot reach tenant B's proxy:
+
+```sh
+kubectl run nettest-xtenant -n <tenant-a-namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --labels='actions-gateway/component=workload' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 \
+       https://actions-gateway-proxy.<tenant-b-namespace>.svc.cluster.local:8080
+# Expected: connection timeout (tenant A's workload NP only allows egress to
+# tenant A's own proxy ClusterIP, not arbitrary in-cluster services)
 ```
 
 ---
