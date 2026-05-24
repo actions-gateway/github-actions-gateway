@@ -43,7 +43,7 @@ fi
 # this, a fast caller (buildx push) can race and fail on the first attempt.
 echo "==> waiting for registry to accept connections"
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS "http://localhost:${REGISTRY_PORT}/v2/" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:${REGISTRY_PORT}/v2/" >/dev/null 2>&1; then
     break
   fi
   if [ "${i}" = '10' ]; then
