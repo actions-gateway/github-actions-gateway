@@ -171,14 +171,17 @@ spec:
                       minimum: 1
                       type: integer
                     maxWorkers:
-                      description: MaxWorkers caps the number of worker pods this
-                        RunnerGroup may run concurrently.
+                      description: |-
+                        MaxWorkers caps the number of worker pods this RunnerGroup may run concurrently.
+                        This is a soft ceiling enforced in-process; pair it with a Kubernetes ResourceQuota
+                        on the tenant namespace for a hard, cluster-enforced limit (D-6).
                       format: int32
                       minimum: 1
                       type: integer
                     podTemplate:
-                      description: PodTemplate is the standard Kubernetes PodTemplateSpec
-                        for worker pods.
+                      description: |-
+                        PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
+                        Privileged containers are rejected by the GMC admission webhook.
                       properties:
                         metadata:
                           description: |-

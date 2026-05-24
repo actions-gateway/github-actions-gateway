@@ -6,8 +6,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
 )
 
@@ -47,10 +49,87 @@ func TestWebhook_AllowsTenantNamespace(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestWebhook_UpdateNoOp(t *testing.T) {
+func TestWebhook_UpdateAllowsSafe(t *testing.T) {
 	v := &ActionsGatewayCustomValidator{}
-	_, err := v.ValidateUpdate(context.Background(), newAG("kube-system"), newAG("kube-system"))
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), newAG("team-a"))
 	require.NoError(t, err)
+}
+
+// ptr returns a pointer to v — helper for SecurityContext fields.
+func ptr[T any](v T) *T { return &v }
+
+func agWithPrivilegedContainer(privileged bool) *gmcv1alpha1.ActionsGateway {
+	ag := newAG("team-a")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
+		{
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "runner",
+							Image: "runner:latest",
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: ptr(privileged),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return ag
+}
+
+func agWithPrivilegedInitContainer() *gmcv1alpha1.ActionsGateway {
+	ag := newAG("team-a")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
+		{
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "runner", Image: "runner:latest"}},
+					InitContainers: []corev1.Container{
+						{
+							Name:  "init",
+							Image: "busybox",
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: ptr(true),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	return ag
+}
+
+func TestWebhook_RejectsPrivilegedContainer(t *testing.T) {
+	v := &ActionsGatewayCustomValidator{}
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedContainer(true))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+func TestWebhook_AllowsNonPrivilegedContainer(t *testing.T) {
+	v := &ActionsGatewayCustomValidator{}
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedContainer(false))
+	require.NoError(t, err)
+}
+
+func TestWebhook_RejectsPrivilegedInitContainer(t *testing.T) {
+	v := &ActionsGatewayCustomValidator{}
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedInitContainer())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged init containers are not permitted")
+}
+
+func TestWebhook_UpdateRejectsPrivilegedContainer(t *testing.T) {
+	v := &ActionsGatewayCustomValidator{}
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), agWithPrivilegedContainer(true))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
 func TestWebhook_DeleteNoOp(t *testing.T) {

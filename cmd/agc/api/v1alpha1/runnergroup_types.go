@@ -54,9 +54,7 @@ type RunnerGroupSpec struct {
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
-	//
-	// +kubebuilder:validation:XValidation:rule="self.spec.containers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || !c.securityContext.privileged)",message="privileged containers are not permitted in worker pods"
-	// +kubebuilder:validation:XValidation:rule="!has(self.spec.initContainers) || self.spec.initContainers.all(c, !has(c.securityContext) || !has(c.securityContext.privileged) || !c.securityContext.privileged)",message="privileged init containers are not permitted in worker pods"
+	// Privileged containers are rejected by the GMC admission webhook.
 	PodTemplate corev1.PodTemplateSpec `json:"podTemplate"`
 
 	// WorkerImage is the fully-qualified container image for the runner container.
