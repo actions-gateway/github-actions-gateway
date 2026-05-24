@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 )
 
@@ -46,9 +47,14 @@ type Manager struct {
 	ready     chan struct{} // closed after the first successful fetch
 	readyOnce sync.Once
 
-	// Namespace and Metrics are optional; set after NewManager if desired.
+	// Namespace, Metrics, and Logger are optional; set after NewManager if desired.
+	// Logger defaults to logr.Discard() so a silent loop never panics — set it to
+	// surface fetch attempts, errors, and successes in production. Without a real
+	// logger the loop is invisible: a pod stuck on the initial fetch produces
+	// zero output, which is exactly what hid an earlier CI hang.
 	Namespace string
 	Metrics   MetricsRecorder
+	Logger    logr.Logger
 }
 
 // NewManager creates a Token Manager backed by the given ExpiringTokenProvider.
@@ -61,6 +67,7 @@ func NewManager(provider githubapp.ExpiringTokenProvider, clock Clock) *Manager 
 		provider: provider,
 		clock:    clock,
 		ready:    make(chan struct{}),
+		Logger:   logr.Discard(),
 	}
 }
 
@@ -93,6 +100,7 @@ func NewManagerWithExpiredToken() *Manager {
 		clock:   RealClock,
 		ready:   make(chan struct{}),
 		current: &githubapp.InstallationToken{Token: "", ExpiresAt: time.Unix(0, 0)},
+		Logger:  logr.Discard(),
 	}
 	close(m.ready)
 	return m
@@ -106,12 +114,21 @@ func (m *Manager) Start(ctx context.Context) {
 }
 
 // loop is the background refresh goroutine.
+//
+// Logging policy: every iteration is observable. The previous silent-retry
+// implementation made a stuck initial fetch indistinguishable from a healthy
+// process — kubectl logs returned nothing for minutes. The Info/Error pair
+// here ensures one log line per attempt regardless of outcome.
 func (m *Manager) loop(ctx context.Context) {
 	const baseBackoff = 5 * time.Second
 	const maxBackoff = 60 * time.Second
 	backoff := baseBackoff
+	attempt := 0
 
 	for {
+		attempt++
+		m.Logger.Info("fetching installation token", "attempt", attempt)
+
 		// Attempt to fetch a new token (HTTP call outside the lock).
 		tok, err := m.provider.TokenWithExpiry(ctx)
 		if err != nil {
@@ -121,6 +138,8 @@ func (m *Manager) loop(ctx context.Context) {
 			if m.Metrics != nil {
 				m.Metrics.IncTokenRefreshErrors(m.Namespace)
 			}
+			m.Logger.Error(err, "token fetch failed; retrying after backoff",
+				"attempt", attempt, "backoff", backoff)
 			// Retry with exponential backoff; do not update ready or current.
 			select {
 			case <-ctx.Done():
@@ -138,10 +157,18 @@ func (m *Manager) loop(ctx context.Context) {
 		m.mu.Lock()
 		m.current = tok
 		m.mu.Unlock()
-		m.readyOnce.Do(func() { close(m.ready) })
+		firstFetch := false
+		m.readyOnce.Do(func() {
+			close(m.ready)
+			firstFetch = true
+		})
 		if m.Metrics != nil {
 			m.Metrics.IncTokenRefreshes(m.Namespace)
 		}
+		m.Logger.Info("token ready",
+			"firstFetch", firstFetch,
+			"expiresAt", tok.ExpiresAt.Format(time.RFC3339),
+			"validFor", tok.ExpiresAt.Sub(m.clock.Now()).Round(time.Second).String())
 		backoff = baseBackoff
 
 		// Sleep until T-5min before expiry.

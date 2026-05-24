@@ -177,16 +177,31 @@ func run() error {
 	ctx := ctrl.SetupSignalHandler()
 	tokenMgr.Namespace = namespace
 	tokenMgr.Metrics = m
+	tokenMgr.Logger = ctrl.Log.WithName("token")
 	tokenMgr.Start(ctx)
 
 	// Wait for the first token before starting the reconciler.
-	// Use a short-lived context so a GitHub outage at startup fails fast
-	// rather than blocking indefinitely.
-	tokenCtx, tokenCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer tokenCancel()
+	//
+	// Bound this with a timeout so a GitHub outage at startup fails fast rather
+	// than blocking indefinitely. Parent is the signal-handler ctx so a SIGTERM
+	// during the wait cancels immediately. Bookended by log lines so a stuck
+	// fetch is visible — without the lines the previous unbounded call produced
+	// a pod that was Running 1/1 with zero log output indefinitely.
+	//
+	// 2 minutes is deliberate: the in-loop backoff (5s → 10s → 20s → 40s → 60s)
+	// fits ~6 attempts in this budget, which absorbs slow-startup transients
+	// (kube-proxy programming, Service endpoint sync, image pull contention on
+	// a 2-CPU runner) that resolve in the 30–90s window. Beyond 2 minutes you're
+	// almost certainly in persistent-failure territory where kubelet's
+	// CrashLoopBackOff escalation produces equivalent restart cadence either
+	// way, and the per-attempt error log lines already surface the cause.
+	ctrl.Log.Info("waiting for initial GitHub App token")
+	tokenCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
 	if _, err := tokenMgr.Token(tokenCtx); err != nil {
 		return fmt.Errorf("initial token fetch: %w", err)
 	}
+	ctrl.Log.Info("initial token acquired")
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
 	httpClient := &http.Client{Timeout: 60 * time.Second}
