@@ -1,11 +1,12 @@
 go 1.26
 
 use (
-	./cmd/agc   // Milestone 2
-	./cmd/gmc   // Milestone 4
-	./cmd/probe // Milestone 1
-	./cmd/proxy // Milestone 4
+	./cmd/agc        // Milestone 2
+	./cmd/gmc        // Milestone 4
+	./cmd/probe      // Milestone 1
+	./cmd/proxy      // Milestone 4
 	./cmd/worker
+	./test/fakegithub // Stub GitHub broker used by Tier B e2e tests
 )
 
 // replace is required instead of a "use ." entry because Go's workspace

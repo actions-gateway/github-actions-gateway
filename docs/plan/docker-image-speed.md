@@ -7,6 +7,39 @@ items target the **build** phase; §10–§13 target the **load-into-kind** phas
 used by the e2e suite. Each section covers motivation, implementation steps,
 files affected, and estimated savings.
 
+## Status as of commit landing this plan
+
+| # | Change | Status |
+|---|---|---|
+| 1  | Root `.dockerignore` | ✅ Done |
+| 2  | BuildKit cache mounts | ⚪ Superseded by vendoring (see "Workspace vendoring" below) |
+| 3  | Split `go mod download` layer | ⚪ Superseded by vendoring |
+| 4  | Drop `go work sync` no-op | ✅ Done |
+| 5  | Parallel CI builds (bake) | ⬜ TODO |
+| 6  | Shared `builder-base` stage | ⚪ Subsumed by vendoring (single workspace vendor IS the shared base) |
+| 7  | Alpine builder base | ⬜ TODO |
+| 8  | Pin bases by digest | ⬜ TODO |
+| 9  | Path-based image skip in CI | ⬜ TODO (depends on §5) |
+| 10 | Skip control-plane on kind load | ⚪ Obsoleted by §13 |
+| 11 | Parallel `kind load` | ⚪ Obsoleted by §13 |
+| 12 | Single-node CI cluster | ⬜ TODO (smaller benefit now §13 is in) |
+| 13 | In-cluster registry | ✅ Done |
+
+### Workspace vendoring
+
+After the plan was written, we switched the runtime modules to **Go
+workspace vendoring** (`go work vendor` produces a single `vendor/` at the
+repo root, committed to git). This made §3 (mod-download layer) and §6
+(shared builder-base for mod download) obsolete by construction — every
+Dockerfile now does `COPY . .` + `go build` with `-mod=vendor` auto-selected,
+no module-cache plumbing required. §2's `/go/pkg/mod` cache mount becomes
+useless too; only the `/root/.cache/go-build` half retains some value (for
+incremental compile across edits), and that's a smaller win than the mod-
+download savings the original §2 promised.
+
+Tradeoff accepted: vendor/ adds ~76 MB to the repo. `.gitattributes` marks
+it `linguist-vendored` so it doesn't dominate GitHub UI summaries.
+
 ---
 
 ## Background — where time goes today

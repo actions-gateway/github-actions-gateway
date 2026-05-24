@@ -25,6 +25,15 @@
 !**/go.mod
 !**/go.sum
 
+# Workspace vendor tree at the repo root — produced by `go work vendor` and
+# consumed by every Dockerfile via auto-detected `-mod=vendor`.
+!vendor/**
+
+# Re-exclude the tools vendor tree. Tools (controller-gen, kubebuilder, etc.)
+# are built only for `make tools`, never for runtime images — without this
+# re-exclude the !**/*.go rule above pulls its ~29 MB of source back in.
+tools/vendor/**
+
 # If a build ever needs a non-.go file (an embedded asset, a config
 # template, etc.) re-include the specific path here. Do not blanket-include
 # directories — the point of this file is to keep the context tight.
