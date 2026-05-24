@@ -69,6 +69,7 @@ For the full design, see [docs/design/](docs/design/README.md).
 | Security & Threat Risk Assessment | [05-security.md](docs/design/05-security.md) |
 | Capacity Targets & SLOs | [appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) |
 | Alternatives Considered | [appendix-d-alternatives-considered.md](docs/design/appendix-d-alternatives-considered.md) |
+| Optional Future Enhancements | [appendix-g-future-enhancements.md](docs/design/appendix-g-future-enhancements.md) |
 
 ## Quick Start
 
@@ -87,7 +88,7 @@ See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-sl
 Run `make` (or `make help`) for the full list of targets. The most common ones:
 
 ```sh
-# Build AGC and probe binaries
+# Build all binaries (agc, gmc, probe, proxy) into .build/
 make build
 
 # Build tool binaries (controller-gen, setup-envtest, ginkgo, kubebuilder)
@@ -98,17 +99,39 @@ make e2e-up
 
 # Tear down the kind cluster when done
 make e2e-clean
+```
 
-# Run unit tests (per-module — `go test ./...` from the repo root does not
-# work; see CLAUDE.md "Go workspaces" section for the workspace mechanics)
-GOWORK=off go test ./...        # root: broker, githubapp
-(cd cmd/agc && go test ./...)
-(cd cmd/gmc && go test ./...)
+### Running tests
 
-# Run integration tests (envtest-backed; requires KUBEBUILDER_ASSETS)
+This repo uses a `go.work` workspace, so `go test ./...` from the repo root
+does **not** discover all modules. Use the per-module commands:
+
+```sh
+# Root module (broker, githubapp)
+GOWORK=off go test ./...
+
+# AGC module
+(cd cmd/agc   && go test ./...)
+
+# GMC module
+(cd cmd/gmc   && go test ./...)
+
+# probe module
+(cd cmd/probe && go test ./...)
+```
+
+Integration tests require the envtest binaries staged via
+`KUBEBUILDER_ASSETS`:
+
+```sh
 make setup-envtest
-export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x --bin-dir /tmp/envtest-bins -p path)
-(cd cmd/agc && go test -tags integration ./internal/controller/integration/...)
+export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x \
+    --bin-dir /tmp/envtest-bins -p path)
+
+(cd cmd/agc && go test -v -tags integration -timeout 5m -count=1 \
+    ./internal/controller/integration/...)
+(cd cmd/gmc && go test -v -tags integration -timeout 5m -count=1 \
+    ./internal/controller/integration/...)
 ```
 
 ## Repository Layout
