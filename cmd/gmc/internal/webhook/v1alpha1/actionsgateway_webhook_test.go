@@ -119,6 +119,32 @@ func agWithPrivilegedInitContainer() *gmcv1alpha1.ActionsGateway {
 	return ag
 }
 
+func TestWebhook_RejectsCrossNamespaceSecretRef(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.GitHubAppRef.Namespace = "other-namespace"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gitHubAppRef.namespace is not supported")
+}
+
+func TestWebhook_AllowsEmptySecretRefNamespace(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	// Namespace is zero value ("") — must be accepted.
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateRejectsCrossNamespaceSecretRef(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	updated := newAG("team-a")
+	updated.Spec.GitHubAppRef.Namespace = "other-namespace"
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gitHubAppRef.namespace is not supported")
+}
+
 func TestWebhook_RejectsPrivilegedContainer(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedContainer(true))

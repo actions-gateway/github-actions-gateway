@@ -53,6 +53,67 @@ func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
 }
 
 
+// TestCRD_ActionsGateway_CrossNamespaceSecretRef_Rejected verifies that the webhook
+// validator rejects a non-empty gitHubAppRef.namespace. The field has no effect
+// (secretKeyRef ignores the namespace), but it looks cross-namespace to users —
+// a confused-deputy footgun. Validated by the webhook rather than a CEL
+// XValidation rule because k8s ≤ 1.30 CEL cannot use has() on optional
+// non-pointer string fields; the webhook check is version-agnostic.
+func TestCRD_ActionsGateway_CrossNamespaceSecretRef_Rejected(t *testing.T) {
+	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("")
+	ag := &gmcv1alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "cross-ns-ag", Namespace: "team-a"},
+		Spec: gmcv1alpha1.ActionsGatewaySpec{
+			GitHubAppRef: gmcv1alpha1.SecretReference{
+				Name:      "github-app",
+				Namespace: "other-namespace",
+			},
+		},
+	}
+	_, err := validator.ValidateCreate(context.Background(), ag)
+	require.Error(t, err, "ActionsGateway with gitHubAppRef.namespace set must be rejected by the webhook")
+	assert.Contains(t, err.Error(), "gitHubAppRef.namespace is not supported")
+}
+
+// TestCRD_ProxyConfig_MaxReplicas_TooHigh_Rejected verifies that proxy.maxReplicas > 100
+// is rejected by the CRD OpenAPI bounds (sanity ceiling; a per-cluster policy cap
+// requires a future GMC flag).
+func TestCRD_ProxyConfig_MaxReplicas_TooHigh_Rejected(t *testing.T) {
+	const nsName = "team-cel-maxreplicas"
+	createNamespace(t, nsName)
+
+	ag := newActionsGateway("maxreplicas-ag", nsName, "github-app")
+	maxReplicas := int32(101)
+	ag.Spec.Proxy.MaxReplicas = &maxReplicas
+
+	err := k8sClient.Create(ctx, ag)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+
+	require.Error(t, err, "ActionsGateway with proxy.maxReplicas > 100 must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+}
+
+// TestCRD_ProxyConfig_MinExceedsMax_Rejected verifies that the CEL XValidation rule
+// on ProxyConfig rejects specs where minReplicas > maxReplicas.
+func TestCRD_ProxyConfig_MinExceedsMax_Rejected(t *testing.T) {
+	const nsName = "team-cel-proxyorder"
+	createNamespace(t, nsName)
+
+	ag := newActionsGateway("proxyorder-ag", nsName, "github-app")
+	minReplicas := int32(5)
+	maxReplicas := int32(2)
+	ag.Spec.Proxy.MinReplicas = &minReplicas
+	ag.Spec.Proxy.MaxReplicas = &maxReplicas
+
+	err := k8sClient.Create(ctx, ag)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+
+	require.Error(t, err, "ActionsGateway with proxy.minReplicas > proxy.maxReplicas must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+	assert.Contains(t, err.Error(), "minReplicas must not exceed maxReplicas",
+		"error message should reference the ordering constraint")
+}
+
 func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 	const nsName = "team-cel-maxworkers"
 	createNamespace(t, nsName)
