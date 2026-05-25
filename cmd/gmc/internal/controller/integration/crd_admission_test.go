@@ -52,7 +52,6 @@ func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
 	}
 }
 
-
 // TestCRD_ActionsGateway_CrossNamespaceSecretRef_Rejected verifies that the webhook
 // validator rejects a non-empty gitHubAppRef.namespace. The field has no effect
 // (secretKeyRef ignores the namespace), but it looks cross-namespace to users —

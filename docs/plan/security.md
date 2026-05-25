@@ -1065,7 +1065,7 @@ Independent items, scheduled opportunistically.
 
 | Finding | Workstream | Notes |
 |---|---|---|
-| M-10 | Expand validating webhook *or* move to CRD CEL | Prefer CEL where possible — visible in `kubectl explain`. |
+| M-10 | ~~Expand validating webhook *or* move to CRD CEL~~ | **Done (2026-05-25).** `proxy.maxReplicas ≤ 100`, `minReplicas ≤ maxReplicas` → CEL `x-kubernetes-validations`. `gitHubAppRef.namespace` confused-deputy check → webhook (`ValidateCreate`/`ValidateUpdate`), because k8s 1.30 CEL does not expose `self.metadata.namespace` at the resource root. |
 | M-11b | Extend `cmd/probe` (add `-key-type`/`-register-test-runner` flags) then run against real GitHub App | Verifies broker accepts Ed25519 SPKI + EdDSA JWTs so `--agent-key-type=ed25519` opt-in is documented as working. Does not affect the RSA-3072 default. |
 | M-11c | ~~Migrate `agentpool.createAgent`~~ | **Done (2026-05-23).** RSA-3072 is the default; Ed25519 is opt-in via `--agent-key-type=ed25519`. |
 | M-12 | ~~Generic 502 in `cmd/proxy/proxy.go:103-106`~~ | **Done.** Dial error logged server-side; response body is generic `"upstream unavailable"`. |
