@@ -12,7 +12,7 @@ Make the smallest change that achieves the goal. If you notice problems outside 
 
 1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent.
 2. **For complex tasks** — write an explicit plan to `docs/plan/` and follow it. Keep it updated as the session progresses so completed scope is verifiable at the end. Revise the plan if new information changes the approach.
-3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update `README.md`, `CONTRIBUTING.md`, and any relevant docs in `docs/` if the change affects anything they describe.
+3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update `README.md`, `CONTRIBUTING.md`, and any relevant docs in `docs/` if the change affects anything they describe. Also update `.github/workflows/` if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. `go-version-file`, test commands, module paths).
 4. **Commit when done** — once a task is complete and validated, commit with git. Keep commits small and focused. Never commit broken code or failing tests.
 
 ## Code standards
