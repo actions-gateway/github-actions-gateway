@@ -157,16 +157,11 @@ e2e-multi-node: $(GINKGO) ## Run the multi-node e2e suite (HPA load, PDB drain â
 		--junit-report /tmp/e2e-local-report.xml \
 		./test/e2e/...
 
+# e2e-all runs the standard suite first, then the multi-node suite. Sequential
+# ordering matters: multi-node tests need an idle cluster to trigger HPA
+# scale-up; running both suites concurrently causes resource contention.
 .PHONY: e2e-all
-e2e-all: $(GINKGO) ## Run every e2e suite, including multi-node (requires 3-node cluster; used by CI)
-	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
-		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		$(GINKGO) run \
-		--tags e2e --timeout 30m \
-		--procs 4 \
-		--github-output --poll-progress-after 60s \
-		--junit-report /tmp/e2e-report.xml \
-		./test/e2e/...
+e2e-all: e2e e2e-multi-node ## Run every e2e suite sequentially, including multi-node (requires 3-node cluster; used by CI)
 
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete ## Tear down the e2e kind cluster
