@@ -1071,7 +1071,7 @@ Independent items, scheduled opportunistically.
 | M-12 | ~~Generic 502 in `cmd/proxy/proxy.go:103-106`~~ | **Done.** Dial error logged server-side; response body is generic `"upstream unavailable"`. |
 | M-13 | ~~Cap broker error bodies (`body[:200]`)~~ | **Done.** `capBody(rawBody, 200)` used throughout broker client; `capBody` helper added. |
 | M-15 | ~~In-process counter in `provisioner` for MaxWorkers~~ | **Accepted (D-6).** Soft ceiling; ResourceQuota is the hard limit. No code change needed. |
-| M-16 | Hash suffix in `safeName` | Both `provisioner.go` and `builder.go` variants. |
+| M-16 | ~~Hash suffix in `safeName`~~ | **Done (2026-05-25).** `provisioner.go:safeName` already had the suffix. Added hash suffix to `actionsgateway_controller.go:labelSafe` (used for RunnerGroup names); 6 unit tests added. |
 | L-1 | ~~Add `jti` to App-level JWT~~ | **Done.** `ID: newUUID()` sets the `jti` claim. |
 | L-2 | ~~`http.Client{Timeout}` in each binary `main`~~ | **Done.** 60 s timeout client injected into broker client, registrar, and IP-range fetcher. |
 | L-3 | ~~`//nolint:gosec` or migrate to `math/rand/v2`~~ | **Done.** `//nolint:gosec // jitter, not crypto` on both `rand.Int63n` calls. |
