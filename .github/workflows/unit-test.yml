@@ -16,10 +16,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: go.work
       - name: run unit tests
         run: |
-          GOWORK=off go test -timeout 2m ./...
           go work edit -json | jq -r '.Use[].DiskPath' | while read -r dir; do
             (cd "$dir" && go test -timeout 2m ./...)
           done
