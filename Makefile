@@ -10,10 +10,10 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 GINKGO         := $(REPO_ROOT)/.build/ginkgo
 
 KIND_CLUSTER  ?= actions-gateway-e2e
-# KIND_CONFIG defaults to the 2-node config for local single-suite runs.
-# CI passes test/kind-config.yaml (3-node) so both suites share one cluster.
-# Use KIND_CONFIG=test/kind-config.yaml locally when running `e2e-multi-node` or `e2e-all`.
-KIND_CONFIG   ?= test/kind-config-ci.yaml
+# KIND_CONFIG defaults to the 1-worker config for local single-suite runs.
+# CI passes test/kind-config-2worker.yaml so both suites share one cluster.
+# Use KIND_CONFIG=test/kind-config-2worker.yaml locally when running `e2e-multi-node` or `e2e-all`.
+KIND_CONFIG   ?= test/kind-config-1worker.yaml
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 
 # Local OCI registry that kind nodes pull from. scripts/kind-with-registry.sh
@@ -145,7 +145,7 @@ e2e: $(GINKGO) ## Run the standard e2e suite (Tier A + Tier B; excludes multi-no
 		--junit-report /tmp/e2e-report.xml \
 		./test/e2e/...
 
-# Run multi-node e2e tests (requires 3-node cluster; see test/kind-config.yaml).
+# Run multi-node e2e tests (requires 3-node cluster; see test/kind-config-2worker.yaml).
 # Uses --procs=3 so the three suites' BeforeAll deployment waits overlap.
 .PHONY: e2e-multi-node
 e2e-multi-node: $(GINKGO) ## Run the multi-node e2e suite (HPA load, PDB drain — requires 3-node cluster)
