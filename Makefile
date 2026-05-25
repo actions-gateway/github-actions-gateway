@@ -31,7 +31,7 @@ FAKEGITHUB_IMG ?= $(IMAGE_REGISTRY)/fakegithub:e2e-$(GIT_SHA)
 .DEFAULT_GOAL := help
 
 .PHONY: all build build-agc build-gmc build-probe build-proxy tools setup-envtest \
-        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-multi-node e2e-all e2e-clean \
+        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo
 
@@ -70,7 +70,7 @@ build-proxy: ## Build the proxy binary
 ##@ e2e
 
 .PHONY: e2e-up
-e2e-up: e2e-cluster e2e-images e2e ## One-shot: create cluster, build+push images, run the standard e2e suite
+e2e-up: e2e-cluster e2e-images e2e ## One-shot: create cluster, build+push images, run all e2e suites
 
 .PHONY: e2e-cluster
 e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
@@ -125,43 +125,30 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
 		docker buildx bake --file docker-bake.hcl fakegithub
 
-# Run Tier A + Tier B e2e tests (excludes multi-node tests).
-# Uses the ginkgo CLI so --procs and --label-filter are recognised.
+# SUITE filters which specs run: 'standard' (excludes multi-node), 'multi-node',
+# or unset to run all suites sequentially. Sequential ordering matters: HPA
+# scale-up tests need an idle cluster and fail when the standard suite's tenant
+# workloads are still running.
 #
-# --procs 4 is a moderate parallelism that fits comfortably inside a 2-node
-# kind cluster on a GitHub Actions standard runner. The earlier --procs 8
-# default was too aggressive — too many parallel tenants being provisioned
-# at once exceeded the cluster's burst capacity. Empirically --procs 4 cut
-# wall-clock ~3× while keeping the cluster within its scheduling budget.
+# --procs 4: tuned for the standard suite; --procs 8 caused burst scheduling
+# failures. Multi-node uses --procs 3 so BeforeAll deployment waits overlap.
+SUITE ?=
+
+_GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
+	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
+	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 60s
+
 .PHONY: e2e
-e2e: $(GINKGO) ## Run the standard e2e suite (Tier A + Tier B; excludes multi-node)
-	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
-		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		$(GINKGO) run \
-		--tags e2e --timeout 30m \
-		--label-filter '!multi-node' --procs 4 \
-		--github-output --poll-progress-after 60s \
-		--junit-report /tmp/e2e-report.xml \
-		./test/e2e/...
-
-# Run multi-node e2e tests (requires 3-node cluster; see test/kind-config-2worker.yaml).
-# Uses --procs=3 so the three suites' BeforeAll deployment waits overlap.
-.PHONY: e2e-multi-node
-e2e-multi-node: $(GINKGO) ## Run the multi-node e2e suite (HPA load, PDB drain — requires 3-node cluster)
-	cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
-		GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
-		$(GINKGO) run \
-		--tags e2e --timeout 30m \
-		--label-filter 'multi-node' --procs 3 \
-		--github-output --poll-progress-after 60s \
-		--junit-report /tmp/e2e-local-report.xml \
-		./test/e2e/...
-
-# e2e-all runs the standard suite first, then the multi-node suite. Sequential
-# ordering matters: multi-node tests need an idle cluster to trigger HPA
-# scale-up; running both suites concurrently causes resource contention.
-.PHONY: e2e-all
-e2e-all: e2e e2e-multi-node ## Run every e2e suite sequentially, including multi-node (requires 3-node cluster; used by CI)
+e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all suites
+ifeq ($(SUITE),standard)
+	$(_GINKGO_RUN) --label-filter '!multi-node' --procs 4 --junit-report /tmp/e2e-report.xml ./test/e2e/...
+else ifeq ($(SUITE),multi-node)
+	$(_GINKGO_RUN) --label-filter 'multi-node' --procs 3 --junit-report /tmp/e2e-report.xml ./test/e2e/...
+else
+	$(_GINKGO_RUN) --label-filter '!multi-node' --procs 4 --junit-report /tmp/e2e-standard-report.xml ./test/e2e/...
+	$(_GINKGO_RUN) --label-filter 'multi-node' --procs 3 --junit-report /tmp/e2e-multi-node-report.xml ./test/e2e/...
+	python3 -c "import xml.etree.ElementTree as ET; r=ET.parse('/tmp/e2e-standard-report.xml').getroot(); [r.append(c) for c in ET.parse('/tmp/e2e-multi-node-report.xml').getroot()]; ET.ElementTree(r).write('/tmp/e2e-report.xml', xml_declaration=True, encoding='UTF-8')"
+endif
 
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete ## Tear down the e2e kind cluster
