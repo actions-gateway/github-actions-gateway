@@ -11,9 +11,8 @@ require (
 	k8s.io/apimachinery v0.35.0
 	k8s.io/client-go v0.35.0
 	sigs.k8s.io/controller-runtime v0.23.3
+	sigs.k8s.io/yaml v1.6.0
 )
-
-require sigs.k8s.io/yaml v1.6.0
 
 require (
 	cel.dev/expr v0.24.0 // indirect
@@ -102,4 +101,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 )
 
-replace github.com/karlkfi/github-actions-gateway/agc => ../agc
+replace github.com/karlkfi/github-actions-gateway/broker => ../../broker
+
+replace github.com/karlkfi/github-actions-gateway/githubapp => ../../githubapp
+
+replace github.com/karlkfi/github-actions-gateway/agc => ../../cmd/agc
