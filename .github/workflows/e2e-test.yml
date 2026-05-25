@@ -51,23 +51,21 @@ jobs:
           GIT_SHA: ${{ github.sha }}
           GHA_CACHE: "true"
 
-      - name: Run e2e tests (all suites)
+      - name: Run e2e tests
         # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive
         # after the suite finishes so the diagnostic step can dump real cluster
         # state on failure. The kind cluster itself is still deleted by the
         # final cleanup step regardless.
         env:
           E2E_SKIP_TEARDOWN: "true"
-        run: make e2e-all KIND_CLUSTER=actions-gateway-e2e
+        run: make e2e KIND_CLUSTER=actions-gateway-e2e
 
-      - name: Upload e2e test reports
+      - name: Upload e2e test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-junit-reports
-          path: |
-            /tmp/e2e-report.xml
-            /tmp/e2e-local-report.xml
+          name: e2e-junit-report
+          path: /tmp/e2e-report.xml
 
       - name: Collect diagnostic info on failure
         # Also fire on cancellation so a manually-cancelled run still produces
