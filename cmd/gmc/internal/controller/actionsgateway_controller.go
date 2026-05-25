@@ -16,9 +16,11 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
@@ -528,8 +530,12 @@ func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gm
 	return r.Update(ctx, &ns)
 }
 
-// labelSafe converts a string to a safe label value segment.
+// labelSafe converts a string to a safe Kubernetes DNS label segment and appends
+// a 7-char SHA-256 hex suffix so that distinct inputs always produce distinct
+// outputs, even when they share the same sanitized prefix (e.g. "gpu/a100" vs
+// "gpu_a100" both sanitize to "gpu-a100").
 func labelSafe(s string) string {
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(s)))[:7]
 	out := make([]byte, 0, len(s))
 	for _, c := range []byte(s) {
 		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' {
@@ -540,5 +546,12 @@ func labelSafe(s string) string {
 			out = append(out, '-')
 		}
 	}
-	return string(out)
+	seg := strings.Trim(string(out), "-")
+	if len(seg) > 40 {
+		seg = strings.TrimRight(seg[:40], "-")
+	}
+	if seg == "" {
+		seg = "label"
+	}
+	return seg + "-" + hash
 }
