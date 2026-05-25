@@ -39,9 +39,9 @@ func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("broker: rate limited, retry after %s", e.RetryAfter)
 }
 
-// UnauthorizedError is returned by GetMessage when the broker responds with
-// 401 Unauthorized or 403 Forbidden. Callers should treat this as a signal
-// to refresh the bearer token before retrying.
+// UnauthorizedError is returned by CreateSession and GetMessage when the
+// broker responds with 401 Unauthorized or 403 Forbidden. Callers should
+// treat this as a signal to refresh the bearer token before retrying.
 type UnauthorizedError struct {
 	StatusCode int
 }
@@ -243,6 +243,9 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 			return nil, &VersionTooOldError{Message: msg}
 		}
 		return nil, fmt.Errorf("broker: CreateSession: 400 %s", msg)
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, &UnauthorizedError{StatusCode: resp.StatusCode}
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("broker: CreateSession: unexpected status %d from %s: %s",

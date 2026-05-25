@@ -3,6 +3,7 @@ package broker_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -593,6 +594,25 @@ func TestCreateSession_UnexpectedStatus(t *testing.T) {
 	_, err := c.CreateSession(context.Background(), 1, "test-agent", "2.327.1")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "503")
+}
+
+func TestCreateSession_Unauthorized(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(fmt.Sprintf("HTTP%d", status), func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer srv.Close()
+
+			c := newTestClient(srv)
+			_, err := c.CreateSession(context.Background(), 1, "test-agent", "2.327.1")
+			require.Error(t, err)
+			var unauth *broker.UnauthorizedError
+			require.ErrorAs(t, err, &unauth, "expected UnauthorizedError for HTTP %d", status)
+			assert.Equal(t, status, unauth.StatusCode)
+		})
+	}
 }
 
 func TestAcquireJob_NonOKStatus(t *testing.T) {

@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
@@ -425,31 +424,13 @@ func setCondition(cfg Config, condType string, status metav1.ConditionStatus, re
 }
 
 func isUnauthorized(err error) bool {
-	if err == nil {
-		return false
-	}
 	var typed *broker.UnauthorizedError
-	if errors.As(err, &typed) {
-		return true
-	}
-	// Fallback for errors from callers that don't yet return typed errors (e.g. CreateSession).
-	s := err.Error()
-	return strings.Contains(s, "401") || strings.Contains(s, "403") ||
-		strings.Contains(s, "unauthorized") || strings.Contains(s, "access denied")
+	return errors.As(err, &typed)
 }
 
 func isSessionExpired(err error) bool {
-	if err == nil {
-		return false
-	}
 	var typed *broker.SessionExpiredError
-	if errors.As(err, &typed) {
-		return true
-	}
-	// Fallback for non-typed session-expired signals.
-	s := err.Error()
-	return strings.Contains(s, "404") || strings.Contains(s, "410") ||
-		(strings.Contains(s, "session") && strings.Contains(s, "expired"))
+	return errors.As(err, &typed)
 }
 
 // BackoffDelay returns a jittered delay matching the two-tier policy from
