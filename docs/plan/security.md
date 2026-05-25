@@ -1075,9 +1075,9 @@ Independent items, scheduled opportunistically.
 | L-1 | Add `jti` to App-level JWT | Optional. |
 | L-2 | `http.Client{Timeout}` in each binary `main` | Inject into broker client, registrar, IPRange fetcher. |
 | L-3 | `//nolint:gosec` or migrate to `math/rand/v2` | Trivial. |
-| L-4 | Typed errors from `broker.Client` | `*UnauthorizedError`, `*SessionExpiredError`; use `errors.As` instead of substring match. |
-| L-5 | Unified PEM parser shared by `agentpool/crypto.go` and `githubapp/auth.go` | Currently asymmetric. |
-| L-6 | Return errors instead of `os.Exit` in `mustEnv` | Operability, not security. |
+| L-4 | ~~Typed errors from `broker.Client`~~ | **Done (2026-05-24).** `CreateSession` now returns `*UnauthorizedError` for 401/403. Substring fallbacks removed from `isUnauthorized`/`isSessionExpired`. |
+| L-5 | ~~Unified PEM parser shared by `agentpool/crypto.go` and `githubapp/auth.go`~~ | **Done (W9, 2026-05-23).** Both parsers already handle PKCS#8 and PKCS#1; the asymmetry no longer exists. |
+| L-6 | ~~Return errors instead of `os.Exit` in `mustEnv`~~ | **Done.** All three `mustEnv` helpers (`cmd/agc`, `cmd/probe`, `cmd/gmc`) return errors; callers handle exit. |
 | L-7 | Require both stub URLs together | Reject half-configured stub state in `cmd/agc/main.go`. |
 
 ### Out of scope (flagged separately)
@@ -1168,6 +1168,7 @@ pure-logic properties. No cluster required.
 | M-6 — RunnerOS injection | `broker/client_test.go` | `GetMessage` with adversarial `RunnerOS` (`"linux&admin=true"`) encodes to a single `os` value and does not smuggle additional parameters. | ✓ done |
 | W9, M-11a — EdDSA | `githubapp/runner_auth_test.go` | EdDSA signing branch produces a JWT verifiable with the matching Ed25519 public key; PKCS#8 round-trip works for RSA and Ed25519. | ✓ done |
 | L-1 — jti | existing JWT tests | `jti` claim is unique per-request and included in the signed assertion. | ✓ done |
+| L-4 — typed errors | `broker/client_test.go`, `cmd/agc/internal/listener/goroutine_test.go` | `CreateSession` returns `*UnauthorizedError` for 401/403; `isUnauthorized`/`isSessionExpired` use `errors.As` only (no substring fallback). | ✓ done |
 
 **W4 residual risk (H-2 accepted):** The AGC Role grants `get`, `list`,
 `watch`, `create`, and `delete` on all Secrets in the tenant namespace.
