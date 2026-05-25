@@ -107,17 +107,11 @@ This repo uses a `go.work` workspace, so `go test ./...` from the repo root
 does **not** discover all modules. Use the per-module commands:
 
 ```sh
-# Root module (broker, githubapp)
-GOWORK=off go test ./...
-
-# AGC module
-(cd cmd/agc   && go test ./...)
-
-# GMC module
-(cd cmd/gmc   && go test ./...)
-
-# probe module
-(cd cmd/probe && go test ./...)
+(cd broker     && go test ./...)    # broker module
+(cd githubapp  && go test ./...)    # githubapp module
+(cd cmd/agc   && go test ./...)     # AGC module
+(cd cmd/gmc   && go test ./...)     # GMC module
+(cd cmd/probe && go test ./...)     # probe module
 ```
 
 Integration tests require the envtest binaries staged via
@@ -138,6 +132,7 @@ export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x \
 
 ```
 broker/          GitHub broker client (session management, crypto, metrics)
+githubapp/       GitHub App authentication and runner registration
 cmd/agc/         Actions Gateway Controller binary
 cmd/gmc/         Gateway Manager Controller binary (kubebuilder-generated)
 cmd/proxy/       Egress proxy binary
@@ -145,7 +140,6 @@ cmd/worker/      Worker pod entrypoint
 cmd/probe/       Diagnostic probe for live investigations
 docs/design/     Full system design documentation
 docs/plan/       Implementation milestone plans
-internal/        Shared test helpers
 test/            E2E test infrastructure (fakegithub stub, kind configs)
 tools/           Vendored build tools (controller-gen, setup-envtest)
 vendor/          Workspace-vendored runtime dependencies (`go work vendor`)

@@ -31,7 +31,8 @@ See [`docs/development/building.md`](docs/development/building.md) for the full 
 The repo uses a `go.work` workspace. `go test ./...` from the root does **not** work — use per-module commands:
 
 ```bash
-GOWORK=off go test ./...            # root module: broker, githubapp
+(cd broker     && go test ./...)
+(cd githubapp  && go test ./...)
 (cd cmd/agc   && go test ./...)
 (cd cmd/gmc   && go test ./...)
 (cd cmd/probe && go test ./...)
@@ -50,9 +51,14 @@ make e2e-clean  # tear down the cluster when done
 
 ## Changing dependencies
 
-When you change any module's `go.mod`, run `go work vendor` at the repo root and commit the `vendor/` diff in the same commit as the `go.mod`/`go.sum` changes.
+When you change any module's `go.mod`:
 
-Do not run `go mod vendor` inside a module — that conflicts with the workspace vendor. See [`docs/development/go-workspaces.md`](docs/development/go-workspaces.md) for the full vendoring discipline and worktree layout.
+1. Run `scripts/go-work-tidy.sh` to tidy all modules in dependency order.
+2. Run `go work sync` to sync the workspace build list.
+3. Run `go work vendor` at the repo root to update the shared `vendor/`.
+4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit.
+
+Do not run `go mod tidy` or `go mod vendor` inside an individual module — that conflicts with the workspace vendor. See [`docs/development/go-workspaces.md`](docs/development/go-workspaces.md) for the full vendoring discipline and worktree layout.
 
 ## Modifying CRD types
 

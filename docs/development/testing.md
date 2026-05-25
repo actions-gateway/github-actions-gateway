@@ -20,7 +20,8 @@ When adding or editing CI workflows and scripts, use the same per-module command
 Per-module commands for reference:
 
 ```bash
-GOWORK=off go test ./...            # root module: broker, githubapp
+(cd broker     && go test ./...)    # broker module
+(cd githubapp  && go test ./...)    # githubapp module
 (cd cmd/agc   && go test ./...)     # AGC module
 (cd cmd/gmc   && go test ./...)     # GMC module
 (cd cmd/probe && go test ./...)     # probe module
