@@ -43,7 +43,7 @@ jobs:
           driver-opts: network=host
 
       - name: Create kind cluster (3-node, with local registry)
-        run: make e2e-cluster KIND_CLUSTER=actions-gateway-e2e KIND_CONFIG=test/kind-config-2worker.yaml
+        run: make e2e-cluster KIND_CLUSTER=actions-gateway-e2e
 
       - name: Build and push all four images in parallel (bake)
         run: docker buildx bake --file docker-bake.hcl
