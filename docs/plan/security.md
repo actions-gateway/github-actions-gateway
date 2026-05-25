@@ -1068,17 +1068,17 @@ Independent items, scheduled opportunistically.
 | M-10 | Expand validating webhook *or* move to CRD CEL | Prefer CEL where possible — visible in `kubectl explain`. |
 | M-11b | Extend `cmd/probe` (add `-key-type`/`-register-test-runner` flags) then run against real GitHub App | Verifies broker accepts Ed25519 SPKI + EdDSA JWTs so `--agent-key-type=ed25519` opt-in is documented as working. Does not affect the RSA-3072 default. |
 | M-11c | ~~Migrate `agentpool.createAgent`~~ | **Done (2026-05-23).** RSA-3072 is the default; Ed25519 is opt-in via `--agent-key-type=ed25519`. |
-| M-12 | Generic 502 in `cmd/proxy/proxy.go:103-106` | Log detail server-side. |
-| M-13 | Cap broker error bodies (`body[:200]`) | Add debug env var to log full body. |
-| M-15 | In-process counter in `provisioner` for MaxWorkers | Or document MaxWorkers as a soft ceiling and rely on ResourceQuota. |
+| M-12 | ~~Generic 502 in `cmd/proxy/proxy.go:103-106`~~ | **Done.** Dial error logged server-side; response body is generic `"upstream unavailable"`. |
+| M-13 | ~~Cap broker error bodies (`body[:200]`)~~ | **Done.** `capBody(rawBody, 200)` used throughout broker client; `capBody` helper added. |
+| M-15 | ~~In-process counter in `provisioner` for MaxWorkers~~ | **Accepted (D-6).** Soft ceiling; ResourceQuota is the hard limit. No code change needed. |
 | M-16 | Hash suffix in `safeName` | Both `provisioner.go` and `builder.go` variants. |
-| L-1 | Add `jti` to App-level JWT | Optional. |
-| L-2 | `http.Client{Timeout}` in each binary `main` | Inject into broker client, registrar, IPRange fetcher. |
-| L-3 | `//nolint:gosec` or migrate to `math/rand/v2` | Trivial. |
+| L-1 | ~~Add `jti` to App-level JWT~~ | **Done.** `ID: newUUID()` sets the `jti` claim. |
+| L-2 | ~~`http.Client{Timeout}` in each binary `main`~~ | **Done.** 60 s timeout client injected into broker client, registrar, and IP-range fetcher. |
+| L-3 | ~~`//nolint:gosec` or migrate to `math/rand/v2`~~ | **Done.** `//nolint:gosec // jitter, not crypto` on both `rand.Int63n` calls. |
 | L-4 | ~~Typed errors from `broker.Client`~~ | **Done (2026-05-24).** `CreateSession` now returns `*UnauthorizedError` for 401/403. Substring fallbacks removed from `isUnauthorized`/`isSessionExpired`. |
 | L-5 | ~~Unified PEM parser shared by `agentpool/crypto.go` and `githubapp/auth.go`~~ | **Done (W9, 2026-05-23).** Both parsers already handle PKCS#8 and PKCS#1; the asymmetry no longer exists. |
 | L-6 | ~~Return errors instead of `os.Exit` in `mustEnv`~~ | **Done.** All three `mustEnv` helpers (`cmd/agc`, `cmd/probe`, `cmd/gmc`) return errors; callers handle exit. |
-| L-7 | Require both stub URLs together | Reject half-configured stub state in `cmd/agc/main.go`. |
+| L-7 | ~~Require both stub URLs together~~ | **Done.** When `GITHUB_ORG_URL` is unset, `cmd/agc/main.go` requires both stub URLs; partial config returns an error. |
 
 ### Out of scope (flagged separately)
 
