@@ -64,6 +64,7 @@ Spell out acronyms on first use: write the full term first, then the acronym in 
 - Use small, focused commits.
 - Follow the Conventional Commits standard.
 - Amending an unpushed commit is fine — fix up the message or staged changes before pushing without asking. Once a commit is pushed, prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
+- After pushing, check whether a PR exists (`gh pr view`). If one does, update its description with `gh pr edit` to reflect any new commits.
 
 ## Agent reference docs
 
