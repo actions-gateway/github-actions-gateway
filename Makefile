@@ -131,9 +131,10 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 # Ginkgo runs them after all parallel specs complete — no separate invocation or
 # label-based split needed for cluster isolation.
 #
-# SUITE=standard|multi-node filters to a subset for local iteration; unset runs all specs.
+# SUITE=single-node|multi-node filters to a subset for local iteration; unset runs all specs.
+# single-node maps to --label-filter '!multi-node' (tests that run on a 1-worker cluster).
 SUITE ?=
-_SUITE_FILTER = $(if $(filter standard,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,))
+_SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,))
 
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
