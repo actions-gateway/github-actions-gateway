@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: go.work
       - name: Build setup-envtest
         run: make setup-envtest
       - uses: actions/cache@v4
