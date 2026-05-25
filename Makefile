@@ -125,30 +125,24 @@ docker-build-fakegithub: ## Build and push only the fakegithub image (bake targe
 	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
 		docker buildx bake --file docker-bake.hcl fakegithub
 
-# SUITE filters which specs run: 'standard' (excludes multi-node), 'multi-node',
-# or unset to run all suites sequentially. Sequential ordering matters: HPA
-# scale-up tests need an idle cluster and fail when the standard suite's tenant
-# workloads are still running.
+# --procs 4: moderate parallelism tuned for the standard suite on a GitHub
+# Actions runner; --procs 8 caused burst scheduling failures.
+# E2E_GMC_HPA_PDB and E2E_GMC_Resilience are marked Serial in the test code so
+# Ginkgo runs them after all parallel specs complete — no separate invocation or
+# label-based split needed for cluster isolation.
 #
-# --procs 4: tuned for the standard suite; --procs 8 caused burst scheduling
-# failures. Multi-node uses --procs 3 so BeforeAll deployment waits overlap.
+# SUITE=standard|multi-node filters to a subset for local iteration; unset runs all specs.
 SUITE ?=
+_SUITE_FILTER = $(if $(filter standard,$(SUITE)),!multi-node,$(if $(filter multi-node,$(SUITE)),multi-node,))
 
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) \
 	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 60s
 
 .PHONY: e2e
-e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all suites
-ifeq ($(SUITE),standard)
-	$(_GINKGO_RUN) --label-filter '!multi-node' --procs 4 --junit-report /tmp/e2e-report.xml ./test/e2e/...
-else ifeq ($(SUITE),multi-node)
-	$(_GINKGO_RUN) --label-filter 'multi-node' --procs 3 --junit-report /tmp/e2e-report.xml ./test/e2e/...
-else
-	$(_GINKGO_RUN) --label-filter '!multi-node' --procs 4 --junit-report /tmp/e2e-standard-report.xml ./test/e2e/...
-	$(_GINKGO_RUN) --label-filter 'multi-node' --procs 3 --junit-report /tmp/e2e-multi-node-report.xml ./test/e2e/...
-	python3 -c "import xml.etree.ElementTree as ET; r=ET.parse('/tmp/e2e-standard-report.xml').getroot(); [r.append(c) for c in ET.parse('/tmp/e2e-multi-node-report.xml').getroot()]; ET.ElementTree(r).write('/tmp/e2e-report.xml', xml_declaration=True, encoding='UTF-8')"
-endif
+e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
+	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
+		--procs 4 --junit-report /tmp/e2e-report.xml ./test/e2e/...
 
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete ## Tear down the e2e kind cluster
