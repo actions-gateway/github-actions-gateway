@@ -6,21 +6,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SecretReference is a pointer to a Kubernetes Secret with optional namespace override.
+// SecretReference is a pointer to a Kubernetes Secret.
+//
+// Cross-namespace references are not supported; Namespace must be left empty.
+// The admission webhook enforces this at create/update time. A CEL XValidation
+// rule is intentionally omitted: k8s ≤ 1.30 CEL cannot use has() on optional
+// non-pointer string fields, so the rule would fail to install on those versions.
 type SecretReference struct {
 	Name string `json:"name"`
+	// Namespace must be left empty. Cross-namespace Secret references are not
+	// supported; the referenced Secret must reside in the ActionsGateway's own
+	// namespace. This field is reserved for a future protocol extension.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 }
 
 // ProxyConfig configures the per-tenant egress proxy pool.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",message="minReplicas must not exceed maxReplicas"
 type ProxyConfig struct {
 	// +optional
 	// +kubebuilder:default=2
+	// +kubebuilder:validation:Minimum=1
 	MinReplicas *int32 `json:"minReplicas,omitempty"`
 
 	// +optional
 	// +kubebuilder:default=10
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
 	MaxReplicas *int32 `json:"maxReplicas,omitempty"`
 
 	// +optional

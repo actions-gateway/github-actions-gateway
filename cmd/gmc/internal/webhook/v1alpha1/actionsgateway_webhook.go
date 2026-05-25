@@ -72,10 +72,14 @@ type ActionsGatewayCustomValidator struct {
 	reservedNamespaces map[string]bool
 }
 
-// ValidateCreate rejects CRs created in reserved namespaces and with privileged containers.
+// ValidateCreate rejects CRs created in reserved namespaces, with a cross-namespace
+// gitHubAppRef, or with privileged containers.
 func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace)
+	}
+	if err := validateGitHubAppRef(obj); err != nil {
+		return nil, err
 	}
 	if err := validateRunnerGroups(obj); err != nil {
 		return nil, err
@@ -83,8 +87,11 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 	return nil, nil
 }
 
-// ValidateUpdate rejects updates that introduce privileged containers.
+// ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef or privileged containers.
 func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, _, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
+	if err := validateGitHubAppRef(newObj); err != nil {
+		return nil, err
+	}
 	if err := validateRunnerGroups(newObj); err != nil {
 		return nil, err
 	}
@@ -94,6 +101,18 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, _, new
 // ValidateDelete is a no-op.
 func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	return nil, nil
+}
+
+// validateGitHubAppRef rejects a non-empty gitHubAppRef.namespace. The field is
+// ignored by the Secret lookup (which always uses the CR's own namespace), but it
+// looks like a cross-namespace reference to users — a confused-deputy footgun.
+// A CEL XValidation rule is not used here because k8s ≤ 1.30 CEL cannot apply
+// has() to optional non-pointer string fields; the webhook is version-agnostic.
+func validateGitHubAppRef(ag *gmcv1alpha1.ActionsGateway) error {
+	if ag.Spec.GitHubAppRef.Namespace != "" {
+		return fmt.Errorf("gitHubAppRef.namespace is not supported; the Secret must reside in the ActionsGateway's own namespace (got %q)", ag.Spec.GitHubAppRef.Namespace)
+	}
+	return nil
 }
 
 // validateRunnerGroups rejects privileged containers in any RunnerGroup's PodTemplate.

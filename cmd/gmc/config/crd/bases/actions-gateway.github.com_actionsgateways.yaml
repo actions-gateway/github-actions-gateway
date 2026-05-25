@@ -52,12 +52,21 @@ spec:
             description: ActionsGatewaySpec is the desired state of an ActionsGateway.
             properties:
               gitHubAppRef:
-                description: SecretReference is a pointer to a Kubernetes Secret with
-                  optional namespace override.
+                description: |-
+                  SecretReference is a pointer to a Kubernetes Secret.
+
+                  Cross-namespace references are not supported; Namespace must be left empty.
+                  The admission webhook enforces this at create/update time. A CEL XValidation
+                  rule is intentionally omitted: k8s ≤ 1.30 CEL cannot use has() on optional
+                  non-pointer string fields, so the rule would fail to install on those versions.
                 properties:
                   name:
                     type: string
                   namespace:
+                    description: |-
+                      Namespace must be left empty. Cross-namespace Secret references are not
+                      supported; the referenced Secret must reside in the ActionsGateway's own
+                      namespace. This field is reserved for a future protocol extension.
                     type: string
                 required:
                 - name
@@ -80,10 +89,13 @@ spec:
                   maxReplicas:
                     default: 10
                     format: int32
+                    maximum: 100
+                    minimum: 1
                     type: integer
                   minReplicas:
                     default: 2
                     format: int32
+                    minimum: 1
                     type: integer
                   noProxyCIDRs:
                     items:
@@ -154,6 +166,10 @@ spec:
                     format: int32
                     type: integer
                 type: object
+                x-kubernetes-validations:
+                - message: minReplicas must not exceed maxReplicas
+                  rule: '!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas
+                    <= self.maxReplicas'
               runnerGroups:
                 description: RunnerGroups lists RunnerGroup specs bootstrapped in
                   the tenant namespace.
