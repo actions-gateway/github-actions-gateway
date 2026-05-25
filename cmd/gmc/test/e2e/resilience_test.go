@@ -13,7 +13,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
 )
 
-var _ = Describe("E2E_GMC_Resilience", Ordered, func() {
+var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 	const (
 		tenantNS   = "tenant-resilience"
 		agName     = "test-ag"
