@@ -1,7 +1,5 @@
 # github-actions-gateway
 
-Go module: `github.com/karlkfi/github-actions-gateway`
-
 A four-tier system for running GitHub Actions self-hosted runners in a shared Kubernetes cluster with zero idle compute. The Gateway Manager Controller (GMC) provisions isolated per-tenant gateway instances from a single `ActionsGateway` CR. Each instance is an Actions Gateway Controller (AGC) that multiplexes thousands of virtual runner sessions as goroutines — provisioning ephemeral worker pods only when a job is acquired and releasing them immediately on completion. Per-tenant egress proxy pools give each tenant isolated egress IPs for GitHub traffic. See `DESIGN.md` and `docs/design/` for full design context.
 
 ## Development philosophy
@@ -30,7 +28,8 @@ Make the smallest change that achieves the goal. If you notice problems outside 
 Always use per-module test commands — `go test ./...` from the repo root does not work (Go workspace; see `docs/development/go-workspaces.md`):
 
 ```bash
-GOWORK=off go test ./...            # root module: broker, githubapp
+(cd broker     && go test ./...)    # broker module
+(cd githubapp  && go test ./...)    # githubapp module
 (cd cmd/agc   && go test ./...)     # AGC module
 (cd cmd/gmc   && go test ./...)     # GMC module
 (cd cmd/probe && go test ./...)     # probe module
