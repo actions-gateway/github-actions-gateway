@@ -1,18 +1,12 @@
-go 1.26
+go 1.26.3
 
 use (
-	./cmd/agc        // Milestone 2
-	./cmd/gmc        // Milestone 4
-	./cmd/probe      // Milestone 1
-	./cmd/proxy      // Milestone 4
+	./broker
+	./cmd/agc // Milestone 2
+	./cmd/gmc // Milestone 4
+	./cmd/probe // Milestone 1
+	./cmd/proxy // Milestone 4
 	./cmd/worker
+	./githubapp
 	./test/fakegithub // Stub GitHub broker used by Tier B e2e tests
 )
-
-// replace is required instead of a "use ." entry because Go's workspace
-// resolver does not correctly apply longest-prefix matching when one workspace
-// module path is a strict prefix of another
-// (github.com/karlkfi/github-actions-gateway vs .../agc). With both in "use",
-// packages under .../agc/... are routed to the root module directory instead
-// of cmd/agc/. Providing the root module via replace avoids the ambiguity.
-replace github.com/karlkfi/github-actions-gateway => ./
