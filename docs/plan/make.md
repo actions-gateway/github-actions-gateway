@@ -2,9 +2,8 @@
 
 ## Status at a glance
 
-Last refreshed 2026-05-25. Phase 1 (day-one UX) has fully landed. Phase 2
-(consistency cleanup) is partially done — the image-name and envtest
-drift between root and `cmd/gmc/Makefile` remain.
+Last refreshed 2026-05-26. Phase 1 (day-one UX) has fully landed. Phase 2
+(consistency cleanup) is fully done.
 
 | # | Item | File | Status |
 |---|---|---|---|
@@ -13,23 +12,18 @@ drift between root and `cmd/gmc/Makefile` remain.
 | 1.3 | Stop swallowing `kind` errors | [Makefile](../../Makefile) | ✅ Done — no `\|\| true` remains in cluster targets |
 | 1.4 | `e2e-up` umbrella target | [Makefile](../../Makefile) | ✅ Done — `e2e-up: e2e-cluster e2e-images e2e` |
 | 1.5 | `KIND_CONFIG` default | [Makefile](../../Makefile) | ✅ Done — now `test/kind-config-2worker.yaml` |
-| 2.1 | Unify image variable names across Makefiles | [Makefile](../../Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ❌ Open — root uses `*_IMG`, GMC uses `IMG`/`AGC_IMAGE`/`PROXY_IMAGE` |
+| 2.1 | Unify image variable names across Makefiles | [Makefile](../../Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — GMC now uses `GMC_IMG`/`AGC_IMG`/`PROXY_IMG` matching root |
 | 2.2 | Consistent SHA-based image tagging | [Makefile](../../Makefile) | ✅ Done — all four images use `:e2e-$(GIT_SHA)` |
-| 2.3 | Single source of truth for `setup-envtest` | [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ❌ Open — GMC still has its own `go install ...@$(ENVTEST_VERSION)` path alongside root's `$(SETUP_ENVTEST)` |
+| 2.3 | Single source of truth for `setup-envtest` | [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — GMC delegates to root's `setup-envtest` target via `$(MAKE) -C $(REPO_ROOT) setup-envtest` |
 | 2.4 | DRY ginkgo invocations | [Makefile:141-144](../../Makefile) | ✅ Done — single `e2e` target with `SUITE=` selector replaces the three-target duplication |
 | 2.5 | Consistent build invocation style (`go -C` vs `cd &&`) | various | ⓘ Minor — no follow-up needed unless someone touches the file again |
-| 2.6 | Align `all` semantics across Makefiles | [Makefile](../../Makefile), [cmd/agc/Makefile](../../cmd/agc/Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ❌ Open — root `all: build`; agc/gmc `all: generate build test` |
-| 2.7a | `e2e-clean` actually cleans (images + `.build/`) | [Makefile](../../Makefile) | ❌ Open — still a one-line alias for `e2e-cluster-delete` |
+| 2.6 | Align `all` semantics across Makefiles | [Makefile](../../Makefile), [cmd/agc/Makefile](../../cmd/agc/Makefile), [cmd/gmc/Makefile](../../cmd/gmc/Makefile) | ✅ Done — root now has `all: generate build test` with delegating `generate` and `test` targets |
+| 2.7a | `e2e-clean` actually cleans (images + `.build/`) | [Makefile](../../Makefile) | ✅ Done — deletes cluster, registry, and `.build/` |
 | 2.7b | `make tools` prints progress | [Makefile](../../Makefile) | ⓘ Cosmetic — defer unless someone reports it |
 
-### Open work (priority order)
+### Open work
 
-1. **2.1 + 2.3** — Unify image var names *and* delete the GMC's
-   separate envtest install. These are the two real drift items between
-   the root and per-binary Makefiles. Cheap, related, land together.
-2. **2.6** — Align `all` semantics. One-line fix.
-3. **2.7a** — Make `e2e-clean` actually clean. Small.
-4. **2.5 / 2.7b** — Cosmetic; defer until next Makefile touch.
+None — all Phase 2 items are done. 2.5 and 2.7b remain cosmetic defers.
 
 ---
 

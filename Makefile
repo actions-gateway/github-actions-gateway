@@ -30,7 +30,7 @@ FAKEGITHUB_IMG ?= $(IMAGE_REGISTRY)/fakegithub:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all build build-agc build-gmc build-probe build-proxy tools setup-envtest \
+.PHONY: all generate build build-agc build-gmc build-probe build-proxy test tools setup-envtest \
         e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo
@@ -46,7 +46,12 @@ help: ## Display this help message
 ##@ Build
 
 .PHONY: all
-all: build ## Alias for `build`
+all: generate build test ## Generate, build, and test all modules
+
+.PHONY: generate
+generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods
+	$(MAKE) -C cmd/gmc generate
+	$(MAKE) -C cmd/agc generate
 
 .PHONY: build
 build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
@@ -66,6 +71,16 @@ build-probe: ## Build the probe binary
 .PHONY: build-proxy
 build-proxy: ## Build the proxy binary
 	go build -C cmd/proxy -o ../../.build/proxy .
+
+.PHONY: test
+test: ## Run unit tests for all modules (go test directly, except gmc which needs envtest)
+	cd broker     && go test ./...
+	cd githubapp  && go test ./...
+	cd cmd/agc   && go test ./...
+	$(MAKE) -C cmd/gmc test
+	cd cmd/probe && go test ./...
+	cd cmd/proxy && go test ./...
+	cd cmd/worker && go test ./...
 
 ##@ e2e
 
@@ -146,7 +161,8 @@ e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, uns
 		--procs 4 --junit-report /tmp/e2e-report.xml ./test/e2e/...
 
 .PHONY: e2e-clean
-e2e-clean: e2e-cluster-delete ## Tear down the e2e kind cluster
+e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster and registry, and delete .build/
+	rm -rf .build
 
 ##@ Tools
 
