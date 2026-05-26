@@ -405,8 +405,12 @@ func TestAGC_Reconciler_ScaleDown(t *testing.T) {
 	}, 15*time.Second, 50*time.Millisecond, "expected 5 agent Secrets before scale-down")
 
 	require.Eventually(t, func() bool {
-		return brokerStub.ActiveSessionCount() >= 1
-	}, 15*time.Second, 1*time.Millisecond, "permanent baseline session should be active")
+		var fetched v1alpha1.RunnerGroup
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "scaledown-rg"}, &fetched); err != nil {
+			return false
+		}
+		return fetched.Status.ActiveSessions >= 1
+	}, 15*time.Second, 50*time.Millisecond, "permanent baseline session should be active")
 
 	// Patch maxListeners from 5 to 2 (retry on conflict).
 	require.Eventually(t, func() bool {
@@ -432,9 +436,15 @@ func TestAGC_Reconciler_ScaleDown(t *testing.T) {
 
 	// Active session count should settle at 1 (permanent baseline only; any burst
 	// goroutines that held excess agents idle-exit at their next empty poll).
+	// Use per-RunnerGroup Status.ActiveSessions (set by the multiplexer) rather than
+	// the global broker stub counter, which can include sessions from other tests.
 	assert.Eventually(t, func() bool {
-		return brokerStub.ActiveSessionCount() == 1
-	}, 30*time.Second, 10*time.Millisecond,
+		var fetched v1alpha1.RunnerGroup
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "scaledown-rg"}, &fetched); err != nil {
+			return false
+		}
+		return fetched.Status.ActiveSessions == 1
+	}, 15*time.Second, 50*time.Millisecond,
 		"active session count should be 1 at rest after scale-down")
 
 	// Verify no goroutine leaks after stopping the manager.
