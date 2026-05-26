@@ -442,7 +442,14 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 			Replicas: ptr(int32(1)),
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
+					// Record the referenced Secret name so that kubectl rollout history
+					// shows the cause of any credential-rotation rolling update.
+					Annotations: map[string]string{
+						"actions-gateway/github-app-secret": ag.Spec.GitHubAppRef.Name,
+					},
+				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
 					SecurityContext: &corev1.PodSecurityContext{

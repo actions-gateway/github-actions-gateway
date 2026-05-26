@@ -127,12 +127,14 @@ When your GitHub App private key expires or is compromised, follow these steps t
      --type=merge -p '{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'
    ```
 
-   The GMC detects the Secret reference change and triggers a rolling update of the AGC Deployment. The new pod mounts the new Secret and immediately begins using the new credentials.
+   The GMC detects the Secret reference change, updates the AGC pod template (including an `actions-gateway/github-app-secret` annotation that records the new Secret name), and triggers a rolling update. The new pod mounts the new Secret and immediately begins using the new credentials.
 
 4. **Confirm the rollout completed:**
 
    ```sh
    kubectl rollout status deploy/actions-gateway-agc -n team-a
+   # Optionally inspect rotation history:
+   kubectl rollout history deploy/actions-gateway-agc -n team-a
    ```
 
 5. **Verify the new token is working:**
@@ -151,3 +153,9 @@ When your GitHub App private key expires or is compromised, follow these steps t
 7. **Revoke the old key** in the GitHub App settings.
 
 **Important:** Do not update the Secret in-place. The GMC watches the `gitHubAppRef.name` reference, not the Secret's contents. Changing the Secret data without changing the reference name does not trigger an AGC rollout — the AGC will continue using the cached token derived from the old key until it restarts or the token expires. Creating a new Secret and updating the reference is the correct rotation path.
+
+**If the referenced Secret is deleted before you complete the rotation**, the GMC sets a `CredentialUnavailable=True` condition on the `ActionsGateway` CR and stops reconciling child resources. Recreating the Secret (with the same name, or updating `gitHubAppRef.name`) clears the condition and resumes normal operation. To inspect the condition:
+
+```sh
+kubectl get actionsgateway -n team-a team-a-gateway -o jsonpath='{.status.conditions}' | jq .
+```

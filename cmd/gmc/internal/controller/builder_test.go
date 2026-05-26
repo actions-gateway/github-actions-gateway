@@ -110,6 +110,15 @@ func TestBuildAGCDeployment_ProxyEnv(t *testing.T) {
 	}
 }
 
+func TestBuildAGCDeployment_CredentialAnnotation(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	ann := dep.Spec.Template.Annotations
+	require.NotNil(t, ann, "pod template must have annotations")
+	assert.Equal(t, "github-app", ann["actions-gateway/github-app-secret"],
+		"pod template annotation must record the referenced Secret name for kubectl rollout history")
+}
+
 func TestBuildAGCDeployment_WorkerSA(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
