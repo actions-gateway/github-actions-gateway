@@ -5,72 +5,102 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
+	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// testPublicKeyPEM generates a 2048-bit RSA key and returns the DER-encoded
-// SubjectPublicKeyInfo wrapped in a "PUBLIC KEY" PEM block.
-func testPublicKeyPEM(t *testing.T) []byte {
+// jitFixture holds the components of a fake generate-jitconfig response.
+type jitFixture struct {
+	encodedBlob string
+	rsaKey      *rsa.PrivateKey
+	brokerURL   string
+	clientID    string
+	authURL     string
+}
+
+// newJITFixture builds a self-consistent fake JIT config blob using a fresh 2048-bit RSA key.
+func newJITFixture(t *testing.T, agentID int64) *jitFixture {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	derBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	key.Precompute()
+
+	brokerURL := "https://broker.example.com/token"
+	clientID := "client-abc"
+	authURL := "https://auth.example.com/oauth"
+
+	runnerJSON := fmt.Sprintf(`{"agentId":%d,"serverUrl":%q}`, agentID, brokerURL)
+	credJSON := fmt.Sprintf(`{"scheme":"OAuth","data":{"clientId":%q,"authorizationUrl":%q}}`, clientID, authURL)
+	rsaXML := buildRSAKeyValueXML(key)
+
+	files := map[string]string{
+		".runner":                runnerJSON,
+		".credentials":           credJSON,
+		".credentials_rsaparams": rsaXML,
+	}
+	blobBytes, err := json.Marshal(files)
 	require.NoError(t, err)
-	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: derBytes})
+
+	return &jitFixture{
+		encodedBlob: base64.StdEncoding.EncodeToString(blobBytes),
+		rsaKey:      key,
+		brokerURL:   brokerURL,
+		clientID:    clientID,
+		authURL:     authURL,
+	}
 }
 
-// newGithubAPISrv starts an httptest server that stubs the three GitHub
-// registration API endpoints in GHES URL form.
+// buildRSAKeyValueXML renders key as a .NET RSAKeyValue XML string.
+func buildRSAKeyValueXML(key *rsa.PrivateKey) string {
+	enc := base64.StdEncoding.EncodeToString
+	eBytes := big.NewInt(int64(key.E)).Bytes()
+	return fmt.Sprintf(
+		`<RSAKeyValue><Modulus>%s</Modulus><Exponent>%s</Exponent>`+
+			`<P>%s</P><Q>%s</Q><DP>%s</DP><DQ>%s</DQ>`+
+			`<InverseQ>%s</InverseQ><D>%s</D></RSAKeyValue>`,
+		enc(key.N.Bytes()),
+		enc(eBytes),
+		enc(key.Primes[0].Bytes()),
+		enc(key.Primes[1].Bytes()),
+		enc(key.Precomputed.Dp.Bytes()),
+		enc(key.Precomputed.Dq.Bytes()),
+		enc(key.Precomputed.Qinv.Bytes()),
+		enc(key.D.Bytes()),
+	)
+}
+
+// newGithubAPISrv starts an httptest server that stubs the generate-jitconfig
+// and deregistration endpoints in GHES URL form.
 //
 // resourcePath is the org or repo path segment used in the API URLs:
 //   - org-level:  "orgs/myorg"
 //   - repo-level: "repos/myorg/myrepo"
-//
-// GithubRegistrar.HTTPClient should point to srv.Client() and OrgURL should
-// be srv.URL + "/" + owner (org) or srv.URL + "/" + owner + "/" + repo.
-func newGithubAPISrv(t *testing.T, resourcePath, regToken string, agentID int64) *httptest.Server {
+func newGithubAPISrv(t *testing.T, resourcePath string, agentID int64, fixture *jitFixture) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 
-	// Step 1 — registration token (most specific path, registered first).
-	mux.HandleFunc("/api/v3/"+resourcePath+"/actions/runners/registration-token",
+	// generate-jitconfig endpoint
+	mux.HandleFunc("/api/v3/"+resourcePath+"/actions/runners/generate-jitconfig",
 		func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "registration-token must be POST")
+			assert.Equal(t, http.MethodPost, r.Method, "generate-jitconfig must be POST")
 			assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "),
-				"registration-token call must carry Bearer auth")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]string{"token": regToken})
-		})
-
-	// Step 2 — runner registration (same endpoint for org and repo).
-	mux.HandleFunc("/api/v3/actions/runners/register",
-		func(w http.ResponseWriter, r *http.Request) {
-			assert.Equal(t, http.MethodPost, r.Method, "register must be POST")
-			assert.Equal(t, "RemoteAuth "+regToken, r.Header.Get("Authorization"),
-				"register call must use RemoteAuth with the registration token")
-			var body map[string]any
-			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-			assert.NotEmpty(t, body["public_key"], "public_key field must be present")
-
+				"generate-jitconfig call must carry Bearer auth")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id": agentID,
-				"authorization": map[string]string{
-					"authorization_url": "https://auth.example.com/oauth",
-					"server_url":        "https://broker.example.com",
-					"client_id":         "client-abc",
-				},
+				"runner":             map[string]any{"id": agentID},
+				"encoded_jit_config": fixture.encodedBlob,
 			})
 		})
 
@@ -89,7 +119,8 @@ func newGithubAPISrv(t *testing.T, resourcePath, regToken string, agentID int64)
 // ── Register ──────────────────────────────────────────────────────────────────
 
 func TestGithubRegistrar_Register(t *testing.T) {
-	srv := newGithubAPISrv(t, "orgs/myorg", "reg-token-xyz", 12345)
+	fixture := newJITFixture(t, 12345)
+	srv := newGithubAPISrv(t, "orgs/myorg", 12345, fixture)
 	defer srv.Close()
 
 	r := &agentpool.GithubRegistrar{
@@ -98,21 +129,30 @@ func TestGithubRegistrar_Register(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
-		Name:         "test-runner",
-		Version:      "2.327.1",
-		Labels:       []string{"self-hosted"},
-		PublicKeyPEM: testPublicKeyPEM(t),
+		Name:    "test-runner",
+		Version: "2.327.1",
+		Labels:  []string{"self-hosted"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(12345), creds.AgentID)
-	assert.Equal(t, "client-abc", creds.ClientID)
-	assert.Equal(t, "https://auth.example.com/oauth", creds.AuthorizationURL)
-	assert.Equal(t, "https://broker.example.com", creds.BrokerURL)
+	assert.Equal(t, fixture.clientID, creds.ClientID)
+	assert.Equal(t, fixture.authURL, creds.AuthorizationURL)
+	assert.Equal(t, fixture.brokerURL, creds.BrokerURL)
+
+	// Verify the returned private key is a valid RSA key matching the fixture.
+	require.NotEmpty(t, creds.PrivateKeyPEM)
+	block, _ := pem.Decode(creds.PrivateKeyPEM)
+	require.NotNil(t, block, "PrivateKeyPEM must be valid PEM")
+	raw, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	require.NoError(t, err)
+	rsaKey, ok := raw.(*rsa.PrivateKey)
+	require.True(t, ok, "private key must be RSA")
+	assert.Equal(t, fixture.rsaKey.N, rsaKey.N, "returned key must match fixture")
 }
 
-func TestGithubRegistrar_Register_RegistrationTokenError(t *testing.T) {
+func TestGithubRegistrar_Register_JITConfigError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "registration-token") {
+		if strings.Contains(r.URL.Path, "generate-jitconfig") {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -124,23 +164,19 @@ func TestGithubRegistrar_Register_RegistrationTokenError(t *testing.T) {
 		OrgURL:     srv.URL + "/myorg",
 		HTTPClient: srv.Client(),
 	}
-	_, err := r.Register(context.Background(), "token", agentpool.RegisterParams{
-		PublicKeyPEM: testPublicKeyPEM(t),
-	})
+	_, err := r.Register(context.Background(), "token", agentpool.RegisterParams{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get registration token",
-		"error should identify the registration token step")
+	assert.Contains(t, err.Error(), "generate jit config")
 }
 
-func TestGithubRegistrar_Register_RunnerRegisterError(t *testing.T) {
+func TestGithubRegistrar_Register_InvalidBlob(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "registration-token") {
+		if strings.Contains(r.URL.Path, "generate-jitconfig") {
 			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]string{"token": "reg-token"})
-			return
-		}
-		if strings.Contains(r.URL.Path, "register") {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"runner":             map[string]any{"id": 1},
+				"encoded_jit_config": "not-valid-base64!!!",
+			})
 			return
 		}
 		t.Errorf("unexpected request to %s", r.URL.Path)
@@ -149,38 +185,12 @@ func TestGithubRegistrar_Register_RunnerRegisterError(t *testing.T) {
 
 	r := &agentpool.GithubRegistrar{
 		OrgURL:     srv.URL + "/myorg",
+		GroupID:    1,
 		HTTPClient: srv.Client(),
 	}
-	_, err := r.Register(context.Background(), "token", agentpool.RegisterParams{
-		PublicKeyPEM: testPublicKeyPEM(t),
-	})
+	_, err := r.Register(context.Background(), "token", agentpool.RegisterParams{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "register runner",
-		"error should identify the runner register step")
-}
-
-func TestGithubRegistrar_Register_InvalidPublicKey(t *testing.T) {
-	// Register fetches the registration token first, then marshals the key.
-	// Stub step 1 to succeed so we reach the key-marshalling step.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "registration-token") {
-			w.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(w).Encode(map[string]string{"token": "reg-token"})
-			return
-		}
-		t.Errorf("unexpected request to %s", r.URL.Path)
-	}))
-	defer srv.Close()
-
-	r := &agentpool.GithubRegistrar{
-		OrgURL:     srv.URL + "/myorg",
-		HTTPClient: srv.Client(),
-	}
-	_, err := r.Register(context.Background(), "token", agentpool.RegisterParams{
-		PublicKeyPEM: []byte("not a valid PEM block"),
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "marshal public key")
+	assert.Contains(t, err.Error(), "decode jit config blob")
 }
 
 // ── Deregister ────────────────────────────────────────────────────────────────
@@ -225,7 +235,8 @@ func TestGithubRegistrar_Deregister_Error(t *testing.T) {
 // ── Repo-level ────────────────────────────────────────────────────────────────
 
 func TestGithubRegistrar_Register_Repo(t *testing.T) {
-	srv := newGithubAPISrv(t, "repos/myorg/myrepo", "reg-token-repo", 99)
+	fixture := newJITFixture(t, 99)
+	srv := newGithubAPISrv(t, "repos/myorg/myrepo", 99, fixture)
 	defer srv.Close()
 
 	r := &agentpool.GithubRegistrar{
@@ -234,14 +245,14 @@ func TestGithubRegistrar_Register_Repo(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
-		Name:         "repo-runner",
-		Version:      "2.327.1",
-		Labels:       []string{"self-hosted"},
-		PublicKeyPEM: testPublicKeyPEM(t),
+		Name:    "repo-runner",
+		Version: "2.327.1",
+		Labels:  []string{"self-hosted"},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(99), creds.AgentID)
-	assert.Equal(t, "client-abc", creds.ClientID)
+	assert.Equal(t, fixture.clientID, creds.ClientID)
+	require.NotEmpty(t, creds.PrivateKeyPEM)
 }
 
 func TestGithubRegistrar_Deregister_Repo(t *testing.T) {
