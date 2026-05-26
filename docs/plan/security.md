@@ -36,7 +36,7 @@ by-design / accepted.
 |---|---|---|---|---|---|
 | **C-1** | RunnerGroup PodTemplate not validated | Critical | W2 | ✅ Done 2026-05-23 | PSA labels + CEL `XValidation` rejecting `privileged: true` |
 | **H-1** | GitHub App key in env var | High | W3 | ✅ Done 2026-05-23 | File mount at `/etc/actions-gateway/github-app/` mode `0o400` |
-| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list`/`watch` retained; Secret cache disabled as compensating control; residual accepted per D-3 |
+| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list`/`watch` retained; Secret cache disabled as compensating control; residual accepted per D-3. Note: separate from the GMC's credential Secret watch — see §GMC-1 below. |
 | **M-1** | Workers can bypass proxy to GitHub | Medium | W1 | ✅ Done 2026-05-23 | Three split NetworkPolicies (`buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`) |
 | **M-2** | Proxy has no destination allowlist | Informational | — | ⓘ By design | Appendix G §G.1 records revisit conditions |
 | **M-3** | AES-CBC padding-oracle-shaped errors | Medium | W6 | ✅ Done 2026-05-23 | Single `errInvalidPadding` sentinel + `crypto/subtle` constant-time |
@@ -301,6 +301,40 @@ by-design / accepted.
   **Decision:** accept the broad `list`/`watch` in combination with the
   cache-disable control. Revisit if a real exploit path surfaces or if
   Kubernetes adds label-selector support to `PolicyRule`.
+
+---
+
+### GMC-1. GMC credential Secret watch design
+
+- **Status: Done 2026-05-26.** Two-layer isolation in place.
+- **Context:** The GMC reconciler must detect credential Secret
+  creation/deletion to set `CredentialUnavailable` promptly. The naive
+  implementation — `Watches(&corev1.Secret{}, ...)` — establishes a full
+  Secret informer, buffering all Secret `.data` (GitHub App private keys)
+  in the controller's in-process cache indefinitely. This was briefly
+  shipped and then reverted when the security intent was confirmed.
+- **Implementation:**
+  1. **`WatchesMetadata(&corev1.Secret{}, ...)`** in
+     [actionsgateway_controller.go](../../cmd/gmc/internal/controller/actionsgateway_controller.go)
+     — registers a metadata-only informer. The cache holds only
+     `ObjectMeta` (name, namespace, resourceVersion, deletionTimestamp);
+     `.data` is never buffered. The controller gets event-driven
+     reconcilation on Secret create/delete. The GMC ClusterRole retains
+     `list`/`watch` on Secrets (required for the metadata informer).
+  2. **`client.Cache.DisableFor[*corev1.Secret]`** in
+     [cmd/gmc/cmd/main.go](../../cmd/gmc/cmd/main.go)
+     — ensures all `r.Get()` calls on Secrets bypass the cache and hit the
+     API server directly. Secret key material is never resident in the
+     in-process cache; it exists only on the call stack during a reconcile
+     and is GC'd immediately after.
+  3. `setCredentialUnavailable` also returns `RequeueAfter: 30s` as a
+     fallback for cases where a watch event is missed (e.g. controller
+     restart during Secret deletion window).
+- **Residual risk:** A compromised GMC can `list`/`watch` Secret
+  *metadata* cluster-wide (names, namespaces), which leaks tenant
+  `gitHubAppRef` names even without a matching `ActionsGateway` CR. This
+  is the same information already exposed by the CR spec itself, so it
+  adds no new attack surface. Accepted.
 
 ---
 
