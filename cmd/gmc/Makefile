@@ -64,15 +64,21 @@ docker-build: ## Build and push the GMC Docker image to the local registry
 
 ##@ Cluster dependencies
 
-.PHONY: install-cert-manager
-install-cert-manager: ## Install cert-manager into the current kube-context
+.PHONY: apply-cert-manager
+apply-cert-manager: ## Apply cert-manager manifests (pods start asynchronously)
 	kubectl apply -f $(_CERTMANAGER_URL)
+
+.PHONY: wait-cert-manager
+wait-cert-manager: ## Wait for cert-manager deployments to be Available
 	kubectl wait deployment.apps/cert-manager \
 		--for=condition=Available --namespace=cert-manager --timeout=5m
 	kubectl wait deployment.apps/cert-manager-webhook \
 		--for=condition=Available --namespace=cert-manager --timeout=5m
 	kubectl wait deployment.apps/cert-manager-cainjector \
 		--for=condition=Available --namespace=cert-manager --timeout=5m
+
+.PHONY: install-cert-manager
+install-cert-manager: apply-cert-manager wait-cert-manager ## Apply cert-manager and wait for it to be ready
 
 .PHONY: uninstall-cert-manager
 uninstall-cert-manager: ## Remove cert-manager from the current kube-context
