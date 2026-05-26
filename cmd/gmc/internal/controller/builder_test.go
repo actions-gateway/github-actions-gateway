@@ -138,6 +138,41 @@ func TestBuildProxyDeployment_CustomResources(t *testing.T) {
 	c := dep.Spec.Template.Spec.Containers[0]
 	assert.Equal(t, resource.MustParse("50m"), c.Resources.Requests[corev1.ResourceCPU])
 	assert.Equal(t, resource.MustParse("500m"), c.Resources.Limits[corev1.ResourceCPU])
+	// Memory defaults must survive a partial override (per-key merge, not replacement).
+	assert.Equal(t, resource.MustParse("32Mi"), c.Resources.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("64Mi"), c.Resources.Limits[corev1.ResourceMemory])
+}
+
+func TestBuildProxyDeployment_LimitsOnlyPreservesCPURequest(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.Proxy.Resources = corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("128Mi")},
+	}
+	dep := buildProxyDeployment(ag, "proxy:latest")
+	c := dep.Spec.Template.Spec.Containers[0]
+	// Default cpu request must be preserved — HPA needs it to compute utilization.
+	assert.Equal(t, resource.MustParse("10m"), c.Resources.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("128Mi"), c.Resources.Limits[corev1.ResourceMemory])
+}
+
+func TestBuildProxyDeployment_FullOverrideWins(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.Proxy.Resources = corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("200m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+	}
+	dep := buildProxyDeployment(ag, "proxy:latest")
+	c := dep.Spec.Template.Spec.Containers[0]
+	assert.Equal(t, resource.MustParse("200m"), c.Resources.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("256Mi"), c.Resources.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("1"), c.Resources.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("512Mi"), c.Resources.Limits[corev1.ResourceMemory])
 }
 
 func TestBuildProxyDeployment_SecurityContext(t *testing.T) {

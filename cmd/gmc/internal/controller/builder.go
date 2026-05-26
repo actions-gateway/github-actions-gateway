@@ -245,8 +245,11 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 			corev1.ResourceMemory: resource.MustParse("64Mi"),
 		},
 	}
-	if ag.Spec.Proxy.Resources.Requests != nil || ag.Spec.Proxy.Resources.Limits != nil {
-		res = ag.Spec.Proxy.Resources
+	for k, v := range ag.Spec.Proxy.Resources.Requests {
+		res.Requests[k] = v
+	}
+	for k, v := range ag.Spec.Proxy.Resources.Limits {
+		res.Limits[k] = v
 	}
 
 	false_ := false
