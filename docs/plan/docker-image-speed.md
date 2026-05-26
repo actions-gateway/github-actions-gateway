@@ -11,6 +11,9 @@ Items that were obsoleted by other decisions (§3 and §6 by workspace
 vendoring; §10 and §11 by the in-cluster registry in §13) have been removed
 from this document — see commit history for the original plans.
 
+Items deliberately not pursued are noted with the rationale so the decision
+is not revisited inadvertently.
+
 ## Status
 
 | # | Change | Status |
@@ -19,10 +22,10 @@ from this document — see commit history for the original plans.
 | 2  | Compile-cache mount | ✅ Done (lite — `/root/.cache/go-build` only; module-cache half mooted by vendoring) |
 | 4  | Drop `go work sync` no-op | ✅ Done |
 | 5  | Parallel CI builds (bake) | ✅ Done |
-| 7  | Alpine builder base | ⬜ TODO |
-| 8  | Pin bases by digest | ⬜ TODO |
-| 9  | Path-based image skip in CI | ⬜ TODO (depends on §5, now satisfied) |
-| 12 | Single-node CI cluster | ⬜ TODO (smaller benefit now §13 is in) |
+| 7  | Alpine builder base | 🚫 Not doing — musl/glibc differences introduce build complexity and a latent error risk that outweighs the 15–30 s savings. All builder stages use the standard Debian-based `golang` image. |
+| 8  | Pin bases by digest | ✅ Done — `golang:1.26`, `gcr.io/distroless/static:nonroot`, and `golang:1.24` pinned in all five Dockerfiles. `ghcr.io/actions/runner` deferred until GHCR auth is available. |
+| 9  | Path-based image skip in CI | ✅ Done — `changes` job gates the `e2e` job on e2e-relevant file changes; pushes to `main` always run. Note: bake still builds all four images (GHA layer cache makes cache-hits fast); the skip is at the job level, not per bake target, since all four images must be present in the ephemeral local registry for e2e to run. |
+| 12 | Single-node CI cluster | 🚫 Not doing — the project has committed to a multi-node e2e suite to validate multi-tenancy under realistic scheduling conditions. Splitting into single-node and multi-node suites adds CI maintenance overhead that is not justified by the 30–60 s `kind create` saving. |
 | 13 | In-cluster registry | ✅ Done |
 
 Plus, as an extra-plan change: **Go workspace vendoring** (`go work vendor`
@@ -257,42 +260,17 @@ The implementation added a `GHA_CACHE` variable that toggles the
 
 ---
 
-## 7. Switch builder base to `golang:1.26-alpine`
+## 7. Switch builder base to `golang:1.26-alpine` — **Not doing**
 
-**Estimated savings: 15–30 s on cold-cache CI runs (smaller base pull)**
-
-### Problem
-
-gmc, agc, proxy, and fakegithub all use `golang:1.26` (~800 MB). The worker
-uses `golang:1.24-alpine` (~250 MB) and builds fine. The Debian-based base is
-~500 MB heavier, and that pull happens on every cold CI runner.
-
-### Approach
-
-Switch to `golang:1.26-alpine`. The binaries are already built `CGO_ENABLED=0`
-and shipped into `gcr.io/distroless/static:nonroot`, so the builder libc
-doesn't matter.
-
-### Implementation steps
-
-1. Change `FROM golang:1.26 AS builder` to `FROM golang:1.26-alpine AS builder`
-   in each Dockerfile.
-
-2. **Verify the build still works** — alpine ships with musl and may lack
-   tools like `git` that some Go modules need at install time. With vendoring
-   in place there's no `go mod download` reaching out for tools, so this is
-   probably a no-op, but worth verifying.
-
-### Files
-
-- `cmd/gmc/Dockerfile`
-- `cmd/agc/Dockerfile`
-- `cmd/proxy/Dockerfile`
-- `test/fakegithub/Dockerfile`
+**Decision**: Alpine's musl libc introduces build-tool incompatibilities and
+a latent error surface that outweighs the 15–30 s cold-pull savings. All
+builder stages use the standard Debian-based `golang` image. The `cmd/worker`
+builder was previously on `golang:1.24-alpine` and has been updated to the
+standard `golang:1.24` as part of §8.
 
 ---
 
-## 8. Pin base images by digest
+## 8. Pin base images by digest ✓
 
 **Estimated savings: reproducibility / cache stability, not raw speed**
 
@@ -301,94 +279,66 @@ doesn't matter.
 `golang:1.26`, `gcr.io/distroless/static:nonroot`, and
 `ghcr.io/actions/runner:2.327.1` (worker base) are referenced by mutable tags.
 A registry-side tag move silently busts the layer cache for every downstream
-build. The worker Dockerfile flags this already
-([cmd/worker/Dockerfile:20-23](cmd/worker/Dockerfile)).
+build.
 
-### Approach
+### Approach (shipped)
 
-Pin each base image to its `@sha256:...` digest. `docker buildx imagetools
-inspect <image>` prints the digest; CI dependabot or renovate can keep them
-up to date.
+Each base image is now pinned to its multi-arch manifest list digest
+(`@sha256:...`) with a comment showing the inspect command to refresh it.
+Dependabot keeps these up to date automatically.
 
-### Implementation steps
-
-1. Resolve current digests:
-
-   ```sh
-   docker buildx imagetools inspect golang:1.26-alpine
-   docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-   docker buildx imagetools inspect ghcr.io/actions/runner:2.327.1
-   ```
-
-2. Update each Dockerfile's `FROM` lines to `image@sha256:...` form (keep the
-   tag as a comment for human readability).
+| Image | Pinned |
+|---|---|
+| `golang:1.26` | ✅ — all four builder stages |
+| `golang:1.24` | ✅ — worker builder stage (also switched from alpine) |
+| `gcr.io/distroless/static:nonroot` | ✅ — all four runtime stages |
+| `ghcr.io/actions/runner:2.327.1` | ⏳ — deferred; requires GHCR auth to resolve digest |
 
 ### Files
 
-- All five Dockerfiles
+- `cmd/gmc/Dockerfile`, `cmd/agc/Dockerfile`, `cmd/proxy/Dockerfile`,
+  `test/fakegithub/Dockerfile`, `cmd/worker/Dockerfile`
 
 ---
 
-## 9. Skip image rebuilds when nothing relevant changed
+## 9. Skip image rebuilds when nothing relevant changed ✓
 
-**Estimated savings: 60–120 s when CI re-runs against an unchanged tree**
+**Estimated savings: full e2e suite time on PRs that touch only unit tests,
+CI configs for other suites, scripts, etc.**
 
 ### Problem
 
-CI rebuilds all four images on every PR push, even when the change is
-docs-only or touches a different module's tests. With a root `.dockerignore`
-(§1) the build context excludes most non-build files, but Buildx still spends
-time computing the layer hash and probing the cache.
+CI ran the full e2e suite (up to 45 min) on every PR push, even when the only
+changes were unit tests, CI workflow files for other suites, or other files
+that do not affect any of the four built images.
 
-### Approach
+### Approach (shipped)
 
-Use `dorny/paths-filter` (or equivalent) to detect which Go modules changed
-and only invoke the corresponding bake targets. This is a CI-only optimisation
-that requires bake (§5) to be in place first.
+A `changes` job runs `dorny/paths-filter` before `e2e` and emits a boolean
+output `e2e` indicating whether any e2e-relevant file changed. The `e2e` job
+has `needs: [changes]` and an `if:` condition:
 
-### Implementation steps
+```
+if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push'
+```
 
-1. **Add a `changes` job** to
-   [.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml) that runs
-   `dorny/paths-filter` with filters mapping paths → image targets:
+Pushes to `main` always run. PRs that touch only CI configs for other suites,
+`.claude/`, etc. skip both bake and the full test run entirely.
 
-   ```yaml
-   - uses: dorny/paths-filter@v3
-     id: filter
-     with:
-       filters: |
-         gmc:
-           - 'cmd/gmc/**'
-           - 'go.work*'
-           - 'broker/**'
-           - 'githubapp/**'
-         agc:
-           - 'cmd/agc/**'
-           - 'go.work*'
-           - 'broker/**'
-           - 'githubapp/**'
-         proxy:
-           - 'cmd/proxy/**'
-         fakegithub:
-           - 'test/fakegithub/**'
-   ```
+**Why not per-bake-target skipping?** The local registry (`localhost:5000`) is
+ephemeral — created fresh each run. All four images must be present for e2e to
+run, so skipping a specific bake target would leave the registry incomplete.
+The GHA layer cache (`type=gha,mode=max`) already makes cache-hit builds fast
+(~15 s across all four in parallel), so the marginal gain from per-target
+skipping is small compared to skipping the entire 10–45 min test suite.
 
-2. **Conditionally invoke bake** with only the changed targets, falling back
-   to all targets when the filter detects a workspace-wide change.
-
-3. **Always run the e2e tests** — only the image build phase is skippable;
-   tests must still execute against the cached images.
-
-### Risks
-
-- Cache misses if a previous run for the same branch didn't produce an image
-  (e.g. first run). Mitigate by always building if `cache-from` reports no hit.
-- False negatives if the path filter doesn't list a dependency. Keep the filter
-  permissive (workspace files always trigger all builds).
+**Required-status-checks note**: if `e2e` is a required branch-protection
+check, enable "Allow required status checks to pass when skipped" in the
+repo's branch protection settings so that skipped runs count as passing.
 
 ### Files
 
-- `.github/workflows/e2e-test.yml` — add `changes` job and condition bake step
+- [.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml) — `changes` job + `if:` on `e2e` job
 
 ---
 
@@ -423,71 +373,19 @@ Three structural CI penalties on top of that:
    `NoSchedule`, but `kind load docker-image` still pushed every image into
    it, doubling the work in the 2-node config.
 
-§13 (in-cluster registry) replaced all of this. §12 (single-node CI cluster)
-remains relevant as a smaller follow-up for cluster-create overhead.
+§13 (in-cluster registry) replaced all of this.
 
 ---
 
-## 12. Single-node CI cluster
+## 12. Single-node CI cluster — **Not doing**
 
-**Estimated savings: ~30–60 s on cluster create**
-
-### Problem
-
-[test/kind-config-ci.yaml](test/kind-config-ci.yaml) provisions 1 control-plane
-+ 1 worker. The control-plane already runs every system addon (cert-manager,
-metrics-server, GMC) and the worker only exists to run tenant workloads. A
-single-node cluster (control-plane only, with the `NoSchedule` taint removed)
-runs everything on one kubelet, eliminating cross-node scheduling and one
-node-startup wait during `kind create`.
-
-§13 already removed the per-node image-load penalty that was the bigger
-motivator for this change; what remains is just the cluster-create overhead.
-
-### Approach
-
-Switch [test/kind-config-ci.yaml](test/kind-config-ci.yaml) to a single
-control-plane node and remove the `NoSchedule` taint via the kind config's
-`kubeadmConfigPatches`.
-
-### Implementation steps
-
-1. **Replace [test/kind-config-ci.yaml](test/kind-config-ci.yaml)**:
-
-   ```yaml
-   kind: Cluster
-   apiVersion: kind.x-k8s.io/v1alpha4
-   nodes:
-     - role: control-plane
-       kubeadmConfigPatches:
-         - |
-           kind: InitConfiguration
-           nodeRegistration:
-             taints: []
-   ```
-
-   Setting `taints: []` clears the default `node-role.kubernetes.io/control-plane:NoSchedule`
-   taint so tenant pods schedule on the control-plane.
-
-2. **Skip-verify the worker-required tests** — the only e2e test that requires
-   a distinct worker node is `E2E_GMC_ProxyPodScheduledOnWorker`, already
-   tagged `local-only` and excluded from CI. Confirm no other test asserts on
-   node count.
-
-3. **Local-dev compatibility**: keep [test/kind-config.yaml](test/kind-config.yaml)
-   (3-node) as the local default; only CI switches to the single-node config.
-
-### Risks
-
-- Single-node clusters are denser than 2-node; if CI runner memory becomes
-  the bottleneck this could surface as OOMKills. Monitor the first few runs.
-- Some Kubernetes default behaviour differs when the control-plane is also a
-  worker (e.g. `NoSchedule` removal also affects DaemonSet scheduling, which
-  is desirable here but worth verifying).
-
-### Files
-
-- `test/kind-config-ci.yaml`
+**Decision**: The project has consolidated on a multi-node e2e suite (1
+control-plane + 1 worker) to validate multi-tenancy under realistic scheduling
+conditions — including the `E2E_GMC_ProxyPodScheduledOnWorker` assertion.
+Shrinking to a single-node cluster would require either splitting the suite or
+removing that coverage. Splitting into single-node and multi-node suites adds
+CI maintenance overhead that is not justified by the 30–60 s `kind create`
+saving.
 
 ---
 
@@ -532,7 +430,9 @@ can't serve a stale image across cluster reuse.
 
 ---
 
-## Recommended implementation order
+## Final status
+
+All planned improvements are either shipped or explicitly closed.
 
 | # | Status | Notes |
 |---|---|---|
@@ -542,12 +442,7 @@ can't serve a stale image across cluster reuse.
 | Workspace vendoring | ✅ Done | Subsumed §3, §6, and §2's module-cache half |
 | 2 — compile-cache mount | ✅ Done | Lite version (build cache only) |
 | 5 — parallel buildx bake | ✅ Done | Observed ~2:15 saved on the standard e2e job |
-| 7 — alpine builder base | ⬜ TODO | 15 min effort; 15–30 s on cold CI |
-| 8 — pin bases by digest | ⬜ TODO | Reproducibility / cache stability |
-| 9 — path-based image skip | ⬜ TODO | Now that §5 is in, this is the biggest remaining CI win (60–120 s on path-targeted PRs) |
-| 12 — single-node CI cluster | ⬜ TODO | Reduced value after §13 (~30–60 s on `kind create` only) |
-
-The bulk of the planned savings have shipped. What remains: §9 is the biggest
-remaining CI improvement (path-based image skip on top of bake); §7 and §8
-are 15–30 minute follow-ups; §12 is optional now that image loading isn't
-on the critical path.
+| 7 — alpine builder base | 🚫 Not doing | Complexity/error risk exceeds 15–30 s savings |
+| 8 — pin bases by digest | ✅ Done | `golang:1.26`, `distroless`, `golang:1.24` pinned; runner image deferred |
+| 9 — path-based e2e skip | ✅ Done | `changes` job gates full e2e suite on PR; pushes to main always run |
+| 12 — single-node CI cluster | 🚫 Not doing | Committed to multi-node suite for realistic multi-tenancy validation |

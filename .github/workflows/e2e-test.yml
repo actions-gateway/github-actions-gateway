@@ -10,7 +10,38 @@ on:
       - 'docs/**'
 
 jobs:
+  # Detect which files changed so the e2e job can be skipped on PRs that
+  # touch only CI configs for other suites, .claude/, etc.  Pushes to main
+  # always run regardless of this filter.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            e2e:
+              - 'cmd/**'
+              - 'broker/**'
+              - 'githubapp/**'
+              - 'test/**'
+              - 'vendor/**'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'scripts/**'
+              - 'Makefile'
+              - 'docker-bake.hcl'
+              - '.github/workflows/e2e-test.yml'
+
   e2e:
+    needs: [changes]
+    # Always run on push to main; skip on PRs where no e2e-relevant files changed.
+    if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
