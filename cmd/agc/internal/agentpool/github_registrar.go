@@ -143,29 +143,51 @@ func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, 
 		return nil, fmt.Errorf("decode jit config blob: %w", err)
 	}
 
+	// The outer blob is a JSON object; each value is the base64-encoded
+	// content of the corresponding runner config file.
 	var files map[string]string
 	if err := json.Unmarshal(decoded, &files); err != nil {
 		return nil, fmt.Errorf("unmarshal jit config blob: %w", err)
 	}
 
+	decodeFile := func(key string) ([]byte, error) {
+		b, err := base64.StdEncoding.DecodeString(files[key])
+		if err != nil {
+			return nil, fmt.Errorf("decode %s: %w", key, err)
+		}
+		return b, nil
+	}
+
+	runnerFileBytes, err := decodeFile(".runner")
+	if err != nil {
+		return nil, err
+	}
 	var runnerCfg struct {
 		ServerURL string `json:"serverUrl"`
 	}
-	if err := json.Unmarshal([]byte(files[".runner"]), &runnerCfg); err != nil {
+	if err := json.Unmarshal(runnerFileBytes, &runnerCfg); err != nil {
 		return nil, fmt.Errorf("parse .runner config: %w", err)
 	}
 
+	credFileBytes, err := decodeFile(".credentials")
+	if err != nil {
+		return nil, err
+	}
 	var credCfg struct {
 		Data struct {
 			ClientID         string `json:"clientId"`
 			AuthorizationURL string `json:"authorizationUrl"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(files[".credentials"]), &credCfg); err != nil {
+	if err := json.Unmarshal(credFileBytes, &credCfg); err != nil {
 		return nil, fmt.Errorf("parse .credentials config: %w", err)
 	}
 
-	privKey, err := parseRSAParamsXML(files[".credentials_rsaparams"])
+	rsaParamsBytes, err := decodeFile(".credentials_rsaparams")
+	if err != nil {
+		return nil, err
+	}
+	privKey, err := parseRSAParamsXML(string(rsaParamsBytes))
 	if err != nil {
 		return nil, fmt.Errorf("parse RSA params: %w", err)
 	}
