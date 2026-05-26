@@ -4,6 +4,38 @@
 
 ---
 
+## Status at a glance
+
+Last refreshed 2026-05-25. The provisioner, decryption, ceiling
+enforcement, eviction retry, GC, and RBAC are all in code. What remains
+is a real end-to-end run that proves the Named Pipe handoff against a
+live `Runner.Worker` binary.
+
+| Success criterion | Status | Notes |
+|---|---|---|
+| Real workflow job completes with green checkmark | ❌ Open | No live end-to-end run yet; gated on Investigation A |
+| `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
+| Worker container exits 0 on success, non-zero on failure | ⚠️ Unverified | Wrapper code forwards exit codes ([worker/main.go:99-107](../../cmd/worker/main.go)) but not exercised end-to-end |
+| Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
+| `maxWorkers` ceiling enforced | ✅ Done | `activePodCount` check at [provisioner.go:335](../../cmd/agc/internal/provisioner/provisioner.go) |
+| `priorityTiers` ceiling + PriorityClass assignment | ✅ Done | Tier walk in provisioner pod builder |
+| Eviction auto-retry up to `maxEvictionRetries` | ✅ Done | `handleEviction` + `rerunFailedJobs` at [provisioner.go:210-276](../../cmd/agc/internal/provisioner/provisioner.go) |
+| Retry budget exhausted → no rerun, exhausted metric | ✅ Done | Counter check at line 218; `actions_gateway_eviction_retries_exhausted_total` |
+| Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](../../cmd/agc/internal/listener/goroutine.go)) |
+| Investigation A — Named Pipe protocol documented (§11.A) | ⚠️ Partial | Code in [worker/main.go](../../cmd/worker/main.go) infers a 4-byte-length-prefix + JSON protocol from runner source; §11.A still says "Source: TBD / Findings: TBD"; needs live validation against `Runner.Worker` |
+| Investigation B — Worker image source documented (§11.B) | ⚠️ Partial | Dockerfile pins `ghcr.io/actions/runner:2.327.1`; §11.B still says "TBD" |
+| RBAC markers regenerated and committed | ✅ Done | Pod + Secret markers in [controller/doc.go](../../cmd/agc/internal/controller/doc.go) |
+
+### Critical path
+
+The Named Pipe protocol (Investigation A) is the only structural unknown.
+The wrapper code in `cmd/worker/main.go` reflects a best-guess
+implementation; until validated against a live `Runner.Worker` binary,
+the green-checkmark criterion is unreachable. Everything else is in code
+and ready to be exercised once the pipe handoff is confirmed.
+
+---
+
 ## Overview
 
 **Goal:** Replace the M2 stub job handler with a real pod provisioner, build the worker container image and entrypoint wrapper, and wire the full `AcquireJob` → pod-create → pipe handoff → garbage-collection sequence so that a real GitHub workflow job executes end-to-end inside a Kubernetes pod.

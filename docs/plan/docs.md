@@ -1,5 +1,43 @@
 # Documentation Plan
 
+## Status at a glance
+
+Last refreshed 2026-05-25. Most of Phase 1 and Phase 3 has shipped; a
+handful of small Phase 2 cross-references remain.
+
+| # | Item | File | Status |
+|---|---|---|---|
+| 1.1 | Troubleshooting guide | [docs/operations/troubleshooting.md](../operations/troubleshooting.md) | ✅ Done |
+| 1.2 | Production runbook | [docs/operations/runbook.md](../operations/runbook.md) | ✅ Done |
+| 1.3 | Upgrade and rollback | [docs/operations/upgrade.md](../operations/upgrade.md) | ✅ Done |
+| 2.1 | Fix `maxEvictionRetries` inconsistency | `docs/design/03-api-contracts.md §3.1` | ✅ Done — fields now in CRD spec (lines 364, 382) |
+| 2.2 | Failure paths in operational flows | `docs/design/04-operational-flows.md §4.3` | ✅ Done — provisioning failure, broker error, eviction retry sections added |
+| 2.3 | Worked examples in capacity-planning appendix | `docs/design/appendix-e-capacity-planning.md` | ❌ Open — no example scenarios present |
+| 2.4 | Expand observability.md (alerts, symptoms, cardinality, ServiceMonitor) | [docs/operations/observability.md](../operations/observability.md) | ✅ Done |
+| 2.5 | Credential rotation in getting-started | `docs/getting-started.md:101` | ✅ Done |
+| 2.6 | `DefaultWorkerImage` note in API contracts | `docs/design/03-api-contracts.md` | ❌ Open — constant not mentioned |
+| 2.7 | HPA silent-failure callout on ProxyConfig | `docs/design/03-api-contracts.md` | ❌ Open — `requests.cpu`-required note missing from `ProxyConfig` |
+| 2.8 | Reading-path guide in design README | `docs/design/README.md` | ✅ Done |
+| 3.1 | Network architecture doc | [docs/design/network-architecture.md](../design/network-architecture.md) | ✅ Done |
+| 3.2 | Alerting and dashboards doc | `docs/operations/alerting.md` | ❌ Open — file does not exist |
+| 3.3 | Tenant onboarding checklist | [docs/operations/tenant-onboarding.md](../operations/tenant-onboarding.md) | ✅ Done |
+| 3.4 | Cost modeling appendix | [docs/design/appendix-f-cost-model.md](../design/appendix-f-cost-model.md) | ✅ Done |
+| X | Token-refresh alerting threshold cross-link | `docs/design/07-test-plan.md §7.1` | ✅ Done |
+| X | Appendices C, E in design README TOC | `docs/design/README.md` | ✅ Done |
+| X | `observability.md` linked from design README | `docs/design/README.md` | ✅ Done |
+| X | `getting-started.md` linked from design README | `docs/design/README.md` | ✅ Done |
+
+### Open work (priority order)
+
+1. **2.7** — HPA silent-failure callout. Highest operator-safety value
+   for a one-paragraph change.
+2. **2.6** — `DefaultWorkerImage` discoverability. Small.
+3. **2.3** — Capacity-planning worked examples. Medium effort.
+4. **3.2** — Alerting/dashboards reference. Largest remaining item;
+   defer until a real Prometheus setup exists to source from.
+
+---
+
 ## Current state
 
 The design doc suite (16 files) covers architecture, API contracts, security, testing, and implementation planning well. Critical gaps are in production operations: there is no troubleshooting guide, no production runbook, and no upgrade/disaster recovery procedures. Several existing docs have incomplete failure-path coverage and lack worked examples. A handful of cross-reference and API contract inconsistencies need to be resolved before the system goes into production use.

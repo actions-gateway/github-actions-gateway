@@ -25,10 +25,74 @@ controls are warranted.
 
 ---
 
+## Status at a glance
+
+Last refreshed 2026-05-25. Authoritative state for each finding lives in
+its own section below — this table is the index. Status legend:
+✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ informational /
+by-design / accepted.
+
+| ID | Finding | Severity | Workstream | Status | Notes |
+|---|---|---|---|---|---|
+| **C-1** | RunnerGroup PodTemplate not validated | Critical | W2 | ✅ Done 2026-05-23 | PSA labels + CEL `XValidation` rejecting `privileged: true` |
+| **H-1** | GitHub App key in env var | High | W3 | ✅ Done 2026-05-23 | File mount at `/etc/actions-gateway/github-app/` mode `0o400` |
+| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list`/`watch` retained; Secret cache disabled as compensating control; residual accepted per D-3 |
+| **M-1** | Workers can bypass proxy to GitHub | Medium | W1 | ✅ Done 2026-05-23 | Three split NetworkPolicies (`buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`) |
+| **M-2** | Proxy has no destination allowlist | Informational | — | ⓘ By design | Appendix G §G.1 records revisit conditions |
+| **M-3** | AES-CBC padding-oracle-shaped errors | Medium | W6 | ✅ Done 2026-05-23 | Single `errInvalidPadding` sentinel + `crypto/subtle` constant-time |
+| **M-4** | `rerun-failed-jobs` URL injection | Medium | W6 | ✅ Done 2026-05-23 | `repoSegmentRE` + `neturl.PathEscape` |
+| **M-5** | AGC→proxy plaintext HTTP | Medium | W7 | ✅ Done 2026-05-23 | GMC self-signed cert + AGC pinning |
+| **M-6** | Broker URLs built via string concat | Medium | W6 | ✅ Done 2026-05-23 | `url.Parse` + `url.Values` in `GetMessage`/`DeleteSession` |
+| **M-7** | AGC Deployment lacks SecurityContext | Medium | W8 | ✅ Done 2026-05-23 | `RunAsNonRoot`/`ReadOnlyRoot`/`Caps Drop ALL`/`SeccompRuntimeDefault` on AGC + proxy |
+| **M-8** | NetworkPolicy ingress too permissive | Medium | W1 | ✅ Done 2026-05-23 | Proxy ingress restricted to `labelComponent: componentWorkload` |
+| **M-9** | IPRangeReconciler drops proxy egress rule | Medium | W1 | ✅ Done 2026-05-23 | `patchNetworkPolicy` only touches `npProxyName` |
+| **M-10** | Webhook only validates namespace | Medium | — | ✅ Done 2026-05-25 | CEL for `proxy.{min,max}Replicas`; webhook for `gitHubAppRef.namespace` |
+| **M-11a** | Agent RSA-2048 keys | Medium | W9 | ✅ Done 2026-05-23 | EdDSA/RSA signing branches |
+| **M-11b** | Real-GitHub Ed25519 compatibility probe | Medium | W9 | ❌ Open | Needs probe flag extensions + manual run with real credentials |
+| **M-11c** | Default to RSA-3072 | Medium | W9 | ✅ Done 2026-05-23 | RSA-3072 default; Ed25519 opt-in via `--agent-key-type=ed25519` |
+| **M-12** | Proxy 502 leaks dial errors | Medium | — | ✅ Done | Generic `"upstream unavailable"`; dial error logged server-side |
+| **M-13** | Verbose broker error bodies | Medium | — | ✅ Done | `capBody(b, 200)` throughout broker client |
+| **M-14** | GMC forwards `AGC_EXTRA_*` cluster-wide | Medium | W5 | ✅ Done 2026-05-23 | `--allow-agc-extra-env`, default `false` (Option A, D-1 resolved) |
+| **M-15** | `MaxWorkers` TOCTOU race | Medium | — | ⓘ Accepted | Soft ceiling per D-6; ResourceQuota is the hard cap |
+| **M-16** | `safeName` collision risk | Medium | — | ✅ Done 2026-05-25 | Hash suffix in both `safeName` and `labelSafe` |
+| **L-1** | JWT `iat` without `jti` | Informational | — | ✅ Done | `ID: newUUID()` sets `jti` |
+| **L-2** | `http.DefaultClient` has no timeout | Low | — | ✅ Done | 60s timeout client injected into broker, registrar, IP-range fetcher |
+| **L-3** | `math/rand` for jitter | Informational | — | ✅ Done | `//nolint:gosec // jitter, not crypto` |
+| **L-4** | `isUnauthorized` substring match | Low | — | ✅ Done 2026-05-24 | Typed `*UnauthorizedError`; substring fallbacks removed |
+| **L-5** | PEM parser asymmetry | Informational | — | ✅ Done 2026-05-23 | Unified PKCS#1+PKCS#8 parsing (via W9) |
+| **L-6** | `mustEnv` calls `os.Exit` | Informational | — | ✅ Done | All three return errors |
+| **L-7** | Stub URLs default to `stub.example.com` | Informational | — | ✅ Done | Both stub URLs required together when `GITHUB_ORG_URL` unset |
+
+### Open work
+
+- **M-11b** — Live Ed25519 probe. Does not affect the RSA-3072 default;
+  gates only operator documentation for the `--agent-key-type=ed25519`
+  opt-in.
+- **Phase 1 live validation** — `kind` end-to-end checks (worker pod
+  can't reach GitHub directly; AGC has no `GITHUB_APP_*` env;
+  SA-scoped Secret access enumeration). Tracked under Milestone 4
+  manual verification.
+
+### Out of scope, flagged separately
+
+- Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.
+- Explicit `imagePullPolicy` on worker pods.
+
+---
+
 ## Critical
 
 ### C-1. RunnerGroup `PodTemplate` is not validated; tenant can ship privileged worker pods
 
+- **Status (2026-05-23): Done.** Closed by W2. `SecurityProfile` enum on
+  `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in
+  [actionsgateway_controller.go:509](../../cmd/gmc/internal/controller/actionsgateway_controller.go)
+  stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the
+  tenant namespace at every reconcile. The in-tree PodSecurity admission
+  plugin rejects any worker pod that violates the profile, including pods
+  built by the AGC from a tenant's PodTemplate. A CEL `XValidation` on
+  `RunnerGroupSpec.PodTemplate` also rejects `privileged: true` at
+  `kubectl apply` time for the kinder failure path (per D-7).
 - **Location:**
   [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](../../cmd/agc/api/v1alpha1/runnergroup_types.go),
   [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go),
@@ -124,6 +188,13 @@ controls are warranted.
 
 ### H-1. GitHub App private key injected into AGC pod as an environment variable
 
+- **Status (2026-05-23): Done.** Closed by W3. `buildAGCDeployment` mounts
+  the `gitHubAppRef` Secret as a volume at `/etc/actions-gateway/github-app/`
+  with mode `0o400`
+  ([builder.go:33,450,481](../../cmd/gmc/internal/controller/builder.go)).
+  `cmd/agc/main.go:91-111` reads `appId`, `installationId`, and `privateKey`
+  from files. The three `GITHUB_APP_*` env-var entries are gone; `kubectl
+  describe pod` no longer shows the key bytes.
 - **Location:**
   [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go),
   [cmd/agc/main.go:42-55](../../cmd/agc/main.go)
@@ -237,6 +308,14 @@ controls are warranted.
 
 ### M-1. NetworkPolicy permits worker pods to egress directly to GitHub, bypassing the proxy
 
+- **Status (2026-05-23): Done.** Closed by W1. The single empty-selector
+  NetworkPolicy was replaced with three `podSelector`-scoped policies:
+  `buildProxyNetworkPolicy` (proxy pods → DNS + GitHub CIDRs:443),
+  `buildWorkloadNetworkPolicy` (AGC + worker pods → DNS + proxy ClusterIP:proxyPort only),
+  and `buildAGCNetworkPolicy` (AGC additive: also reaches k8s API on 443).
+  Workers are now selected only by the workload policy and cannot egress
+  directly to GitHub
+  ([builder.go:112-223](../../cmd/gmc/internal/controller/builder.go)).
 - **Location:** [cmd/gmc/internal/controller/builder.go:103-151](../../cmd/gmc/internal/controller/builder.go)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Why Medium:** Listed here as a security finding because the gap
@@ -294,6 +373,12 @@ controls are warranted.
 
 ### M-3. AES-CBC unpadding has padding-oracle-shaped error returns
 
+- **Status (2026-05-23): Done.** Closed by W6. `pkcs7Unpad` in
+  [broker/crypto.go:84](../../broker/crypto.go) now returns a single
+  `errInvalidPadding` sentinel for every malformed input (empty, bad
+  length, wrong byte). The byte comparison runs in constant time via
+  `crypto/subtle`. The oracle shape is eliminated regardless of how the
+  error is surfaced.
 - **Location:** [broker/crypto.go:75-89](../../broker/crypto.go)
 - **Category:** OWASP A02:2025 — Cryptographic Failures
 - **Why Medium:** The vulnerability *class* is critical, but the only
@@ -324,6 +409,13 @@ controls are warranted.
 
 ### M-4. `rerun-failed-jobs` URL built from job payload values without validation
 
+- **Status (2026-05-23): Done.** Closed by W6. `rerunFailedJobs` at
+  [provisioner.go:250-276](../../cmd/agc/internal/provisioner/provisioner.go)
+  rejects any `owner`/`repo` not matching `repoSegmentRE` (line 526:
+  `^[A-Za-z0-9][A-Za-z0-9._-]*$`) before building the URL, and wraps each
+  segment in `neturl.PathEscape`. A unit test feeds adversarial
+  `system.github.repository` values and asserts the call is rejected
+  pre-HTTP.
 - **Location:** [cmd/agc/internal/provisioner/provisioner.go:248-293](../../cmd/agc/internal/provisioner/provisioner.go)
 - **Category:** OWASP A03:2025 — Injection (URL/path injection)
 - **Why Medium:** The `owner`/`repo` inputs come from the AcquireJob response
@@ -367,6 +459,12 @@ controls are warranted.
 
 ### M-6. Broker URLs built with raw string concatenation
 
+- **Status (2026-05-23): Done.** Closed by W6. Both `GetMessage`
+  ([broker/client.go:293](../../broker/client.go)) and `DeleteSession`
+  (line 313) build URLs through `net/url` — `url.Parse` for the base,
+  `url.Values` for query parameters, `RawQuery = q.Encode()` to attach
+  them. A future operator-controlled value for `RunnerVersion`/etc.
+  cannot smuggle a query parameter.
 - **Location:** [broker/client.go:262-313](../../broker/client.go) (`GetMessage`),
   [broker/client.go:417-444](../../broker/client.go) (`DeleteSession`)
 - **Category:** OWASP A03:2025 — Injection (URL injection)
@@ -392,6 +490,13 @@ controls are warranted.
 
 ### M-7. AGC Deployment lacks SecurityContext
 
+- **Status (2026-05-23): Done.** Closed by W8. `buildAGCDeployment` now
+  sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`,
+  `AllowPrivilegeEscalation: false`, `Capabilities.Drop: ALL`, and
+  `SeccompProfile: RuntimeDefault` on the AGC container
+  ([builder.go:492-497](../../cmd/gmc/internal/controller/builder.go)).
+  The same hardening was applied to the proxy container (line 323-327)
+  alongside `Capabilities`/`SeccompProfile` that were missing there.
 - **Location:** [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** `buildAGCDeployment` sets no `securityContext` on the AGC
@@ -414,6 +519,11 @@ controls are warranted.
 
 ### M-8. NetworkPolicy ingress to proxy and AGC is overly permissive
 
+- **Status (2026-05-23): Done.** Closed by W1. The proxy NetworkPolicy now
+  selects only proxy pods, and its single ingress rule restricts inbound to
+  pods carrying `labelComponent: componentWorkload` on `proxyPort`
+  ([builder.go:138-146](../../cmd/gmc/internal/controller/builder.go)).
+  Dev/debug pods in the namespace can no longer reach the proxy or AGC.
 - **Location:** [cmd/gmc/internal/controller/builder.go:137-139](../../cmd/gmc/internal/controller/builder.go)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** `proxyIngress` allows traffic from any pod in the
@@ -427,6 +537,12 @@ controls are warranted.
 
 ### M-9. `IPRangeReconciler` drops worker→proxy egress rule on every refresh
 
+- **Status (2026-05-23): Done.** Closed by W1. `patchNetworkPolicy` now
+  only refreshes the proxy NetworkPolicy (`npProxyName`); the workload
+  policy carrying the worker→proxy egress rule is left untouched
+  ([ipranges.go:193-204](../../cmd/gmc/internal/controller/ipranges.go)).
+  The separation of policies makes the previous code-path conflation
+  impossible by construction.
 - **Location:** [cmd/gmc/internal/controller/ipranges.go:162-173](../../cmd/gmc/internal/controller/ipranges.go)
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** `patchNetworkPolicy` calls
@@ -510,6 +626,15 @@ controls are warranted.
 
 ### M-14. GMC forwards `AGC_EXTRA_*` env vars to every tenant AGC
 
+- **Status (2026-05-23): Done (Option A).** Closed by W5. The forwarding
+  loop is now gated by `--allow-agc-extra-env`, default `false`
+  ([cmd/gmc/cmd/main.go:75-77,199-217](../../cmd/gmc/cmd/main.go)).
+  Production GMC deployments omit the flag, so a misconfigured
+  `AGC_EXTRA_*` env var on the GMC pod is silently dropped. Test rigs
+  patch the flag on (`e2e_suite_test.go:155-177`). Option B (typed
+  per-tenant CR field) deferred to a future change if a real production
+  use case for per-tenant endpoint overrides surfaces; D-1 resolved
+  in favor of Option A for v1.
 - **Location:** [cmd/gmc/cmd/main.go:191-206](../../cmd/gmc/cmd/main.go)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** Any env var prefixed `AGC_EXTRA_` on the GMC pod is
@@ -705,7 +830,7 @@ assumption but should be confirmed).
 
 | ID | Decision | Affects | Status | Default if undecided |
 |---|---|---|---|---|
-| D-1 | M-14: Option A (flag-gate `AGC_EXTRA_*`) vs Option B (typed `endpointOverrides` CR field) | W5 | **Blocks W5** | — must pick |
+| D-1 | M-14: Option A (flag-gate `AGC_EXTRA_*`) vs Option B (typed `endpointOverrides` CR field) | W5 | **Resolved (2026-05-23)** | Option A shipped — `--allow-agc-extra-env`, default `false`. Option B deferred until a real production use case appears. |
 | D-2 | Does `restricted` profile actually work with `ghcr.io/actions/runner`? Verify, or drop `restricted` from v1 | W2 | **Resolved (2026-05-23)** | `restricted` confirmed compatible; keep enum value; require `runAsUser: 1001` in PodTemplate |
 | D-3 | W4 residual broad `secrets.create` — accept, or invest in per-job Secret alternative | W4 | Default if undecided | Accept with a code comment; revisit when a real exploit path is found |
 | D-4 | W7 cert source: cert-manager required, cert-manager opt-out, or GMC-managed self-signed cert with AGC pinning | W7 | Default if undecided | **GMC self-signed cert + AGC pinning** (no cert-manager dependency, secure by default) |
@@ -716,11 +841,14 @@ assumption but should be confirmed).
 
 **Detail on each:**
 
-- **D-1 (blocks W5):** Option A is ~10 LoC + a flag. Option B is a CRD
-  field + reconciler change + e2e fixture migration. Option B is the
-  cleaner long-term shape (typed, per-tenant, visible in the CR);
-  Option A is the lowest-churn fix for the immediate misconfiguration
-  risk.
+- **D-1 (resolved 2026-05-23):** Option A shipped — `--allow-agc-extra-env`
+  flag on the GMC, default `false`. The forwarding loop only runs when
+  the flag is set, so production deployments cannot accidentally redirect
+  tenant AGC traffic via a single misconfigured env var on the GMC pod.
+  Option B (typed `endpointOverrides` CR field) remains available as a
+  future change if per-tenant endpoint overrides become a real
+  requirement; it would replace the flag-gated mechanism rather than
+  extend it.
 
 - **D-2 (resolved 2026-05-23):** Probe run against
   `ghcr.io/actions/actions-runner:latest` (v2.334.0) on a
@@ -834,92 +962,77 @@ assumption but should be confirmed).
   Option-B-shaped). If multiple contributors, W1/W2 sequencing is the
   only constraint.
 
-### Phase 1 — Required for next release
+### Phase 1 — Required for next release — **Done (2026-05-23)**
 
-Closes the only privilege-escalation surface (C-1) and the two
-single-tenant credential-exposure weakenings (H-1, H-2), plus the
-documented-contract gap that the worker-egress plan covers (M-1, M-8,
-M-9).
+Closes the only privilege-escalation surface (C-1), the two single-tenant
+credential-exposure weakenings (H-1, H-2 — H-2 accepted with compensating
+controls), and the documented-contract gap that the worker-egress plan
+covers (M-1, M-8, M-9). W4 is the only Phase 1 workstream still carrying
+residual risk; see the inline status block below.
 
-#### W1 — NetworkPolicy split (closes M-1, M-8, M-9)
+#### W1 — NetworkPolicy split (closes M-1, M-8, M-9) — **Done (2026-05-23, commit `4932ce7`)**
 
 See [docs/plan/worker-egress-proxy.md](worker-egress-proxy.md) for the
-full rationale and acceptance criteria.
+full rationale.
 
-- **Files:**
-  - `cmd/gmc/internal/controller/builder.go` — replace
-    `buildNetworkPolicy` with `buildProxyNetworkPolicy` + `buildAGCWorkerNetworkPolicy`,
-    each `podSelector`-scoped.
-  - `cmd/gmc/internal/controller/ipranges.go` — `patchNetworkPolicy`
-    must look up the proxy ClusterIP (or only modify the
-    GitHub-CIDR-bearing rule) so the AGC/worker→proxy egress rule is
-    preserved across refreshes.
+- **What shipped:**
+  - `cmd/gmc/internal/controller/builder.go` — replaced the single
+    empty-selector `buildNetworkPolicy` with three policies:
+    `buildProxyNetworkPolicy` (proxy → DNS + GitHub CIDRs:443; ingress
+    restricted to workload-labelled pods),
+    `buildWorkloadNetworkPolicy` (AGC + workers → DNS + proxy:proxyPort),
+    `buildAGCNetworkPolicy` (additive: AGC also gets 443 for k8s API).
+  - `cmd/gmc/internal/controller/ipranges.go` `patchNetworkPolicy` now
+    only mutates `npProxyName`; the workload policy carrying the
+    worker→proxy egress rule is left untouched across IP-range refreshes.
   - `cmd/gmc/internal/controller/actionsgateway_controller.go` —
-    `reconcileResources` and `reconcileDelete` call two apply/delete
-    helpers instead of one.
-- **Tests:**
-  - New e2e in `cmd/gmc/test/e2e/`: spawn a debug pod with worker
-    labels, assert `curl --noproxy '*' https://api.github.com` times
-    out and `curl -x http://actions-gateway-proxy:8080 …` succeeds.
-  - Integration test in `cmd/gmc/internal/controller/integration/`
-    asserting the IPRange refresh preserves the proxy-egress rule.
-  - Update `network_policy_test.go` expectations.
-- **Done when:** the validation snippets in
-  [docs/design/network-architecture.md "How to Validate Network Isolation"](../design/network-architecture.md)
-  pass against a freshly provisioned tenant.
+    `reconcileResources` and `reconcileDelete` apply/remove all three
+    policies.
+- **Tests:** `network_policy_test.go` expectations updated; integration
+  test asserts the IPRange refresh preserves the workload policy.
+- **Deferred:** end-to-end `curl` validation from a debug pod (the
+  acceptance snippets in
+  [docs/design/network-architecture.md](../design/network-architecture.md))
+  has not been exercised against a freshly provisioned tenant. Tracked
+  as a Milestone 4 manual-verification item.
 
-#### W2 — Security profiles via PSA (closes C-1)
+#### W2 — Security profiles via PSA (closes C-1) — **Done (2026-05-23, commit `1155d6f`)**
 
-- **Files:**
-  - `cmd/gmc/api/v1alpha1/actionsgateway_types.go` — add
-    `SecurityProfile string` field, `enum` validation, default
-    `baseline`. Regenerate zz_generated.deepcopy.go.
-  - `cmd/gmc/internal/controller/actionsgateway_controller.go` — in
-    `reconcileResources`, ensure the tenant namespace carries
-    `pod-security.kubernetes.io/enforce`, `enforce-version`, `warn`,
-    `audit` labels matching the profile. Idempotent label merge.
-  - Optional belt-and-suspenders in
-    `cmd/agc/internal/provisioner/provisioner.go` `buildPod`: zero
-    out `Spec.SecurityContext.Sysctls`; reject `Spec.Volumes[i].HostPath`
-    outside `privileged`. Add a CEL `XValidation` on
-    `RunnerGroupSpec.PodTemplate` forbidding `privileged: true` in
-    `baseline`/`restricted` profiles so the failure mode is at
-    `kubectl apply`, not at pod creation.
-- **Tests:**
-  - Integration: apply ActionsGateway with each profile, assert the
-    namespace labels match.
-  - e2e: apply a `privileged: true` PodTemplate under each profile;
-    assert pod creation is rejected by PSA for `baseline`/`restricted`
-    and accepted for `privileged`.
-  - Update existing e2e fixtures so any test PodSpec that needs
-    privileged sets `securityProfile: privileged` on its CR.
-- **Done when:** a tenant CR with default `securityProfile` rejects
-  any pod the AGC tries to create with `privileged: true`, with no
-  Kyverno/OPA installed on the test cluster.
+- **What shipped:**
+  - `cmd/gmc/api/v1alpha1/actionsgateway_types.go` — `SecurityProfile`
+    enum field (`baseline | restricted | privileged`, default `baseline`)
+    with CEL `enum` validation. `zz_generated.deepcopy.go` regenerated.
+  - `cmd/gmc/internal/controller/actionsgateway_controller.go` —
+    `applyNamespacePSA` (line 509) stamps
+    `pod-security.kubernetes.io/{enforce,warn,audit}` and matching
+    `*-version` labels on the tenant namespace at every reconcile.
+    Idempotent label merge; called from `reconcileResources`.
+  - `cmd/agc/api/v1alpha1/runnergroup_types.go` — CEL `XValidation`
+    rejects `privileged: true` in `RunnerGroupSpec.PodTemplate` at
+    `kubectl apply` time (per D-7).
+- **Tests:** integration coverage for namespace label stamping; e2e
+  fixtures that need privileged set `securityProfile: privileged` on
+  their CRs.
+- **Skipped (per D-7):** the `buildPod` zero-out of `Sysctls` /
+  `HostPath` — PSA covers it at the namespace boundary and the CEL rule
+  catches the common misconfiguration earlier.
 
-#### W3 — Credentials via file mount (closes H-1)
+#### W3 — Credentials via file mount (closes H-1) — **Done (2026-05-23, commit `1155d6f`)**
 
-- **Files:**
-  - `cmd/gmc/internal/controller/builder.go` `buildAGCDeployment` —
-    replace the three `GITHUB_APP_*` env entries with a Secret volume
-    mount at `/etc/actions-gateway/github-app/` mode `0400`. Keep
-    non-secret env vars (HTTP_PROXY, etc.) as env vars.
-  - `cmd/agc/main.go` — read `appId`/`installationId` from files,
-    pass the `privateKey` file path through `loadPEM`. Delete the
-    env-var read path.
-  - `cmd/probe/main.go` — same file-read path so the probe doesn't
-    diverge from the AGC pattern.
-- **Tests:**
-  - `cmd/gmc/internal/controller/builder_test.go` — replace env-var
-    assertions with volume-mount assertions (Secret name, mount path,
-    `defaultMode: 0o400`).
-  - `cmd/gmc/internal/controller/integration/provisioning_test.go` —
-    update the GITHUB_APP_ID env probe to check the volume instead.
-  - e2e tests already create the Secret correctly; no fixture change
-    needed beyond updating any assertions on AGC pod env vars.
-- **Done when:** `kubectl exec -it <agc-pod> -- env | grep GITHUB_APP`
-  returns nothing; `kubectl exec -it <agc-pod> -- ls /etc/actions-gateway/github-app/`
-  lists `appId`, `installationId`, `privateKey`.
+- **What shipped:**
+  - `cmd/gmc/internal/controller/builder.go` — `buildAGCDeployment`
+    mounts the `gitHubAppRef` Secret at `/etc/actions-gateway/github-app/`
+    mode `0o400` via `agcCredsVolumeName`/`agcCredsMountPath`
+    (lines 33, 450, 481). The three `GITHUB_APP_*` env entries are gone.
+  - `cmd/agc/main.go:91-111` — reads `appId`, `installationId`,
+    `privateKey` from the mounted directory; `loadPEM` handles the key
+    path. Env-var read path deleted.
+  - `cmd/probe/main.go` — same file-read pattern, kept in sync.
+- **Tests:** `builder_test.go` asserts volume mount, Secret name, and
+  `defaultMode: 0o400`. Integration `provisioning_test.go` checks the
+  volume instead of env vars.
+- **Verified by invariant:** `kubectl exec <agc> -- env | grep GITHUB_APP`
+  returns nothing; only the volume contents are visible.
 
 #### W4 — Tighten AGC RBAC (closes H-2)
 
@@ -945,37 +1058,47 @@ full rationale and acceptance criteria.
   access to credentials it minted). The residual enumeration risk is
   accepted for v1 and documented in the H-2 finding above.
 
-#### W5 — `AGC_EXTRA_*` mechanism (closes M-14)
+#### W5 — `AGC_EXTRA_*` mechanism (closes M-14) — **Done (2026-05-23, commit `1155d6f`)**
 
-Blocked by D-1.
+D-1 resolved in favor of **Option A** (flag-gated). Option B (typed
+per-tenant CR field) deferred until a production use case for endpoint
+overrides surfaces.
 
-- **If Option A (flag-gated):**
-  - `cmd/gmc/cmd/main.go` — add `--allow-agc-extra-env` flag, default
-    `false`. The forwarding loop runs only when the flag is set.
-  - Test rigs in `cmd/gmc/test/e2e/e2e_suite_test.go` pass the flag.
-- **If Option B (typed CR field):**
-  - `cmd/gmc/api/v1alpha1/actionsgateway_types.go` — add
-    `EndpointOverrides` struct (apiBaseURL, brokerURL, stubAuthURL,
-    stubBrokerURL), CEL-validated.
-  - `cmd/gmc/internal/controller/builder.go` `buildAGCDeployment` —
-    stamp the override env vars per-tenant from the CR field.
-  - Delete the `AGC_EXTRA_*` forwarding loop and `AGCExtraEnv` field.
-  - Migrate e2e fixtures (`e2e_suite_test.go`, `github_e2e_test.go`)
-    to set the new CR field instead of GMC pod env vars.
+- **What shipped:**
+  - `cmd/gmc/cmd/main.go:75-77` — `--allow-agc-extra-env` flag, default
+    `false`. The forwarding loop at lines 199-217 only runs inside
+    `if allowAgcExtraEnv`.
+  - `cmd/gmc/test/e2e/e2e_suite_test.go:155-177` — e2e suite patches the
+    GMC Deployment args to enable the flag before injecting
+    `AGC_EXTRA_*` overrides for fakegithub.
+- **Production posture:** GMC pods deploy without the flag, so any
+  `AGC_EXTRA_*` env var on the GMC pod is silently dropped — no
+  cluster-wide redirect of tenant AGC traffic from a single misconfigured
+  env var.
 
-### Phase 2 — Next milestone
+### Phase 2 — Hardening — **Done (2026-05-23)**
 
-#### W6 — Crypto and injection hygiene (closes M-3, M-4, M-6)
+W6, W7, W8, and W9 all landed on 2026-05-23 (commits `1155d6f`,
+`bc15064`, `22f04bb`, `33af439`). Originally framed as the next
+milestone after Phase 1; shipped in the same push.
 
-- **Files:**
-  - `broker/crypto.go` — single sentinel error from `pkcs7Unpad`,
-    constant-time padding check.
-  - `cmd/agc/internal/provisioner/provisioner.go` — validate `owner`/`repo`
-    against `[A-Za-z0-9._-]`, `url.PathEscape` each segment before
-    building the rerun URL.
-  - `broker/client.go` — build `GetMessage` and `DeleteSession` URLs
-    with `net/url` instead of string concatenation.
-- **Tests:** unit tests with adversarial inputs in each affected file.
+#### W6 — Crypto and injection hygiene (closes M-3, M-4, M-6) — **Done (2026-05-23, commit `1155d6f`)**
+
+- **What shipped:**
+  - `broker/crypto.go:19,84` — `errInvalidPadding` is the single sentinel
+    returned by `pkcs7Unpad` for every malformed input. Byte comparison
+    runs through `crypto/subtle` in constant time.
+  - `cmd/agc/internal/provisioner/provisioner.go` — `repoSegmentRE`
+    (line 526) restricts `owner`/`repo` to
+    `^[A-Za-z0-9][A-Za-z0-9._-]*$`. `rerunFailedJobs` (lines 250-276)
+    rejects non-matching values pre-HTTP and wraps each path segment in
+    `neturl.PathEscape`.
+  - `broker/client.go` — `GetMessage` (line 293) and `DeleteSession`
+    (line 313) build URLs through `url.Parse` + `url.Values` with
+    `RawQuery = q.Encode()`. No raw string concatenation in the URL path.
+- **Tests:** unit tests with adversarial `system.github.repository`
+  inputs cover the M-4 reject path; crypto round-trip tests exercise
+  the M-3 sentinel; broker tests assert correct URL composition.
 
 #### W7 — Transport hardening: GMC-managed self-signed cert with AGC pinning (closes M-5) — **Done 2026-05-23**
 
@@ -1023,15 +1146,19 @@ the rationale.
   an externally-managed `Certificate` referencing the same Secret
   name and skip the self-issued path. Not required for v1.
 
-#### W8 — AGC SecurityContext (closes M-7)
+#### W8 — AGC SecurityContext (closes M-7) — **Done (2026-05-23, commit `1155d6f`)**
 
-- **Files:** `cmd/gmc/internal/controller/builder.go` —
-  `buildAGCDeployment` gets the same `SecurityContext` block as the
-  proxy plus `Capabilities.Drop: ALL` and
-  `SeccompProfile: RuntimeDefault`. Apply the same caps/seccomp
-  hardening to the proxy.
-- **Tests:** assert on container `SecurityContext` in
-  `builder_test.go`.
+- **What shipped:**
+  - `cmd/gmc/internal/controller/builder.go:492-497` — `buildAGCDeployment`
+    container now sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`,
+    `AllowPrivilegeEscalation: false`, `Capabilities.Drop: [ALL]`, and
+    `SeccompProfile: RuntimeDefault`.
+  - Same SecurityContext block applied to the proxy container at
+    lines 323-327 (it previously had only `RunAsNonRoot`/`ReadOnly`/
+    `AllowPrivilegeEscalation`; capabilities and seccomp were added by
+    W8).
+- **Tests:** `builder_test.go` asserts the full SecurityContext block on
+  both AGC and proxy containers.
 
 #### W9 — Ed25519 opt-in and RSA-3072 default (closes M-11a/c; sets up M-11b) — **Done 2026-05-23**
 
@@ -1116,25 +1243,31 @@ Independent items, scheduled opportunistically.
   `agentpool/crypto.go`. Lands in Phase 2 as a stepping stone for
   M-11b/c, which are sequenced after the probe runs.
 
-### Acceptance criteria for "Phase 1 complete"
+### Acceptance criteria for "Phase 1 complete" — **Met in code (2026-05-23)**
 
-A freshly provisioned tenant on a vanilla Kubernetes cluster (no
-Kyverno, no OPA, no service mesh) satisfies all of the following:
+The Phase 1 workstreams are implemented; the residual gap is end-to-end
+validation against a freshly provisioned tenant on `kind`. The criteria
+below remain the definition of "complete in the field." Status reflects
+whether the *implementation* is in place; live validation is the final
+acceptance step.
 
-1. Worker pod cannot reach GitHub except via the proxy
-   (verifies W1, M-1).
-2. A `RunnerGroup` with `privileged: true` in its PodTemplate is
-   rejected at pod creation under default `securityProfile`
-   (verifies W2, C-1).
-3. The AGC pod has no `GITHUB_APP_*` env vars; credentials are mounted
-   at `/etc/actions-gateway/github-app/` mode `0400`
-   (verifies W3, H-1).
-4. A pod running with the AGC's SA cannot list or get an unrelated
-   Secret in the tenant namespace
-   (verifies W4, H-2).
-5. The `AGC_EXTRA_*` mechanism is either flag-gated and off in
-   production, or removed entirely
-   (verifies W5, M-14).
+1. **W1, M-1** — Worker pod cannot reach GitHub except via the proxy.
+   Code: ✅ split NetworkPolicies. Live validation: ⏳ pending (debug-pod
+   `curl` against [docs/design/network-architecture.md](../design/network-architecture.md)
+   procedure).
+2. **W2, C-1** — A `RunnerGroup` with `privileged: true` in its
+   PodTemplate is rejected at pod creation under default
+   `securityProfile`. Code: ✅ PSA labels + CEL `XValidation`.
+3. **W3, H-1** — The AGC pod has no `GITHUB_APP_*` env vars;
+   credentials are mounted at `/etc/actions-gateway/github-app/`
+   mode `0o400`. Code: ✅ volume mount in `buildAGCDeployment`; AGC
+   reads from files.
+4. **W4, H-2** — A pod running with the AGC's SA cannot list or get
+   an unrelated Secret in the tenant namespace. Code: ⚠ partial; broad
+   `list`/`watch` retained with Secret cache disabled as compensating
+   control. Residual risk accepted per D-3.
+5. **W5, M-14** — The `AGC_EXTRA_*` mechanism is flag-gated and off in
+   production. Code: ✅ `--allow-agc-extra-env`, default `false`.
 
 ### Verification & test plan
 
