@@ -16,8 +16,8 @@
 // runner config file contents keyed by their file names:
 //
 //	".runner"                — JSON: agentId, serverUrl (broker URL), etc.
-//	".credentials"           — JSON: scheme, data.clientId, data.authorizationUrl
-//	".credentials_rsaparams" — XML:  RSAKeyValue with base64-encoded RSA parameters
+//	".credentials"           — JSON: Scheme, Data.ClientId, Data.AuthorizationUrl (PascalCase keys)
+//	".credentials_rsaparams" — JSON: modulus, exponent, d, p, q, dp, dq, inverseQ (base64 values)
 //
 // Deregistration (org-scoped or repo-scoped):
 //
@@ -32,7 +32,6 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"math/big"
@@ -187,7 +186,7 @@ func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, 
 	if err != nil {
 		return nil, err
 	}
-	privKey, err := parseRSAParamsXML(string(rsaParamsBytes))
+	privKey, err := parseRSAParamsJSON(rsaParamsBytes)
 	if err != nil {
 		return nil, fmt.Errorf("parse RSA params: %w", err)
 	}
@@ -206,53 +205,57 @@ func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, 
 	}, nil
 }
 
-// rsaParamsXML matches the .NET RSAKeyValue XML format written by the runner.
-// Child elements contain standard base64-encoded RSA parameter bytes.
-// The root element name is not validated to handle both RSAKeyValue and RSAParameters.
-type rsaParamsXML struct {
-	Exponent string `xml:"Exponent"`
-	Modulus  string `xml:"Modulus"`
-	P        string `xml:"P"`
-	Q        string `xml:"Q"`
-	DP       string `xml:"DP"`
-	DQ       string `xml:"DQ"`
-	InverseQ string `xml:"InverseQ"`
-	D        string `xml:"D"`
+// rsaParamsJSON matches the JSON format used by the GitHub Actions runner
+// JIT config for .credentials_rsaparams. Values are standard base64-encoded
+// big-endian byte arrays.
+type rsaParamsJSON struct {
+	Modulus  string `json:"modulus"`
+	Exponent string `json:"exponent"`
+	D        string `json:"d"`
+	P        string `json:"p"`
+	Q        string `json:"q"`
+	DP       string `json:"dp"`
+	DQ       string `json:"dq"`
+	InverseQ string `json:"inverseQ"`
 }
 
-// parseRSAParamsXML reconstructs an RSA private key from the .NET RSAKeyValue
-// XML format stored in .credentials_rsaparams.
-func parseRSAParamsXML(xmlStr string) (*rsa.PrivateKey, error) {
-	var p rsaParamsXML
-	if err := xml.Unmarshal([]byte(xmlStr), &p); err != nil {
-		return nil, fmt.Errorf("unmarshal RSA XML: %w", err)
+// parseRSAParamsJSON reconstructs an RSA private key from the JSON format
+// stored in .credentials_rsaparams of the JIT config blob.
+func parseRSAParamsJSON(data []byte) (*rsa.PrivateKey, error) {
+	var p rsaParamsJSON
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("unmarshal RSA JSON: %w", err)
 	}
 
 	decodeParam := func(name, b64 string) (*big.Int, error) {
+		// Try standard base64 first, then URL-safe (no padding) as fallback.
 		b, err := base64.StdEncoding.DecodeString(b64)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", name, err)
+			b, err = base64.RawURLEncoding.DecodeString(b64)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", name, err)
+			}
 		}
 		return new(big.Int).SetBytes(b), nil
 	}
 
-	n, err := decodeParam("Modulus", p.Modulus)
+	n, err := decodeParam("modulus", p.Modulus)
 	if err != nil {
 		return nil, err
 	}
-	eInt, err := decodeParam("Exponent", p.Exponent)
+	eInt, err := decodeParam("exponent", p.Exponent)
 	if err != nil {
 		return nil, err
 	}
-	d, err := decodeParam("D", p.D)
+	d, err := decodeParam("d", p.D)
 	if err != nil {
 		return nil, err
 	}
-	pp, err := decodeParam("P", p.P)
+	pp, err := decodeParam("p", p.P)
 	if err != nil {
 		return nil, err
 	}
-	q, err := decodeParam("Q", p.Q)
+	q, err := decodeParam("q", p.Q)
 	if err != nil {
 		return nil, err
 	}

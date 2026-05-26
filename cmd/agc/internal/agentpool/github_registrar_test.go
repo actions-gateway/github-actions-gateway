@@ -42,7 +42,7 @@ func newJITFixture(t *testing.T, agentID int64) *jitFixture {
 
 	runnerJSON := fmt.Sprintf(`{"agentId":%d,"serverUrl":%q}`, agentID, brokerURL)
 	credJSON := fmt.Sprintf(`{"scheme":"OAuth","data":{"clientId":%q,"authorizationUrl":%q}}`, clientID, authURL)
-	rsaXML := buildRSAKeyValueXML(key)
+	rsaXML := buildRSAParamsJSON(key)
 
 	// Each value is the base64-encoded content of the corresponding config file.
 	files := map[string]string{
@@ -62,23 +62,22 @@ func newJITFixture(t *testing.T, agentID int64) *jitFixture {
 	}
 }
 
-// buildRSAKeyValueXML renders key as a .NET RSAKeyValue XML string.
-func buildRSAKeyValueXML(key *rsa.PrivateKey) string {
+// buildRSAParamsJSON renders key as the JSON format used by the runner JIT config.
+func buildRSAParamsJSON(key *rsa.PrivateKey) string {
 	enc := base64.StdEncoding.EncodeToString
 	eBytes := big.NewInt(int64(key.E)).Bytes()
-	return fmt.Sprintf(
-		`<RSAKeyValue><Modulus>%s</Modulus><Exponent>%s</Exponent>`+
-			`<P>%s</P><Q>%s</Q><DP>%s</DP><DQ>%s</DQ>`+
-			`<InverseQ>%s</InverseQ><D>%s</D></RSAKeyValue>`,
-		enc(key.N.Bytes()),
-		enc(eBytes),
-		enc(key.Primes[0].Bytes()),
-		enc(key.Primes[1].Bytes()),
-		enc(key.Precomputed.Dp.Bytes()),
-		enc(key.Precomputed.Dq.Bytes()),
-		enc(key.Precomputed.Qinv.Bytes()),
-		enc(key.D.Bytes()),
-	)
+	m := map[string]string{
+		"modulus":  enc(key.N.Bytes()),
+		"exponent": enc(eBytes),
+		"d":        enc(key.D.Bytes()),
+		"p":        enc(key.Primes[0].Bytes()),
+		"q":        enc(key.Primes[1].Bytes()),
+		"dp":       enc(key.Precomputed.Dp.Bytes()),
+		"dq":       enc(key.Precomputed.Dq.Bytes()),
+		"inverseQ": enc(key.Precomputed.Qinv.Bytes()),
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 // newGithubAPISrv starts an httptest server that stubs the generate-jitconfig
