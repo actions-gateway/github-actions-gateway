@@ -209,6 +209,7 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientStream).writeRequest"),
 		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
+		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
 	)
 }
 
@@ -464,5 +465,6 @@ func TestAGC_Reconciler_ScaleDown(t *testing.T) {
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientStream).writeRequest"),
 		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
+		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
 	)
 }
