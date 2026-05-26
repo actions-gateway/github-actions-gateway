@@ -1,48 +1,46 @@
 // Package agentpool manages pre-registered GitHub Actions runner agents.
 //
-// # Runner Registration API (from github.com/actions/runner source, RunnerDotcomServer.cs)
+// # Runner Registration via JIT Config (generate-jitconfig)
 //
 // Registration flow:
-//  1. Obtain a short-lived registration token (org-scoped or repo-scoped):
-//     POST https://api.github.com/orgs/{org}/actions/runners/registration-token
-//     POST https://api.github.com/repos/{owner}/{repo}/actions/runners/registration-token
+//  1. Register a JIT runner (org-scoped or repo-scoped):
+//     POST https://api.github.com/orgs/{org}/actions/runners/generate-jitconfig
+//     POST https://api.github.com/repos/{owner}/{repo}/actions/runners/generate-jitconfig
 //     Authorization: Bearer {installationAccessToken}
-//     → {"token": "...", "expires_at": "..."}
-//
-//  2. Register the runner agent:
-//     POST https://api.github.com/actions/runners/register
-//     Authorization: RemoteAuth {registrationToken}
 //     Content-Type: application/json
-//     {"url": "{orgOrRepoURL}", "group_id": {groupID}, "name": "{name}",
-//      "version": "{version}", "updates_disabled": false, "ephemeral": false,
-//      "labels": [], "public_key": "{base64(DER(SubjectPublicKeyInfo))}"}
-//     → {"id": 12345, "authorization": {"authorization_url": "...",
-//        "server_url": "...", "client_id": "..."}}
+//     {"name": "{name}", "runner_group_id": {groupID},
+//      "labels": [...], "work_folder": "_work"}
+//     → {"runner": {"id": 12345, ...}, "encoded_jit_config": "{base64blob}"}
+//
+// The encoded_jit_config is a base64-encoded JSON blob containing three
+// runner config file contents keyed by their file names:
+//
+//	".runner"                — JSON: agentId, serverUrl (broker URL), etc.
+//	".credentials"           — JSON: scheme, data.clientId, data.authorizationUrl
+//	".credentials_rsaparams" — XML:  RSAKeyValue with base64-encoded RSA parameters
 //
 // Deregistration (org-scoped or repo-scoped):
 //
 //	DELETE https://api.github.com/orgs/{org}/actions/runners/{id}
 //	DELETE https://api.github.com/repos/{owner}/{repo}/actions/runners/{id}
 //	Authorization: Bearer {installationAccessToken}
-//
-// The public_key field is base64-standard-encoded DER of the RSA public key in
-// SubjectPublicKeyInfo format (equivalent to Go's x509.MarshalPKIXPublicKey).
-//
 package agentpool
 
 import (
 	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
+	"encoding/xml"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strings"
 )
 
-// GithubRegistrar implements Registrar using the GitHub Actions runner registration API.
+// GithubRegistrar implements Registrar using the GitHub Actions runner JIT config API.
 // It requires the org or repo URL and the installation access token is passed
 // per-call via Register/Deregister.
 type GithubRegistrar struct {
@@ -65,23 +63,52 @@ func (r *GithubRegistrar) httpClient() *http.Client {
 	return http.DefaultClient
 }
 
-// Register registers a new runner agent with GitHub and returns its credentials.
+// Register registers a new runner agent with GitHub using the JIT config API
+// and returns its credentials including the server-generated RSA private key.
 // token is the GitHub App installation access token.
 func (r *GithubRegistrar) Register(ctx context.Context, token string, params RegisterParams) (*AgentCredentials, error) {
-	// Step 1: Get a short-lived registration token.
-	regToken, err := r.getRegistrationToken(ctx, token)
+	generateURL := r.runnerAPIPrefix() + "/actions/runners/generate-jitconfig"
+
+	body := map[string]any{
+		"name":            params.Name,
+		"runner_group_id": r.GroupID,
+		"labels":          params.Labels,
+		"work_folder":     "_work",
+	}
+	bodyBytes, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("get registration token: %w", err)
+		return nil, fmt.Errorf("marshal jitconfig request: %w", err)
 	}
 
-	// Step 2: Marshal public key to base64-DER.
-	pubKeyB64, err := marshalPublicKeyBase64(params.PublicKeyPEM)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, generateURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return nil, fmt.Errorf("marshal public key: %w", err)
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := r.httpClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("generate jit config: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("generate jit config: unexpected status %d: %s", resp.StatusCode, respBody)
 	}
 
-	// Step 3: Register the runner.
-	return r.registerRunner(ctx, regToken, params, pubKeyB64)
+	var result struct {
+		Runner struct {
+			ID int64 `json:"id"`
+		} `json:"runner"`
+		EncodedJITConfig string `json:"encoded_jit_config"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("decode jit config response: %w", err)
+	}
+
+	return parseJITCredentials(result.Runner.ID, result.EncodedJITConfig)
 }
 
 // Deregister removes a runner agent from GitHub.
@@ -107,31 +134,120 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 	return nil
 }
 
-func (r *GithubRegistrar) getRegistrationToken(ctx context.Context, installToken string) (string, error) {
-	tokenURL := r.runnerAPIPrefix() + "/actions/runners/registration-token"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, nil)
+// parseJITCredentials decodes the base64 JIT config blob returned by
+// generate-jitconfig and extracts the AgentCredentials including the
+// RSA private key from the .credentials_rsaparams XML.
+func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, error) {
+	decoded, err := base64.StdEncoding.DecodeString(encodedBlob)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("decode jit config blob: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+installToken)
-	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := r.httpClient().Do(req)
+	var files map[string]string
+	if err := json.Unmarshal(decoded, &files); err != nil {
+		return nil, fmt.Errorf("unmarshal jit config blob: %w", err)
+	}
+
+	var runnerCfg struct {
+		ServerURL string `json:"serverUrl"`
+	}
+	if err := json.Unmarshal([]byte(files[".runner"]), &runnerCfg); err != nil {
+		return nil, fmt.Errorf("parse .runner config: %w", err)
+	}
+
+	var credCfg struct {
+		Data struct {
+			ClientID         string `json:"clientId"`
+			AuthorizationURL string `json:"authorizationUrl"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(files[".credentials"]), &credCfg); err != nil {
+		return nil, fmt.Errorf("parse .credentials config: %w", err)
+	}
+
+	privKey, err := parseRSAParamsXML(files[".credentials_rsaparams"])
 	if err != nil {
-		return "", fmt.Errorf("get registration token: %w", err)
+		return nil, fmt.Errorf("parse RSA params: %w", err)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("get registration token: unexpected status %d: %s", resp.StatusCode, body)
+
+	privKeyPEM, err := marshalPrivateKey(privKey)
+	if err != nil {
+		return nil, fmt.Errorf("marshal private key: %w", err)
 	}
-	var result struct {
-		Token string `json:"token"`
+
+	return &AgentCredentials{
+		AgentID:          agentID,
+		ClientID:         credCfg.Data.ClientID,
+		AuthorizationURL: credCfg.Data.AuthorizationURL,
+		BrokerURL:        runnerCfg.ServerURL,
+		PrivateKeyPEM:    privKeyPEM,
+	}, nil
+}
+
+// rsaParamsXML matches the .NET RSAKeyValue XML format written by the runner.
+// Child elements contain standard base64-encoded RSA parameter bytes.
+// The root element name is not validated to handle both RSAKeyValue and RSAParameters.
+type rsaParamsXML struct {
+	Exponent string `xml:"Exponent"`
+	Modulus  string `xml:"Modulus"`
+	P        string `xml:"P"`
+	Q        string `xml:"Q"`
+	DP       string `xml:"DP"`
+	DQ       string `xml:"DQ"`
+	InverseQ string `xml:"InverseQ"`
+	D        string `xml:"D"`
+}
+
+// parseRSAParamsXML reconstructs an RSA private key from the .NET RSAKeyValue
+// XML format stored in .credentials_rsaparams.
+func parseRSAParamsXML(xmlStr string) (*rsa.PrivateKey, error) {
+	var p rsaParamsXML
+	if err := xml.Unmarshal([]byte(xmlStr), &p); err != nil {
+		return nil, fmt.Errorf("unmarshal RSA XML: %w", err)
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return "", fmt.Errorf("decode registration token response: %w", err)
+
+	decodeParam := func(name, b64 string) (*big.Int, error) {
+		b, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
+		}
+		return new(big.Int).SetBytes(b), nil
 	}
-	return result.Token, nil
+
+	n, err := decodeParam("Modulus", p.Modulus)
+	if err != nil {
+		return nil, err
+	}
+	eInt, err := decodeParam("Exponent", p.Exponent)
+	if err != nil {
+		return nil, err
+	}
+	d, err := decodeParam("D", p.D)
+	if err != nil {
+		return nil, err
+	}
+	pp, err := decodeParam("P", p.P)
+	if err != nil {
+		return nil, err
+	}
+	q, err := decodeParam("Q", p.Q)
+	if err != nil {
+		return nil, err
+	}
+
+	key := &rsa.PrivateKey{
+		PublicKey: rsa.PublicKey{
+			N: n,
+			E: int(eInt.Int64()),
+		},
+		D:      d,
+		Primes: []*big.Int{pp, q},
+	}
+	key.Precompute()
+	if err := key.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid RSA key: %w", err)
+	}
+	return key, nil
 }
 
 // runnerAPIPrefix returns the base REST API path for runner management calls,
@@ -153,76 +269,6 @@ func (r *GithubRegistrar) apiBase() string {
 		return "https://api.github.com"
 	}
 	return extractHost(r.OrgURL) + "/api/v3"
-}
-
-func (r *GithubRegistrar) registerRunner(ctx context.Context, regToken string, params RegisterParams, pubKeyB64 string) (*AgentCredentials, error) {
-	registerURL := r.apiBase() + "/actions/runners/register"
-
-	body := map[string]any{
-		"url":              r.OrgURL,
-		"name":             params.Name,
-		"version":          params.Version,
-		"updates_disabled": false,
-		"ephemeral":        false,
-		"labels":           params.Labels,
-		"public_key":       pubKeyB64,
-	}
-	// group_id is an org-level concept; omit it for repo-scoped runners.
-	if !isRepoURL(r.OrgURL) && r.GroupID != 0 {
-		body["group_id"] = r.GroupID
-	}
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("marshal register request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, registerURL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "RemoteAuth "+regToken)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := r.httpClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("register runner: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("register runner: unexpected status %d: %s", resp.StatusCode, respBody)
-	}
-
-	var result struct {
-		ID            int64 `json:"id"`
-		Authorization struct {
-			AuthorizationURL string `json:"authorization_url"`
-			ServerURL        string `json:"server_url"`
-			ClientID         string `json:"client_id"`
-		} `json:"authorization"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("decode register response: %w", err)
-	}
-	return &AgentCredentials{
-		AgentID:          result.ID,
-		ClientID:         result.Authorization.ClientID,
-		AuthorizationURL: result.Authorization.AuthorizationURL,
-		BrokerURL:        result.Authorization.ServerURL,
-	}, nil
-}
-
-// marshalPublicKeyBase64 extracts the DER-encoded SubjectPublicKeyInfo from a PEM-encoded
-// public key and returns the base64 standard encoding. This matches .NET's
-// rsa.ExportSubjectPublicKeyInfo() → Convert.ToBase64String() used by the runner.
-func marshalPublicKeyBase64(pubKeyPEM []byte) (string, error) {
-	block, _ := pem.Decode(pubKeyPEM)
-	if block == nil {
-		return "", fmt.Errorf("no PEM block found in public key")
-	}
-	// block.Bytes is already DER-encoded SubjectPublicKeyInfo for "PUBLIC KEY" blocks.
-	return base64.StdEncoding.EncodeToString(block.Bytes), nil
 }
 
 func isHostedServer(githubURL string) bool {

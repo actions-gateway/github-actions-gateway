@@ -4,8 +4,6 @@ package agentpool
 import (
 	"context"
 	"crypto"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -29,12 +27,11 @@ const (
 
 // RegisterParams is the input to Registrar.Register.
 type RegisterParams struct {
-	Name         string
-	Version      string
-	Labels       []string
-	GroupName    string
-	GroupID      int
-	PublicKeyPEM []byte // DER-encoded PKIX public key, PEM-wrapped
+	Name      string
+	Version   string
+	Labels    []string
+	GroupName string
+	GroupID   int
 }
 
 // AgentCredentials is returned by Registrar.Register and stored in a Secret.
@@ -43,6 +40,10 @@ type AgentCredentials struct {
 	ClientID         string
 	AuthorizationURL string
 	BrokerURL        string
+	// PrivateKeyPEM is the PKCS#8 PEM-encoded private key for this agent.
+	// Set by registrars that generate the key pair server-side (e.g. JIT config).
+	// Nil when the registrar expects the caller to supply its own key pair.
+	PrivateKeyPEM []byte
 }
 
 // Registrar abstracts the runner agent registration API.
@@ -150,32 +151,30 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 }
 
 func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
-	privateKey, err := generateKey(p.keyType)
-	if err != nil {
-		return fmt.Errorf("generate agent key: %w", err)
-	}
-
-	pubDER, err := x509.MarshalPKIXPublicKey(privateKey.Public())
-	if err != nil {
-		return fmt.Errorf("marshal public key: %w", err)
-	}
 	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
 	params := RegisterParams{
-		Name:         agentName,
-		Version:      p.runnerVersion,
-		Labels:       []string{},
-		GroupName:    p.groupName,
-		GroupID:      1,
-		PublicKeyPEM: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}),
+		Name:      agentName,
+		Version:   p.runnerVersion,
+		Labels:    []string{},
+		GroupName: p.groupName,
+		GroupID:   1,
 	}
 	creds, err := p.registrar.Register(ctx, token, params)
 	if err != nil {
 		return fmt.Errorf("register agent: %w", err)
 	}
 
-	privKeyPEM, err := marshalPrivateKey(privateKey)
-	if err != nil {
-		return err
+	privKeyPEM := creds.PrivateKeyPEM
+	if len(privKeyPEM) == 0 {
+		// Fallback for stub/test registrars that don't generate a key pair server-side.
+		privateKey, err := generateKey(p.keyType)
+		if err != nil {
+			return fmt.Errorf("generate agent key: %w", err)
+		}
+		privKeyPEM, err = marshalPrivateKey(privateKey)
+		if err != nil {
+			return err
+		}
 	}
 
 	sec := &corev1.Secret{
