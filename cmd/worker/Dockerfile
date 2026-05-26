@@ -1,7 +1,9 @@
 ## Stage 1: build the Go entrypoint wrapper.
 ## This produces a static binary that reads the job payload Secret
 ## and feeds it into Runner.Worker via named pipes.
-FROM golang:1.24-alpine AS builder
+# golang:1.24 — pinned to the multi-arch manifest digest for cache stability.
+# Update with: docker buildx imagetools inspect golang:1.24
+FROM golang:1.24@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804 AS builder
 WORKDIR /src
 # Copy the workspace-level go files so the build can resolve shared modules.
 COPY go.work go.work.sum ./
@@ -17,8 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 ## The official actions/runner image includes Runner.Worker at
 ## /home/runner/externals/node20/bin/ and the runner binaries at /home/runner/.
 ##
-## TODO(validation): Pin to an immutable digest in production.
-## The version here must match the runner version used during agent registration
+## Pin this to a digest once GHCR auth is available:
+##   docker buildx imagetools inspect ghcr.io/actions/runner:2.327.1
+## The version must match the runner version used during agent registration
 ## (cmd/agc/internal/agentpool) so GitHub does not reject POST /sessions with
 ## a version-too-old error.
 FROM ghcr.io/actions/runner:2.327.1
