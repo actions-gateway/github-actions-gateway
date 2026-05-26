@@ -462,7 +462,7 @@ func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {
 	// Verify the AGC NetworkPolicy allows port 443 (k8s API) but that this is distinct
 	// from the proxy-only restriction that buildWorkloadNetworkPolicy applies to workers.
-	// Workers lack the `app: actions-gateway-agc` selector, so this policy doesn't apply to them.
+	// Workers lack the `app: actions-gateway-controller` selector, so this policy doesn't apply to them.
 	ag := newTestAG("gateway", "team-a")
 	np := buildAGCNetworkPolicy(ag)
 

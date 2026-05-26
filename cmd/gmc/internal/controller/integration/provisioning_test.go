@@ -78,9 +78,9 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 
-	// ServiceAccount: actions-gateway-agc
+	// ServiceAccount: actions-gateway-controller
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&corev1.ServiceAccount{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -90,15 +90,15 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 			&corev1.ServiceAccount{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// Role: actions-gateway-agc
+	// Role: actions-gateway-controller
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&rbacv1.Role{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// RoleBinding: actions-gateway-agc
+	// RoleBinding: actions-gateway-controller
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&rbacv1.RoleBinding{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -120,10 +120,10 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// Deployment: actions-gateway-agc with proxy env vars
+	// Deployment: actions-gateway-controller with proxy env vars
 	g.Eventually(func() error {
 		var dep appsv1.Deployment
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep); err != nil {
 			return err
 		}
 		return nil
@@ -131,7 +131,7 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 
 	// Verify proxy env vars are present on the AGC Deployment.
 	var agcDep appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &agcDep))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &agcDep))
 	require.NotEmpty(t, agcDep.Spec.Template.Spec.Containers)
 	envNames := make(map[string]bool)
 	for _, e := range agcDep.Spec.Template.Spec.Containers[0].Env {
@@ -177,12 +177,12 @@ func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var dep appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep))
 	require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
 	var noProxy string
 	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
@@ -211,12 +211,12 @@ func TestGMC_TenantProvisioning_GitHubAppRefDefaultsToOwnNamespace(t *testing.T)
 
 	// Wait for the AGC Deployment to be created.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var dep appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep))
 	require.NotEmpty(t, dep.Spec.Template.Spec.Volumes)
 
 	// Credentials are mounted from a Secret volume (not env vars). The volume
@@ -246,7 +246,7 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 
 	// Wait for initial reconcile — AGC Deployment references secret-v1.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -263,7 +263,7 @@ func TestGMC_TenantProvisioning_CredentialRotation(t *testing.T) {
 	// Wait for AGC Deployment to reference secret-v2 via the credential volume.
 	g.Eventually(func() bool {
 		var dep appsv1.Deployment
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep); err != nil {
 			return false
 		}
 		for _, v := range dep.Spec.Template.Spec.Volumes {

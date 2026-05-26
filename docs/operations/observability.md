@@ -10,7 +10,7 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
 
 **Port forward (ad-hoc):**
 ```sh
-kubectl port-forward -n <namespace> deploy/actions-gateway-agc 8080:8080
+kubectl port-forward -n <namespace> deploy/actions-gateway-controller 8080:8080
 curl http://localhost:8080/metrics
 ```
 
@@ -27,7 +27,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: actions-gateway-agc
+      app: actions-gateway-controller
   endpoints:
     - port: metrics
       interval: 30s

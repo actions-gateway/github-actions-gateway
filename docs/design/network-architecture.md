@@ -95,20 +95,20 @@ spec:
           protocol: TCP
 ```
 
-### Policy 2: `actions-gateway-agc` — AGC → Kubernetes API server
+### Policy 2: `actions-gateway-controller` — AGC → Kubernetes API server
 
-Selects the AGC Deployment pods by `app: actions-gateway-agc`. Adds (additively) egress to the Kubernetes API server on port 443. Worker pods do not match this selector and so have no API-server egress.
+Selects the AGC Deployment pods by `app: actions-gateway-controller`. Adds (additively) egress to the Kubernetes API server on port 443. Worker pods do not match this selector and so have no API-server egress.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: actions-gateway-agc
+  name: actions-gateway-controller
   namespace: <tenant>
 spec:
   podSelector:
     matchLabels:
-      app: actions-gateway-agc
+      app: actions-gateway-controller
   policyTypes:
     - Egress
   egress:
@@ -214,7 +214,7 @@ kubectl run nettest-workload -n <namespace> --rm -it --restart=Never \
 
 ### Confirm a worker-like pod cannot reach the Kubernetes API server
 
-The `actions-gateway-agc` NetworkPolicy only matches pods labelled `app=actions-gateway-agc`, so worker pods (labelled `actions-gateway/component=workload` but not the AGC `app` label) have no API-server egress.
+The `actions-gateway-controller` NetworkPolicy only matches pods labelled `app=actions-gateway-controller`, so worker pods (labelled `actions-gateway/component=workload` but not the AGC `app` label) have no API-server egress.
 
 ```sh
 kubectl run nettest-worker -n <namespace> --rm -it --restart=Never \

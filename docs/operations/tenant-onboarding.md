@@ -118,7 +118,7 @@ kubectl get actionsgateway -n <tenant-namespace> <name> \
 
 ```sh
 # Confirm the AGC Deployment is running
-kubectl get deploy -n <tenant-namespace> actions-gateway-agc
+kubectl get deploy -n <tenant-namespace> actions-gateway-controller
 # Expected: READY 1/1
 
 # Confirm the proxy pool is running
@@ -135,7 +135,7 @@ kubectl get serviceaccount,role,rolebinding -n <tenant-namespace> | grep actions
 kubectl get networkpolicy,resourcequota -n <tenant-namespace>
 # Expected NetworkPolicies (3):
 #   actions-gateway-workload — restricts AGC and worker pods to proxy + DNS
-#   actions-gateway-agc      — adds Kubernetes API server egress for the AGC only
+#   actions-gateway-controller      — adds Kubernetes API server egress for the AGC only
 #   actions-gateway-proxy    — restricts proxy pods to GitHub CIDRs + DNS
 
 # Confirm the Pod Security Admission label matches the chosen securityProfile
@@ -154,7 +154,7 @@ The AGC should begin polling GitHub within seconds of starting.
 
 ```sh
 # Check AGC logs for session registration
-kubectl logs -n <tenant-namespace> deploy/actions-gateway-agc --tail=30
+kubectl logs -n <tenant-namespace> deploy/actions-gateway-controller --tail=30
 # Look for: "session registered" or "starting listener goroutine"
 
 # Check the active sessions metric

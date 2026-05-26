@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/require"
@@ -21,6 +22,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
+
+// agcName is the on-cluster name for the AGC Deployment and associated resources.
+// Shared across all integration tests in this package.
+const agcName = agcnames.ControllerName
 
 var (
 	testEnv    *envtest.Environment

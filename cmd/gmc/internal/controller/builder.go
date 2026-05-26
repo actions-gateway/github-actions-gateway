@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -22,10 +23,10 @@ const (
 	labelManagedBy    = "app.kubernetes.io/managed-by"
 	labelManagerValue = "actions-gateway-gmc"
 
-	agcSAName    = "actions-gateway-agc"
+	agcSAName    = agcnames.ControllerName
 	workerSAName = "actions-gateway-worker"
 	proxyAppName = "actions-gateway-proxy"
-	agcAppName   = "actions-gateway-agc"
+	agcAppName   = agcnames.ControllerName
 
 	// agcCredsVolumeName / agcCredsMountPath define how the GitHub App Secret is
 	// projected into the AGC pod. Keys (appId, installationId, privateKey) are
@@ -41,7 +42,7 @@ const (
 	npProxyName = "actions-gateway-proxy"
 	// npAGCName is the NetworkPolicy that gives AGC pods Kubernetes API server access (port 443).
 	// Combined with npWorkloadName (additive), AGC pods can reach: DNS + proxy + k8s API.
-	npAGCName = "actions-gateway-agc"
+	npAGCName = agcnames.ControllerName
 	// npWorkloadName is the NetworkPolicy that restricts AGC and worker pod egress to the proxy only.
 	npWorkloadName = "actions-gateway-workload"
 

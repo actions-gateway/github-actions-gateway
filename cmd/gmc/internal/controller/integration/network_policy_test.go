@@ -190,11 +190,11 @@ func TestGMC_NetworkPolicy_AGCPolicyExists(t *testing.T) {
 	// Wait for the AGC-specific NetworkPolicy to appear, selecting AGC pods by app label.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &np); err != nil {
 			return false
 		}
 		// Selector must target AGC pods by app label (not the broad workload label).
-		if np.Spec.PodSelector.MatchLabels["app"] != "actions-gateway-agc" {
+		if np.Spec.PodSelector.MatchLabels["app"] != agcName {
 			return false
 		}
 		// Must include port 443 egress for Kubernetes API server access.
@@ -207,7 +207,7 @@ func TestGMC_NetworkPolicy_AGCPolicyExists(t *testing.T) {
 		}
 		return false
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
-		"actions-gateway-agc NetworkPolicy must exist with AGC pod selector and port-443 egress")
+		"actions-gateway-controller NetworkPolicy must exist with AGC pod selector and port-443 egress")
 }
 
 func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) {

@@ -33,21 +33,21 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	})
 
 	It("E2E_GMC_AGCServiceAccountHasRole: AGC ServiceAccount is bound to expected Role", func() {
-		By("checking RoleBinding subjects include actions-gateway-agc ServiceAccount")
-		cmd := exec.Command("kubectl", "get", "rolebinding", "actions-gateway-agc",
+		By("checking RoleBinding subjects include actions-gateway-controller ServiceAccount")
+		cmd := exec.Command("kubectl", "get", "rolebinding", "actions-gateway-controller",
 			"-n", tenantNS,
 			"-o", "jsonpath={.subjects[0].name}",
 		)
 		out, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(Equal("actions-gateway-agc"),
+		Expect(out).To(Equal("actions-gateway-controller"),
 			"RoleBinding subject should be the AGC service account")
 	})
 
 	It("E2E_GMC_AGCCanManagePods: AGC ServiceAccount can create and delete pods", func() {
 		By("checking that the agc role allows pod management")
 		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-agc",
+			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
 			"-n", tenantNS,
 		)
 		out, err := utils.Run(cmd)
@@ -55,7 +55,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to create pods")
 
 		cmd = exec.Command("kubectl", "auth", "can-i", "delete", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-agc",
+			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
 			"-n", tenantNS,
 		)
 		out, err = utils.Run(cmd)
@@ -66,7 +66,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	It("E2E_GMC_AGCCannotAccessOtherNamespaces: AGC SA has no access to other namespaces", func() {
 		By("checking AGC SA cannot create pods in gmc-system")
 		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-agc",
+			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
 			"-n", gmcNamespace,
 		)
 		out, _ := utils.Run(cmd)

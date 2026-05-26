@@ -38,7 +38,7 @@ func TestGMC_CredRotation_PodTemplateAnnotation(t *testing.T) {
 	// Initial reconcile: annotation must reference secret-v1.
 	g.Eventually(func() string {
 		var dep appsv1.Deployment
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep); err != nil {
 			return ""
 		}
 		return dep.Spec.Template.Annotations["actions-gateway/github-app-secret"]
@@ -57,7 +57,7 @@ func TestGMC_CredRotation_PodTemplateAnnotation(t *testing.T) {
 	// After rotation the annotation must reflect secret-v2.
 	g.Eventually(func() string {
 		var dep appsv1.Deployment
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &dep); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep); err != nil {
 			return ""
 		}
 		return dep.Spec.Template.Annotations["actions-gateway/github-app-secret"]
@@ -89,7 +89,7 @@ func TestGMC_CredRotation_CredentialUnavailableOnSecretDelete(t *testing.T) {
 
 	// Wait for initial healthy reconcile.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -134,12 +134,12 @@ func TestGMC_CredRotation_InPlaceUpdateNoRollout(t *testing.T) {
 
 	// Wait for the AGC Deployment to be created and note its resource version.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var depBefore appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &depBefore))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &depBefore))
 	templateRVBefore := depBefore.Spec.Template.Annotations["actions-gateway/github-app-secret"]
 
 	// Update the Secret in place (same name, new content).
@@ -157,7 +157,7 @@ func TestGMC_CredRotation_InPlaceUpdateNoRollout(t *testing.T) {
 
 	// The annotation must still reference "stable-secret" (unchanged).
 	var depAfter appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"}, &depAfter))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &depAfter))
 	require.Equal(t, templateRVBefore, depAfter.Spec.Template.Annotations["actions-gateway/github-app-secret"],
 		"in-place Secret update must not change the pod template annotation")
 }

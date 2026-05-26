@@ -43,7 +43,7 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 		By("waiting for all managed resources to be removed")
 		Eventually(func(g Gomega) {
 			g.Expect(utils.ResourceExists("deployment",    tenantNS, "actions-gateway-proxy")).To(BeFalse(), "proxy Deployment still exists")
-			g.Expect(utils.ResourceExists("deployment",    tenantNS, "actions-gateway-agc")).To(BeFalse(), "AGC Deployment still exists")
+			g.Expect(utils.ResourceExists("deployment",    tenantNS, "actions-gateway-controller")).To(BeFalse(), "AGC Deployment still exists")
 			g.Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-proxy")).To(BeFalse(), "proxy NetworkPolicy still exists")
 			g.Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-workload")).To(BeFalse(), "workload NetworkPolicy still exists")
 			g.Expect(utils.ResourceExists("service",       tenantNS, "actions-gateway-proxy")).To(BeFalse(), "Service still exists")

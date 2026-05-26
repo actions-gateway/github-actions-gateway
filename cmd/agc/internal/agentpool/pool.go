@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/karlkfi/github-actions-gateway/agc/names"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -23,7 +24,7 @@ const (
 	labelManagedBy   = "app.kubernetes.io/managed-by"
 	labelRunnerGroup = "actions-gateway/runner-group"
 	labelAgentIndex  = "actions-gateway/agent-index"
-	managedByValue   = "actions-gateway-agc"
+	managedByValue   = names.ControllerName
 )
 
 // RegisterParams is the input to Registrar.Register.

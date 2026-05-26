@@ -42,7 +42,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, agcImage)
 
 		By("waiting for AGC to be ready")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-agc", 4*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-controller", 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())
@@ -106,7 +106,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app.kubernetes.io/managed-by=actions-gateway-agc",
+				"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
 				"-o", "jsonpath={.items[*].metadata.name}",
 			)
 			out, err := utils.Run(cmd)
@@ -140,7 +140,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app.kubernetes.io/managed-by=actions-gateway-agc",
+				"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
 				"--no-headers",
 			)
 			out, err := utils.Run(cmd)
