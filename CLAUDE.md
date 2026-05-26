@@ -6,19 +6,45 @@ A four-tier system for running GitHub Actions self-hosted runners in a shared Ku
 
 At the start of each session, assess the work and recommend a model if the current one seems mismatched. Re-evaluate and prompt again mid-session when a trigger fires.
 
-**Model guide:**
-- **Opus 4.7** — architecture decisions, cross-cutting design changes, security analysis, complex debugging across multiple systems
-- **Sonnet 4.6** — general implementation, code review, refactoring, test writing (good default)
-- **Haiku 4.5** — repetitive/mechanical tasks: renaming, formatting, grep-and-replace, doc typo fixes
+### Models
 
-**Triggers for re-evaluation** — prompt with `AskUserQuestion` when:
-- The task shifts from implementation to architecture or design (consider Opus)
-- A bug is proving surprisingly hard to root-cause across multiple layers (consider Opus)
-- A security-relevant change is discovered mid-session (consider Opus)
-- The session pivots to a large batch of mechanical edits (consider Haiku)
+| Model | ID | Context | Best for |
+|---|---|---|---|
+| **Opus 4.7** | `claude-opus-4-7` | 1M | Architecture, cross-cutting design, security analysis, complex multi-layer debugging — highest capability |
+| **Opus 4.6** | `claude-opus-4-6` | 1M | Same scope as 4.7; use only if 4.7 is unavailable |
+| **Sonnet 4.6** | `claude-sonnet-4-6` | 1M | General implementation, code review, refactoring, test writing — good default |
+| **Haiku 4.5** | `claude-haiku-4-5-20251001` | 200k | Mechanical tasks: renaming, formatting, grep-and-replace, doc typo fixes |
+
+Default to **Sonnet 4.6**. Switch to Opus 4.7 for work that genuinely requires deeper reasoning; switch to Haiku 4.5 for high-volume mechanical tasks where speed matters more than depth.
+
+### Extended thinking (Max plan)
+
+Prefix a message with a thinking keyword to ask for deeper reasoning before responding. Use sparingly — thinking adds latency and cost.
+
+| Keyword | Effort | When to use |
+|---|---|---|
+| `think` | low–medium | Moderately tricky problems: non-obvious refactors, subtle test failures |
+| `think harder` | high | Hard problems: cross-layer bugs, security design decisions, API contract changes |
+| `ultrathink` | max | Hardest problems: architectural trade-offs, novel failure modes, cryptographic or concurrency correctness |
+
+For most tasks no thinking keyword is needed. Reserve `ultrathink` for genuinely difficult problems where getting it wrong is expensive.
+
+### 1M context window (Max plan)
+
+Opus 4.7, Opus 4.6, and Sonnet 4.6 all have a 1M-token context window — no special flag needed. Haiku 4.5 caps at 200k.
+
+Use the larger context to your advantage by loading full file sets at once rather than reading piecemeal. When a task spans many files (e.g. a cross-module refactor, a full security audit), suggest loading all relevant files upfront rather than fetching them incrementally.
+
+### Triggers for re-evaluation
+
+Prompt with `AskUserQuestion` when:
+- The task shifts from implementation to architecture or design → consider Opus 4.7
+- A bug is proving hard to root-cause across multiple layers → consider Opus 4.7 + `think harder`
+- A security-relevant change is discovered mid-session → consider Opus 4.7
+- The session pivots to a large batch of mechanical edits → consider Haiku 4.5
 - A new chapter starts that is clearly lighter/heavier than the previous one
 
-When prompting, offer the three models as options, mark the recommendation, and include the `/model <id>` command the user needs to run.
+When prompting, offer the relevant models as options, mark the recommendation, and include the `/model <id>` command the user needs to run.
 
 ## Development philosophy
 
