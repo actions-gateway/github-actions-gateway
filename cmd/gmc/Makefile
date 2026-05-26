@@ -16,6 +16,9 @@ PROXY_IMG   ?= localhost:5000/proxy:e2e
 
 ENVTEST_K8S_VERSION ?= 1.35
 
+CERTMANAGER_VERSION ?= v1.20.2
+_CERTMANAGER_URL    := https://github.com/cert-manager/cert-manager/releases/download/$(CERTMANAGER_VERSION)/cert-manager.yaml
+
 .DEFAULT_GOAL := help
 
 ##@ General
@@ -58,6 +61,24 @@ generate: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder mark
 .PHONY: docker-build
 docker-build: ## Build and push the GMC Docker image to the local registry
 	docker buildx build --push -f Dockerfile -t $(GMC_IMG) .
+
+##@ Cluster dependencies
+
+.PHONY: install-cert-manager
+install-cert-manager: ## Install cert-manager into the current kube-context
+	kubectl apply -f $(_CERTMANAGER_URL)
+	kubectl wait deployment.apps/cert-manager \
+		--for=condition=Available --namespace=cert-manager --timeout=5m
+	kubectl wait deployment.apps/cert-manager-webhook \
+		--for=condition=Available --namespace=cert-manager --timeout=5m
+	kubectl wait deployment.apps/cert-manager-cainjector \
+		--for=condition=Available --namespace=cert-manager --timeout=5m
+
+.PHONY: uninstall-cert-manager
+uninstall-cert-manager: ## Remove cert-manager from the current kube-context
+	-kubectl delete -f $(_CERTMANAGER_URL)
+	-kubectl delete lease cert-manager-cainjector-leader-election cert-manager-controller \
+		-n kube-system --ignore-not-found --force --grace-period=0
 
 ##@ Deploy
 
