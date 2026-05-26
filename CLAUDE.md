@@ -6,7 +6,12 @@ A four-tier system for running GitHub Actions self-hosted runners in a shared Ku
 
 Build the right thing AND build it well. Before writing any code, state the goal in one sentence and the approach in two or three. If the goal is unclear, ask one focused question rather than guessing.
 
-Make the smallest change that achieves the goal. If you notice problems outside the current task's scope, flag them rather than fixing them — and if they're worth tracking, document them in `docs/todo/`. Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
+Make the smallest change that achieves the goal. If you notice problems outside the current task's scope, flag them rather than fixing them. Use the right tracking layer:
+- `docs/backlog/README.md` — prioritized near-term work not yet started; update it when items are picked up (move to `docs/plan/`) or newly identified.
+- `docs/todo/` — small bugs and investigations without a clear fix yet.
+- `docs/design/appendix-g-future-enhancements.md` — long-horizon "someday maybe" features.
+
+Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
 
 ## Workflow
 
@@ -76,3 +81,4 @@ When working on specific tasks, read the relevant doc before starting:
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
+| Picking the next task / updating near-term priorities | `docs/backlog/README.md` |
