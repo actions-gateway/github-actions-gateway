@@ -69,6 +69,8 @@ Spell out acronyms on first use: write the full term first, then the acronym in 
 - Follow the Conventional Commits standard.
 - Amending an unpushed commit is fine — fix up the message or staged changes before pushing without asking. Once a commit is pushed, prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
 - After pushing, check whether a PR exists (`gh pr view`). If one does, update its description with `gh pr edit` to reflect any new commits.
+- Always commit `docs/STATUS.md` changes in their own isolated commit, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating it makes rebase conflicts trivial to resolve.
+- If a change doesn't belong in the current PR, open a separate PR for it. Working multiple PRs in parallel is fine and preferable to bundling unrelated concerns.
 
 ## Agent reference docs
 
