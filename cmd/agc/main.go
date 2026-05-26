@@ -153,16 +153,16 @@ func run() error {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Cache:  cacheOpts,
-		// Secrets are fetched directly from the API server rather than cached.
-		// W4 removed list/watch from the AGC's Role (only get/create/delete
-		// remain), but controller-runtime's default client establishes a
-		// cache-backed reader for every type the reconciler touches — which
-		// requires list+watch. Without DisableFor here, every Secret Get
-		// against this manager's client triggers a watch attempt that the
-		// API server forbids, and controller-runtime logs a steady stream
-		// of "secrets is forbidden: cannot list resource secrets" errors.
-		// Direct fetches sidestep the watch entirely (only get permission
-		// needed) and keep secret bodies out of the AGC's in-memory cache.
+		// Three-part Secret isolation (see plan/security.md §H-2):
+		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
+		//    the controller-runtime cache and hit the API server directly, so
+		//    Secret bodies never buffer in-process beyond the duration of a call.
+		// 2. SetupWithManager registers no Watches or WatchesMetadata for Secrets
+		//    — no Secret informer (full or metadata-only) is ever established, so
+		//    nothing caches Secret data or metadata in the background.
+		// 3. The AGC Role grants list+watch on Secrets (list needed by agentpool
+		//    for EnsureAgents; watch is over-declared and unused by the controller).
+		//    Any exfiltration via list requires live API server calls in the audit log.
 		Client: client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: []client.Object{&corev1.Secret{}},

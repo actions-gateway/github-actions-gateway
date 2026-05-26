@@ -36,7 +36,7 @@ by-design / accepted.
 |---|---|---|---|---|---|
 | **C-1** | RunnerGroup PodTemplate not validated | Critical | W2 | ✅ Done 2026-05-23 | PSA labels + CEL `XValidation` rejecting `privileged: true` |
 | **H-1** | GitHub App key in env var | High | W3 | ✅ Done 2026-05-23 | File mount at `/etc/actions-gateway/github-app/` mode `0o400` |
-| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list`/`watch` retained; Secret cache disabled as compensating control; residual accepted per D-3. Note: separate from the GMC's credential Secret watch — see §GMC-1 below. |
+| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list` retained (needed by agentpool); `watch` over-declared (no informer registered); Secret cache disabled; residual accepted per D-3. See §GMC-1 for GMC's separate credential watch design. |
 | **M-1** | Workers can bypass proxy to GitHub | Medium | W1 | ✅ Done 2026-05-23 | Three split NetworkPolicies (`buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`) |
 | **M-2** | Proxy has no destination allowlist | Informational | — | ⓘ By design | Appendix G §G.1 records revisit conditions |
 | **M-3** | AES-CBC padding-oracle-shaped errors | Medium | W6 | ✅ Done 2026-05-23 | Single `errInvalidPadding` sentinel + `crypto/subtle` constant-time |
@@ -261,7 +261,7 @@ by-design / accepted.
   Secret in the tenant namespace (e.g. a developer's `ghcr-pull-token` or
   `slack-webhook`). The broad `create` would let it stage a Secret that another
   workload mounts.
-- **Mitigation (implemented, partially):** Two controls landed:
+- **Mitigation (implemented, partially):** Three controls landed:
 
   1. **`list`/`watch` were initially removed** (commit where W4 first
      shipped), but this broke `agentpool.Pool.listSecrets` — the agent
@@ -269,16 +269,27 @@ by-design / accepted.
      (`EnsureAgents`). `list` was restored (dc80293).
 
   2. **Secret cache disabled on the AGC manager** (`Client.Cache.DisableFor
-     [*corev1.Secret]`, commit 8ea6f5f) — all Secret reads bypass the
-     controller-runtime in-process cache and go direct to the API server.
-     A compromised AGC cannot silently drain Secret bodies from memory;
-     any exfiltration requires live API server calls that appear in the
-     audit log.
+     [*corev1.Secret]`, commit 8ea6f5f) — all Secret reads (`Get` and
+     `List`) bypass the controller-runtime in-process cache and go direct
+     to the API server. A compromised AGC cannot silently drain Secret
+     bodies from memory; any exfiltration requires live API server calls
+     that appear in the audit log.
 
-- **Residual risk (accepted):** The AGC Role still grants `list`/`watch`
-  on all Secrets in the tenant namespace. A compromised AGC can enumerate
-  user-managed Secrets (e.g. `ghcr-pull-token`, `slack-webhook`). Two
-  paths to closing this were evaluated and rejected for v1:
+  3. **No Secret informer registered** —
+     `RunnerGroupReconciler.SetupWithManager` registers only
+     `For(&v1alpha1.RunnerGroup{})`. There is no `Watches` or
+     `WatchesMetadata` call for Secrets. The `watch` verb in the AGC Role
+     is therefore **over-declared**: the RBAC grants it, but the AGC's
+     controller machinery never establishes a Secret informer (full or
+     metadata-only), so no Secret data or metadata buffers in-process. A
+     compromised AGC binary *could* exercise `watch` out-of-band, but the
+     legitimate controller never does.
+
+- **Residual risk (accepted):** The AGC Role grants `list` on all Secrets
+  in the tenant namespace. A compromised AGC can enumerate user-managed
+  Secrets (e.g. `ghcr-pull-token`, `slack-webhook`). The `watch` verb is
+  over-declared and unused by the controller. Two paths to closing `list`
+  were evaluated and rejected for v1:
 
   - **`resourceNames` restriction** — not viable: RBAC doesn't support
     glob patterns and agent Secret names are dynamic (created per
@@ -298,9 +309,12 @@ by-design / accepted.
     ~100 LoC, and a compromised AGC already controls the credentials it
     minted (the accepted D-3 reasoning extends here).
 
-  **Decision:** accept the broad `list`/`watch` in combination with the
-  cache-disable control. Revisit if a real exploit path surfaces or if
-  Kubernetes adds label-selector support to `PolicyRule`.
+  **Decision:** accept `list` in combination with the cache-disable
+  control and the no-informer property. Revisit if a real exploit path
+  surfaces or if Kubernetes adds label-selector support to `PolicyRule`.
+  The over-declared `watch` verb can be removed from the AGC Role once
+  confirmed no informer path needs it — low priority, zero functional
+  impact.
 
 ---
 
