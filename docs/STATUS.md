@@ -14,7 +14,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **New item identified:** insert it in the Queue at the right priority position.
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 
-Last refreshed: 2026-05-26 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅, AGC rename ✅, go-workspace prefix-match ✅ — workaround already removed in 6c23b0d).
+Last refreshed: 2026-05-26 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅, AGC rename ✅, go-workspace prefix-match ✅ — workaround already removed in 6c23b0d, Make UX Phase 2 ✅, e2e test speed ✅).
 
 ---
 
@@ -33,9 +33,9 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
 | Worker egress proxy | `security` `infra` | ⚠️ | NetworkPolicy split shipped; live `curl` validation blocked on M3/M4 — [plan](plan/worker-egress-proxy.md) |
 | Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
-| Make UX | `infra` | ⚠️ | Phase 1 done; Phase 2 drift items open — [plan](plan/make.md) |
-| Docker image speed | `speed` | ⚠️ | §1/2/4/5 done; §7/8/9/12 open — [plan](plan/docker-image-speed.md) |
-| e2e test speed | `speed` `tests` | ⚠️ | §2/3 done; §1/4/5 open — [plan](plan/e2e-tests-speed.md) |
+| Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
+| Docker image speed | `speed` | ⚠️ | §1/2/4/5/13 done; §7/8/9/12 open — [plan](plan/docker-image-speed.md) |
+| e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
 
 ---
 
