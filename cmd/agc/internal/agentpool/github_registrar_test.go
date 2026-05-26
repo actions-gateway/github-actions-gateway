@@ -29,16 +29,20 @@ func testPublicKeyPEM(t *testing.T) []byte {
 }
 
 // newGithubAPISrv starts an httptest server that stubs the three GitHub
-// registration API endpoints in GHES URL form (paths derived from OrgURL).
+// registration API endpoints in GHES URL form.
 //
-// All three paths route to the same server so GithubRegistrar.HTTPClient can
-// point to it via OrgURL = srv.URL+"/"+orgPath.
-func newGithubAPISrv(t *testing.T, orgPath, regToken string, agentID int64) *httptest.Server {
+// resourcePath is the org or repo path segment used in the API URLs:
+//   - org-level:  "orgs/myorg"
+//   - repo-level: "repos/myorg/myrepo"
+//
+// GithubRegistrar.HTTPClient should point to srv.Client() and OrgURL should
+// be srv.URL + "/" + owner (org) or srv.URL + "/" + owner + "/" + repo.
+func newGithubAPISrv(t *testing.T, resourcePath, regToken string, agentID int64) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 
 	// Step 1 — registration token (most specific path, registered first).
-	mux.HandleFunc("/api/v3/orgs/"+orgPath+"/actions/runners/registration-token",
+	mux.HandleFunc("/api/v3/"+resourcePath+"/actions/runners/registration-token",
 		func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "registration-token must be POST")
 			assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "),
@@ -48,7 +52,7 @@ func newGithubAPISrv(t *testing.T, orgPath, regToken string, agentID int64) *htt
 			_ = json.NewEncoder(w).Encode(map[string]string{"token": regToken})
 		})
 
-	// Step 2 — runner registration.
+	// Step 2 — runner registration (same endpoint for org and repo).
 	mux.HandleFunc("/api/v3/actions/runners/register",
 		func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method, "register must be POST")
@@ -71,7 +75,7 @@ func newGithubAPISrv(t *testing.T, orgPath, regToken string, agentID int64) *htt
 		})
 
 	// Deregistration — subtree pattern catches DELETE /…/runners/{id}.
-	mux.HandleFunc("/api/v3/orgs/"+orgPath+"/actions/runners/",
+	mux.HandleFunc("/api/v3/"+resourcePath+"/actions/runners/",
 		func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodDelete, r.Method, "deregister must be DELETE")
 			assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "),
@@ -85,7 +89,7 @@ func newGithubAPISrv(t *testing.T, orgPath, regToken string, agentID int64) *htt
 // ── Register ──────────────────────────────────────────────────────────────────
 
 func TestGithubRegistrar_Register(t *testing.T) {
-	srv := newGithubAPISrv(t, "myorg", "reg-token-xyz", 12345)
+	srv := newGithubAPISrv(t, "orgs/myorg", "reg-token-xyz", 12345)
 	defer srv.Close()
 
 	r := &agentpool.GithubRegistrar{
@@ -199,6 +203,7 @@ func TestGithubRegistrar_Deregister(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodDelete, gotMethod)
 	assert.Contains(t, gotPath, "/42", "path must include the agent ID")
+	assert.Contains(t, gotPath, "/orgs/myorg/", "org-level URL must use orgs path")
 	assert.Equal(t, "Bearer install-token", gotAuth)
 }
 
@@ -215,4 +220,44 @@ func TestGithubRegistrar_Deregister_Error(t *testing.T) {
 	err := r.Deregister(context.Background(), "token", 42)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "deregister runner")
+}
+
+// ── Repo-level ────────────────────────────────────────────────────────────────
+
+func TestGithubRegistrar_Register_Repo(t *testing.T) {
+	srv := newGithubAPISrv(t, "repos/myorg/myrepo", "reg-token-repo", 99)
+	defer srv.Close()
+
+	r := &agentpool.GithubRegistrar{
+		OrgURL:     srv.URL + "/myorg/myrepo",
+		GroupID:    1,
+		HTTPClient: srv.Client(),
+	}
+	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
+		Name:         "repo-runner",
+		Version:      "2.327.1",
+		Labels:       []string{"self-hosted"},
+		PublicKeyPEM: testPublicKeyPEM(t),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(99), creds.AgentID)
+	assert.Equal(t, "client-abc", creds.ClientID)
+}
+
+func TestGithubRegistrar_Deregister_Repo(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	r := &agentpool.GithubRegistrar{
+		OrgURL:     srv.URL + "/myorg/myrepo",
+		HTTPClient: srv.Client(),
+	}
+	err := r.Deregister(context.Background(), "install-token", 77)
+	require.NoError(t, err)
+	assert.Contains(t, gotPath, "/repos/myorg/myrepo/", "repo-level URL must use repos path")
+	assert.Contains(t, gotPath, "/77", "path must include the agent ID")
 }

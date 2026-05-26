@@ -3,8 +3,9 @@
 // # Runner Registration API (from github.com/actions/runner source, RunnerDotcomServer.cs)
 //
 // Registration flow:
-//  1. Obtain a short-lived registration token:
+//  1. Obtain a short-lived registration token (org-scoped or repo-scoped):
 //     POST https://api.github.com/orgs/{org}/actions/runners/registration-token
+//     POST https://api.github.com/repos/{owner}/{repo}/actions/runners/registration-token
 //     Authorization: Bearer {installationAccessToken}
 //     → {"token": "...", "expires_at": "..."}
 //
@@ -12,15 +13,16 @@
 //     POST https://api.github.com/actions/runners/register
 //     Authorization: RemoteAuth {registrationToken}
 //     Content-Type: application/json
-//     {"url": "{runnerGroupURL}", "group_id": {groupID}, "name": "{name}",
+//     {"url": "{orgOrRepoURL}", "group_id": {groupID}, "name": "{name}",
 //      "version": "{version}", "updates_disabled": false, "ephemeral": false,
 //      "labels": [], "public_key": "{base64(DER(SubjectPublicKeyInfo))}"}
 //     → {"id": 12345, "authorization": {"authorization_url": "...",
 //        "server_url": "...", "client_id": "..."}}
 //
-// Deregistration:
+// Deregistration (org-scoped or repo-scoped):
 //
 //	DELETE https://api.github.com/orgs/{org}/actions/runners/{id}
+//	DELETE https://api.github.com/repos/{owner}/{repo}/actions/runners/{id}
 //	Authorization: Bearer {installationAccessToken}
 //
 // The public_key field is base64-standard-encoded DER of the RSA public key in
@@ -41,11 +43,13 @@ import (
 )
 
 // GithubRegistrar implements Registrar using the GitHub Actions runner registration API.
-// It requires the org/repo URL (e.g. "https://github.com/myorg") and the
-// installation access token is passed per-call via Register/Deregister.
+// It requires the org or repo URL and the installation access token is passed
+// per-call via Register/Deregister.
 type GithubRegistrar struct {
-	// OrgURL is the GitHub organization or repository URL, e.g. "https://github.com/myorg".
-	// Used to derive the registration token endpoint and the runner group URL.
+	// OrgURL is the GitHub organization or repository URL.
+	// Org-level:  "https://github.com/myorg"
+	// Repo-level: "https://github.com/myorg/myrepo"
+	// Used to derive the registration/deregistration endpoints and the runner URL.
 	OrgURL string
 	// GroupID is the GitHub-side runner group ID to register agents into.
 	// Use 1 for the default runner group.
@@ -83,15 +87,7 @@ func (r *GithubRegistrar) Register(ctx context.Context, token string, params Reg
 // Deregister removes a runner agent from GitHub.
 // token is the GitHub App installation access token.
 func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID int64) error {
-	orgPath := extractOrgPath(r.OrgURL)
-	var deleteURL string
-	if isHostedServer(r.OrgURL) {
-		deleteURL = fmt.Sprintf("https://api.github.com/orgs/%s/actions/runners/%d", orgPath, agentID)
-	} else {
-		host := extractHost(r.OrgURL)
-		deleteURL = fmt.Sprintf("%s/api/v3/orgs/%s/actions/runners/%d", host, orgPath, agentID)
-	}
-
+	deleteURL := fmt.Sprintf("%s/actions/runners/%d", r.runnerAPIPrefix(), agentID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("build deregister request: %w", err)
@@ -112,15 +108,7 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 }
 
 func (r *GithubRegistrar) getRegistrationToken(ctx context.Context, installToken string) (string, error) {
-	orgPath := extractOrgPath(r.OrgURL)
-	var tokenURL string
-	if isHostedServer(r.OrgURL) {
-		tokenURL = fmt.Sprintf("https://api.github.com/orgs/%s/actions/runners/registration-token", orgPath)
-	} else {
-		host := extractHost(r.OrgURL)
-		tokenURL = fmt.Sprintf("%s/api/v3/orgs/%s/actions/runners/registration-token", host, orgPath)
-	}
-
+	tokenURL := r.runnerAPIPrefix() + "/actions/runners/registration-token"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, nil)
 	if err != nil {
 		return "", err
@@ -146,23 +134,42 @@ func (r *GithubRegistrar) getRegistrationToken(ctx context.Context, installToken
 	return result.Token, nil
 }
 
-func (r *GithubRegistrar) registerRunner(ctx context.Context, regToken string, params RegisterParams, pubKeyB64 string) (*AgentCredentials, error) {
-	var registerURL string
-	if isHostedServer(r.OrgURL) {
-		registerURL = "https://api.github.com/actions/runners/register"
-	} else {
-		registerURL = extractHost(r.OrgURL) + "/api/v3/actions/runners/register"
+// runnerAPIPrefix returns the base REST API path for runner management calls,
+// switching between org-scoped and repo-scoped endpoints based on OrgURL.
+//
+//	Org-level:  https://api.github.com/orgs/{org}
+//	Repo-level: https://api.github.com/repos/{owner}/{repo}
+func (r *GithubRegistrar) runnerAPIPrefix() string {
+	base := r.apiBase()
+	if isRepoURL(r.OrgURL) {
+		return base + "/repos/" + extractRepoPath(r.OrgURL)
 	}
+	return base + "/orgs/" + extractOrgPath(r.OrgURL)
+}
+
+// apiBase returns the REST API root for the server hosting OrgURL.
+func (r *GithubRegistrar) apiBase() string {
+	if isHostedServer(r.OrgURL) {
+		return "https://api.github.com"
+	}
+	return extractHost(r.OrgURL) + "/api/v3"
+}
+
+func (r *GithubRegistrar) registerRunner(ctx context.Context, regToken string, params RegisterParams, pubKeyB64 string) (*AgentCredentials, error) {
+	registerURL := r.apiBase() + "/actions/runners/register"
 
 	body := map[string]any{
 		"url":              r.OrgURL,
-		"group_id":         r.GroupID,
 		"name":             params.Name,
 		"version":          params.Version,
 		"updates_disabled": false,
 		"ephemeral":        false,
 		"labels":           params.Labels,
 		"public_key":       pubKeyB64,
+	}
+	// group_id is an org-level concept; omit it for repo-scoped runners.
+	if !isRepoURL(r.OrgURL) && r.GroupID != 0 {
+		body["group_id"] = r.GroupID
 	}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -222,14 +229,33 @@ func isHostedServer(githubURL string) bool {
 	return strings.Contains(githubURL, "github.com")
 }
 
+// isRepoURL reports whether githubURL refers to a repository (owner + repo)
+// rather than just an organization (owner only).
+func isRepoURL(githubURL string) bool {
+	// parts: ["https:", "", "host", "owner", "repo", ...]
+	trimmed := strings.TrimRight(githubURL, "/")
+	parts := strings.Split(trimmed, "/")
+	return len(parts) >= 5 && parts[4] != ""
+}
+
 func extractOrgPath(githubURL string) string {
 	// "https://github.com/myorg" → "myorg"
-	// "https://github.com/myorg/myrepo" → "myorg" (use only the org segment)
-	// parts: ["https:", "", "host", "org", "repo"(optional)]
+	// parts: ["https:", "", "host", "org"]
 	trimmed := strings.TrimRight(githubURL, "/")
 	parts := strings.Split(trimmed, "/")
 	if len(parts) >= 4 {
 		return parts[3]
+	}
+	return ""
+}
+
+func extractRepoPath(githubURL string) string {
+	// "https://github.com/myorg/myrepo" → "myorg/myrepo"
+	// parts: ["https:", "", "host", "owner", "repo"]
+	trimmed := strings.TrimRight(githubURL, "/")
+	parts := strings.Split(trimmed, "/")
+	if len(parts) >= 5 {
+		return parts[3] + "/" + parts[4]
 	}
 	return ""
 }
