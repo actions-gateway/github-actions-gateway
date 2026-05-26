@@ -14,6 +14,7 @@ import (
 	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/gmc/internal/controller"
+	gmcnames "github.com/karlkfi/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -25,9 +26,15 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
-// agcName is the on-cluster name for the AGC Deployment and associated resources.
-// Shared across all integration tests in this package.
-const agcName = agcnames.ControllerName
+// Shared resource name constants — single source of truth for all integration
+// tests in this package. Import the canonical constants rather than repeating
+// string literals so that a rename propagates automatically.
+const (
+	agcName      = agcnames.ControllerName
+	workerSAName = agcnames.WorkerSAName
+	proxyName    = gmcnames.ProxyName
+	workloadName = gmcnames.WorkloadNetworkPolicyName
+)
 
 var (
 	testEnv    *envtest.Environment

@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
+	gmcnames "github.com/karlkfi/github-actions-gateway/gmc/names"
 	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
 )
 
@@ -31,7 +32,9 @@ const (
 	fakegithubServiceName = "fakegithub"
 	fakegithubServicePort = "8080"
 
-	agcName = agcnames.ControllerName
+	agcName      = agcnames.ControllerName
+	proxyName    = gmcnames.ProxyName
+	workloadName = gmcnames.WorkloadNetworkPolicyName
 )
 
 var (

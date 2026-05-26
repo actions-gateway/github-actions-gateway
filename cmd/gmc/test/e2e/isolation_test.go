@@ -43,7 +43,7 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		By("waiting for both proxy deployments")
 		Eventually(func(g Gomega) {
 			for _, ns := range []string{nsA, nsB} {
-				cmd := exec.Command("kubectl", "get", "deployment", "actions-gateway-proxy",
+				cmd := exec.Command("kubectl", "get", "deployment", proxyName,
 					"-n", ns, "-o", "jsonpath={.status.readyReplicas}")
 				out, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -54,11 +54,11 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 	})
 
 	It("E2E_GMC_NetworkPolicyScopedToNamespace: NetworkPolicies exist in each namespace", func() {
-		Expect(utils.ResourceExists("networkpolicy", nsA, "actions-gateway-proxy")).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsA, "actions-gateway-workload")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsA, proxyName)).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsA, workloadName)).To(BeTrue())
 		Expect(utils.ResourceExists("networkpolicy", nsA, agcName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, "actions-gateway-proxy")).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, "actions-gateway-workload")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsB, proxyName)).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", nsB, workloadName)).To(BeTrue())
 		Expect(utils.ResourceExists("networkpolicy", nsB, agcName)).To(BeTrue())
 	})
 
@@ -68,7 +68,7 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		Expect(podName).NotTo(BeEmpty())
 
 		By("getting proxy service ClusterIP in nsB")
-		cmd := exec.Command("kubectl", "get", "service", "actions-gateway-proxy",
+		cmd := exec.Command("kubectl", "get", "service", proxyName,
 			"-n", nsB, "-o", "jsonpath={.spec.clusterIP}")
 		clusterIP, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())

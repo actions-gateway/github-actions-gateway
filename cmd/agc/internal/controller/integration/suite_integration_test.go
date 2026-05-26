@@ -16,6 +16,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/internal/controller"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	"github.com/karlkfi/github-actions-gateway/broker/brokertest"
 	"github.com/karlkfi/github-actions-gateway/githubapp"
 	"github.com/stretchr/testify/require"
@@ -177,7 +178,7 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 			Client:             mgr.GetClient(),
 			Log:                slog.Default(),
 			PollInterval:       pollInterval,
-			WorkerSA:           "actions-gateway-worker",
+			WorkerSA:           agcnames.WorkerSAName,
 			MaxEvictionRetries: maxRetries,
 			DefaultWorkerImage: "runner:test",
 			GitHubAPIURL:       opts.githubAPIURL,
