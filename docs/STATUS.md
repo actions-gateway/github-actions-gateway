@@ -14,7 +14,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **New item identified:** insert it in the Queue at the right priority position.
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 
-Last refreshed: 2026-05-25 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅).
+Last refreshed: 2026-05-25 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅ — already done).
 
 ---
 
@@ -45,16 +45,15 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 1 | [M3 metric assertions + dead PodCreationLatency](plan/milestone-3-tests.md) | `milestone` `tests` | 🔲 | S | Metrics untested; `PodCreationLatency` declared but never emitted |
-| 2 | [M4 remaining test gaps](plan/milestone-4-tests.md) | `milestone` `tests` | 🔲 | S | IPRange edge cases, webhook IP-range test, HPA/PDB coverage |
-| 3 | [Open docs items: HPA callout, DefaultWorkerImage, capacity examples](plan/docs.md) | `docs` | 🔲 | S | Items 2.7, 2.6, 2.3 from docs plan |
-| 4 | [Rename actions-gateway-agc → actions-gateway-controller](plan/rename-agc-to-controller.md) | `infra` `milestone` | 🔲 | M | Code/docs mismatch since M4; 5 constants, all tests, ops docs |
-| 5 | [Go workspace prefix-match bug investigation](development/go-workspaces.md) | `infra` | 🔲 | S | Check if Go 1.22–1.24 fixed it; drop `replace` workaround if so |
-| 6 | [M2 kind: live activeSessions==1 check](plan/milestone-2.md) | `milestone` `tests` | 🔲 | S | Requires live kind cluster with GitHub credentials |
-| 7 | [M3/M4 kind end-to-end validation](plan/milestone-3.md) | `milestone` | 🚫 | M | → Named Pipe investigation (complete; needs live Runner.Worker run) |
-| 8 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🚫 | S | → M3/M4 kind end-to-end |
-| 9 | [M2-tests remaining unit gaps (3–11)](plan/milestone-2-tests.md) | `milestone` `tests` | 🚫 | M | → M2 envtest suite |
-| 10 | [M3-tests remaining items (H2/M/L)](plan/milestone-3-tests.md) | `milestone` `tests` | 🚫 | M | → M3 metric assertions |
+| 1 | [M4 remaining test gaps](plan/milestone-4-tests.md) | `milestone` `tests` | 🔲 | S | IPRange edge cases, webhook IP-range test, HPA/PDB coverage |
+| 2 | [Open docs items: HPA callout, DefaultWorkerImage, capacity examples](plan/docs.md) | `docs` | 🔲 | S | Items 2.7, 2.6, 2.3 from docs plan |
+| 3 | [Rename actions-gateway-agc → actions-gateway-controller](plan/rename-agc-to-controller.md) | `infra` `milestone` | 🔲 | M | Code/docs mismatch since M4; 5 constants, all tests, ops docs |
+| 4 | [Go workspace prefix-match bug investigation](development/go-workspaces.md) | `infra` | 🔲 | S | Check if Go 1.22–1.24 fixed it; drop `replace` workaround if so |
+| 5 | [M2 kind: live activeSessions==1 check](plan/milestone-2.md) | `milestone` `tests` | 🔲 | S | Requires live kind cluster with GitHub credentials |
+| 6 | [M3/M4 kind end-to-end validation](plan/milestone-3.md) | `milestone` | 🚫 | M | → Named Pipe investigation (complete; needs live Runner.Worker run) |
+| 7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🚫 | S | → M3/M4 kind end-to-end |
+| 8 | [M2-tests remaining unit gaps (3–11)](plan/milestone-2-tests.md) | `milestone` `tests` | 🚫 | M | → M2 envtest suite |
+| 9 | [M3-tests remaining items (H2/M/L)](plan/milestone-3-tests.md) | `milestone` `tests` | 🚫 | M | → M3 metric assertions |
 | 11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🚫 | S | → M3/M4 kind end-to-end (needs live kind cluster) |
 | 12 | [M5 packaging — Kustomize overlay](plan/milestone-5.md) | `milestone` | 🚫 | L | → M3/M4 kind end-to-end |
 | 13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🚫 | L | → M5 packaging |
