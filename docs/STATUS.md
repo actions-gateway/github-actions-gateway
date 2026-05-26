@@ -45,7 +45,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 1 | [M2 envtest goroutine-leak integration suite](plan/milestone-2.md) | `milestone` `tests` | 🔲 | M | Last two unchecked M2 success criteria; 7 scenarios from §7.2 |
+| 1 | [M2 envtest goroutine-leak integration suite](plan/milestone-2.md) | `milestone` `tests` | ▶ | M | Last two unchecked M2 success criteria; 7 scenarios from §7.2 |
 | 2 | [Credential rotation: Secret watch + CredentialUnavailable](plan/gaps.md) | `milestone` `security` | 🔲 | M | Silent failure when referenced Secret is deleted mid-operation |
 | 3 | [M3 metric assertions + dead PodCreationLatency](plan/milestone-3-tests.md) | `milestone` `tests` | 🔲 | S | Metrics untested; `PodCreationLatency` declared but never emitted |
 | 4 | [M4 remaining test gaps](plan/milestone-4-tests.md) | `milestone` `tests` | 🔲 | S | IPRange edge cases, webhook IP-range test, HPA/PDB coverage |
