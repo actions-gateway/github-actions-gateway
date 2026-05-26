@@ -354,10 +354,12 @@ type RunnerGroupSpec struct {
     // returns 400 Bad Request for versions below the threshold. Tenants are
     // responsible for keeping this image current.
     //
-    // Omitting this field causes the AGC to use its operator-configured default,
-    // set via the --worker-image flag at AGC startup (itself defaulting to a
-    // pinned release in the AGC binary). Tenants who need a different image can
-    // override per-RunnerGroup with this field without affecting other groups.
+    // Omitting this field causes the AGC to use its operator-configured default.
+    // The compile-time constant DefaultWorkerImage in
+    // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
+    // (currently "ghcr.io/actions/runner:2.327.1"). Operators override it at
+    // AGC startup via the --worker-image flag; tenants can then override
+    // further per-RunnerGroup with this field without affecting other groups.
     // +optional
     WorkerImage string `json:"workerImage,omitempty"`
 
