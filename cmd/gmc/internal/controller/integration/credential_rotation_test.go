@@ -152,7 +152,9 @@ func TestGMC_CredRotation_InPlaceUpdateNoRollout(t *testing.T) {
 		return k8sClient.Update(ctx, &s) == nil
 	}, 5*time.Second, 25*time.Millisecond, "update Secret contents in-place")
 
-	// Give the controller time to react to any spurious reconcile.
+	// Give the controller time to react: a WatchesMetadata event fires on the
+	// in-place Secret update, but the pod template must NOT change because the
+	// annotation encodes only the Secret name (not its content).
 	time.Sleep(200 * time.Millisecond)
 
 	// The annotation must still reference "stable-secret" (unchanged).

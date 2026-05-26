@@ -157,10 +157,14 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "actions-gateway-gmc-leader",
-		// Secrets are fetched directly from the API server rather than cached.
-		// This means only `get` permission is needed (not list/watch), keeps
-		// secret data out of the controller's in-memory cache, and avoids the
-		// cache trying to establish a watch it has no RBAC for.
+		// Two-layer Secret isolation:
+		// 1. WatchesMetadata on the controller registers a metadata-only informer
+		//    for Secrets (ObjectMeta only — no .data ever enters the cache), so
+		//    the controller gets event-driven reconciliation on credential Secret
+		//    create/delete without buffering secret material in memory.
+		// 2. DisableFor here ensures r.Get() calls bypass the cache entirely and
+		//    hit the API server directly, so the actual Secret contents are always
+		//    read fresh and never persist in-process after the call returns.
 		Client: client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: []client.Object{&corev1.Secret{}},
