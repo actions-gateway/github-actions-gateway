@@ -42,25 +42,24 @@ jobs:
           # registry container published on the runner's 127.0.0.1:5000.
           driver-opts: network=host
 
-      - name: Create kind cluster (3-node, with local registry)
-        run: make e2e-cluster KIND_CLUSTER=actions-gateway-e2e
-
-      - name: Build images and install cert-manager in parallel
-        # cert-manager is applied in the background while images build.
-        # By the time setupGMC() deploys the GMC and its Certificate CR,
-        # cert-manager is already running and issues the webhook cert
-        # immediately — removing the ~4-5 min spin-up wait from the critical
-        # path. The version is defined once in cmd/gmc/Makefile.
+      - name: Create kind cluster (3-node, with local registry) and apply cert-manager
+        # Applying cert-manager here (not waiting) lets its pods start while
+        # images build in the next step. The version is defined once in
+        # cmd/gmc/Makefile.
         run: |
-          make install-cert-manager &
-          CERT_PID=$!
+          make e2e-cluster KIND_CLUSTER=actions-gateway-e2e
+          make apply-cert-manager
 
-          docker buildx bake --file docker-bake.hcl
-
-          wait "$CERT_PID"
+      - name: Build and push all four images in parallel (bake)
+        run: docker buildx bake --file docker-bake.hcl
         env:
           GIT_SHA: ${{ github.sha }}
           GHA_CACHE: "true"
+
+      - name: Wait for cert-manager to be ready
+        # cert-manager pods have been starting since the cluster step; by the
+        # time the image build finishes they are typically already Available.
+        run: make wait-cert-manager
 
       - name: Run e2e tests
         # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive

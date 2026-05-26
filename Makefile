@@ -93,8 +93,16 @@ e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
 		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
 		scripts/kind-with-registry.sh
 
+.PHONY: apply-cert-manager
+apply-cert-manager: ## Apply cert-manager manifests (version defined in cmd/gmc/Makefile)
+	$(MAKE) -C cmd/gmc apply-cert-manager
+
+.PHONY: wait-cert-manager
+wait-cert-manager: ## Wait for cert-manager deployments to be Available
+	$(MAKE) -C cmd/gmc wait-cert-manager
+
 .PHONY: install-cert-manager
-install-cert-manager: ## Install cert-manager (version defined in cmd/gmc/Makefile)
+install-cert-manager: ## Apply cert-manager and wait for it to be ready
 	$(MAKE) -C cmd/gmc install-cert-manager
 
 .PHONY: e2e-cluster-delete
