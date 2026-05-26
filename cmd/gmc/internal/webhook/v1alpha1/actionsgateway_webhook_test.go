@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
@@ -176,4 +177,47 @@ func TestWebhook_DeleteNoOp(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateDelete(context.Background(), newAG("team-a"))
 	require.NoError(t, err)
+}
+
+func TestWebhook_WarnsMissingCPURequest(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.Proxy.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	warnings, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "cpu")
+}
+
+func TestWebhook_UpdateWarnsMissingCPURequest(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	updated := newAG("team-a")
+	updated.Spec.Proxy.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	warnings, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
+	require.NoError(t, err)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0], "cpu")
+}
+
+func TestWebhook_NoWarnWhenCPURequestPresent(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.Proxy.Resources.Requests = corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("50m"),
+		corev1.ResourceMemory: resource.MustParse("64Mi"),
+	}
+	warnings, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+	assert.Empty(t, warnings)
+}
+
+func TestWebhook_NoWarnWhenResourcesUnset(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	warnings, err := v.ValidateCreate(context.Background(), newAG("team-a"))
+	require.NoError(t, err)
+	assert.Empty(t, warnings)
 }

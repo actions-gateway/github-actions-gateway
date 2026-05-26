@@ -84,7 +84,7 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 	if err := validateRunnerGroups(obj); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return proxyResourceWarnings(obj), nil
 }
 
 // ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef or privileged containers.
@@ -95,7 +95,7 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, _, new
 	if err := validateRunnerGroups(newObj); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return proxyResourceWarnings(newObj), nil
 }
 
 // ValidateDelete is a no-op.
@@ -130,6 +130,21 @@ func validateRunnerGroups(ag *gmcv1alpha1.ActionsGateway) error {
 			if isPrivileged(c.SecurityContext) {
 				return fmt.Errorf("runnerGroups[%d]: privileged init containers are not permitted in worker pods (container %q)", i, c.Name)
 			}
+		}
+	}
+	return nil
+}
+
+// proxyResourceWarnings returns a warning when proxy.resources.requests is set
+// without a cpu key. The builder merges user values over defaults, so the
+// default cpu request is preserved in the Deployment, but callers who expect
+// their explicit requests map to be the authoritative source will be surprised.
+// A warning surfaces the issue at apply time without blocking the operation.
+func proxyResourceWarnings(ag *gmcv1alpha1.ActionsGateway) admission.Warnings {
+	if ag.Spec.Proxy.Resources.Requests != nil {
+		if _, hasCPU := ag.Spec.Proxy.Resources.Requests[corev1.ResourceCPU]; !hasCPU {
+			return admission.Warnings{"proxy.resources.requests does not include cpu; " +
+				"HPA requires a cpu request to compute utilization — autoscaling will not function if the default is later removed"}
 		}
 	}
 	return nil
