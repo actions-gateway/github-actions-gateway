@@ -27,6 +27,7 @@ type PriorityTier struct {
 // RunnerGroupSpec defines the desired state of a RunnerGroup.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
+// +kubebuilder:validation:XValidation:rule="!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay) >= duration('1s')",message="evictionRetryDelay must be at least 1s"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
 	// Each listener holds one open broker session; additional goroutines spawn
@@ -60,6 +61,20 @@ type RunnerGroupSpec struct {
 	// WorkerImage is the fully-qualified container image for the runner container.
 	// +optional
 	WorkerImage string `json:"workerImage,omitempty"`
+
+	// MaxEvictionRetries controls how many times the AGC automatically re-queues a job
+	// whose worker pod was evicted. Set to 0 to disable auto-retry entirely (useful for
+	// GPU workloads where a failed job warrants manual inspection before rerunning).
+	// Defaults to 2 when omitted.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=10
+	MaxEvictionRetries *int32 `json:"maxEvictionRetries,omitempty"`
+
+	// EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job.
+	// Must be at least 1s. Defaults to "5s" when omitted.
+	// +optional
+	EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`
 }
 
 // RunnerGroupStatus defines the observed state of a RunnerGroup.

@@ -97,9 +97,18 @@ func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Pro
 
 // HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup.
 // The returned function is injected into listener.Config.JobHandler.
+// Per-RunnerGroup eviction settings override the provisioner-level defaults.
 func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
+	maxRetries := p.MaxEvictionRetries
+	if rg.Spec.MaxEvictionRetries != nil {
+		maxRetries = int(*rg.Spec.MaxEvictionRetries)
+	}
+	retryDelay := p.EvictionRetryDelay
+	if rg.Spec.EvictionRetryDelay != nil && rg.Spec.EvictionRetryDelay.Duration > 0 {
+		retryDelay = rg.Spec.EvictionRetryDelay.Duration
+	}
 	return func(ctx context.Context, runServiceURL, planID string, payload []byte) error {
-		return p.provision(ctx, rg, planID, payload)
+		return p.provision(ctx, rg, planID, payload, maxRetries, retryDelay)
 	}
 }
 
@@ -135,7 +144,7 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte) error {
+func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, maxRetries int, retryDelay time.Duration) error {
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -199,7 +208,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, rg, owner, repo, runID, log)
+		p.handleEviction(ctx, rg, owner, repo, runID, log, maxRetries, retryDelay)
 	}
 
 	// 7. Cleanup.
@@ -207,7 +216,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	return nil
 }
 
-func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, owner, repo, runID string, log *slog.Logger) {
+func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
 	if runID == "0" || runID == "" {
 		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
 		return
@@ -215,9 +224,9 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 
 	actual, _ := p.evictionCounts.LoadOrStore(runID, 0)
 	count := actual.(int)
-	if count >= p.MaxEvictionRetries {
+	if count >= maxRetries {
 		log.Warn("eviction retry budget exhausted; manual rerun required",
-			"runID", runID, "maxRetries", p.MaxEvictionRetries)
+			"runID", runID, "maxRetries", maxRetries)
 		if p.Metrics != nil {
 			p.Metrics.EvictionRetriesExhausted.WithLabelValues(rg.Namespace, rg.Name).Inc()
 		}
@@ -235,7 +244,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 	select {
 	case <-ctx.Done():
 		return
-	case <-time.After(p.EvictionRetryDelay):
+	case <-time.After(retryDelay):
 	}
 
 	if err := p.rerunFailedJobs(ctx, owner, repo, runID, log); err != nil {

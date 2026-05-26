@@ -1124,3 +1124,165 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// TestProvisioner_RGMaxEvictionRetriesZero verifies that setting maxEvictionRetries:0
+// on the RunnerGroup suppresses auto-retry: no rerun API call, exhausted metric incremented.
+func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rerunCalled := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCalled <- struct{}{}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	zero := int32(0)
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.MaxEvictionRetries = &zero
+	payload := stubPayloadFull("org", "repo", 42)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-zero-retry", payload) }()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	evictPod(ctx, t, fc, "team-a", pod.Name)
+	require.NoError(t, <-done)
+
+	// Rerun API must NOT be called.
+	select {
+	case <-rerunCalled:
+		t.Fatal("rerun API should not be called when maxEvictionRetries=0")
+	default:
+	}
+
+	// Exhausted counter must increment immediately.
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup")))
+}
+
+// TestProvisioner_RGMaxEvictionRetriesOne verifies that maxEvictionRetries:1 on the
+// RunnerGroup overrides the provisioner default: one retry fires, then budget exhausts.
+func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	var rerunCount int
+	rerunCalls := make(chan struct{}, 10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunCount++
+		rerunCalls <- struct{}{}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	// Provisioner default is 2; RG overrides to 1.
+	p := newProvisioner(fc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.MaxEvictionRetries = 2
+	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	one := int32(1)
+	rg := newRG("mygroup", "ns")
+	rg.Spec.MaxEvictionRetries = &one
+	payload := stubPayloadFull("org", "repo", 77)
+
+	runCycle := func(planID string) {
+		t.Helper()
+		done := make(chan error, 1)
+		go func() { done <- p.HandlerFor(rg)(ctx, "", planID, payload) }()
+		var podToEvict *corev1.Pod
+		require.Eventually(t, func() bool {
+			var list corev1.PodList
+			if err := fc.List(ctx, &list, client.InNamespace("ns")); err != nil {
+				return false
+			}
+			for i := range list.Items {
+				if list.Items[i].Status.Phase != corev1.PodFailed {
+					podToEvict = &list.Items[i]
+					return true
+				}
+			}
+			return false
+		}, 2*time.Second, 5*time.Millisecond)
+		evictPod(ctx, t, fc, "ns", podToEvict.Name)
+		require.NoError(t, <-done)
+	}
+
+	// First eviction: retry fires (count 0 < 1).
+	runCycle("plan-rg-retry-1")
+	select {
+	case <-rerunCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected rerun API call on first eviction")
+	}
+
+	// Second eviction: budget exhausted (count 1 >= 1), no retry.
+	runCycle("plan-rg-retry-2")
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup")))
+	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
+}
+
+// TestProvisioner_RGEvictionRetryDelay verifies that evictionRetryDelay on the
+// RunnerGroup overrides the provisioner-level delay.
+func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	rerunAt := make(chan time.Time, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rerunAt <- time.Now()
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.EvictionRetryDelay = 0 // provisioner default is effectively zero in tests
+	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
+	p.GitHubAPIURL = srv.URL
+	p.HTTPClient = srv.Client()
+
+	delay := metav1.Duration{Duration: 50 * time.Millisecond}
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.EvictionRetryDelay = &delay
+	payload := stubPayloadFull("org", "repo", 11)
+
+	evictAt := time.Now()
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-delay", payload) }()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	evictAt = time.Now()
+	evictPod(ctx, t, fc, "team-a", pod.Name)
+	require.NoError(t, <-done)
+
+	select {
+	case ts := <-rerunAt:
+		assert.GreaterOrEqual(t, ts.Sub(evictAt), 40*time.Millisecond,
+			"rerun should not fire before evictionRetryDelay elapses")
+	case <-time.After(2 * time.Second):
+		t.Fatal("rerun API was not called within timeout")
+	}
+}
+
