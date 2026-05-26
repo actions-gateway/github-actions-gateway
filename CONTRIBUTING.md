@@ -7,6 +7,14 @@
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
 - `make`
 
+**AI-assisted development (Claude Code):** Install the [`model-advisor`](https://github.com/karlkfi/claude-skills/tree/main/model-advisor) skill to get model and thinking-level recommendations at session start and on task shifts:
+
+```bash
+# clone once, then symlink into your user-level skills directory
+git clone git@github.com:karlkfi/claude-skills.git ~/workspace/claude-skills
+ln -s ~/workspace/claude-skills/model-advisor ~/.claude/skills/model-advisor
+```
+
 Build the vendored tool binaries before doing anything else:
 
 ```bash
