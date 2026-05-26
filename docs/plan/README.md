@@ -23,6 +23,7 @@ The five-milestone delivery from
 | [milestone-2.md](milestone-2.md) | AGC controller, reconciler, agent pool, token manager | ⚠️ Mostly done — code shipped; goroutine-leak integration suite + live `kind` `activeSessions == 1` verification still open |
 | [milestone-3.md](milestone-3.md) | Worker pod, Named Pipe handoff, pod provisioner, eviction retry | ⚠️ Code done — end-to-end green-checkmark gated on Investigation A (Named Pipe protocol) |
 | [milestone-4.md](milestone-4.md) | GMC, ActionsGateway CRD, proxy binary, webhook, TLS pinning | ⚠️ Code done — live `kind` multi-tenant validation pending (blocked on M3) |
+| [milestone-5.md](milestone-5.md) | Hardening + 1,000-session load testing + posture audit + packaging | ⚠️ Security-half done via security.md W2/W7/W8 + ResourceQuota; packaging, `test/load/` harness, `kube-bench`/`polaris` scan, gVisor validation still open |
 
 ## Security
 
