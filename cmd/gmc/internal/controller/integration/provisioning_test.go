@@ -86,7 +86,7 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 
 	// ServiceAccount: actions-gateway-worker
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-worker"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workerSAName},
 			&corev1.ServiceAccount{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -104,19 +104,19 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 
 	// NetworkPolicy: actions-gateway-proxy (proxy pod egress to GitHub CIDRs)
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&networkingv1.NetworkPolicy{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// NetworkPolicy: actions-gateway-workload (AGC and worker egress to proxy only)
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName},
 			&networkingv1.NetworkPolicy{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Deployment: actions-gateway-proxy
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -143,19 +143,19 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 
 	// Service: actions-gateway-proxy
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&corev1.Service{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// HPA: actions-gateway-proxy
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&autoscalingv2.HorizontalPodAutoscaler{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// PDB: actions-gateway-proxy
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&policyv1.PodDisruptionBudget{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 }
@@ -296,7 +296,7 @@ func TestGMC_TenantProvisioning_PSALabelsStamped(t *testing.T) {
 
 	// Wait for the proxy Deployment to be created (reconcile completed).
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -325,7 +325,7 @@ func TestGMC_TenantProvisioning_PSALabels_CustomProfile(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 

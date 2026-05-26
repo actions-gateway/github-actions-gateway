@@ -36,14 +36,14 @@ func TestGMC_HPABoundsUpdate(t *testing.T) {
 	// Wait for HPA to be created with initial values.
 	g.Eventually(func() error {
 		var hpa autoscalingv2.HorizontalPodAutoscaler
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &hpa); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &hpa); err != nil {
 			return err
 		}
 		return nil
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var hpa autoscalingv2.HorizontalPodAutoscaler
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &hpa))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &hpa))
 	require.NotNil(t, hpa.Spec.MinReplicas)
 	require.Equal(t, int32(2), *hpa.Spec.MinReplicas)
 	require.Equal(t, int32(8), hpa.Spec.MaxReplicas)
@@ -63,7 +63,7 @@ func TestGMC_HPABoundsUpdate(t *testing.T) {
 	// Wait for HPA to reflect the updated values.
 	g.Eventually(func() bool {
 		var updatedHPA autoscalingv2.HorizontalPodAutoscaler
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &updatedHPA); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &updatedHPA); err != nil {
 			return false
 		}
 		if updatedHPA.Spec.MinReplicas == nil {
@@ -100,7 +100,7 @@ func TestGMC_HPABoundsUpdate_MinReplicasClamped(t *testing.T) {
 
 	g.Eventually(func() bool {
 		var hpa autoscalingv2.HorizontalPodAutoscaler
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &hpa); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &hpa); err != nil {
 			return false
 		}
 		if hpa.Spec.MinReplicas == nil {

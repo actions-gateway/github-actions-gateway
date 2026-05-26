@@ -108,7 +108,7 @@ func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 	require.NotNil(t, pod.Spec.AutomountServiceAccountToken)
 	assert.False(t, *pod.Spec.AutomountServiceAccountToken,
 		"automountServiceAccountToken must be false")
-	assert.Equal(t, "actions-gateway-worker", pod.Spec.ServiceAccountName)
+	assert.Equal(t, agcnames.WorkerSAName, pod.Spec.ServiceAccountName)
 	assert.False(t, pod.Spec.HostPID, "hostPID must be false")
 	assert.False(t, pod.Spec.HostNetwork, "hostNetwork must be false")
 	assert.False(t, pod.Spec.HostIPC, "hostIPC must be false")

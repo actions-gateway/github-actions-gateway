@@ -26,7 +26,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
 
 		By("waiting for initial provisioning")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-proxy", 4*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
 	AfterAll(func() {
@@ -51,7 +51,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("waiting for the Deployment to restore a ready replica")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-proxy", 3*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, proxyName, 3*time.Minute)
 	})
 
 	It("E2E_GMC_GMCRestartPreservesState: GMC restart does not re-provision existing resources", Label("multi-node"), func() {
@@ -73,7 +73,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("verifying proxy and AGC deployments still exist")
-		Expect(utils.ResourceExists("deployment", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("deployment", tenantNS, proxyName)).To(BeTrue())
 		Expect(utils.ResourceExists("deployment", tenantNS, agcName)).To(BeTrue())
 
 		By("verifying ActionsGateway Ready condition is still True")

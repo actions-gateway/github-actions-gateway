@@ -636,7 +636,7 @@ func TestGenerateProxyCert_SANsAndValidity(t *testing.T) {
 	assert.Contains(t, cert.DNSNames, "actions-gateway-proxy.team-a.svc.cluster.local",
 		"cert must include the fully-qualified proxy Service DNS name as SAN")
 	// Short names must also be SANs so in-namespace lookups work.
-	assert.Contains(t, cert.DNSNames, "actions-gateway-proxy")
+	assert.Contains(t, cert.DNSNames, proxyServiceName)
 
 	// Validity must be approximately 1 year.
 	remaining := cert.NotAfter.Sub(cert.NotBefore)

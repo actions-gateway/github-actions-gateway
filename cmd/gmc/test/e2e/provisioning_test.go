@@ -37,7 +37,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_ProvisionsProxyDeployment: proxy Deployment reaches ready", func() {
 		By("waiting for actions-gateway-proxy Deployment to have ready replicas")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-proxy", 3*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, proxyName, 3*time.Minute)
 	})
 
 	It("E2E_GMC_ProvisionsAGCDeployment: AGC Deployment reaches ready", func() {
@@ -60,9 +60,9 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_NetworkPoliciesCreated: NetworkPolicies are present in tenant namespace", func() {
 		By("verifying proxy NetworkPolicy exists")
-		Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", tenantNS, proxyName)).To(BeTrue())
 		By("verifying workload NetworkPolicy exists")
-		Expect(utils.ResourceExists("networkpolicy", tenantNS, "actions-gateway-workload")).To(BeTrue())
+		Expect(utils.ResourceExists("networkpolicy", tenantNS, workloadName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_ServiceAccountAndRBACCreated: ServiceAccount and RoleBinding are present", func() {
@@ -74,14 +74,14 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_ProxyServiceCreated: proxy Service is present", func() {
 		By("verifying Service actions-gateway-proxy exists")
-		Expect(utils.ResourceExists("service", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("service", tenantNS, proxyName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_HPAAndPDBCreated: HPA and PDB are present", func() {
 		By("checking HPA actions-gateway-proxy")
-		Expect(utils.ResourceExists("horizontalpodautoscaler", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("horizontalpodautoscaler", tenantNS, proxyName)).To(BeTrue())
 		By("checking PDB actions-gateway-proxy")
-		Expect(utils.ResourceExists("poddisruptionbudget", tenantNS, "actions-gateway-proxy")).To(BeTrue())
+		Expect(utils.ResourceExists("poddisruptionbudget", tenantNS, proxyName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_ProxyPodScheduledOnWorker: proxy pod runs on a worker node", Label("multi-node"), func() {
@@ -165,7 +165,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 		By("waiting for HPA minReplicas to reflect the change")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "hpa", "actions-gateway-proxy",
+			cmd := exec.Command("kubectl", "get", "hpa", proxyName,
 				"-n", tenantNS,
 				"-o", "jsonpath={.spec.minReplicas}",
 			)

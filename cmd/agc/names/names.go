@@ -14,3 +14,9 @@ package names
 //   - the NetworkPolicy that selects AGC pods (app: actions-gateway-controller)
 //   - the value of app.kubernetes.io/managed-by on worker pods and agent Secrets
 const ControllerName = "actions-gateway-controller"
+
+// WorkerSAName is the ServiceAccount name assigned to worker pods. The GMC
+// creates this ServiceAccount in each tenant namespace and injects it into the
+// AGC Deployment via the WORKER_SERVICE_ACCOUNT env var. Both sides must agree
+// on this name; a single constant here prevents silent drift.
+const WorkerSAName = "actions-gateway-worker"

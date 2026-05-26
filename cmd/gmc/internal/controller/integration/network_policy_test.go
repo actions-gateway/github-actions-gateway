@@ -38,7 +38,7 @@ func TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs(t *testing.T) {
 	// Wait for the proxy NetworkPolicy to appear with the GitHub CIDR egress rule.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -76,7 +76,7 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 	g.Eventually(func() bool {
 		// Fetch the proxy Service ClusterIP.
 		var svc corev1.Service
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &svc); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &svc); err != nil {
 			return false
 		}
 		if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
@@ -85,7 +85,7 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 		expectedCIDR := svc.Spec.ClusterIP + "/32"
 
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -129,7 +129,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 	// Wait for the proxy NetworkPolicy to appear with the first CIDR.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &np); err != nil {
 			return false
 		}
 		for _, rule := range np.Spec.Egress {
@@ -152,7 +152,7 @@ func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T)
 	// Assert the proxy NetworkPolicy now includes the new CIDR.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &np); err != nil {
 			return false
 		}
 		found140, found1 := false, false
@@ -229,7 +229,7 @@ func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) 
 	// Wait for proxy Service ClusterIP.
 	var svc corev1.Service
 	g.Eventually(func() bool {
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &svc); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &svc); err != nil {
 			return false
 		}
 		return svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None"
@@ -240,7 +240,7 @@ func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) 
 	// Wait for workload NetworkPolicy with proxy egress rule.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np); err != nil {
 			return false
 		}
 		return workloadNPHasProxyRule(np, expectedCIDR)
@@ -252,7 +252,7 @@ func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) 
 
 	// Workload NP must still have its proxy egress rule after the refresh.
 	var np networkingv1.NetworkPolicy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-workload"}, &np))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np))
 	require.True(t, workloadNPHasProxyRule(np, expectedCIDR),
 		"workload NP proxy egress rule must be preserved after IP range refresh")
 }
@@ -301,12 +301,12 @@ func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&networkingv1.NetworkPolicy{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	var np networkingv1.NetworkPolicy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-proxy"}, &np))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &np))
 
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
