@@ -107,6 +107,8 @@ type provisionerOptions struct {
 	maxEvictionRetries int
 	githubAPIURL       string
 	pollInterval       time.Duration
+	// registrar overrides the default brokerRegistrar. Nil uses the default.
+	registrar agentpool.Registrar
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
@@ -139,12 +141,17 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 	go tm.Start(mgrCtx)
 	_, _ = tm.Token(mgrCtx)
 
-	registrar := &brokerRegistrar{stub: brokerStub}
+	var reg agentpool.Registrar
+	if opts.registrar != nil {
+		reg = opts.registrar
+	} else {
+		reg = &brokerRegistrar{stub: brokerStub}
+	}
 
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tm,
-		Registrar:    registrar,
+		Registrar:    reg,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     brokerStub.URL,
 			RunnerVersion: "2.334.0",
@@ -155,6 +162,8 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 			// so 500 polls (~50ms on CI) is enough to reliably catch new sessions
 			// before they idle-shut.
 			IdleThreshold: 500,
+			// Short renew interval so integration tests can verify RenewJob is called.
+			RenewJobInterval: 50 * time.Millisecond,
 		},
 	}
 
