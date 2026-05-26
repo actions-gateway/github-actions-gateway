@@ -10,7 +10,7 @@ Last refreshed 2026-05-25.
 |---|---|---|---|
 | 1 | Expose `maxEvictionRetries` / `evictionRetryDelay` on `RunnerGroup` CRD | `cmd/agc/api/v1alpha1/runnergroup_types.go`, `cmd/agc/internal/provisioner/provisioner.go` | ✅ Done — fields added to spec; `HandlerFor` reads per-RG overrides |
 | 2 | Per-key merge for `proxy.resources` (fix HPA silent failure) | `cmd/gmc/internal/controller/builder.go:248-250` | ❌ Open — full replacement still in place |
-| 3 | Credential rotation: pod-template annotation, Secret watch, `CredentialUnavailable` condition | `cmd/gmc/internal/controller/builder.go`, `cmd/gmc/internal/controller/actionsgateway_controller.go`, `docs/getting-started.md` | ❌ Open — none of the three sub-changes shipped |
+| 3 | Credential rotation: pod-template annotation, Secret watch, `CredentialUnavailable` condition | `cmd/gmc/internal/controller/builder.go`, `cmd/gmc/internal/controller/actionsgateway_controller.go`, `docs/getting-started.md` | ✅ Done — all three sub-changes shipped; 3 integration tests + 1 unit test added |
 
 All three are local, low-risk fixes that don't depend on each other.
 
