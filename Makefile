@@ -83,7 +83,8 @@ test: ## Run unit tests for all modules
 	cd cmd/worker && go test ./...
 
 .PHONY: test-integration
-test-integration: ## Run envtest-backed integration tests for cmd/gmc
+test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
+	$(MAKE) -C cmd/agc test-integration
 	$(MAKE) -C cmd/gmc test-integration
 
 ##@ e2e
