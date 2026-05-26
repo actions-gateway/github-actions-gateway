@@ -38,7 +38,7 @@ func scheme() *runtime.Scheme {
 
 func newPool(c *fake.ClientBuilder, ns, group string) *agentpool.Pool {
 	registrar := agentpool.NewStubRegistrar()
-	return agentpool.NewPool(c.Build(), ns, group, "2.327.1", registrar, agentpool.KeyTypeEd25519)
+	return agentpool.NewPool(c.Build(), ns, group, "2.327.1", []string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519)
 }
 
 func TestPool_EnsureAgents_Creates(t *testing.T) {
@@ -152,7 +152,7 @@ func TestPool_EnsureAgents_DeregisterErrorContinues(t *testing.T) {
 		err:  fmt.Errorf("deregistration failed: temporary error"),
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", reg, agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", []string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
 
 	// Create 3 agents.
 	require.NoError(t, pool.EnsureAgents(ctx, 3, "token"))
@@ -173,7 +173,7 @@ func TestPool_EnsureAgents_DeregisterErrorContinues(t *testing.T) {
 func TestPool_LoadAgents_SkipsCorruptSecret(t *testing.T) {
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 
 	// Create 2 valid agents via EnsureAgents.
 	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
@@ -234,7 +234,7 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 	}
 
 	fb := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingSecret)
-	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", "2.327.1", agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", "2.327.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 
 	// EnsureAgents(1) — index 0 already exists, should be idempotent.
 	err := pool.EnsureAgents(ctx, 1, "token")

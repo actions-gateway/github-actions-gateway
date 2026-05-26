@@ -69,6 +69,7 @@ type Pool struct {
 	namespace     string
 	groupName     string
 	runnerVersion string
+	runnerLabels  []string
 	registrar     Registrar
 	keyType       KeyType
 
@@ -78,13 +79,15 @@ type Pool struct {
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
+// runnerLabels is the label set passed to GitHub during runner registration.
 // keyType selects the algorithm for newly-generated agent keys; empty defaults to KeyTypeEd25519.
-func NewPool(c client.Client, namespace, groupName, runnerVersion string, registrar Registrar, keyType KeyType) *Pool {
+func NewPool(c client.Client, namespace, groupName, runnerVersion string, runnerLabels []string, registrar Registrar, keyType KeyType) *Pool {
 	return &Pool{
 		client:        c,
 		namespace:     namespace,
 		groupName:     groupName,
 		runnerVersion: runnerVersion,
+		runnerLabels:  runnerLabels,
 		registrar:     registrar,
 		keyType:       keyType,
 	}
@@ -155,7 +158,7 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 	params := RegisterParams{
 		Name:      agentName,
 		Version:   p.runnerVersion,
-		Labels:    []string{},
+		Labels:    p.runnerLabels,
 		GroupName: p.groupName,
 		GroupID:   1,
 	}

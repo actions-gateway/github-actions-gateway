@@ -148,7 +148,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// 6. Ensure agent pool Secrets.
-	pool := r.getOrCreatePool(req.NamespacedName, rg.Namespace, rg.Name)
+	pool := r.getOrCreatePool(req.NamespacedName, rg.Namespace, rg.Name, rg.Spec.RunnerLabels)
 	if err := pool.EnsureAgents(ctx, rg.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
 		return ctrl.Result{}, err
@@ -208,13 +208,13 @@ func (r *RunnerGroupReconciler) reconcileDelete(ctx context.Context, log *slog.L
 }
 
 // getOrCreatePool returns the Pool for the given RunnerGroup, creating it if needed.
-func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namespace, groupName string) *agentpool.Pool {
+func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namespace, groupName string, runnerLabels []string) *agentpool.Pool {
 	r.poolsMu.Lock()
 	defer r.poolsMu.Unlock()
 	if p, ok := r.pools[key]; ok {
 		return p
 	}
-	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, r.Registrar, r.AgentKeyType)
+	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, runnerLabels, r.Registrar, r.AgentKeyType)
 	r.pools[key] = p
 	return p
 }
