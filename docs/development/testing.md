@@ -2,16 +2,23 @@
 
 ## Integration tests
 
-Integration tests require `KUBEBUILDER_ASSETS` to be set. Build the vendored `setup-envtest` binary first:
+Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
+
+```bash
+make test-integration          # runs cmd/gmc integration tests (root delegate)
+make -C cmd/gmc test-integration  # same, from the cmd/gmc Makefile directly
+```
+
+Or manually, after building setup-envtest:
 
 ```bash
 make setup-envtest
-export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x --bin-dir /tmp/envtest-bins -p path)
+export KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.35 --bin-dir .build -p path)
 (cd cmd/agc && go test -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...)
 (cd cmd/gmc && go test -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...)
 ```
 
-GMC unit tests also require `KUBEBUILDER_ASSETS` for the envtest suite embedded in the non-integration package. If `(cd cmd/gmc && go test ./...)` fails with a missing assets error, set the variable as above before running.
+Unit tests (`make test` / `go test ./...`) do **not** require envtest — the integration packages are excluded by their `//go:build integration` tag.
 
 ## CI workflows and scripts
 
