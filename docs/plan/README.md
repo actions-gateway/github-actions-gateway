@@ -1,13 +1,8 @@
 # Plans
 
-Living planning docs for in-flight work. Each file is a self-contained
-plan with rationale, scope, and (where appropriate) a status table
-near the top. This README is the index.
+Topic-organized index of plan files. For current status and priorities, see [docs/STATUS.md](../STATUS.md).
 
-Last refreshed 2026-05-25. Status reflects the plan's own
-"Status at a glance" section where present, or a quick read against
-current code otherwise. Authoritative state always lives in the
-individual file.
+Each file is a self-contained plan with rationale, scope, and (where appropriate) a status table near the top. Authoritative state always lives in the individual file.
 
 Legend: ✅ done, ⚠️ partial / mixed, ❌ open, ⓘ informational
 (forward-looking spec or design rationale, no progress to track).
