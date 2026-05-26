@@ -56,6 +56,15 @@ func TestAGC_SecretLifecycle_CreatedOnJobAcquire(t *testing.T) {
 		return false
 	}, 20*time.Second, 50*time.Millisecond,
 		"a job Secret with non-empty payload must be created after job acquisition")
+
+	// RenewJob should tick at least once while the provisioner holds the job open.
+	// RenewJobInterval=50ms in test config; the provisioner polls the pod at 50ms,
+	// so the job handler stays alive long enough for the renew loop to fire.
+	renewBefore := brokerStub.RenewJobCalls()
+	assert.Eventually(t, func() bool {
+		return brokerStub.RenewJobCalls() > renewBefore
+	}, 5*time.Second, 5*time.Millisecond,
+		"RenewJob must be called at least once while the provisioner holds the job open")
 }
 
 // TestAGC_SecretLifecycle_DeletedAfterPodCompletes verifies that the provisioner

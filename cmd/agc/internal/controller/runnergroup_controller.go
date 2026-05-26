@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
@@ -75,6 +76,9 @@ type BrokerConfig struct {
 	// IdleThreshold is the number of consecutive empty polls before a burst
 	// listener goroutine shuts down. 0 means the default (50).
 	IdleThreshold int
+	// RenewJobInterval is the cadence of the per-job RenewJob renewal loop.
+	// 0 means the default (60s).
+	RenewJobInterval time.Duration
 }
 
 // SetupWithManager registers the reconciler with the controller-runtime manager.
@@ -265,6 +269,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			RunnerOS:      brokerCfg.RunnerOS,
 			JobHandler:    jobHandler,
 			IdleThreshold: brokerCfg.IdleThreshold,
+			RenewInterval: brokerCfg.RenewJobInterval,
 		}
 	}
 

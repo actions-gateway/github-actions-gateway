@@ -56,6 +56,8 @@ type Config struct {
 	Conditions    ConditionUpdater
 	Metrics       *Metrics
 	IdleThreshold int // consecutive 202s before idle shutdown; 0 means 50
+	// RenewInterval is the cadence of the per-job RenewJob loop. 0 means 60s.
+	RenewInterval time.Duration
 	JobHandler    JobHandlerFunc
 	Clock         Clock
 	Log           *slog.Logger
@@ -353,9 +355,13 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	// Start renew loop for this job.
+	renewInterval := cfg.RenewInterval
+	if renewInterval == 0 {
+		renewInterval = 60 * time.Second
+	}
 	jobID := strconv.FormatInt(msg.MessageID, 10)
 	stop := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
-		cfg.Metrics, cfg.Namespace, cfg.Clock, log)
+		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval)
 	defer stop()
 
 	if cfg.Metrics != nil {
@@ -368,7 +374,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	return nil
 }
 
-// StartRenewLoop starts a per-job renewal goroutine that ticks every 60 s.
+// StartRenewLoop starts a per-job renewal goroutine that ticks on the given interval.
 // The returned stop function cancels the loop and blocks until it exits;
 // callers must call it when the job completes to avoid goroutine leaks.
 func StartRenewLoop(
@@ -379,6 +385,7 @@ func StartRenewLoop(
 	namespace string,
 	clk Clock,
 	log *slog.Logger,
+	renewInterval time.Duration,
 ) (stop func()) {
 	stopCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -388,7 +395,7 @@ func StartRenewLoop(
 			select {
 			case <-stopCtx.Done():
 				return
-			case <-clk.After(60 * time.Second):
+			case <-clk.After(renewInterval):
 				if runServiceURL == "" {
 					continue // M2 stub: no real run service URL
 				}

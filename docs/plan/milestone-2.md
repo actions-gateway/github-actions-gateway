@@ -615,7 +615,7 @@ After integration tests pass, deploy the AGC to a local `kind` cluster with real
 - [x] `go test -race ./...` passes with zero failures across all three modules (root, probe, agc).
 - [x] `goleak.VerifyNone` passes in all goroutine-spawning tests.
 - [x] CRD YAML generated and committed under `cmd/agc/config/crd/`.
-- [ ] `RunnerGroup` create/scale/delete lifecycle produces no goroutine leaks in integration tests.
+- [x] `RunnerGroup` create/scale/delete lifecycle produces no goroutine leaks in integration tests.
 - [ ] `status.activeSessions` is exactly 1 at rest per RunnerGroup in the kind cluster.
 - [x] Token Manager proactive refresh fires before expiry (verified via unit test with fake clock).
 - [x] `RateLimited` condition surfaces after 10 minutes of sustained 429s (verified via unit test).

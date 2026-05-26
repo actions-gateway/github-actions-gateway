@@ -30,6 +30,7 @@ type Server struct {
 	bearerSessions      map[string]string                      // bearerToken → sessionID
 	acquireJobResponse  interface{}                            // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
+	renewJobCount       atomic.Int64
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
 }
@@ -48,6 +49,7 @@ func New() *Server {
 	mux.HandleFunc("/session", s.handleSession)
 	mux.HandleFunc("/message", s.handleMessage)
 	mux.HandleFunc("/acquirejob", s.handleAcquireJob)
+	mux.HandleFunc("/renewjob", s.handleRenewJob)
 	s.server = httptest.NewServer(mux)
 	s.URL = s.server.URL + "/"
 	return s
@@ -148,6 +150,11 @@ func (s *Server) WaitForFirstPoll(sessionID string, timeout time.Duration) bool 
 // AcquireJobCalls returns the number of times /acquirejob was called.
 func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
+}
+
+// RenewJobCalls returns the number of times /renewjob was called.
+func (s *Server) RenewJobCalls() int {
+	return int(s.renewJobCount.Load())
 }
 
 // ActiveSessionCount returns the number of goroutines that have registered a session
@@ -283,6 +290,19 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleRenewJob serves POST /renewjob — returns a synthetic RenewJob response.
+func (s *Server) handleRenewJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.renewJobCount.Add(1)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"lockedUntil": time.Now().Add(10 * time.Minute).Format(time.RFC3339),
+	})
 }
 
 // handleAcquireJob serves POST /acquirejob — returns a synthetic AcquireJob response.
