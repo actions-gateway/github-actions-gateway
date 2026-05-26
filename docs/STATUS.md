@@ -45,8 +45,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 1 | [buildNoProxy merge bug](plan/milestone-4-tests.md) | `bug` `milestone` `tests` | 🔲 | S | Custom `noProxyCIDRs` silently drops cluster-internal exclusions — AGC malfunctions |
-| 2 | [proxy.resources per-key merge](plan/gaps.md) | `bug` `milestone` | 🔲 | S | Partial override silently drops `requests.cpu`; HPA reports `<unknown>` |
+| 1 | [proxy.resources per-key merge](plan/gaps.md) | `bug` `milestone` | 🔲 | S | Partial override silently drops `requests.cpu`; HPA reports `<unknown>` |
 | 3 | [Named Pipe investigation (M3 §5.A)](plan/milestone-3.md) | `milestone` | 🔲 | M | Critical path — unblocks M3/M4 kind end-to-end and everything downstream |
 | 4 | [Wire live GithubRegistrar in main.go](plan/milestone-2.md) | `milestone` | 🔲 | S | StubRegistrar still wired in production binary |
 | 5 | [Expose maxEvictionRetries / evictionRetryDelay on CRD](plan/gaps.md) | `milestone` | 🔲 | S | Fields hardcoded; GPU operators can't disable auto-retry |
