@@ -34,7 +34,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | Worker egress proxy | `security` `infra` | ⚠️ | NetworkPolicy split shipped; live `curl` validation blocked on M3/M4 — [plan](plan/worker-egress-proxy.md) |
 | Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
 | Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
-| Docker image speed | `speed` | ⚠️ | §1/2/4/5/13 done; §7/8/9/12 open — [plan](plan/docker-image-speed.md) |
+| Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
 | e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
 
 ---
