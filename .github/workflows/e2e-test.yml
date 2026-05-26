@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: read
     outputs:
       e2e: ${{ steps.filter.outputs.e2e }}
     steps:
