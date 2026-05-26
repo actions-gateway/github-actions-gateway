@@ -44,10 +44,11 @@ func newJITFixture(t *testing.T, agentID int64) *jitFixture {
 	credJSON := fmt.Sprintf(`{"scheme":"OAuth","data":{"clientId":%q,"authorizationUrl":%q}}`, clientID, authURL)
 	rsaXML := buildRSAKeyValueXML(key)
 
+	// Each value is the base64-encoded content of the corresponding config file.
 	files := map[string]string{
-		".runner":                runnerJSON,
-		".credentials":           credJSON,
-		".credentials_rsaparams": rsaXML,
+		".runner":                base64.StdEncoding.EncodeToString([]byte(runnerJSON)),
+		".credentials":           base64.StdEncoding.EncodeToString([]byte(credJSON)),
+		".credentials_rsaparams": base64.StdEncoding.EncodeToString([]byte(rsaXML)),
 	}
 	blobBytes, err := json.Marshal(files)
 	require.NoError(t, err)
