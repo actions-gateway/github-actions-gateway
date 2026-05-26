@@ -89,7 +89,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		utils.ApplyActionsGatewayCR(tenantNS, agName, secretName)
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-controller", 5*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, agcName, 5*time.Minute)
 	})
 
 	AfterAll(func() {

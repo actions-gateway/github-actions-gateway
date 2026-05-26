@@ -158,4 +158,5 @@ NetworkPolicy by `actions-gateway/component: workload`, not by the AGC's
 - [x] Operations docs flipped back to `actions-gateway-controller`.
 - [x] Migration notes (on-cluster rename, manual cleanup command, Prometheus label change)
       added to `docs/operations/upgrade.md`.
+- [x] All e2e test literals replaced with `agcName = agcnames.ControllerName` (same pattern as integration tests).
 - [ ] `make e2e-up` passes on a fresh kind cluster. (Requires live cluster.)
