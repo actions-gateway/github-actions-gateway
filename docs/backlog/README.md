@@ -1,12 +1,18 @@
 # Backlog
 
-Prioritized near-term work — things not yet started but worth picking up soon. Items here are lighter-weight than a full plan doc; they exist to capture *what* and *why* clearly enough to hand off context.
+Prioritized near-term work — things not yet started but worth picking up soon.
+
+## Conventions
+
+**Sizes:** S = fits in one session | M = 2–3 sessions | L = needs a standalone plan doc in `docs/plan/`
+
+- **S items:** delete from the backlog and commit directly. No plan doc needed.
+- **M/L items:** keep the backlog entry marked **▶ Started** until the plan doc is committed to `docs/plan/`, then remove the backlog entry in the same commit.
 
 **Lifecycle:**
-- Items graduate to `docs/plan/` when actively started (write a full plan there, remove the entry here).
-- Items that are genuinely deferred with a known reason go into **Parked** below.
+- Items graduate to `docs/plan/` when actively started (M/L) or are removed on completion (S).
+- Items that are genuinely deprioritized with a known reason go into **Parked** below.
 - Long-horizon "someday" features live in `docs/design/appendix-g-future-enhancements.md`.
-- Small bugs and investigations that don't yet have a clear fix go in `docs/todo/`.
 
 Last refreshed: 2026-05-25.
 
@@ -28,6 +34,8 @@ Ordered by priority. Start from the top.
 | 8 | [M3 metric assertions + dead `PodCreationLatency` field](#8-m3-metric-assertions--dead-podcreationlatency-field) | S | — |
 | 9 | [M4 remaining test gaps](#9-m4-remaining-test-gaps) | S | — |
 | 10 | [Open docs items](#10-open-docs-items) | S | — |
+| 11 | [Rename `actions-gateway-agc` → `actions-gateway-controller`](#11-rename-actions-gateway-agc--actions-gateway-controller) | M | — |
+| 12 | [Go workspace prefix-match bug investigation](#12-go-workspace-prefix-match-bug-investigation) | S | — |
 
 ---
 
@@ -190,20 +198,53 @@ Ordered by priority. Start from the top.
 
 ---
 
+### 11. Rename `actions-gateway-agc` → `actions-gateway-controller`
+
+**What:** Standardize the on-cluster name of the AGC Deployment (and related constants across GMC and AGC) to `actions-gateway-controller`, matching the name used throughout docs and the design.
+
+**Why now:** Code/docs mismatch since Milestone 4 — the implementation diverged silently from the planned name. Operators reading the docs see `actions-gateway-controller`; `kubectl get deploy` shows `actions-gateway-agc`.
+
+**Done when:**
+- One exported `ControllerName` constant in a shared package; both binaries import it.
+- All five Go-side literals replaced; all tests updated (no literal-string greps).
+- Operations docs flipped back to `actions-gateway-controller`.
+- Release notes mention on-cluster rename, manual cleanup command, and Prometheus label change.
+- Full scope and migration plan in [docs/plan/rename-agc-to-controller.md](../plan/rename-agc-to-controller.md).
+
+**Size:** M (touches two binaries, test suite, and ops docs)
+
+---
+
+### 12. Go workspace prefix-match bug investigation
+
+**What:** Check the Go issue tracker for the workspace module-path prefix-matching bug that forced the `replace` workaround in `go.work`, and remove the workaround if the bug is fixed.
+
+**Why now:** Low urgency but worth checking periodically — if Go 1.22–1.24 fixed it, the `replace` directive in `go.work` can be dropped, simplifying the workspace layout.
+
+**Done when:**
+- Go issue tracker searched; release notes for Go 1.22–1.24 checked.
+- If fixed: `replace` directive removed from `go.work`, workspace tested.
+- If unfixed: upstream issue filed (or confirmed existing); `docs/development/go-workspaces.md` updated with issue link.
+- Background in `docs/development/go-workspaces.md`.
+
+**Size:** S (investigation; code change only if bug is fixed upstream)
+
+---
+
 ## Parked
 
-Explicitly deprioritized. Each entry has a one-line reason.
+Explicitly deprioritized. Pick up when the blocker clears or priority shifts.
 
-| Item | Why parked |
-|---|---|
-| M2 `kind` live `activeSessions == 1` check | Deferred until envtest suite (#6) passes; the kind run is redundant until integration tests are green |
-| M3/M4 kind end-to-end validation | Blocked on Named Pipe investigation (#3); will become the next ready item once #3 is done |
-| Egress proxy live `curl` validation | Blocked on M3/M4 kind end-to-end working; validates NetworkPolicy split already in code |
-| M2-tests remaining unit gaps (Gaps 3/4/5) | Medium priority; interleave with #6 once started |
-| M3-tests H2/M1/M2/L items | Medium priority; add incrementally after #8 lands |
-| M5 Kustomize/Helm packaging (`deploy/`) | Blocked on end-to-end green checkmark in kind |
-| M5 load test harness (`test/load/`) | Blocked on packaging |
-| M5 `polaris`/`kube-bench` scan | Blocked on packaging |
-| Speed improvements (unit/integration/e2e/docker) | Low priority; pick up when CI is the bottleneck |
-| `docs/operations/alerting.md` (docs item 3.2) | Deferred until a real Prometheus/Alertmanager setup exists to source from |
-| gVisor `RuntimeClass` validation | Needs a cluster with gVisor installed; operator concern |
+| Item | Why parked | Since |
+|---|---|---|
+| M2 `kind` live `activeSessions == 1` check | Deferred until envtest suite (#6) passes; the kind run is redundant until integration tests are green | 2026-05-25 |
+| M3/M4 kind end-to-end validation | Blocked on Named Pipe investigation (#3); will become the next ready item once #3 is done | 2026-05-25 |
+| Egress proxy live `curl` validation | Blocked on M3/M4 kind end-to-end working; validates NetworkPolicy split already in code | 2026-05-25 |
+| M2-tests remaining unit gaps (Gaps 3/4/5) | Medium priority; interleave with #6 once started | 2026-05-25 |
+| M3-tests H2/M1/M2/L items | Medium priority; add incrementally after #8 lands | 2026-05-25 |
+| M5 Kustomize/Helm packaging (`deploy/`) | Blocked on end-to-end green checkmark in kind | 2026-05-25 |
+| M5 load test harness (`test/load/`) | Blocked on packaging | 2026-05-25 |
+| M5 `polaris`/`kube-bench` scan | Blocked on packaging | 2026-05-25 |
+| Speed improvements (unit/integration/e2e/docker) | Low priority; pick up when CI is the bottleneck | 2026-05-25 |
+| `docs/operations/alerting.md` (docs item 3.2) | Deferred until a real Prometheus/Alertmanager setup exists to source from | 2026-05-25 |
+| gVisor `RuntimeClass` validation | Needs a cluster with gVisor installed; operator concern | 2026-05-25 |

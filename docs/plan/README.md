@@ -66,6 +66,7 @@ markers per item.
 | [gaps.md](gaps.md) | Three code-level fixes surfaced by doc audit (CRD eviction fields, proxy resource merge, credential rotation observability) | ❌ All 3 open |
 | [docs.md](docs.md) | Documentation roadmap across phases | ⚠️ Phase 1 fully done; 4 items open in Phase 2/3 |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ⚠️ Phase 1 done; Phase 2 has open drift items (image vars, envtest, `all` semantics) |
+| [rename-agc-to-controller.md](rename-agc-to-controller.md) | Rename on-cluster `actions-gateway-agc` → `actions-gateway-controller` to match docs and design intent | ❌ Open — not started |
 
 ## Conventions
 
