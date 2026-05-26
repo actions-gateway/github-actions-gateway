@@ -16,7 +16,12 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
 1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent. If starting a Queue item from `docs/STATUS.md`, mark it ▶ Started there (M/L items only).
 2. **For complex tasks** — write an explicit plan to `docs/plan/` and follow it. Keep it updated as the session progresses so completed scope is verifiable at the end. Revise the plan if new information changes the approach.
-3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update `README.md`, `CONTRIBUTING.md`, and any relevant docs in `docs/` if the change affects anything they describe. Also update `.github/workflows/` if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. `go-version-file`, test commands, module paths). Update `docs/STATUS.md`: remove the completed Queue row; update the Progress table if a plan-level status changed (⚠️ → ✅ or a new ⚠️ item appeared).
+3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update docs proactively — do not wait to be asked. Specific docs to check based on what changed:
+   - **New or changed CRD fields / API surface** → `docs/design/03-api-contracts.md` (add the field with its comment block) and `docs/design/02-architecture.md` (update any prose and the metrics table if new metrics were added).
+   - **New behaviour, retry logic, or operational mode** → `docs/design/02-architecture.md` (architecture prose), `docs/design/04-operational-flows.md` (flow diagrams/prose), `docs/design/07-test-plan.md` (integration test criteria), and `docs/operations/troubleshooting.md` (add a runbook section for any new failure mode an operator might observe).
+   - **Security-relevant changes** → `docs/design/05-security.md`.
+   - **General** → `README.md`, `CONTRIBUTING.md`, and any other `docs/` file that describes the changed behaviour. Also update `.github/workflows/` if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. `go-version-file`, test commands, module paths).
+   - Update `docs/STATUS.md`: remove the completed Queue row; update the Progress table if a plan-level status changed (⚠️ → ✅ or a new ⚠️ item appeared).
 4. **Commit when done** — once a task is complete and validated, commit with git. Keep commits small and focused. Never commit broken code or failing tests. **Always commit `docs/STATUS.md` changes in their own isolated commit**, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating its changes makes rebase conflicts trivial to resolve.
 
 ## Code standards
@@ -83,3 +88,9 @@ When working on specific tasks, read the relevant doc before starting:
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` |
+| Updating API/CRD docs after a field change | `docs/design/03-api-contracts.md` |
+| Updating architecture prose or metrics table | `docs/design/02-architecture.md` |
+| Updating operational flow diagrams | `docs/design/04-operational-flows.md` |
+| Updating integration test criteria | `docs/design/07-test-plan.md` |
+| Adding a troubleshooting runbook for a new failure mode | `docs/operations/troubleshooting.md` |
+| Security-relevant changes | `docs/design/05-security.md` |
