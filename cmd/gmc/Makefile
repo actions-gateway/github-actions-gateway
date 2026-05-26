@@ -39,9 +39,13 @@ build: ## Build the gmc binary into .build/
 	go build -o $(LOCALBIN)/gmc .
 
 .PHONY: test
-test: manifests generate $(SETUP_ENVTEST) ## Run unit tests with envtest
+test: generate ## Run unit tests (no envtest required)
+	go test -race -timeout 5m ./...
+
+.PHONY: test-integration
+test-integration: manifests generate $(SETUP_ENVTEST) ## Run envtest-backed integration tests
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
-		go test -race -timeout 5m $$(go list ./... | grep -v /e2e)
+		go test -race -timeout 5m -tags integration ./...
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
