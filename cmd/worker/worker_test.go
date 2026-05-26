@@ -2,14 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
-	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,130 +23,68 @@ func TestWrapper_ReadPayloadFromMount(t *testing.T) {
 
 func TestWrapper_MissingPayload(t *testing.T) {
 	dir := t.TempDir()
-	// No payload file written.
 	_, err := readPayload(dir)
 	require.Error(t, err)
 }
 
-// TestWrapper_WritesToNamedPipes verifies that writePayloadToPipe sends a
-// 4-byte big-endian length prefix followed by the raw payload bytes.
-func TestWrapper_WritesToNamedPipes(t *testing.T) {
-	dir := t.TempDir()
-	pipePath := filepath.Join(dir, "job-in")
-	require.NoError(t, syscall.Mkfifo(pipePath, 0o600))
+// TestWrapper_EncodeUTF16LE verifies that encodeUTF16LE matches the C# UnicodeEncoding
+// behaviour used by StreamString: each UTF-16 code unit is two little-endian bytes.
+func TestWrapper_EncodeUTF16LE(t *testing.T) {
+	// ASCII: every character → [char, 0x00]
+	assert.Equal(t, []byte{'A', 0x00, 'B', 0x00}, encodeUTF16LE("AB"))
 
+	// BMP non-ASCII: U+00E9 LATIN SMALL LETTER E WITH ACUTE → [0xE9, 0x00]
+	assert.Equal(t, []byte{0xE9, 0x00}, encodeUTF16LE("é"))
+
+	// Supplementary plane character U+1F600 (😀) → surrogate pair
+	// UTF-16LE: 0xD83D 0xDE00 → [0x3D, 0xD8, 0x00, 0xDE]
+	assert.Equal(t, []byte{0x3D, 0xD8, 0x00, 0xDE}, encodeUTF16LE("😀"))
+
+	assert.Empty(t, encodeUTF16LE(""))
+}
+
+// TestWrapper_WriteJobMessage verifies the full wire format:
+// [4 bytes LE MessageType=1][4 bytes LE byteLen][UTF-16LE body]
+func TestWrapper_WriteJobMessage(t *testing.T) {
 	payload := []byte(`{"run_id":99}`)
-
-	// L1: use a deadline so a blocked FIFO open fails the test clearly instead
-	// of hanging indefinitely in CI.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Read end must be opened concurrently — open(RDONLY) on a FIFO blocks
-	// until a writer opens the write end.
-	var buf bytes.Buffer
-	readDone := make(chan error, 1)
-	go func() {
-		f, err := os.Open(pipePath)
-		if err != nil {
-			readDone <- err
-			return
-		}
-		defer f.Close()
-		_, err = io.Copy(&buf, f)
-		readDone <- err
-	}()
-
-	require.NoError(t, writePayloadToPipe(pipePath, payload))
-	select {
-	case err := <-readDone:
-		require.NoError(t, err)
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for FIFO reader to finish")
-	}
-
-	b := buf.Bytes()
-	require.Len(t, b, 4+len(payload), "expected 4-byte length prefix + payload")
-
-	gotLen := binary.BigEndian.Uint32(b[:4])
-	assert.Equal(t, uint32(len(payload)), gotLen, "length prefix must equal payload length")
-	assert.Equal(t, payload, b[4:], "payload bytes must follow the length prefix")
-}
-
-// TestWrapper_EmptyPayload verifies that writePayloadToPipe sends a [0,0,0,0]
-// wire message (4-byte prefix encoding 0) when the payload is empty.
-func TestWrapper_EmptyPayload(t *testing.T) {
-	dir := t.TempDir()
-	pipePath := filepath.Join(dir, "job-in-empty")
-	require.NoError(t, syscall.Mkfifo(pipePath, 0o600))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	wantBody := encodeUTF16LE(string(payload))
 
 	var buf bytes.Buffer
-	readDone := make(chan error, 1)
-	go func() {
-		f, err := os.Open(pipePath)
-		if err != nil {
-			readDone <- err
-			return
-		}
-		defer f.Close()
-		_, err = io.Copy(&buf, f)
-		readDone <- err
-	}()
+	require.NoError(t, writeJobMessage(&buf, payload))
 
-	require.NoError(t, writePayloadToPipe(pipePath, []byte{}))
-	select {
-	case err := <-readDone:
-		require.NoError(t, err)
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for FIFO reader to finish")
-	}
-
-	// M2: empty payload → exactly 4 bytes encoding value 0.
 	b := buf.Bytes()
-	require.Len(t, b, 4, "empty payload must produce exactly the 4-byte length prefix")
-	assert.Equal(t, uint32(0), binary.BigEndian.Uint32(b[:4]), "length prefix must be 0 for empty payload")
+	require.Len(t, b, 8+len(wantBody))
+
+	assert.Equal(t, uint32(msgTypeNewJobRequest), binary.LittleEndian.Uint32(b[:4]),
+		"message type must be 1 (NewJobRequest)")
+	assert.Equal(t, uint32(len(wantBody)), binary.LittleEndian.Uint32(b[4:8]),
+		"byte-length field must be UTF-16LE byte count")
+	assert.Equal(t, wantBody, b[8:], "body must be UTF-16LE encoded")
 }
 
-// TestWrapper_LargePayload verifies that the length prefix round-trips correctly
-// for a payload larger than a single TCP segment (65536 bytes).
-func TestWrapper_LargePayload(t *testing.T) {
-	dir := t.TempDir()
-	pipePath := filepath.Join(dir, "job-in-large")
-	require.NoError(t, syscall.Mkfifo(pipePath, 0o600))
+// TestWrapper_WriteJobMessage_Empty verifies that an empty payload produces an
+// 8-byte header with byteLen=0 and no body bytes.
+func TestWrapper_WriteJobMessage_Empty(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeJobMessage(&buf, []byte{}))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	b := buf.Bytes()
+	require.Len(t, b, 8, "empty payload must produce exactly the 8-byte header")
+	assert.Equal(t, uint32(msgTypeNewJobRequest), binary.LittleEndian.Uint32(b[:4]))
+	assert.Equal(t, uint32(0), binary.LittleEndian.Uint32(b[4:8]))
+}
 
+// TestWrapper_WriteJobMessage_Large verifies that the byte-length field
+// round-trips for payloads larger than a single pipe buffer (65536 bytes).
+func TestWrapper_WriteJobMessage_Large(t *testing.T) {
 	payload := bytes.Repeat([]byte("x"), 65536)
+	wantBody := encodeUTF16LE(string(payload))
 
 	var buf bytes.Buffer
-	readDone := make(chan error, 1)
-	go func() {
-		f, err := os.Open(pipePath)
-		if err != nil {
-			readDone <- err
-			return
-		}
-		defer f.Close()
-		_, err = io.Copy(&buf, f)
-		readDone <- err
-	}()
+	require.NoError(t, writeJobMessage(&buf, payload))
 
-	require.NoError(t, writePayloadToPipe(pipePath, payload))
-	select {
-	case err := <-readDone:
-		require.NoError(t, err)
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for FIFO reader to finish")
-	}
-
-	// M2: length prefix must round-trip correctly via binary.BigEndian.
 	b := buf.Bytes()
-	require.Len(t, b, 4+len(payload), "expected 4-byte length prefix + 65536 payload bytes")
-	gotLen := binary.BigEndian.Uint32(b[:4])
-	assert.Equal(t, uint32(len(payload)), gotLen, "length prefix must equal payload length for large payload")
-	assert.Equal(t, payload, b[4:], "payload bytes must be intact after large write")
+	require.Len(t, b, 8+len(wantBody))
+	assert.Equal(t, uint32(len(wantBody)), binary.LittleEndian.Uint32(b[4:8]))
+	assert.Equal(t, wantBody, b[8:])
 }
