@@ -26,11 +26,23 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
 ## Code standards
 
+### Go
+
 - Follow Go best practices for code style, naming, comments, and package organization.
 - Public types, functions, and packages must have godoc comments.
 - Tests must be meaningful — verify behavior, not just that the code runs.
 - All go modules in the repo must use the same Go version.
 - When a function starts something asynchronous, return a `<-chan struct{}` done channel so the caller controls whether and how to wait (block, select with timeout, ignore). Do not hide the channel inside a closure or call site.
+
+### Bash
+
+- Every script must start with `set -euo pipefail`.
+- Use `local` for all variables inside functions.
+- Use `[[ ]]` for conditionals and `(( ))` for arithmetic — never `[ ]`.
+- Quote all variable expansions (`"$var"`, `"${arr[@]}"`) unless word-splitting is explicitly intended.
+- When background processes need cleanup, register a `trap cleanup EXIT INT TERM` function that kills tracked PIDs.
+- Prefer `awk -v name="$value" '...'` over `sed` for substitutions involving variables — `sed` delimiter and metacharacter (`/`, `&`, `\`) issues are a common source of bugs.
+- When capturing the exit code of a pipeline via `wait`, wrap it in a subshell (`( cmd | other ) &`) so `$!` is the subshell's PID and `wait` reflects the pipeline result under `pipefail`, not just the last process's exit code.
 
 ## Testing
 
