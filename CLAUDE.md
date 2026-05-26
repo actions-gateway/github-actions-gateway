@@ -14,7 +14,7 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
 ## Workflow
 
-1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent. If starting a Queue item from `docs/STATUS.md`, mark it ▶ Started there (M/L items only).
+1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent. If picking the next task, run `gh pr list` first and skip any Queue item from `docs/STATUS.md` that is already covered by an open PR. If starting a Queue item, mark it ▶ Started there (M/L items only).
 2. **For complex tasks** — write an explicit plan to `docs/plan/` and follow it. Keep it updated as the session progresses so completed scope is verifiable at the end. Revise the plan if new information changes the approach.
 3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update docs proactively — do not wait to be asked. Specific docs to check based on what changed:
    - **New or changed CRD fields / API surface** → `docs/design/03-api-contracts.md` (add the field with its comment block) and `docs/design/02-architecture.md` (update any prose and the metrics table if new metrics were added).
@@ -87,7 +87,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
-| Picking the next task, tracking progress, adding new items | `docs/STATUS.md` |
+| Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — also run `gh pr list` and skip any Queue item already covered by an open PR |
 | Updating API/CRD docs after a field change | `docs/design/03-api-contracts.md` |
 | Updating architecture prose or metrics table | `docs/design/02-architecture.md` |
 | Updating operational flow diagrams | `docs/design/04-operational-flows.md` |
