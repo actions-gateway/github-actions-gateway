@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -77,12 +79,17 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	t.Cleanup(mgrCancel)
 
 	skipNameValidation := true
+	syncPeriod := 2 * time.Second
 	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
 		Scheme:                 testScheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 		LeaderElection:         false,
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
+		// Short sync period ensures the controller re-reconciles objects even when
+		// no watch event fires (e.g. after a Secret referenced by an ActionsGateway
+		// is deleted — no informer maps Secret deletions to ActionsGateway reconciles).
+		Cache: cache.Options{SyncPeriod: &syncPeriod},
 	})
 	require.NoError(t, err)
 

@@ -6,7 +6,7 @@
 // +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete;bind;escalate
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
@@ -40,7 +40,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -325,8 +324,8 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 }
 
 // setCredentialUnavailable sets CredentialUnavailable=True and Ready=False on the
-// ActionsGateway, emits a Warning event, and returns without requeueing. The
-// Secret watch will re-trigger reconciliation when the Secret is created again.
+// ActionsGateway and requeues after 30 seconds so the reconciler periodically
+// re-checks for the Secret being recreated without needing a watch informer.
 func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, msg string) (ctrl.Result, error) {
 	now := metav1.Now()
 	gen := ag.Generation
@@ -349,27 +348,7 @@ func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context,
 	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, nil
-}
-
-// secretToActionsGateway maps a Secret event to any ActionsGateway in the same
-// namespace that references the Secret by name. Used by the Secret watch so that
-// deleting or recreating a referenced credential Secret triggers reconciliation.
-func (r *ActionsGatewayReconciler) secretToActionsGateway(ctx context.Context, obj client.Object) []ctrl.Request {
-	var agList gmcv1alpha1.ActionsGatewayList
-	if err := r.List(ctx, &agList, client.InNamespace(obj.GetNamespace())); err != nil {
-		return nil
-	}
-	var reqs []ctrl.Request
-	for _, ag := range agList.Items {
-		if ag.Spec.GitHubAppRef.Name == obj.GetName() {
-			reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
-				Namespace: ag.Namespace,
-				Name:      ag.Name,
-			}})
-		}
-	}
-	return reqs
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -377,10 +356,6 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv1alpha1.ActionsGateway{}).
 		Owns(&appsv1.Deployment{}).
-		Watches(
-			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.secretToActionsGateway),
-		).
 		Named("actionsgateway").
 		Complete(r)
 }
