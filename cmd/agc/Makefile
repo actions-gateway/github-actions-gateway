@@ -1,8 +1,12 @@
 # Makefile for the Actions Gateway Controller (AGC).
 # Run `make` (or `make help`) for the list of available targets.
 
-REPO_ROOT := $(shell git rev-parse --show-toplevel)
+REPO_ROOT      := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
+SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
+LOCALBIN       := $(REPO_ROOT)/.build
+
+ENVTEST_K8S_VERSION ?= 1.35
 
 .DEFAULT_GOAL := help
 
@@ -24,8 +28,13 @@ build: ## Build the agc binary into .build/
 	go build -o ../../.build/agc .
 
 .PHONY: test
-test: ## Run unit tests
+test: ## Run unit tests (no envtest required)
 	go test -race -timeout 2m ./...
+
+.PHONY: test-integration
+test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration tests
+	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
+		go test -race -timeout 5m -tags integration ./...
 
 .PHONY: generate
 generate: manifests ## Alias for `manifests`
@@ -38,3 +47,6 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder m
 
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(REPO_ROOT) tools
+
+$(SETUP_ENVTEST):
+	$(MAKE) -C $(REPO_ROOT) setup-envtest

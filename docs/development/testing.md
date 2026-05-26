@@ -5,8 +5,9 @@
 Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
 
 ```bash
-make test-integration          # runs cmd/gmc integration tests (root delegate)
-make -C cmd/gmc test-integration  # same, from the cmd/gmc Makefile directly
+make test-integration              # runs both cmd/agc and cmd/gmc integration tests
+make -C cmd/agc test-integration   # AGC only
+make -C cmd/gmc test-integration   # GMC only
 ```
 
 Or manually, after building setup-envtest:
