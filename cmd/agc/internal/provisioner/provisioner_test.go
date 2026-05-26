@@ -18,12 +18,14 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // newTestMetrics builds a Metrics with unregistered counters/histograms safe
@@ -39,7 +41,40 @@ func newTestMetrics() *listener.Metrics {
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_exhausted_total",
 		}, []string{"namespace", "runner_group"}),
+		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_quota_retries_total",
+		}, []string{"namespace", "runner_group"}),
+		QuotaRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_prov_quota_retries_exhausted_total",
+		}, []string{"namespace", "runner_group"}),
 	}
+}
+
+// quotaError returns the error the Kubernetes API server returns when a namespace
+// ResourceQuota is exhausted — a 403 Forbidden with "exceeded quota" in the message.
+func quotaError() error {
+	return apierrors.NewForbidden(
+		schema.GroupResource{Group: "", Resource: "pods"}, "pod",
+		fmt.Errorf("exceeded quota: default-quota, requested: pods=1, used: pods=10, limited: pods=10"),
+	)
+}
+
+// quotaPodCreateClient wraps a client.Client and returns a quota error for the
+// first failCount Pod creates, then delegates to the underlying client.
+type quotaPodCreateClient struct {
+	client.Client
+	failCount int
+	calls     int
+}
+
+func (q *quotaPodCreateClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if _, ok := obj.(*corev1.Pod); ok {
+		q.calls++
+		if q.calls <= q.failCount {
+			return quotaError()
+		}
+	}
+	return q.Client.Create(ctx, obj, opts...)
 }
 
 func newScheme() *runtime.Scheme {
@@ -1284,5 +1319,119 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("rerun API was not called within timeout")
 	}
+}
+
+// TestProvisioner_QuotaRetrySucceeds verifies that a single quota rejection at pod
+// creation is retried and the job completes successfully once quota frees up.
+func TestProvisioner_QuotaRetrySucceeds(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	// Fail the first pod create with a quota error; succeed on the second.
+	qc := &quotaPodCreateClient{Client: fc, failCount: 1}
+
+	p := newProvisioner(qc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.QuotaRetryDelay = 1 * time.Millisecond
+
+	rg := newRG("mygroup", "team-a")
+	payload := stubPayload(1)
+
+	done := make(chan error, 1)
+	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-quota-ok", payload) }()
+
+	// Pod appears after the first (failed) attempt retries.
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+
+	// One quota retry recorded; none exhausted.
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+}
+
+// TestProvisioner_QuotaRetryExhausted verifies that after maxQuotaRetries failed
+// attempts the provisioner gives up, increments the exhausted counter, and cleans up.
+func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	// Always return a quota error — budget (default 5) will exhaust.
+	qc := &quotaPodCreateClient{Client: fc, failCount: 100}
+
+	p := newProvisioner(qc)
+	m := newTestMetrics()
+	p.Metrics = m
+	p.MaxQuotaRetries = 2
+	p.QuotaRetryDelay = 1 * time.Millisecond
+
+	rg := newRG("mygroup", "team-a")
+
+	err := p.HandlerFor(rg)(ctx, "", "plan-quota-exhaust", stubPayload(1))
+	assert.Error(t, err)
+
+	// No pod created; Secret cleaned up.
+	assert.Nil(t, findPod(ctx, t, fc, "team-a"))
+	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"))
+
+	// 2 retries attempted (attempts 1 and 2 after the initial failure), then exhausted.
+	assert.Equal(t, float64(2), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+}
+
+// TestProvisioner_QuotaRetryDisabled verifies that maxQuotaRetries:0 causes an
+// immediate failure on quota rejection with no retries.
+func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	qc := &quotaPodCreateClient{Client: fc, failCount: 1}
+
+	p := newProvisioner(qc)
+	m := newTestMetrics()
+	p.Metrics = m
+
+	zero := int32(0)
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.MaxQuotaRetries = &zero
+
+	err := p.HandlerFor(rg)(ctx, "", "plan-quota-disabled", stubPayload(1))
+	assert.Error(t, err)
+
+	// No pod; no retry counters incremented.
+	assert.Nil(t, findPod(ctx, t, fc, "team-a"))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+}
+
+// TestProvisioner_NonQuotaCreateFailureNoRetry verifies that a non-quota pod
+// creation error (e.g. admission webhook rejection) is not retried.
+func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	// failPodCreateClient returns a generic error, not a quota error.
+	p := newProvisioner(failPodCreateClient{fc})
+	m := newTestMetrics()
+	p.Metrics = m
+	p.MaxQuotaRetries = 5 // quota retry enabled, but should not fire
+
+	rg := newRG("mygroup", "team-a")
+
+	err := p.HandlerFor(rg)(ctx, "", "plan-nonquota", stubPayload(1))
+	assert.Error(t, err)
+
+	// No quota retries attempted.
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
+	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
 }
 

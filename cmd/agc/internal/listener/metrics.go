@@ -19,6 +19,8 @@ type Metrics struct {
 	JobDuration              *prometheus.HistogramVec
 	EvictionRetries          *prometheus.CounterVec
 	EvictionRetriesExhausted *prometheus.CounterVec
+	QuotaRetries             *prometheus.CounterVec
+	QuotaRetriesExhausted    *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -76,6 +78,16 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_eviction_retries_exhausted_total",
 			Help: "Evicted jobs where retry budget was exhausted.",
 		}, []string{"namespace", "runner_group"}),
+
+		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_quota_retries_total",
+			Help: "Pod creation attempts retried due to namespace ResourceQuota exhaustion.",
+		}, []string{"namespace", "runner_group"}),
+
+		QuotaRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_quota_retries_exhausted_total",
+			Help: "Jobs abandoned after exhausting the quota retry budget.",
+		}, []string{"namespace", "runner_group"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -89,6 +101,8 @@ func NewMetrics() *Metrics {
 		m.JobDuration,
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,
+		m.QuotaRetries,
+		m.QuotaRetriesExhausted,
 	)
 	return m
 }

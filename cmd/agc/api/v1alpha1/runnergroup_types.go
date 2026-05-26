@@ -28,6 +28,7 @@ type PriorityTier struct {
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 // +kubebuilder:validation:XValidation:rule="!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay) >= duration('1s')",message="evictionRetryDelay must be at least 1s"
+// +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
 	// Each listener holds one open broker session; additional goroutines spawn
@@ -75,6 +76,21 @@ type RunnerGroupSpec struct {
 	// Must be at least 1s. Defaults to "5s" when omitted.
 	// +optional
 	EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`
+
+	// MaxQuotaRetries controls how many times the AGC retries pod creation when the
+	// namespace ResourceQuota is exhausted. The AGC holds the job lock and waits for
+	// quota to free up between attempts. Set to 0 to disable quota retry. Defaults to
+	// 5 when omitted.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=20
+	MaxQuotaRetries *int32 `json:"maxQuotaRetries,omitempty"`
+
+	// QuotaRetryDelay is the time to wait between pod creation retries when the
+	// namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s"
+	// when omitted.
+	// +optional
+	QuotaRetryDelay *metav1.Duration `json:"quotaRetryDelay,omitempty"`
 }
 
 // RunnerGroupStatus defines the observed state of a RunnerGroup.
