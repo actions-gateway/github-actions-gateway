@@ -24,9 +24,9 @@ jobs:
       FAKEGITHUB_IMG: localhost:5000/fakegithub:e2e-${{ github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.work
 
@@ -36,7 +36,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           # network=host so the docker-container builder can push to the
           # registry container published on the runner's 127.0.0.1:5000.
@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload e2e test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-junit-report
           path: /tmp/e2e-report.xml
