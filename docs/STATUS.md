@@ -14,7 +14,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **New item identified:** insert it in the Queue at the right priority position.
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 
-Last refreshed: 2026-05-25 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅).
+Last refreshed: 2026-05-26 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅, AGC rename ✅).
 
 ---
 
@@ -28,7 +28,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | M1: Unit-test coverage | `milestone` `tests` | ✅ | All 5 gaps closed — [plan](plan/milestone-1-tests.md) |
 | M2: AGC controller | `milestone` | ⚠️ | Code shipped; envtest suite and kind `activeSessions` check open — [plan](plan/milestone-2.md) |
 | M3: Worker pod | `milestone` | ⚠️ | Code complete; end-to-end gated on Named Pipe investigation — [plan](plan/milestone-3.md) |
-| M4: GMC + proxy | `milestone` | ⚠️ | Code complete; multi-tenant kind validation blocked on M3 — [plan](plan/milestone-4.md) |
+| M4: GMC + proxy | `milestone` | ⚠️ | Code + rename complete; multi-tenant kind validation blocked on M3 — [plan](plan/milestone-4.md) |
 | M5: Hardening | `milestone` `security` | ⚠️ | Security half done; packaging, load test harness, posture scan open — [plan](plan/milestone-5.md) |
 | Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
 | Worker egress proxy | `security` `infra` | ⚠️ | NetworkPolicy split shipped; live `curl` validation blocked on M3/M4 — [plan](plan/worker-egress-proxy.md) |
@@ -45,9 +45,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 1 | [Rename actions-gateway-agc → actions-gateway-controller](plan/rename-agc-to-controller.md) | `infra` `milestone` | 🔲 | M | Code/docs mismatch since M4; 5 constants, all tests, ops docs |
-| 2 | [Go workspace prefix-match bug investigation](development/go-workspaces.md) | `infra` | 🔲 | S | Check if Go 1.22–1.24 fixed it; drop `replace` workaround if so |
-| 3 | [M2 kind: live activeSessions==1 check](plan/milestone-2.md) | `milestone` `tests` | 🔲 | S | Requires live kind cluster with GitHub credentials |
+| 1 | [Go workspace prefix-match bug investigation](development/go-workspaces.md) | `infra` | 🔲 | S | Check if Go 1.22–1.24 fixed it; drop `replace` workaround if so |
+| 2 | [M2 kind: live activeSessions==1 check](plan/milestone-2.md) | `milestone` `tests` | 🔲 | S | Requires live kind cluster with GitHub credentials |
 | 6 | [M3/M4 kind end-to-end validation](plan/milestone-3.md) | `milestone` | 🚫 | M | → Named Pipe investigation (complete; needs live Runner.Worker run) |
 | 7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🚫 | S | → M3/M4 kind end-to-end |
 | 8 | [M2-tests remaining unit gaps (3–11)](plan/milestone-2-tests.md) | `milestone` `tests` | 🚫 | M | → M2 envtest suite |
