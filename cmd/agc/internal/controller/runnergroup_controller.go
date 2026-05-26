@@ -160,6 +160,15 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// the struct before writing the API response back into it).
 	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rg.DeepCopy(), pool)
 	mux.SetMaxListeners(rg.Spec.MaxListeners)
+	// Restart the permanent baseline goroutine if all goroutines have exited
+	// and at least one listener was requested. This recovers from the race where
+	// the goroutine hit a pool-exhausted NonRetriableError at startup before
+	// EnsureAgents finished populating the pool.
+	if mux.ActiveCount() == 0 && rg.Spec.MaxListeners > 0 {
+		if startErr := mux.Start(ctx); startErr != nil {
+			log.Warn("multiplexer restart failed", "error", startErr)
+		}
+	}
 
 	// 8. Update status.
 	rg.Status.ActiveSessions = mux.ActiveCount()
@@ -247,8 +256,14 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 				Namespace: rg.Namespace,
 			}
 		}
+		// Use the per-agent broker URL from the JIT config (.runner serverUrl).
+		// Fall back to the static BrokerConfig URL for non-JIT registrars (stubs).
+		agentBrokerURL := agent.BrokerURL
+		if agentBrokerURL == "" {
+			agentBrokerURL = brokerCfg.BrokerURL
+		}
 		bc := &broker.BrokerClient{
-			BrokerURL:     brokerCfg.BrokerURL,
+			BrokerURL:     agentBrokerURL,
 			RunnerVersion: brokerCfg.RunnerVersion,
 			RunnerOS:      brokerCfg.RunnerOS,
 			RunnerArch:    brokerCfg.RunnerArch,
