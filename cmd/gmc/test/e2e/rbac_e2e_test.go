@@ -34,13 +34,13 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 
 	It("E2E_GMC_AGCServiceAccountHasRole: AGC ServiceAccount is bound to expected Role", func() {
 		By("checking RoleBinding subjects include actions-gateway-controller ServiceAccount")
-		cmd := exec.Command("kubectl", "get", "rolebinding", "actions-gateway-controller",
+		cmd := exec.Command("kubectl", "get", "rolebinding", agcName,
 			"-n", tenantNS,
 			"-o", "jsonpath={.subjects[0].name}",
 		)
 		out, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(Equal("actions-gateway-controller"),
+		Expect(out).To(Equal(agcName),
 			"RoleBinding subject should be the AGC service account")
 	})
 

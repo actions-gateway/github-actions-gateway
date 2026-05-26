@@ -42,7 +42,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, agcImage)
 
 		By("waiting for AGC to be ready")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-controller", 4*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())

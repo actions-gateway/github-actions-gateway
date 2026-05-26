@@ -74,7 +74,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 
 		By("verifying proxy and AGC deployments still exist")
 		Expect(utils.ResourceExists("deployment", tenantNS, "actions-gateway-proxy")).To(BeTrue())
-		Expect(utils.ResourceExists("deployment", tenantNS, "actions-gateway-controller")).To(BeTrue())
+		Expect(utils.ResourceExists("deployment", tenantNS, agcName)).To(BeTrue())
 
 		By("verifying ActionsGateway Ready condition is still True")
 		Eventually(func(g Gomega) {

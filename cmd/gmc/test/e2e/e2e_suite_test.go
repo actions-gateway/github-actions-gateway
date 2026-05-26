@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
 )
 
@@ -29,6 +30,8 @@ const (
 
 	fakegithubServiceName = "fakegithub"
 	fakegithubServicePort = "8080"
+
+	agcName = agcnames.ControllerName
 )
 
 var (

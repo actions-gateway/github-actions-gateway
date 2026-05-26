@@ -42,7 +42,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_ProvisionsAGCDeployment: AGC Deployment reaches ready", func() {
 		By("waiting for actions-gateway-controller Deployment to have ready replicas")
-		utils.WaitForDeploymentReady(tenantNS, "actions-gateway-controller", 3*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, agcName, 3*time.Minute)
 	})
 
 	It("E2E_GMC_ReadyConditionTrue: ActionsGateway Ready condition becomes True", func() {
@@ -67,9 +67,9 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_ServiceAccountAndRBACCreated: ServiceAccount and RoleBinding are present", func() {
 		By("checking ServiceAccount actions-gateway-controller")
-		Expect(utils.ResourceExists("serviceaccount", tenantNS, "actions-gateway-controller")).To(BeTrue())
+		Expect(utils.ResourceExists("serviceaccount", tenantNS, agcName)).To(BeTrue())
 		By("checking RoleBinding actions-gateway-controller")
-		Expect(utils.ResourceExists("rolebinding", tenantNS, "actions-gateway-controller")).To(BeTrue())
+		Expect(utils.ResourceExists("rolebinding", tenantNS, agcName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_ProxyServiceCreated: proxy Service is present", func() {
