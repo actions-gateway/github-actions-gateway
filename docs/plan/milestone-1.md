@@ -31,7 +31,7 @@ The repository uses **Go workspaces** so that future binaries (AGC in Milestone 
 
 ```
 cd github-actions-gateway
-go mod init github.com/karlkfi/github-actions-gateway
+go mod init github.com/actions-gateway/github-actions-gateway
 ```
 
 **Probe module** — the Milestone 1 binary:
@@ -39,7 +39,7 @@ go mod init github.com/karlkfi/github-actions-gateway
 ```
 mkdir -p cmd/probe
 cd cmd/probe
-go mod init github.com/karlkfi/github-actions-gateway/probe
+go mod init github.com/actions-gateway/github-actions-gateway/probe
 ```
 
 **Workspace file** — ties all modules together for local development:
@@ -73,7 +73,7 @@ Use Go 1.22 or later (required for `net/http` routing improvements and the `slic
 ```
 github-actions-gateway/
 ├── go.work                          # workspace: ties root + cmd/* modules together
-├── go.mod                           # root module: github.com/karlkfi/github-actions-gateway
+├── go.mod                           # root module: github.com/actions-gateway/github-actions-gateway
 ├── broker/
 │   ├── client.go                    # BrokerClient: sessions, message, acquirejob, renewjob
 │   ├── client_test.go
@@ -85,7 +85,7 @@ github-actions-gateway/
 │   └── auth_test.go
 ├── cmd/
 │   └── probe/
-│       ├── go.mod                   # module: github.com/karlkfi/github-actions-gateway/probe
+│       ├── go.mod                   # module: github.com/actions-gateway/github-actions-gateway/probe
 │       └── main.go                  # Probe entry point; imports root module packages
 ├── testdata/
 │   ├── job_payload.json             # Committed decrypted payload fixture (from live probe run)
@@ -273,7 +273,7 @@ func DecryptMessageBody(encryptedBody string, key []byte) ([]byte, error)
 
 ### 2.3 `cmd/probe/main.go` — Probe Entry Point
 
-The probe is a thin orchestration layer over the two packages above. It imports them as `github.com/karlkfi/github-actions-gateway/broker` and `github.com/karlkfi/github-actions-gateway/githubapp` — the workspace resolves these to the root module locally. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.
+The probe is a thin orchestration layer over the two packages above. It imports them as `github.com/actions-gateway/github-actions-gateway/broker` and `github.com/actions-gateway/github-actions-gateway/githubapp` — the workspace resolves these to the root module locally. It is not itself unit-tested (it wires up real credentials and makes live calls), but its logic is simple enough to read and audit directly.
 
 **Startup sequence:**
 

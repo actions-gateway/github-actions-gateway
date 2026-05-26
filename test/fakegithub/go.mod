@@ -1,3 +1,3 @@
-module github.com/karlkfi/github-actions-gateway/test/fakegithub
+module github.com/actions-gateway/github-actions-gateway/test/fakegithub
 
 go 1.26

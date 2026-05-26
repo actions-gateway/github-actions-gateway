@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/karlkfi/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"

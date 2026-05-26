@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // pkgTestRSAKey is a shared 2048-bit RSA key generated once per test binary run.

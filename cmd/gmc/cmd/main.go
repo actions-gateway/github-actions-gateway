@@ -25,10 +25,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
-	actionsgatewaygithubcomv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
-	"github.com/karlkfi/github-actions-gateway/gmc/internal/controller"
-	webhookv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/internal/webhook/v1alpha1"
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

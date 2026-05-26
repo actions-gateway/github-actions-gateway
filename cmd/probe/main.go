@@ -39,8 +39,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/broker"
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 func main() {

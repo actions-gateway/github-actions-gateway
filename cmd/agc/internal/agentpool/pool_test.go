@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
-	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"

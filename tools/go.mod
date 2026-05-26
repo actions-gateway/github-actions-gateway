@@ -1,4 +1,4 @@
-module github.com/karlkfi/github-actions-gateway/tools
+module github.com/actions-gateway/github-actions-gateway/tools
 
 go 1.26.0
 

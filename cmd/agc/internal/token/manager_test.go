@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/internal/token"
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"

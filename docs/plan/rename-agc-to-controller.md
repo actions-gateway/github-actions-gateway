@@ -55,7 +55,7 @@ const ControllerName = "actions-gateway-controller"
 ```
 
 The package needs to be importable by both `cmd/gmc/...` and `cmd/agc/...`. The
-root module (`github.com/karlkfi/github-actions-gateway`) is already shared by
+root module (`github.com/actions-gateway/github-actions-gateway`) is already shared by
 both — putting it there (e.g. `names/names.go` at the repo root or
 `internal/names/` if the package should not be public API) keeps the import
 graph clean.

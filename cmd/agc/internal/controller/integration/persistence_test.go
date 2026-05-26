@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"

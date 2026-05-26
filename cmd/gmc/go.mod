@@ -1,9 +1,9 @@
-module github.com/karlkfi/github-actions-gateway/gmc
+module github.com/actions-gateway/github-actions-gateway/gmc
 
 go 1.26.0
 
 require (
-	github.com/karlkfi/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 // workspace-local
+	github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 // workspace-local
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.40.0
 	github.com/stretchr/testify v1.11.1
@@ -101,8 +101,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 )
 
-replace github.com/karlkfi/github-actions-gateway/broker => ../../broker
+replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
 
-replace github.com/karlkfi/github-actions-gateway/githubapp => ../../githubapp
+replace github.com/actions-gateway/github-actions-gateway/githubapp => ../../githubapp
 
-replace github.com/karlkfi/github-actions-gateway/agc => ../../cmd/agc
+replace github.com/actions-gateway/github-actions-gateway/agc => ../../cmd/agc

@@ -27,7 +27,7 @@ import (
 	"math/big"
 	"time"
 
-	gmcv1alpha1 "github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1"
+	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
 const (

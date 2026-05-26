@@ -34,7 +34,7 @@ The AGC binary lives in its own module, parallel to `cmd/probe/`:
 ```
 mkdir -p cmd/agc
 cd cmd/agc
-go mod init github.com/karlkfi/github-actions-gateway/agc
+go mod init github.com/actions-gateway/github-actions-gateway/agc
 ```
 
 Add the new module to `go.work`:
@@ -70,7 +70,7 @@ github-actions-gateway/
 └── cmd/
     ├── probe/                            # Milestone 1 — unchanged
     └── agc/
-        ├── go.mod                        # module: github.com/karlkfi/github-actions-gateway/agc
+        ├── go.mod                        # module: github.com/actions-gateway/github-actions-gateway/agc
         ├── main.go                       # operator entry point
         ├── api/
         │   └── v1alpha1/
@@ -96,7 +96,7 @@ github-actions-gateway/
             └── default/                  # kustomize base
 ```
 
-Shared packages (`broker`, `githubapp`) are imported as `github.com/karlkfi/github-actions-gateway/broker` and `.../ githubapp`; the workspace resolves them locally without a published release.
+Shared packages (`broker`, `githubapp`) are imported as `github.com/actions-gateway/github-actions-gateway/broker` and `.../ githubapp`; the workspace resolves them locally without a published release.
 
 ### 1.4 New dependencies (AGC module `go.mod`)
 

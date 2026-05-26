@@ -6,14 +6,14 @@ This repo uses a `go.work` workspace with no root-level Go module. The workspace
 
 | Directory | Module path |
 |---|---|
-| `broker/` | `github.com/karlkfi/github-actions-gateway/broker` |
-| `githubapp/` | `github.com/karlkfi/github-actions-gateway/githubapp` |
-| `cmd/agc/` | `github.com/karlkfi/github-actions-gateway/agc` |
-| `cmd/gmc/` | `github.com/karlkfi/github-actions-gateway/gmc` |
-| `cmd/probe/` | `github.com/karlkfi/github-actions-gateway/probe` |
-| `cmd/proxy/` | `github.com/karlkfi/github-actions-gateway/proxy` |
-| `cmd/worker/` | `github.com/karlkfi/github-actions-gateway/worker` |
-| `test/fakegithub/` | `github.com/karlkfi/github-actions-gateway/fakegithub` |
+| `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` |
+| `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` |
+| `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` |
+| `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` |
+| `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` |
+| `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` |
+| `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` |
+| `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` |
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 
@@ -43,7 +43,7 @@ Worktrees (`.claude/worktrees/<name>/`) each have their own `go.work` that may d
 **Running go commands in a worktree:** `go test ./...` from the worktree root fails because `.` is not in `go.work`'s `use` block. Use per-module commands instead — Go finds `go.work` by walking up parent directories from `cmd/agc`, `cmd/probe`, etc. To run a single go command against a specific module from the worktree root, set `GOWORK` explicitly:
 
 ```bash
-GOWORK=/path/to/worktree/go.work go build github.com/karlkfi/github-actions-gateway/agc/...
+GOWORK=/path/to/worktree/go.work go build github.com/actions-gateway/github-actions-gateway/agc/...
 ```
 
-**No root module at the repo root.** There is no `./go.mod` and no `use .` in `go.work`. An earlier revision had a root module (`github.com/karlkfi/github-actions-gateway`) that had to be supplied via `replace` rather than `use` to work around a Go workspace prefix-match bug (Go resolved packages under `.../agc/...` to the root module instead of `cmd/agc/` when both appeared in `use`). The root module was dropped entirely in the broker/githubapp refactor (commit `6c23b0d`), eliminating the ambiguity. Do not add `use .` or a `replace github.com/karlkfi/github-actions-gateway => ./` back — it would reintroduce the prefix-match problem.
+**No root module at the repo root.** There is no `./go.mod` and no `use .` in `go.work`. An earlier revision had a root module (`github.com/actions-gateway/github-actions-gateway`) that had to be supplied via `replace` rather than `use` to work around a Go workspace prefix-match bug (Go resolved packages under `.../agc/...` to the root module instead of `cmd/agc/` when both appeared in `use`). The root module was dropped entirely in the broker/githubapp refactor (commit `6c23b0d`), eliminating the ambiguity. Do not add `use .` or a `replace github.com/actions-gateway/github-actions-gateway => ./` back — it would reintroduce the prefix-match problem.

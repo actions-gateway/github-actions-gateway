@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
 // Server is a test HTTP server that implements the broker v2 protocol endpoints.

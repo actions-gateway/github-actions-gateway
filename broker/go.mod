@@ -1,11 +1,11 @@
-module github.com/karlkfi/github-actions-gateway/broker
+module github.com/actions-gateway/github-actions-gateway/broker
 
 go 1.26
 
-replace github.com/karlkfi/github-actions-gateway/githubapp => ../githubapp
+replace github.com/actions-gateway/github-actions-gateway/githubapp => ../githubapp
 
 require (
-	github.com/karlkfi/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
 )

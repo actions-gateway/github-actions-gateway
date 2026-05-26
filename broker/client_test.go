@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
-	"github.com/karlkfi/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
 func TestMain(m *testing.M) {

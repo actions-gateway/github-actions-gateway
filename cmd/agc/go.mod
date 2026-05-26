@@ -1,11 +1,11 @@
-module github.com/karlkfi/github-actions-gateway/agc
+module github.com/actions-gateway/github-actions-gateway/agc
 
 go 1.26.0
 
 require (
 	github.com/go-logr/logr v1.4.3
-	github.com/karlkfi/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
-	github.com/karlkfi/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
@@ -72,6 +72,6 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/karlkfi/github-actions-gateway/broker => ../../broker
+replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
 
-replace github.com/karlkfi/github-actions-gateway/githubapp => ../../githubapp
+replace github.com/actions-gateway/github-actions-gateway/githubapp => ../../githubapp

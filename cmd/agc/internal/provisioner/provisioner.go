@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
-	"github.com/karlkfi/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

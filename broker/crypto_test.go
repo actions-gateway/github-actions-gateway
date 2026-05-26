@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/karlkfi/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
 // testRSAKeyA and testRSAKeyB are shared 2048-bit RSA key pairs generated once

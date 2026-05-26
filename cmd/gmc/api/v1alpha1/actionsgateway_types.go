@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	agcv1alpha1 "github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

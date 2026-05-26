@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/karlkfi/github-actions-gateway/agc/names"
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

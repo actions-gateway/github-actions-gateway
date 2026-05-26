@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
-	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
-	"github.com/karlkfi/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"

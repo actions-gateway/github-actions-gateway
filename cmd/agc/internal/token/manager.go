@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // Clock abstracts time for testability.

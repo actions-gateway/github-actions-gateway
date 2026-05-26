@@ -20,9 +20,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
-	gmcnames "github.com/karlkfi/github-actions-gateway/gmc/names"
-	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
+	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
 const (

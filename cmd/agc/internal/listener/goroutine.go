@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
-	"github.com/karlkfi/github-actions-gateway/broker"
-	"github.com/karlkfi/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
+	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

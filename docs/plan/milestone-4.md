@@ -67,8 +67,8 @@ mechanical.
 
 ```
 mkdir -p cmd/gmc cmd/proxy
-cd cmd/gmc && go mod init github.com/karlkfi/github-actions-gateway/gmc
-cd cmd/proxy && go mod init github.com/karlkfi/github-actions-gateway/proxy
+cd cmd/gmc && go mod init github.com/actions-gateway/github-actions-gateway/gmc
+cd cmd/proxy && go mod init github.com/actions-gateway/github-actions-gateway/proxy
 ```
 
 Add both to `go.work`:
@@ -84,12 +84,12 @@ use (
     ./cmd/worker
 )
 
-replace github.com/karlkfi/github-actions-gateway => ./
+replace github.com/actions-gateway/github-actions-gateway => ./
 ```
 
 The `replace` directive already in `go.work` prevents the longest-prefix routing bug (see `CLAUDE.md`); no additional replace directives are needed for the new modules.
 
-The `cmd/gmc/go.mod` requires `github.com/karlkfi/github-actions-gateway/agc` to import the RunnerGroup API types. The workspace resolver handles this via the `use ./cmd/agc` entry without a replace directive.
+The `cmd/gmc/go.mod` requires `github.com/actions-gateway/github-actions-gateway/agc` to import the RunnerGroup API types. The workspace resolver handles this via the `use ./cmd/agc` entry without a replace directive.
 
 ### 1.2 Kubebuilder bootstrapping for GMC
 
@@ -97,7 +97,7 @@ Scaffold the GMC inside `cmd/gmc/` using `kubebuilder`:
 
 ```bash
 cd cmd/gmc
-kubebuilder init --domain actions-gateway.github.com --repo github.com/karlkfi/github-actions-gateway/gmc
+kubebuilder init --domain actions-gateway.github.com --repo github.com/actions-gateway/github-actions-gateway/gmc
 kubebuilder create api --group actions-gateway.github.com --version v1alpha1 \
     --kind ActionsGateway --resource --controller
 kubebuilder create webhook --group actions-gateway.github.com --version v1alpha1 \
@@ -225,7 +225,7 @@ type ActionsGateway struct {
 }
 ```
 
-`RunnerGroups []agcv1alpha1.RunnerGroupSpec` reuses the type from the AGC API package (`github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1`). This is the only external dependency between the two modules and flows in one direction (GMC → AGC).
+`RunnerGroups []agcv1alpha1.RunnerGroupSpec` reuses the type from the AGC API package (`github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1`). This is the only external dependency between the two modules and flows in one direction (GMC → AGC).
 
 Note: the `ActionsGatewaySpec.RunnerGroups` field uses `agcv1alpha1.RunnerGroupSpec`, not the full `RunnerGroup` CR type, because the GMC bootstraps RunnerGroup CRs from a spec — it constructs the CR name itself as `{actionsgateway-name}-{runnergroup.name}`.
 

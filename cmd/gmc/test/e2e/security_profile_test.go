@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/karlkfi/github-actions-gateway/gmc/test/utils"
+	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
 var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {

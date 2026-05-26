@@ -1,4 +1,4 @@
-module github.com/karlkfi/github-actions-gateway/proxy
+module github.com/actions-gateway/github-actions-gateway/proxy
 
 go 1.26
 

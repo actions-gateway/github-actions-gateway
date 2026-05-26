@@ -1,4 +1,4 @@
-module github.com/karlkfi/github-actions-gateway/worker
+module github.com/actions-gateway/github-actions-gateway/worker
 
 go 1.26.3
 
