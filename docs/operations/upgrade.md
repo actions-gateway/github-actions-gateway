@@ -15,7 +15,7 @@ Before upgrading any component, confirm the system is healthy:
 kubectl get actionsgateway --all-namespaces
 
 # 2. All AGC pods healthy
-kubectl get pods --all-namespaces -l app=actions-gateway-agc
+kubectl get pods --all-namespaces -l app=actions-gateway-controller
 
 # 3. All proxy pools healthy
 kubectl get pods --all-namespaces -l app=actions-gateway-proxy
@@ -30,6 +30,27 @@ kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).
 - Behavior changes that require configuration updates before the new binary takes effect.
+
+---
+
+## Migration Notes
+
+### AGC Deployment renamed from `actions-gateway-agc` to `actions-gateway-controller`
+
+Deployments and resources created by the GMC are now named `actions-gateway-controller`
+instead of `actions-gateway-agc`. After upgrading the GMC:
+
+1. The GMC creates a new `actions-gateway-controller` Deployment in each tenant namespace.
+2. The old `actions-gateway-agc` Deployment is left **orphaned** (still running but no longer
+   managed). Remove it manually per tenant:
+
+   ```sh
+   kubectl delete deploy actions-gateway-agc -n <namespace>
+   ```
+
+3. Pods labelled `app=actions-gateway-agc` become `app=actions-gateway-controller`. Update
+   any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old
+   label before upgrading.
 
 ---
 
@@ -118,7 +139,7 @@ The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before 
 The GMC manages the AGC Deployment. To update the AGC image, update the GMC's configuration (Helm values or Kustomize overlay) with the new AGC image tag and re-deploy the GMC, which will then roll each tenant's AGC Deployment. Alternatively, patch per-namespace:
 
 ```sh
-kubectl set image deploy/actions-gateway-agc \
+kubectl set image deploy/actions-gateway-controller \
   agc=<registry>/agc:<new-tag> \
   -n <namespace>
 ```
@@ -126,7 +147,7 @@ kubectl set image deploy/actions-gateway-agc \
 **Step 3: Watch the rollout**
 
 ```sh
-kubectl rollout status deploy/actions-gateway-agc -n <namespace>
+kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
 **Step 4: Confirm session recovery**
@@ -146,8 +167,8 @@ After the rollout, verify that jobs active during the restart have either comple
 ### Rollback
 
 ```sh
-kubectl rollout undo deploy/actions-gateway-agc -n <namespace>
-kubectl rollout status deploy/actions-gateway-agc -n <namespace>
+kubectl rollout undo deploy/actions-gateway-controller -n <namespace>
+kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
 Then confirm sessions are re-established and job acquisition resumes.

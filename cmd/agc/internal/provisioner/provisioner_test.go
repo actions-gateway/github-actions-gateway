@@ -17,6 +17,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/provisioner"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -184,7 +185,7 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
-	assert.Equal(t, "actions-gateway-agc", pod.Labels["app.kubernetes.io/managed-by"])
+	assert.Equal(t, agcnames.ControllerName, pod.Labels["app.kubernetes.io/managed-by"])
 	assert.Equal(t, "mygroup", pod.Labels["actions-gateway/runner-group"])
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")

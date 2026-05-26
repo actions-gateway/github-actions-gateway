@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -183,7 +184,7 @@ func TestPool_LoadAgents_SkipsCorruptSecret(t *testing.T) {
 			Name:      "agentpool-my-rg-99",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "actions-gateway-agc",
+				"app.kubernetes.io/managed-by": agcnames.ControllerName,
 				"actions-gateway/runner-group": "my-rg",
 				"actions-gateway/agent-index":  "99",
 			},
@@ -217,7 +218,7 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 			Name:      "agentpool-my-rg-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by":   "actions-gateway-agc",
+				"app.kubernetes.io/managed-by":   agcnames.ControllerName,
 				"actions-gateway/runner-group":   "my-rg",
 				"actions-gateway/agent-index":    "0",
 			},

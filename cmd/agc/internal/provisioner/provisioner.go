@@ -28,6 +28,7 @@ import (
 
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
+	"github.com/karlkfi/github-actions-gateway/agc/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ const (
 	labelManagedBy   = "app.kubernetes.io/managed-by"
 	labelRunnerGroup = "actions-gateway/runner-group"
 	labelPlanID      = "actions-gateway/plan-id"
-	managerName      = "actions-gateway-agc"
+	managerName      = names.ControllerName
 
 	// DefaultWorkerImage is the fallback worker image when RunnerGroup.Spec.WorkerImage
 	// is empty. Combine with an immutable digest for production deployments.

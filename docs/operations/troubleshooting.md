@@ -15,8 +15,8 @@ Run these checks immediately after deploying a new tenant gateway or upgrading e
 kubectl get actionsgateway -n <namespace> -o yaml | grep -A 20 status:
 
 # 2. Confirm the AGC pod is running
-kubectl get deploy -n <namespace> actions-gateway-agc
-kubectl logs -n <namespace> deploy/actions-gateway-agc --tail=50
+kubectl get deploy -n <namespace> actions-gateway-controller
+kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=50
 
 # 3. Confirm the proxy pool is healthy
 kubectl get deploy -n <namespace> actions-gateway-proxy
@@ -89,10 +89,10 @@ kubectl get actionsgateway -n <namespace> <name> -o jsonpath='{.status.condition
 
 ```sh
 # Check pod status and restarts
-kubectl get pod -n <namespace> -l app=actions-gateway-agc
+kubectl get pod -n <namespace> -l app=actions-gateway-controller
 
 # Check logs for startup errors
-kubectl logs -n <namespace> deploy/actions-gateway-agc
+kubectl logs -n <namespace> deploy/actions-gateway-controller
 
 # Check that the referenced Secret exists and has the right keys
 kubectl get secret -n <namespace> <gitHubAppRef.name>
@@ -250,7 +250,7 @@ kubectl get secret -n <namespace> <name> -o jsonpath='{.data.privateKey}' | base
 **Resolution.** Re-create the Secret with correct values. To trigger a rolling update on the AGC Deployment after fixing the Secret, change `gitHubAppRef.name` in the `ActionsGateway` spec to reference the new Secret name (the GMC will roll the AGC Deployment automatically) or manually restart the Deployment:
 
 ```sh
-kubectl rollout restart deploy/actions-gateway-agc -n <namespace>
+kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
 ```
 
 See [Getting Started — Rotating GitHub App Credentials](../getting-started.md#rotating-github-app-credentials) for the full rotation procedure.
@@ -273,7 +273,7 @@ See [Getting Started — Rotating GitHub App Credentials](../getting-started.md#
 # Metric: rate(actions_gateway_token_refresh_errors_total[5m])
 
 # Check AGC logs for the error detail
-kubectl logs -n <namespace> deploy/actions-gateway-agc | grep "token refresh"
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "token refresh"
 
 # Test connectivity to GitHub via the tenant proxy (AGC is distroless — use an
 # ephemeral curl pod in the same namespace; it picks up the same NetworkPolicy egress).
@@ -307,7 +307,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 # Metric: rate(actions_gateway_renewjob_errors_total[5m])
 
 # Check AGC logs for renewal errors and job IDs
-kubectl logs -n <namespace> deploy/actions-gateway-agc | grep "renewjob"
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "renewjob"
 
 # Confirm the proxy pool is healthy
 kubectl get pods -n <namespace> -l app=actions-gateway-proxy
@@ -331,7 +331,7 @@ Each `renewjob` error is a warning, not an immediate job failure — GitHub gran
 - `HTTP_PROXY`/`HTTPS_PROXY` environment variables are incorrect (wrong Service name or port).
 - `actions-gateway-workload` NetworkPolicy is blocking the AGC-to-proxy egress path (e.g. proxy ClusterIP changed after a recreate and the rule wasn't reconciled).
 - `actions-gateway-proxy` NetworkPolicy is blocking the proxy's egress to GitHub (IP ranges stale or `managedNetworkPolicy: false` with no replacement rule).
-- `actions-gateway-agc` NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.
+- `actions-gateway-controller` NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.
 
 **Diagnostics.**
 
@@ -344,7 +344,7 @@ kubectl get svc -n <namespace> actions-gateway-proxy
 kubectl get endpoints -n <namespace> actions-gateway-proxy
 
 # Check the AGC container's HTTPS_PROXY env var (distroless — inspect spec, not the running process)
-kubectl get pod -n <namespace> -l app=actions-gateway-agc \
+kubectl get pod -n <namespace> -l app=actions-gateway-controller \
   -o jsonpath='{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="HTTPS_PROXY")]}{.name}={.value}{"\n"}{end}'
 
 # Test proxy connectivity using an ephemeral curl pod in the same namespace
@@ -354,7 +354,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 # Check NetworkPolicy rules — there are three: workload, agc, proxy
 kubectl get networkpolicy -n <namespace>
-# Expected: actions-gateway-workload, actions-gateway-agc, actions-gateway-proxy
+# Expected: actions-gateway-workload, actions-gateway-controller, actions-gateway-proxy
 kubectl describe networkpolicy -n <namespace>
 
 # Check the IP range refresh metric
@@ -422,7 +422,7 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i evict
 kubectl describe resourcequota -n <namespace>
 
 # Check AGC logs for quota errors
-kubectl logs -n <agc-namespace> deploy/actions-gateway-agc | grep "exceeded quota"
+kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceeded quota"
 ```
 
 **Resolution.**

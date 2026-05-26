@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
+	agcnames "github.com/karlkfi/github-actions-gateway/agc/names"
 	"github.com/karlkfi/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -243,7 +244,7 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 				Name:      "preexisting-worker-" + string(rune('0'+i)),
 				Namespace: nsName,
 				Labels: map[string]string{
-					"app.kubernetes.io/managed-by":   "actions-gateway-agc",
+					"app.kubernetes.io/managed-by":   agcnames.ControllerName,
 					"actions-gateway/runner-group":   "ceiling-rg",
 				},
 			},

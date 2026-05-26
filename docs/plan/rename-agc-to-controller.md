@@ -151,11 +151,11 @@ NetworkPolicy by `actions-gateway/component: workload`, not by the AGC's
 
 ## Definition of done
 
-- [ ] One exported constant declared in a shared package; both binaries
-      import it.
-- [ ] All five Go-side string literals replaced.
-- [ ] All test files updated (literal-string greps return zero results).
-- [ ] Operations docs flipped back to `actions-gateway-controller`.
-- [ ] Release notes mention the on-cluster rename, the manual cleanup
-      command, and the Prometheus label change.
-- [ ] `make e2e-up` passes on a fresh kind cluster.
+- [x] One exported constant declared in a shared package (`cmd/agc/names/names.go`); both
+      binaries import it.
+- [x] All five Go-side string literals replaced.
+- [x] All test files updated (literal-string greps return zero results).
+- [x] Operations docs flipped back to `actions-gateway-controller`.
+- [x] Migration notes (on-cluster rename, manual cleanup command, Prometheus label change)
+      added to `docs/operations/upgrade.md`.
+- [ ] `make e2e-up` passes on a fresh kind cluster. (Requires live cluster.)

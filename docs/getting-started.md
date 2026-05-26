@@ -132,15 +132,15 @@ When your GitHub App private key expires or is compromised, follow these steps t
 4. **Confirm the rollout completed:**
 
    ```sh
-   kubectl rollout status deploy/actions-gateway-agc -n team-a
+   kubectl rollout status deploy/actions-gateway-controller -n team-a
    # Optionally inspect rotation history:
-   kubectl rollout history deploy/actions-gateway-agc -n team-a
+   kubectl rollout history deploy/actions-gateway-controller -n team-a
    ```
 
 5. **Verify the new token is working:**
 
    ```sh
-   kubectl logs -n team-a deploy/actions-gateway-agc --tail=20
+   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
    # Look for: "token refresh successful" or no token refresh errors
    ```
 

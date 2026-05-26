@@ -55,17 +55,17 @@ func TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied(t *testing.T) {
 
 	// Wait for the AGC ServiceAccount and Role to be created in nsA.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: agcName},
 			&corev1.ServiceAccount{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: agcName},
 			&rbacv1.Role{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Use the AGC SA from nsA impersonated client.
-	impersonatedClient := newImpersonatedClient(t, nsA, "actions-gateway-agc")
+	impersonatedClient := newImpersonatedClient(t, nsA, agcName)
 
 	// The AGC SA in nsA should be able to list Secrets in nsA.
 	var secretsInA corev1.SecretList
@@ -100,7 +100,7 @@ func TestGMC_AGCRole_PermitsOwnNamespace(t *testing.T) {
 
 	// Wait for Role and RoleBinding to exist.
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-agc"},
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&rbacv1.RoleBinding{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
@@ -115,7 +115,7 @@ func TestGMC_AGCRole_PermitsOwnNamespace(t *testing.T) {
 	})
 
 	// Impersonate the AGC SA.
-	impersonatedClient := newImpersonatedClient(t, nsName, "actions-gateway-agc")
+	impersonatedClient := newImpersonatedClient(t, nsName, agcName)
 
 	// The AGC SA should be able to list Secrets in its own namespace.
 	var secretList corev1.SecretList
