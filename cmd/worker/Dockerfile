@@ -1,9 +1,9 @@
 ## Stage 1: build the Go entrypoint wrapper.
 ## This produces a static binary that reads the job payload Secret
 ## and feeds it into Runner.Worker via named pipes.
-# golang:1.24 — pinned to the multi-arch manifest digest for cache stability.
-# Update with: docker buildx imagetools inspect golang:1.24
-FROM golang:1.24@sha256:d2d2bc1c84f7e60d7d2438a3836ae7d0c847f4888464e7ec9ba3a1339a1ee804 AS builder
+# golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
+# Update with: docker buildx imagetools inspect golang:1.26
+FROM golang:1.26@sha256:2d6c80227255c3112a4d08e67ba98e58efd3846daf15d9d7d4c389565d881b1a AS builder
 WORKDIR /src
 # Copy the workspace-level go files so the build can resolve shared modules.
 COPY go.work go.work.sum ./
