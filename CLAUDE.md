@@ -2,6 +2,24 @@
 
 A four-tier system for running GitHub Actions self-hosted runners in a shared Kubernetes cluster with zero idle compute. The Gateway Manager Controller (GMC) provisions isolated per-tenant gateway instances from a single `ActionsGateway` CR. Each instance is an Actions Gateway Controller (AGC) that multiplexes thousands of virtual runner sessions as goroutines — provisioning ephemeral worker pods only when a job is acquired and releasing them immediately on completion. Per-tenant egress proxy pools give each tenant isolated egress IPs for GitHub traffic. See `DESIGN.md` and `docs/design/` for full design context.
 
+## Model selection
+
+At the start of each session, assess the work and recommend a model if the current one seems mismatched. Re-evaluate and prompt again mid-session when a trigger fires.
+
+**Model guide:**
+- **Opus 4.7** — architecture decisions, cross-cutting design changes, security analysis, complex debugging across multiple systems
+- **Sonnet 4.6** — general implementation, code review, refactoring, test writing (good default)
+- **Haiku 4.5** — repetitive/mechanical tasks: renaming, formatting, grep-and-replace, doc typo fixes
+
+**Triggers for re-evaluation** — prompt with `AskUserQuestion` when:
+- The task shifts from implementation to architecture or design (consider Opus)
+- A bug is proving surprisingly hard to root-cause across multiple layers (consider Opus)
+- A security-relevant change is discovered mid-session (consider Opus)
+- The session pivots to a large batch of mechanical edits (consider Haiku)
+- A new chapter starts that is clearly lighter/heavier than the previous one
+
+When prompting, offer the three models as options, mark the recommendation, and include the `/model <id>` command the user needs to run.
+
 ## Development philosophy
 
 Build the right thing AND build it well. Before writing any code, state the goal in one sentence and the approach in two or three. If the goal is unclear, ask one focused question rather than guessing.
