@@ -93,6 +93,10 @@ e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
 		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
 		scripts/kind-with-registry.sh
 
+.PHONY: install-cert-manager
+install-cert-manager: ## Install cert-manager (version defined in cmd/gmc/Makefile)
+	$(MAKE) -C cmd/gmc install-cert-manager
+
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
 	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \
@@ -158,7 +162,7 @@ _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 .PHONY: e2e
 e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
 	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
-		--procs 4 --junit-report /tmp/e2e-report.xml ./test/e2e/...
+		--procs 6 --junit-report /tmp/e2e-report.xml ./test/e2e/...
 
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster and registry, and delete .build/
