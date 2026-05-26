@@ -392,6 +392,33 @@ type RunnerGroupSpec struct {
     // +optional
     // +kubebuilder:default="5s"
     EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`
+
+    // MaxQuotaRetries controls how many times the AGC retries pod creation when
+    // the namespace ResourceQuota is exhausted. Unlike eviction retry, the AGC
+    // holds the job lock and retries in place — quota typically clears as other
+    // jobs complete, so the acquired job is not lost. Once the budget is exhausted
+    // the pod creation failure is returned and the job Secret is cleaned up.
+    //
+    // Set to 0 to disable quota retry entirely. When disabled, a quota-exceeded
+    // error fails the provision call immediately without incrementing the
+    // exhausted counter (disabled is a policy choice, not a budget failure).
+    //
+    // +optional
+    // +kubebuilder:default=5
+    // +kubebuilder:validation:Minimum=0
+    // +kubebuilder:validation:Maximum=20
+    MaxQuotaRetries *int32 `json:"maxQuotaRetries,omitempty"`
+
+    // QuotaRetryDelay is the time to wait between pod creation retries when the
+    // namespace ResourceQuota is exhausted. The default of 30s is chosen to give
+    // a running job time to finish and free quota before the next attempt.
+    //
+    // Accepts standard Go duration strings: "30s", "1m". Values below "1s" are
+    // rejected at admission.
+    //
+    // +optional
+    // +kubebuilder:default="30s"
+    QuotaRetryDelay *metav1.Duration `json:"quotaRetryDelay,omitempty"`
 }
 
 // WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration

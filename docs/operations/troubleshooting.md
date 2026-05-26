@@ -402,4 +402,34 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i evict
 
 ---
 
+## Jobs Failing Due to Namespace ResourceQuota Exhaustion
+
+**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled.
+
+**Likely causes.**
+- The namespace ResourceQuota `pods` or `requests.cpu`/`requests.memory` limit is too low for the burst of concurrent jobs arriving.
+- A long-running job is holding quota that a new job needs; quota will clear once it completes.
+- The quota retry budget (`maxQuotaRetries`, default 5) is exhausting before quota clears.
+
+**Diagnostics.**
+
+```sh
+# Check quota retry metrics
+# actions_gateway_quota_retries_total{namespace, runner_group}
+# actions_gateway_quota_retries_exhausted_total{namespace, runner_group}
+
+# Inspect current quota usage
+kubectl describe resourcequota -n <namespace>
+
+# Check AGC logs for quota errors
+kubectl logs -n <agc-namespace> deploy/actions-gateway-agc | grep "exceeded quota"
+```
+
+**Resolution.**
+- If quota is consistently full: increase the namespace `ResourceQuota` limits or reduce `maxWorkers` / `priorityTiers` thresholds so the AGC holds fewer concurrent pods.
+- If quota clears quickly but the retry window is too short: increase `maxQuotaRetries` or `quotaRetryDelay` on the RunnerGroup spec (defaults: 5 retries / 30s delay).
+- If quota retry is causing unwanted job-lock hold time: set `maxQuotaRetries: 0` to fail immediately on quota exhaustion — the job lock is dropped and GitHub redelivers the job.
+
+---
+
 ← [Back to Operations](.)
