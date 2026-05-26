@@ -60,24 +60,33 @@ The AGC is a single pod running on a CPU-only node with modest resources (500m C
 
 ## F.2. Cost Comparison: This System vs. ARC
 
-The fundamental difference is idle GPU allocation:
+ARC's idle GPU footprint depends heavily on configuration. Compare against the configuration your team actually runs:
 
-| Scenario | ARC | This system |
-|----------|-----|-------------|
-| 10 GPU runner sets, 0 jobs running | 10 GPU pods alive | 0 GPU pods; only AGC goroutines (~600 KiB total) |
-| 10 GPU runner sets, 5 jobs running | 10+ GPU pods (≥1 per set + active) | 5 GPU pods |
-| 10 GPU runner sets, 10 jobs running | 10+ GPU pods | 10 GPU pods |
+| Scenario (10 GPU runner sets, 0 jobs running) | GPU pods alive | Other always-on overhead |
+|----------|----------------|--------------------------|
+| **ARC scale sets, `minRunners: 0`** | 0 | 10 listener pods (~256 MiB / 1 cluster IP each) on CPU nodes |
+| **ARC scale sets, `minRunners: 1`** (common, to mask cold-start latency) | 10 | 10 listener pods on CPU nodes |
+| **Legacy ARC `RunnerDeployment`** (per-pod listener) | ≥1 per scale set depending on HRA config | Each runner pod runs its own `Runner.Listener` (~256 MiB) |
+| **This system** | 0 | 1 AGC pod (goroutine listener per group, ~60 KiB each) + 1 proxy pool |
 
-**Idle-state cost example.**
+**Idle-state cost examples.**
 
-ARC keeps at least one runner pod per scale set alive to handle incoming jobs. For 10 GPU runner sets, each requiring a dedicated 8-GPU node:
+For 10 GPU runner sets, each requiring a dedicated 8-GPU node at $25/hr:
 
-- ARC idle cost: `10 nodes × $25/hr = $250/hr` — even when no jobs are running.
-- This system idle cost: AGC + proxy pool ≈ `$0.05/hr` — no GPU nodes held.
+*Against ARC scale sets with `minRunners: 0`:*
+- ARC GPU idle cost: `$0/hr` — GPU pods scale to zero between jobs, same as this system.
+- ARC always-on overhead: 10 listener pods × ~256 MiB on CPU nodes — small but real.
+- This system always-on overhead: 1 AGC pod with goroutine listeners + 1 proxy pool — typically lower than the listener-pod aggregate at 10+ groups.
+- **GPU cost difference at idle: zero.** The advantage is listener footprint and the fact that this system does not need `minRunners > 0` tuning to avoid cold-start latency.
 
-Over a 16-hour off-peak window (nights and weekends at a typical org): ARC idles away `16 × $250 = $4,000` per day in GPU charges. This system incurs essentially $0 in GPU charges during that window.
+*Against ARC scale sets with `minRunners: 1`:*
+- ARC idle cost: `10 nodes × $25/hr = $250/hr` — 10 GPU pods held to avoid cold-start latency, even when no jobs are running.
+- This system idle cost: AGC + proxy pool ≈ `$0.05/hr` — no GPU nodes held; the goroutine listener never goes cold, so no `minRunners > 0` workaround is needed.
+- Over a 16-hour off-peak window: ARC idles away `16 × $250 = $4,000` per day in GPU charges that this system does not incur.
 
-**At 100% utilization** (jobs running 24/7 at full concurrency), both systems hold the same number of GPU pods and the cost difference approaches zero. The advantage of this system is proportional to how often the GPU fleet is idle — which for most teams is the majority of the time.
+*Against legacy ARC `RunnerDeployment`*: idle costs are similar to or worse than the `minRunners: 1` scale-set case, depending on HRA configuration. Migrating from legacy ARC produces the largest absolute idle-GPU savings.
+
+**At 100% utilization** (jobs running 24/7 at full concurrency), all configurations hold the same number of GPU pods and the cost difference approaches zero. This system's GPU-cost advantage is proportional to how often the GPU fleet is idle *and* how the comparison ARC deployment is configured.
 
 ---
 

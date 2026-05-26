@@ -6,28 +6,55 @@
 
 ## Executive Summary
 
-### For Executive Leadership: GPU Utilization & Cost Justification
+### For Executive Leadership
 
-**Every idle GPU runner pod is burning money with nothing to show for it.** ARC's minimum replica count is 1, so a tenant with 10 GPU runner sets holds at least 10 GPUs allocated at all times — whether jobs are running or not. At 1–8 GPUs per runner, a single tenant can idle 80 GPUs between pull requests and scheduled tests, paying full cloud rates for hardware that isn't doing work.
+**Make GitHub Actions self-hosted runners safe and economical to operate at multi-tenant enterprise scale.** This system turns the shared Kubernetes cluster hosting CI/CD into a managed internal platform: one operator, deployed once, that lets dozens of tenant teams onboard themselves and run thousands of jobs per hour — without the platform team becoming the bottleneck and without any one team's incident becoming everyone's outage.
 
-- **Idle runner allocation — GPUs held by runner pods between jobs — drops to zero.** At ARC's minimum of 1 pod per runner set, 10 clusters with 5 tenants and 5 runner sets each holds 250 GPUs allocated around the clock. At a conservative 50% idle time and 1 GPU per runner, that's ~90,000 wasted GPU-hours per month. At typical on-demand rates, this system eliminates roughly **$180K–$360K in monthly idle GPU spend** — over $2M annually. *(Estimate based on 1–2 GPUs per runner set at $2/GPU-hour; to be validated with observed utilization data.)*
-- **The ask:** engineering investment to build and operate this system. At this scale of idle spend, the build cost is expected to pay back within weeks of production operation.
+- **Engineering velocity for product teams.** Tenant teams onboard themselves via a single custom resource in their own namespace and own every subsequent change — new runner types, GPU quota rebalancing, scale limits. Changes that today wait days for a platform-team ticket ship in minutes. Teams iterating quickly — especially those adding new GPU test suites — are no longer rate-limited by platform availability.
 
-### For Tenant Teams: Self-Service & Cost Ownership
+- **GPU utilization that holds under contention.** GPU runners are guaranteed scheduling slots even when cheap CPU runners flood a shared quota, so the most expensive hardware actually runs instead of losing the race. GPU nodes return to the cluster scheduler the moment each job completes, freeing them for other workloads between CI jobs. Per-tenant utilization metrics give finance and platform leadership the data to justify GPU allocations and reclaim under-used capacity.
 
-**Tenants today depend on the platform team for every runner set change.** Adding a test suite, rebalancing GPU quota between runner sets, or adjusting scale limits requires filing a request and waiting. Teams iterating quickly — especially those adding new GPU test suites frequently — are blocked by this overhead and can't move at their own pace.
+- **No manual recovery from infrastructure incidents.** Preempted, OOM-killed, and node-lost jobs are fast-cancelled at GitHub and rerun automatically, with a per-job retry budget. The class of "my CI job hung for ten minutes and then failed mysteriously — please rerun" support tickets is closed by construction, eliminating a recurring source of toil for both tenant teams and on-call.
 
-- **Full self-service via a single custom resource.** Teams declare all their runner sets, GPU allocations, and scale limits in one `ActionsGateway` CR they own and manage in their own namespace. No platform team involvement after initial onboarding.
-- **Rebalancing is a one-line config change.** Shifting GPU quota between runner sets to make room for a new test suite is a self-managed edit, not a ticket.
-- **Utilization data to compete for scarce quota.** Tenants need to show high utilization to be approved for more GPU quota. This system makes utilization a first-class per-tenant metric, giving teams the data to make their case.
+- **Per-tenant security and audit isolation.** Every tenant's GitHub traffic exits through a dedicated egress IP pool, enabling per-team IP allowlisting on the GitHub side and per-tenant audit attribution. A rate limit, abuse flag, or IP ban triggered by one team is contained to that team — other tenants are unaffected. For organizations with GitHub Enterprise IP allowlist requirements or regulated workloads, this is what makes a shared cluster viable instead of one cluster per tenant.
 
-### For Platform Engineering: Operational Leverage & Shift Left
+- **Operational leverage for the platform team.** One operator at the cluster level replaces a per-tenant runner deployment for every team. The platform team's job shrinks to running one controller; first-line debugging shifts to the tenant teams who know their own workloads. Fewer escalations, fewer on-call pages, no per-tenant configuration drift to manage.
 
-**The platform team is the bottleneck for every tenant runner change.** Each new test suite, quota adjustment, or scaling tweak lands as a ticket. First-line debugging — why isn't my runner scaling? — escalates to platform instead of being ownable by the tenant who knows their workload.
+**On cost.** The largest idle-GPU savings come from eliminating the per-team `minRunners > 0` pattern frequently used in production runner deployments to mask runner-pod cold-start latency — a pattern that silently holds GPUs around the clock. Teams migrating from older runner deployments see the largest absolute reductions; teams already on modern auto-scaling runners gain primarily from the operational, scheduling, and security benefits above, plus reduced always-on listener overhead. See [Appendix F — Cost Model](appendix-f-cost-model.md) for a configuration-by-configuration breakdown.
 
-- **A clear multi-tenant abstraction shifts ownership to tenants.** The Gateway Manager Controller provisions a fully isolated gateway instance per tenant from a single namespace-scoped custom resource. Once deployed, tenants manage their own runner sets end-to-end.
-- **Fewer escalations.** Tenants who own their own configuration can diagnose their own runner behavior. Platform's job shrinks to operating the controller — not hand-holding individual runner configs.
-- **One operator to manage, not N per-tenant deployments.** The platform team deploys the Gateway Manager Controller once at the cluster level. Tenants handle everything beneath it.
+**The ask.** Engineering investment to build and operate the Gateway Manager Controller. Payback comes from platform-team leverage, tenant self-service, GPU utilization under contention, eliminated incident-recovery toil, and the security posture needed to host regulated and high-value tenants on a shared cluster.
+
+### For Tenant Teams
+
+**Own your CI infrastructure end-to-end, without waiting on the platform team.** Declare every runner type your team needs in one custom resource in your own namespace and iterate on it as your test matrix changes. Get the GPU slots you ask for, see exactly how much capacity you actually use, and stop losing afternoons to mysteriously-failed CI jobs.
+
+- **One CR, one source of truth.** All your runner sets, GPU allocations, scale limits, and priority tiers live in a single `ActionsGateway` resource in your own namespace. Changes are a `kubectl edit` away, owned by the team that needs them.
+
+- **GPU slots that are actually guaranteed under contention.** Priority tiers let you declare a minimum number of GPU runner pods that schedule even when the cluster's GPU quota is otherwise saturated. The cheap CPU runners that today crowd you out of the queue cannot push your GPU jobs out of the schedule.
+
+- **Failed jobs from infrastructure issues just disappear.** When a worker pod is preempted, OOM-killed, or lost to a node failure, the system fast-cancels the job at GitHub and reruns it automatically. No more "did this fail for a real reason or was it just infrastructure?" investigations.
+
+- **No cold-start tax to pay around.** You don't need to pin a minimum runner count to mask first-job latency — the listener is always warm, and worker pods are created on demand. Configure for the load you actually have, not the cold start you're trying to hide.
+
+- **First-class utilization metrics in your own namespace.** Per-tenant, per-runner-group GPU-hours, job counts, queue times, and pod-creation latency are exposed as Prometheus metrics. Use them to right-size your quota, justify increases when you need more, and identify runner shapes that are over- or under-used.
+
+- **Contained blast radius for cross-tenant incidents.** Another team's CI incident — a runaway job hitting GitHub rate limits, an abuse flag, an IP ban triggered by their traffic — does not propagate to your pipeline. Your egress IPs are your own.
+
+### For Platform Engineering
+
+**Stop being the bottleneck for every tenant runner change and the first responder for every tenant runner failure.** Deploy one operator at the cluster level; tenants own their own configuration, debugging, and capacity planning beneath it. Onboarding a new team is approving a namespace, not standing up a deployment.
+
+- **One operator, many tenants.** The Gateway Manager Controller watches `ActionsGateway` resources cluster-wide and provisions everything a tenant needs — RBAC, NetworkPolicies, `ResourceQuota`, egress proxy, the AGC, and every runner group declared in the CR. No per-tenant Helm releases or bespoke YAML to maintain.
+
+- **First-line debugging shifts to the tenant.** Tenants who own their own configuration can answer their own "why isn't my runner scaling?" and "why did my job fail?" questions. The escalation path back to platform shrinks to the controller itself.
+
+- **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, NetworkPolicies, and `ResourceQuota` are part of what the controller provisions. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
+
+- **Worker eviction is no longer a paging event.** Preempted, OOM-killed, and node-lost jobs are recovered automatically. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
+
+- **Per-tenant cost and capacity visibility out of the box.** Prometheus metrics scoped per tenant and per runner group make it straightforward to spot under-used GPU quota, hot tenants approaching their limits, and which runner shapes are driving the most cost — without per-tenant deployment-level instrumentation to assemble.
+
+- **One thing to upgrade.** One controller binary at the cluster level instead of N per-tenant runner deployments to roll forward and verify.
 
 ---
 
@@ -45,9 +72,13 @@ When eviction does occur — either from the floor tier preempting lower-priorit
 
 ### GPU Node Utilization
 
-For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization. GPU runner pods hold GPU node allocations while waiting for work — even between jobs. Those GPU resources are unavailable to other workloads during the wait, wasting some of the most expensive capacity in the cluster.
+For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization. Where GAG provides headroom over ARC depends on how ARC is configured:
 
-This design eliminates idle GPU allocation entirely. Worker pods are provisioned on-demand after a job is acquired and garbage-collected immediately on completion. The AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. GPU nodes are returned to the cluster scheduler the moment each job completes and remain available for other workloads until the next job arrives. Across a shared GPU node pool, this translates directly into higher effective utilization without requiring additional hardware.
+* **ARC scale-set mode with `minRunners: 0`** (the current best practice for scale sets) scales runner pods to zero between jobs. GPU allocation between jobs is comparable to GAG: GPU nodes are consumed only while a job is running, and the listener pod sits on a CPU node. GAG's advantage in this configuration is listener footprint (one shared pod versus N per-scale-set pods) and the fact that tenants do not need to pin `minRunners > 0` to avoid cold-start latency — not GPU allocation per se.
+* **ARC scale-set mode with `minRunners > 0`**, commonly configured per scale set to mask runner-pod cold-start latency, holds N runner pods continuously per scale set even with no work queued. A tenant with 10 GPU scale sets at `minRunners: 1` holds 10 GPU pods around the clock. GAG eliminates this entirely — the goroutine listener never goes cold, so no minimum-pod tuning is needed.
+* **Legacy ARC (`RunnerDeployment` + HRA)** had a per-pod `Runner.Listener` and no clean scale-to-zero parity. Teams migrating from this configuration see the largest absolute idle-GPU reductions.
+
+In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. Worker pods are provisioned on-demand after a job is acquired and garbage-collected immediately on completion — across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.
 
 ### For Teams Migrating from Host-Machine or VM Runners
 

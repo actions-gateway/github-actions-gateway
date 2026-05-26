@@ -1,30 +1,39 @@
 # GitHub Actions Gateway
 
-A Kubernetes operator for managing self-hosted GitHub Actions runners on multi-tenant clusters that scales to zero when the job queue is empty.
+A Kubernetes operator for self-hosted GitHub Actions runners, built for multi-tenant clusters where each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`.
 
-Unlike Actions Runner Controller (ARC), which co-locates the queue listener and the job worker, GitHub Actions Gateway (GAG) runs listeners as goroutines in a separate pod and only creates worker pods when a job is acquired from the queue. This reduces waste from idle workers, especially when they need expensive GPUs or lots of resources.
+GitHub Actions Gateway (GAG) brings four properties that Actions Runner Controller (ARC) scale-set mode does not provide together:
 
-In addition to saving money, GAG uses its unique architecture to solve several other problems encountered when using ARC at scale in production enterprise environments, like consolidating egress IPs for allowlisting, tolerating eviction with auto-retries, and gradually reducing priority as horizontal scale increases to ensure fair use of limited resources across multiple runner groups.
+- **Priority-tiered scheduling across a shared `ResourceQuota`.** Guarantee that GPU runners always claim at least N slots, even when cheap CPU runner pods flood the quota first.
+- **Automatic eviction retry.** When a worker pod is preempted, OOM-killed, or lost to a node failure, GAG fast-cancels the GitHub-side job lock and calls the rerun API, with a per-job retry budget — no manual rerun needed.
+- **Per-tenant dedicated egress IP pool.** Every tenant's GitHub traffic exits through a tenant-specific HTTPS CONNECT proxy pool, enabling per-team IP allowlisting on the GitHub side and containing rate-limit or abuse blast radius to one tenant.
+- **Self-service multi-tenant onboarding via one CR.** A team creates a single `ActionsGateway` CR in their own namespace and receives a fully isolated gateway instance: RBAC, NetworkPolicies, `ResourceQuota`, egress proxy, controller, and every runner group they declared.
+
+GAG also **scales workers to zero between jobs** — the same property ARC scale-set mode provides with `minRunners: 0` — but with substantially less always-on overhead. ARC's listener is a per-scale-set pod running a full .NET runtime (~256 MiB resident, plus a cluster IP, held open 24/7 to long-poll GitHub). GAG hosts every `RunnerGroup`'s listener as a goroutine in one shared controller pod, at ~60 KiB per group. A tenant with 10 runner groups holds ~600 KiB of listener state in one pod instead of ~2.5 GiB across 10 pods.
 
 ## The Problem
 
-Running GitHub Actions self-hosted runners in a shared Kubernetes cluster creates three compounding problems:
+Running many runner groups for one tenant in a shared Kubernetes namespace creates four compounding problems that ARC scale-set mode does not address together:
 
-**Idle resource waste.** ARC keeps at least one runner pod per scale set alive at all times. A tenant with ten GPU runner sets holds ten GPU-backed pods perpetually — whether or not a job is queued.
+**Scheduling starvation under a shared `ResourceQuota`.** Each ARC `AutoscalingRunnerSet` has its own `maxRunners` cap, but there is no primitive for "GPU runners must always be able to claim at least N slots, regardless of how many CPU runners are active." When cheap CPU pods exhaust namespace quota first, the most expensive hardware reliably loses the race.
 
-**Scheduling starvation.** In a namespace with a shared `ResourceQuota`, cheap CPU runner pods can exhaust quota before GPU runner pods have a chance to schedule. ARC provides no mechanism to express minimum scheduling guarantees across runner sets, so the most expensive hardware reliably loses the race.
+**Listener overhead at scale.** ARC's scale-set listener is one pod per scale set running a full .NET runtime — roughly 256 MiB resident, plus a cluster IP, held alive 24/7 to long-poll GitHub. A tenant with 10 scale sets pays ~2.5 GiB of memory and 10 pod slots at rest, before any job runs. Teams that also pin `minRunners > 0` to mask runner-pod cold-start latency multiply this further with idle runner pods on expensive hardware.
 
-**Platform team bottleneck.** Every runner set change — new test suite, quota adjustment, scaling tweak — lands as a ticket to the platform team. Teams can't move at their own pace.
+**No automatic recovery from worker eviction.** When a runner pod is preempted, OOM-killed, or lost to a node failure, ARC has no built-in flow to fast-cancel the GitHub job lock and rerun. The job sits until GitHub's lock expires (typically ~10 minutes), then surfaces as a failed workflow that needs manual rerun.
+
+**Platform team as bottleneck.** Onboarding a tenant means provisioning namespace, quotas, controller scope, scale sets, NetworkPolicies, and egress — a platform-team checklist per team. Subsequent changes (new runner type, quota adjustment, scaling tweak) land as tickets.
 
 ## The Solution
 
-**Zero idle GPU allocation.** GPU nodes are only consumed while a job is actively running. The Actions Gateway Controller (AGC) itself runs on CPU-only nodes.
+**Scheduling priority tiers per `RunnerGroup`.** The `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting `PriorityClass` and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs. A final threshold caps total concurrency per group.
 
-**Scheduling priority tiers.** The `RunnerGroup` `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds. The first N pods of a GPU runner group get a preempting priority class and will displace lower-priority CPU pods when quota is contended — guaranteeing they schedule. Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs.
+**Automatic eviction retry with fast lock cancel.** When the AGC sees a worker pod in `Evicted` status, it immediately stops lock renewal so GitHub cancels the job in seconds instead of waiting the full lock expiry, then calls GitHub's rerun API to reschedule. A configurable per-job retry budget prevents loops on persistently failing workloads.
 
-**Automatic eviction retry.** When a worker pod is evicted (preemption or out-of-memory (OOM)), the AGC detects the `Evicted` status, immediately stops lock renewal so GitHub cancels the job quickly, and calls GitHub's rerun API to reschedule. A configurable retry budget prevents loops on persistently failing workloads.
+**Per-tenant dedicated egress IP pool.** A Horizontal Pod Autoscaler (HPA)-managed pool of stateless HTTPS CONNECT proxy pods per tenant. All GitHub traffic from the AGC and worker pods routes through this pool, so each tenant gets egress IPs never shared with other tenants. Enables per-team allowlisting on the GitHub side, clean per-tenant audit attribution, and contained blast radius for rate limits or abuse flags.
 
-**Self-service tenant management.** Teams declare all their runner sets in one `ActionsGateway` CR they own in their own namespace — no cluster-admin involvement after initial setup. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
+**Self-service tenant management via one CR.** The Gateway Manager Controller (GMC) watches `ActionsGateway` CRs in tenant namespaces and provisions everything the tenant needs — RBAC, NetworkPolicies, `ResourceQuota`, egress proxy, AGC, and every runner group declared in the CR. No cluster-admin involvement after initial GMC install. Because tenants control their own configuration, they can diagnose their own runner behavior without escalating to the platform team.
+
+**Scale workers to zero with low listener overhead.** Worker pods are created only when a job is acquired and deleted immediately on completion — the same scale-to-zero behavior as ARC scale-set mode with `minRunners: 0`, so GPU nodes return to the cluster scheduler the moment a job finishes. The difference is the listener: GAG runs every `RunnerGroup`'s listener as a goroutine (~60 KiB resident) inside one shared AGC pod, instead of one ~256 MiB .NET listener pod per scale set. Tenants do not need to pin `minRunners > 0` to mask cold-start latency, so the silent re-introduction of idle GPU pods that pattern causes does not happen.
 
 **Per-tenant utilization metrics.** Both the GMC and AGC expose Prometheus metrics scoped per tenant and runner group. Teams have the data to understand their own GPU utilization and make the case for quota adjustments without relying on cluster-wide visibility.
 
