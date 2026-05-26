@@ -152,7 +152,7 @@ func TestGMC_CredRotation_InPlaceUpdateNoRollout(t *testing.T) {
 		return k8sClient.Update(ctx, &s) == nil
 	}, 5*time.Second, 25*time.Millisecond, "update Secret contents in-place")
 
-	// Give the controller time to react (it will re-reconcile due to the Secret watch).
+	// Give the controller time to react to any spurious reconcile.
 	time.Sleep(200 * time.Millisecond)
 
 	// The annotation must still reference "stable-secret" (unchanged).

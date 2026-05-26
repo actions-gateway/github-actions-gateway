@@ -35,9 +35,7 @@ rules:
   verbs:
   - create
   - get
-  - list
   - update
-  - watch
 - apiGroups:
   - actions-gateway.github.com
   resources:
