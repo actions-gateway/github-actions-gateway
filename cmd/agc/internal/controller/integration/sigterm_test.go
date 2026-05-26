@@ -42,6 +42,7 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientStream).writeRequest"),
 		goleak.IgnoreAnyFunction("net/http.(*persistConn).writeLoop"),
+		goleak.IgnoreAnyFunction("net/http.(*persistConn).readLoop"),
 	)
 
 	const nsName = "agc-sigterm-test"
