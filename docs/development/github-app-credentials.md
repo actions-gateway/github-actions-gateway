@@ -38,9 +38,14 @@ rm ~/Downloads/actions-gateway-test.*.private-key.pem
 To verify the key is present:
 
 ```bash
-security find-generic-password -a "actions-gateway-test" -s "github-app-private-key" -w | head -1
+security find-generic-password -a "actions-gateway-test" -s "github-app-private-key" -w \
+  | xxd -r -p | head -1
 # should print: -----BEGIN RSA PRIVATE KEY-----
 ```
+
+> **Note:** `security find-generic-password -w` outputs the password as ASCII
+> hex. Pipe through `xxd -r -p` to convert it back to the raw PEM bytes before
+> use.
 
 ## Creating the Kubernetes Secret
 
@@ -56,7 +61,7 @@ kubectl create secret generic github-app-secret \
   --from-literal=privateKey="$(security find-generic-password \
       -a actions-gateway-test \
       -s github-app-private-key \
-      -w)"
+      -w | xxd -r -p)"
 ```
 
 Reference the Secret in the `ActionsGateway` CR:
@@ -80,5 +85,5 @@ spec:
    ```
 
 3. Delete the downloaded file and recreate the Kubernetes Secret using the
-   command above.
+   command above (remember to pipe through `xxd -r -p`).
 4. Delete the old key from the GitHub App settings page.
