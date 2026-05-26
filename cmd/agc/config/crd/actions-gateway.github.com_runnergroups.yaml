@@ -81,6 +81,16 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              maxQuotaRetries:
+                description: |-
+                  MaxQuotaRetries controls how many times the AGC retries pod creation when the
+                  namespace ResourceQuota is exhausted. The AGC holds the job lock and waits for
+                  quota to free up between attempts. Set to 0 to disable quota retry. Defaults to
+                  5 when omitted.
+                format: int32
+                maximum: 20
+                minimum: 0
+                type: integer
               maxWorkers:
                 description: |-
                   MaxWorkers caps the number of worker pods this RunnerGroup may run concurrently.
@@ -8599,6 +8609,12 @@ spec:
                   type: object
                 maxItems: 10
                 type: array
+              quotaRetryDelay:
+                description: |-
+                  QuotaRetryDelay is the time to wait between pod creation retries when the
+                  namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s"
+                  when omitted.
+                type: string
               runnerLabels:
                 description: RunnerLabels is the label set matched against workflow
                   runs-on values.
@@ -8620,6 +8636,9 @@ spec:
                 == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold'
             - message: evictionRetryDelay must be at least 1s
               rule: '!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay)
+                >= duration(''1s'')'
+            - message: quotaRetryDelay must be at least 1s
+              rule: '!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay)
                 >= duration(''1s'')'
           status:
             description: RunnerGroupStatus defines the observed state of a RunnerGroup.

@@ -29,6 +29,7 @@ import (
 	"github.com/karlkfi/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/karlkfi/github-actions-gateway/agc/internal/listener"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,6 +58,8 @@ type Provisioner struct {
 	Log                *slog.Logger
 	MaxEvictionRetries int
 	EvictionRetryDelay time.Duration
+	MaxQuotaRetries    int
+	QuotaRetryDelay    time.Duration
 	PollInterval       time.Duration
 	DefaultWorkerImage string
 	// WorkerSA is the ServiceAccount name assigned to worker pods.
@@ -90,6 +93,8 @@ func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Pro
 		Log:                log,
 		MaxEvictionRetries: 2,
 		EvictionRetryDelay: 5 * time.Second,
+		MaxQuotaRetries:    5,
+		QuotaRetryDelay:    30 * time.Second,
 		PollInterval:       5 * time.Second,
 		DefaultWorkerImage: DefaultWorkerImage,
 	}
@@ -97,18 +102,26 @@ func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Pro
 
 // HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup.
 // The returned function is injected into listener.Config.JobHandler.
-// Per-RunnerGroup eviction settings override the provisioner-level defaults.
+// Per-RunnerGroup settings override the provisioner-level defaults.
 func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
-	maxRetries := p.MaxEvictionRetries
+	maxEviction := p.MaxEvictionRetries
 	if rg.Spec.MaxEvictionRetries != nil {
-		maxRetries = int(*rg.Spec.MaxEvictionRetries)
+		maxEviction = int(*rg.Spec.MaxEvictionRetries)
 	}
-	retryDelay := p.EvictionRetryDelay
+	evictionDelay := p.EvictionRetryDelay
 	if rg.Spec.EvictionRetryDelay != nil && rg.Spec.EvictionRetryDelay.Duration > 0 {
-		retryDelay = rg.Spec.EvictionRetryDelay.Duration
+		evictionDelay = rg.Spec.EvictionRetryDelay.Duration
+	}
+	maxQuota := p.MaxQuotaRetries
+	if rg.Spec.MaxQuotaRetries != nil {
+		maxQuota = int(*rg.Spec.MaxQuotaRetries)
+	}
+	quotaDelay := p.QuotaRetryDelay
+	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
+		quotaDelay = rg.Spec.QuotaRetryDelay.Duration
 	}
 	return func(ctx context.Context, runServiceURL, planID string, payload []byte) error {
-		return p.provision(ctx, rg, planID, payload, maxRetries, retryDelay)
+		return p.provision(ctx, rg, planID, payload, maxEviction, evictionDelay, maxQuota, quotaDelay)
 	}
 }
 
@@ -144,7 +157,7 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, maxRetries int, retryDelay time.Duration) error {
+func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) error {
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -184,9 +197,9 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
 	}
 
-	// 4. Build and create the pod.
+	// 4. Build and create the pod (with quota retry).
 	pod := p.buildPod(rg, podName, secretName, priorityClass)
-	if err := p.Client.Create(ctx, pod); err != nil {
+	if err := p.createPodWithQuotaRetry(ctx, rg, pod, maxQuota, quotaDelay, log); err != nil {
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
 	}
@@ -208,12 +221,56 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, rg, owner, repo, runID, log, maxRetries, retryDelay)
+		p.handleEviction(ctx, rg, owner, repo, runID, log, maxEviction, evictionDelay)
 	}
 
 	// 7. Cleanup.
 	_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 	return nil
+}
+
+// createPodWithQuotaRetry attempts to create pod, retrying up to maxRetries times
+// when the namespace ResourceQuota is exhausted. Other errors are returned immediately.
+func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, rg *v1alpha1.RunnerGroup, pod *corev1.Pod, maxRetries int, retryDelay time.Duration, log *slog.Logger) error {
+	for attempt := 0; ; attempt++ {
+		err := p.Client.Create(ctx, pod)
+		if err == nil {
+			return nil
+		}
+		// Non-quota errors are never retried.
+		if !isQuotaError(err) {
+			return err
+		}
+		// maxRetries==0 means quota retry is disabled; return immediately without
+		// counting as "exhausted" (disabled is a policy choice, not a budget failure).
+		if maxRetries == 0 || attempt >= maxRetries {
+			if maxRetries > 0 {
+				log.Warn("quota retry budget exhausted; abandoning pod creation",
+					"pod", pod.Name, "attempts", attempt+1)
+				if p.Metrics != nil {
+					p.Metrics.QuotaRetriesExhausted.WithLabelValues(rg.Namespace, rg.Name).Inc()
+				}
+			}
+			return err
+		}
+		log.Info("pod creation blocked by namespace quota; retrying",
+			"pod", pod.Name, "attempt", attempt+1, "maxRetries", maxRetries, "delay", retryDelay)
+		if p.Metrics != nil {
+			p.Metrics.QuotaRetries.WithLabelValues(rg.Namespace, rg.Name).Inc()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryDelay):
+		}
+	}
+}
+
+// isQuotaError reports whether err is a Kubernetes API error caused by a namespace
+// ResourceQuota being exceeded. Quota errors are Forbidden (403) and their message
+// contains "exceeded quota".
+func isQuotaError(err error) bool {
+	return apierrors.IsForbidden(err) && strings.Contains(err.Error(), "exceeded quota")
 }
 
 func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
