@@ -4,6 +4,38 @@
 
 ---
 
+## Status at a glance
+
+Last refreshed 2026-05-25. The GMC, proxy binary, admission webhook,
+TLS pinning, IP-range refresh, leader election, and worker
+ServiceAccount are all in code. What remains is live `kind` validation
+across two tenants and an end-to-end job that proves proxy routing.
+
+| Success criterion | Status | Notes |
+|---|---|---|
+| Two `ActionsGateway` CRs → two independent tenants | ⚠️ Unverified | Reconciler emits all resources per tenant; multi-tenant `kind` validation pending |
+| Deleting one CR removes only that tenant's resources | ⚠️ Unverified | `reconcileDelete` scopes by namespace; live deletion test pending |
+| `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` ([builder.go:385](../../cmd/gmc/internal/controller/builder.go)); `hpa_update_test.go` covers it |
+| Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | [actionsgateway_webhook.go:21-47](../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go) |
+| End-to-end job via proxy (green checkmark + `HTTPS_PROXY` in worker env) | ❌ Open | Blocked on Milestone 3 Investigation A (Named Pipe handoff) |
+| RBAC: no `*` verbs on `secrets`/`pods`/`nodes` in GMC ClusterRole | ✅ Done | `rbac_test.go` has 2 wildcard-detection tests |
+| `go test -race ./...` passes across all four modules | ✅ Done | Per-module test commands pass |
+| Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` ([builder.go:77](../../cmd/gmc/internal/controller/builder.go)); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
+| Proxy pods: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false` | ✅ Done | [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); also `Caps Drop ALL` + `Seccomp RuntimeDefault` via W8 |
+| IP range reconciler updates NetworkPolicy on 24h tick | ✅ Done | `time.NewTicker(24 * time.Hour)` in [ipranges.go:135-151](../../cmd/gmc/internal/controller/ipranges.go); `ipranges_test.go` covers the path |
+| GMC runs with leader election | ✅ Done | `--leader-elect` flag wired ([cmd/gmc/cmd/main.go:61,158](../../cmd/gmc/cmd/main.go)); enabled in `config/manager/manager.yaml:64` |
+| Code committed | ✅ Done | |
+
+### Critical path
+
+The only milestone gate is end-to-end validation in `kind`. The code
+shipping milestone is complete; the validation milestone is blocked on
+Milestone 3's Named Pipe investigation. Once a worker pod actually runs
+a job, the multi-tenant isolation and proxy-routing checks become
+mechanical.
+
+---
+
 ## Overview
 
 **Goal:** Introduce the Gateway Manager Controller (GMC), a cluster-level operator that reconciles `ActionsGateway` CRs into the full per-tenant resource set — RBAC, network guardrails, egress proxy, and AGC deployment — and deliver a minimal stateless CONNECT proxy binary. The result is a self-contained, multi-tenant system: platform teams apply one CR per tenant and the GMC handles everything else.

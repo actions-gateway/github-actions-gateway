@@ -129,43 +129,37 @@ capacity model.
 
 ---
 
-## Implementation status
+## Implementation status — **Done (2026-05-23, commit `4932ce7`)**
 
-The design is documented but not fully enforced by the current
-implementation. The gap is recorded in
-[docs/plan/security.md](security.md) as **M-1** ("NetworkPolicy applies
-to all pods in the namespace; workers can bypass the proxy").
+The split shipped. `cmd/gmc/internal/controller/builder.go` now emits
+three NetworkPolicies:
 
-Concretely: `buildNetworkPolicy` in
-[cmd/gmc/internal/controller/builder.go:103-151](../../cmd/gmc/internal/controller/builder.go)
-creates a single `NetworkPolicy` with an empty `podSelector`, which
-applies to every pod in the namespace. Its `egress` is the union of two
-rule sets: DNS + GitHub CIDRs on 443 (intended for proxy pods) and proxy
-ClusterIP on 8080 (intended for AGC and workers). Both rule sets apply
-to every pod, so worker pods are allowed to egress directly to GitHub on
-443.
+- `buildProxyNetworkPolicy` (lines 112-157) — `podSelector: { app:
+  actions-gateway-proxy }`, egress = DNS + GitHub CIDRs:443, ingress
+  restricted to pods carrying `labelComponent: componentWorkload` on
+  `proxyPort`.
+- `buildWorkloadNetworkPolicy` (lines 159-188) — `podSelector` matching
+  AGC and worker labels, egress = DNS + proxy ClusterIP:`proxyPort`
+  only.
+- `buildAGCNetworkPolicy` (lines 190-223) — additive AGC-only policy
+  granting 443 for k8s API access. Worker pods are *not* selected by
+  this policy, so they cannot directly reach the API server or GitHub.
 
-Required change: split into two `NetworkPolicy` objects (or one with
-selector-scoped rules):
+`patchNetworkPolicy` in [ipranges.go:193-204](../../cmd/gmc/internal/controller/ipranges.go)
+only mutates `npProxyName`; the workload policy carrying the
+worker→proxy egress rule survives IP-range refreshes (closes **M-9**).
+The `labelComponent`/`componentWorkload` selector closes **M-8** — dev
+or debug pods in the namespace can no longer reach the proxy or AGC.
 
-- `np-proxy`: `podSelector: { app: actions-gateway-proxy }`,
-  egress = DNS + GitHub CIDRs:443.
-- `np-agc-worker`: `podSelector` matching AGC and worker labels
-  (`app.kubernetes.io/managed-by: actions-gateway`),
-  egress = DNS + proxy ClusterIP:8080 only.
-- Add an `ingress` rule on `np-agc-worker` denying inbound except from
-  proxy/AGC selectors and Prometheus.
+### Live validation — pending
 
-The `network-architecture.md` doc already shows the two-policy structure
-as the design intent; the implementation never converged on it.
-
-Related implementation items uncovered by this work:
-
-- **M-9** (`IPRangeReconciler` drops the worker→proxy egress rule on
-  refresh) is the same NetworkPolicy code path and should be fixed in the
-  same change.
-- **M-8** (NetworkPolicy ingress is overly permissive) overlaps with the
-  ingress-rule addition above.
+The e2e procedure in
+[docs/design/network-architecture.md "How to Validate Network Isolation"](../design/network-architecture.md)
+(spawn a worker-labelled debug pod; assert
+`curl --noproxy '*' https://api.github.com` times out, and
+`curl -x https://actions-gateway-proxy:proxyPort …` succeeds) has not
+yet been run against a freshly provisioned tenant. Tracked as a
+Milestone 4 manual-verification item.
 
 ---
 
