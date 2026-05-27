@@ -1,9 +1,9 @@
-// docker-bake.hcl — build all four e2e images concurrently with one Buildx
-// invocation. Replaces four sequential `docker buildx build` calls in the CI
+// docker-bake.hcl — build all five e2e images concurrently with one Buildx
+// invocation. Replaces five sequential `docker buildx build` calls in the CI
 // workflow with one bake step bounded by the slowest target's wall time.
 //
 // Invoke:
-//   docker buildx bake                        # build all four (default group)
+//   docker buildx bake                        # build all five (default group)
 //   docker buildx bake gmc                    # build just one target
 //   GHA_CACHE=true docker buildx bake         # opt into GitHub Actions cache
 //
@@ -27,7 +27,7 @@ variable "GHA_CACHE" {
 }
 
 group "default" {
-  targets = ["gmc", "agc", "proxy", "fakegithub"]
+  targets = ["gmc", "agc", "proxy", "fakegithub", "worker"]
 }
 
 // _common holds the settings every target inherits. The output `type=registry`
@@ -68,4 +68,12 @@ target "fakegithub" {
   tags       = ["${IMAGE_REGISTRY}/fakegithub:e2e-${GIT_SHA}"]
   cache-from = GHA_CACHE != "" ? ["type=gha,scope=fakegithub"] : []
   cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=fakegithub"] : []
+}
+
+target "worker" {
+  inherits   = ["_common"]
+  dockerfile = "cmd/worker/Dockerfile"
+  tags       = ["${IMAGE_REGISTRY}/worker:e2e-${GIT_SHA}"]
+  cache-from = GHA_CACHE != "" ? ["type=gha,scope=worker"] : []
+  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=worker"] : []
 }
