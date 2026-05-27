@@ -42,6 +42,7 @@ var (
 	agcImage        string
 	proxyImage      string
 	fakegithubImage string
+	workerImage     string
 
 	shouldCleanupCertManager bool
 
@@ -62,6 +63,7 @@ type suiteData struct {
 	AGCImage        string `json:"agcImage"`
 	ProxyImage      string `json:"proxyImage"`
 	FakegithubImage string `json:"fakegithubImage"`
+	WorkerImage     string `json:"workerImage"`
 	RSAKeyPEM       []byte `json:"rsaKeyPEM"`
 }
 
@@ -75,6 +77,7 @@ var _ = SynchronizedBeforeSuite(
 		agcImg := envOrDefault("AGC_IMG", "localhost:5000/agc:e2e")
 		proxyImg := envOrDefault("PROXY_IMG", "localhost:5000/proxy:e2e")
 		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "localhost:5000/fakegithub:e2e")
+		workerImg := envOrDefault("WORKER_IMG", "localhost:5000/worker:e2e")
 
 		By("generating test RSA private key")
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -92,6 +95,7 @@ var _ = SynchronizedBeforeSuite(
 		agcImage = agcImg
 		proxyImage = proxyImg
 		fakegithubImage = fakegithubImg
+		workerImage = workerImg
 
 		configureKubectlKubeRC()
 		setupCertManager()
@@ -104,6 +108,7 @@ var _ = SynchronizedBeforeSuite(
 			AGCImage:        agcImg,
 			ProxyImage:      proxyImg,
 			FakegithubImage: fakegithubImg,
+			WorkerImage:     workerImg,
 			RSAKeyPEM:       rsaKeyPEM,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -117,6 +122,7 @@ var _ = SynchronizedBeforeSuite(
 		agcImage = sd.AGCImage
 		proxyImage = sd.ProxyImage
 		fakegithubImage = sd.FakegithubImage
+		workerImage = sd.WorkerImage
 		testRSAKeyPEM = sd.RSAKeyPEM
 	},
 )
