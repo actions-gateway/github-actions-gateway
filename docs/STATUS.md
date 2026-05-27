@@ -14,7 +14,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **New item identified:** insert it in the Queue at the right priority position.
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 
-Last refreshed: 2026-05-27 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅, AGC rename ✅, go-workspace prefix-match ✅ — workaround already removed in 6c23b0d, Make UX Phase 2 ✅, e2e test speed ✅, envtest/unit test split ✅, M2 kind activeSessions check ✅ — runner registration via generate-jitconfig working end-to-end).
+Last refreshed: 2026-05-27 (named-pipe ✅, GithubRegistrar ✅, eviction retry CRD fields ✅, M2 envtest goroutine-leak suite ✅, credential rotation ✅, M3 metric assertions ✅, M4 test gaps ✅, open docs items ✅, AGC rename ✅, go-workspace prefix-match ✅ — workaround already removed in 6c23b0d, Make UX Phase 2 ✅, e2e test speed ✅, envtest/unit test split ✅, M2 kind activeSessions check ✅ — runner registration via generate-jitconfig working end-to-end, ARC alignment ✅).
 
 ---
 
@@ -54,7 +54,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | 13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🚫 | L | → M5 packaging |
 | 14 | [M5 polaris/kube-bench posture scan](plan/milestone-5.md) | `milestone` `security` | 🚫 | S | → M5 packaging |
 | 15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
-| 16 | ARC scale-set alignment: swap worker image to `ghcr.io/actions/actions-runner` and decide on renaming `podTemplate` → `template` (pre-1.0 only); document that `resources`/`nodeSelector`/`tolerations` are already aligned via embedded `corev1.PodTemplateSpec` | `infra` `docs` | 🔲 | S | shortens copy-paste path from ARC users; verify entrypoint/env compatibility before flipping image |
 | 17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | 💤 | M | low priority; pick up when CI latency is the bottleneck |
 | 18 | [alerting.md](plan/docs.md) | `docs` | 💤 | M | deferred until a real Prometheus/Alertmanager setup exists |
 | 19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | 💤 | L | explicit non-commitments; build only when a named trigger fires |
