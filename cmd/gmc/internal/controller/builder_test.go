@@ -355,47 +355,40 @@ func TestBuildAGCDeployment_NoProxyContainsDefaults(t *testing.T) {
 
 func TestBuildWorkloadNetworkPolicy_EgressToProxy(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
+	np := buildWorkloadNetworkPolicy(ag)
 	assert.Equal(t, npWorkloadName, np.Name)
 	assert.Equal(t, componentWorkload, np.Spec.PodSelector.MatchLabels[labelComponent],
 		"workload NP must select workload-labeled pods")
 
+	// The proxy peer must be a PodSelector matching the proxy app label, not an
+	// ipBlock on the Service ClusterIP. kube-proxy DNATs ClusterIP → PodIP before
+	// NetworkPolicy enforcement, so an ipBlock rule on the Service IP never matches.
 	found := false
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
 			if port.Port != nil && port.Port.IntVal == proxyPort {
 				for _, peer := range rule.To {
-					if peer.IPBlock != nil && peer.IPBlock.CIDR == "10.96.0.1/32" {
+					if peer.PodSelector != nil &&
+						peer.PodSelector.MatchLabels["app"] == proxyAppName {
 						found = true
 					}
+					assert.Nil(t, peer.IPBlock,
+						"workload NP must not target proxy via ipBlock — DNAT defeats it")
 				}
 			}
 		}
 	}
-	assert.True(t, found, "expected workload egress rule to proxy ClusterIP on port 8080")
+	assert.True(t, found, "expected workload egress rule to select proxy pods by label on port 8080")
 }
 
 func TestBuildWorkloadNetworkPolicy_NoGitHubEgress(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
+	np := buildWorkloadNetworkPolicy(ag)
 
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
 			if port.Port != nil && port.Port.IntVal == 443 {
 				t.Errorf("workload NP must not allow direct egress on port 443")
-			}
-		}
-	}
-}
-
-func TestBuildWorkloadNetworkPolicy_NoProxyEgressWhenClusterIPEmpty(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	np := buildWorkloadNetworkPolicy(ag, "")
-
-	for _, rule := range np.Spec.Egress {
-		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == proxyPort {
-				t.Errorf("unexpected egress rule on proxy port when clusterIP is empty")
 			}
 		}
 	}
@@ -408,7 +401,7 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 
 		for _, np := range []*networkingv1.NetworkPolicy{
 			buildProxyNetworkPolicy(ag, nil),
-			buildWorkloadNetworkPolicy(ag, ""),
+			buildWorkloadNetworkPolicy(ag),
 			buildAGCNetworkPolicy(ag),
 		} {
 			udpFound, tcpFound := false, false

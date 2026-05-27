@@ -173,7 +173,7 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
 	}
 	proxyNP := buildProxyNetworkPolicy(ag, nil)
-	workloadNP := buildWorkloadNetworkPolicy(ag, "10.96.0.1")
+	workloadNP := buildWorkloadNetworkPolicy(ag)
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(ag, proxyNP, workloadNP).
@@ -183,7 +183,8 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
 	r.reconcileAll(ctx, slogDefault())
 
-	// Workload NP must still have the proxy ClusterIP egress rule — the reconciler must not touch it.
+	// Workload NP must still have the proxy egress rule (PodSelector on the proxy
+	// app label) — the reconciler must not touch it.
 	var updated networkingv1.NetworkPolicy
 	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npWorkloadName}, &updated))
 
@@ -192,7 +193,8 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 		for _, port := range rule.Ports {
 			if port.Port != nil && port.Port.IntVal == proxyPort {
 				for _, peer := range rule.To {
-					if peer.IPBlock != nil && peer.IPBlock.CIDR == "10.96.0.1/32" {
+					if peer.PodSelector != nil &&
+						peer.PodSelector.MatchLabels["app"] == proxyAppName {
 						found = true
 					}
 				}
