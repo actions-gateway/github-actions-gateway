@@ -1,18 +1,16 @@
+# syntax=docker/dockerfile:1.7
 ## Stage 1: build the Go entrypoint wrapper.
 ## This produces a static binary that reads the job payload Secret
-## and feeds it into Runner.Worker via named pipes.
+## and feeds it into Runner.Worker via anonymous pipes.
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
 # Update with: docker buildx imagetools inspect golang:1.26
 FROM golang:1.26@sha256:2d6c80227255c3112a4d08e67ba98e58efd3846daf15d9d7d4c389565d881b1a AS builder
 WORKDIR /src
-# Copy the workspace-level go files so the build can resolve shared modules.
-COPY go.work go.work.sum ./
-COPY go.mod go.sum ./
-COPY broker/ broker/
-COPY githubapp/ githubapp/
-COPY cmd/worker/ cmd/worker/
-RUN cd cmd/worker && go mod download
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+# Build context is the repo root so the workspace vendor/ is available.
+# `go build` auto-selects -mod=vendor when go.work and vendor/ are present.
+COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -o /wrapper ./cmd/worker
 
 ## Stage 2: runner image with the wrapper as ENTRYPOINT.
