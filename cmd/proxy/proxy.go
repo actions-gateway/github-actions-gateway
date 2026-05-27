@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"log/slog"
 	"net"
@@ -76,6 +77,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	proxySrv := &http.Server{
 		Addr:    s.Addr,
 		Handler: http.HandlerFunc(s.handleConnect),
+		// CONNECT is HTTP/1.1-only. Without disabling HTTP/2, Go's http.Server
+		// negotiates h2 via ALPN when TLS is configured; the AGC's HTTPS proxy
+		// client then sends an HTTP/1.1 CONNECT line over what is now an HTTP/2
+		// connection and the proxy responds with an HTTP/2 SETTINGS frame —
+		// surfaced to the client as `malformed HTTP response`.
+		TLSConfig:    &tls.Config{NextProtos: []string{"http/1.1"}},
+		TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){},
 	}
 
 	errCh := make(chan error, 2)
