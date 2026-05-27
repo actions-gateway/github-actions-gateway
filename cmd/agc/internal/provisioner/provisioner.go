@@ -55,7 +55,14 @@ const (
 	payloadMountPath = "/run/secrets/job-payload"
 	payloadKey       = "payload"
 	planIDKey        = "plan-id"
-	runnerContainer  = "runner"
+	// jitConfigKey is the Secret data key that carries the agent's
+	// encoded_jit_config blob to the worker wrapper. The wrapper base64-decodes
+	// the value, JSON-unmarshals the file map, and writes each entry to
+	// /home/runner/<filename> before exec'ing Runner.Worker. Absent or empty
+	// values are tolerated by the wrapper for backwards compatibility with
+	// stub-registrar agents.
+	jitConfigKey    = "jitconfig"
+	runnerContainer = "runner"
 )
 
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
@@ -127,8 +134,8 @@ func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFu
 	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
 		quotaDelay = rg.Spec.QuotaRetryDelay.Duration
 	}
-	return func(ctx context.Context, runServiceURL, planID string, payload []byte) error {
-		return p.provision(ctx, rg, planID, payload, maxEviction, evictionDelay, maxQuota, quotaDelay)
+	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
+		return p.provision(ctx, rg, planID, payload, jitConfig, maxEviction, evictionDelay, maxQuota, quotaDelay)
 	}
 }
 
@@ -164,7 +171,7 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) error {
+func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) error {
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -183,7 +190,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	runID := fmt.Sprintf("%d", runIDInt)
 
 	// 1. Stage the job Secret.
-	secret := p.buildSecret(rg, secretName, planID, payload)
+	secret := p.buildSecret(rg, secretName, planID, payload, jitConfig)
 	if err := p.Client.Create(ctx, secret); err != nil {
 		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
 	}
@@ -411,7 +418,14 @@ func (p *Provisioner) ceilingCheck(rg *v1alpha1.RunnerGroup, activePods int32) (
 	return "", false
 }
 
-func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string, payload []byte) *corev1.Secret {
+func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string, payload []byte, jitConfig string) *corev1.Secret {
+	data := map[string][]byte{
+		payloadKey: payload,
+		planIDKey:  []byte(planID),
+	}
+	if jitConfig != "" {
+		data[jitConfigKey] = []byte(jitConfig)
+	}
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -421,10 +435,7 @@ func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string,
 				labelRunnerGroup: rg.Name,
 			},
 		},
-		Data: map[string][]byte{
-			payloadKey: payload,
-			planIDKey:  []byte(planID),
-		},
+		Data: data,
 	}
 }
 

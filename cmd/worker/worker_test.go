@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -87,4 +89,131 @@ func TestWrapper_WriteJobMessage_Large(t *testing.T) {
 	require.Len(t, b, 8+len(wantBody))
 	assert.Equal(t, uint32(len(wantBody)), binary.LittleEndian.Uint32(b[4:8]))
 	assert.Equal(t, wantBody, b[8:])
+}
+
+// encodeFixtureBlob renders files as the base64-encoded JIT config blob format
+// produced by GitHub's generate-jitconfig endpoint.
+func encodeFixtureBlob(t *testing.T, files map[string]string) string {
+	t.Helper()
+	enc := make(map[string]string, len(files))
+	for k, v := range files {
+		enc[k] = base64.StdEncoding.EncodeToString([]byte(v))
+	}
+	raw, err := json.Marshal(enc)
+	require.NoError(t, err)
+	return base64.StdEncoding.EncodeToString(raw)
+}
+
+func TestMaterializeJITConfig_WritesAllThreeFiles(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+
+	runnerCfg := `{"agentId":1234,"serverUrl":"https://broker"}`
+	credsCfg := `{"scheme":"OAuth","data":{"clientId":"abc","authorizationUrl":"https://auth"}}`
+	rsaParams := `{"modulus":"AA","exponent":"AQAB","d":"BB","p":"CC","q":"DD","dp":"EE","dq":"FF","inverseQ":"GG"}`
+
+	blob := encodeFixtureBlob(t, map[string]string{
+		".runner":                runnerCfg,
+		".credentials":           credsCfg,
+		".credentials_rsaparams": rsaParams,
+	})
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, "jitconfig"), []byte(blob), 0o600))
+
+	require.NoError(t, materializeJITConfig(payloadDir, runnerHome))
+
+	for name, want := range map[string]string{
+		".runner":                runnerCfg,
+		".credentials":           credsCfg,
+		".credentials_rsaparams": rsaParams,
+	} {
+		got, err := os.ReadFile(filepath.Join(runnerHome, name))
+		require.NoError(t, err, "expected %s to exist", name)
+		assert.Equal(t, want, string(got), "content of %s must round-trip", name)
+		info, err := os.Stat(filepath.Join(runnerHome, name))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(),
+			"credentials files must be 0600 to protect the RSA private key")
+	}
+}
+
+// TestMaterializeJITConfig_MissingFileIsNoOp covers stub-registrar agents
+// whose Secrets carry no jitconfig key. The wrapper must not error so that
+// pre-M3 integration tests continue to work.
+func TestMaterializeJITConfig_MissingFileIsNoOp(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+
+	require.NoError(t, materializeJITConfig(payloadDir, runnerHome))
+
+	entries, err := os.ReadDir(runnerHome)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "runner home must remain empty when jitconfig is absent")
+}
+
+// TestMaterializeJITConfig_EmptyFileIsNoOp covers the case where the AGC wrote
+// the key with empty content (e.g. agent created before the field was
+// populated). Treated identically to missing.
+func TestMaterializeJITConfig_EmptyFileIsNoOp(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, "jitconfig"), []byte("   \n"), 0o600))
+
+	require.NoError(t, materializeJITConfig(payloadDir, runnerHome))
+
+	entries, err := os.ReadDir(runnerHome)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestMaterializeJITConfig_RejectsBadBase64(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, "jitconfig"), []byte("not-base64!!"), 0o600))
+
+	err := materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode base64 blob")
+}
+
+func TestMaterializeJITConfig_RejectsMalformedJSON(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	bad := base64.StdEncoding.EncodeToString([]byte("[not a map]"))
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, "jitconfig"), []byte(bad), 0o600))
+
+	err := materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse JIT config JSON")
+}
+
+// TestMaterializeJITConfig_IgnoresUnknownEntries hardens the wrapper against a
+// future or malicious JIT blob that includes arbitrary file names. Only the
+// three documented runner-config files are written; other keys are dropped
+// without raising an error (the AGC is trusted but defense-in-depth is cheap).
+func TestMaterializeJITConfig_IgnoresUnknownEntries(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+
+	blob := encodeFixtureBlob(t, map[string]string{
+		".runner":                `{"agentId":1}`,
+		".credentials":           `{}`,
+		".credentials_rsaparams": `{}`,
+		"../../etc/passwd":       "evil",
+		"unrelated":              "ignored",
+	})
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, "jitconfig"), []byte(blob), 0o600))
+
+	require.NoError(t, materializeJITConfig(payloadDir, runnerHome))
+
+	entries, err := os.ReadDir(runnerHome)
+	require.NoError(t, err)
+	got := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		got[e.Name()] = true
+	}
+	assert.Equal(t, map[string]bool{
+		".runner":                true,
+		".credentials":           true,
+		".credentials_rsaparams": true,
+	}, got)
 }

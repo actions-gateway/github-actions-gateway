@@ -44,6 +44,14 @@ type AgentCredentials struct {
 	// Set by registrars that generate the key pair server-side (e.g. JIT config).
 	// Nil when the registrar expects the caller to supply its own key pair.
 	PrivateKeyPEM []byte
+	// EncodedJITConfig is the raw base64-encoded JIT config blob returned by
+	// GitHub's generate-jitconfig endpoint. The blob is the base64 of a JSON
+	// object mapping the runner config file names (".runner", ".credentials",
+	// ".credentials_rsaparams") to their individually-base64-encoded contents.
+	// The worker wrapper materializes these files into /home/runner/ before
+	// invoking Runner.Worker. Empty for registrars that do not produce a JIT
+	// blob (e.g. the stub registrar without an explicit blob set).
+	EncodedJITConfig string
 }
 
 // Registrar abstracts the runner agent registration API.
@@ -60,6 +68,11 @@ type Agent struct {
 	PrivateKey    crypto.Signer
 	RunnerVersion string
 	BrokerURL     string
+	// EncodedJITConfig is the raw base64-encoded JIT config blob from GitHub.
+	// Passed through to the worker Secret so Runner.Worker can read its
+	// runner configuration files at startup. Empty when the agent was
+	// created via a registrar that does not return a JIT blob.
+	EncodedJITConfig string
 }
 
 // Pool manages the lifecycle of pre-registered runner agents for one RunnerGroup.
@@ -198,6 +211,7 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 			"agentIndex":       []byte(strconv.Itoa(index)),
 			"runnerVersion":    []byte(p.runnerVersion),
 			"brokerURL":        []byte(creds.BrokerURL),
+			"encodedJITConfig": []byte(creds.EncodedJITConfig),
 		},
 	}
 	return p.client.Create(ctx, sec)
@@ -334,8 +348,9 @@ func secretToAgent(s corev1.Secret) (*Agent, error) {
 			ClientID:         string(s.Data["clientId"]),
 			AuthorizationURL: string(s.Data["authorizationUrl"]),
 		},
-		PrivateKey:    privKey,
-		RunnerVersion: string(s.Data["runnerVersion"]),
-		BrokerURL:     string(s.Data["brokerURL"]),
+		PrivateKey:       privKey,
+		RunnerVersion:    string(s.Data["runnerVersion"]),
+		BrokerURL:        string(s.Data["brokerURL"]),
+		EncodedJITConfig: string(s.Data["encodedJITConfig"]),
 	}, nil
 }

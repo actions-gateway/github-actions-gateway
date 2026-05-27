@@ -647,16 +647,39 @@ Runner.Worker spawnclient <readFD> <writeFD>
 is `pipeOut`. The wrapper passes "3" and "4" (Go's `cmd.ExtraFiles[0]` maps to
 fd 3 and `[1]` to fd 4 in the child).
 
-**Outstanding gap:** Runner.Worker also reads its runner configuration from
-`/home/runner/.runner`, `/home/runner/.credentials`, and
-`/home/runner/.credentials_rsaparams` (see
+**Outstanding gap (resolved 2026-05-27 — Queue item 5a):** Runner.Worker also
+reads its runner configuration from `/home/runner/.runner`,
+`/home/runner/.credentials`, and `/home/runner/.credentials_rsaparams` (see
 `Runner.Common/ConfigurationStore.cs` — `GetSettings()` enforces non-null
-settings). The wrapper does not write these files today; without them
-Runner.Worker fails at job start with
-`ArgumentNullException: configuredSettings`. The AGC has the data — GitHub
-returns `encoded_jit_config` from `generate-jitconfig` and the AGC stores the
-agent in a Secret — but it is not yet plumbed into the worker Secret. Tracked
-as Queue item 5a in [docs/STATUS.md](../STATUS.md).
+settings). Without them Runner.Worker fails at job start with
+`ArgumentNullException: configuredSettings`.
+
+The end-to-end plumbing is now:
+
+1. `GithubRegistrar.Register` retains the raw `encoded_jit_config` it
+   already parsed and exposes it on `AgentCredentials`
+   ([github_registrar.go](../../cmd/agc/internal/agentpool/github_registrar.go)).
+2. `Pool.createAgent` writes the blob into the agent Secret under
+   `encodedJITConfig`; `secretToAgent` restores it onto the `Agent` struct so
+   the AGC reconciler picks it up on restart
+   ([pool.go](../../cmd/agc/internal/agentpool/pool.go)).
+3. The listener passes `cfg.Agent.EncodedJITConfig` into `JobHandlerFunc`,
+   which the provisioner forwards into the worker Secret under the
+   `jitconfig` key
+   ([goroutine.go](../../cmd/agc/internal/listener/goroutine.go),
+   [provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
+4. The wrapper reads `<payloadDir>/jitconfig`, base64-decodes the outer blob,
+   JSON-unmarshals the file map, base64-decodes each entry, and writes the
+   three runner-config files into `$RUNNER_HOME_DIR` (default `/home/runner`)
+   with mode 0600 before exec'ing Runner.Worker
+   ([worker/main.go](../../cmd/worker/main.go) — `materializeJITConfig`).
+
+Unit tests pin: the agent Secret round-trip
+(`TestPool_EnsureAgents_StoresEncodedJITConfig`), the worker Secret hand-off
+(`TestProvisioner_ForwardsJITConfigIntoSecret` /
+`TestProvisioner_OmitsJITKeyWhenEmpty`), and the wrapper-side
+materialization (`TestMaterializeJITConfig_*`). Live-cluster validation
+remains gated on Queue item 5c.
 
 **Implementation:** `cmd/worker/main.go` — `writeJobMessage` and `encodeUTF16LE`.
 

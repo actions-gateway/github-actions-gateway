@@ -240,3 +240,42 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 	err := pool.EnsureAgents(ctx, 1, "token")
 	require.NoError(t, err)
 }
+
+// TestPool_EnsureAgents_StoresEncodedJITConfig verifies that a registrar's
+// EncodedJITConfig flows into the agent Secret and back out through
+// LoadAgents. This is the data path the wrapper depends on to materialize
+// .runner / .credentials / .credentials_rsaparams (Queue item 5a).
+func TestPool_EnsureAgents_StoresEncodedJITConfig(t *testing.T) {
+	ctx := context.Background()
+	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
+
+	reg := agentpool.NewStubRegistrar()
+	reg.SetEncodedJITConfig("aGVsbG8tand0LWNvbmZpZw==") // arbitrary opaque blob
+
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1",
+		[]string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
+
+	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
+
+	// Round-trip via LoadAgents: the blob must come back unchanged.
+	agents, err := pool.LoadAgents(ctx)
+	require.NoError(t, err)
+	require.Len(t, agents, 2)
+	for _, a := range agents {
+		assert.Equal(t, "aGVsbG8tand0LWNvbmZpZw==", a.EncodedJITConfig,
+			"agent must carry the JIT blob in memory")
+	}
+
+	// And the Secret on disk must have the encodedJITConfig key set so the
+	// provisioner — running in a fresh AGC after restart — sees it too.
+	var secrets corev1.SecretList
+	require.NoError(t, c.List(ctx, &secrets,
+		client.InNamespace("default"),
+		client.MatchingLabels{"actions-gateway/runner-group": "my-rg"},
+	))
+	require.Len(t, secrets.Items, 2)
+	for _, s := range secrets.Items {
+		assert.Equal(t, "aGVsbG8tand0LWNvbmZpZw==", string(s.Data["encodedJITConfig"]),
+			"Secret %s must carry the JIT blob", s.Name)
+	}
+}

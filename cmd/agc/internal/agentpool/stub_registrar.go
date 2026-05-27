@@ -10,11 +10,12 @@ import (
 // Used in tests and in deployments that point at a fake GitHub server.
 // Each Register call returns a unique agent ID with the configured OAuth endpoint.
 type StubRegistrar struct {
-	nextID     atomic.Int64
-	mu         sync.Mutex
-	registered map[int64]bool
-	authURL    string
-	brokerURL  string
+	nextID           atomic.Int64
+	mu               sync.Mutex
+	registered       map[int64]bool
+	authURL          string
+	brokerURL        string
+	encodedJITConfig string
 }
 
 // NewStubRegistrar returns a StubRegistrar with a synthetic agent ID counter.
@@ -35,16 +36,27 @@ func NewStubRegistrarWithURLs(authURL, brokerURL string) *StubRegistrar {
 	return r
 }
 
+// SetEncodedJITConfig configures the JIT config blob returned by every Register call.
+// Empty (the default) leaves the field unset, which is appropriate for tests that
+// do not exercise the wrapper's runner-config materialization path.
+func (r *StubRegistrar) SetEncodedJITConfig(blob string) {
+	r.mu.Lock()
+	r.encodedJITConfig = blob
+	r.mu.Unlock()
+}
+
 func (r *StubRegistrar) Register(_ context.Context, _ string, _ RegisterParams) (*AgentCredentials, error) {
 	id := r.nextID.Add(1)
 	r.mu.Lock()
 	r.registered[id] = true
+	blob := r.encodedJITConfig
 	r.mu.Unlock()
 	return &AgentCredentials{
 		AgentID:          id,
 		ClientID:         "stub-client-id",
 		AuthorizationURL: r.authURL,
 		BrokerURL:        r.brokerURL,
+		EncodedJITConfig: blob,
 	}, nil
 }
 

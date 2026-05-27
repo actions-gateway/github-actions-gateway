@@ -107,7 +107,12 @@ func (r *GithubRegistrar) Register(ctx context.Context, token string, params Reg
 		return nil, fmt.Errorf("decode jit config response: %w", err)
 	}
 
-	return parseJITCredentials(result.Runner.ID, result.EncodedJITConfig)
+	creds, err := parseJITCredentials(result.Runner.ID, result.EncodedJITConfig)
+	if err != nil {
+		return nil, err
+	}
+	creds.EncodedJITConfig = result.EncodedJITConfig
+	return creds, nil
 }
 
 // Deregister removes a runner agent from GitHub.
