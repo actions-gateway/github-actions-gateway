@@ -47,13 +47,17 @@ jobs:
     timeout-minutes: 45
 
     env:
-      # All four images live in the local registry the e2e-cluster target
+      # All five images live in the local registry the e2e-cluster target
       # stands up. SHA-suffixed so kubelet's IfNotPresent cache cannot serve a
-      # stale image across runs that reuse the cluster.
+      # stale image across runs that reuse the cluster. The full ${{ github.sha }}
+      # is used here (not the Makefile's short SHA default) so the tags match
+      # the ones the bake step pushes — leaving any of these unset would let
+      # the Makefile default to its short-SHA tag and the lookup would miss.
       GMC_IMG: localhost:5000/gmc:e2e-${{ github.sha }}
       AGC_IMG: localhost:5000/agc:e2e-${{ github.sha }}
       PROXY_IMG: localhost:5000/proxy:e2e-${{ github.sha }}
       FAKEGITHUB_IMG: localhost:5000/fakegithub:e2e-${{ github.sha }}
+      WORKER_IMG: localhost:5000/worker:e2e-${{ github.sha }}
 
     steps:
       - uses: actions/checkout@v6

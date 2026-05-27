@@ -41,6 +41,14 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		// not that runner pods complete successfully.
 		utils.ApplyActionsGatewayCRWithRunnerGroup(tenantNS, agName, secretName, agcImage)
 
+		By("granting workload pods egress to fakegithub in e2e-infra")
+		// The GMC-built workload NP restricts 8080 egress to proxy pods only
+		// (production-correct shape). fakegithub lives in another namespace on
+		// 8080 and is reached directly via the AGC_EXTRA_* URLs (NO_PROXY
+		// matches svc.cluster.local). Stamp an additive NP so the AGC can
+		// reach fakegithub for broker session registration.
+		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
+
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
