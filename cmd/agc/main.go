@@ -72,13 +72,27 @@ func run() error {
 
 	// ── 0.5. Configure proxy TLS cert pinning ───────────────────────────────
 	// The GMC mounts the proxy's self-signed TLS cert (public part only) at
-	// proxyCACertDir/tls.crt. Pinning to this specific cert — rather than
-	// trusting the cluster CA — prevents MITM on the AGC↔proxy hop even from a
-	// compromised cluster CA. If the file is absent (local dev, no TLS proxy)
-	// we fall through and the standard transport uses HTTP proxy as before.
+	// proxyCACertDir/tls.crt. Adding it to the trust pool — alongside the
+	// system roots — lets the AGC validate the proxy's self-signed cert without
+	// losing the ability to validate upstream endpoints (api.github.com,
+	// pipelinesghubeus*.actions.githubusercontent.com) over the proxy's CONNECT
+	// tunnel. Go's http.Transport uses one TLSClientConfig for both the
+	// AGC↔proxy hop and the AGC↔upstream-over-tunnel hop, so the pool must
+	// satisfy both.
+	//
+	// Effective pinning: the proxy's hostname is *.svc.cluster.local, which no
+	// public CA will issue a certificate for. Trusting both system roots and
+	// the per-tenant proxy CA therefore preserves the property that only this
+	// proxy's cert can validate for the proxy hostname.
+	//
+	// If the file is absent (local dev, no TLS proxy) we fall through and the
+	// standard transport uses HTTP proxy as before.
 	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
 	if certPEM, err := os.ReadFile(proxyCACert); err == nil {
-		pool := x509.NewCertPool()
+		pool, err := x509.SystemCertPool()
+		if err != nil {
+			return fmt.Errorf("load system CA pool: %w", err)
+		}
 		if !pool.AppendCertsFromPEM(certPEM) {
 			return fmt.Errorf("proxy CA cert at %s: no valid certificates", proxyCACert)
 		}
