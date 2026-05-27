@@ -44,7 +44,13 @@ const (
 
 	// DefaultWorkerImage is the fallback worker image when RunnerGroup.Spec.WorkerImage
 	// is empty. Combine with an immutable digest for production deployments.
-	DefaultWorkerImage = "ghcr.io/actions/runner:2.327.1"
+	//
+	// Aligned with the Actions Runner Controller (ARC) gha-runner-scale-set chart,
+	// which defaults to ghcr.io/actions/actions-runner. Tenants copy-pasting from
+	// ARC examples see the same image name. Operators override at AGC startup via
+	// --worker-image (env: WORKER_IMAGE); the per-RunnerGroup workerImage field
+	// overrides further.
+	DefaultWorkerImage = "ghcr.io/actions/actions-runner:2.327.1"
 
 	payloadMountPath = "/run/secrets/job-payload"
 	payloadKey       = "payload"
