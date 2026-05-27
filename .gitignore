@@ -13,3 +13,4 @@ CLAUDE.local.md
 /cmd/gmc/gmc
 /cmd/probe/probe
 /cmd/proxy/proxy
+/cmd/worker/worker
