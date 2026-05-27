@@ -340,6 +340,16 @@ type RunnerGroupSpec struct {
     //
     // Reserved fields (see WorkerPodTemplate for the full list) are rejected at
     // admission and overwritten by the AGC at pod-creation time.
+    //
+    // ARC alignment. ARC's AutoscalingRunnerSet exposes the runner container's
+    // scheduling and resource knobs through its spec.template (a corev1.PodTemplateSpec).
+    // The same surface is available here because PodTemplate embeds a
+    // PodTemplateSpec — resources, nodeSelector, tolerations, affinity,
+    // topologySpreadConstraints, runtimeClassName, securityContext, volumes,
+    // and init/sidecar containers all map one-to-one with no translation. The
+    // field is named "podTemplate" rather than ARC's "template" so the
+    // underlying Kubernetes type is unambiguous at the spec level; tenants
+    // copy-pasting from ARC manifests only need to rename the top-level key.
     PodTemplate  WorkerPodTemplate           `json:"podTemplate"`
 
     // WorkerImage is the fully-qualified container image for the runner container
@@ -357,9 +367,10 @@ type RunnerGroupSpec struct {
     // Omitting this field causes the AGC to use its operator-configured default.
     // The compile-time constant DefaultWorkerImage in
     // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
-    // (currently "ghcr.io/actions/runner:2.327.1"). Operators override it at
-    // AGC startup via the --worker-image flag; tenants can then override
-    // further per-RunnerGroup with this field without affecting other groups.
+    // (currently "ghcr.io/actions/actions-runner:2.327.1", aligned with the
+    // ARC gha-runner-scale-set chart default). Operators override it at AGC
+    // startup via the --worker-image flag; tenants can then override further
+    // per-RunnerGroup with this field without affecting other groups.
     // +optional
     WorkerImage string `json:"workerImage,omitempty"`
 
