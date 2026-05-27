@@ -69,7 +69,16 @@ type HTTPGitHubIPRangeFetcher struct {
 }
 
 type githubMetaResponse struct {
+	// API is the api.github.com origin range; required for installation token
+	// exchange, runner registration-token, and rerun-failed-jobs calls.
+	API []string `json:"api"`
+	// Actions is the Azure Pipelines range that fronts the broker
+	// (pipelinesghubeus*.actions.githubusercontent.com) and the
+	// *.actions.githubusercontent.com job log/blob endpoints.
 	Actions []string `json:"actions"`
+	// Web includes codeload/objects.githubusercontent.com, used by checkout
+	// and any actions/cache I/O.
+	Web []string `json:"web"`
 }
 
 // FetchIPRanges fetches GitHub Actions IP ranges from the GitHub meta API.
@@ -104,8 +113,17 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
-	cidrs := make([]net.IPNet, 0, len(meta.Actions))
-	for _, s := range meta.Actions {
+	// Merge the api, actions, and web ranges. Each covers a distinct GitHub
+	// endpoint family that the AGC or worker pods must reach: api.github.com
+	// (token exchange, runner registration), *.actions.githubusercontent.com
+	// (broker, job logs), and codeload/objects.githubusercontent.com (checkout,
+	// cache). Restricting egress to any single range silently breaks one of them.
+	combined := make([]string, 0, len(meta.API)+len(meta.Actions)+len(meta.Web))
+	combined = append(combined, meta.API...)
+	combined = append(combined, meta.Actions...)
+	combined = append(combined, meta.Web...)
+	cidrs := make([]net.IPNet, 0, len(combined))
+	for _, s := range combined {
 		_, cidr, err := net.ParseCIDR(s)
 		if err != nil {
 			continue
