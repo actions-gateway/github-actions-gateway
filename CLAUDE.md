@@ -19,6 +19,8 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 ## Workflow
 
 1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent. If picking the next task, run `gh pr list` first and skip any Queue item from `docs/STATUS.md` that is already covered by an open PR. If starting a Queue item, mark it ▶ Started there (M/L items only).
+   - **Verify 🚫 blockers are still real.** A previous session may have silently completed the dependency without flipping the Queue row. Grep for the blocker's deliverables (test files, env vars, code paths) before treating the item as truly blocked. PR #59 unstuck two items whose blockers had landed weeks earlier.
+   - **Investigation findings marked ✅ in a plan doc must be end-to-end verified, not just source-read.** If a §Findings block says "the X argument is Y" because of source inspection, actually exec the thing and confirm. PR #59 found `docs/plan/milestone-3.md` §11.A had the wrong Runner.Worker process invocation despite citing the right `.cs` files.
 2. **For complex tasks** — write an explicit plan to `docs/plan/` and follow it. Keep it updated as the session progresses so completed scope is verifiable at the end. Revise the plan if new information changes the approach.
 3. **After making changes** — review the diff to confirm it matches the design, is well tested, and achieves the intent. Update docs proactively — do not wait to be asked. Specific docs to check based on what changed:
    - **New or changed CRD fields / API surface** → `docs/design/03-api-contracts.md` (add the field with its comment block) and `docs/design/02-architecture.md` (update any prose and the metrics table if new metrics were added).
@@ -66,7 +68,20 @@ Run tests locally before pushing to a PR to avoid burning CI. Prefer the narrowe
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
+**Pick the right tier for the bug class.** Unit and envtest tests can't observe behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A kind e2e test (see `docs/plan/e2e-tests.md`) is the only thing that proves it works. PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
+
 For integration tests and CI workflow guidance, see `docs/development/testing.md`.
+
+## Live-cluster iteration (kind)
+
+When validating against a real kind cluster (`make e2e-cluster` + `make e2e-images`):
+
+- **Image tag caching.** Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. Push to a unique tag per iteration (e.g. append `-v2`/`-v3`, or use a content hash) and update the deployment image — don't rebuild the same tag and expect new content.
+- **`kubectl rollout restart` can be a no-op.** If the spec hash hasn't changed, no new pod gets created. To force a fresh pod after a Secret/ConfigMap change, `kubectl delete pod -l <selector>`.
+- **Distroless pods can't be `kubectl exec`'d.** For connectivity checks from a pod that *should* be allowed, spawn a temporary debugger with the same labels as the real pod: `kubectl run dbg --image=alpine --restart=Never --rm -i --labels='<same-as-the-real-pod>' --command -- sh -c '...'`. NetworkPolicy enforces on labels, so the test only validates the path if the labels match.
+- **NetworkPolicy enforces after kube-proxy DNAT.** An `ipBlock` rule targeting a Service ClusterIP never matches real packets — kube-proxy rewrites the destination to a Pod IP before the NP layer sees it. Use `podSelector` for in-cluster destinations.
+- **GMC `--allow-agc-extra-env`** lets the GMC pod's `AGC_EXTRA_*` env vars propagate into the AGC Deployments it creates. The e2e suite uses this to point AGC at fakegithub; toggling between fakegithub and real GitHub is `kubectl set env deployment/gmc-controller-manager AGC_EXTRA_GITHUB_API_BASE_URL=... AGC_EXTRA_GITHUB_BROKER_URL=...` (or `=-` to unset).
+- **Tighten the inner loop.** Don't restart the whole `ginkgo run` for every fix — keep the cluster, GMC, and fakegithub up (`E2E_SKIP_TEARDOWN=true`), iterate on the target component (rebuild → push new tag → `kubectl set image` → `kubectl delete pod`), and re-test the specific path with `kubectl run` debug pods. Each iteration drops from ~10 minutes to under a minute.
 
 ## Security principles
 
@@ -100,6 +115,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Task | Reference |
 |---|---|
 | Running integration tests, editing CI workflows | `docs/development/testing.md` |
+| Standing up / iterating against a kind cluster | `docs/plan/e2e-tests.md` + the **Live-cluster iteration** section above |
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
