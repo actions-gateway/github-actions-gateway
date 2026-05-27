@@ -630,6 +630,34 @@ On Linux, `.GetClientHandleAsString()` returns the integer file descriptor numbe
 
 `BitConverter.GetBytes` on x86/x64 Linux is little-endian. The string encoding is `UnicodeEncoding` (UTF-16LE, no BOM). The previous implementation had three errors: it used FIFOs instead of anonymous pipes, big-endian instead of little-endian, and UTF-8 instead of UTF-16LE.
 
+**Process arguments** (corrected during M3/M4 live-cluster dry-run, 2026-05-27):
+
+The initial draft of this section claimed the invocation is
+`Runner.Worker --startuptype workerprocess <readFD> <writeFD>` (4 args). That
+is wrong. Runner.Worker's `Program.MainAsync` asserts `args.Length == 3` and
+`args[0].ToLowerInvariant() == "spawnclient"`
+([Program.cs](https://github.com/actions/runner/blob/v2.327.1/src/Runner.Worker/Program.cs)),
+so the correct invocation is:
+
+```
+Runner.Worker spawnclient <readFD> <writeFD>
+```
+
+`args[1]` is `pipeIn` (the wrapper's read-end FD as seen in the child), `args[2]`
+is `pipeOut`. The wrapper passes "3" and "4" (Go's `cmd.ExtraFiles[0]` maps to
+fd 3 and `[1]` to fd 4 in the child).
+
+**Outstanding gap:** Runner.Worker also reads its runner configuration from
+`/home/runner/.runner`, `/home/runner/.credentials`, and
+`/home/runner/.credentials_rsaparams` (see
+`Runner.Common/ConfigurationStore.cs` — `GetSettings()` enforces non-null
+settings). The wrapper does not write these files today; without them
+Runner.Worker fails at job start with
+`ArgumentNullException: configuredSettings`. The AGC has the data — GitHub
+returns `encoded_jit_config` from `generate-jitconfig` and the AGC stores the
+agent in a Secret — but it is not yet plumbed into the worker Secret. Tracked
+as Queue item 5a in [docs/STATUS.md](../STATUS.md).
+
 **Implementation:** `cmd/worker/main.go` — `writeJobMessage` and `encodeUTF16LE`.
 
 ---
