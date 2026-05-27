@@ -9,9 +9,9 @@ import (
 	"time"
 
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -70,44 +70,18 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 
-	// Wait for the workload NetworkPolicy to include an egress rule on port 8080 targeting the
-	// proxy Service ClusterIP as a /32 CIDR. The controller fetches the ClusterIP after
-	// creating the Service, so this check waits for at least one post-Service reconcile.
+	// The workload NetworkPolicy must include an egress rule on port 8080 selecting
+	// the proxy pods by label. The egress rule must NOT use an ipBlock on the proxy
+	// Service ClusterIP — kube-proxy DNATs ClusterIP→PodIP before NetworkPolicy
+	// enforcement, so an ipBlock rule on a ClusterIP silently never matches.
 	g.Eventually(func() bool {
-		// Fetch the proxy Service ClusterIP.
-		var svc corev1.Service
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &svc); err != nil {
-			return false
-		}
-		if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
-			return false
-		}
-		expectedCIDR := svc.Spec.ClusterIP + "/32"
-
 		var np networkingv1.NetworkPolicy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np); err != nil {
 			return false
 		}
-		for _, rule := range np.Spec.Egress {
-			hasPort8080 := false
-			for _, port := range rule.Ports {
-				if port.Port != nil && port.Port.IntVal == 8080 {
-					hasPort8080 = true
-					break
-				}
-			}
-			if !hasPort8080 {
-				continue
-			}
-			for _, peer := range rule.To {
-				if peer.IPBlock != nil && peer.IPBlock.CIDR == expectedCIDR {
-					return true
-				}
-			}
-		}
-		return false
+		return workloadNPHasProxyRule(np)
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
-		"egress rule on port 8080 must target the proxy Service ClusterIP as a /32 CIDR")
+		"egress rule on port 8080 must select proxy pods by label (PodSelector app=actions-gateway-proxy)")
 }
 
 func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T) {
@@ -226,24 +200,13 @@ func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) 
 
 	g := gomega.NewWithT(t)
 
-	// Wait for proxy Service ClusterIP.
-	var svc corev1.Service
-	g.Eventually(func() bool {
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &svc); err != nil {
-			return false
-		}
-		return svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None"
-	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "proxy Service must have ClusterIP")
-
-	expectedCIDR := svc.Spec.ClusterIP + "/32"
-
-	// Wait for workload NetworkPolicy with proxy egress rule.
+	// Wait for workload NetworkPolicy with proxy egress rule (PodSelector-based).
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np); err != nil {
 			return false
 		}
-		return workloadNPHasProxyRule(np, expectedCIDR)
+		return workloadNPHasProxyRule(np)
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"workload NP must have proxy egress rule before IP range refresh")
 
@@ -253,20 +216,29 @@ func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) 
 	// Workload NP must still have its proxy egress rule after the refresh.
 	var np networkingv1.NetworkPolicy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np))
-	require.True(t, workloadNPHasProxyRule(np, expectedCIDR),
+	require.True(t, workloadNPHasProxyRule(np),
 		"workload NP proxy egress rule must be preserved after IP range refresh")
 }
 
-// workloadNPHasProxyRule returns true if np contains an egress rule for port 8080 to expectedCIDR.
-func workloadNPHasProxyRule(np networkingv1.NetworkPolicy, expectedCIDR string) bool {
+// workloadNPHasProxyRule returns true if np contains an egress rule for port 8080
+// targeting the proxy pods by label. The peer must be a PodSelector — not an
+// ipBlock — because kube-proxy DNATs ClusterIP→PodIP before NetworkPolicy
+// enforcement, so an ipBlock rule on the Service ClusterIP never matches.
+func workloadNPHasProxyRule(np networkingv1.NetworkPolicy) bool {
 	for _, rule := range np.Spec.Egress {
+		hasPort8080 := false
 		for _, port := range rule.Ports {
 			if port.Port != nil && port.Port.IntVal == 8080 {
-				for _, peer := range rule.To {
-					if peer.IPBlock != nil && peer.IPBlock.CIDR == expectedCIDR {
-						return true
-					}
-				}
+				hasPort8080 = true
+				break
+			}
+		}
+		if !hasPort8080 {
+			continue
+		}
+		for _, peer := range rule.To {
+			if peer.PodSelector != nil && peer.PodSelector.MatchLabels["app"] == gmcnames.ProxyName {
+				return true
 			}
 		}
 	}
