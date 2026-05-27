@@ -162,10 +162,17 @@ func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, 
 		return nil, err
 	}
 	var runnerCfg struct {
-		ServerURL string `json:"serverUrl"`
+		ServerURL   string `json:"serverUrl"`
+		ServerURLV2 string `json:"serverUrlV2"`
 	}
 	if err := json.Unmarshal(runnerFileBytes, &runnerCfg); err != nil {
 		return nil, fmt.Errorf("parse .runner config: %w", err)
+	}
+	// The v2 broker API (used by default) lives at serverUrlV2.
+	// Fall back to serverUrl for GHES deployments that use the v1 VSTS pool API.
+	brokerURL := runnerCfg.ServerURLV2
+	if brokerURL == "" {
+		brokerURL = runnerCfg.ServerURL
 	}
 
 	credFileBytes, err := decodeFile(".credentials")
@@ -200,7 +207,7 @@ func parseJITCredentials(agentID int64, encodedBlob string) (*AgentCredentials, 
 		AgentID:          agentID,
 		ClientID:         credCfg.Data.ClientID,
 		AuthorizationURL: credCfg.Data.AuthorizationURL,
-		BrokerURL:        runnerCfg.ServerURL,
+		BrokerURL:        brokerURL,
 		PrivateKeyPEM:    privKeyPEM,
 	}, nil
 }
