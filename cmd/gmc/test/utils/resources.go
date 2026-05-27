@@ -115,6 +115,47 @@ spec:
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with runner group", ns, name)
 }
 
+// ApplyFakegithubEgressNetworkPolicy stamps an additive NetworkPolicy that lets
+// workload-labeled pods in `ns` reach the fakegithub Service in the e2e-infra
+// namespace on port 8080.
+//
+// Why this is needed: the per-tenant workload NetworkPolicy created by the GMC
+// restricts port-8080 egress to the proxy pods only (selected by
+// `app: actions-gateway-proxy`). That is the production-correct shape — workers
+// must not reach arbitrary cluster endpoints. The e2e suite, however, points
+// the AGC at the fakegithub Service running in `e2e-infra`, which sits on
+// port 8080 and is reached directly (NO_PROXY includes `svc.cluster.local`).
+// Without this additive policy, kindnet correctly drops the AGC→fakegithub
+// connect and no broker session ever registers.
+//
+// NetworkPolicies are additive: this policy adds an allowed egress path
+// without weakening the workload NP's deny-by-default for everything else.
+func ApplyFakegithubEgressNetworkPolicy(ns string) {
+	manifest := fmt.Sprintf(`apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-fakegithub-egress
+  namespace: %s
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: e2e-infra
+      podSelector:
+        matchLabels:
+          app: fakegithub
+    ports:
+    - port: 8080
+      protocol: TCP
+`, ns)
+	Expect(ApplyManifest(manifest)).To(Succeed(), "apply fakegithub egress NP in %s", ns)
+}
+
 // DeleteActionsGatewayCR deletes an ActionsGateway CR and waits for the finalizer to clear.
 // A 5-minute timeout prevents hangs if the controller is unavailable.
 func DeleteActionsGatewayCR(ns, name string) {
