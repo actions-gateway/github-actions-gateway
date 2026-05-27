@@ -16,14 +16,19 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -o /wrapper ./cmd/worker
 
 ## Stage 2: runner image with the wrapper as ENTRYPOINT.
-## The official actions/runner image includes Runner.Worker at
-## /home/runner/externals/node20/bin/ and the runner binaries at /home/runner/.
+## Built on top of ghcr.io/actions/actions-runner (the ARC gha-runner-scale-set
+## default) so tenants copy-pasting from ARC manifests see the same base. The
+## image runs as USER runner (UID 1001) and ships Runner.Worker at
+## /home/runner/bin/Runner.Worker. That directory is NOT on the image's default
+## PATH, so prepend it here — the wrapper resolves the binary via
+## exec.LookPath("Runner.Worker").
 ##
 ## Pin this to a digest once GHCR auth is available:
-##   docker buildx imagetools inspect ghcr.io/actions/runner:2.327.1
+##   docker buildx imagetools inspect ghcr.io/actions/actions-runner:2.327.1
 ## The version must match the runner version used during agent registration
 ## (cmd/agc/internal/agentpool) so GitHub does not reject POST /sessions with
 ## a version-too-old error.
-FROM ghcr.io/actions/runner:2.327.1
+FROM ghcr.io/actions/actions-runner:2.327.1
+ENV PATH=/home/runner/bin:$PATH
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]

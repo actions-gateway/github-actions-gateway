@@ -277,7 +277,7 @@ standard `golang:1.24` as part of §8.
 ### Problem
 
 `golang:1.26`, `gcr.io/distroless/static:nonroot`, and
-`ghcr.io/actions/runner:2.327.1` (worker base) are referenced by mutable tags.
+`ghcr.io/actions/actions-runner:2.327.1` (worker base) are referenced by mutable tags.
 A registry-side tag move silently busts the layer cache for every downstream
 build.
 
@@ -292,7 +292,7 @@ Dependabot keeps these up to date automatically.
 | `golang:1.26` | ✅ — all four builder stages |
 | `golang:1.24` | ✅ — worker builder stage (also switched from alpine) |
 | `gcr.io/distroless/static:nonroot` | ✅ — all four runtime stages |
-| `ghcr.io/actions/runner:2.327.1` | ⏳ — deferred; requires GHCR auth to resolve digest |
+| `ghcr.io/actions/actions-runner:2.327.1` | ⏳ — deferred; requires GHCR auth to resolve digest |
 
 ### Files
 

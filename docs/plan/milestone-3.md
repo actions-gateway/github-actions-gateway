@@ -25,7 +25,7 @@ runner source. What remains is a live end-to-end run against a real
 | Retry budget exhausted → no rerun, exhausted metric | ✅ Done | Counter check at line 218; `actions_gateway_eviction_retries_exhausted_total` |
 | Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](../../cmd/agc/internal/listener/goroutine.go)) |
 | Investigation A — Named Pipe protocol documented (§11.A) | ✅ Done | Anonymous pipes + LE int32 type + LE int32 byte-len + UTF-16LE body confirmed from runner source; implementation updated in [worker/main.go](../../cmd/worker/main.go); findings in §11.A |
-| Investigation B — Worker image source documented (§11.B) | ⚠️ Partial | Dockerfile pins `ghcr.io/actions/runner:2.327.1`; §11.B still says "TBD" |
+| Investigation B — Worker image source documented (§11.B) | ⚠️ Partial | Dockerfile pins `ghcr.io/actions/actions-runner:2.327.1` (ARC-aligned base, UID 1001, Runner.Worker at `/home/runner/bin/`); §11.B still says "TBD" |
 | RBAC markers regenerated and committed | ✅ Done | Pod + Secret markers in [controller/doc.go](../../cmd/agc/internal/controller/doc.go) |
 
 ### Critical path
@@ -187,7 +187,7 @@ RUN CGO_ENABLED=0 go build -o /bin/worker-wrapper ./cmd/worker/
 
 # Runner.Worker is harvested from the official actions/runner release.
 # Pin to a specific version digest for reproducibility.
-FROM ghcr.io/actions/runner:2.327.1 AS runner-source
+FROM ghcr.io/actions/actions-runner:2.327.1 AS runner-source
 
 FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -458,11 +458,12 @@ Add a new `JobHandlerFuncWithStop` type if needed, or have the provisioner wrap 
 
 ### 5.B — Worker Image Source
 
-**Context:** The Dockerfile in §2.4 references `ghcr.io/actions/runner:2.327.1` as a source for `Runner.Worker`. Confirm:
+**Context:** The Dockerfile in §2.4 references `ghcr.io/actions/actions-runner:2.327.1` (ARC-aligned base) as a source for `Runner.Worker`. Confirmed via local `docker pull` + `docker run`:
 
-1. Whether `Runner.Worker` is present in the official GitHub Actions runner image, or must be extracted from a release tarball.
-2. The exact path of the `Runner.Worker` binary within the image.
-3. Whether `Runner.Worker` requires any co-located .NET runtime or shared libraries not present in the `ubuntu:24.04` base.
+1. `Runner.Worker` is present in the image (no tarball extraction needed).
+2. Path: `/home/runner/bin/Runner.Worker`. This directory is **not** on the default `$PATH`, so the worker Dockerfile sets `ENV PATH=/home/runner/bin:$PATH` to keep [cmd/worker/main.go:91](../../cmd/worker/main.go:91)'s `exec.LookPath("Runner.Worker")` resolving correctly.
+3. .NET runtime + shared libraries ship inside the image (no host dependency on `ubuntu:24.04`).
+4. Image runs as `USER runner` (UID 1001) — tenants need `runAsUser: 1001` in the RunnerGroup `podTemplate` for PSA `restricted` admission. Already documented in [security.md D-2](security.md).
 
 **Document findings:** Add §8.B to the Investigation Findings section.
 
