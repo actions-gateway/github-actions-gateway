@@ -36,11 +36,13 @@ func newJITFixture(t *testing.T, agentID int64) *jitFixture {
 	require.NoError(t, err)
 	key.Precompute()
 
-	brokerURL := "https://broker.example.com/token"
+	// serverUrlV2 is the v2-flow broker URL; it should be preferred over serverUrl.
+	brokerURLV1 := "https://pipelines.example.com/pool"
+	brokerURL := "https://broker.example.com/v2/"
 	clientID := "client-abc"
 	authURL := "https://auth.example.com/oauth"
 
-	runnerJSON := fmt.Sprintf(`{"agentId":%d,"serverUrl":%q}`, agentID, brokerURL)
+	runnerJSON := fmt.Sprintf(`{"agentId":%d,"serverUrl":%q,"serverUrlV2":%q}`, agentID, brokerURLV1, brokerURL)
 	credJSON := fmt.Sprintf(`{"scheme":"OAuth","data":{"clientId":%q,"authorizationUrl":%q}}`, clientID, authURL)
 	rsaXML := buildRSAParamsJSON(key)
 
