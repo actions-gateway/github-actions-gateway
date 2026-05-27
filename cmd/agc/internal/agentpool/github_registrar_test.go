@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/karlkfi/github-actions-gateway/agc/internal/agentpool"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
