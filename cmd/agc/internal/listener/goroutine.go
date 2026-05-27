@@ -40,7 +40,14 @@ type ConditionUpdater interface {
 
 // JobHandlerFunc is called with the AcquireJob response bytes after a successful
 // acquisition. In M2 this is a stub; in M3 it becomes the pod provisioner.
-type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte) error
+//
+// jitConfig is the agent's raw encoded JIT config blob (the base64-encoded JSON
+// map of runner config files from GitHub's generate-jitconfig endpoint). The
+// provisioner forwards it into the worker Secret so the entrypoint wrapper can
+// materialize .runner / .credentials / .credentials_rsaparams in /home/runner/
+// before invoking Runner.Worker. May be empty when the agent was created by a
+// registrar that does not produce a JIT blob (e.g. stub-only tests).
+type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error
 
 // Config holds the dependencies injected into a listener goroutine.
 type Config struct {
@@ -369,7 +376,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
-		return cfg.JobHandler(ctx, runServiceURL, planID, payload)
+		return cfg.JobHandler(ctx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
 	}
 	return nil
 }

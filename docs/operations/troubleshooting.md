@@ -432,4 +432,35 @@ kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceed
 
 ---
 
+## Worker Pod Crashes With `configuredSettings` ArgumentNullException
+
+**Symptoms.** Worker pod reaches `Running`, the entrypoint wrapper logs `payload loaded` and starts Runner.Worker, but Runner.Worker exits non-zero almost immediately with a stack trace containing `System.ArgumentNullException: Value cannot be null. (Parameter 'configuredSettings')` originating from `Runner.Common.ConfigurationStore.GetSettings()`. The job is never reported back to GitHub.
+
+**Likely causes.**
+- The agent Secret was created before Queue item 5a shipped and is missing the `encodedJITConfig` key; the AGC reconciled forward but the per-job Secret has no `jitconfig` key for the wrapper to materialize.
+- A custom registrar (non-GitHub) returns an `AgentCredentials` value without `EncodedJITConfig` populated.
+- The runner home directory inside the worker container is not `/home/runner` (custom image), but `RUNNER_HOME_DIR` was not overridden in the pod template — the wrapper writes the files to the wrong location and Runner.Worker reads from `$HOME`.
+
+**Diagnostics.**
+
+```sh
+# 1. Inspect the agent Secret. encodedJITConfig must be present and non-empty.
+kubectl get secret -n <agc-namespace> -l actions-gateway/runner-group=<group>,actions-gateway/agent-index -o jsonpath='{.items[*].data.encodedJITConfig}' | base64 -d | head -c 32; echo
+
+# 2. Inspect the per-job worker Secret while a job is in flight. The jitconfig
+#    key must be present.
+kubectl get secret -n <tenant-namespace> -l actions-gateway/runner-group=<group> -o name | grep '^secret/job-' | head -1 | xargs -I{} kubectl get {} -n <tenant-namespace> -o jsonpath='{.data.jitconfig}' | base64 -d | head -c 32; echo
+
+# 3. Confirm the wrapper materialized the files. From a debug sidecar or by
+#    exec'ing into a running worker pod, list /home/runner:
+kubectl exec -n <tenant-namespace> <pod> -c runner -- ls -la /home/runner/.runner /home/runner/.credentials /home/runner/.credentials_rsaparams
+```
+
+**Resolution.**
+- If the agent Secret is missing `encodedJITConfig`: scale the agent pool to zero (`maxListeners: 0` on the RunnerGroup), wait for Secrets to be deleted, then scale back up. New agents will be registered via `generate-jitconfig` and carry the blob.
+- If the worker image puts `$HOME` elsewhere: set `RUNNER_HOME_DIR` on the runner container env via the RunnerGroup `podTemplate`.
+- If a custom registrar is in use: ensure it populates `AgentCredentials.EncodedJITConfig` with the raw blob from GitHub's response (the wrapper only knows how to decode that exact format).
+
+---
+
 ← [Back to Operations](.)

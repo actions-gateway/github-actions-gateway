@@ -510,7 +510,7 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastListener = func() bool { return true }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -545,7 +545,7 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastListener = func() bool { return true }
 	cfg.SpawnReplacement = func(_ context.Context) { spawnCalls.Add(1) }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1032,7 +1032,7 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 		Clock:          clk,
 		RunnerOS:       "Linux",
 		IsLastListener: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
 			return nil
@@ -1185,7 +1185,7 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 		Clock:          clk,
 		RunnerOS:       "Linux",
 		IsLastListener: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
 			return nil
@@ -1302,7 +1302,7 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 		Broker:         bc,
 		Clock:          clk,
 		IsLastListener: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
 			return nil
@@ -1411,7 +1411,7 @@ func TestListener_PlaintextSessionKey(t *testing.T) {
 		Broker:         bc,
 		Clock:          clk,
 		IsLastListener: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			cancel()
 			return nil
 		},
@@ -1509,7 +1509,7 @@ func TestListener_NoSessionKey(t *testing.T) {
 		Broker:         bc,
 		Clock:          clk,
 		IsLastListener: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			cancel()
 			return nil
 		},

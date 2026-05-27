@@ -4,19 +4,23 @@
 //
 //  1. Read the job payload from the mounted Secret directory
 //     (PAYLOAD_SECRET_PATH, default /run/secrets/job-payload).
-//  2. Create two OS anonymous pipes (not FIFOs — inherited file descriptors):
+//  2. Materialize the runner configuration files (.runner, .credentials,
+//     .credentials_rsaparams) from the Secret's "jitconfig" key into the
+//     runner's home directory (RUNNER_HOME_DIR, default /home/runner).
+//     Runner.Worker reads these files at startup via ConfigurationStore.
+//  3. Create two OS anonymous pipes (not FIFOs — inherited file descriptors):
 //     pipe-in (fd 3 in child): wrapper → worker
 //     pipe-out (fd 4 in child): worker → wrapper
-//  3. Start Runner.Worker with three positional args: "spawnclient" and the
+//  4. Start Runner.Worker with three positional args: "spawnclient" and the
 //     inherited FD numbers (3 and 4). Reference: actions/runner v2.327.1
 //     src/Runner.Worker/Program.cs — args.Length must equal 3, args[0] must
 //     be "spawnclient", args[1] is pipeIn (read fd), args[2] is pipeOut
 //     (write fd).
-//  4. Write the job payload as a NewJobRequest message to pipe-in
+//  5. Write the job payload as a NewJobRequest message to pipe-in
 //     concurrently (the write blocks until Runner.Worker reads).
-//  5. Drain pipe-out to prevent the worker from blocking on writes.
-//  6. Relay Runner.Worker stdout/stderr to our own stdout/stderr.
-//  7. Exit with the same exit code as Runner.Worker.
+//  6. Drain pipe-out to prevent the worker from blocking on writes.
+//  7. Relay Runner.Worker stdout/stderr to our own stdout/stderr.
+//  8. Exit with the same exit code as Runner.Worker.
 //
 // Wire format (ProcessChannel / StreamString in the runner source,
 // src/Runner.Common/ProcessChannel.cs and StreamString.cs):
@@ -32,7 +36,9 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -40,13 +46,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"unicode/utf16"
 )
 
 const (
 	defaultPayloadPath = "/run/secrets/job-payload"
+	defaultRunnerHome  = "/home/runner"
 	workerBin          = "Runner.Worker"
 	payloadFile        = "payload"
+	jitConfigFile      = "jitconfig"
 
 	// msgTypeNewJobRequest is MessageType.NewJobRequest from the runner source.
 	msgTypeNewJobRequest = 1
@@ -57,6 +66,16 @@ const (
 	workerWriteFD = 4
 )
 
+// runnerConfigFiles is the allowlist of file names the wrapper will materialize
+// from the JIT config blob. The runner generate-jitconfig endpoint always
+// returns these three keys; anything else is ignored to keep the wrapper from
+// writing attacker-controlled file names into the runner's home directory.
+var runnerConfigFiles = map[string]bool{
+	".runner":                true,
+	".credentials":           true,
+	".credentials_rsaparams": true,
+}
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("worker wrapper failed", "error", err)
@@ -66,6 +85,7 @@ func main() {
 
 func run() error {
 	payloadDir := envOr("PAYLOAD_SECRET_PATH", defaultPayloadPath)
+	runnerHome := envOr("RUNNER_HOME_DIR", defaultRunnerHome)
 
 	// 1. Read payload from Secret mount.
 	payload, err := readPayload(payloadDir)
@@ -74,7 +94,15 @@ func run() error {
 	}
 	slog.Info("payload loaded", "bytes", len(payload))
 
-	// 2. Create anonymous pipes.
+	// 2. Materialize the runner configuration files from the JIT blob.
+	// Runner.Worker's ConfigurationStore.GetSettings() loads .runner /
+	// .credentials / .credentials_rsaparams from $HOME at startup and fails
+	// with ArgumentNullException: configuredSettings when they are absent.
+	if err := materializeJITConfig(payloadDir, runnerHome); err != nil {
+		return fmt.Errorf("materialize JIT config: %w", err)
+	}
+
+	// 3. Create anonymous pipes.
 	// r1/w1: wrapper writes job → worker reads (workerReadFD in child)
 	// r2/w2: worker writes back → wrapper drains  (workerWriteFD in child)
 	r1, w1, err := os.Pipe()
@@ -88,7 +116,7 @@ func run() error {
 		return fmt.Errorf("create worker-output pipe: %w", err)
 	}
 
-	// 3. Start Runner.Worker.
+	// 4. Start Runner.Worker.
 	// ExtraFiles[0] = r1 → fd 3 in child (worker reads job message)
 	// ExtraFiles[1] = w2 → fd 4 in child (worker writes back)
 	workerPath, err := exec.LookPath(workerBin)
@@ -118,7 +146,7 @@ func run() error {
 	r1.Close()
 	w2.Close()
 
-	// 4. Write payload to worker-input pipe concurrently.
+	// 5. Write payload to worker-input pipe concurrently.
 	// The write blocks until Runner.Worker opens the read end.
 	writeErr := make(chan error, 1)
 	go func() {
@@ -126,7 +154,7 @@ func run() error {
 		writeErr <- writeJobMessage(w1, payload)
 	}()
 
-	// 5. Drain worker-output pipe to prevent the worker blocking on writes.
+	// 6. Drain worker-output pipe to prevent the worker blocking on writes.
 	drainDone := make(chan struct{})
 	go func() {
 		defer close(drainDone)
@@ -134,7 +162,7 @@ func run() error {
 		_, _ = io.Copy(io.Discard, r2)
 	}()
 
-	// 6. Wait for Runner.Worker.
+	// 7. Wait for Runner.Worker.
 	waitErr := cmd.Wait()
 
 	// After the process exits its fds close, so drainDone fires promptly.
@@ -144,7 +172,7 @@ func run() error {
 		slog.Warn("payload write error", "error", werr)
 	}
 
-	// 7. Propagate Runner.Worker exit code.
+	// 8. Propagate Runner.Worker exit code.
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			os.Exit(exitErr.ExitCode())
@@ -184,6 +212,69 @@ func encodeUTF16LE(s string) []byte {
 func readPayload(dir string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(dir, payloadFile))
 }
+
+// materializeJITConfig reads the base64-encoded JIT config blob from
+// <payloadDir>/jitconfig and writes the runner configuration files
+// (.runner, .credentials, .credentials_rsaparams) under runnerHome.
+//
+// The blob is a base64-encoded JSON object mapping file names to the
+// base64-encoded contents of each file (the format returned verbatim by
+// GitHub's POST /actions/runners/generate-jitconfig endpoint and stored in
+// the agent Secret by the AGC).
+//
+// A missing jitconfig file is tolerated and is a no-op: this preserves the
+// behavior of agents created by registrars that do not produce a JIT blob
+// (e.g. stub agents in pre-M3 integration tests). Runner.Worker will fail
+// at startup with ArgumentNullException: configuredSettings when the files
+// are absent, so callers who care must ensure the AGC populated the key.
+func materializeJITConfig(payloadDir, runnerHome string) error {
+	blob, err := os.ReadFile(filepath.Join(payloadDir, jitConfigFile))
+	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Info("no JIT config blob in payload Secret; skipping runner config materialization")
+			return nil
+		}
+		return fmt.Errorf("read jitconfig: %w", err)
+	}
+	trimmed := strings.TrimSpace(string(blob))
+	if trimmed == "" {
+		slog.Info("empty JIT config blob; skipping runner config materialization")
+		return nil
+	}
+
+	decodedBlob, err := base64.StdEncoding.DecodeString(trimmed)
+	if err != nil {
+		return fmt.Errorf("decode base64 blob: %w", err)
+	}
+
+	var files map[string]string
+	if err := json.Unmarshal(decodedBlob, &files); err != nil {
+		return fmt.Errorf("parse JIT config JSON: %w", err)
+	}
+
+	if err := os.MkdirAll(runnerHome, 0o700); err != nil {
+		return fmt.Errorf("create runner home %s: %w", runnerHome, err)
+	}
+
+	for name, encoded := range files {
+		if !runnerConfigFiles[name] {
+			slog.Warn("ignoring unexpected JIT config entry", "name", name)
+			continue
+		}
+		content, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return fmt.Errorf("decode %s: %w", name, err)
+		}
+		target := filepath.Join(runnerHome, name)
+		// 0o600 — runner credentials include an RSA private key (in .credentials_rsaparams).
+		if err := os.WriteFile(target, content, 0o600); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
+		}
+		slog.Info("runner config file written", "path", target, "bytes", len(content))
+	}
+	return nil
+}
+
 
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
