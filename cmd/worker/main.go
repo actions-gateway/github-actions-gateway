@@ -7,8 +7,11 @@
 //  2. Create two OS anonymous pipes (not FIFOs — inherited file descriptors):
 //     pipe-in (fd 3 in child): wrapper → worker
 //     pipe-out (fd 4 in child): worker → wrapper
-//  3. Start Runner.Worker with --startuptype workerprocess and the inherited
-//     FD numbers (3 and 4) as positional arguments.
+//  3. Start Runner.Worker with three positional args: "spawnclient" and the
+//     inherited FD numbers (3 and 4). Reference: actions/runner v2.327.1
+//     src/Runner.Worker/Program.cs — args.Length must equal 3, args[0] must
+//     be "spawnclient", args[1] is pipeIn (read fd), args[2] is pipeOut
+//     (write fd).
 //  4. Write the job payload as a NewJobRequest message to pipe-in
 //     concurrently (the write blocks until Runner.Worker reads).
 //  5. Drain pipe-out to prevent the worker from blocking on writes.
@@ -97,7 +100,7 @@ func run() error {
 		return fmt.Errorf("find Runner.Worker: %w", err)
 	}
 	cmd := exec.Command(workerPath,
-		"--startuptype", "workerprocess",
+		"spawnclient",
 		strconv.Itoa(workerReadFD), strconv.Itoa(workerWriteFD),
 	)
 	cmd.Stdout = os.Stdout
