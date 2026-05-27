@@ -159,24 +159,31 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 }
 
 // buildWorkloadNetworkPolicy constructs the NetworkPolicy for AGC and worker pods.
-// Workload pods may only reach the proxy service (not GitHub CIDRs directly) and DNS.
+// Workload pods may only reach the proxy pods (not GitHub CIDRs directly) and DNS.
 // This enforces the design invariant that all GitHub-bound traffic routes through the
 // per-tenant proxy pool, preserving egress-IP attribution per tenant.
-func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, proxyClusterIP string) *networkingv1.NetworkPolicy {
+//
+// The egress rule targets the proxy by PodSelector rather than the Service ClusterIP.
+// kube-proxy DNATs ClusterIP → PodIP before NetworkPolicy enforcement, so an
+// `ipBlock: <ClusterIP>/32` rule never matches actual packets and silently drops all
+// proxy-bound traffic. Selecting the proxy pods directly matches post-DNAT destinations.
+func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
 
-	egress := []networkingv1.NetworkPolicyEgressRule{{
-		Ports: []networkingv1.NetworkPolicyPort{
-			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
-			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
+	egress := []networkingv1.NetworkPolicyEgressRule{
+		{
+			Ports: []networkingv1.NetworkPolicyPort{
+				{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
+				{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
+			},
 		},
-	}}
-	if proxyClusterIP != "" {
-		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
+		{
 			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
-			To:    []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: proxyClusterIP + "/32"}}},
-		})
+			To: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
+			}},
+		},
 	}
 
 	return &networkingv1.NetworkPolicy{

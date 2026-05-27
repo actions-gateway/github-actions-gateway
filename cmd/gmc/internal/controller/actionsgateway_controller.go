@@ -157,16 +157,13 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("proxy Service: %w", err)
 	}
 
-	// 5. NetworkPolicies — built after Service creation so we can embed the ClusterIP.
-	proxyClusterIP := ""
-	var proxySvc corev1.Service
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, &proxySvc); err == nil {
-		proxyClusterIP = proxySvc.Spec.ClusterIP
-	}
+	// 5. NetworkPolicies. The workload policy targets the proxy by PodSelector
+	// (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
+	// so an ipBlock on the ClusterIP would silently drop all proxy-bound traffic).
 	if err := r.applyNetworkPolicy(ctx, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
 		return fmt.Errorf("proxy NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag, proxyClusterIP)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag)); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
 	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag)); err != nil {
