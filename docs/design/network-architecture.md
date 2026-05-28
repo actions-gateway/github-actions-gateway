@@ -33,8 +33,8 @@ All GitHub-bound traffic — from both the AGC and worker pods — is routed thr
 
 | # | Initiator | Destination | Protocol | In-cluster? | Via proxy? |
 |---|-----------|-------------|----------|-------------|------------|
-| 1 | GMC | K8s API server | HTTPS (443) | Yes | No |
-| 2 | AGC | K8s API server | HTTPS (443) | Yes | No |
+| 1 | GMC | K8s API server | HTTPS (443 / 6443) | Yes | No |
+| 2 | AGC | K8s API server | HTTPS (443 / 6443) | Yes | No |
 | 3 | AGC | Proxy ClusterIP Service | HTTPS CONNECT (8080) | Yes | — |
 | 4 | Proxy pod | GitHub API endpoints (see below) | HTTPS (443) | No (egress) | — |
 | 5 | Worker pod | Proxy ClusterIP Service | HTTPS CONNECT (8080) | Yes | — |
@@ -97,7 +97,9 @@ spec:
 
 ### Policy 2: `actions-gateway-controller` — AGC → Kubernetes API server
 
-Selects the AGC Deployment pods by `app: actions-gateway-controller`. Adds (additively) egress to the Kubernetes API server on port 443. Worker pods do not match this selector and so have no API-server egress.
+Selects the AGC Deployment pods by `app: actions-gateway-controller`. Adds (additively) egress to the Kubernetes API server on ports 443 *and* 6443. Worker pods do not match this selector and so have no API-server egress.
+
+Both apiserver ports are listed deliberately. NetworkPolicy port matches are evaluated against the **post-DNAT** destination port. Most production clusters expose the apiserver via the `kubernetes` Service at 443 → backends on 443, so a 443-only rule works. Kind (and any cluster where the apiserver Endpoints listen on 6443) translates ClusterIP `10.96.0.1:443` → `<node-ip>:6443`, and the policy evaluator sees 6443 — a 443-only rule silently drops every k8s API call. Allowing both ports keeps the rule precise (only apiserver-style ports) while working in both topologies. See [`docs/plan/5b-root-cause.md`](../plan/5b-root-cause.md) for the diagnosis and a worked repro.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -118,12 +120,14 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Kubernetes API server — port 443 to any destination. The exact CIDR
-    # depends on the cluster's apiserver placement (control-plane node IPs
-    # or kubernetes Service ClusterIP); the policy allows port 443 broadly
-    # rather than tracking a moving target.
+    # Kubernetes API server — ports 443 and 6443 to any destination.
+    # Both ports are needed because NetworkPolicy enforcement evaluates
+    # post-DNAT: production clusters typically expose the apiserver on 443,
+    # kind translates Service:443 → node:6443. Allowing both works in both.
     - ports:
         - port: 443
+          protocol: TCP
+        - port: 6443
           protocol: TCP
 ```
 

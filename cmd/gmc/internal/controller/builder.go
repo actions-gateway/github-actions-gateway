@@ -197,16 +197,29 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 }
 
 // buildAGCNetworkPolicy constructs the NetworkPolicy for AGC pods only.
-// It allows egress on port 443 (Kubernetes API server) in addition to the DNS
-// and proxy egress that the workload NetworkPolicy already grants. Because
-// NetworkPolicies are additive, AGC pods (selected by both this policy and
-// buildWorkloadNetworkPolicy) end up with: DNS + proxy + k8s API egress.
-// Worker pods (selected only by buildWorkloadNetworkPolicy) are limited to
-// DNS + proxy — they cannot directly reach GitHub or the k8s API server.
+// It allows egress on the Kubernetes API server ports (443 and 6443) in
+// addition to the DNS and proxy egress that the workload NetworkPolicy
+// already grants. Because NetworkPolicies are additive, AGC pods (selected by
+// both this policy and buildWorkloadNetworkPolicy) end up with: DNS + proxy +
+// k8s API egress. Worker pods (selected only by buildWorkloadNetworkPolicy)
+// are limited to DNS + proxy — they cannot directly reach GitHub or the k8s
+// API server.
 //
-// Port 443 egress has no `To` restriction because the Kubernetes API server
-// is not a regular pod; its ClusterIP is not predictable at controller deploy
-// time across all cloud providers.
+// Why both 443 and 6443: NetworkPolicy port matches are evaluated against the
+// *post-DNAT* destination port. In production clusters the `kubernetes`
+// Service typically points at backends listening on 443, so a 443 rule
+// matches. In kind, the apiserver runs inside the control-plane container on
+// 6443 and the Service does port translation (10.96.0.1:443 → node:6443), so
+// the policy evaluator sees 6443 — a 443-only rule never matches, and the
+// AGC silently loses k8s API access. This is the port-axis equivalent of the
+// `ipBlock: <ClusterIP>/32` trap that bit the proxy NP in PR #59. See
+// docs/plan/5b-root-cause.md for the full diagnosis. Allowing both keeps the
+// policy precise (only apiserver-style ports) while working in both kind and
+// every production deployment topology this controller targets.
+//
+// The egress rule has no `To` restriction because the Kubernetes API server
+// is not a regular pod; its ClusterIP/node IPs are not predictable at
+// controller deploy time across all cloud providers.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
@@ -224,7 +237,10 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 					},
 				},
 				{
-					Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
+					Ports: []networkingv1.NetworkPolicyPort{
+						{Port: ptr(intstr.FromInt32(443))},
+						{Port: ptr(intstr.FromInt32(6443))},
+					},
 				},
 			},
 		},

@@ -368,6 +368,37 @@ kubectl describe networkpolicy -n <namespace>
 
 ---
 
+## AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)
+
+**Symptoms.** AGC logs show `dial tcp 10.96.0.1:443: i/o timeout` (or similar) when calling the K8s API server. The `actions-gateway-controller` NetworkPolicy *appears* to allow port 443, yet the connection is silently dropped. Most often surfaces in kind, but possible on any cluster where the `kubernetes` Service backends listen on a port other than 443.
+
+**Cause.** NetworkPolicy enforcement evaluates packets *after* kube-proxy's DNAT. When a pod connects to `kubernetes.default.svc` (ClusterIP `10.96.0.1:443`), kube-proxy DNATs the destination to the apiserver's actual Endpoints address — in kind, that's `<node-ip>:6443`. The policy controller sees the post-DNAT destination port (6443), and an NP rule that allows only port 443 doesn't match. This is the port-axis equivalent of the `ipBlock: <ClusterIP>/32` trap that bit the proxy NP in PR #59.
+
+**Diagnostics.**
+
+```sh
+# 1. Confirm the apiserver Endpoints port. If it's 6443, the AGC NP must allow 6443.
+kubectl get endpointslice -n default -l kubernetes.io/service-name=kubernetes \
+  -o jsonpath='{.items[0].ports[0].port}{"\n"}'
+
+# 2. Confirm the AGC NetworkPolicy actually allows both 443 and 6443.
+kubectl get networkpolicy -n <namespace> actions-gateway-controller -o yaml \
+  | yq '.spec.egress[].ports[].port' | sort -u
+
+# 3. If the cluster uses kindnet / kube-network-policies, check the verdict log
+#    on the node hosting the AGC pod. Look for lines like:
+#      "Pod is not allowed to connect to port" pod="<ns>/<agc-pod>" port=6443
+kubectl get pod -n <namespace> -l app=actions-gateway-controller \
+  -o jsonpath='{.items[0].spec.nodeName}{"\n"}'
+kubectl logs -n kube-system -l app=kindnet --tail=200 --field-selector spec.nodeName=<node-name>
+```
+
+**Resolution.** Ensure `buildAGCNetworkPolicy` allows both port 443 (production Service shape) *and* port 6443 (kind / Endpoints-on-6443 clusters). The shipped policy does this. If you see this on a custom build or a hand-edited NP, add the 6443 rule. The diagnosis writeup at [`docs/plan/5b-root-cause.md`](../plan/5b-root-cause.md) has a minimal repro and the reasoning behind allowing both ports.
+
+If you see the same symptom for an *ingress*-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.
+
+---
+
 ## Evicted Worker Pods Exhausting Retry Budget
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries.
