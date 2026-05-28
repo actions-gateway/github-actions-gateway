@@ -439,17 +439,34 @@ func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildAGCNetworkPolicy(ag)
 
-	found := false
+	// The AGC NP must allow egress on BOTH 443 and 6443:
+	//   - 443: production clusters where the kubernetes Service backends listen on 443.
+	//   - 6443: kind (and any cluster where the apiserver Endpoints listen on 6443) —
+	//     kube-proxy DNATs the Service ClusterIP:443 → node-ip:6443, and NetworkPolicy
+	//     enforcement evaluates the post-DNAT port. A 443-only rule silently drops
+	//     k8s API traffic in kind. See docs/plan/5b-root-cause.md.
+	saw443, saw6443 := false, false
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == 443 {
-				found = true
-				// No destination restriction — k8s API server IP is not known at deploy time.
-				assert.Empty(t, rule.To, "port-443 rule must allow egress to any destination for k8s API access")
+			if port.Port == nil {
+				continue
+			}
+			switch port.Port.IntVal {
+			case 443:
+				saw443 = true
+				assert.Empty(t, rule.To,
+					"port-443 rule must allow egress to any destination for k8s API access")
+			case 6443:
+				saw6443 = true
+				assert.Empty(t, rule.To,
+					"port-6443 rule must allow egress to any destination for k8s API access")
 			}
 		}
 	}
-	assert.True(t, found, "AGC NP must include egress rule for port 443 (Kubernetes API server)")
+	assert.True(t, saw443, "AGC NP must include egress rule for port 443 (k8s API server, production)")
+	assert.True(t, saw6443,
+		"AGC NP must include egress rule for port 6443 (k8s API server post-DNAT in kind — "+
+			"docs/plan/5b-root-cause.md)")
 }
 
 func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {

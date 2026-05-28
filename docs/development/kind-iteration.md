@@ -74,6 +74,24 @@ never matches real packets. The fix is to target the destination by pod selector
 
 Same problem in reverse: a NetworkPolicy ingress rule targeting a Service ClusterIP doesn't work either.
 
+#### The port-axis variant: kube-apiserver access in kind
+
+The same DNAT-before-NP-enforcement pattern bites the **port** of NP rules, not just the destination. When a pod connects to `kubernetes.default.svc` (ClusterIP `10.96.0.1:443`), kube-proxy DNATs to the apiserver's host endpoint — in kind, that's `<node-ip>:6443`. By the time `kube-network-policies` evaluates the packet, the destination port is **6443**, not 443. An NP rule like:
+
+```yaml
+- ports: [{port: 443}]   # apiserver in production: 443→443
+```
+
+silently drops every k8s API call in kind, even though it works in production where the Service backends listen on 443. The fix is to allow both ports explicitly:
+
+```yaml
+- ports:
+  - {port: 443}    # production: kubernetes Service backends on 443
+  - {port: 6443}   # kind: post-DNAT host port of the apiserver
+```
+
+`buildAGCNetworkPolicy` in [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) does this. The full diagnosis (and why removing the workload label is **not** a fix) is in [`docs/plan/5b-root-cause.md`](../plan/5b-root-cause.md). The pattern generalises: any NP rule that allows egress through a Service should allow both the Service port and the backend pod (or host) port, unless you can guarantee they match.
+
 ## Pointing AGC at fakegithub vs real GitHub
 
 The GMC has an `--allow-agc-extra-env=true` flag (set by the e2e suite) that forwards any `AGC_EXTRA_*` env vars from the GMC pod into the AGC Deployments it creates. The suite uses this to point AGC at fakegithub:
