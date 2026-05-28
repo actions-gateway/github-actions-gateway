@@ -20,6 +20,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -135,6 +136,19 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (context.Canc
 		HealthProbeBindAddress: "0",
 		LeaderElection:         false,
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
+		// Mirror the production AGC manager's Secret cache-isolation
+		// (cmd/agc/main.go, W4 / H-2 / decision D-3): r.List and r.Get on
+		// Secrets bypass the controller-runtime cache and go straight to the
+		// API server, so Secret.Data is never resident in the in-process
+		// informer cache. Without this, envtest is both less safe than
+		// production for the duration of the test run and exposed to
+		// cache-lag races (e.g. agentpool.EnsureAgents seeing a partial
+		// post-create Secret list) that production code cannot hit.
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: []client.Object{&corev1.Secret{}},
+			},
+		},
 	})
 	require.NoError(t, err)
 

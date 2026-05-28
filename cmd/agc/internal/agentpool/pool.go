@@ -112,91 +112,64 @@ func (p *Pool) secretName(index int) string {
 
 // EnsureAgents reconciles the pool to exactly count agents.
 // Idempotent: safe to call on every reconcile loop.
-//
-// The in-memory agent list is built from the Secrets EnsureAgents knows about
-// — those returned by the initial cached List plus any it creates in this
-// call — rather than by re-listing through the cache after Creates. The
-// controller-runtime cache used by p.client is updated asynchronously by an
-// informer watch and can lag a freshly-issued Create by several milliseconds.
-// A post-create re-list against that cache can return a partial view, which
-// previously caused TestAGC_Reconciler_JobAcquisitionCycle to flake with
-// "pool exhausted: no agent available" when the baseline listener claimed
-// the one agent the cache had observed before the second Create propagated.
 func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) error {
 	existing, err := p.listSecrets(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Map secrets by index from the initial list. This is the cache-derived
-	// view and is treated only as a starting point; any Creates below extend
-	// the map directly so subsequent state does not depend on the cache
-	// observing those writes.
-	secretsByIdx := make(map[int]*corev1.Secret, len(existing))
-	for i := range existing {
-		idx, parseErr := strconv.Atoi(existing[i].Labels[labelAgentIndex])
-		if parseErr != nil {
+	// Build index set of existing secrets.
+	existingIdx := make(map[int]bool)
+	for _, s := range existing {
+		idxStr := s.Labels[labelAgentIndex]
+		idx, err := strconv.Atoi(idxStr)
+		if err != nil {
 			continue
 		}
-		secretsByIdx[idx] = &existing[i]
+		existingIdx[idx] = true
 	}
 
 	// Create missing agents.
 	for i := int32(0); i < count; i++ {
-		if _, ok := secretsByIdx[int(i)]; ok {
+		if existingIdx[int(i)] {
 			continue
 		}
-		sec, err := p.createAgent(ctx, int(i), token)
-		if err != nil {
+		if err := p.createAgent(ctx, int(i), token); err != nil {
 			return fmt.Errorf("agentpool: create agent %d: %w", i, err)
 		}
-		secretsByIdx[int(i)] = sec
 	}
 
 	// Delete excess agents.
-	for idx, s := range secretsByIdx {
-		if int32(idx) < count {
-			continue
-		}
-		// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
-		// claimed this agent; deleting its Secret while it is in use will cause the
-		// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
-		agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
-		a := agentFromSecret(*s, agentID, idx)
-		if err := p.registrar.Deregister(ctx, token, a.AgentID); err != nil {
-			slog.Warn("failed to deregister agent; continuing",
-				"index", a.Index, "agentID", a.AgentID, "error", err)
-		}
-		if delErr := p.client.Delete(ctx, s); delErr != nil && !errors.IsNotFound(delErr) {
-			return fmt.Errorf("agentpool: delete secret %s: %w", s.Name, delErr)
-		}
-		delete(secretsByIdx, idx)
-	}
-
-	// Build the agent list directly from the in-memory secret map and publish
-	// it to the pool. Skipping the re-list step is what closes the cache-lag
-	// flake described above.
-	agents := make([]*Agent, 0, len(secretsByIdx))
-	for _, s := range secretsByIdx {
-		a, err := secretToAgent(*s)
+	for _, s := range existing {
+		idxStr := s.Labels[labelAgentIndex]
+		idx, err := strconv.Atoi(idxStr)
 		if err != nil {
 			continue
 		}
-		agents = append(agents, a)
+		if int32(idx) >= count {
+			// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
+			// claimed this agent; deleting its Secret while it is in use will cause the
+			// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
+			agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
+			a := agentFromSecret(s, agentID, idx)
+			if err := p.registrar.Deregister(ctx, token, a.AgentID); err != nil {
+				slog.Warn("failed to deregister agent; continuing", "index", a.Index, "agentID", a.AgentID, "error", err)
+			}
+			sec := s // capture
+			if delErr := p.client.Delete(ctx, &sec); delErr != nil && !errors.IsNotFound(delErr) {
+				return fmt.Errorf("agentpool: delete secret %s: %w", s.Name, delErr)
+			}
+		}
 	}
-	sort.Slice(agents, func(i, j int) bool {
-		return agents[i].Index < agents[j].Index
-	})
 
-	p.mu.Lock()
-	p.agents = agents
-	p.available = make([]*Agent, len(agents))
-	copy(p.available, agents)
-	p.mu.Unlock()
-	return nil
+	// Reload agents into memory. p.client is configured with
+	// Cache.DisableFor[*corev1.Secret] in production (cmd/agc/main.go, W4 /
+	// H-2) and matched in the envtest suite, so this List goes straight to
+	// the API server — no informer-cache lag relative to the Creates above.
+	return p.reload(ctx)
 }
 
-func (p *Pool) createAgent(ctx context.Context, index int, token string) (*corev1.Secret, error) {
+func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
 	params := RegisterParams{
 		Name:      agentName,
@@ -207,7 +180,7 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) (*corev
 	}
 	creds, err := p.registrar.Register(ctx, token, params)
 	if err != nil {
-		return nil, fmt.Errorf("register agent: %w", err)
+		return fmt.Errorf("register agent: %w", err)
 	}
 
 	privKeyPEM := creds.PrivateKeyPEM
@@ -215,11 +188,11 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) (*corev
 		// Fallback for stub/test registrars that don't generate a key pair server-side.
 		privateKey, err := generateKey(p.keyType)
 		if err != nil {
-			return nil, fmt.Errorf("generate agent key: %w", err)
+			return fmt.Errorf("generate agent key: %w", err)
 		}
 		privKeyPEM, err = marshalPrivateKey(privateKey)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -244,13 +217,7 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) (*corev
 			"encodedJITConfig": []byte(creds.EncodedJITConfig),
 		},
 	}
-	if err := p.client.Create(ctx, sec); err != nil {
-		return nil, err
-	}
-	// Return the Secret we just wrote so EnsureAgents can build the in-memory
-	// agent for this index without re-reading through the controller-runtime
-	// cache, which may not yet have observed this Create.
-	return sec, nil
+	return p.client.Create(ctx, sec)
 }
 
 // LoadAgents reads all existing agent Secrets and returns them in index order.
