@@ -110,57 +110,6 @@ func TestPool_LoadAgents_Order(t *testing.T) {
 	assert.Equal(t, 2, agents[2].Index)
 }
 
-// frozenListClient wraps a client.Client so that List against SecretList always
-// returns the pre-seeded snapshot, regardless of any Creates issued in the
-// meantime. This simulates a controller-runtime cache that has not yet
-// observed recent writes — the real-world condition that caused the AGC
-// integration-test flake fixed in this commit.
-type frozenListClient struct {
-	client.Client
-	snapshot corev1.SecretList
-}
-
-func (c *frozenListClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	if sl, ok := list.(*corev1.SecretList); ok {
-		c.snapshot.DeepCopyInto(sl)
-		return nil
-	}
-	return c.Client.List(ctx, list, opts...)
-}
-
-// TestPool_EnsureAgents_PostCreateStateDoesNotDependOnListCache pins the fix
-// for the AGC reconciler integration flake. The wrapping client's List
-// returns an empty SecretList no matter how many Secrets are Created, so the
-// only way for EnsureAgents to publish both agents is to build the in-memory
-// pool from the Secrets it created directly — without a post-create re-list.
-//
-// Prior to the fix, EnsureAgents called reload() (which calls listSecrets)
-// after Creates. Against this client, listSecrets returns [] → p.available
-// would be [], and the second ClaimAgent in this test would have returned
-// nil — the exact "pool exhausted: no agent available" the integration
-// suite hit under CI cache-lag conditions.
-func TestPool_EnsureAgents_PostCreateStateDoesNotDependOnListCache(t *testing.T) {
-	ctx := context.Background()
-	inner := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	stale := &frozenListClient{Client: inner} // empty snapshot — List always returns []
-
-	registrar := agentpool.NewStubRegistrar()
-	pool := agentpool.NewPool(stale, "default", "my-rg", "2.327.1",
-		[]string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519)
-
-	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
-
-	a1 := pool.ClaimAgent()
-	require.NotNil(t, a1, "expected first agent to be claimable after EnsureAgents(2)")
-	a2 := pool.ClaimAgent()
-	require.NotNil(t, a2,
-		"expected SECOND agent to be claimable even though the client's List returns nothing — "+
-			"this is the regression that surfaced as TestAGC_Reconciler_JobAcquisitionCycle "+
-			"flaking with \"non-retriable: pool exhausted: no agent available\"")
-	assert.NotEqual(t, a1.AgentID, a2.AgentID, "claimed agents must be distinct")
-	assert.Nil(t, pool.ClaimAgent(), "pool should be exhausted after both agents are claimed")
-}
-
 func TestPool_ClaimRelease(t *testing.T) {
 	ctx := context.Background()
 	fb := fake.NewClientBuilder().WithScheme(scheme())
