@@ -39,15 +39,27 @@ The Deployment controller will recreate it with the latest spec and pull policy.
 
 ### Distroless pods can't be `kubectl exec`'d
 
-The AGC, GMC, and proxy images are distroless — no shell, no `nc`, no `curl`. For connectivity checks from a pod that *should* be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod:
+The AGC, GMC, and proxy images are distroless — no shell, no `nc`, no `curl`. For connectivity checks from a pod that *should* be allowed by NetworkPolicy, spawn a temporary debugger with the same labels as the real pod you want to simulate. To exercise the worker → proxy path:
 
 ```bash
-kubectl run dbg --image=alpine --restart=Never --rm -i \
-  --labels='actions-gateway/component=workload,app=actions-gateway-controller' \
+kubectl run dbg-worker --image=alpine --restart=Never --rm -i \
+  --labels='actions-gateway/component=workload' \
   --command -- sh -c '
     apk add --no-cache curl bind-tools >/dev/null 2>&1
     nc -zv -w 5 actions-gateway-proxy 8080
     curl -sv --max-time 10 --proxy-insecure --proxy https://actions-gateway-proxy:8080 https://api.github.com/zen
+  '
+```
+
+To exercise the AGC path (proxy egress + k8s API egress on 443), use the AGC's `app` label only — AGC pods deliberately do NOT carry the workload label. (Background: PR #59's live dry-run saw an AGC carrying both labels lose its 443 egress; the root cause was never captured and a follow-up diagnosis task is queued. The single-label shape is a workaround. See the `labelComponent` comment in `cmd/gmc/internal/controller/builder.go`.)
+
+```bash
+kubectl run dbg-agc --image=alpine --restart=Never --rm -i \
+  --labels='app=actions-gateway-controller' \
+  --command -- sh -c '
+    apk add --no-cache curl bind-tools >/dev/null 2>&1
+    nc -zv -w 5 actions-gateway-proxy 8080
+    nc -zv -w 5 kubernetes.default.svc 443
   '
 ```
 

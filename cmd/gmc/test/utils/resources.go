@@ -116,20 +116,32 @@ spec:
 }
 
 // ApplyFakegithubEgressNetworkPolicy stamps an additive NetworkPolicy that lets
-// workload-labeled pods in `ns` reach the fakegithub Service in the e2e-infra
-// namespace on port 8080.
+// the AGC in `ns` reach the fakegithub Service in the e2e-infra namespace on
+// port 8080.
 //
-// Why this is needed: the per-tenant workload NetworkPolicy created by the GMC
+// Why this is needed: the per-tenant AGC NetworkPolicy created by the GMC
 // restricts port-8080 egress to the proxy pods only (selected by
-// `app: actions-gateway-proxy`). That is the production-correct shape — workers
-// must not reach arbitrary cluster endpoints. The e2e suite, however, points
-// the AGC at the fakegithub Service running in `e2e-infra`, which sits on
-// port 8080 and is reached directly (NO_PROXY includes `svc.cluster.local`).
-// Without this additive policy, kindnet correctly drops the AGC→fakegithub
-// connect and no broker session ever registers.
+// `app: actions-gateway-proxy`). That is the production-correct shape —
+// AGC and workers reach GitHub via the proxy, not arbitrary cluster endpoints.
+// The e2e suite, however, points the AGC at the fakegithub Service running
+// in `e2e-infra`, which sits on port 8080 and is reached directly
+// (NO_PROXY includes `svc.cluster.local`). Without this additive policy,
+// kindnet correctly drops the AGC→fakegithub connect and no broker session
+// ever registers.
 //
-// NetworkPolicies are additive: this policy adds an allowed egress path
-// without weakening the workload NP's deny-by-default for everything else.
+// The selector targets the AGC pod by `app: actions-gateway-controller` rather
+// than `actions-gateway/component: workload`, because the AGC no longer carries
+// the workload label (see the comment on labelComponent in builder.go for the
+// PR #59 background).
+//
+// Caveat: applying this NP and the GMC-managed AGC NP to the same pod is
+// exactly the two-NP-per-pod shape that the production AGC deliberately
+// avoids. Tolerated here because (a) this is an e2e concern only, never
+// reaches production, and (b) the production behaviour of AGC→fakegithub is
+// not what we are testing. If e2e starts seeing the AGC lose its k8s API
+// (443) or proxy (8080) egress after this NP is applied, the fix is to merge
+// the rule below into the AGC NP itself via a controller flag rather than as
+// a sidecar NP.
 func ApplyFakegithubEgressNetworkPolicy(ns string) {
 	manifest := fmt.Sprintf(`apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -139,7 +151,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      actions-gateway/component: workload
+      app: actions-gateway-controller
   policyTypes: [Egress]
   egress:
   - to:

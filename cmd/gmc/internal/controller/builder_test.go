@@ -245,18 +245,30 @@ func TestBuildProxyNetworkPolicy_ManagedFalse(t *testing.T) {
 	}
 }
 
-func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
+func TestBuildProxyNetworkPolicy_IngressFromWorkloadAndAGC(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildProxyNetworkPolicy(ag, nil)
 
 	require.Len(t, np.Spec.Ingress, 1)
 	rule := np.Spec.Ingress[0]
-	require.Len(t, rule.From, 1)
-	peer := rule.From[0]
-	require.NotNil(t, peer.PodSelector)
-	assert.Equal(t, componentWorkload, peer.PodSelector.MatchLabels[labelComponent],
-		"proxy ingress must only allow workload-labeled pods")
-	assert.Nil(t, peer.IPBlock, "IPBlock must be nil — ingress must not allow arbitrary IPs")
+	// AGC does not carry the workload label (see labelComponent comment in builder.go),
+	// so the proxy ingress NP must list AGC as its own peer alongside workload pods.
+	require.Len(t, rule.From, 2, "proxy ingress must have two peers: workload pods and AGC")
+
+	workloadPeer, agcPeer := false, false
+	for _, peer := range rule.From {
+		require.NotNil(t, peer.PodSelector)
+		assert.Nil(t, peer.IPBlock, "IPBlock must be nil — ingress must not allow arbitrary IPs")
+		if peer.PodSelector.MatchLabels[labelComponent] == componentWorkload {
+			workloadPeer = true
+		}
+		if peer.PodSelector.MatchLabels["app"] == agcAppName {
+			agcPeer = true
+		}
+	}
+	assert.True(t, workloadPeer, "proxy ingress must allow workload-labeled pods (workers)")
+	assert.True(t, agcPeer, "proxy ingress must allow AGC pods (app: actions-gateway-controller)")
+
 	// Must restrict to proxyPort only.
 	require.Len(t, rule.Ports, 1)
 	assert.Equal(t, proxyPort, rule.Ports[0].Port.IntVal)
@@ -464,6 +476,56 @@ func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {
 	_, hasComponentLabel := np.Spec.PodSelector.MatchLabels[labelComponent]
 	assert.False(t, hasComponentLabel,
 		"AGC NP pod selector must not include the workload label — it would broaden scope to workers")
+}
+
+// TestBuildAGCNetworkPolicy_ProxyEgressAllowed pins the regression for Queue
+// item 5b. AGC pods are no longer selected by the workload NP, so they must
+// receive proxy egress directly from this NP. The peer must be a PodSelector
+// — not an ipBlock — because kube-proxy DNATs ClusterIP → PodIP before NP
+// enforcement.
+func TestBuildAGCNetworkPolicy_ProxyEgressAllowed(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildAGCNetworkPolicy(ag)
+
+	found := false
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == proxyPort {
+				for _, peer := range rule.To {
+					assert.Nil(t, peer.IPBlock,
+						"AGC NP proxy egress must not target the proxy via ipBlock — DNAT defeats it")
+					if peer.PodSelector != nil &&
+						peer.PodSelector.MatchLabels["app"] == proxyAppName {
+						found = true
+					}
+				}
+			}
+		}
+	}
+	assert.True(t, found,
+		"AGC NP must include an egress rule on port 8080 selecting proxy pods by label "+
+			"(AGC no longer inherits this from the workload NP)")
+}
+
+// TestBuildAGCDeployment_NoWorkloadLabel pins the regression for Queue item 5b.
+// During PR #59's live kind dry-run, the AGC pod (then carrying both
+// `app: actions-gateway-controller` and `actions-gateway/component: workload`)
+// lost its 443 egress to the kube-apiserver. Removing the workload label from
+// the AGC restored access. The root cause was never captured (a follow-up
+// diagnosis task is queued), so this test pins the workaround: each pod is
+// governed by exactly one NP — AGC by npAGCName, workers by npWorkloadName.
+func TestBuildAGCDeployment_NoWorkloadLabel(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)
+
+	labels := dep.Spec.Template.Labels
+	require.NotNil(t, labels, "AGC pod template must have labels")
+	assert.Equal(t, agcAppName, labels["app"], "AGC pod template must carry the app label")
+
+	_, hasWorkloadLabel := labels[labelComponent]
+	assert.False(t, hasWorkloadLabel,
+		"AGC pod template must NOT carry %s — see Queue item 5b: keeping AGC under "+
+			"a single NP avoids whatever broke 443 egress during PR #59's live dry-run", labelComponent)
 }
 
 // §4 — buildProxyServiceAddr format

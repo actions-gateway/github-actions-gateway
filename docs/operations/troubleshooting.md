@@ -329,9 +329,10 @@ Each `renewjob` error is a warning, not an immediate job failure — GitHub gran
 **Likely causes.**
 - The proxy pod is not running or not ready.
 - `HTTP_PROXY`/`HTTPS_PROXY` environment variables are incorrect (wrong Service name or port).
-- `actions-gateway-workload` NetworkPolicy is blocking the AGC-to-proxy egress path (e.g. proxy ClusterIP changed after a recreate and the rule wasn't reconciled).
+- `actions-gateway-controller` NetworkPolicy is missing or has stale rules — the AGC's proxy egress (port 8080) and Kubernetes API egress (port 443) both live in this single policy.
+- `actions-gateway-workload` NetworkPolicy is blocking worker-to-proxy egress.
 - `actions-gateway-proxy` NetworkPolicy is blocking the proxy's egress to GitHub (IP ranges stale or `managedNetworkPolicy: false` with no replacement rule).
-- `actions-gateway-controller` NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.
+- A custom NetworkPolicy in the tenant namespace also selects the AGC or worker pod. The GMC-generated policies are designed so each pod is governed by exactly one of the workload/AGC policies. During PR #59's live-cluster kind dry-run, an AGC pod carrying both selectors lost its 443 egress; root cause was never captured (the K8s NP spec defines multi-NP semantics as additive, so a CNI bug is not the most likely explanation, but the symptom was real). If you add custom NPs that select these pods, watch for similar drops.
 
 **Diagnostics.**
 

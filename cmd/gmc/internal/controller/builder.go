@@ -41,14 +41,27 @@ const (
 
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = gmcnames.ProxyName
-	// npAGCName is the NetworkPolicy that gives AGC pods Kubernetes API server access (port 443).
-	// Combined with npWorkloadName (additive), AGC pods can reach: DNS + proxy + k8s API.
+	// npAGCName is the NetworkPolicy that governs AGC pod egress: DNS, proxy (8080),
+	// and the Kubernetes API server (443). AGC pods are NOT selected by npWorkloadName
+	// — see labelComponent below for the reason.
 	npAGCName = agcnames.ControllerName
-	// npWorkloadName is the NetworkPolicy that restricts AGC and worker pod egress to the proxy only.
+	// npWorkloadName is the NetworkPolicy that restricts worker pod egress to the proxy only.
 	npWorkloadName = gmcnames.WorkloadNetworkPolicyName
 
-	// labelComponent / componentWorkload identify AGC and worker pods as "workload" for
-	// NetworkPolicy podSelector matching.
+	// labelComponent / componentWorkload identify worker pods as "workload" for
+	// NetworkPolicy podSelector matching. AGC pods deliberately do NOT carry this
+	// label: each pod is kept under exactly one of the workload/AGC NPs.
+	//
+	// Background: during PR #59's live-cluster kind dry-run, the AGC pod (then
+	// labelled both `app: actions-gateway-controller` and the workload component
+	// label) lost its 443 egress to the kube-apiserver. Removing the workload
+	// label from the AGC restored access. The exact root cause was never
+	// captured — the K8s NetworkPolicy spec defines multi-NP semantics as
+	// additive, and kindnet's kube-network-policies implementation appears to
+	// honour that, so a kindnet bug is not the most likely explanation. A
+	// follow-up task is queued to diagnose the underlying cause properly; this
+	// single-NP shape is the workaround that sidesteps whatever was actually
+	// breaking, and is also simpler than the previous two-NPs-on-AGC layout.
 	labelComponent    = "actions-gateway/component"
 	componentWorkload = "workload"
 
@@ -137,13 +150,22 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 		})
 	}
 
-	// Ingress: only workload pods (AGC and workers) may connect to the proxy on proxyPort.
+	// Ingress: workers (selected by the workload label) and the AGC (selected by its app label)
+	// may both connect to the proxy on proxyPort. AGC deliberately does not carry the workload
+	// label (see labelComponent comment), so it needs its own ingress peer here.
 	ingress := []networkingv1.NetworkPolicyIngressRule{{
-		From: []networkingv1.NetworkPolicyPeer{{
-			PodSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{labelComponent: componentWorkload},
+		From: []networkingv1.NetworkPolicyPeer{
+			{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{labelComponent: componentWorkload},
+				},
 			},
-		}},
+			{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": agcAppName},
+				},
+			},
+		},
 		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
 	}}
 
@@ -196,13 +218,19 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 	}
 }
 
-// buildAGCNetworkPolicy constructs the NetworkPolicy for AGC pods only.
-// It allows egress on port 443 (Kubernetes API server) in addition to the DNS
-// and proxy egress that the workload NetworkPolicy already grants. Because
-// NetworkPolicies are additive, AGC pods (selected by both this policy and
-// buildWorkloadNetworkPolicy) end up with: DNS + proxy + k8s API egress.
+// buildAGCNetworkPolicy constructs the NetworkPolicy for AGC pods only. It is the
+// single NetworkPolicy that governs AGC egress: DNS (53), proxy (8080), and the
+// Kubernetes API server (443). AGC pods do NOT carry the workload component
+// label, so buildWorkloadNetworkPolicy does not apply to them — see the
+// labelComponent comment for why each pod is kept under a single NP.
+//
 // Worker pods (selected only by buildWorkloadNetworkPolicy) are limited to
-// DNS + proxy — they cannot directly reach GitHub or the k8s API server.
+// DNS + proxy — they cannot reach the k8s API server.
+//
+// The port-8080 rule targets the proxy by PodSelector for the same reason as
+// buildWorkloadNetworkPolicy: kube-proxy DNATs ClusterIP → PodIP before
+// NetworkPolicy enforcement, so an ipBlock rule on the Service ClusterIP never
+// matches actual packets.
 //
 // Port 443 egress has no `To` restriction because the Kubernetes API server
 // is not a regular pod; its ClusterIP is not predictable at controller deploy
@@ -222,6 +250,12 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 						{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
 						{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
 					},
+				},
+				{
+					Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+					To: []networkingv1.NetworkPolicyPeer{{
+						PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
+					}},
 				},
 				{
 					Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
@@ -452,7 +486,10 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
+					// AGC deliberately does NOT carry labelComponent: componentWorkload.
+				// Worker pods do, and the workload NP applies to them; AGC is governed
+				// solely by npAGCName. See labelComponent comment for the rationale.
+				Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue},
 					// Record the referenced Secret name so that kubectl rollout history
 					// shows the cause of any credential-rotation rolling update.
 					Annotations: map[string]string{

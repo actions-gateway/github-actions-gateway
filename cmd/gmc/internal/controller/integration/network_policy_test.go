@@ -11,7 +11,9 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,12 +59,12 @@ func TestGMC_NetworkPolicy_ProxyEgressContainsGitHubCIDRs(t *testing.T) {
 		"expected egress rule for 140.82.112.0/20 on port 443")
 }
 
-func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
-	const nsName = "team-np-agc-egress"
+func TestGMC_NetworkPolicy_WorkerEgressToProxy(t *testing.T) {
+	const nsName = "team-np-worker-egress"
 	createNamespace(t, nsName)
 	createGitHubAppSecret(t, nsName, "github-app")
 
-	ag := newActionsGateway("agc-egress-gateway", nsName, "github-app")
+	ag := newActionsGateway("worker-egress-gateway", nsName, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -74,6 +76,11 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 	// the proxy pods by label. The egress rule must NOT use an ipBlock on the proxy
 	// Service ClusterIP — kube-proxy DNATs ClusterIP→PodIP before NetworkPolicy
 	// enforcement, so an ipBlock rule on a ClusterIP silently never matches.
+	//
+	// The workload NP governs worker pods only — AGC is governed solely by its own
+	// NP (see TestGMC_NetworkPolicy_AGCEgressToProxy). Background on keeping each
+	// pod under a single NP is in cmd/gmc/internal/controller/builder.go on the
+	// labelComponent constant.
 	g.Eventually(func() bool {
 		var np networkingv1.NetworkPolicy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workloadName}, &np); err != nil {
@@ -82,6 +89,33 @@ func TestGMC_NetworkPolicy_AGCWorkerEgressToProxy(t *testing.T) {
 		return workloadNPHasProxyRule(np)
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"egress rule on port 8080 must select proxy pods by label (PodSelector app=actions-gateway-proxy)")
+}
+
+// TestGMC_NetworkPolicy_AGCEgressToProxy pins the regression for Queue item 5b.
+// AGC no longer carries the workload label, so the workload NP does not apply
+// to it. The AGC NP must therefore include the port-8080 egress rule to the
+// proxy that AGC previously inherited from the workload NP.
+func TestGMC_NetworkPolicy_AGCEgressToProxy(t *testing.T) {
+	const nsName = "team-np-agc-proxy-egress"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("agc-proxy-egress-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &np); err != nil {
+			return false
+		}
+		return workloadNPHasProxyRule(np)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"AGC NP must have a port-8080 egress rule selecting proxy pods by label")
 }
 
 func TestGMC_NetworkPolicy_IPRangeReconciler_UpdatesExistingPolicy(t *testing.T) {
@@ -292,4 +326,77 @@ func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestGMC_NetworkPolicy_ProxyIngressIncludesAGCPeer pins the regression for
+// Queue item 5b. Because AGC no longer carries the workload label, the proxy's
+// ingress NP must list AGC as a separate peer or AGC cannot reach the proxy.
+func TestGMC_NetworkPolicy_ProxyIngressIncludesAGCPeer(t *testing.T) {
+	const nsName = "team-np-proxy-ingress-agc"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("proxy-ingress-agc-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	g.Eventually(func() bool {
+		var np networkingv1.NetworkPolicy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &np); err != nil {
+			return false
+		}
+		workloadPeer, agcPeer := false, false
+		for _, rule := range np.Spec.Ingress {
+			for _, peer := range rule.From {
+				if peer.PodSelector == nil {
+					continue
+				}
+				if peer.PodSelector.MatchLabels["actions-gateway/component"] == "workload" {
+					workloadPeer = true
+				}
+				if peer.PodSelector.MatchLabels["app"] == agcName {
+					agcPeer = true
+				}
+			}
+		}
+		return workloadPeer && agcPeer
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"proxy ingress NP must list both the workload-component peer (workers) and the AGC app-label peer")
+}
+
+// TestGMC_AGCDeployment_PodTemplateOmitsWorkloadLabel pins the regression for
+// Queue item 5b. The AGC pod must carry the app label only — not also
+// `actions-gateway/component: workload` — so it stays governed by a single NP.
+// See cmd/gmc/internal/controller/builder.go labelComponent comment for the
+// PR #59 background and pending diagnosis task.
+func TestGMC_AGCDeployment_PodTemplateOmitsWorkloadLabel(t *testing.T) {
+	const nsName = "team-agc-no-workload-label"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("agc-no-workload-label-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	var dep appsv1.Deployment
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed(),
+		"AGC Deployment must be reconciled")
+
+	labels := dep.Spec.Template.Labels
+	assert.Equal(t, agcName, labels["app"], "AGC pod template must keep the app label")
+	_, hasWorkloadLabel := labels["actions-gateway/component"]
+	assert.False(t, hasWorkloadLabel,
+		"AGC pod template must NOT carry actions-gateway/component — keeps AGC under "+
+			"a single NP, avoiding whatever broke 443 egress during PR #59's live dry-run "+
+			"(see builder.go labelComponent comment)")
 }

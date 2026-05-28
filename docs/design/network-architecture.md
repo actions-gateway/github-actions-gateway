@@ -58,11 +58,13 @@ GitHub publishes its current IP ranges at `https://api.github.com/meta` under th
 
 ## NetworkPolicy Rules
 
-The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace. The split (over a single combined policy) closes M-12 — worker pods inherit egress to the proxy and DNS only, not the Kubernetes API server. Only the AGC Deployment has API-server egress.
+The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace. The split (over a single combined policy) closes M-12 — worker pods are restricted to proxy + DNS egress, not the Kubernetes API server. Only the AGC Deployment has API-server egress.
 
-### Policy 1: `actions-gateway-workload` — AGC and worker pods → proxy + DNS
+Each pod is governed by **exactly one** of the workload or AGC policies — not both. The AGC carries `app: actions-gateway-controller` and is governed by Policy 2 only; worker pods carry `actions-gateway/component: workload` and are governed by Policy 1 only. Background: during PR #59's live-cluster kind dry-run, an AGC pod (then labelled with both selectors) lost its 443 egress to the kube-apiserver; removing the workload label restored access. The Kubernetes NetworkPolicy spec defines multi-NP semantics as additive and kindnet's NP implementation (kube-network-policies) appears to honour that, so the root cause is probably elsewhere — a diagnosis task is queued. In the meantime, the single-NP shape sidesteps whatever was actually breaking and is also simpler than the two-NP layout.
 
-Selects all "workload" pods (AGC and worker) by the `actions-gateway/component: workload` label. Allows egress to the proxy ClusterIP (port 8080) and DNS only. Denies all ingress.
+### Policy 1: `actions-gateway-workload` — Worker pods → proxy + DNS
+
+Selects worker pods by the `actions-gateway/component: workload` label. Allows egress to the proxy pods (port 8080) and DNS only. AGC pods do not carry this label.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -75,9 +77,7 @@ spec:
     matchLabels:
       actions-gateway/component: workload
   policyTypes:
-    - Ingress
     - Egress
-  ingress: []  # no ingress permitted
   egress:
     # DNS — needed for resolving the proxy Service name
     - ports:
@@ -85,19 +85,21 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Proxy ClusterIP — selected by stable IP (not pod label) so the rule survives
-    # proxy pod churn from rolling updates and HPA scaling.
+    # Proxy — selected by pod label, NOT by Service ClusterIP. kube-proxy DNATs
+    # ClusterIP → PodIP before NetworkPolicy enforcement, so an ipBlock rule on
+    # the Service IP would silently never match.
     - to:
-        - ipBlock:
-            cidr: <proxy-cluster-ip>/32
+        - podSelector:
+            matchLabels:
+              app: actions-gateway-proxy
       ports:
         - port: 8080
           protocol: TCP
 ```
 
-### Policy 2: `actions-gateway-controller` — AGC → Kubernetes API server
+### Policy 2: `actions-gateway-controller` — AGC → proxy + DNS + Kubernetes API server
 
-Selects the AGC Deployment pods by `app: actions-gateway-controller`. Adds (additively) egress to the Kubernetes API server on port 443. Worker pods do not match this selector and so have no API-server egress.
+Selects the AGC Deployment pods by `app: actions-gateway-controller`. Allows DNS, proxy egress (port 8080), and Kubernetes API server egress (port 443). The AGC NP intentionally includes the proxy + DNS rules that workers get from Policy 1 — AGC is not selected by Policy 1, so it must get everything it needs from this single policy.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -118,6 +120,14 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Proxy — same PodSelector form as Policy 1, for the same kube-proxy DNAT reason.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: actions-gateway-proxy
+      ports:
+        - port: 8080
+          protocol: TCP
     # Kubernetes API server — port 443 to any destination. The exact CIDR
     # depends on the cluster's apiserver placement (control-plane node IPs
     # or kubernetes Service ClusterIP); the policy allows port 443 broadly
@@ -129,7 +139,7 @@ spec:
 
 ### Policy 3: `actions-gateway-proxy` — Proxy pods → GitHub
 
-Selects proxy pods by `app: actions-gateway-proxy`. Allows ingress only from "workload" pods on port 8080, and egress only to GitHub IP ranges (port 443) and DNS.
+Selects proxy pods by `app: actions-gateway-proxy`. Allows ingress from worker pods and from the AGC on port 8080, and egress only to GitHub IP ranges (port 443) and DNS. Because workers and the AGC carry different labels (see above), the ingress rule lists both peers explicitly.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -145,11 +155,14 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Only workload pods (AGC and workers) may CONNECT to the proxy
+    # Workers and the AGC may CONNECT to the proxy.
     - from:
         - podSelector:
             matchLabels:
               actions-gateway/component: workload
+        - podSelector:
+            matchLabels:
+              app: actions-gateway-controller
       ports:
         - port: 8080
           protocol: TCP
