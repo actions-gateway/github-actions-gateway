@@ -171,7 +171,7 @@ _SUITE_FILTER = $(if $(filter single-node,$(SUITE)),!multi-node,$(if $(filter mu
 
 _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) \
-	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 60s
+	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 30s
 
 .PHONY: e2e
 e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
