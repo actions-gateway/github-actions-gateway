@@ -283,6 +283,49 @@ func TestHTTPFetcher_EmptyActions(t *testing.T) {
 	assert.Empty(t, cidrs)
 }
 
+// TestHTTPFetcher_MergesAllRanges is a regression test for PR #59
+// (`fix(gmc): expand proxy egress to api + actions + web GitHub ranges`).
+// Before that fix the fetcher merged only the `actions` field, silently
+// blocking AGC traffic to api.github.com (token exchange, runner
+// registration) and codeload/objects.githubusercontent.com (checkout,
+// cache). The fixture mirrors the real /meta shape — each of api,
+// actions, and web populated with a distinct CIDR — so the assertion
+// proves every family was merged into the returned slice.
+func TestHTTPFetcher_MergesAllRanges(t *testing.T) {
+	const (
+		apiCIDR     = "192.30.252.0/22"     // representative api.github.com range
+		actionsCIDR = "4.175.114.0/23"      // representative *.actions.githubusercontent.com range
+		webCIDR     = "185.199.108.0/22"    // representative codeload/objects range
+		noiseCIDR   = "20.201.28.0/22"      // unrelated field — must NOT appear
+	)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{
+			"verifiable_password_authentication": false,
+			"ssh_key_fingerprints": {},
+			"api":      [%q],
+			"web":      [%q],
+			"actions":  [%q],
+			"git":      [%q],
+			"packages": [%q]
+		}`, apiCIDR, webCIDR, actionsCIDR, noiseCIDR, noiseCIDR)
+	}))
+	defer ts.Close()
+
+	f := &HTTPGitHubIPRangeFetcher{APIURL: ts.URL}
+	cidrs, err := f.FetchIPRanges(context.Background())
+	require.NoError(t, err)
+
+	got := make(map[string]struct{}, len(cidrs))
+	for _, c := range cidrs {
+		got[c.String()] = struct{}{}
+	}
+	assert.Contains(t, got, apiCIDR, "api range must be merged (AGC → api.github.com)")
+	assert.Contains(t, got, actionsCIDR, "actions range must be merged (broker, job logs)")
+	assert.Contains(t, got, webCIDR, "web range must be merged (codeload/objects for checkout, cache)")
+	assert.NotContains(t, got, noiseCIDR, "unrelated /meta fields (git, packages) must not be merged")
+}
+
 // §7 — IPRangeReconciler.Start ticker loop
 
 // countingFetcher records how many times FetchIPRanges has been called.
