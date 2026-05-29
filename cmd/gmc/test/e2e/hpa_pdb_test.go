@@ -90,28 +90,47 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			By("waiting for proxy deployment to stabilize before eviction")
 			utils.WaitForDeploymentReady(tenantNS, proxyName, 2*time.Minute)
 
-			By("getting proxy pod name")
-			podName := getPodName(tenantNS, "app=actions-gateway-proxy")
-			Expect(podName).NotTo(BeEmpty())
+			// The preceding Ordered/Serial test (HPADrivesScaleUp) patches HPA
+			// minReplicas back to 1 in its DeferCleanup, which triggers an
+			// HPA-driven scale-down from 2 → 1 that runs asynchronously. Between
+			// reading a pod name and issuing the eviction the pod we sampled
+			// may be terminated by the ReplicaSet controller — surfacing as
+			// "Error from server (NotFound)" instead of the PDB's 429
+			// TooManyRequests. WaitForDeploymentReady above is not sufficient
+			// to close the race (it only checks readyReplicas != 0 and does
+			// not block on terminating pods, see commit a86b262). Retry the
+			// {fetch pod name, attempt eviction} pair until we land on either
+			// the PDB rejection or a successful eviction.
+			By("evicting a proxy pod and asserting PDB outcome (retries on transient NotFound)")
+			var evictionSucceeded bool
+			Eventually(func(g Gomega) {
+				podName := getPodName(tenantNS, "app=actions-gateway-proxy")
+				g.Expect(podName).NotTo(BeEmpty(), "no proxy pod found yet")
 
-			By("attempting to evict the proxy pod via the eviction API")
-			evictJSON := fmt.Sprintf(`{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"%s"}}`,
-				podName, tenantNS)
-			cmd := exec.Command("kubectl", "create", "--raw",
-				fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/eviction", tenantNS, podName),
-				"-f", "-",
-			)
-			cmd.Stdin = strings.NewReader(evictJSON)
-			out, err := utils.Run(cmd)
-			// Expect a 429 (TooManyRequests) response from the PDB.
-			// kubectl prints "TooManyRequests" rather than the numeric 429 code.
-			if err != nil {
-				Expect(out).To(ContainSubstring("TooManyRequests"),
-					"expected PDB to reject eviction with 429 TooManyRequests, got: %s", out)
-			} else {
-				// If no error, the eviction may have succeeded — only acceptable
-				// if minAvailable was already satisfied (replica count > 1).
-				By("eviction succeeded — verify pod recovered")
+				evictJSON := fmt.Sprintf(`{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"%s"}}`,
+					podName, tenantNS)
+				cmd := exec.Command("kubectl", "create", "--raw",
+					fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/eviction", tenantNS, podName),
+					"-f", "-",
+				)
+				cmd.Stdin = strings.NewReader(evictJSON)
+				out, err := utils.Run(cmd)
+				if err == nil {
+					// Eviction succeeded — acceptable when an extra replica
+					// still satisfied minAvailable=1. Recovery is verified
+					// after the Eventually loop exits.
+					evictionSucceeded = true
+					return
+				}
+				// Anything other than TooManyRequests is treated as transient
+				// (NotFound from a Terminating pod, occasional 5xx, etc.) and
+				// retried until the deployment settles.
+				g.Expect(out).To(ContainSubstring("TooManyRequests"),
+					"expected PDB to reject eviction with 429 TooManyRequests, got transient error: %s", out)
+			}, 2*time.Minute, 1*time.Second).Should(Succeed())
+
+			if evictionSucceeded {
+				By("eviction succeeded — verify deployment recovered")
 				utils.WaitForDeploymentReady(tenantNS, proxyName, 3*time.Minute)
 			}
 		})
