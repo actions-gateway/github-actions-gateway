@@ -3,11 +3,20 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -262,6 +271,100 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("ListenAndServe did not return within 2s after context cancellation")
 	}
+}
+
+// writeTestTLSCert generates a self-signed RSA cert for 127.0.0.1 and writes
+// cert.pem/key.pem under t.TempDir(), returning their paths.
+func writeTestTLSCert(t *testing.T) (certPath, keyPath string) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "127.0.0.1"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+		NotBefore:             time.Now().Add(-time.Minute),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, "cert.pem")
+	keyPath = filepath.Join(dir, "key.pem")
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0o600))
+
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600))
+
+	return certPath, keyPath
+}
+
+// TestProxy_TLS_RejectsHTTP2_ALPN guards against the regression fixed in PR #59
+// (`fix(proxy): disable HTTP/2 on the TLS CONNECT listener`). A client offering
+// both h2 and http/1.1 via ALPN must be downgraded to http/1.1, and a CONNECT
+// over that handshake must succeed with `HTTP/1.1 200 Connection established`.
+func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	certPath, keyPath := writeTestTLSCert(t)
+
+	reg := prometheus.NewRegistry()
+	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv.TLSCertFile = certPath
+	srv.TLSKeyFile = keyPath
+
+	ctx, cancel := context.WithCancel(context.Background())
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- srv.ListenAndServe(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-serverDone
+	})
+
+	// Wait for the TLS listener to be ready.
+	require.Eventually(t, func() bool {
+		c, err := tls.Dial("tcp", srv.Addr, &tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			return false
+		}
+		c.Close()
+		return true
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Client advertises h2 first, then http/1.1. A correctly configured server
+	// must select http/1.1.
+	tlsConn, err := tls.Dial("tcp", srv.Addr, &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2", "http/1.1"},
+	})
+	require.NoError(t, err)
+	defer tlsConn.Close()
+
+	assert.Equal(t, "http/1.1", tlsConn.ConnectionState().NegotiatedProtocol,
+		"server must negotiate http/1.1 even when client offers h2 first — HTTP/2 must be disabled on the CONNECT listener")
+
+	// CONNECT over the TLS tunnel must return the canonical HTTP/1.1 status line.
+	_, err = fmt.Fprintf(tlsConn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	require.NoError(t, err)
+
+	br := bufio.NewReader(tlsConn)
+	statusLine, err := br.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 200 Connection established\r\n", statusLine)
 }
 
 func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
