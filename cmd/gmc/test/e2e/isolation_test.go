@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"time"
 
@@ -62,11 +63,15 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		Expect(utils.ResourceExists("networkpolicy", nsB, agcName)).To(BeTrue())
 	})
 
-	It("E2E_GMC_CrossTenantNetworkBlocked: proxy in nsA cannot reach proxy in nsB", func() {
-		By("getting proxy pod in nsA")
-		podName := getPodName(nsA, "app=actions-gateway-proxy")
-		Expect(podName).NotTo(BeEmpty())
-
+	It("E2E_GMC_CrossTenantNetworkBlocked: pod in nsA cannot reach proxy in nsB", func() {
+		// Earlier revisions of this spec did `kubectl exec <proxy-pod-in-nsA> -- sh -c ...`,
+		// but the proxy image is distroless (no `sh`), so the exec always failed with an
+		// OCI error like `failed to start exec "<random-hex>": ... "sh": executable file
+		// not found`. The only assertion was `NotTo(ContainSubstring("200"))` on that
+		// error string, so the spec passed iff the random exec-session hex didn't happen
+		// to contain "200" (~1.4% per run flake rate). It never actually probed the
+		// NetworkPolicy. Drive a one-shot curl pod instead so the exit code reflects the
+		// real network outcome.
 		By("getting proxy service ClusterIP in nsB")
 		cmd := exec.Command("kubectl", "get", "service", proxyName,
 			"-n", nsB, "-o", "jsonpath={.spec.clusterIP}")
@@ -74,21 +79,73 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clusterIP).NotTo(BeEmpty())
 
-		By("attempting connection from nsA pod to nsB proxy — should fail due to NetworkPolicy")
-		// Use a timeout of 3s so the test doesn't hang. The connection should be
-		// blocked by NetworkPolicy and time out quickly.
-		cmd = exec.Command("kubectl", "exec", podName, "-n", nsA,
-			"--", "sh", "-c",
-			"wget -q -T 3 -O - http://"+clusterIP+":8080/healthz 2>&1; true",
-		)
-		out, _ := utils.Run(cmd)
-		// We expect a timeout/connection refused, not a successful HTTP response.
-		Expect(out).NotTo(ContainSubstring("200"),
-			"cross-tenant connection should be blocked")
+		const curlPodName = "cross-tenant-probe"
+
+		By("deploying a one-shot curl pod in nsA that targets the nsB proxy service")
+		// Unlabeled (no actions-gateway/* label) so it is not selected by any source-side
+		// NetworkPolicy in nsA — the only thing that can block the connection is nsB's
+		// proxy-ingress NP, which is what this spec is meant to verify.
+		manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  restartPolicy: Never
+  containers:
+  - name: curl
+    image: curlimages/curl:8.10.1
+    imagePullPolicy: IfNotPresent
+    command: ["curl"]
+    args:
+    - "--silent"
+    - "--show-error"
+    - "--max-time"
+    - "5"
+    - "--connect-timeout"
+    - "5"
+    - "--output"
+    - "/dev/null"
+    - "--write-out"
+    - "HTTP_CODE=%%{http_code}\n"
+    - "http://%s:8080/healthz"
+`, curlPodName, nsA, clusterIP)
+
+		Expect(utils.ApplyManifest(manifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
+				"-n", nsA, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the curl pod to terminate")
+		var finalPhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", curlPodName,
+				"-n", nsA, "-o", "jsonpath={.status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"curl pod still in phase %q", out)
+			finalPhase = out
+		}, 90*time.Second, 2*time.Second).Should(Succeed())
+
+		// Always dump logs so the CI artifact shows the real outcome.
+		logsCmd := exec.Command("kubectl", "logs", curlPodName, "-n", nsA)
+		logs, _ := utils.Run(logsCmd)
+
+		// NetworkPolicy drops produce a connect timeout (curl exits 28); a missing
+		// route or DNS failure produces a different non-zero code. Either way, the
+		// curl process must NOT exit 0 (Succeeded) and must NOT print HTTP_CODE=200.
+		Expect(finalPhase).To(Equal("Failed"),
+			"cross-tenant connection should be blocked by NetworkPolicy; got phase=%s logs:\n%s", finalPhase, logs)
+		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=200"),
+			"cross-tenant connection should be blocked; logs:\n%s", logs)
 	})
 })
 
 // getPodName returns the name of the first running pod matching the label selector.
+// Used by hpa_pdb_test.go and resilience_test.go.
 func getPodName(ns, selector string) string {
 	cmd := exec.Command("kubectl", "get", "pods",
 		"-n", ns,
