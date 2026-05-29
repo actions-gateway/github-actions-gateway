@@ -5,8 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -216,4 +219,60 @@ func TestMaterializeJITConfig_IgnoresUnknownEntries(t *testing.T) {
 		".credentials":           true,
 		".credentials_rsaparams": true,
 	}, got)
+}
+
+// TestWrapper_InvokesRunnerWorker_WithSpawnclientArgs end-to-end exercises run()
+// against a stub Runner.Worker binary and asserts the subprocess receives exactly
+// the three positional arguments documented by the .NET runner
+// (src/Runner.Worker/Program.cs): "spawnclient", the inherited read FD (3), and
+// the inherited write FD (4). Guards against the regression fixed in PR #59,
+// where the wrapper passed "--startuptype workerprocess" instead.
+func TestWrapper_InvokesRunnerWorker_WithSpawnclientArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
+	}
+
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	stubDir := t.TempDir()
+	argsFile := filepath.Join(t.TempDir(), "args.txt")
+
+	// A minimal payload is enough — the wrapper writes it to the worker-input
+	// pipe via a goroutine, and the kernel pipe buffer absorbs it even though
+	// the stub never reads fd 3.
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, payloadFile), []byte(`{}`), 0o600))
+
+	// Stub Runner.Worker: dump argc + argv to argsFile and exit 0. exit 0 is
+	// required because run() calls os.Exit on any non-zero ExitError, which
+	// would terminate the test process.
+	stubPath := filepath.Join(stubDir, workerBin)
+	script := fmt.Sprintf(`#!/bin/sh
+{
+  printf '%%s\n' "$#"
+  for a in "$@"; do
+    printf '%%s\n' "$a"
+  done
+} > %q
+exit 0
+`, argsFile)
+	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755))
+
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
+	t.Setenv("RUNNER_HOME_DIR", runnerHome)
+
+	require.NoError(t, run())
+
+	data, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	got := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	want := []string{
+		"3",
+		"spawnclient",
+		fmt.Sprintf("%d", workerReadFD),
+		fmt.Sprintf("%d", workerWriteFD),
+	}
+	require.Equal(t, want, got,
+		"Runner.Worker must be invoked with exactly [spawnclient, %d, %d]",
+		workerReadFD, workerWriteFD)
 }
