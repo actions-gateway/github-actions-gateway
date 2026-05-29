@@ -3,9 +3,9 @@ module github.com/actions-gateway/github-actions-gateway/agc
 go 1.26.0
 
 require (
-	github.com/go-logr/logr v1.4.3
 	github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
 	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
+	github.com/go-logr/logr v1.4.3
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
@@ -39,7 +39,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/ginkgo/v2 v2.29.0 // indirect
-	github.com/onsi/gomega v1.40.0 // indirect
+	github.com/onsi/gomega v1.41.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
