@@ -4,6 +4,28 @@
 
 ---
 
+## Status
+
+**✅ Complete (2026-05-29).** All 9 gaps below (3–11) and the Gap 11 NonRetriableError wrap were shipped across prior sessions. Verified by per-test go-test invocations against the listed names; all pass. The envtest integration suite referenced at the bottom of this doc was also shipped (tracked separately as "M2 envtest goroutine-leak suite ✅" in `docs/STATUS.md`).
+
+Per-gap landing points:
+
+| Gap | Test | Location |
+|---|---|---|
+| 3 | `TestManager_TokenCancelledBeforeReady` | `cmd/agc/internal/token/manager_test.go:242` |
+| 4 | `TestPool_EnsureAgents_DeregisterErrorContinues` | `cmd/agc/internal/agentpool/pool_test.go:148` |
+| 5 | `TestPool_LoadAgents_SkipsCorruptSecret` | `cmd/agc/internal/agentpool/pool_test.go:173` |
+| 6 | `TestListener_OAuthTokenFetchError` | `cmd/agc/internal/listener/goroutine_test.go:739` |
+| 7 | `TestListener_AcquireJobError` | `cmd/agc/internal/listener/goroutine_test.go:796` |
+| 8 | `TestListener_PollErrorBackoff`, `TestBackoffDelay_HighErrorCount` | `cmd/agc/internal/listener/goroutine_test.go:839,886` |
+| 9 | `TestReconcile_TokenManagerError`, `TestReconcile_DeleteWithBrokenTokenManager` | `cmd/agc/internal/controller/runnergroup_controller_test.go:302,333` |
+| 10 | `TestReconcile_DrainConditionsIsolation` | `cmd/agc/internal/controller/runnergroup_controller_test.go:385` |
+| 11 | fix + `TestReconcile_PoolExhausted` | `cmd/agc/internal/listener/goroutine.go:96-98`, `cmd/agc/internal/controller/runnergroup_controller_test.go:437` |
+
+The narrative below is retained for historical context.
+
+---
+
 ## Overview
 
 **Goal:** Fill the moderate-severity test gaps identified in the post-PR coverage review of the Milestone 2 implementation. These were deferred from the main M2 PR to keep the initial PR focused.
