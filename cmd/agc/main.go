@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"flag"
 	"fmt"
 	"net/http"
@@ -33,6 +32,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,12 +89,9 @@ func run() error {
 	// standard transport uses HTTP proxy as before.
 	proxyCACert := filepath.Join(proxyCACertDir, "tls.crt")
 	if certPEM, err := os.ReadFile(proxyCACert); err == nil {
-		pool, err := x509.SystemCertPool()
+		pool, err := transport.BuildProxyTrustPool(certPEM)
 		if err != nil {
-			return fmt.Errorf("load system CA pool: %w", err)
-		}
-		if !pool.AppendCertsFromPEM(certPEM) {
-			return fmt.Errorf("proxy CA cert at %s: no valid certificates", proxyCACert)
+			return fmt.Errorf("build proxy trust pool from %s: %w", proxyCACert, err)
 		}
 		t := http.DefaultTransport.(*http.Transport).Clone()
 		t.TLSClientConfig = &tls.Config{RootCAs: pool}
