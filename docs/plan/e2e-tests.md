@@ -215,11 +215,17 @@ Setup: same as above. Assert after proxy pods are Ready:
 
 This verifies the `podAntiAffinity` rule in the proxy Deployment actually takes effect under a real scheduler.
 
-**`E2E_GMC_TenantProvisioning_ProxyConnectWorks`**
+**`E2E_GMC_TenantProvisioning_ProxyConnectWorks`** *(implemented in `cmd/gmc/test/e2e/provisioning_test.go`)*
 
-Assert that the proxy pod is functional, not just scheduled. Run a `curl` pod in `e2e-tenant-a` with `HTTP_PROXY=http://actions-gateway-proxy.e2e-tenant-a.svc.cluster.local:8080` and `HTTPS_CONNECT` method to a reachable target (e.g., `httpbin.org:443` if outbound is available, or an in-cluster echo server). Assert the CONNECT handshake returns `200 Connection established`.
+Asserts that the proxy pod is functional end-to-end, not just scheduled. The implementation runs a workload-labeled (`actions-gateway/component=workload`) `curlimages/curl` pod that:
 
-This verifies the proxy binary is running and routing correctly — not testable in envtest.
+1. Mounts the `actions-gateway-proxy-tls` Secret (cert only, no key) at `/etc/proxy-ca/tls.crt`.
+2. Runs `curl --proxy https://actions-gateway-proxy.<ns>.svc.cluster.local:8080 --proxy-cacert /etc/proxy-ca/tls.crt https://api.github.com/zen` with a 30s timeout.
+3. Writes `HTTP_CODE=%{http_code}` and `BODY_BYTES=<count>` to stdout for assertion.
+
+The test waits for the `IPRangeReconciler` to populate the proxy NetworkPolicy with GitHub `ipBlock` peers first (otherwise the CONNECT silently drops), then waits for the curl pod to reach phase `Succeeded` and asserts the logs contain `HTTP_CODE=200` and a non-empty body.
+
+Exercises in one pass: kindnet enforcement of the workload NP (deny-by-default + allow-to-proxy), the proxy's HTTPS+CONNECT path (PR #59 disabled HTTP/2 ALPN to avoid CONNECT-over-h2 failures), the IP-range allowlist on the proxy egress NP (PR #59 expanded from `actions` to `api+actions+web`), the proxy TLS cert SAN chain (PR #59 fixed AGC's CA pool to append the proxy CA rather than replace the system pool), and the workload NP `podSelector`-vs-`ipBlock` shape (PR #59 fixed kube-proxy DNAT silently dropping traffic). Not testable in envtest.
 
 ### 5.3 Multi-Tenant Isolation (`isolation_test.go`)
 
@@ -687,7 +693,7 @@ These scenarios are deferred or explicitly out of scope for the kind e2e layer:
 | Existing e2e | Cert-manager CA injection | A |
 | provisioning | `E2E_GMC_TenantProvisioning_AllResourcesCreated` | A |
 | provisioning | `E2E_GMC_TenantProvisioning_ProxyPodsSpreadAcrossNodes` | A |
-| provisioning | `E2E_GMC_TenantProvisioning_ProxyConnectWorks` | A |
+| provisioning | `E2E_GMC_TenantProvisioning_ProxyConnectWorks` ✅ | A |
 | isolation | `E2E_GMC_Isolation_TwoTenantsGetIndependentResources` | A |
 | isolation | `E2E_GMC_Isolation_OneTenantsProxyDoesNotRouteOtherTenantTraffic` | A |
 | teardown | `E2E_GMC_Teardown_RemovesOnlyOwnedResources` | A |
