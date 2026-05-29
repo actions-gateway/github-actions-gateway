@@ -174,4 +174,113 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 			g.Expect(out).To(Equal("2"), fmt.Sprintf("HPA minReplicas not updated yet: %q", out))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
+
+	// E2E_GMC_TenantProvisioning_ProxyConnectWorks is the keystone Tier-A test
+	// (see docs/plan/e2e-tests.md §5.2). It runs a workload-labeled curl pod
+	// that issues an HTTPS CONNECT through the per-tenant proxy to a real
+	// GitHub endpoint, exercising in one shot: kindnet workload-NP egress to
+	// the proxy pods, the proxy's HTTPS+CONNECT path, the proxy egress NP's
+	// IP-range allowlist (populated by the IPRangeReconciler at startup), and
+	// the proxy TLS cert+SAN chain. This is the test that would have caught
+	// 4 of the 5 PR #59 bugs at local-iteration speed.
+	It("E2E_GMC_TenantProvisioning_ProxyConnectWorks: curl through proxy reaches GitHub", func() {
+		By("waiting for proxy NetworkPolicy to be populated with GitHub IP ranges")
+		// The IPRangeReconciler refreshes the cache on Manager start, then the
+		// periodic reconciler patches the proxy NP with GitHub CIDRs. Until that
+		// completes the NP only permits DNS — CONNECT to api.github.com would
+		// silently drop. Wait for at least one ipBlock egress peer to appear.
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "networkpolicy", proxyName,
+				"-n", tenantNS,
+				"-o", `jsonpath={.spec.egress[*].to[*].ipBlock.cidr}`,
+			)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).NotTo(BeEmpty(), "proxy NetworkPolicy has no GitHub ipBlock peers yet")
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		const curlPodName = "proxy-connect-curl"
+		proxyURL := fmt.Sprintf("https://%s.%s.svc.cluster.local:8080", proxyName, tenantNS)
+
+		By("deploying a workload-labeled curl pod that CONNECTs through the proxy")
+		// Labels:
+		//   actions-gateway/component=workload — matches the workload NP, so
+		//     kindnet permits egress to the proxy pods on port 8080.
+		// Volume:
+		//   The actions-gateway-proxy-tls Secret holds the self-signed leaf cert
+		//   served by the proxy. We mount only tls.crt (not tls.key) and pass it
+		//   to curl via --proxy-cacert so the CONNECT handshake to the proxy is
+		//   TLS-verified end-to-end.
+		manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    actions-gateway/component: workload
+spec:
+  restartPolicy: Never
+  containers:
+  - name: curl
+    image: curlimages/curl:8.10.1
+    imagePullPolicy: IfNotPresent
+    command: ["sh", "-c"]
+    args:
+    - |
+      set -eu
+      curl --silent --show-error --fail-with-body \
+           --max-time 30 \
+           --proxy %s \
+           --proxy-cacert /etc/proxy-ca/tls.crt \
+           --output /tmp/body \
+           --write-out 'HTTP_CODE=%%{http_code}\n' \
+           https://api.github.com/zen
+      echo "BODY_BYTES=$(wc -c < /tmp/body)"
+    volumeMounts:
+    - name: proxy-ca
+      mountPath: /etc/proxy-ca
+      readOnly: true
+  volumes:
+  - name: proxy-ca
+    secret:
+      secretName: actions-gateway-proxy-tls
+      items:
+      - key: tls.crt
+        path: tls.crt
+`, curlPodName, tenantNS, proxyURL)
+
+		Expect(utils.ApplyManifest(manifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
+				"-n", tenantNS, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the curl pod to terminate")
+		var finalPhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", curlPodName,
+				"-n", tenantNS,
+				"-o", "jsonpath={.status.phase}",
+			)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"curl pod still in phase %q", out)
+			finalPhase = out
+		}, 2*time.Minute, 3*time.Second).Should(Succeed())
+
+		// Always dump logs — even on success — so the CI artifact has the
+		// HTTP_CODE/BODY_BYTES line for visual confirmation.
+		logsCmd := exec.Command("kubectl", "logs", curlPodName, "-n", tenantNS)
+		logs, logsErr := utils.Run(logsCmd)
+		Expect(logsErr).NotTo(HaveOccurred(), "fetch curl pod logs")
+
+		Expect(finalPhase).To(Equal("Succeeded"),
+			"curl pod ended in phase %s; logs:\n%s", finalPhase, logs)
+		Expect(logs).To(ContainSubstring("HTTP_CODE=200"),
+			"expected HTTP 200 from api.github.com via proxy; logs:\n%s", logs)
+		Expect(logs).To(MatchRegexp(`BODY_BYTES=([1-9][0-9]*)`),
+			"expected non-empty response body from api.github.com/zen; logs:\n%s", logs)
+	})
 })
