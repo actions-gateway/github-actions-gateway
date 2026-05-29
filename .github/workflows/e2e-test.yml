@@ -153,6 +153,12 @@ jobs:
             kubectl describe pods -n "$ns"
             echo
           done
+          echo "=== tenant NetworkPolicies (proxy ipBlock peers populated by IPRangeReconciler) ==="
+          for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            echo "--- namespace: $ns ---"
+            kubectl get networkpolicy -n "$ns" -o yaml
+            echo
+          done
           echo "=== tenant container logs (current + previous) ==="
           for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
             for pod in $(kubectl get pods -n "$ns" -o name); do
