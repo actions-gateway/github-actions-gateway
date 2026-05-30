@@ -150,7 +150,7 @@ Reference the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md)
    kubectl rollout status deploy/actions-gateway-controller -n <namespace>
    ```
 7. Confirm `actions_gateway_token_refresh_errors_total` is no longer incrementing.
-8. Delete the old Secret once confirmed healthy.
+8. Delete the old Secret once confirmed healthy, and delete the downloaded `.pem` file from disk (`shred -u <path>` on Linux, `rm -P <path>` on macOS) — the key now lives only in the Kubernetes Secret.
 
 **Scope assessment.** The compromised key could have been used to acquire installation tokens (scoped to `Actions: Read`, `Administration: Read`). Check GitHub's audit log for unusual API activity from the App installation: Settings → Organizations → `<org>` → Audit log → filter by the App name.
 
