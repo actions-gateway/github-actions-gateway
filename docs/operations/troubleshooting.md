@@ -399,6 +399,52 @@ If you see the same symptom for an *ingress*-type rule or for a different Servic
 
 ---
 
+## Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot
+
+**Symptoms.** Worker pod logs (look at the `runner` container) contain repeated lines like:
+
+```
+System.Security.Authentication.AuthenticationException: The remote certificate is invalid because of errors in the certificate chain: UntrustedRoot
+```
+
+emitted from `JobExtension` connectivity checks, `ResultServer` init, `JobServerQueue` log uploads, the `GitHubActionsService` log-blob fetch, or `RunServer.CompleteJobAsync`. The runner retries for ~3 minutes, then exits 1. The AGC then logs `worker pod completed phase=Failed`, `renewjob` starts returning `401 Not authorized for this job`, and the GitHub workflow concludes `cancelled` even though the actual job steps may have run.
+
+**Cause.** Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the cert-manager-issued self-signed CA that signed it. This is the worker-side mirror of the AGC's proxy-CA pinning ([§5.2](../design/05-security.md) "Cross-Tenant Proxy CA Trust"): the AGC mounts the CA explicitly so its outbound HTTPS works; worker pods must do the same.
+
+The AGC's pod provisioner is supposed to project the per-tenant `actions-gateway-proxy-tls` Secret into every worker pod at `/etc/actions-gateway/proxy-ca/tls.crt` and set `PROXY_CA_CERT_PATH` so the worker entrypoint wrapper builds a combined `SSL_CERT_FILE` bundle before exec'ing `Runner.Worker`. UntrustedRoot means one of those steps did not happen.
+
+**Diagnostics.**
+
+```sh
+# 1. Inspect a failed worker pod's spec — the Secret volume must exist.
+kubectl get pod -n <namespace> <worker-pod-name> -o yaml \
+  | yq '.spec.volumes[] | select(.name=="proxy-ca")'
+# Expected: a Secret volume with secretName: actions-gateway-proxy-tls and Items: [{key: tls.crt, path: tls.crt}]
+# If empty: the AGC was deployed without PROXY_TLS_SECRET_NAME.
+
+# 2. Confirm the AGC has the PROXY_TLS_SECRET_NAME env wired.
+kubectl get pod -n <namespace> -l app=actions-gateway-controller \
+  -o jsonpath='{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="PROXY_TLS_SECRET_NAME")]}{.name}={.value}{"\n"}{end}'
+# Expected: PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls
+# Empty means the GMC needs to roll the AGC Deployment (likely an upgrade across the 5h boundary).
+
+# 3. Confirm the worker container's PROXY_CA_CERT_PATH env.
+kubectl get pod -n <namespace> <worker-pod-name> -o yaml \
+  | yq '.spec.containers[] | select(.name=="runner") | .env[] | select(.name=="PROXY_CA_CERT_PATH")'
+
+# 4. Confirm the proxy TLS Secret exists and contains tls.crt.
+kubectl get secret -n <namespace> actions-gateway-proxy-tls \
+  -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -subject -issuer -dates
+```
+
+**Resolution.**
+- If the worker pod has no `proxy-ca` volume: ensure the AGC was started with `PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls` (the GMC injects this automatically — if it's missing, the GMC needs to roll the AGC Deployment, e.g. by bumping `ag.Spec` or restarting the GMC).
+- If the volume is present but the wrapper logs nothing about `proxy CA trust installed`: check that `PROXY_CA_CERT_PATH` is set on the runner container and the mounted file is non-empty. An empty/missing file is tolerated as a no-op, which silently leaves the runner with no proxy trust — the wrapper log line `no proxy CA cert mounted; skipping trust-store install` distinguishes this case from a wrapper that ran the install successfully.
+- If the proxy TLS Secret is missing or the cert has expired: the GMC's cert-manager integration ([§2.1](../design/02-architecture.md#21-tier-1--gateway-manager-controller-gmc) "Proxy Deployer") owns rotation; check the GMC's logs for issuer errors. As a fallback, deleting the Secret triggers reissuance.
+- If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — `kubectl exec` into a curl pod in the same namespace and run `openssl s_client -connect actions-gateway-proxy:8080 -showcerts </dev/null` to inspect what the proxy actually serves.
+
+---
+
 ## Evicted Worker Pods Exhausting Retry Budget
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries.

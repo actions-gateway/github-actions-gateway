@@ -13,16 +13,16 @@ now uses the correct anonymous-pipe + UTF-16LE wire format confirmed from the
 runner source. The 2026-05-29 live kind dry-run against real GitHub
 (Queue item 6, Tier C `E2E_GitHub_RealDispatch`) reached worker-pod creation
 and Runner.Worker parsed the job message correctly, but every outbound HTTPS
-call (JobExtension connectivity check, ResultServer, JobServerQueue,
-RunServer.CompleteJobAsync) fails the TLS handshake with `UntrustedRoot`
-because the worker pod has `HTTPS_PROXY=https://actions-gateway-proxy:8080`
-and no volume mount for the per-tenant `actions-gateway-proxy-tls` Secret.
-See §11.C below and Queue item 5h in `docs/STATUS.md`. The green-checkmark
-criterion is now gated on 5h, not Investigation A.
+call failed the TLS handshake with `UntrustedRoot` because the worker pod
+had no proxy-CA trust install. Queue item 5h has shipped (see §11.C
+Resolution): AGC now projects `actions-gateway-proxy-tls` cert into worker
+pods, GMC plumbs `PROXY_TLS_SECRET_NAME`, worker entrypoint wrapper installs
+the CA via `SSL_CERT_FILE`. Re-run of item 6 still pending for end-to-end
+verification.
 
 | Success criterion | Status | Notes |
 |---|---|---|
-| Real workflow job completes with green checkmark | ❌ Open | Live dry-run 2026-05-29 reached worker-pod execution; runner exited 1 with `UntrustedRoot` on every outbound HTTPS through the egress proxy. Gated on Queue item 5h (worker proxy-CA trust). See §11.C. |
+| Real workflow job completes with green checkmark | ⚠️ Code complete, awaiting re-run | Queue item 5h shipped on 2026-05-29 (worker proxy-CA trust): provisioner mounts `actions-gateway-proxy-tls` (cert only) into worker pods at `/etc/actions-gateway/proxy-ca/tls.crt`, wrapper exports `SSL_CERT_FILE` pointing at a combined trust bundle. Item 6 re-run will confirm the green checkmark end-to-end. |
 | `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
 | Worker container exits 0 on success, non-zero on failure | ⚠️ Unverified | Wrapper code forwards exit codes ([worker/main.go:99-107](../../cmd/worker/main.go)) but not exercised end-to-end |
 | Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
@@ -37,12 +37,11 @@ criterion is now gated on 5h, not Investigation A.
 
 ### Critical path
 
-The Named Pipe protocol (Investigation A) is resolved. The new critical
-path for green-checkmark is **Queue item 5h** — worker pods must trust
-the per-tenant egress proxy CA so Runner.Worker's outbound HTTPS through
-`HTTPS_PROXY` succeeds. The GMC already mounts the proxy CA into the AGC
-pod; the symmetric mount + wrapper trust-store install is missing for
-worker pods. See §11.C for the dry-run evidence.
+The Named Pipe protocol (Investigation A) is resolved. Queue item 5h
+(worker proxy-CA trust install) has shipped — code paths, unit tests,
+and docs are in. The remaining critical-path action is re-running
+Queue item 6 (`E2E_GitHub_RealDispatch` against `actions-gateway-test`)
+to confirm the green checkmark end-to-end.
 
 ---
 
@@ -799,3 +798,36 @@ the run-service. The job runs (the `echo` step probably succeeds in
 the container) but is invisible to GitHub, which times out the lock and
 marks the run `cancelled`. Once 5h ships, item 6 can be re-run against
 the same kind cluster and should reach the green checkmark.
+
+**Resolution (Queue item 5h shipped):**
+
+- AGC pod provisioner gained `Provisioner.ProxyTLSSecretName`
+  ([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
+  When non-empty, `buildPod` adds an `Items: [tls.crt]` Secret volume
+  + read-only mount at `/etc/actions-gateway/proxy-ca/tls.crt` and
+  exports `PROXY_CA_CERT_PATH` on the runner container.
+  `tls.key` is never projected, keeping the proxy private key off
+  worker pods. Two new unit tests pin the mount shape and the
+  empty-secret-name no-op path
+  ([provisioner_test.go](../../cmd/agc/internal/provisioner/provisioner_test.go) —
+  `TestBuildPod_MountsProxyCASecret`, `TestBuildPod_NoProxyCAWhenSecretNameEmpty`).
+- AGC `main.go` reads `PROXY_TLS_SECRET_NAME` and plumbs it into the
+  provisioner.
+- GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME=
+  actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC
+  finds the right Secret automatically
+  ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go));
+  `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
+- Worker entrypoint wrapper installs the CA into a combined trust
+  bundle and sets `SSL_CERT_FILE` on the child Runner.Worker env before
+  exec'ing ([cmd/worker/main.go](../../cmd/worker/main.go) —
+  `installProxyCATrust` / `readSystemCABundle`). System bundle missing,
+  CA file missing, CA file empty, and `PROXY_CA_CERT_PATH=""` are all
+  tolerated as no-ops so unit-test and non-proxied deployments keep
+  working. Five unit tests cover the helper plus an end-to-end test
+  (`TestWrapper_PropagatesProxyTrustEnvToChild`) that asserts the child
+  process sees `SSL_CERT_FILE` pointing at the combined bundle.
+
+The next live dry-run of item 6 should reach the green checkmark
+without `UntrustedRoot` log lines. M-11b (Ed25519 live probe) and item
+7 (egress-proxy live curl validation) are unblocked at the same time.

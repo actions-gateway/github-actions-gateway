@@ -221,6 +221,12 @@ func run() error {
 	prov.HTTPProxy = os.Getenv("HTTP_PROXY")
 	prov.HTTPSProxy = os.Getenv("HTTPS_PROXY")
 	prov.NoProxy = os.Getenv("NO_PROXY")
+	// PROXY_TLS_SECRET_NAME names the Secret holding the per-tenant
+	// egress-proxy CA cert. The GMC sets this on the AGC Deployment so the
+	// provisioner can project it (cert only, via Items) into every worker
+	// pod. Empty (the default) disables the mount and is appropriate for
+	// any deployment without a per-tenant egress proxy.
+	prov.ProxyTLSSecretName = os.Getenv("PROXY_TLS_SECRET_NAME")
 	prov.HTTPClient = httpClient
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img

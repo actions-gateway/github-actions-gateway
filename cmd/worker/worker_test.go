@@ -16,6 +16,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// withSystemCABundleCandidates temporarily overrides systemCABundleCandidates
+// so tests don't have to depend on whatever real bundle exists on the dev
+// machine.
+func withSystemCABundleCandidates(t *testing.T, paths []string) {
+	t.Helper()
+	orig := systemCABundleCandidates
+	systemCABundleCandidates = paths
+	t.Cleanup(func() { systemCABundleCandidates = orig })
+}
+
 func TestWrapper_ReadPayloadFromMount(t *testing.T) {
 	dir := t.TempDir()
 	want := []byte(`{"run_id":42,"variables":{}}`)
@@ -219,6 +229,153 @@ func TestMaterializeJITConfig_IgnoresUnknownEntries(t *testing.T) {
 		".credentials":           true,
 		".credentials_rsaparams": true,
 	}, got)
+}
+
+// TestInstallProxyCATrust_EmptyPathIsNoOp guards the common "no per-tenant
+// proxy configured" case: the AGC provisioner leaves PROXY_CA_CERT_PATH empty
+// and the wrapper must skip the trust-store install without error and without
+// touching the runner home.
+func TestInstallProxyCATrust_EmptyPathIsNoOp(t *testing.T) {
+	runnerHome := t.TempDir()
+	env, err := installProxyCATrust("", runnerHome)
+	require.NoError(t, err)
+	assert.Nil(t, env)
+
+	entries, err := os.ReadDir(runnerHome)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "no files must be written when no proxy CA is configured")
+}
+
+// TestInstallProxyCATrust_MissingFileIsNoOp covers the race where the env var
+// names a path but the Secret was deleted underneath us (or the mount is
+// stale). Tolerated as no-op so the wrapper at least lets the runner reach
+// GitHub via whatever the base image already trusts.
+func TestInstallProxyCATrust_MissingFileIsNoOp(t *testing.T) {
+	runnerHome := t.TempDir()
+	env, err := installProxyCATrust(filepath.Join(t.TempDir(), "nonexistent.crt"), runnerHome)
+	require.NoError(t, err)
+	assert.Nil(t, env)
+}
+
+// TestInstallProxyCATrust_EmptyFileIsNoOp covers the case where the Secret
+// was created but never populated. Treated identically to missing.
+func TestInstallProxyCATrust_EmptyFileIsNoOp(t *testing.T) {
+	runnerHome := t.TempDir()
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("   \n"), 0o600))
+
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.NoError(t, err)
+	assert.Nil(t, env)
+}
+
+// TestInstallProxyCATrust_AppendsToSystemBundle verifies the happy path:
+// the wrapper concatenates the system trust bundle with the mounted proxy CA,
+// writes the combined PEM into the runner home, and returns the SSL_CERT_FILE
+// env var pointing at the combined file. Regression guard for Queue item 5h.
+func TestInstallProxyCATrust_AppendsToSystemBundle(t *testing.T) {
+	stagingDir := t.TempDir()
+	systemBundle := filepath.Join(stagingDir, "ca-certificates.crt")
+	systemContent := []byte("-----BEGIN CERTIFICATE-----\nFAKE-SYSTEM-CA\n-----END CERTIFICATE-----\n")
+	require.NoError(t, os.WriteFile(systemBundle, systemContent, 0o644))
+	withSystemCABundleCandidates(t, []string{systemBundle})
+
+	caPath := filepath.Join(stagingDir, "tls.crt")
+	caContent := []byte("-----BEGIN CERTIFICATE-----\nFAKE-PROXY-CA\n-----END CERTIFICATE-----\n")
+	require.NoError(t, os.WriteFile(caPath, caContent, 0o600))
+
+	runnerHome := t.TempDir()
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.NoError(t, err)
+
+	bundlePath := filepath.Join(runnerHome, proxyCABundleFile)
+	require.Equal(t, []string{"SSL_CERT_FILE=" + bundlePath}, env)
+
+	got, err := os.ReadFile(bundlePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), "FAKE-SYSTEM-CA",
+		"combined bundle must preserve the system trust roots")
+	assert.Contains(t, string(got), "FAKE-PROXY-CA",
+		"combined bundle must include the per-tenant proxy CA")
+	// Order matters for some validators that short-circuit on first match;
+	// our wrapper writes system bundle first, proxy CA last.
+	sysIdx := bytes.Index(got, []byte("FAKE-SYSTEM-CA"))
+	proxyIdx := bytes.Index(got, []byte("FAKE-PROXY-CA"))
+	assert.True(t, sysIdx < proxyIdx, "system roots must precede the proxy CA")
+}
+
+// TestInstallProxyCATrust_WorksWithoutSystemBundle covers minimal base images
+// (e.g. distroless variants) that ship no OS trust store. The wrapper writes
+// a bundle containing only the proxy CA — sufficient for the proxy handshake
+// itself, though the runner won't be able to validate any non-proxied
+// endpoints. That trade-off is acceptable because Runner.Worker's only
+// network egress in this deployment IS through the proxy.
+func TestInstallProxyCATrust_WorksWithoutSystemBundle(t *testing.T) {
+	withSystemCABundleCandidates(t, []string{filepath.Join(t.TempDir(), "does-not-exist.crt")})
+
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	caContent := []byte("-----BEGIN CERTIFICATE-----\nONLY-PROXY-CA\n-----END CERTIFICATE-----\n")
+	require.NoError(t, os.WriteFile(caPath, caContent, 0o600))
+
+	runnerHome := t.TempDir()
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.NoError(t, err)
+	require.Len(t, env, 1)
+
+	got, err := os.ReadFile(filepath.Join(runnerHome, proxyCABundleFile))
+	require.NoError(t, err)
+	assert.Equal(t, caContent, got,
+		"bundle must contain just the proxy CA when no system bundle exists")
+}
+
+// TestWrapper_PropagatesProxyTrustEnvToChild verifies that when
+// PROXY_CA_CERT_PATH is set, run() builds the combined trust bundle and the
+// child process sees SSL_CERT_FILE in its environment. The stub
+// Runner.Worker dumps its env to a file so we can assert on it directly.
+func TestWrapper_PropagatesProxyTrustEnvToChild(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("worker wrapper targets Linux; shell-stub strategy is POSIX-only")
+	}
+
+	staging := t.TempDir()
+	withSystemCABundleCandidates(t, []string{filepath.Join(staging, "missing")})
+	caPath := filepath.Join(staging, "tls.crt")
+	require.NoError(t, os.WriteFile(caPath,
+		[]byte("-----BEGIN CERTIFICATE-----\nTEST-PROXY-CA\n-----END CERTIFICATE-----\n"),
+		0o600))
+
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	stubDir := t.TempDir()
+	envFile := filepath.Join(t.TempDir(), "env.txt")
+
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, payloadFile), []byte(`{}`), 0o600))
+
+	stubPath := filepath.Join(stubDir, workerBin)
+	script := fmt.Sprintf(`#!/bin/sh
+printenv > %q
+exit 0
+`, envFile)
+	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755))
+
+	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
+	t.Setenv("RUNNER_HOME_DIR", runnerHome)
+	t.Setenv("PROXY_CA_CERT_PATH", caPath)
+
+	require.NoError(t, run())
+
+	data, err := os.ReadFile(envFile)
+	require.NoError(t, err)
+
+	wantBundle := filepath.Join(runnerHome, proxyCABundleFile)
+	assert.Contains(t, string(data), "SSL_CERT_FILE="+wantBundle,
+		"child Runner.Worker must see SSL_CERT_FILE pointing at the combined trust bundle")
+
+	got, err := os.ReadFile(wantBundle)
+	require.NoError(t, err)
+	assert.Contains(t, string(got), "TEST-PROXY-CA",
+		"combined bundle must contain the mounted proxy CA")
 }
 
 // TestWrapper_InvokesRunnerWorker_WithSpawnclientArgs end-to-end exercises run()
