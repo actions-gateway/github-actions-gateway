@@ -34,7 +34,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
 | Worker egress proxy | `security` `infra` | ⚠️ | NetworkPolicy split shipped; live `curl` validation blocked on M3/M4 — [plan](plan/worker-egress-proxy.md) |
 | Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
-| Six-layer docs audit | `docs` | ⚠️ | Consistency audit across the six doc layers; small fixes open — [plan](plan/docs-six-layer-audit.md) |
+| Six-layer docs audit | `docs` | ✅ | All six layers audited and fixed (0 broken links/anchors); follow-ons tracked as #51 + #52 — [plan](plan/docs-six-layer-audit.md) |
 | Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
 | Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
 | e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
@@ -81,7 +81,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | 15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
 | 45 | Compress Progress table — drop Notes column | `docs` | 🔲 | S | Most cells just say "see plan" or restate the plan doc; the plan link in the row's name already carries the detail. Reduces edit surface and width. |
 | 47 | Append-by-default for new low-priority Queue rows | `docs` | 🔲 | S | Loosen "insert at right priority position" to "append unless re-prioritizing" so row order stays stable in diffs across parallel sessions. Re-prioritization becomes a deliberate separate commit. |
-| 50 | [Six-layer docs consistency audit](plan/docs-six-layer-audit.md) | `docs` | 🔲 | L | Framework-free audit across the six doc layers. Top fixes: add `docs/README.md` landing page (no top-level index today), fix broken archived-doc link, glossary discoverability, README-index sweeps. |
 | 52 | Markdown link + anchor check CI gate | `docs` `infra` `tests` | 🔲 | S | Add a markdown link/anchor checker to `unit-test.yml` (fits the lint-gate pattern) so broken `.md` links and `#anchor` references fail CI instead of rotting silently. Must be GitHub-slug-aware for anchors (em-dash/ampersand → `--`); the validation script in the [docs-six-layer-audit.md](plan/docs-six-layer-audit.md) L2 pass is a working reference. |
 | 51 | Reconcile documented vs emitted Prometheus metrics | `infra` `docs` `bug` | 🔲 | M | 6 metrics are documented (observability/runbook/troubleshooting/02-architecture/appendix-a) but never registered in code: `pod_creation_latency_seconds` (headline SLO), `managed_gateways`, `ip_range_updates_total`, `proxy_replicas`, `proxy_tunnel_duration_seconds`, and `reconcile_errors_total` (docs should point at controller-runtime's `controller_runtime_reconcile_errors_total`). Per metric: implement, re-point, or mark `(planned)`. Surfaced by the L3 pass in [docs-six-layer-audit.md](plan/docs-six-layer-audit.md). |
 | 17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | 💤 | M | low priority; pick up when CI latency is the bottleneck |
