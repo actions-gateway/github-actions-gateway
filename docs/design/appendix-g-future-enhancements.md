@@ -45,7 +45,7 @@ fallback restriction of its own.
 
 - A new optional field on `ProxyConfig`, e.g.
   `destinationAllowlist: [github.com, githubusercontent.com, ghe.io]`.
-- The GMC propagates it to the proxy via an env var or config volume.
+- The Gateway Manager Controller (GMC) propagates it to the proxy via an env var or config volume.
 - The proxy parses the CONNECT target hostname, normalizes it
   (lowercase, strip port), and rejects any host not matching one of
   the configured suffixes.
@@ -85,7 +85,7 @@ per-installation rate limits are the only ceiling on call volume.
 
 **Gap.** If a tenant's runners go into a tight loop (misconfigured
 workflow, broken retry policy), the only feedback is GitHub's
-`429 Too Many Requests` and the AGC's exponential backoff. There is no
+`429 Too Many Requests` and the Actions Gateway Controller (AGC) exponential backoff. There is no
 way to slow a single misbehaving RunnerGroup before it hits the GitHub
 ceiling.
 
