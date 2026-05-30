@@ -68,7 +68,7 @@ Run tests locally before pushing to a PR to avoid burning CI. Prefer the narrowe
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
-**Pick the right tier for the bug class.** Unit and envtest tests can't observe behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A kind e2e test (see `docs/plan/e2e-tests.md`) is the only thing that proves it works. PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
+**Pick the right tier for the bug class.** Unit and envtest tests can't observe behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A kind e2e test (see [`docs/design/07-test-plan.md`](docs/design/07-test-plan.md) §7.3 and [`docs/development/testing.md`](docs/development/testing.md)) is the only thing that proves it works. PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
 
 For integration tests and CI workflow guidance, see `docs/development/testing.md`. For iterating against a real kind cluster — image-tag caching, debugging distroless pods, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop — see `docs/development/kind-iteration.md`.
 
@@ -104,7 +104,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Task | Reference |
 |---|---|
 | Running integration tests, editing CI workflows | `docs/development/testing.md` |
-| Standing up / iterating against a kind cluster | `docs/development/kind-iteration.md` (planning context in `docs/plan/e2e-tests.md`) |
+| Standing up / iterating against a kind cluster | `docs/development/kind-iteration.md` (design context in `docs/design/07-test-plan.md` §7.3) |
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |

@@ -29,14 +29,14 @@ The five-milestone delivery from
 
 ## Test plans
 
-The "spec" plans translate `docs/design/07-test-plan.md` into concrete
-test files. The "gaps" plans track holes found by review of existing
-tests.
+Per-milestone test gap plans. The durable design rationale for what the
+unit/integration/e2e layers cover lives in
+[`docs/design/07-test-plan.md`](../design/07-test-plan.md); developer
+run commands live in
+[`docs/development/testing.md`](../development/testing.md).
 
 | Plan | Scope | Status |
 |---|---|---|
-| [integration-tests.md](integration-tests.md) | envtest layout, fakegithub, per-controller integration suites | ⓘ Spec — source of truth for what the integration suite covers |
-| [e2e-tests.md](e2e-tests.md) | `kind` layout, cluster addons, Tier A/B test surfaces | ⓘ Spec |
 | [milestone-1-tests.md](milestone-1-tests.md) | M1 unit-test coverage gaps | ✅ Done — all five gaps closed |
 | [milestone-3-tests.md](milestone-3-tests.md) | M3 metric/decryption/eviction test gaps | ❌ Open — H/M/L items not yet implemented |
 

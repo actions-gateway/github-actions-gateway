@@ -43,9 +43,11 @@ Testing is structured in three layers. Each layer has a distinct scope, speed co
 
 **Speed contract:** Full suite runs in under 5 minutes. Each test must complete in under 30 seconds. Tests run against a local `envtest` API server (from `controller-runtime`). `kind` is not used for this layer — it requires container builds and is slower than envtest.
 
-**Tooling:** `controller-runtime/pkg/envtest` for the Kubernetes API surface. A shared stateful `httptest` fake broker (`internal/brokertest`) for the GitHub broker — tests control it by enqueuing job messages on demand and asserting which sessions were deleted, rather than replaying static fixtures. Standard `go test` with `testify` and `gomega.Eventually` for eventually-consistent assertions. Ginkgo is not used; the integration tests follow the same `testing`-package style as the unit tests in this repo.
+**Build tag:** all integration test files carry `//go:build integration`. This keeps them out of the unit-test run (`go test ./...`) and requires an explicit `-tags integration` flag. CI runs them as a separate job after unit tests pass. Tests live under `cmd/{agc,gmc}/internal/controller/integration/`. See [docs/development/testing.md](../development/testing.md) for the run commands.
 
-> **Detailed test cases** are specified in [docs/plan/integration-tests.md](../plan/integration-tests.md), including the file layout, suite setup, and CI workflow.
+**Why envtest, not the fake client:** the fake `client.Client` cannot enforce CRD admission validation (CEL rules, `x-kubernetes-validations`), does not handle ownership references and garbage collection, and cannot test webhook behavior. envtest spins up a real `kube-apiserver` and `etcd` binary locally (no kubelet, no scheduler), so CRD schemas, admission webhooks, and status subresources all behave as in production.
+
+**Tooling:** `controller-runtime/pkg/envtest` for the Kubernetes API surface. A shared stateful `httptest` fake broker under `internal/brokertest/` for the GitHub broker — tests control it by enqueuing job messages on demand and asserting which sessions were deleted, rather than replaying static fixtures. Standard `go test` with `testify` and `gomega.Eventually` for eventually-consistent assertions. Ginkgo is not used; the integration tests follow the same `testing`-package style as the unit tests in this repo.
 
 **What to cover:**
 
@@ -65,11 +67,42 @@ Testing is structured in three layers. Each layer has a distinct scope, speed co
 
 ## 7.3. End-to-End Tests
 
-**Scope:** A real workflow job dispatched from GitHub, executed by the gateway against a staging Kubernetes cluster, with results confirmed in the GitHub Actions UI.
+**Scope:** the full system deployed into a real Kubernetes cluster. GMC, AGC, and proxy binaries run as actual Pods. Proxy pods are scheduled and connected. Cert-manager issues TLS certificates for the admission webhook. NetworkPolicy is enforced by the CNI. HPA scaling is driven by `metrics-server`.
 
-**Speed contract:** Individual tests take 2–5 minutes each. The full suite runs nightly; a focused smoke test (single job, single runner) runs on every merge to `main`.
+**Tier structure.** End-to-end tests split into three tiers along the "what's required to run them" axis:
 
-**Tooling:** A dedicated test GitHub repository with a small set of workflow files. The staging cluster runs the gateway operator in a locked-down namespace. A test harness script (under `test/e2e/`) triggers workflow dispatches via the GitHub REST API and polls the run to completion, asserting on final status and log content.
+| Tier | What it tests | GitHub required? | When it runs |
+|---|---|---|---|
+| **A — Infrastructure** | GMC provisioning, proxy scheduling, NetworkPolicy enforcement, HPA, PDB, RBAC, teardown, GMC restart | No | every merge to `main` |
+| **B — Lifecycle (fake broker)** | AGC session polling, job acquisition, pod creation, eviction retry, SIGTERM cleanup | No | every merge to `main` |
+| **C — Real GitHub** | Actual workflow dispatch, log streaming, RenewJob across renewal cycles, proxy egress IP routing | Yes (GitHub App credentials) | nightly + on-demand |
+
+Tier A and Tier B run on a local `kind` cluster — fast enough for CI on every merge and for the inner dev loop. Tier C runs against a real GitHub App and a dedicated test repository; it requires `E2E_GITHUB_APP_ID`, `E2E_GITHUB_APP_INSTALLATION_ID`, `E2E_GITHUB_APP_PRIVATE_KEY`, `E2E_GITHUB_ORG`, and `E2E_GITHUB_REPO` to be set, and is skipped at runtime when any are missing.
+
+**What kind adds over envtest integration tests:**
+
+| Capability | envtest (§7.2) | kind (Tier A/B) |
+|---|---|---|
+| CRD admission + CEL validation | ✅ | ✅ |
+| Admission webhook with cert-manager TLS | ⚠️ requires manual cert workaround | ✅ |
+| Real pod scheduling (kubelet present) | ❌ | ✅ |
+| Container images actually pulled and run | ❌ | ✅ |
+| NetworkPolicy enforcement (CNI) | ❌ | ✅ |
+| HPA scaling (`metrics-server` required) | ❌ | ✅ |
+| PDB enforcement during node drain | ❌ | ✅ |
+| Proxy CONNECT tunnel actually relays bytes | ❌ | ✅ |
+| GMC/AGC/proxy binaries running as real Pods | ❌ | ✅ |
+| Deployment rollout behavior | ❌ | ✅ |
+
+**Speed contract:** each Tier A/B test completes in under 3 minutes. Tier A+B together run in under ~30 minutes. Tier C tests take 2–15 minutes each (the 15-minute RenewJob test is the bound). Cluster setup is a one-time `BeforeSuite` cost, not counted against individual test budgets.
+
+**Build tag:** all e2e files carry `//go:build e2e`. Tests are excluded from both `go test ./...` and the integration test run. Two Tier-A tests (`E2E_GMC_HPA_ScalesUpUnderLoad` and `E2E_GMC_PDB_PreventsEvictionBelowMinAvailable`) carry the Ginkgo `Label("local-only")` and are excluded from CI via `--label-filter '!local-only'` because they depend on CPU-load timing that is flaky on 2-vCPU GitHub Actions runners. They pass reliably on a local machine. See [docs/development/testing.md](../development/testing.md) for run commands.
+
+**Cluster shape.** A multi-node kind cluster (1 control-plane + 2 workers) is required for pod anti-affinity and PDB tests to be meaningful. kindnet is the CNI and supports `NetworkPolicy` natively; no additional CNI is installed.
+
+**Fake GitHub for Tier B.** Tier B replaces real GitHub with `test/fakegithub/`, a standalone HTTP server deployed into the cluster as a `Deployment` + `Service`. It implements the broker protocol with stateful behaviour (session registration, controllable job-message delivery, recorded acquire/renew/rerun calls) and exposes a control API used by tests to inject jobs and assert on calls. The AGC is pointed at the fake by setting `AGC_EXTRA_*` env vars on the GMC, which forwards them into the AGC Deployments it creates (gated by `--allow-agc-extra-env=true`, set only in e2e). See [docs/development/kind-iteration.md](../development/kind-iteration.md) for the env-var details.
+
+**Tooling:** Ginkgo-based suites under `cmd/gmc/test/e2e/`. A shared `cmd/gmc/test/utils/` helper package wraps `kubectl`, `kind`, and the fakegithub port-forward. Tier C uses the GitHub REST API to dispatch workflows and poll runs to completion.
 
 **What to cover:**
 
