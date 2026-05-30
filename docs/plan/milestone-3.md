@@ -6,16 +6,23 @@
 
 ## Status at a glance
 
-Last refreshed 2026-05-25. The provisioner, decryption, ceiling
+Last refreshed 2026-05-29. The provisioner, decryption, ceiling
 enforcement, eviction retry, GC, and RBAC are all in code. Investigation A
 (Named Pipe protocol) is complete — the implementation in `cmd/worker/main.go`
 now uses the correct anonymous-pipe + UTF-16LE wire format confirmed from the
-runner source. What remains is a live end-to-end run against a real
-`Runner.Worker` binary.
+runner source. The 2026-05-29 live kind dry-run against real GitHub
+(Queue item 6, Tier C `E2E_GitHub_RealDispatch`) reached worker-pod creation
+and Runner.Worker parsed the job message correctly, but every outbound HTTPS
+call (JobExtension connectivity check, ResultServer, JobServerQueue,
+RunServer.CompleteJobAsync) fails the TLS handshake with `UntrustedRoot`
+because the worker pod has `HTTPS_PROXY=https://actions-gateway-proxy:8080`
+and no volume mount for the per-tenant `actions-gateway-proxy-tls` Secret.
+See §11.C below and Queue item 5h in `docs/STATUS.md`. The green-checkmark
+criterion is now gated on 5h, not Investigation A.
 
 | Success criterion | Status | Notes |
 |---|---|---|
-| Real workflow job completes with green checkmark | ❌ Open | No live end-to-end run yet; gated on Investigation A |
+| Real workflow job completes with green checkmark | ❌ Open | Live dry-run 2026-05-29 reached worker-pod execution; runner exited 1 with `UntrustedRoot` on every outbound HTTPS through the egress proxy. Gated on Queue item 5h (worker proxy-CA trust). See §11.C. |
 | `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
 | Worker container exits 0 on success, non-zero on failure | ⚠️ Unverified | Wrapper code forwards exit codes ([worker/main.go:99-107](../../cmd/worker/main.go)) but not exercised end-to-end |
 | Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
@@ -30,11 +37,12 @@ runner source. What remains is a live end-to-end run against a real
 
 ### Critical path
 
-The Named Pipe protocol (Investigation A) is the only structural unknown.
-The wrapper code in `cmd/worker/main.go` reflects a best-guess
-implementation; until validated against a live `Runner.Worker` binary,
-the green-checkmark criterion is unreachable. Everything else is in code
-and ready to be exercised once the pipe handoff is confirmed.
+The Named Pipe protocol (Investigation A) is resolved. The new critical
+path for green-checkmark is **Queue item 5h** — worker pods must trust
+the per-tenant egress proxy CA so Runner.Worker's outbound HTTPS through
+`HTTPS_PROXY` succeeds. The GMC already mounts the proxy CA into the AGC
+pod; the symmetric mount + wrapper trust-store install is missing for
+worker pods. See §11.C for the dry-run evidence.
 
 ---
 
@@ -690,3 +698,104 @@ remains gated on Queue item 5c.
 **Source:** TBD
 
 **Findings:** TBD
+
+---
+
+### 11.C — Worker pod must trust the per-tenant egress proxy CA
+
+**Surfaced by:** 2026-05-29 live kind dry-run of `E2E_GitHub_RealDispatch`
+(Tier C `Label("github-real")`) against the `actions-gateway-test` GitHub
+App and the `actions-gateway/gateway-test` workflow.
+
+**Symptom:**
+
+- Worker pod is scheduled with
+  `HTTPS_PROXY=https://actions-gateway-proxy.<ns>.svc.cluster.local:8080`
+  (and matching `HTTP_PROXY`). Volume mounts: only the `job-payload`
+  Secret. No mount for the per-tenant `actions-gateway-proxy-tls` Secret.
+- Wrapper executes, payload + JIT config are materialized
+  (`/home/runner/.runner`, `/home/runner/.credentials`,
+  `/home/runner/.credentials_rsaparams`), Runner.Worker 2.327.1 starts and
+  reads the job message from the pipe (`Message received` /
+  `Job message: ...`).
+- Every outbound HTTPS call from Runner.Worker via the proxy fails the
+  outer TLS handshake with
+  `System.Security.Authentication.AuthenticationException: The remote
+  certificate is invalid because of errors in the certificate chain:
+  UntrustedRoot`. Affected paths observed in the same run:
+    - `JobExtension` connectivity check
+    - `ResultServer` init
+    - `JobServerQueue` log uploads
+    - `GitHubActionsService` log-blob signed-URL fetch
+    - `RunServer.CompleteJobAsync` (final completion)
+- Runner exits 1 after ~3m of retries. AGC observes
+  `worker pod completed phase=Failed reason="" duration=3m50s`.
+- RenewJob from the AGC starts returning `401 Not authorized for this job`
+  ~60s in (the run-service revokes the lock once the runner abandons).
+- GitHub-side run concludes `cancelled`.
+
+**Root cause:**
+
+The .NET HttpClient validates the proxy's TLS certificate before sending
+`CONNECT`. The proxy's cert is signed by a cert-manager-issued
+self-signed CA (the `actions-gateway-proxy-tls` Secret in the tenant
+namespace). The runner image's default OS trust store
+(`/etc/ssl/certs/ca-certificates.crt`) does not contain that CA, so the
+outer TLS handshake fails before any traffic ever reaches GitHub.
+
+The GMC already mounts this Secret into the AGC pod (cert only, via
+`Items: [tls.crt]`) at `/etc/actions-gateway/proxy-tls/tls.crt` — see
+`buildAGCDeployment` in
+[cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)
+~lines 494-509 — and the AGC code path reads it via the
+`appendProxyCAToSystemPool` helper landed under Queue item 5f. Worker
+pods need the symmetric treatment, but the AGC provisioner's `BuildPod`
+([cmd/agc/internal/provisioner/pod_builder.go](../../cmd/agc/internal/provisioner/pod_builder.go))
+never adds that volume.
+
+**Fix sketch (tracked as Queue item 5h):**
+
+1. **AGC provisioner pod builder:** Mount `actions-gateway-proxy-tls`
+   (cert only, `Items: [{Key: tls.crt, Path: tls.crt}]`) into the runner
+   container at a fixed path (e.g.
+   `/etc/actions-gateway/proxy-tls/tls.crt`). Symmetric to the AGC
+   mount.
+2. **GMC `AGC_EXTRA_*` plumbing:** Thread the proxy-TLS Secret name into
+   the AGC deployment as an env var (or hard-code the canonical name —
+   the Secret name is deterministic per tenant). AGC reads it when
+   building the worker pod spec.
+3. **Worker entrypoint wrapper:** After payload + JIT materialization
+   and before exec'ing Runner.Worker, read the mounted CA cert and:
+    - If the OS trust dir is writable (it should be under
+      `runAsUser: 1001` + `fsGroup` in the actions-runner base image),
+      append the cert to `/etc/ssl/certs/ca-certificates.crt`
+      (or drop into `/usr/local/share/ca-certificates/` and call
+      `update-ca-certificates`). .NET on Linux uses OpenSSL's bundle by
+      default, so this is sufficient for both the wrapper and
+      Runner.Worker.
+    - As a fallback, build a combined PEM at a writable path and export
+      `SSL_CERT_FILE` + `SSL_CERT_DIR` to both wrapper and child env.
+4. **Tests:**
+    - `pod_builder_test.go`: assert the runner container has the
+      `actions-gateway-proxy-tls` Secret volume + mount, cert-only
+      (no `tls.key`).
+    - `cmd/worker/worker_test.go`: stage a fake CA at the mount path,
+      run the wrapper against a stub `Runner.Worker`, assert the CA was
+      appended to the bundle (or `SSL_CERT_FILE` set) before the child
+      ran.
+5. **Doc updates:**
+    - `docs/design/02-architecture.md` — call out the worker proxy-CA
+      trust requirement in the egress-proxy section.
+    - `docs/design/05-security.md` — note that the proxy CA is
+      tenant-scoped and the worker trust-store install is per-pod.
+    - `docs/operations/troubleshooting.md` — add a runbook entry keyed
+      on the `UntrustedRoot` log line.
+
+**Why this matters for the green-checkmark criterion:**
+
+Without 5h, no real workflow can complete: the runner cannot post step
+logs, cannot upload step results, and cannot call `CompleteJob` against
+the run-service. The job runs (the `echo` step probably succeeds in
+the container) but is invisible to GitHub, which times out the lock and
+marks the run `cancelled`. Once 5h ships, item 6 can be re-run against
+the same kind cluster and should reach the green checkmark.
