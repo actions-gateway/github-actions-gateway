@@ -15,7 +15,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 
-Last touched: 2026-05-30
+Last touched: 2026-05-31
 
 ---
 
@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 44 | `make lint-status` for STATUS.md format rules | `infra` `tests` | 🔲 | S | ~30 LoC shell enforcing the rules in [maintaining-backlog](development/maintaining-backlog.md): single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Wire to `unit-test.yml` + pre-commit. |
 | 43 | Structured `Blocked by:` + queue-unblock helper | `infra` `docs` | 🔲 | S | Replace free-text "→ X" blocker notes with `Blocked by #N`; add `make queue-unblock ID=N` to enumerate dependents for one-commit unblock sweeps. Fixes the stale-blocker class CLAUDE.md already warns about. See [maintaining-backlog](development/maintaining-backlog.md). |
 | 7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🔲 | S | **Unblocked by item 6 on 2026-05-30.** Same kind cluster + real GitHub App available; need to assert workload→proxy CONNECT + DNAT + IP-range egress with `curl` from a workload-labeled debug pod. |
 | 42 | Proxy `/readyz` must gate on CONNECT listener (analogue of GMC §11.D fix) | `security` `infra` `bug` | 🔲 | S | Surfaced by item 6 re-run on 2026-05-30. `cmd/proxy/proxy.go` serves `/healthz` (returns 200 as soon as health server binds) but the CONNECT server on port 8080 is in a separate goroutine — kubelet can mark the pod Ready and add it to the Service endpoints before CONNECT is listening, causing transient `connection refused` for worker HTTPS_PROXY traffic on proxy rollouts/HPA scale-up. Add `/readyz` that returns OK only after the CONNECT listener has bound; switch readiness probe in `cmd/gmc/internal/controller/builder.go` from `/healthz` to `/readyz`. Diagnosis in `docs/plan/milestone-3.md` §11.D follow-up. Overlaps with #34 (manifest defaults) but is its own diagnosis and patch. |
