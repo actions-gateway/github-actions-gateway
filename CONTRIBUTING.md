@@ -7,12 +7,16 @@
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
 - `make`
 
-**Optional — AI-assisted development (Claude Code):** The [`model-advisor`](https://github.com/karlkfi/claude-skills/tree/main/model-advisor) skill provides model and thinking-level recommendations at session start and on task shifts:
+**Optional — AI-assisted development (Claude Code):** Two skills from [`karlkfi/claude-skills`](https://github.com/karlkfi/claude-skills) are recommended:
+
+- [`model-advisor`](https://github.com/karlkfi/claude-skills/tree/main/model-advisor) — model and thinking-level recommendations at session start and on task shifts.
+- [`tech-docs-layers`](https://github.com/karlkfi/claude-skills/tree/main/tech-docs-layers) — applies the six-layer model of technical documentation when writing, editing, or restructuring docs.
 
 ```bash
 # clone once, then symlink into your user-level skills directory
 git clone git@github.com:karlkfi/claude-skills.git ~/workspace/claude-skills
-ln -s ~/workspace/claude-skills/model-advisor ~/.claude/skills/model-advisor
+ln -s ~/workspace/claude-skills/model-advisor    ~/.claude/skills/model-advisor
+ln -s ~/workspace/claude-skills/tech-docs-layers ~/.claude/skills/tech-docs-layers
 ```
 
 Build the vendored tool binaries before doing anything else:
