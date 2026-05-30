@@ -213,7 +213,7 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // the policy evaluator sees 6443 — a 443-only rule never matches, and the
 // AGC silently loses k8s API access. This is the port-axis equivalent of the
 // `ipBlock: <ClusterIP>/32` trap that bit the proxy NP in PR #59. See
-// docs/plan/5b-root-cause.md for the full diagnosis. Allowing both keeps the
+// docs/development/networkpolicy-port-matching.md for the full diagnosis. Allowing both keeps the
 // policy precise (only apiserver-style ports) while working in both kind and
 // every production deployment topology this controller targets.
 //

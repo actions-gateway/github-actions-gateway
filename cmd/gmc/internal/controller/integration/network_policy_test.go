@@ -174,7 +174,7 @@ func TestGMC_NetworkPolicy_AGCPolicyExists(t *testing.T) {
 		// Must include BOTH port-443 and port-6443 egress for Kubernetes API server access:
 		// production clusters expose the apiserver via the Service at 443, kind translates
 		// the Service ClusterIP:443 → node:6443 and NP enforcement evaluates post-DNAT.
-		// See docs/plan/5b-root-cause.md.
+		// See docs/development/networkpolicy-port-matching.md.
 		saw443, saw6443 := false, false
 		for _, rule := range np.Spec.Egress {
 			for _, port := range rule.Ports {
@@ -192,7 +192,7 @@ func TestGMC_NetworkPolicy_AGCPolicyExists(t *testing.T) {
 		return saw443 && saw6443
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"actions-gateway-controller NetworkPolicy must exist with AGC pod selector and both "+
-			"port-443 and port-6443 egress (see docs/plan/5b-root-cause.md)")
+			"port-443 and port-6443 egress (see docs/development/networkpolicy-port-matching.md)")
 }
 
 func TestGMC_NetworkPolicy_IPRangeRefresh_WorkloadEgressPreserved(t *testing.T) {

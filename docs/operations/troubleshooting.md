@@ -393,7 +393,7 @@ kubectl get pod -n <namespace> -l app=actions-gateway-controller \
 kubectl logs -n kube-system -l app=kindnet --tail=200 --field-selector spec.nodeName=<node-name>
 ```
 
-**Resolution.** Ensure `buildAGCNetworkPolicy` allows both port 443 (production Service shape) *and* port 6443 (kind / Endpoints-on-6443 clusters). The shipped policy does this. If you see this on a custom build or a hand-edited NP, add the 6443 rule. The diagnosis writeup at [`docs/plan/5b-root-cause.md`](../plan/5b-root-cause.md) has a minimal repro and the reasoning behind allowing both ports.
+**Resolution.** Ensure `buildAGCNetworkPolicy` allows both port 443 (production Service shape) *and* port 6443 (kind / Endpoints-on-6443 clusters). The shipped policy does this. If you see this on a custom build or a hand-edited NP, add the 6443 rule. The diagnosis writeup at [`docs/development/networkpolicy-port-matching.md`](../development/networkpolicy-port-matching.md) has a minimal repro and the reasoning behind allowing both ports.
 
 If you see the same symptom for an *ingress*-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.
 

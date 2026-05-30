@@ -444,7 +444,7 @@ func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 	//   - 6443: kind (and any cluster where the apiserver Endpoints listen on 6443) —
 	//     kube-proxy DNATs the Service ClusterIP:443 → node-ip:6443, and NetworkPolicy
 	//     enforcement evaluates the post-DNAT port. A 443-only rule silently drops
-	//     k8s API traffic in kind. See docs/plan/5b-root-cause.md.
+	//     k8s API traffic in kind. See docs/development/networkpolicy-port-matching.md.
 	saw443, saw6443 := false, false
 	for _, rule := range np.Spec.Egress {
 		for _, port := range rule.Ports {
@@ -466,7 +466,7 @@ func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 	assert.True(t, saw443, "AGC NP must include egress rule for port 443 (k8s API server, production)")
 	assert.True(t, saw6443,
 		"AGC NP must include egress rule for port 6443 (k8s API server post-DNAT in kind — "+
-			"docs/plan/5b-root-cause.md)")
+			"docs/development/networkpolicy-port-matching.md)")
 }
 
 func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {

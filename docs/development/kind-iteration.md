@@ -90,7 +90,7 @@ silently drops every k8s API call in kind, even though it works in production wh
   - {port: 6443}   # kind: post-DNAT host port of the apiserver
 ```
 
-`buildAGCNetworkPolicy` in [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) does this. The full diagnosis (and why removing the workload label is **not** a fix) is in [`docs/plan/5b-root-cause.md`](../plan/5b-root-cause.md). The pattern generalises: any NP rule that allows egress through a Service should allow both the Service port and the backend pod (or host) port, unless you can guarantee they match.
+`buildAGCNetworkPolicy` in [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) does this. The full diagnosis (and why removing the workload label is **not** a fix) is in [`networkpolicy-port-matching.md`](networkpolicy-port-matching.md). The pattern generalises: any NP rule that allows egress through a Service should allow both the Service port and the backend pod (or host) port, unless you can guarantee they match.
 
 ## Pointing AGC at fakegithub vs real GitHub
 
