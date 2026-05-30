@@ -448,6 +448,14 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		{Name: "HTTP_PROXY", Value: proxyServiceAddr},
 		{Name: "HTTPS_PROXY", Value: proxyServiceAddr},
 		{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},
+		// PROXY_TLS_SECRET_NAME tells the AGC's pod provisioner which Secret
+		// to project into worker pods so Runner.Worker can validate the
+		// egress proxy's TLS cert. The Secret name is deterministic
+		// per-tenant but is plumbed via env so the AGC pod spec
+		// self-describes the dependency (and a `kubectl describe pod` on the
+		// AGC surfaces it). Symmetric to the proxy-CA mount the AGC itself
+		// already consumes for outbound API calls.
+		{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecretName},
 	}
 	env = append(env, extraEnv...)
 

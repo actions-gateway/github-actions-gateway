@@ -1129,6 +1129,138 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// proxyCA* mirror the unexported provisioner constants. Kept in sync via the
+// test below so a future rename of either side surfaces immediately.
+const (
+	testProxyCAVolumeName = "proxy-ca"
+	testProxyCAMountPath  = "/etc/actions-gateway/proxy-ca"
+	testProxyCAFileName   = "tls.crt"
+)
+
+// TestBuildPod_MountsProxyCASecret verifies that when Provisioner.ProxyTLSSecretName
+// is set, the worker pod gets a Secret volume projecting only tls.crt at
+// testProxyCAMountPath, with a matching read-only mount in the runner
+// container, and PROXY_CA_CERT_PATH points at the cert. tls.key must never be
+// projected because the worker has no use for the private key (the proxy
+// holds it) and leaking it to every worker pod widens the blast radius of a
+// runner compromise. Regression guard for Queue item 5h: Runner.Worker's
+// outbound HTTPS through HTTPS_PROXY fails with UntrustedRoot without this
+// mount.
+func TestBuildPod_MountsProxyCASecret(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.HTTPSProxy = "https://actions-gateway-proxy.team-a.svc.cluster.local:8080"
+	p.ProxyTLSSecretName = "actions-gateway-proxy-tls"
+
+	rg := newRG("mygroup", "team-a")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-proxy-ca", stubPayload(1), "")
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	var caVol *corev1.Volume
+	for i := range pod.Spec.Volumes {
+		if pod.Spec.Volumes[i].Name == testProxyCAVolumeName {
+			caVol = &pod.Spec.Volumes[i]
+			break
+		}
+	}
+	require.NotNil(t, caVol, "proxy CA Secret volume must be present on the worker pod")
+	require.NotNil(t, caVol.Secret, "proxy CA volume must be a Secret volume source")
+	assert.Equal(t, "actions-gateway-proxy-tls", caVol.Secret.SecretName)
+
+	require.Len(t, caVol.Secret.Items, 1,
+		"only tls.crt must be projected — never tls.key — to keep the proxy private key off worker pods")
+	assert.Equal(t, corev1.TLSCertKey, caVol.Secret.Items[0].Key)
+	assert.Equal(t, testProxyCAFileName, caVol.Secret.Items[0].Path)
+
+	var runner *corev1.Container
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "runner" {
+			runner = &pod.Spec.Containers[i]
+			break
+		}
+	}
+	require.NotNil(t, runner)
+
+	var caMount *corev1.VolumeMount
+	for i := range runner.VolumeMounts {
+		if runner.VolumeMounts[i].Name == testProxyCAVolumeName {
+			caMount = &runner.VolumeMounts[i]
+			break
+		}
+	}
+	require.NotNil(t, caMount, "runner container must mount the proxy CA volume")
+	assert.Equal(t, testProxyCAMountPath, caMount.MountPath)
+	assert.True(t, caMount.ReadOnly, "proxy CA mount must be read-only")
+
+	envMap := make(map[string]string)
+	for _, e := range runner.Env {
+		envMap[e.Name] = e.Value
+	}
+	assert.Equal(t, testProxyCAMountPath+"/"+testProxyCAFileName, envMap["PROXY_CA_CERT_PATH"],
+		"PROXY_CA_CERT_PATH must point at the mounted cert so the worker wrapper can read it")
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+// TestBuildPod_NoProxyCAWhenSecretNameEmpty verifies that the proxy-CA mount
+// is skipped when ProxyTLSSecretName is empty (the default for tests and any
+// deployment without the per-tenant egress proxy). PROXY_CA_CERT_PATH must be
+// empty so the worker wrapper short-circuits the trust-store install.
+func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	// ProxyTLSSecretName left empty.
+
+	rg := newRG("mygroup", "team-a")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+
+	for _, v := range pod.Spec.Volumes {
+		assert.NotEqual(t, testProxyCAVolumeName, v.Name,
+			"proxy CA volume must be absent when ProxyTLSSecretName is empty")
+	}
+	for _, c := range pod.Spec.Containers {
+		for _, m := range c.VolumeMounts {
+			assert.NotEqual(t, testProxyCAVolumeName, m.Name,
+				"proxy CA mount must be absent when ProxyTLSSecretName is empty")
+		}
+		for _, e := range c.Env {
+			if e.Name == "PROXY_CA_CERT_PATH" {
+				assert.Empty(t, e.Value,
+					"PROXY_CA_CERT_PATH must be empty when no proxy CA Secret is configured")
+			}
+		}
+	}
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
 // TestProvisioner_RerunURLRejectsAdversarialRepository verifies that adversarial
 // system.github.repository values do not reach the GitHub API. The rerun path
 // is exercised end-to-end via pod eviction so the full owner/repo extraction and

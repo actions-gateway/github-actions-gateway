@@ -63,6 +63,19 @@ const (
 	// stub-registrar agents.
 	jitConfigKey    = "jitconfig"
 	runnerContainer = "runner"
+
+	// proxyCAVolumeName / proxyCAMountPath / proxyCAFileName describe how the
+	// per-tenant egress-proxy CA cert is projected into the worker pod. The
+	// runner image's default OS trust store does not include the
+	// cert-manager-issued self-signed CA that signs the proxy's TLS cert, so
+	// Runner.Worker's outbound HTTPS calls through HTTPS_PROXY fail with
+	// UntrustedRoot. The worker wrapper reads the cert from this path and
+	// publishes it via SSL_CERT_FILE before exec'ing Runner.Worker. The path
+	// matches the AGC's own mount in [cmd/gmc/internal/controller/builder.go]
+	// (buildAGCDeployment) for symmetry.
+	proxyCAVolumeName = "proxy-ca"
+	proxyCAMountPath  = "/etc/actions-gateway/proxy-ca"
+	proxyCAFileName   = "tls.crt"
 )
 
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
@@ -83,6 +96,15 @@ type Provisioner struct {
 	HTTPProxy  string
 	HTTPSProxy string
 	NoProxy    string
+
+	// ProxyTLSSecretName names a Secret in the tenant namespace whose tls.crt
+	// key is the per-tenant egress-proxy CA certificate. When non-empty the
+	// provisioner projects that key (cert only — never tls.key) into the
+	// worker pod at proxyCAMountPath/proxyCAFileName so the worker entrypoint
+	// wrapper can trust the proxy's TLS cert. Empty (the default) skips the
+	// mount, which is the right behaviour for tests and any deployment that
+	// runs without the per-tenant egress proxy.
+	ProxyTLSSecretName string
 
 	// TokenFunc returns a valid GitHub App installation token for API calls.
 	// If nil, eviction auto-retry is logged but the rerun API is not called.
@@ -489,11 +511,47 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 		Value: payloadMountPath,
 	})
 
+	// Project the per-tenant egress-proxy CA cert into the runner container.
+	// Cert only — Items restricts the projection to tls.crt so the private key
+	// never reaches the worker pod. Mount mode 0o444 + the PodSpec FSGroup keep
+	// the cert world-readable to the runner user (UID 1001 in the actions-runner
+	// base image) without requiring write capability.
+	if p.ProxyTLSSecretName != "" {
+		caMode := int32(0o444)
+		template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
+			Name: proxyCAVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: p.ProxyTLSSecretName,
+					Items: []corev1.KeyToPath{{
+						Key:  corev1.TLSCertKey,
+						Path: proxyCAFileName,
+					}},
+					DefaultMode: &caMode,
+				},
+			},
+		})
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      proxyCAVolumeName,
+			MountPath: proxyCAMountPath,
+			ReadOnly:  true,
+		})
+	}
+
 	// Inject proxy env vars into the runner container (controller-enforced invariants).
+	// PROXY_CA_CERT_PATH tells the worker wrapper where to find the mounted CA;
+	// empty when ProxyTLSSecretName is unset, in which case the wrapper skips
+	// the trust-store install and HTTPS_PROXY traffic falls back to whatever
+	// the base image already trusts.
+	proxyCACertPath := ""
+	if p.ProxyTLSSecretName != "" {
+		proxyCACertPath = proxyCAMountPath + "/" + proxyCAFileName
+	}
 	proxyEnvs := []corev1.EnvVar{
 		{Name: "HTTP_PROXY", Value: p.HTTPProxy},
 		{Name: "HTTPS_PROXY", Value: p.HTTPSProxy},
 		{Name: "NO_PROXY", Value: p.NoProxy},
+		{Name: "PROXY_CA_CERT_PATH", Value: proxyCACertPath},
 	}
 	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
 

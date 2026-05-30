@@ -718,6 +718,21 @@ func TestBuildAGCDeployment_NilExtraEnvNoLeaks(t *testing.T) {
 	}
 }
 
+// TestBuildAGCDeployment_PlumbsProxyTLSSecretName asserts that the AGC
+// Deployment ships PROXY_TLS_SECRET_NAME so the AGC's pod provisioner can
+// project the same Secret into worker pods. Regression guard for Queue
+// item 5h: without this env, worker pods inherit HTTPS_PROXY but no proxy CA
+// trust and every outbound HTTPS call fails with UntrustedRoot.
+func TestBuildAGCDeployment_PlumbsProxyTLSSecretName(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+	got, ok := env["PROXY_TLS_SECRET_NAME"]
+	require.True(t, ok, "PROXY_TLS_SECRET_NAME must be set on the AGC Deployment")
+	assert.Equal(t, proxyTLSSecretName, got.Value,
+		"PROXY_TLS_SECRET_NAME must point at the per-tenant proxy TLS Secret")
+}
+
 func TestBuildAGCDeployment_ProxyCACertMount(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)
