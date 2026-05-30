@@ -52,25 +52,13 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
 ## Testing
 
-Always use per-module test commands — `go test ./...` from the repo root does not work (Go workspace; see `docs/development/go-workspaces.md`):
-
-```bash
-(cd broker     && go test ./...)    # broker module
-(cd githubapp  && go test ./...)    # githubapp module
-(cd cmd/agc   && go test ./...)     # AGC module
-(cd cmd/gmc   && go test ./...)     # GMC module
-(cd cmd/probe && go test ./...)     # probe module
-(cd cmd/proxy && go test ./...)     # proxy module
-(cd cmd/worker && go test ./...)    # worker module
-```
-
-Run tests locally before pushing to a PR to avoid burning CI. Prefer the narrowest scope that covers the changes: a single module's unit tests, `-run` to target a specific test, integration tests for controller changes, or `--focus` for a targeted e2e spec. Run the full e2e suite only when changes are broad enough to warrant it.
+Use the per-module test commands in [`docs/development/testing.md`](docs/development/testing.md) — `go test ./...` from the repo root does not work (Go workspace). That doc is the canonical source for run commands, test-scope selection, and the integration/e2e tiers.
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
 **Pick the right tier for the bug class.** Unit and envtest tests can't observe behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A kind e2e test (see [`docs/design/07-test-plan.md`](docs/design/07-test-plan.md) §7.3 and [`docs/development/testing.md`](docs/development/testing.md)) is the only thing that proves it works. PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
 
-For integration tests and CI workflow guidance, see `docs/development/testing.md`. For iterating against a real kind cluster — image-tag caching, debugging distroless pods, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop — see `docs/development/kind-iteration.md`.
+For iterating against a real kind cluster — image-tag caching, debugging distroless pods, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop — see `docs/development/kind-iteration.md`.
 
 ## Security principles
 
