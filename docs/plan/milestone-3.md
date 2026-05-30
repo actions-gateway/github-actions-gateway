@@ -6,25 +6,26 @@
 
 ## Status at a glance
 
-Last refreshed 2026-05-29. The provisioner, decryption, ceiling
+Last refreshed 2026-05-30. The provisioner, decryption, ceiling
 enforcement, eviction retry, GC, and RBAC are all in code. Investigation A
-(Named Pipe protocol) is complete — the implementation in `cmd/worker/main.go`
-now uses the correct anonymous-pipe + UTF-16LE wire format confirmed from the
-runner source. The 2026-05-29 live kind dry-run against real GitHub
-(Queue item 6, Tier C `E2E_GitHub_RealDispatch`) reached worker-pod creation
-and Runner.Worker parsed the job message correctly, but every outbound HTTPS
-call failed the TLS handshake with `UntrustedRoot` because the worker pod
-had no proxy-CA trust install. Queue item 5h has shipped (see §11.C
-Resolution): AGC now projects `actions-gateway-proxy-tls` cert into worker
-pods, GMC plumbs `PROXY_TLS_SECRET_NAME`, worker entrypoint wrapper installs
-the CA via `SSL_CERT_FILE`. Re-run of item 6 still pending for end-to-end
-verification.
+(Named Pipe protocol) is complete. Queue item 5h (worker proxy-CA trust)
+shipped 2026-05-30. **Queue item 6 (Tier-C `E2E_GitHub_RealDispatch`)
+re-ran successfully on 2026-05-30** against real GitHub
+(`actions-gateway/gateway-test`, workflow `test-job.yml`, run
+[26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172)):
+both specs (`E2E_GitHub_ActionsGatewayReachesReady` and
+`E2E_GitHub_WorkflowCompletesGreen`) pass, GitHub-side run concludes
+`success` — the first green checkmark from this system. The re-run
+also surfaced an unrelated GMC readiness-probe bug (`/readyz` returned
+OK before the webhook server bound, racing every rollout); fixed
+separately in `cmd/gmc/cmd/main.go` by gating readyz on
+`mgr.GetWebhookServer().StartedChecker()`.
 
 | Success criterion | Status | Notes |
 |---|---|---|
-| Real workflow job completes with green checkmark | ⚠️ Code complete, awaiting re-run | Queue item 5h shipped on 2026-05-29 (worker proxy-CA trust): provisioner mounts `actions-gateway-proxy-tls` (cert only) into worker pods at `/etc/actions-gateway/proxy-ca/tls.crt`, wrapper exports `SSL_CERT_FILE` pointing at a combined trust bundle. Item 6 re-run will confirm the green checkmark end-to-end. |
+| Real workflow job completes with green checkmark | ✅ Done | 2026-05-30 — Tier-C `E2E_GitHub_RealDispatch` passes; run [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172) on `actions-gateway/gateway-test` concludes `success`. Required both 5h (worker proxy-CA trust) and the GMC `/readyz` webhook-gating fix. |
 | `go test -race ./...` passes across all modules | ✅ Done | Per-module test commands pass |
-| Worker container exits 0 on success, non-zero on failure | ⚠️ Unverified | Wrapper code forwards exit codes ([worker/main.go:99-107](../../cmd/worker/main.go)) but not exercised end-to-end |
+| Worker container exits 0 on success, non-zero on failure | ✅ Done | Exercised by the 2026-05-30 Tier-C re-run: worker pod exited 0 and the GitHub-side run concluded `success`. |
 | Pod and Secret GC'd within 30s of terminal state | ✅ Done in code | `deleteSecret` + pod cleanup in [provisioner.go:166-206](../../cmd/agc/internal/provisioner/provisioner.go) |
 | `maxWorkers` ceiling enforced | ✅ Done | `activePodCount` check at [provisioner.go:335](../../cmd/agc/internal/provisioner/provisioner.go) |
 | `priorityTiers` ceiling + PriorityClass assignment | ✅ Done | Tier walk in provisioner pod builder |
@@ -37,11 +38,11 @@ verification.
 
 ### Critical path
 
-The Named Pipe protocol (Investigation A) is resolved. Queue item 5h
-(worker proxy-CA trust install) has shipped — code paths, unit tests,
-and docs are in. The remaining critical-path action is re-running
-Queue item 6 (`E2E_GitHub_RealDispatch` against `actions-gateway-test`)
-to confirm the green checkmark end-to-end.
+All M3 criteria are met. Queue item 6 (`E2E_GitHub_RealDispatch`)
+passed end-to-end on 2026-05-30 with a green checkmark on the
+GitHub-side run, unblocking items 7 (egress-proxy live curl) and
+11 (Ed25519 live probe) which both share the live-kind-cluster
+dependency.
 
 ---
 
@@ -831,3 +832,57 @@ the same kind cluster and should reach the green checkmark.
 The next live dry-run of item 6 should reach the green checkmark
 without `UntrustedRoot` log lines. M-11b (Ed25519 live probe) and item
 7 (egress-proxy live curl validation) are unblocked at the same time.
+
+---
+
+### 11.D — GMC readiness probe did not gate on webhook server start
+
+**Surfaced by:** 2026-05-30 re-run of `E2E_GitHub_RealDispatch` (Queue
+item 6). The test's `BeforeAll` does `kubectl set env` on the GMC
+Deployment to swap fakegithub→real-GitHub env vars, which triggers a
+rolling update. It then waits for `kubectl rollout status` to settle
+and immediately applies the tenant `ActionsGateway` CR. Every attempt
+failed in `kubectl apply` with:
+
+```
+Internal error occurred: failed calling webhook
+"vactionsgateway-v1alpha1.kb.io": failed to call webhook:
+Post "https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s":
+context deadline exceeded
+```
+
+**Root cause:** `cmd/gmc/cmd/main.go` only registered
+`mgr.AddReadyzCheck("readyz", healthz.Ping)` — a probe that returns OK
+as soon as the manager process is up. controller-runtime starts the
+webhook listener on port 9443 in a separate goroutine that races
+against the readiness probe. Once readyz returns 200, the kubelet
+marks the pod Ready and the EndpointSlice for `gmc-webhook-service`
+adds the new pod IP. The kube-apiserver routes admission calls to that
+pod — but its webhook listener may not yet be bound, so every
+`kubectl apply ActionsGateway` racing a GMC rollout hangs for the
+admission `timeout=10s` and fails.
+
+**Fix:** Added a second readyz check gated on
+`mgr.GetWebhookServer().StartedChecker()`
+([cmd/gmc/cmd/main.go](../../cmd/gmc/cmd/main.go)) — the
+controller-runtime helper returns nil only after the webhook listener
+is bound *and* a TLS self-dial succeeds. Conditional on
+`ENABLE_WEBHOOKS != "false"` so envtest runs that disable webhooks
+keep marking themselves Ready.
+
+**Production impact:** This race affected every GMC rolling update in
+production, not just the e2e suite. Any concurrent `kubectl apply` of
+an `ActionsGateway` CR during a GMC image roll or env-var change had a
+1–2s window where it could time out. The fix is a one-line addition
+and ships in the same branch as the item 6 re-run.
+
+**Follow-up identified:** The egress proxy
+([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)) has the same class of
+bug — its `/healthz` returns OK as soon as the health-port server
+binds, but the CONNECT listener on port 8080 is started in a separate
+goroutine. The GMC's per-tenant proxy Deployment
+([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go))
+uses `/healthz` for both liveness and readiness, so worker pods can
+hit `connection refused` on `HTTPS_PROXY` traffic during a proxy
+rollout or HPA scale-up. Tracked as a Queue item in
+[docs/STATUS.md](../STATUS.md).
