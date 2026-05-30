@@ -10,3 +10,5 @@ Developer and CI helper scripts. All scripts follow the bash conventions in [CLA
 | [run-parallel.sh](run-parallel.sh) | Run multiple commands in parallel with labeled, real-time output. Useful for running per-module tests concurrently. |
 | [probe-live-run.sh](probe-live-run.sh) | End-to-end setup and execution of the Milestone 1 wire-protocol probe against a real GitHub App installation. |
 | [probe-investigations-cd.sh](probe-investigations-cd.sh) | Runs Milestone 1 Investigations C and D against real GitHub. |
+| [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`). |
+| [pre-commit-lint-status](pre-commit-lint-status) | Optional git pre-commit hook. Enable with `ln -s ../../scripts/pre-commit-lint-status .git/hooks/pre-commit`. |

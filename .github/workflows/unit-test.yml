@@ -3,11 +3,13 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - '!docs/STATUS.md'
   push:
     branches: [main]
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - '!docs/STATUS.md'
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -42,6 +44,8 @@ jobs:
             echo "==> golangci-lint $dir"
             (cd "$dir" && "$GITHUB_WORKSPACE/.build/golangci-lint" run --config "$GITHUB_WORKSPACE/.golangci.yml" ./...)
           done
+      - name: lint STATUS.md
+        run: make lint-status
   unit-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

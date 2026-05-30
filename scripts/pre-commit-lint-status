@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Optional git pre-commit hook to lint docs/STATUS.md.
+#
+# To enable: ln -s ../../scripts/pre-commit-lint-status .git/hooks/pre-commit
+# To disable: rm .git/hooks/pre-commit
+#
+# This hook runs before each commit. If docs/STATUS.md is staged, the linter
+# will validate it. A validation failure prevents the commit.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if git diff --cached --name-only | grep -q "^docs/STATUS.md$"; then
+    echo "Linting docs/STATUS.md..."
+    "$REPO_ROOT/scripts/lint-status.sh"
+fi
