@@ -266,6 +266,17 @@ func main() {
 		setupLog.Error(err, "Failed to set up ready check")
 		os.Exit(1)
 	}
+	// Gate readiness on the webhook server actually listening, not just on the
+	// manager being up. Without this, a fresh GMC pod is briefly added to the
+	// gmc-webhook-service endpoints before the admission webhook port is bound,
+	// so the apiserver routes admission calls to a not-yet-serving pod and
+	// every dependent `kubectl apply` times out for ~1s during each rollout.
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "Failed to set up webhook ready check")
+			os.Exit(1)
+		}
+	}
 
 	setupLog.Info("Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
