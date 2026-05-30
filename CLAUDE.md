@@ -109,6 +109,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — also run `gh pr list` and skip any Queue item already covered by an open PR |
+| Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` |
 | Updating API/CRD docs after a field change | `docs/design/03-api-contracts.md` |
 | Updating architecture prose or metrics table | `docs/design/02-architecture.md` |
 | Updating operational flow diagrams | `docs/design/04-operational-flows.md` |
