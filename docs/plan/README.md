@@ -57,6 +57,7 @@ markers per item.
 |---|---|---|
 | [gaps.md](gaps.md) | Three code-level fixes surfaced by doc audit (CRD eviction fields, proxy resource merge, credential rotation observability) | ⚠️ Fixes #1 and #3 done; fix #2 (per-key `proxy.resources` merge — HPA silent failure) still open |
 | [docs.md](docs.md) | Documentation roadmap across phases | ⚠️ Phase 1 fully done; 4 items open in Phase 2/3 |
+| [docs-six-layer-audit.md](docs-six-layer-audit.md) | Six-layer consistency audit of `docs/` (terminology, cross-refs, nav, reuse) | ⚠️ Layer 2 healthy; Layers 1/4/5/6 have audit + small fixes open |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ⚠️ Phase 1 done; Phase 2 has open drift items (image vars, envtest, `all` semantics) |
 
 ## Archive
