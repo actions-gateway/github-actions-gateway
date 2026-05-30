@@ -12,3 +12,4 @@ Developer workflow references. Read the relevant doc before starting a task in t
 | [go-workspaces.md](go-workspaces.md) | Working across modules — workspace layout, vendoring, worktree gotchas. |
 | [github-app-credentials.md](github-app-credentials.md) | Setting up GitHub App credentials for live-cluster tests (M2 kind check, M3/M4 end-to-end, Ed25519 probe, egress). |
 | [maintaining-backlog.md](maintaining-backlog.md) | Editing [docs/STATUS.md](../STATUS.md) — Queue, Progress table, header. Rules that keep merge conflicts trivial. |
+| [../design/08-glossary.md](../design/08-glossary.md) | Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers). |

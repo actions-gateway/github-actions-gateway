@@ -1,6 +1,6 @@
 # Milestone 2 — Remaining Test Gaps
 
-← [Milestone 2](milestone-2.md)
+← [Milestone 2](../milestone-2.md)
 
 ---
 
