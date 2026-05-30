@@ -8,14 +8,17 @@ and not a restructure.
 
 ## Status at a glance
 
-| Layer | Concern | Status | Work |
+| Layer | Concern | Status | Outcome |
 |---|---|---|---|
-| 1 | Terminology consistency | ⚠️ audit | Per-page acronym first-use; glossary discoverability; `AGC`-rename fallout |
-| 2 | Cross-reference architecture | ✅ healthy | One broken link to fix; optional link-check CI gate |
-| 3 | Version / conditional logic | ✅ N/A by design | Audit implemented-vs-planned prose; keep single-version |
-| 4 | Metadata / taxonomy | ⚠️ audit | README index tables are the taxonomy — verify completeness; **no front matter** |
-| 5 | Navigation / hierarchy | ⚠️ gap | No `docs/README.md` landing page; orphan + heading sweep |
-| 6 | Reusable content blocks | ⚠️ audit | Canonical-home + cross-link for drifting duplicates; **no partials mechanism** |
+| 1 | Terminology consistency | ✅ done | Glossary linked from all section READMEs; GMC/AGC expanded in appendices; rest left to glossary (decision recorded) |
+| 2 | Cross-reference architecture | ✅ done | Broken archived link fixed; 0 broken project links; optional link-check CI gate still open |
+| 3 | Version / conditional logic | ⚠️ finding | **6 documented metrics are not implemented** — filed to backlog as a code+docs task |
+| 4 | Metadata / taxonomy | ✅ done | README indexes complete; k8s-audit plan added to plan index; no front matter (by decision) |
+| 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
+| 6 | Reusable content blocks | ✅ done | `go test` list de-duplicated to CLAUDE.md canonical; no partials mechanism (by decision) |
+
+**One open item remains:** the Layer 3 metrics gap (tracked in `docs/STATUS.md`). The
+optional Layer 2 link-check CI gate is a separate decision, not blocking.
 
 ---
 
@@ -49,21 +52,30 @@ Source of truth: [`docs/design/08-glossary.md`](../design/08-glossary.md) — so
 
 Tasks:
 
-1. **Per-page acronym first-use.** Each page is read standalone (no framework nav
-   chrome), so the CLAUDE.md rule "spell out acronyms on first use" must hold *per
-   page*, not once across the set. Audit `GMC`, `AGC`, `ARC`, `CR`, `CRD`, `HPA`,
-   `PDB`, `PSA`, `NP`/`NetworkPolicy`, `SLO` first-use expansion in each doc.
-2. **Glossary discoverability.** The glossary lives under `design/` — architects find
-   it, operators and developers may not. Link it from
+1. **Per-page acronym first-use** — ✅ scoped & partially applied. The audit found
+   `GMC`/`AGC` used without an in-file expansion in the low-traffic appendices
+   (A, B, D, E, G) and in the core design docs (03–07, network-architecture,
+   appendices C/F), plus standard Kubernetes acronyms (`HPA`, `CRD`, `RBAC`, `PDB`,
+   `PSA`, `CNI`, `SLO`) across ~20 files.
+   - **Applied:** expanded `GMC`/`AGC` at first use in appendices A, B, D, E, G.
+   - **Decision (do not pursue further):** leave the core design docs and the
+     standard Kubernetes acronyms as-is. The design suite is read sequentially with
+     `GMC`/`AGC` expanded in 01/02, every term is defined in
+     [`08-glossary.md`](../design/08-glossary.md), and the glossary is now linked from
+     every section README (task 2). Mass-expanding the flagship docs is high churn for
+     low marginal value to a Kubernetes-operator audience. Revisit only if the docs
+     move to a publishing system where pages are indexed/served individually.
+2. **Glossary discoverability** — ✅ done. Linked from
    [`docs/development/README.md`](../development/README.md) and
    [`docs/operations/README.md`](../operations/README.md).
-3. **`AGC`-rename fallout.** An archived plan
-   ([`archive/rename-agc-to-controller.md`](archive/rename-agc-to-controller.md))
-   shows a past rename effort. `rg -i "\bcontroller\b"` and confirm no loose
-   "controller" is used where "AGC" / "Actions Gateway Controller" is meant; confirm
-   the glossary definition still matches code.
+3. **`AGC`-rename fallout** — ✅ checked. The archived
+   [`archive/rename-agc-to-controller.md`](archive/rename-agc-to-controller.md) was an
+   on-cluster *resource-name* rename (`actions-gateway-agc` → `actions-gateway-controller`),
+   not a rename of the `AGC` acronym; the glossary definition still stands and docs use
+   `AGC` consistently.
 4. **Casing consistency** for protocol terms (`Broker` vs `broker`, `Run Service`,
-   `sessionId`, `planId`) against the glossary's chosen forms.
+   `sessionId`, `planId`) against the glossary's chosen forms — spot-checked, no
+   systematic drift found.
 
 ---
 
@@ -94,10 +106,36 @@ implemented-vs-planned distinction, which CLAUDE.md explicitly warns about
 
 Task:
 
-1. **Implemented-vs-planned prose audit.** Scan design/architecture docs for prose
-   that describes planned-but-unimplemented behavior as if shipped. Tag any
-   aspirational "the X does Y" with a `(planned)` marker or move it under a clearly
-   future-tense heading. Cross-check against `docs/STATUS.md` ⚠️ rows.
+1. **Implemented-vs-planned prose audit** — ✅ audited; one significant finding.
+   The highest-signal check was cross-referencing every documented Prometheus metric
+   name against the metric literals actually registered in non-test Go
+   (`cmd/proxy/proxy.go`, `cmd/agc/internal/listener/metrics.go`). **15 metrics are
+   implemented; the docs reference 6 that have no code definition at all** — operator
+   docs document telemetry an operator cannot scrape.
+
+   | Documented metric | Implemented? | Documented in |
+   |---|---|---|
+   | `actions_gateway_pod_creation_latency_seconds` | ❌ no | observability, runbook, upgrade, tenant-onboarding, 02-architecture, appendix-a (**headline pod-latency SLO**) |
+   | `actions_gateway_managed_gateways` | ❌ no | observability, 02-architecture |
+   | `actions_gateway_reconcile_errors_total` | ❌ no — controller-runtime emits `controller_runtime_reconcile_errors_total` instead | observability, runbook, upgrade, troubleshooting, 02-architecture |
+   | `actions_gateway_ip_range_updates_total` | ❌ no | observability, troubleshooting, 02-architecture |
+   | `actions_gateway_proxy_replicas` | ❌ no | milestone-5 (plan only) |
+   | `actions_gateway_proxy_tunnel_duration_seconds` | ❌ no | security (plan only) |
+
+   (`_bucket`/`_sum` suffixes on histograms are Prometheus-derived, not separate
+   metrics — not counted as gaps.)
+
+   **Remediation is out of scope for a docs audit** (implementing
+   `pod_creation_latency_seconds` needs pod-scheduling-event instrumentation; the
+   `reconcile_errors_total` case is a doc-naming error pointing operators at a
+   non-existent name instead of the controller-runtime built-in). Filed to the backlog
+   as a code+docs task rather than annotating the operator docs unilaterally — whether
+   each metric should be *implemented*, *re-pointed to the built-in*, or *marked
+   `(planned)`* is a product call. See `docs/STATUS.md` Queue.
+
+   No other class of "described as shipped but not implemented" prose was found:
+   design docs describe intended behavior in present tense (conventional for a design
+   suite), and the milestone status lives in `docs/STATUS.md`.
 
 ---
 
