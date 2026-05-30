@@ -129,7 +129,9 @@ capacity model.
 
 ---
 
-## Implementation status — **Done (2026-05-23, commit `4932ce7`)**
+## Implementation status
+
+**Done (2026-05-23, commit `4932ce7`).**
 
 The split shipped. `cmd/gmc/internal/controller/builder.go` now emits
 three NetworkPolicies:
