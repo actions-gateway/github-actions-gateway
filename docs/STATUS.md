@@ -46,7 +46,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 37 | Go best-practices: CI lint gate | `infra` `tests` | 🔲 | S | Add `gofmt -l`, `go vet`, and `golangci-lint` to `.github/workflows/unit-test.yml`. 20 files currently fail `gofmt -l` on `main`; no Go linter runs in CI today. A repo-root `.golangci.yml` is also missing (only `cmd/gmc/.golangci.yml` exists, Kubebuilder default, never invoked). Would prevent regressions of items 38–41. |
 | 44 | `make lint-status` for STATUS.md format rules | `infra` `tests` | 🔲 | S | ~30 LoC shell enforcing the rules in [maintaining-backlog](development/maintaining-backlog.md): single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Wire to `unit-test.yml` + pre-commit. |
 | 43 | Structured `Blocked by:` + queue-unblock helper | `infra` `docs` | 🔲 | S | Replace free-text "→ X" blocker notes with `Blocked by #N`; add `make queue-unblock ID=N` to enumerate dependents for one-commit unblock sweeps. Fixes the stale-blocker class CLAUDE.md already warns about. See [maintaining-backlog](development/maintaining-backlog.md). |
 | 7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🔲 | S | **Unblocked by item 6 on 2026-05-30.** Same kind cluster + real GitHub App available; need to assert workload→proxy CONNECT + DNAT + IP-range egress with `curl` from a workload-labeled debug pod. |
