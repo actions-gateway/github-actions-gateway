@@ -413,8 +413,8 @@ func TestRenewJob_Interval(t *testing.T) {
 
 	const wantRenewals = 3
 	for i := 0; i < wantRenewals; i++ {
-		tickCh <- time.Now()  // trigger exactly one renewal
-		<-renewed             // wait for the HTTP round-trip to complete
+		tickCh <- time.Now() // trigger exactly one renewal
+		<-renewed            // wait for the HTTP round-trip to complete
 	}
 
 	// Cancel and drain the error channel — this waits for the goroutine to exit,

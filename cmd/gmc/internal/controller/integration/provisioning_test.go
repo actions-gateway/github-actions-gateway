@@ -375,4 +375,3 @@ func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
 	require.NoError(t, k8sClient.List(ctx, &rgList, client.InNamespace(nsName)))
 	require.Len(t, rgList.Items, 2)
 }
-

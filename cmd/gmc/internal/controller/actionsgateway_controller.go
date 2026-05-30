@@ -190,7 +190,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	// 12. RunnerGroup CRs.
 	for i, spec := range ag.Spec.RunnerGroups {
 		name := fmt.Sprintf("%s-%d", ag.Name, i)
-		if spec.RunnerLabels != nil && len(spec.RunnerLabels) > 0 {
+		if len(spec.RunnerLabels) > 0 {
 			name = fmt.Sprintf("%s-%s", ag.Name, labelSafe(spec.RunnerLabels[0]))
 		}
 		if err := r.applyRunnerGroup(ctx, buildRunnerGroup(ag, spec, name)); err != nil {

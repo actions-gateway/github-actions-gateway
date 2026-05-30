@@ -64,7 +64,7 @@ type server struct {
 	sessions        map[string]bool
 	jobQueues       map[string]chan message
 	bearerSessions  map[string]string // bearer → sessionID
-	acquireResponse interface{}        // nil = default
+	acquireResponse interface{}       // nil = default
 	acquireCount    atomic.Int64
 }
 

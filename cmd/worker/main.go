@@ -313,7 +313,6 @@ func materializeJITConfig(payloadDir, runnerHome string) error {
 	return nil
 }
 
-
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

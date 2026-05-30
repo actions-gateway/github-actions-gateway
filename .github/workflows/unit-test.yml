@@ -9,6 +9,39 @@ on:
       - '**.md'
       - 'docs/**'
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.work
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          unformatted=$(gofmt -l $(go work edit -json | jq -r '.Use[].DiskPath'))
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt found unformatted files:"
+            echo "$unformatted"
+            echo "run: gofmt -s -w <file>"
+            exit 1
+          fi
+      - name: go vet
+        run: |
+          set -euo pipefail
+          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
+            echo "==> go vet $dir"
+            (cd "$dir" && go vet ./...)
+          done
+      - name: golangci-lint
+        run: |
+          set -euo pipefail
+          make golangci-lint
+          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
+            echo "==> golangci-lint $dir"
+            (cd "$dir" && "$GITHUB_WORKSPACE/.build/golangci-lint" run --config "$GITHUB_WORKSPACE/.golangci.yml" ./...)
+          done
   unit-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

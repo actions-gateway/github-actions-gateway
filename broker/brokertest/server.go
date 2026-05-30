@@ -23,12 +23,12 @@ type Server struct {
 	mu                  sync.Mutex
 	tokenCounter        atomic.Int64
 	sessionCounter      int
-	sessions            map[string]bool                        // sessionID → active
+	sessions            map[string]bool                         // sessionID → active
 	deletedSessions     map[string]chan struct{}                // sessionID → closed on DELETE
 	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
 	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
-	bearerSessions      map[string]string                      // bearerToken → sessionID
-	acquireJobResponse  interface{}                            // custom AcquireJob response; nil uses default
+	bearerSessions      map[string]string                       // bearerToken → sessionID
+	acquireJobResponse  interface{}                             // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
 	renewJobCount       atomic.Int64
 	msgCounter          atomic.Int64

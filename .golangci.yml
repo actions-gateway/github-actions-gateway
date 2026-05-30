@@ -1,0 +1,59 @@
+version: "2"
+# Repo-root config. Each go.work module is linted from its own directory
+# (see the `lint` target in the root Makefile and .github/workflows/unit-test.yml).
+#
+# Scope: catch regressions of the bugs and idiom violations tracked in Queue
+# items 38-41. Tightenings (e.g. modernize/any, predeclared shadowing,
+# errcheck on ignored returns) land alongside those items.
+run:
+  timeout: 5m
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    staticcheck:
+      # Disabled checks:
+      # - QFxxxx: refactor "quick fix" suggestions (style, not bugs).
+      # - ST1000: requires a package comment on every package. Noise on
+      #   internal packages whose API surface is documented at type/func
+      #   level. CLAUDE.md's "godoc comments" rule covers public packages
+      #   (api/, broker/) where package comments already exist.
+      checks: ["all", "-QF1001", "-QF1003", "-QF1008", "-QF1012", "-ST1000"]
+  exclusions:
+    generated: lax
+    rules:
+      # Kubebuilder-generated GroupVersion scaffolding still uses
+      # scheme.Builder; not under our control until kubebuilder updates.
+      - path: api/v1alpha1/groupversion_info\.go
+        linters:
+          - staticcheck
+        text: "SA1019.*scheme\\.Builder"
+      # System cert pool test deliberately uses x509.CertPool.Subjects to
+      # assert superset behavior; rewrite is tracked separately.
+      - path: cmd/agc/internal/transport/proxytrust_test\.go
+        linters:
+          - staticcheck
+        text: "SA1019.*Subjects"
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$

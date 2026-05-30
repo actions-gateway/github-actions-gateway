@@ -242,7 +242,7 @@ func run(logger *slog.Logger) error {
 		msg = got
 		logger.Info("job message received", "messageId", msg.MessageID)
 
-			// Decrypt the session key from the CreateSession response using the
+		// Decrypt the session key from the CreateSession response using the
 		// runner's RSA private key, or fall back to the GITHUB_SESSION_KEY env var.
 		if len(sess.EncryptionKey) > 0 && runnerKey != nil {
 			sessionKey, err = broker.DecryptSessionKey(sess.EncryptionKey, runnerKey)

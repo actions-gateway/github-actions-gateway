@@ -9,8 +9,8 @@ func TestLabelSafe(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		wantSeg  string // expected sanitized segment (before the hash)
-		wantLen  int    // exact expected output length, 0 means don't check
+		wantSeg  string   // expected sanitized segment (before the hash)
+		wantLen  int      // exact expected output length, 0 means don't check
 		distinct []string // inputs that must produce a different output than input
 	}{
 		{
@@ -24,15 +24,15 @@ func TestLabelSafe(t *testing.T) {
 			wantSeg: "linux",
 		},
 		{
-			name:    "slash replaced with hyphen",
-			input:   "gpu/a100",
-			wantSeg: "gpu-a100",
+			name:     "slash replaced with hyphen",
+			input:    "gpu/a100",
+			wantSeg:  "gpu-a100",
 			distinct: []string{"gpu_a100", "gpu.a100"},
 		},
 		{
-			name:    "underscore replaced with hyphen",
-			input:   "gpu_a100",
-			wantSeg: "gpu-a100",
+			name:     "underscore replaced with hyphen",
+			input:    "gpu_a100",
+			wantSeg:  "gpu-a100",
 			distinct: []string{"gpu/a100"},
 		},
 		{
@@ -41,9 +41,9 @@ func TestLabelSafe(t *testing.T) {
 			wantSeg: "leading-trailing",
 		},
 		{
-			name:    "all special chars produces label fallback",
-			input:   "///",
-			wantSeg: "label",
+			name:     "all special chars produces label fallback",
+			input:    "///",
+			wantSeg:  "label",
 			distinct: []string{"___", "..."},
 		},
 		{

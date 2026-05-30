@@ -293,10 +293,10 @@ func TestHTTPFetcher_EmptyActions(t *testing.T) {
 // proves every family was merged into the returned slice.
 func TestHTTPFetcher_MergesAllRanges(t *testing.T) {
 	const (
-		apiCIDR     = "192.30.252.0/22"     // representative api.github.com range
-		actionsCIDR = "4.175.114.0/23"      // representative *.actions.githubusercontent.com range
-		webCIDR     = "185.199.108.0/22"    // representative codeload/objects range
-		noiseCIDR   = "20.201.28.0/22"      // unrelated field — must NOT appear
+		apiCIDR     = "192.30.252.0/22"  // representative api.github.com range
+		actionsCIDR = "4.175.114.0/23"   // representative *.actions.githubusercontent.com range
+		webCIDR     = "185.199.108.0/22" // representative codeload/objects range
+		noiseCIDR   = "20.201.28.0/22"   // unrelated field — must NOT appear
 	)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
