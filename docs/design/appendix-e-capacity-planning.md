@@ -131,7 +131,7 @@ Label the RunnerGroups consistently across installations (`gpu-2x`, `gpu-8x`, et
 
 ## E.7. Per-Tenant vs. Per-Team Partitioning
 
-The GMC's multi-tenant model provisions one `ActionsGateway` per namespace. Within an organization, two common partitioning patterns emerge:
+The Gateway Manager Controller (GMC) multi-tenant model provisions one `ActionsGateway` per namespace. Within an organization, two common partitioning patterns emerge:
 
 **One gateway per team.** Each team owns a namespace and an `ActionsGateway` CR. Runner shapes, `maxListeners` counts, and quota are fully self-managed per team. This is the recommended default — it aligns operational ownership with the team boundary, gives each team an independent rate-limit budget, and eliminates cross-team coordination on RunnerGroup configuration.
 

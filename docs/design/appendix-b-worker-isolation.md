@@ -71,7 +71,7 @@ spec:
             requests: { cpu: "1", memory: "2Gi" }
 ```
 
-The cluster must have the corresponding `RuntimeClass` object installed and at least one node carrying the appropriate handler. The GMC does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.
+The cluster must have the corresponding `RuntimeClass` object installed and at least one node carrying the appropriate handler. The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.
 
 ---
 
