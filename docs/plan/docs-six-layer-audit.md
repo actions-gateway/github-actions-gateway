@@ -189,11 +189,11 @@ may hold its own self-contained copy or link *to* the human doc — never the re
 Outcome:
 
 1. The per-module `go test` command list appeared in both `CLAUDE.md` and
-   [`docs/development/testing.md`](../development/testing.md). `testing.md` is the
-   human-facing canonical home and now carries the self-contained list; `CLAUDE.md`
-   keeps its own copy (it is Claude's always-loaded entrypoint). No human doc points at
-   `CLAUDE.md`. (An earlier pass made `testing.md` link *to* `CLAUDE.md` — reverted, as
-   it inverted the required direction.)
+   [`docs/development/testing.md`](../development/testing.md). Resolved by moving the
+   command block into a new **Running tests** section in `testing.md` (the canonical
+   human home) and replacing the `CLAUDE.md` copy with a link *to* `testing.md` —
+   single source of truth, in the correct direction (`CLAUDE.md` → docs). (An earlier
+   pass had `testing.md` link *to* `CLAUDE.md`; reverted, as it inverted the direction.)
 2. Other human docs that linked to `CLAUDE.md` were redirected to human docs:
    `docs/operations/README.md` (dropped the doc-update-checklist link) and
    `CONTRIBUTING.md` (now points at `docs/design/05-security.md`).

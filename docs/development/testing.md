@@ -1,5 +1,21 @@
 # Agent reference: Testing
 
+## Running tests
+
+The repo is a Go workspace (`go.work`), so `go test ./...` from the repo root does **not** work — run tests per module. See [go-workspaces.md](go-workspaces.md) for why.
+
+```bash
+(cd broker     && go test ./...)    # broker module
+(cd githubapp  && go test ./...)    # githubapp module
+(cd cmd/agc    && go test ./...)    # AGC module
+(cd cmd/gmc    && go test ./...)    # GMC module
+(cd cmd/probe  && go test ./...)    # probe module
+(cd cmd/proxy  && go test ./...)    # proxy module
+(cd cmd/worker && go test ./...)    # worker module
+```
+
+Run tests locally before pushing to a PR to avoid burning CI. Prefer the narrowest scope that covers the change: a single module's unit tests, `-run` to target a specific test, integration tests for controller changes, or `--focus` for a targeted e2e spec. Run the full e2e suite only when the change is broad enough to warrant it.
+
 ## Integration tests
 
 Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
@@ -51,14 +67,4 @@ Both pass reliably on a local machine with more cores. To run them locally, drop
 
 ## CI workflows and scripts
 
-When adding or editing CI workflows and scripts, use the per-module commands below. Never use `go test ./...` from the repo root in CI — it does not work with the Go workspace layout.
-
-```bash
-(cd broker     && go test ./...)    # broker module
-(cd githubapp  && go test ./...)    # githubapp module
-(cd cmd/agc    && go test ./...)    # AGC module
-(cd cmd/gmc    && go test ./...)    # GMC module
-(cd cmd/probe  && go test ./...)    # probe module
-(cd cmd/proxy  && go test ./...)    # proxy module
-(cd cmd/worker && go test ./...)    # worker module
-```
+CI must use the same per-module commands as [Running tests](#running-tests) above — never `go test ./...` from the repo root, which does not work with the Go workspace layout.
