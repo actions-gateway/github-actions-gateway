@@ -97,4 +97,4 @@ Keep commits small and focused. Never commit broken code or failing tests. Amend
 
 ## Security
 
-Defaults must never trade away a security property for convenience. If a change regresses any security property — even partially — raise it explicitly before shipping. See the Security principles section in `CLAUDE.md` for examples of what counts as a regression.
+Defaults must never trade away a security property for convenience. If a change regresses any security property — even partially — raise it explicitly before shipping. See [docs/design/05-security.md](docs/design/05-security.md) for the threat model and examples of what counts as a regression.
