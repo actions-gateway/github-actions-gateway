@@ -87,6 +87,8 @@ When in doubt, ask before shipping.
 
 Spell out acronyms on first use: write the full term first, then the acronym in parentheses — e.g. "Actions Runner Controller (ARC)". Subsequent uses may use the acronym alone.
 
+Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). This file is the entrypoint for Claude/agents only; humans start at `README.md` and navigate the `docs/` tree. The dependency direction is one-way: `CLAUDE.md` may link out to `docs/`, but nothing under `docs/`, `README.md`, or `CONTRIBUTING.md` may link back to it. Canonical reference content humans need (commands, checklists, rules) lives in the `docs/` tree or `CONTRIBUTING.md`; `CLAUDE.md` keeps its own self-contained copy when it needs one.
+
 ## Commits
 
 - Commit after each task is complete and validated.

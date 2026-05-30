@@ -83,6 +83,11 @@ After editing types under `cmd/agc/api/` or `cmd/gmc/api/`, regenerate manifests
 - Async functions return a `<-chan struct{}` done channel — callers decide whether to block, select with timeout, or ignore.
 - All modules in the repo must use the same Go version.
 
+## Documentation
+
+- Humans start at [`README.md`](README.md) and navigate the [`docs/`](docs/README.md) tree. Do **not** link to `CLAUDE.md`/`AGENTS.md` from any human-facing doc — that file is the entrypoint for AI agents only. Reference content humans need lives in `docs/` or this file.
+- Spell out acronyms on first use: full term, then the acronym in parentheses — e.g. "Actions Gateway Controller (AGC)".
+
 ## Commits
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
