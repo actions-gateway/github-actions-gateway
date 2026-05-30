@@ -11,7 +11,7 @@ and not a restructure.
 | Layer | Concern | Status | Outcome |
 |---|---|---|---|
 | 1 | Terminology consistency | ✅ done | Glossary linked from all section READMEs; GMC/AGC expanded in appendices; rest left to glossary (decision recorded) |
-| 2 | Cross-reference architecture | ✅ done | Broken archived link fixed; 0 broken project links; optional link-check CI gate still open |
+| 2 | Cross-reference architecture | ✅ done | 0 broken file links; all 127 in-page anchors validated, 5 pre-existing breaks fixed; optional link-check CI gate still open |
 | 3 | Version / conditional logic | ⚠️ finding | **6 documented metrics are not implemented** — filed to backlog as a code+docs task |
 | 4 | Metadata / taxonomy | ✅ done | README indexes complete; k8s-audit plan added to plan index; no front matter (by decision) |
 | 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
@@ -79,19 +79,24 @@ Tasks:
 
 ---
 
-## Layer 2 — Cross-reference architecture · ✅ (one fix)
+## Layer 2 — Cross-reference architecture · ✅
 
-A repo-wide relative-`.md`-link scan came back clean for project-owned docs except
-for a single dead link. Cross-references use relative `.md` paths plus `§X.Y` anchors
-and breadcrumb prev/next nav in the design docs.
+Cross-references use relative `.md` paths plus `§X.Y` anchors and breadcrumb prev/next
+nav in the design docs. After fixes: 0 broken file links and 0 broken in-page anchors
+across the doc set.
 
 Tasks:
 
-1. **Fix the one broken link:** `docs/plan/archive/milestone-2-tests.md` links to
-   `milestone-2.md`, which moved up a directory — should be `../milestone-2.md`.
-2. **Anchor spot-check.** `§X.Y`-style anchor links break silently when a heading is
-   renamed. Spot-check the high-traffic anchors in `02-architecture.md` and
-   `03-api-contracts.md` referenced from other docs.
+1. **Fix the one broken link** — ✅ done. `docs/plan/archive/milestone-2-tests.md`
+   linked to `milestone-2.md` (moved up a directory) → `../milestone-2.md`. Full
+   relative-`.md`-link scan: 0 broken project links.
+2. **Anchor spot-check** — ✅ done (full check, not just spot). Validated all 127
+   in-page `#anchor` links against the GitHub heading-slug algorithm; found and fixed
+   5 pre-existing broken anchors: 3 in `design/README.md` (TOC pointed at richer text
+   than the actual `01-executive-summary.md` subheadings), 1 in `02-architecture.md`
+   (`§11.A` said `investigation`, heading is `protocol`), and 1 in `security.md` (the
+   `worker-egress-proxy.md` "Implementation status" heading carried a volatile
+   date+commit — stabilized the heading so the anchor is durable). Now 0 broken anchors.
 3. **(Optional) link-check CI gate.** A lightweight markdown-link-check step in
    `unit-test.yml` would fit the repo's recent CI-gate culture (the lint gate just
    landed). Flagged as optional — decide separately; do not bundle.
