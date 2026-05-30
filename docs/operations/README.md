@@ -11,4 +11,4 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [upgrade.md](upgrade.md) | Platform engineer | Upgrade and rollback procedures. Strategy intent lives in [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). |
 | [../design/08-glossary.md](../design/08-glossary.md) | All | Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers). |
 
-When adding a new failure mode an operator might observe, add a section to [troubleshooting.md](troubleshooting.md) — see [CLAUDE.md](../../CLAUDE.md) for the doc-update checklist.
+When adding a new failure mode an operator might observe, add a section to [troubleshooting.md](troubleshooting.md).

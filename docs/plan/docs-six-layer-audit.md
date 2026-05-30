@@ -15,7 +15,7 @@ and not a restructure.
 | 3 | Version / conditional logic | ⚠️ finding | **6 documented metrics are not implemented** — filed to backlog as a code+docs task |
 | 4 | Metadata / taxonomy | ✅ done | README indexes complete; k8s-audit plan added to plan index; no front matter (by decision) |
 | 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
-| 6 | Reusable content blocks | ✅ done | `go test` list de-duplicated to CLAUDE.md canonical; no partials mechanism (by decision) |
+| 6 | Reusable content blocks | ✅ done | `go test` list canonical in testing.md; human docs no longer link to CLAUDE.md; no partials mechanism (by decision) |
 
 **One open item remains:** the Layer 3 metrics gap (tracked in `docs/STATUS.md`). The
 optional Layer 2 link-check CI gate is a separate decision, not blocking.
@@ -176,22 +176,29 @@ Tasks:
 
 ---
 
-## Layer 6 — Reusable content blocks · ⚠️ (canonical-home pattern)
+## Layer 6 — Reusable content blocks · ✅ done
 
 No include mechanism and none will be added (see Decisions). Framework-free reuse =
 pick one canonical location and cross-link to it; do not paste-and-drift.
 
-Tasks:
+**Direction constraint (important):** human-facing docs must never link to `CLAUDE.md`.
+`CLAUDE.md` (symlinked `AGENTS.md`) is the entrypoint *for Claude only*; humans start at
+`README.md`. So a shared block lives canonically in the `docs/` tree, and `CLAUDE.md`
+may hold its own self-contained copy or link *to* the human doc — never the reverse.
 
-1. **De-duplicate drifting blocks.** Known candidates:
-   - The per-module `go test` command list appears in both `CLAUDE.md` and
-     [`docs/development/testing.md`](../development/testing.md). Pick `testing.md` as
-     canonical; have the other point to it.
-   - Prerequisite lists and the AGC/GMC one-line definitions restated inline vs. the
-     glossary.
-2. For each duplicate found, keep the fullest copy in the most discoverable home and
-   replace the others with a link. Only consolidate where the copies have actually
-   drifted or are likely to — do not over-factor.
+Outcome:
+
+1. The per-module `go test` command list appeared in both `CLAUDE.md` and
+   [`docs/development/testing.md`](../development/testing.md). `testing.md` is the
+   human-facing canonical home and now carries the self-contained list; `CLAUDE.md`
+   keeps its own copy (it is Claude's always-loaded entrypoint). No human doc points at
+   `CLAUDE.md`. (An earlier pass made `testing.md` link *to* `CLAUDE.md` — reverted, as
+   it inverted the required direction.)
+2. Other human docs that linked to `CLAUDE.md` were redirected to human docs:
+   `docs/operations/README.md` (dropped the doc-update-checklist link) and
+   `CONTRIBUTING.md` (now points at `docs/design/05-security.md`).
+3. No other drift-prone duplicates worth factoring (the keychain command and AGC/GMC
+   definitions each have a single home).
 
 ---
 
