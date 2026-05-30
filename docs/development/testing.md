@@ -51,16 +51,4 @@ Both pass reliably on a local machine with more cores. To run them locally, drop
 
 ## CI workflows and scripts
 
-When adding or editing CI workflows and scripts, use the same per-module commands as in `CLAUDE.md`. Never use `go test ./...` from the repo root in CI — it does not work with the Go workspace layout.
-
-Per-module commands for reference:
-
-```bash
-(cd broker     && go test ./...)    # broker module
-(cd githubapp  && go test ./...)    # githubapp module
-(cd cmd/agc   && go test ./...)     # AGC module
-(cd cmd/gmc   && go test ./...)     # GMC module
-(cd cmd/probe && go test ./...)     # probe module
-(cd cmd/proxy && go test ./...)     # proxy module
-(cd cmd/worker && go test ./...)    # worker module
-```
+When adding or editing CI workflows and scripts, use the per-module commands listed under **Testing** in [`CLAUDE.md`](../../CLAUDE.md) — that is the canonical list (one `(cd <module> && go test ./...)` per module). Never use `go test ./...` from the repo root in CI — it does not work with the Go workspace layout.
