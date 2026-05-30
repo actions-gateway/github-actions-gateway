@@ -176,7 +176,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	})
 
 	// E2E_GMC_TenantProvisioning_ProxyConnectWorks is the keystone Tier-A test
-	// (see docs/plan/e2e-tests.md §5.2). It runs a workload-labeled curl pod
+	// (see docs/design/07-test-plan.md §7.3). It runs a workload-labeled curl pod
 	// that issues an HTTPS CONNECT through the per-tenant proxy to a real
 	// GitHub endpoint, exercising in one shot: kindnet workload-NP egress to
 	// the proxy pods, the proxy's HTTPS+CONNECT path, the proxy egress NP's

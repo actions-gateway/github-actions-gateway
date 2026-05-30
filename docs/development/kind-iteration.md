@@ -1,6 +1,6 @@
 # Agent reference: kind cluster iteration
 
-Reference for iterating against a real kind cluster — when unit tests and envtest can't observe the behavior you need (real CNI, kube-proxy DNAT, kubelet image pulls, TLS-over-tunnel, etc.). The full kind e2e test design lives in [`docs/plan/e2e-tests.md`](../plan/e2e-tests.md); this doc covers the operational reality of iterating fast against the cluster the suite stands up.
+Reference for iterating against a real kind cluster — when unit tests and envtest can't observe the behavior you need (real CNI, kube-proxy DNAT, kubelet image pulls, TLS-over-tunnel, etc.). The full kind e2e test design lives in [`docs/design/07-test-plan.md`](../design/07-test-plan.md) §7.3; this doc covers the operational reality of iterating fast against the cluster the suite stands up.
 
 ## Standing up the cluster
 

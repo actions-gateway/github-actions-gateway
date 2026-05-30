@@ -81,7 +81,7 @@ Make `e2e-load-images` depend on `e2e-images`, and add an umbrella `e2e-up` targ
 e2e-up: e2e-cluster e2e-load-images e2e
 ```
 
-The standalone targets stay so CI (which builds images differently) is unaffected. The README and `docs/plan/e2e-tests.md` should reference `make e2e-up` as the canonical local command.
+The standalone targets stay so CI (which builds images differently) is unaffected. The README and `docs/development/testing.md` should reference `make e2e-up` as the canonical local command.
 
 ### 1.5 Default `KIND_CONFIG` to the 2-node CI config
 
