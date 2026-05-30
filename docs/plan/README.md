@@ -38,9 +38,7 @@ tests.
 | [integration-tests.md](integration-tests.md) | envtest layout, fakegithub, per-controller integration suites | ⓘ Spec — source of truth for what the integration suite covers |
 | [e2e-tests.md](e2e-tests.md) | `kind` layout, cluster addons, Tier A/B test surfaces | ⓘ Spec |
 | [milestone-1-tests.md](milestone-1-tests.md) | M1 unit-test coverage gaps | ✅ Done — all five gaps closed |
-| [milestone-2-tests.md](milestone-2-tests.md) | M2 unit + envtest gaps (11 items) | ❌ Open — gaps documented, fixes not landed; envtest goroutine-leak suite is the headline item |
 | [milestone-3-tests.md](milestone-3-tests.md) | M3 metric/decryption/eviction test gaps | ❌ Open — H/M/L items not yet implemented |
-| [milestone-4-tests.md](milestone-4-tests.md) | M4 builder + IPRange + webhook test gaps (8 items) | ❌ Open — buildNoProxy bug fix is the headline item |
 
 ## Speed improvements
 
@@ -51,17 +49,26 @@ markers per item.
 |---|---|---|
 | [docker-image-speed.md](docker-image-speed.md) | Image build + load-into-kind time | ⚠️ Has own Status table — §1/2/4/5 done; §7/8/9/12 still TODO |
 | [unit-tests-speed.md](unit-tests-speed.md) | Four targeted unit-test latency cuts (~6s total) | ❌ Open — no ✓ markers on any of the four items |
-| [integration-tests-speed.md](integration-tests-speed.md) | Five integration polling/sleep cuts | ❌ Open — no status markers; items are pure proposals |
 | [e2e-tests-speed.md](e2e-tests-speed.md) | Five e2e suite improvements | ⚠️ Mixed — §2, §3 marked ✓; §1, §4, §5 not |
 
 ## Cross-cutting
 
 | Plan | Scope | Status |
 |---|---|---|
-| [gaps.md](gaps.md) | Three code-level fixes surfaced by doc audit (CRD eviction fields, proxy resource merge, credential rotation observability) | ❌ All 3 open |
+| [gaps.md](gaps.md) | Three code-level fixes surfaced by doc audit (CRD eviction fields, proxy resource merge, credential rotation observability) | ⚠️ Fixes #1 and #3 done; fix #2 (per-key `proxy.resources` merge — HPA silent failure) still open |
 | [docs.md](docs.md) | Documentation roadmap across phases | ⚠️ Phase 1 fully done; 4 items open in Phase 2/3 |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ⚠️ Phase 1 done; Phase 2 has open drift items (image vars, envtest, `all` semantics) |
-| [rename-agc-to-controller.md](rename-agc-to-controller.md) | Rename on-cluster `actions-gateway-agc` → `actions-gateway-controller` to match docs and design intent | ❌ Open — not started |
+
+## Archive
+
+Plans whose work has fully landed and which `docs/STATUS.md` no longer references. Moved here so `ls docs/plan/` shows active work only. The doc remains available — the rationale is often more valuable than the diff.
+
+| Plan | Scope | Closed |
+|---|---|---|
+| [archive/milestone-2-tests.md](archive/milestone-2-tests.md) | M2 unit + envtest gaps (11 items) | 2026-05-29 — banner: "All 9 gaps shipped" |
+| [archive/milestone-4-tests.md](archive/milestone-4-tests.md) | M4 builder + IPRange + webhook test gaps (8 items) | 2026-05-30 — `TestBuildNoProxy`, `TestBuildNetworkPolicy`, `TestHTTPFetcher*`, `TestBuildProxyServiceAddr`, `TestServer_ListenAndServe`, `TestIPRangeReconciler_Start` all present; `ValidateDelete` covered inline in webhook test |
+| [archive/integration-tests-speed.md](archive/integration-tests-speed.md) | Five integration polling/sleep cuts | 2026-05-30 — superseded; GMC integration tests now use Gomega defaults (~10ms polling), faster than the 25ms target |
+| [archive/rename-agc-to-controller.md](archive/rename-agc-to-controller.md) | Rename on-cluster `actions-gateway-agc` → `actions-gateway-controller` to match docs | 2026-05-30 — zero `"actions-gateway-agc"` literals remain in `cmd/`; M3 Tier-C kind run validated the rename live |
 
 ## Conventions
 
@@ -78,4 +85,14 @@ When adding a new plan:
   status table updated to ✅ Done. Don't delete it — the rationale
   is more valuable than the diff.
 
-Add a row to this README when creating or completing a plan.
+When a plan fully closes:
+
+- If `docs/STATUS.md` still references it (Progress table or any Queue
+  row), leave it under `docs/plan/`.
+- Once STATUS.md no longer references it, `git mv` it to
+  `docs/plan/archive/` and move its row in this README to the Archive
+  section. Update any other in-repo links to the new path. The doc
+  stays available; the working directory just gets less noisy. See the
+  full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
+
+Add a row to this README when creating, completing, or archiving a plan.

@@ -66,6 +66,25 @@ The same applies to bulk completions: if a session verifies that a stale Queue e
 
 If you completed work that closes the last ⚠️ open item under a Progress row, update both in the same commit.
 
+## Archiving completed plan docs
+
+When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
+
+**Protocol:**
+
+1. **Confirm STATUS.md doesn't reference the doc.** `grep -n "<docname>" docs/STATUS.md` should be empty.
+2. **Confirm the work actually landed.** Read the plan's Status banner if it has one; otherwise grep the codebase for the named tests, types, or behaviors the plan promised. A plan with one of three fixes still ❌ Open is **not** archive-ready — leave it in place and (if not already there) add the open work to STATUS.md as a Queue row.
+3. `git mv docs/plan/<docname>.md docs/plan/archive/<docname>.md` — preserves history.
+4. **Update any in-repo links** to the new path. Likely candidates:
+   - `docs/plan/README.md` — move the doc's row from its current section into the **Archive** section and update the status text.
+   - Other plan docs cross-referencing it (`grep -rn "<docname>.md" docs/plan/`).
+   - `docs/development/`, `docs/design/`, `docs/operations/` if the plan is cited there.
+   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`).
+5. **Bundle archival in one commit.** If multiple plans are being archived in the same session (e.g. after a sweep), move them together — easier to review and to revert as a unit if a reference was missed.
+6. **Do not edit STATUS.md in the same commit** as the archive move. STATUS.md edits are always isolated (see §1 of the non-negotiables).
+
+A plan that is partially complete should stay in `docs/plan/`. Archive is for "everything in this doc has shipped," not "most of it has."
+
 ## Anti-patterns to watch for
 
 - **Narrating recent session work in the conventions header.** That's what commit messages are for.
