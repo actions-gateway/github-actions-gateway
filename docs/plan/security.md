@@ -55,6 +55,9 @@ by-design / accepted.
 | **M-14** | GMC forwards `AGC_EXTRA_*` cluster-wide | Medium | W5 | ✅ Done 2026-05-23 | `--allow-agc-extra-env`, default `false` (Option A, D-1 resolved) |
 | **M-15** | `MaxWorkers` TOCTOU race | Medium | — | ⓘ Accepted | Soft ceiling per D-6; ResourceQuota is the hard cap |
 | **M-16** | `safeName` collision risk | Medium | — | ✅ Done 2026-05-25 | Hash suffix in both `safeName` and `labelSafe` |
+| **M-17** | Proxy servers lack `ReadHeaderTimeout` (slowloris) | High | — | ❌ Open | ~10 LoC on `healthSrv` + `proxySrv` |
+| **M-18** | CONNECT relay has no idle/lifetime deadline | Medium | — | ❌ Open | Pairs with M-17 in one PR |
+| **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ❌ Open | Floating-tag base ships tenant runtime |
 | **L-1** | JWT `iat` without `jti` | Informational | — | ✅ Done | `ID: newUUID()` sets `jti` |
 | **L-2** | `http.DefaultClient` has no timeout | Low | — | ✅ Done | 60s timeout client injected into broker, registrar, IP-range fetcher |
 | **L-3** | `math/rand` for jitter | Informational | — | ✅ Done | `//nolint:gosec // jitter, not crypto` |
@@ -62,6 +65,7 @@ by-design / accepted.
 | **L-5** | PEM parser asymmetry | Informational | — | ✅ Done 2026-05-23 | Unified PKCS#1+PKCS#8 parsing (via W9) |
 | **L-6** | `mustEnv` calls `os.Exit` | Informational | — | ✅ Done | All three return errors |
 | **L-7** | Stub URLs default to `stub.example.com` | Informational | — | ✅ Done | Both stub URLs required together when `GITHUB_ORG_URL` unset |
+| **L-8** | `:8081` health/metrics port not constrained by NP ingress | Low | — | ❌ Open | Add scrape-source selector alongside M-8 follow-up |
 
 ### Open work
 
@@ -762,6 +766,86 @@ by-design / accepted.
 - **Mitigation:** When collapsing, append a hash suffix of the original
   input (`-<8 hex bytes>`) so distinct inputs produce distinct names.
 
+### M-17. Proxy servers lack `ReadHeaderTimeout` — slowloris-style DoS
+
+- **Location:** [cmd/proxy/proxy.go:75-87](../../cmd/proxy/proxy.go)
+- **Category:** OWASP A04:2025 — Insecure Design (resource exhaustion)
+- **Why High:** The egress proxy is the choke point for every tenant CI
+  job. A connection dribbling headers byte-by-byte ties up a goroutine
+  and a connection slot indefinitely. The CONNECT listener (`:8080`) is
+  reachable from any worker pod in the namespace (post-M-8), so a single
+  compromised workflow can degrade the proxy for all of that tenant's
+  traffic without crossing any other security boundary. The health
+  listener (`:8081`) is reachable from kubelet probe paths and the
+  Prometheus scrape source and is similarly unbounded.
+- **Description:** Neither `healthSrv` nor `proxySrv` sets
+  `ReadHeaderTimeout`, `ReadTimeout`, `WriteTimeout`, or `IdleTimeout`.
+  Go's default is unlimited. Combined with M-18 (no relay deadline), a
+  slow client can exhaust goroutines and FD slots well before HPA
+  reacts.
+- **Mitigation:**
+  1. Set `ReadHeaderTimeout: 5*time.Second` and
+     `IdleTimeout: 60*time.Second` on both `healthSrv` and `proxySrv`.
+  2. Do NOT set `ReadTimeout` on `proxySrv` — the CONNECT body is
+     hijacked and a non-zero `ReadTimeout` would cap the post-handshake
+     tunnel lifetime to a fixed value. Per-connection deadlines belong
+     in `handleConnect` (see M-18).
+  3. Add a unit test that opens a TCP connection to the health port and
+     asserts the server closes it after `ReadHeaderTimeout` if no
+     headers arrive.
+
+### M-18. CONNECT relay has no per-stream deadline or tunnel-lifetime cap
+
+- **Location:** [cmd/proxy/proxy.go:148-158](../../cmd/proxy/proxy.go)
+- **Category:** OWASP A04:2025 — Insecure Design (resource exhaustion)
+- **Why Medium:** Resource starvation rather than privilege escalation.
+  `ResourceQuota` caps pod count and HPA caps replica count, but a
+  flood of hung tunnels within a single pod degrades throughput before
+  either control reacts. Compounds with M-17 to widen the slowloris
+  surface.
+- **Description:** `handleConnect` calls `io.Copy` in two goroutines
+  and waits on a single done signal. There is no read deadline on the
+  hijacked client conn or the upstream conn, and no upper bound on
+  tunnel lifetime. A long-poll that stalls keeps the relay goroutines
+  alive until the OS TCP timeout (minutes-to-hours on Linux).
+- **Mitigation:**
+  1. Wrap the tunnel in
+     `ctx, cancel := context.WithTimeout(r.Context(), maxTunnelLifetime)`
+     (default e.g. 6h, configurable on `Server`) and cancel on the
+     first `done` receive.
+  2. In each relay goroutine, after a successful copy chunk, refresh
+     a per-conn idle deadline (e.g.
+     `dst.SetDeadline(time.Now().Add(idleTimeout))`, default 5min) so a
+     stalled stream is torn down.
+  3. Add an `actions_gateway_proxy_tunnel_duration_seconds` histogram
+     so the chosen ceilings are observable.
+
+### M-19. Worker Dockerfile base image is not digest-pinned
+
+- **Location:** [cmd/worker/Dockerfile:24-28](../../cmd/worker/Dockerfile)
+- **Category:** OWASP A08:2025 — Software and Data Integrity Failures (supply chain)
+- **Why Medium:** The runtime stage is
+  `FROM ghcr.io/actions/actions-runner:2.327.1` — a floating tag
+  pointing at the binary that actually runs tenant workflow code.
+  All four other Dockerfiles in the repo (`agc`, `gmc`, `proxy`,
+  `fakegithub`) pin both stages by `@sha256:…`. The TODO already in
+  this Dockerfile acknowledges the gap. A compromised GHCR push or a
+  tag-mutation event on `actions/actions-runner` would silently swap
+  the worker binary on the next `docker build`.
+- **Description:** The wrapper builder stage correctly pins
+  `golang:1.26@sha256:2d6c80…`, but the runtime base does not.
+  Operators rebuilding the worker image from this repo therefore
+  inherit whatever bytes are at the tag at build time.
+- **Mitigation:**
+  1. Resolve the digest:
+     `docker buildx imagetools inspect ghcr.io/actions/actions-runner:2.327.1`
+     and record the manifest digest.
+  2. Update the Dockerfile to
+     `FROM ghcr.io/actions/actions-runner:2.327.1@sha256:…`.
+  3. Tie the digest update to the runner-version bump procedure (the
+     version must match `cmd/agc/internal/agentpool` per the existing
+     Dockerfile comment).
+
 ---
 
 ## Low
@@ -844,6 +928,25 @@ by-design / accepted.
   third-party endpoint.
 - **Mitigation:** When `GITHUB_ORG_URL` is unset, *require* both stub URLs
   to be set explicitly; do not silently default either to a public domain.
+
+### L-8. Proxy/AGC `:8081` health/metrics port not constrained by NetworkPolicy ingress
+
+- **Location:** [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)
+  (NetworkPolicy section)
+- **Category:** OWASP A05:2025 — Security Misconfiguration
+- **Description:** M-8 narrowed CONNECT-port (`:8080`) ingress to
+  `labelComponent: componentWorkload`, but `:8081` (health + Prometheus
+  metrics) is not the target of an explicit ingress rule. The
+  namespace's default-deny posture relies on no NetworkPolicy
+  targeting that port, which means any pod in the namespace that can
+  route to the proxy/AGC's `:8081` can scrape per-tenant traffic-volume
+  metrics (CONNECT counts, active tunnels, dial errors). Low impact in
+  isolation; useful as a side-channel for an in-tenant attacker
+  correlating with workflow activity.
+- **Mitigation:** Add an ingress rule on the proxy and AGC
+  NetworkPolicies for `:8081` permitting only the kubelet (probe path)
+  and the Prometheus scrape namespace selector. Pairs naturally with
+  the M-8 follow-up.
 
 ---
 
