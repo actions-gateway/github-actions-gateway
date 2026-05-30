@@ -147,8 +147,11 @@ cmd/gmc/         Gateway Manager Controller binary (kubebuilder-generated)
 cmd/proxy/       Egress proxy binary
 cmd/worker/      Worker pod entrypoint
 cmd/probe/       Diagnostic probe for live investigations
+docs/            Documentation hub — see docs/README.md
 docs/design/     Full system design documentation
-docs/plan/       Implementation milestone plans
+docs/development/ Developer workflow guides
+docs/operations/ Operator runbooks and references
+docs/plan/       Implementation plans and audits
 test/            E2E test infrastructure (fakegithub stub, kind configs)
 tools/           Vendored build tools (controller-gen, setup-envtest)
 vendor/          Workspace-vendored runtime dependencies (`go work vendor`)
