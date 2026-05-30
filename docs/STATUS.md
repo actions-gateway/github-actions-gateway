@@ -34,6 +34,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
 | Worker egress proxy | `security` `infra` | ⚠️ | NetworkPolicy split shipped; live `curl` validation blocked on M3/M4 — [plan](plan/worker-egress-proxy.md) |
 | Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
+| Six-layer docs audit | `docs` | ⚠️ | Consistency audit across the six doc layers; small fixes open — [plan](plan/docs-six-layer-audit.md) |
 | Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
 | Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
 | e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
@@ -80,6 +81,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | 15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
 | 45 | Compress Progress table — drop Notes column | `docs` | 🔲 | S | Most cells just say "see plan" or restate the plan doc; the plan link in the row's name already carries the detail. Reduces edit surface and width. |
 | 47 | Append-by-default for new low-priority Queue rows | `docs` | 🔲 | S | Loosen "insert at right priority position" to "append unless re-prioritizing" so row order stays stable in diffs across parallel sessions. Re-prioritization becomes a deliberate separate commit. |
+| 50 | [Six-layer docs consistency audit](plan/docs-six-layer-audit.md) | `docs` | 🔲 | L | Framework-free audit across the six doc layers. Top fixes: add `docs/README.md` landing page (no top-level index today), fix broken archived-doc link, glossary discoverability, README-index sweeps. |
 | 17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | 💤 | M | low priority; pick up when CI latency is the bottleneck |
 | 18 | [alerting.md](plan/docs.md) | `docs` | 💤 | M | deferred until a real Prometheus/Alertmanager setup exists |
 | 19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | 💤 | L | explicit non-commitments; build only when a named trigger fires |
