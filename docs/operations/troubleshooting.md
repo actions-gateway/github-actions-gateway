@@ -540,4 +540,41 @@ kubectl exec -n <tenant-namespace> <pod> -c runner -- ls -la /home/runner/.runne
 
 ---
 
+## `kubectl apply ActionsGateway` Times Out On Webhook During GMC Rollout
+
+**Symptoms.** Right after a GMC rolling update (image bump, env-var change, leader transition), the next `kubectl apply` of an `ActionsGateway` CR fails with:
+
+```
+Internal error occurred: failed calling webhook
+"vactionsgateway-v1alpha1.kb.io": failed to call webhook:
+Post "https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s":
+context deadline exceeded
+```
+
+The webhook recovers seconds later; the same `kubectl apply` succeeds on retry. Common pattern in CI / e2e suites that change GMC env vars then immediately apply a CR.
+
+**Likely causes.**
+- Running a GMC image built before the readyz-gates-webhook fix landed (commit `0eaa30e`). The default Kubebuilder scaffold registers `mgr.AddReadyzCheck("readyz", healthz.Ping)`, which returns OK as soon as the manager process is up — *before* the webhook listener on port 9443 is bound. The new pod is briefly added to the `gmc-webhook-service` endpoints in a not-yet-serving state.
+- A custom probe override that replaces `/readyz` with a cheap liveness check.
+
+**Diagnostics.**
+
+```sh
+# 1. Probe the GMC's /readyz directly. With the fix, output should include
+#    "[+]readyz ok" AND "[+]webhook ok". Without the fix, only "[+]readyz ok".
+kubectl run dbg-readyz --image=alpine --rm -i --restart=Never --quiet --command -- \
+  sh -c "apk add --no-cache curl >/dev/null 2>&1; \
+         curl -s http://$(kubectl get pod -n gmc-system -l control-plane=controller-manager -o jsonpath='{.items[0].status.podIP}'):8081/readyz?verbose"
+
+# 2. Confirm the deployment is rolling. If yes, wait for it to settle before
+#    retrying apply.
+kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=2m
+```
+
+**Resolution.**
+- Upgrade the GMC image to one built from commit `0eaa30e` or later — the readyz check now waits for the webhook server's `StartedChecker()`.
+- Until the upgrade is in place, retry the failing `kubectl apply` after 5–10 seconds.
+
+---
+
 ← [Back to Operations](.)
