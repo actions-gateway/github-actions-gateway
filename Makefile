@@ -35,7 +35,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
         e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint
+        ginkgo golangci-lint lint lint-status
 
 ##@ General
 
@@ -109,6 +109,10 @@ lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all worksp
 		echo "==> golangci-lint $$dir"; \
 		(cd "$$dir" && $(GOLANGCI_LINT) run --config $(REPO_ROOT)/.golangci.yml ./...) || exit 1; \
 	done
+
+.PHONY: lint-status
+lint-status: ## Lint docs/STATUS.md format rules
+	@scripts/lint-status.sh
 
 ##@ e2e
 
