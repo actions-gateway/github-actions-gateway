@@ -128,7 +128,7 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 	// provisioner is the raw AcquireJobResponse from the broker fake. To embed the
 	// runID, we set the AcquireJob response to include eviction retry info.
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan": map[string]string{"planId": "evict-plan-1"},
+		"plan":   map[string]string{"planId": "evict-plan-1"},
 		"run_id": 12345,
 		"variables": map[string]interface{}{
 			"system.github.repository": map[string]string{"value": "owner/repo"},
@@ -197,7 +197,7 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 	sessions := brokerStub.RegisteredSessions()
 
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan": map[string]string{"planId": "budget-plan-1"},
+		"plan":   map[string]string{"planId": "budget-plan-1"},
 		"run_id": 99999,
 		"variables": map[string]interface{}{
 			"system.github.repository": map[string]string{"value": "owner/repo"},

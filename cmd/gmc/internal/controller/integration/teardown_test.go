@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-
 func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 	const nsA = "team-teardown-a"
 	const nsB = "team-teardown-b"

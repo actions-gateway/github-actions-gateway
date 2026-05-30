@@ -45,7 +45,7 @@ type RunnerJobRequestBody struct {
 type JobAcquisitionRequest struct {
 	// JobMessageID is RunnerJobRequestBody.RunnerRequestID.
 	JobMessageID   string `json:"jobMessageId"`
-	RunnerOS       string `json:"runnerOS"`      // e.g. "Linux"
+	RunnerOS       string `json:"runnerOS"` // e.g. "Linux"
 	BillingOwnerID string `json:"billingOwnerId"`
 }
 

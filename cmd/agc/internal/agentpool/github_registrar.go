@@ -9,7 +9,7 @@
 //     Authorization: Bearer {installationAccessToken}
 //     Content-Type: application/json
 //     {"name": "{name}", "runner_group_id": {groupID},
-//      "labels": [...], "work_folder": "_work"}
+//     "labels": [...], "work_folder": "_work"}
 //     → {"runner": {"id": 12345, ...}, "encoded_jit_config": "{base64blob}"}
 //
 // The encoded_jit_config is a base64-encoded JSON blob containing three

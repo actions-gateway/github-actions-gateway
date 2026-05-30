@@ -280,4 +280,3 @@ func run() error {
 	ctrl.Log.Info("starting AGC manager")
 	return mgr.Start(ctx)
 }
-

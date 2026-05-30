@@ -26,7 +26,7 @@ type Clock interface {
 
 type realClock struct{}
 
-func (realClock) Now() time.Time                        { return time.Now() }
+func (realClock) Now() time.Time                         { return time.Now() }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 // RealClock is the production Clock implementation.

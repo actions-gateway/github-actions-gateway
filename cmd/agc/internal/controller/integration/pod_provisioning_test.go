@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	schedulingv1 "k8s.io/api/scheduling/v1"
 )
 
 // waitForWorkerPod polls until a Pod named "runner-*" appears in nsName with the
@@ -244,8 +244,8 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 				Name:      "preexisting-worker-" + string(rune('0'+i)),
 				Namespace: nsName,
 				Labels: map[string]string{
-					"app.kubernetes.io/managed-by":   agcnames.ControllerName,
-					"actions-gateway/runner-group":   "ceiling-rg",
+					"app.kubernetes.io/managed-by": agcnames.ControllerName,
+					"actions-gateway/runner-group": "ceiling-rg",
 				},
 			},
 			Spec: corev1.PodSpec{

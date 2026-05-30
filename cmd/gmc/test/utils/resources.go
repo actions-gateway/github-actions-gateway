@@ -200,4 +200,3 @@ func ResourceExists(resource, ns, name string) bool {
 	}
 	return strings.TrimSpace(out) != ""
 }
-

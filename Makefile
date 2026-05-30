@@ -8,6 +8,7 @@ CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 GINKGO         := $(REPO_ROOT)/.build/ginkgo
+GOLANGCI_LINT  := $(REPO_ROOT)/.build/golangci-lint
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
@@ -34,7 +35,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
         e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo
+        ginkgo golangci-lint lint
 
 ##@ General
 
@@ -87,6 +88,27 @@ test: ## Run unit tests for all modules
 test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
 	$(MAKE) -C cmd/agc test-integration
 	$(MAKE) -C cmd/gmc test-integration
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all workspace modules
+	@set -euo pipefail; \
+	unformatted=$$(gofmt -l $$(go work edit -json | jq -r '.Use[].DiskPath')); \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt: the following files are not formatted:"; \
+		echo "$$unformatted"; \
+		echo "run: gofmt -w <file>"; \
+		exit 1; \
+	fi
+	@set -euo pipefail; \
+	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
+		echo "==> go vet $$dir"; \
+		(cd "$$dir" && go vet ./...) || exit 1; \
+	done
+	@set -euo pipefail; \
+	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
+		echo "==> golangci-lint $$dir"; \
+		(cd "$$dir" && $(GOLANGCI_LINT) run --config $(REPO_ROOT)/.golangci.yml ./...) || exit 1; \
+	done
 
 ##@ e2e
 
@@ -185,7 +207,10 @@ e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster a
 ##@ Tools
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) ## Build all vendored build tools into .build/
+tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) ## Build all vendored build tools into .build/
+
+.PHONY: golangci-lint
+golangci-lint: $(GOLANGCI_LINT) ## Build golangci-lint into .build/
 
 .PHONY: setup-envtest
 setup-envtest: $(SETUP_ENVTEST) ## Build setup-envtest into .build/
@@ -208,3 +233,7 @@ $(SETUP_ENVTEST):
 $(GINKGO):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/cmd/gmc && go build -o $@ github.com/onsi/ginkgo/v2/ginkgo
+
+$(GOLANGCI_LINT):
+	mkdir -p $(REPO_ROOT)/.build
+	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ github.com/golangci/golangci-lint/v2/cmd/golangci-lint

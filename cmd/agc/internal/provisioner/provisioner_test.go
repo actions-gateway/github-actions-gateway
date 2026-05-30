@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -112,7 +112,7 @@ func stubPayload(runID int64) []byte {
 func stubPayloadFull(owner, repo string, runID int64) []byte {
 	b, _ := json.Marshal(map[string]interface{}{
 		"variables": map[string]interface{}{
-			"system.github.run_id":   map[string]interface{}{"value": fmt.Sprintf("%d", runID)},
+			"system.github.run_id":     map[string]interface{}{"value": fmt.Sprintf("%d", runID)},
 			"system.github.repository": map[string]interface{}{"value": owner + "/" + repo},
 		},
 	})
@@ -1497,7 +1497,6 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	rg.Spec.EvictionRetryDelay = &delay
 	payload := stubPayloadFull("org", "repo", 11)
 
-	evictAt := time.Now()
 	done := make(chan error, 1)
 	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-delay", payload, "") }()
 
@@ -1506,7 +1505,7 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	pod := findPod(ctx, t, fc, "team-a")
-	evictAt = time.Now()
+	evictAt := time.Now()
 	evictPod(ctx, t, fc, "team-a", pod.Name)
 	require.NoError(t, <-done)
 
@@ -1632,4 +1631,3 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
 }
-

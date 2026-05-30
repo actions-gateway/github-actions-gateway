@@ -11,9 +11,9 @@ import (
 
 // listenerState tracks one running listener goroutine.
 type listenerState struct {
-	cancel  context.CancelFunc
-	done    chan struct{}
-	isPerm  bool // permanent baseline goroutine; always restarted on exit
+	cancel context.CancelFunc
+	done   chan struct{}
+	isPerm bool // permanent baseline goroutine; always restarted on exit
 }
 
 // ConfigFactory creates a Config for a new listener goroutine at the given

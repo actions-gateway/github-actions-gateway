@@ -218,9 +218,9 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 			Name:      "agentpool-my-rg-0",
 			Namespace: "default",
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by":   agcnames.ControllerName,
-				"actions-gateway/runner-group":   "my-rg",
-				"actions-gateway/agent-index":    "0",
+				"app.kubernetes.io/managed-by": agcnames.ControllerName,
+				"actions-gateway/runner-group": "my-rg",
+				"actions-gateway/agent-index":  "0",
 			},
 			// Missing data fields to test partial state handling.
 		},
@@ -228,7 +228,7 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 			"agentId":          []byte("999"),
 			"clientId":         []byte("c"),
 			"authorizationUrl": []byte("u"),
-			"privateKeyPEM":    []byte{}, // empty — will fail parse
+			"privateKeyPEM":    {}, // empty — will fail parse
 			"agentIndex":       []byte("0"),
 		},
 	}

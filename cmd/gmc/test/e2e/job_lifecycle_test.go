@@ -185,7 +185,9 @@ func fakegithubEnqueueJob(sessionID string, payload map[string]interface{}) {
 // fakegithubControlRequest executes an HTTP request against the fakegithub control API
 // using the persistent port-forward established in BeforeAll.
 // It retries once after 100 ms to handle transient port-forward interruptions.
-func fakegithubControlRequest(g interface{ Expect(interface{}, ...interface{}) Assertion }, method, path string, body []byte) string {
+func fakegithubControlRequest(g interface {
+	Expect(interface{}, ...interface{}) Assertion
+}, method, path string, body []byte) string {
 	url := "http://localhost:" + fakegithubLocalPort + path
 
 	var (
