@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q54"></a>Q54 | Cache `~/.cache/golangci-lint` in CI | `speed` `infra` | 🔲 | S | `setup-go` caches `$GOCACHE` + modules but not the golangci-lint analyzer cache, so every PR re-analyzes cold (~3m51s on PR #91). Add `actions/cache` keyed on `.golangci.yml` + `go.sum`, or switch to `golangci/golangci-lint-action`. |
 | <a id="Q7"></a>Q7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🔲 | S | **Unblocked by Q6 on 2026-05-30.** Same kind cluster + real GitHub App available; need to assert workload→proxy CONNECT + DNAT + IP-range egress with `curl` from a workload-labeled debug pod. |
 | <a id="Q42"></a>Q42 | Proxy `/readyz` must gate on CONNECT listener (analogue of GMC §11.D fix) | `security` `infra` `bug` | 🔲 | S | Proxy `/healthz` returns OK before CONNECT listener binds → workers hit `connection refused` on rollouts. Same bug class as Q6; see [§11.D follow-up](plan/milestone-3.md#11d--gmc-readiness-probe-did-not-gate-on-webhook-server-start). |
 | <a id="Q20"></a>Q20 | [Proxy server + relay timeouts (M-17/M-18)](plan/security.md) | `security` `bug` | 🔲 | S | High + Medium DoS. Add `ReadHeaderTimeout`/`IdleTimeout` to proxy + health servers; per-conn idle + tunnel-lifetime deadline in `handleConnect`. Independent, ~30 LoC + tests. |
