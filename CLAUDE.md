@@ -86,6 +86,7 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 - After pushing, check whether a PR exists (`gh pr view`). If one does, update its description with `gh pr edit` to reflect any new commits.
 - Always commit `docs/STATUS.md` changes in their own isolated commit, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating it makes rebase conflicts trivial to resolve.
 - If a change doesn't belong in the current PR, open a separate PR for it. Working multiple PRs in parallel is fine and preferable to bundling unrelated concerns.
+- Queue items in `docs/STATUS.md` have `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — the `Q` is what stops GitHub from auto-linking the number to PR/issue 44.
 
 ## Agent reference docs
 

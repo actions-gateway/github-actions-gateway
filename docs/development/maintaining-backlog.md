@@ -47,21 +47,23 @@ The `Maintaining this file` section in STATUS.md historically said to mark M/L i
 
 Only set `▶ Started` if you have a specific reason to broadcast in-progress state beyond the open PR (e.g. an exploratory task with no PR yet, an item you've reserved but won't start for several days). Default to not setting it.
 
-### Use `Blocked by #N` for cross-item blockers
+### Use `Blocked by [QN](#QN)` for cross-item blockers
 
-When a 🚫 Queue row is blocked by another Queue item, start its Notes with `Blocked by #N` (or `Blocked by #N, #M` for multiple). External dependencies that have no Queue ID — "needs a cluster with gVisor installed", a third-party sign-off — stay as plain prose.
+When a 🚫 Queue row is blocked by another Queue item, start its Notes with `Blocked by [QN](#QN)` (or comma-separated for multiple). External dependencies that have no Queue ID — "needs a cluster with gVisor installed", a third-party sign-off — stay as plain prose.
 
-The structured form pairs with `make queue-unblock ID=N`, which lists every row currently blocked on `#N`. When the dependency lands, run it to enumerate dependents and clear them in a single isolated STATUS.md commit. Free-text "→ M5 packaging" notes are not machine-readable; `Blocked by #12` is.
+The structured form pairs with `make queue-unblock ID=QN` (the `Q` prefix is optional — `ID=12` works too), which lists every row currently blocked on that ID. When the dependency lands, run it to enumerate dependents and clear them in a single isolated STATUS.md commit. Free-text "→ M5 packaging" notes are not machine-readable; `Blocked by [Q12](#Q12)` is.
 
 ### Stable IDs; do not reuse
 
-Each Queue row has a numeric ID. Once assigned, it stays — even if the row is deleted. New rows take the next unused integer. This makes cross-references in plan docs, commit messages, and PR descriptions stable.
+Each Queue row has a `Q`-prefixed ID (e.g. `Q44`). Once assigned, it stays — even if the row is deleted. New rows take the next unused integer (continuing the same sequence). This makes cross-references in plan docs, commit messages, and PR descriptions stable.
+
+The `Q` prefix exists so that references like `Q44` in a commit message or PR body are **not** auto-linked by GitHub to PR/issue 44 — `#NN` would be, `Q<N>` is not. Use the bare ID (`Q44`) in commits, PRs, and prose. Inside `docs/STATUS.md`, each row carries an inline anchor (`<a id="Q44"></a>Q44`), so cross-references between rows render as Markdown links: `[Q34](#Q34)`.
 
 **Do not introduce sub-IDs (`5a`, `5b`, `5h`)** to track derivative work under a parent item. The 5a–5j sequence in early 2026 caused multiple "rewrite/renumber" churn commits. If a child task is discrete enough to track, give it its own top-level ID.
 
 ### Batch audit-discovery items in one commit
 
-When a single review pass surfaces many new items (security audit → #20–29, k8s audit → #30–36, Go audit → #37–41), add them all in one commit. One commit moving a contiguous block of rows is far easier to rebase than N commits each inserting one row.
+When a single review pass surfaces many new items (security audit → Q20–Q29, k8s audit → Q30–Q36, Go audit → Q37–Q41), add them all in one commit. One commit moving a contiguous block of rows is far easier to rebase than N commits each inserting one row.
 
 The same applies to bulk completions: if a session verifies that a stale Queue entry was actually finished weeks ago, fold the deletion into the same commit as the verification work rather than splitting.
 

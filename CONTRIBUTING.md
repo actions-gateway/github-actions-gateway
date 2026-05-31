@@ -104,6 +104,8 @@ docs: add vendoring discipline to CONTRIBUTING
 
 Keep commits small and focused. Never commit broken code or failing tests. Amending unpushed commits is fine; once pushed, prefer a follow-up commit unless a rebase is explicitly needed.
 
+Queue items in `docs/STATUS.md` are identified by `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — its `Q` prefix is what keeps GitHub from auto-linking to PR/issue 44 (`#44` would be linked, `Q44` is not).
+
 ## Security
 
 Defaults must never trade away a security property for convenience. If a change regresses any security property — even partially — raise it explicitly before shipping. See [docs/design/05-security.md](docs/design/05-security.md) for the threat model and examples of what counts as a regression.

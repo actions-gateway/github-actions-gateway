@@ -8,8 +8,8 @@
 
 Last refreshed 2026-05-30. The provisioner, decryption, ceiling
 enforcement, eviction retry, GC, and RBAC are all in code. Investigation A
-(Named Pipe protocol) is complete. Queue item 5h (worker proxy-CA trust)
-shipped 2026-05-30. **Queue item 6 (Tier-C `E2E_GitHub_RealDispatch`)
+(Named Pipe protocol) is complete. Q5h (worker proxy-CA trust)
+shipped 2026-05-30. **Q6 (Tier-C `E2E_GitHub_RealDispatch`)
 re-ran successfully on 2026-05-30** against real GitHub
 (`actions-gateway/gateway-test`, workflow `test-job.yml`, run
 [26685844172](https://github.com/actions-gateway/gateway-test/actions/runs/26685844172)):
@@ -38,7 +38,7 @@ separately in `cmd/gmc/cmd/main.go` by gating readyz on
 
 ### Critical path
 
-All M3 criteria are met. Queue item 6 (`E2E_GitHub_RealDispatch`)
+All M3 criteria are met. Q6 (`E2E_GitHub_RealDispatch`)
 passed end-to-end on 2026-05-30 with a green checkmark on the
 GitHub-side run, unblocking items 7 (egress-proxy live curl) and
 11 (Ed25519 live probe) which both share the live-kind-cluster
@@ -655,7 +655,7 @@ Runner.Worker spawnclient <readFD> <writeFD>
 is `pipeOut`. The wrapper passes "3" and "4" (Go's `cmd.ExtraFiles[0]` maps to
 fd 3 and `[1]` to fd 4 in the child).
 
-**Outstanding gap (resolved 2026-05-27 — Queue item 5a):** Runner.Worker also
+**Outstanding gap (resolved 2026-05-27 — Q5a):** Runner.Worker also
 reads its runner configuration from `/home/runner/.runner`,
 `/home/runner/.credentials`, and `/home/runner/.credentials_rsaparams` (see
 `Runner.Common/ConfigurationStore.cs` — `GetSettings()` enforces non-null
@@ -687,7 +687,7 @@ Unit tests pin: the agent Secret round-trip
 (`TestProvisioner_ForwardsJITConfigIntoSecret` /
 `TestProvisioner_OmitsJITKeyWhenEmpty`), and the wrapper-side
 materialization (`TestMaterializeJITConfig_*`). Live-cluster validation
-remains gated on Queue item 5c.
+remains gated on Q5c.
 
 **Implementation:** `cmd/worker/main.go` — `writeJobMessage` and `encodeUTF16LE`.
 
@@ -748,12 +748,12 @@ The GMC already mounts this Secret into the AGC pod (cert only, via
 `buildAGCDeployment` in
 [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)
 ~lines 494-509 — and the AGC code path reads it via the
-`appendProxyCAToSystemPool` helper landed under Queue item 5f. Worker
+`appendProxyCAToSystemPool` helper landed under Q5f. Worker
 pods need the symmetric treatment, but the AGC provisioner's `BuildPod`
 ([cmd/agc/internal/provisioner/pod_builder.go](../../cmd/agc/internal/provisioner/pod_builder.go))
 never adds that volume.
 
-**Fix sketch (tracked as Queue item 5h):**
+**Fix sketch (tracked as Q5h):**
 
 1. **AGC provisioner pod builder:** Mount `actions-gateway-proxy-tls`
    (cert only, `Items: [{Key: tls.crt, Path: tls.crt}]`) into the runner
@@ -797,10 +797,10 @@ Without 5h, no real workflow can complete: the runner cannot post step
 logs, cannot upload step results, and cannot call `CompleteJob` against
 the run-service. The job runs (the `echo` step probably succeeds in
 the container) but is invisible to GitHub, which times out the lock and
-marks the run `cancelled`. Once 5h ships, item 6 can be re-run against
+marks the run `cancelled`. Once Q5h ships, Q6 can be re-run against
 the same kind cluster and should reach the green checkmark.
 
-**Resolution (Queue item 5h shipped):**
+**Resolution (Q5h shipped):**
 
 - AGC pod provisioner gained `Provisioner.ProxyTLSSecretName`
   ([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)).
@@ -829,16 +829,16 @@ the same kind cluster and should reach the green checkmark.
   (`TestWrapper_PropagatesProxyTrustEnvToChild`) that asserts the child
   process sees `SSL_CERT_FILE` pointing at the combined bundle.
 
-The next live dry-run of item 6 should reach the green checkmark
-without `UntrustedRoot` log lines. M-11b (Ed25519 live probe) and item
-7 (egress-proxy live curl validation) are unblocked at the same time.
+The next live dry-run of Q6 should reach the green checkmark
+without `UntrustedRoot` log lines. M-11b (Ed25519 live probe) and Q7
+(egress-proxy live curl validation) are unblocked at the same time.
 
 ---
 
 ### 11.D — GMC readiness probe did not gate on webhook server start
 
 **Surfaced by:** 2026-05-30 re-run of `E2E_GitHub_RealDispatch` (Queue
-item 6). The test's `BeforeAll` does `kubectl set env` on the GMC
+Q6). The test's `BeforeAll` does `kubectl set env` on the GMC
 Deployment to swap fakegithub→real-GitHub env vars, which triggers a
 rolling update. It then waits for `kubectl rollout status` to settle
 and immediately applies the tenant `ActionsGateway` CR. Every attempt
@@ -874,7 +874,7 @@ keep marking themselves Ready.
 production, not just the e2e suite. Any concurrent `kubectl apply` of
 an `ActionsGateway` CR during a GMC image roll or env-var change had a
 1–2s window where it could time out. The fix is a one-line addition
-and ships in the same branch as the item 6 re-run.
+and ships in the same branch as the Q6 re-run.
 
 **Follow-up identified:** The egress proxy
 ([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)) has the same class of

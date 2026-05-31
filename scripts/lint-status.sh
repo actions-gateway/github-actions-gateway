@@ -84,12 +84,13 @@ check_last_touched() {
 # Helpers for Queue parsing.
 #
 # Queue rows look like:
-#   | 44 | Item title | `label1` `label2` | 🔲 | S | Notes column text. |
+#   | <a id="Q44"></a>Q44 | Item title | `label1` `label2` | 🔲 | S | Notes. |
 #
 # Splitting on `|` yields 8 awk fields (empty $1 before the leading pipe,
-# empty $8 after the trailing pipe). The numeric ID is $2, Notes is $7.
-# Header (`| # | Item | ...`) and divider (`|---|---|...`) rows are excluded
-# by the `$2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/` guard.
+# empty $8 after the trailing pipe). The Q-prefixed ID lives in $2 (after
+# stripping the inline anchor tag and whitespace); Notes is $7. Header
+# (`| ID | Item | ...`) and divider (`|---|---|...`) rows are excluded by
+# the post-strip regex guard on $2.
 # ----------------------------------------------------------------------------
 
 # Emit "id<TAB>notes_length<TAB>notes" for each Queue row, one per line.
@@ -97,8 +98,11 @@ queue_rows() {
     awk -F'|' '
         /^## Queue/ { in_queue=1; next }
         /^## /      { in_queue=0 }
-        in_queue && /^\|/ && $2 ~ /^[[:space:]]*[0-9]+[[:space:]]*$/ {
-            id=$2; gsub(/[[:space:]]/, "", id)
+        in_queue && /^\|/ {
+            id=$2
+            gsub(/<[^>]*>/, "", id)      # strip inline anchor tags
+            gsub(/[[:space:]]/, "", id)
+            if (id !~ /^Q[0-9]+$/) next  # skip header, divider, non-rows
             notes=$7
             sub(/^[[:space:]]+/, "", notes)
             sub(/[[:space:]]+$/, "", notes)
@@ -116,7 +120,7 @@ check_unique_ids() {
     if [[ -n "$dups" ]]; then
         local id
         while IFS= read -r id; do
-            fail "duplicate Queue ID: #${id}"
+            fail "duplicate Queue ID: ${id}"
         done <<< "$dups"
     fi
 }
@@ -128,7 +132,7 @@ check_notes_length() {
     local id len _notes
     while IFS=$'\t' read -r id len _notes; do
         if (( len > NOTES_MAX_CHARS )); then
-            fail "Queue #${id} Notes is ${len} chars (max ${NOTES_MAX_CHARS}); move detail to the linked plan doc"
+            fail "Queue ${id} Notes is ${len} chars (max ${NOTES_MAX_CHARS}); move detail to the linked plan doc"
         fi
     done < <(queue_rows)
 }

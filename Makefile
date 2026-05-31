@@ -115,7 +115,7 @@ lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 	scripts/lint-status.sh
 
 .PHONY: queue-unblock
-queue-unblock: ## List Queue items blocked by ID=<n> (e.g. make queue-unblock ID=12)
+queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
 	@scripts/queue-unblock.sh $(ID)
 
