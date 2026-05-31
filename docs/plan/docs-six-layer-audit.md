@@ -125,7 +125,7 @@ Task:
    | `actions_gateway_reconcile_errors_total` | ❌ no — controller-runtime emits `controller_runtime_reconcile_errors_total` instead | observability, runbook, upgrade, troubleshooting, 02-architecture |
    | `actions_gateway_ip_range_updates_total` | ❌ no | observability, troubleshooting, 02-architecture |
    | `actions_gateway_proxy_replicas` | ❌ no | milestone-5 (plan only) |
-   | `actions_gateway_proxy_tunnel_duration_seconds` | ❌ no | security (plan only) |
+   | `actions_gateway_proxy_tunnel_duration_seconds` | ✅ yes (M-17/M-18, 2026-05-31) | security, milestone-4 |
 
    (`_bucket`/`_sum` suffixes on histograms are Prometheus-derived, not separate
    metrics — not counted as gaps.)

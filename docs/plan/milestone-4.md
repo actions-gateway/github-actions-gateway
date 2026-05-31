@@ -584,6 +584,7 @@ The proxy exposes Prometheus metrics on the health port at `/metrics`:
 | `actions_gateway_proxy_connections_active` | Gauge | Currently active CONNECT tunnels |
 | `actions_gateway_proxy_connections_total` | Counter | Total CONNECT tunnels opened |
 | `actions_gateway_proxy_dial_errors_total` | Counter | Upstream dial failures |
+| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | Tunnel lifetime, observed at close — surfaces how often tunnels approach the hard lifetime cap |
 
 ### 5.3 Configuration
 

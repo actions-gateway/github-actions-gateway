@@ -55,8 +55,8 @@ by-design / accepted.
 | **M-14** | GMC forwards `AGC_EXTRA_*` cluster-wide | Medium | W5 | ✅ Done 2026-05-23 | `--allow-agc-extra-env`, default `false` (Option A, D-1 resolved) |
 | **M-15** | `MaxWorkers` TOCTOU race | Medium | — | ⓘ Accepted | Soft ceiling per D-6; ResourceQuota is the hard cap |
 | **M-16** | `safeName` collision risk | Medium | — | ✅ Done 2026-05-25 | Hash suffix in both `safeName` and `labelSafe` |
-| **M-17** | Proxy servers lack `ReadHeaderTimeout` (slowloris) | High | — | ❌ Open | ~10 LoC on `healthSrv` + `proxySrv` |
-| **M-18** | CONNECT relay has no idle/lifetime deadline | Medium | — | ❌ Open | Pairs with M-17 in one PR |
+| **M-17** | Proxy servers lack `ReadHeaderTimeout` (slowloris) | High | — | ✅ Done 2026-05-31 | `ReadHeaderTimeout: 5s` + `IdleTimeout: 60s` on both `healthSrv` and `proxySrv` |
+| **M-18** | CONNECT relay has no idle/lifetime deadline | Medium | — | ✅ Done 2026-05-31 | Per-read idle deadline (5m) + absolute lifetime cap (6h); `actions_gateway_proxy_tunnel_duration_seconds` histogram |
 | **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ❌ Open | Floating-tag base ships tenant runtime |
 | **L-1** | JWT `iat` without `jti` | Informational | — | ✅ Done | `ID: newUUID()` sets `jti` |
 | **L-2** | `http.DefaultClient` has no timeout | Low | — | ✅ Done | 60s timeout client injected into broker, registrar, IP-range fetcher |

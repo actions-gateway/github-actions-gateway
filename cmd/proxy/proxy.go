@@ -23,7 +23,19 @@ type Server struct {
 	HealthAddr string
 	// DialTimeout is the upstream TCP dial timeout. Default 10s.
 	DialTimeout time.Duration
-	Log         *slog.Logger
+	// ReadHeaderTimeout caps how long the server waits for request headers on
+	// both the CONNECT and health listeners. Default 5s. Mitigates slowloris.
+	ReadHeaderTimeout time.Duration
+	// HTTPIdleTimeout caps idle keep-alive on both HTTP listeners. Default 60s.
+	// Distinct from TunnelIdleTimeout, which applies to the hijacked CONNECT relay.
+	HTTPIdleTimeout time.Duration
+	// MaxTunnelLifetime is the hard upper bound on a single CONNECT tunnel.
+	// Default 6h. A stalled long-poll cannot tie up a relay goroutine beyond this.
+	MaxTunnelLifetime time.Duration
+	// TunnelIdleTimeout is the per-direction idle deadline applied to the
+	// hijacked CONNECT relay. Reset on every successful read. Default 5m.
+	TunnelIdleTimeout time.Duration
+	Log               *slog.Logger
 	// TLSCertFile and TLSKeyFile enable TLS on the CONNECT listener when both are set.
 	// The health port always remains plaintext.
 	TLSCertFile string
@@ -32,7 +44,15 @@ type Server struct {
 	connectionsActive *prometheus.GaugeVec
 	connectionsTotal  *prometheus.CounterVec
 	dialErrors        *prometheus.CounterVec
+	tunnelDuration    *prometheus.HistogramVec
 }
+
+const (
+	defaultReadHeaderTimeout = 5 * time.Second
+	defaultHTTPIdleTimeout   = 60 * time.Second
+	defaultMaxTunnelLifetime = 6 * time.Hour
+	defaultTunnelIdleTimeout = 5 * time.Minute
+)
 
 // NewServer returns a Server with metrics registered on reg.
 func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Logger, reg prometheus.Registerer) *Server {
@@ -51,7 +71,12 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		Name: "actions_gateway_proxy_dial_errors_total",
 		Help: "Upstream dial failures.",
 	}, nil)
-	reg.MustRegister(active, total, dialErr)
+	tunnelDur := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "actions_gateway_proxy_tunnel_duration_seconds",
+		Help:    "Duration of CONNECT tunnels in seconds, observed at tunnel close.",
+		Buckets: []float64{0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600},
+	}, nil)
+	reg.MustRegister(active, total, dialErr, tunnelDur)
 
 	return &Server{
 		Addr:              addr,
@@ -61,22 +86,43 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		connectionsActive: active,
 		connectionsTotal:  total,
 		dialErrors:        dialErr,
+		tunnelDuration:    tunnelDur,
 	}
 }
 
 // ListenAndServe starts both the CONNECT listener and the health server.
 // Blocks until ctx is cancelled.
 func (s *Server) ListenAndServe(ctx context.Context) error {
+	readHeaderTimeout := s.ReadHeaderTimeout
+	if readHeaderTimeout == 0 {
+		readHeaderTimeout = defaultReadHeaderTimeout
+	}
+	httpIdleTimeout := s.HTTPIdleTimeout
+	if httpIdleTimeout == 0 {
+		httpIdleTimeout = defaultHTTPIdleTimeout
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.Handle("/metrics", promhttp.Handler())
-	healthSrv := &http.Server{Addr: s.HealthAddr, Handler: mux}
+	healthSrv := &http.Server{
+		Addr:              s.HealthAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       httpIdleTimeout,
+	}
 
 	proxySrv := &http.Server{
 		Addr:    s.Addr,
 		Handler: http.HandlerFunc(s.handleConnect),
+		// ReadHeaderTimeout caps the CONNECT request-line + headers read.
+		// ReadTimeout is intentionally NOT set — the CONNECT body is hijacked
+		// and a non-zero ReadTimeout would cap the post-handshake tunnel
+		// lifetime to a fixed value. Per-tunnel deadlines live in handleConnect.
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       httpIdleTimeout,
 		// CONNECT is HTTP/1.1-only. Without disabling HTTP/2, Go's http.Server
 		// negotiates h2 via ALPN when TLS is configured; the AGC's HTTPS proxy
 		// client then sends an HTTP/1.1 CONNECT line over what is now an HTTP/2
@@ -145,6 +191,24 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	s.connectionsActive.WithLabelValues().Inc()
 	defer s.connectionsActive.WithLabelValues().Dec()
 
+	maxLifetime := s.MaxTunnelLifetime
+	if maxLifetime == 0 {
+		maxLifetime = defaultMaxTunnelLifetime
+	}
+	idleTimeout := s.TunnelIdleTimeout
+	if idleTimeout == 0 {
+		idleTimeout = defaultTunnelIdleTimeout
+	}
+	hardDeadline := time.Now().Add(maxLifetime)
+
+	start := time.Now()
+	defer func() {
+		s.tunnelDuration.WithLabelValues().Observe(time.Since(start).Seconds())
+	}()
+
+	clientSrc := &idleDeadlineConn{Conn: conn, idle: idleTimeout, hardDeadline: hardDeadline}
+	upstreamSrc := &idleDeadlineConn{Conn: upstream, idle: idleTimeout, hardDeadline: hardDeadline}
+
 	done := make(chan struct{}, 2)
 	relay := func(dst, src net.Conn) {
 		defer func() { done <- struct{}{} }()
@@ -153,7 +217,25 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 			_ = tc.CloseWrite()
 		}
 	}
-	go relay(upstream, conn)
-	go relay(conn, upstream)
+	go relay(upstream, clientSrc)
+	go relay(conn, upstreamSrc)
 	<-done
+}
+
+// idleDeadlineConn refreshes the underlying conn's read deadline on every
+// Read so an idle stream is torn down after `idle` of inactivity, while
+// hardDeadline imposes an absolute upper bound on tunnel lifetime.
+type idleDeadlineConn struct {
+	net.Conn
+	idle         time.Duration
+	hardDeadline time.Time
+}
+
+func (c *idleDeadlineConn) Read(p []byte) (int, error) {
+	deadline := time.Now().Add(c.idle)
+	if !c.hardDeadline.IsZero() && deadline.After(c.hardDeadline) {
+		deadline = c.hardDeadline
+	}
+	_ = c.Conn.SetReadDeadline(deadline)
+	return c.Conn.Read(p)
 }
