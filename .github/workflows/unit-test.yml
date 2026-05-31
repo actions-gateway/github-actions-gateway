@@ -29,13 +29,6 @@ jobs:
             echo "run: gofmt -s -w <file>"
             exit 1
           fi
-      - name: go vet
-        run: |
-          set -euo pipefail
-          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
-            echo "==> go vet $dir"
-            (cd "$dir" && go vet ./...)
-          done
       - name: golangci-lint
         run: |
           set -euo pipefail

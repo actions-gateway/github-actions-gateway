@@ -90,7 +90,7 @@ test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gm
 	$(MAKE) -C cmd/gmc test-integration
 
 .PHONY: lint
-lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all workspace modules
+lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
 	@set -euo pipefail; \
 	unformatted=$$(gofmt -l $$(go work edit -json | jq -r '.Use[].DiskPath')); \
 	if [ -n "$$unformatted" ]; then \
@@ -99,11 +99,6 @@ lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all worksp
 		echo "run: gofmt -w <file>"; \
 		exit 1; \
 	fi
-	@set -euo pipefail; \
-	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
-		echo "==> go vet $$dir"; \
-		(cd "$$dir" && go vet ./...) || exit 1; \
-	done
 	@set -euo pipefail; \
 	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
 		echo "==> golangci-lint $$dir"; \
