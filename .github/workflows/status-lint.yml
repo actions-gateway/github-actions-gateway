@@ -1,0 +1,21 @@
+name: status-lint
+on:
+  pull_request:
+    paths:
+      - 'docs/STATUS.md'
+      - 'scripts/lint-status.sh'
+      - '.github/workflows/status-lint.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/STATUS.md'
+      - 'scripts/lint-status.sh'
+      - '.github/workflows/status-lint.yml'
+jobs:
+  lint-status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v6
+      - name: lint docs/STATUS.md format
+        run: scripts/lint-status.sh
