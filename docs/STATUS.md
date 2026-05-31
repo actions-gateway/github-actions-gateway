@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | # | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| 43 | Structured `Blocked by:` + queue-unblock helper | `infra` `docs` | 🔲 | S | Replace free-text `→ X` blocker notes with `Blocked by #N`; add `make queue-unblock ID=N` for one-commit unblock sweeps. Fixes the stale-blocker class CLAUDE.md warns about; see [maintaining-backlog](development/maintaining-backlog.md). |
 | 7 | [Egress proxy live curl validation](plan/worker-egress-proxy.md) | `security` `infra` | 🔲 | S | **Unblocked by item 6 on 2026-05-30.** Same kind cluster + real GitHub App available; need to assert workload→proxy CONNECT + DNAT + IP-range egress with `curl` from a workload-labeled debug pod. |
 | 42 | Proxy `/readyz` must gate on CONNECT listener (analogue of GMC §11.D fix) | `security` `infra` `bug` | 🔲 | S | Proxy `/healthz` returns OK before CONNECT listener binds → workers hit `connection refused` on rollouts. Same bug class as item 6; see [§11.D follow-up](plan/milestone-3.md#11d--gmc-readiness-probe-did-not-gate-on-webhook-server-start). |
 | 20 | [Proxy server + relay timeouts (M-17/M-18)](plan/security.md) | `security` `bug` | 🔲 | S | High + Medium DoS. Add `ReadHeaderTimeout`/`IdleTimeout` to proxy + health servers; per-conn idle + tunnel-lifetime deadline in `handleConnect`. Independent, ~30 LoC + tests. |
@@ -73,10 +72,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | 41 | Go best-practices: extend goleak coverage | `tests` | 🔲 | S | `broker/` and `cmd/worker/` spawn goroutines but no `goleak.VerifyNone` in `TestMain`. `goleak` is already a `broker/` dep. See [go-best-practices.md §3](plan/go-best-practices.md#3-extend-goleak-coverage). |
 | 49 | [Per-key merge for `proxy.resources` (gaps.md fix #2)](plan/gaps.md) | `bug` `infra` | 🔲 | S | Setting `proxy.resources.requests.cpu` silently drops default memory/limits, breaks HPA math (`builder.go:248-250`). Fix in [gaps.md §2](plan/gaps.md#2-fix-proxy-resource-override-dropping-cpu-request-hpa-silent-failure). |
 | 12 | [M5 packaging — Kustomize overlay](plan/milestone-5.md) | `milestone` | 🔲 | L | **Unblocked by item 6 on 2026-05-30.** |
-| 28 | [SBOM + cosign signing of built images](plan/security.md) | `security` `infra` | 🚫 | M | → M5 packaging. Distroless + digest pinning are the foundation. |
-| 29 | [API server audit policy sample](plan/security.md) | `security` `infra` | 🚫 | S | → M5 packaging. Surfaces a compromised GMC's Secret `get` calls. |
-| 13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🚫 | L | → M5 packaging. **Highest "right thing" risk — project pitch is thousands of virtual sessions per AGC and nothing pins that claim.** Consider whether a minimal harness could run on the M3 Tier-C kind setup before #12 lands. |
-| 14 | [M5 polaris/kube-bench posture scan](plan/milestone-5.md) | `milestone` `security` | 🚫 | S | → M5 packaging |
+| 28 | [SBOM + cosign signing of built images](plan/security.md) | `security` `infra` | 🚫 | M | Blocked by #12. Distroless + digest pinning are the foundation. |
+| 29 | [API server audit policy sample](plan/security.md) | `security` `infra` | 🚫 | S | Blocked by #12. Surfaces a compromised GMC's Secret `get` calls. |
+| 13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🚫 | L | Blocked by #12. **Highest "right thing" risk — project pitch is thousands of virtual sessions per AGC and nothing pins that claim.** Consider whether a minimal harness could run on the M3 Tier-C kind setup before #12 lands. |
+| 14 | [M5 polaris/kube-bench posture scan](plan/milestone-5.md) | `milestone` `security` | 🚫 | S | Blocked by #12. |
 | 15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
 | 45 | Compress Progress table — drop Notes column | `docs` | 🔲 | S | Most cells just say "see plan" or restate the plan doc; the plan link in the row's name already carries the detail. Reduces edit surface and width. |
 | 47 | Append-by-default for new low-priority Queue rows | `docs` | 🔲 | S | Loosen "insert at right priority position" to "append unless re-prioritizing" so row order stays stable in diffs across parallel sessions. Re-prioritization becomes a deliberate separate commit. |
