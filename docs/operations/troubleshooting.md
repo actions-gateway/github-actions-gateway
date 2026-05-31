@@ -191,6 +191,42 @@ After updating the spec, patch the proxy Deployment or trigger a rollout; the HP
 
 ---
 
+## Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap
+
+**Symptoms.** A worker job logs a connection reset, `EOF`, or `broken pipe` from the GitHub SDK / `curl` / `git`, with no proxy `502` response. The proxy pod itself is healthy and serving other tunnels.
+
+**Likely cause.** The proxy enforces two per-tunnel deadlines on the CONNECT relay (M-18, 2026-05-31):
+
+- **Idle timeout** — 5 minutes of no data in either direction. A long-poll against the GitHub API or a stalled SDK call hits this first.
+- **Hard lifetime cap** — 6 hours absolute, regardless of activity. A continuous artifact stream or Twirp log relay that exceeds this is torn down even with traffic flowing.
+
+These are not bugs. They bound goroutine and file-descriptor exhaustion from slow or stuck clients. The healthy case (an actively-used GitHub API call) completes in seconds and does not trip either cap.
+
+**Diagnostics.**
+
+```sh
+# Distribution of tunnel lifetimes; a heavy tail near 21600s (6h) or
+# a spike at 300s (5m idle) indicates clients hitting the caps.
+kubectl exec -n <namespace> deploy/actions-gateway-proxy -- \
+  wget -qO- localhost:8081/metrics | \
+  grep actions_gateway_proxy_tunnel_duration_seconds_bucket
+
+# Active vs. total tunnels — healthy ratio is "active << total".
+kubectl exec -n <namespace> deploy/actions-gateway-proxy -- \
+  wget -qO- localhost:8081/metrics | \
+  grep -E 'actions_gateway_proxy_connections_(active|total)'
+```
+
+**Resolution.**
+
+For idle hits: examine the workflow step that stalls. A workflow `sleep`-ing inside a long-running `curl --connect-timeout 0` or a misconfigured webhook receiver are typical causes. The fix is usually in the workflow, not the proxy.
+
+For lifetime-cap hits: split very long-running uploads or streams across multiple HTTP requests. The 6h cap is a safety net for stuck connections; a legitimately-long single stream should be rare.
+
+To change the defaults during an incident, patch the proxy Deployment with environment overrides — note that there is no env-var knob today; defaults are baked into the Server struct and require a code change to adjust. File a Queue item if a tenant repeatedly hits either cap on a legitimate workload.
+
+---
+
 ## RateLimited Condition on ActionsGateway
 
 **Symptoms.** `kubectl get actionsgateway` shows a `RateLimited=True` condition. `actions_gateway_active_sessions` is at or near the per-installation budget.
