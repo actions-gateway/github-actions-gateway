@@ -149,6 +149,22 @@ func findPod(ctx context.Context, t *testing.T, c client.Client, ns string) *cor
 	return &list.Items[0]
 }
 
+// waitForPodCreated polls until at least one pod exists in the namespace and
+// returns it. Use this — not findPod — when the provisioner was just fired in a
+// goroutine: provision() creates the Secret before the Pod, so an Eventually
+// keyed on the Secret races with the Pod-Create call and findPod can still
+// return nil. Eventually-on-Pod is strictly later than Secret-create, so a
+// findSecret call after this helper is also race-free.
+func waitForPodCreated(ctx context.Context, t *testing.T, c client.Client, ns string) *corev1.Pod {
+	t.Helper()
+	var pod *corev1.Pod
+	require.Eventually(t, func() bool {
+		pod = findPod(ctx, t, c, ns)
+		return pod != nil
+	}, 2*time.Second, 5*time.Millisecond, "pod must appear in namespace %s", ns)
+	return pod
+}
+
 func findSecret(ctx context.Context, t *testing.T, c client.Client, ns, prefix string) *corev1.Secret {
 	t.Helper()
 	var list corev1.SecretList
@@ -218,17 +234,15 @@ func TestProvisioner_ForwardsJITConfigIntoSecret(t *testing.T) {
 		done <- p.HandlerFor(rg)(ctx, "", "plan-jit", stubPayload(7), jitBlob)
 	}()
 
-	require.Eventually(t, func() bool {
-		return findSecret(ctx, t, fc, "team-a", "job-") != nil
-	}, 2*time.Second, 5*time.Millisecond)
+	// Wait for the Pod (created strictly after the Secret) so the findSecret
+	// below is race-free. See waitForPodCreated for context.
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	require.NotNil(t, secret)
 	assert.Equal(t, []byte(jitBlob), secret.Data["jitconfig"],
 		"worker Secret must carry the JIT blob under the 'jitconfig' key")
 
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
 }
@@ -250,17 +264,15 @@ func TestProvisioner_OmitsJITKeyWhenEmpty(t *testing.T) {
 		done <- p.HandlerFor(rg)(ctx, "", "plan-nojit", stubPayload(8), "")
 	}()
 
-	require.Eventually(t, func() bool {
-		return findSecret(ctx, t, fc, "team-a", "job-") != nil
-	}, 2*time.Second, 5*time.Millisecond)
+	// Wait for the Pod (created strictly after the Secret) so the findSecret
+	// below is race-free. See waitForPodCreated for context.
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	require.NotNil(t, secret)
 	_, present := secret.Data["jitconfig"]
 	assert.False(t, present, "jitconfig key must be absent when no blob was provided")
 
-	pod := findPod(ctx, t, fc, "team-a")
-	require.NotNil(t, pod)
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
 	require.NoError(t, <-done)
 }
