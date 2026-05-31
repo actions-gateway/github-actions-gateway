@@ -60,6 +60,7 @@ markers per item.
 | [docs-six-layer-audit.md](docs-six-layer-audit.md) | Six-layer consistency audit of `docs/` (terminology, cross-refs, nav, reuse) | ⚠️ Layer 2 healthy; Layers 1/4/5/6 have audit + small fixes open |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ⚠️ Phase 1 done; Phase 2 has open drift items (image vars, envtest, `all` semantics) |
 | [k8s-best-practices.md](k8s-best-practices.md) | Project-wide Kubernetes best-practices audit (RBAC, pod security, controller correctness, CRD polish, manifests, observability, supply chain) | ⚠️ Findings logged; fixes open as STATUS Queue #30–36 |
+| [go-best-practices.md](go-best-practices.md) | Small Go-idiom cleanups: unify module versions, fix async-channel violation, extend goleak coverage, misc | ⚠️ Findings logged; fixes open as STATUS Queue #38–41 |
 
 ## Archive
 
