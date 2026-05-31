@@ -56,7 +56,7 @@ Integration tests require `KUBEBUILDER_ASSETS`. See [`docs/development/testing.m
 
 ## Linting
 
-`make lint` runs `gofmt -s`, `go vet`, and `golangci-lint` across every workspace module. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`; the linter config lives at the repo root in [`.golangci.yml`](.golangci.yml). CI runs the same gates in `.github/workflows/unit-test.yml` — run it locally before pushing to avoid burning CI.
+`make lint` runs `gofmt -s` and `golangci-lint` across every workspace module. `golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`. CI runs the same gates in `.github/workflows/unit-test.yml` — run it locally before pushing to avoid burning CI.
 
 For the full e2e suite against a local kind cluster:
 
