@@ -35,7 +35,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
         e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status
+        ginkgo golangci-lint lint lint-status queue-unblock
 
 ##@ General
 
@@ -113,6 +113,11 @@ lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all worksp
 .PHONY: lint-status
 lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 	scripts/lint-status.sh
+
+.PHONY: queue-unblock
+queue-unblock: ## List Queue items blocked by ID=<n> (e.g. make queue-unblock ID=12)
+	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
+	@scripts/queue-unblock.sh $(ID)
 
 ##@ e2e
 
