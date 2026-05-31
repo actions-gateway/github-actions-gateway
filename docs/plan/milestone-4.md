@@ -390,8 +390,8 @@ Key fields:
 - `replicas`: initial value = `spec.proxy.minReplicas` (the HPA takes over after creation)
 - Container resources: `requests: {cpu: 10m, memory: 32Mi}`, `limits: {cpu: 100m, memory: 64Mi}` — overridden by `spec.proxy.resources` if set
 - `podAntiAffinity: preferredDuringSchedulingIgnoredDuringExecution` spreading across nodes
-- Liveness probe: `GET /healthz` on port 8081
-- Readiness probe: `GET /healthz` on port 8081
+- Liveness probe: `GET /healthz` on port 8081 (process up)
+- Readiness probe: `GET /readyz` on port 8081 (CONNECT listener bound — gates Service EndpointSlice membership; see Q42 fix)
 - Security context: `runAsNonRoot: true`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`
 - Labels: `app: actions-gateway-proxy`, `app.kubernetes.io/managed-by: actions-gateway-gmc`
 
@@ -573,7 +573,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-The health server listens on `HealthAddr` and returns `200 OK` for `GET /healthz` — no logic, just a liveness signal.
+The health server listens on `HealthAddr` and serves two endpoints: `GET /healthz` always returns `200 OK` (liveness — process is up); `GET /readyz` returns `200 OK` only after the CONNECT listener has bound (readiness — gates Service EndpointSlice membership, see Q42 fix). Both share the port so the existing single `containerPort: 8081` keeps working.
 
 ### 5.2 Metrics
 

@@ -619,7 +619,7 @@ func TestBuildProxyDeployment_Probes(t *testing.T) {
 	assert.Equal(t, proxyHealthPort, c.LivenessProbe.HTTPGet.Port.IntVal)
 	require.NotNil(t, c.ReadinessProbe)
 	require.NotNil(t, c.ReadinessProbe.HTTPGet)
-	assert.Equal(t, "/healthz", c.ReadinessProbe.HTTPGet.Path)
+	assert.Equal(t, "/readyz", c.ReadinessProbe.HTTPGet.Path)
 	assert.Equal(t, proxyHealthPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
 }
 

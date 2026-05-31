@@ -876,13 +876,19 @@ an `ActionsGateway` CR during a GMC image roll or env-var change had a
 1–2s window where it could time out. The fix is a one-line addition
 and ships in the same branch as the Q6 re-run.
 
-**Follow-up identified:** The egress proxy
-([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)) has the same class of
-bug — its `/healthz` returns OK as soon as the health-port server
-binds, but the CONNECT listener on port 8080 is started in a separate
+**Follow-up identified — resolved by Q42.** The egress proxy
+([cmd/proxy/proxy.go](../../cmd/proxy/proxy.go)) had the same class of
+bug — its `/healthz` returned OK as soon as the health-port server
+bound, but the CONNECT listener on port 8080 was started in a separate
 goroutine. The GMC's per-tenant proxy Deployment
 ([cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go))
-uses `/healthz` for both liveness and readiness, so worker pods can
+used `/healthz` for both liveness and readiness, so worker pods could
 hit `connection refused` on `HTTPS_PROXY` traffic during a proxy
-rollout or HPA scale-up. Tracked as a Queue item in
-[docs/STATUS.md](../STATUS.md).
+rollout or HPA scale-up.
+
+Fixed by Q42: `ListenAndServe` now pre-binds both listeners
+synchronously before either serve goroutine starts, then closes a
+`ready` channel. A new `/readyz` endpoint returns 200 only after the
+channel closes, and the proxy `Deployment`'s `readinessProbe` was
+re-pointed to `/readyz`. `/healthz` remains the liveness probe.
+Runbook: [troubleshooting.md — Worker `HTTPS_PROXY` Returns `connection refused` During Proxy Rollout](../operations/troubleshooting.md#worker-https_proxy-returns-connection-refused-during-proxy-rollout).
