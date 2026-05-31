@@ -613,4 +613,44 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 
 ---
 
+## Worker `HTTPS_PROXY` Returns `connection refused` During Proxy Rollout
+
+**Symptoms.** Worker pods (or `kubectl exec` debug curls from a workload-labeled pod) intermittently fail with `connect: connection refused` against the per-tenant proxy `:8080` immediately after a proxy `Deployment` rollout, scale-up, or HPA event. The proxy pods report `READY 1/1` and `/healthz` returns 200.
+
+**Likely causes.**
+- Running a proxy image built before the proxy `/readyz` gate landed. The pre-fix proxy bound the health server on `:8081` in parallel with the CONNECT server on `:8080`. The kubelet observed `/healthz` returning 200 and added the pod IP to the proxy `Service` EndpointSlice before the CONNECT serve goroutine had bound the kernel socket. Worker pods racing the rollout connected to the new pod IP via `Service` DNS and got `ECONNREFUSED`.
+- A custom probe override that points the GMC-managed proxy `Deployment`'s readinessProbe at `/healthz` instead of `/readyz` (e.g. an out-of-band `kubectl edit deploy`). The GMC reconciler overwrites the probe back to `/readyz` on the next reconcile, but until then the regression is live.
+
+**Diagnostics.**
+
+```sh
+# 1. Confirm the proxy Deployment's readinessProbe path. Should be /readyz.
+kubectl get deploy -n <tenant-namespace> actions-gateway-proxy \
+  -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.path}{"\n"}'
+
+# 2. Probe /readyz directly from a workload-labeled debug pod (the proxy
+#    NetworkPolicy denies ingress from unlabeled pods).
+kubectl run dbg-readyz --rm -i --restart=Never --quiet \
+  --labels='actions-gateway/component=workload' \
+  --image=alpine --command -- \
+  sh -c "apk add --no-cache curl >/dev/null 2>&1; \
+         curl -sv http://actions-gateway-proxy.<tenant-namespace>.svc:8081/readyz"
+
+# 3. From the same debug pod, confirm the CONNECT port accepts TCP. A 200 on
+#    /readyz paired with a refused TCP dial would be a Q42 regression.
+kubectl run dbg-connect --rm -i --restart=Never --quiet \
+  --labels='actions-gateway/component=workload' \
+  --image=alpine --command -- \
+  sh -c "apk add --no-cache busybox-extras >/dev/null 2>&1; \
+         nc -zv actions-gateway-proxy.<tenant-namespace>.svc 8080"
+```
+
+**Resolution.**
+- Upgrade the proxy image to one built with the `/readyz` gate. The handler returns 503 until both listeners are bound (`cmd/proxy/proxy.go` — `handleReadyz`).
+- If a custom override changed the readinessProbe path back to `/healthz`, remove it. GMC re-applies the canonical `Deployment` on its next reconcile, so the regression window closes within a few seconds.
+
+`/healthz` remains the liveness probe (always 200 if the process is up). `/readyz` is the readiness gate — kubelet keeps the pod out of the Service EndpointSlice until both `:8080` and `:8081` are bound.
+
+---
+
 ← [Back to Operations](.)

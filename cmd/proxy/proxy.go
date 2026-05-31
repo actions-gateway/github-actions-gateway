@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -45,6 +46,13 @@ type Server struct {
 	connectionsTotal  *prometheus.CounterVec
 	dialErrors        *prometheus.CounterVec
 	tunnelDuration    *prometheus.HistogramVec
+
+	// ready is closed by ListenAndServe once the CONNECT listener has bound.
+	// /readyz returns 200 only after this channel is closed, so the kubelet
+	// keeps the pod out of the Service EndpointSlice until workers can
+	// actually reach the CONNECT port. Mirrors the §11.D GMC webhook
+	// readiness fix.
+	ready chan struct{}
 }
 
 const (
@@ -87,12 +95,34 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		connectionsTotal:  total,
 		dialErrors:        dialErr,
 		tunnelDuration:    tunnelDur,
+		ready:             make(chan struct{}),
 	}
 }
 
 // ListenAndServe starts both the CONNECT listener and the health server.
 // Blocks until ctx is cancelled.
+//
+// Both listeners are bound synchronously before either serve loop starts and
+// before s.ready is closed. Binding the CONNECT socket puts it in LISTEN state
+// at the kernel level, so workers can complete the TCP handshake the instant
+// /readyz flips to 200 — no race window where the EndpointSlice points at a
+// pod whose CONNECT port is still unbound.
 func (s *Server) ListenAndServe(ctx context.Context) error {
+	connectLn, err := net.Listen("tcp", s.Addr)
+	if err != nil {
+		return fmt.Errorf("bind connect listener: %w", err)
+	}
+	s.Addr = connectLn.Addr().String()
+
+	healthLn, err := net.Listen("tcp", s.HealthAddr)
+	if err != nil {
+		_ = connectLn.Close()
+		return fmt.Errorf("bind health listener: %w", err)
+	}
+	s.HealthAddr = healthLn.Addr().String()
+
+	close(s.ready)
+
 	readHeaderTimeout := s.ReadHeaderTimeout
 	if readHeaderTimeout == 0 {
 		readHeaderTimeout = defaultReadHeaderTimeout
@@ -106,16 +136,15 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFunc("/readyz", s.handleReadyz)
 	mux.Handle("/metrics", promhttp.Handler())
 	healthSrv := &http.Server{
-		Addr:              s.HealthAddr,
 		Handler:           mux,
 		ReadHeaderTimeout: readHeaderTimeout,
 		IdleTimeout:       httpIdleTimeout,
 	}
 
 	proxySrv := &http.Server{
-		Addr:    s.Addr,
 		Handler: http.HandlerFunc(s.handleConnect),
 		// ReadHeaderTimeout caps the CONNECT request-line + headers read.
 		// ReadTimeout is intentionally NOT set — the CONNECT body is hijacked
@@ -133,11 +162,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	errCh := make(chan error, 2)
-	go func() { errCh <- healthSrv.ListenAndServe() }()
+	go func() { errCh <- healthSrv.Serve(healthLn) }()
 	if s.TLSCertFile != "" && s.TLSKeyFile != "" {
-		go func() { errCh <- proxySrv.ListenAndServeTLS(s.TLSCertFile, s.TLSKeyFile) }()
+		go func() { errCh <- proxySrv.ServeTLS(connectLn, s.TLSCertFile, s.TLSKeyFile) }()
 	} else {
-		go func() { errCh <- proxySrv.ListenAndServe() }()
+		go func() { errCh <- proxySrv.Serve(connectLn) }()
 	}
 
 	select {
@@ -147,6 +176,20 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return nil
 	case err := <-errCh:
 		return err
+	}
+}
+
+// handleReadyz returns 200 only once the CONNECT listener has bound. The
+// readiness probe gates a worker pod's HTTPS_PROXY traffic on the proxy
+// kernel socket being in LISTEN state — without this, kubelet adds the
+// pod to the Service EndpointSlice as soon as the health port is up,
+// and concurrent worker traffic races the proxy serve goroutine.
+func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+	select {
+	case <-s.ready:
+		w.WriteHeader(http.StatusOK)
+	default:
+		w.WriteHeader(http.StatusServiceUnavailable)
 	}
 }
 

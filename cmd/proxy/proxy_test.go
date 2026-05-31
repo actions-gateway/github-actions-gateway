@@ -646,3 +646,61 @@ func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, connectResp.StatusCode)
 }
+
+// TestProxy_ReadyzHandler_GatesOnReadyChannel asserts handleReadyz returns 503
+// while s.ready is open and 200 once it closes. Unit-level guarantee that the
+// gate is wired correctly — the integration assertion that /readyz only flips
+// after the CONNECT bind succeeds lives in TestServer_ReadyzImpliesConnectBound.
+func TestProxy_ReadyzHandler_GatesOnReadyChannel(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	srv := NewServer("", "", 5*time.Second, nil, reg)
+
+	rec := httptest.NewRecorder()
+	srv.handleReadyz(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "/readyz must be 503 while ready channel is open")
+
+	close(srv.ready)
+
+	rec = httptest.NewRecorder()
+	srv.handleReadyz(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	assert.Equal(t, http.StatusOK, rec.Code, "/readyz must be 200 once ready channel is closed")
+}
+
+// TestServer_ReadyzImpliesConnectBound is the regression test for Q42: any
+// time /readyz returns 200, the CONNECT port must accept TCP connections.
+// Before the fix, /readyz (or /healthz used as the readiness probe) could
+// return 200 while the CONNECT serve goroutine had not yet bound :8080,
+// causing worker pods to hit `connection refused` on rollouts.
+func TestServer_ReadyzImpliesConnectBound(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	reg := prometheus.NewRegistry()
+	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- srv.ListenAndServe(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-serverDone
+	})
+
+	// Poll /readyz until it returns 200 — and for every 200 response, the
+	// CONNECT port must already accept TCP. A single 200 paired with a
+	// connect-refused on s.Addr would mean the gate is broken.
+	require.Eventually(t, func() bool {
+		resp, err := http.Get("http://" + srv.HealthAddr + "/readyz")
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+		// /readyz says ready — CONNECT port MUST be bound.
+		c, err := net.DialTimeout("tcp", srv.Addr, 100*time.Millisecond)
+		require.NoError(t, err, "/readyz returned 200 but CONNECT port refused TCP — Q42 regression")
+		c.Close()
+		return true
+	}, 2*time.Second, 10*time.Millisecond)
+}
