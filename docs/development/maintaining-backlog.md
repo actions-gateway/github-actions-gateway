@@ -47,6 +47,12 @@ The `Maintaining this file` section in STATUS.md historically said to mark M/L i
 
 Only set `▶ Started` if you have a specific reason to broadcast in-progress state beyond the open PR (e.g. an exploratory task with no PR yet, an item you've reserved but won't start for several days). Default to not setting it.
 
+### Use `Blocked by #N` for cross-item blockers
+
+When a 🚫 Queue row is blocked by another Queue item, start its Notes with `Blocked by #N` (or `Blocked by #N, #M` for multiple). External dependencies that have no Queue ID — "needs a cluster with gVisor installed", a third-party sign-off — stay as plain prose.
+
+The structured form pairs with `make queue-unblock ID=N`, which lists every row currently blocked on `#N`. When the dependency lands, run it to enumerate dependents and clear them in a single isolated STATUS.md commit. Free-text "→ M5 packaging" notes are not machine-readable; `Blocked by #12` is.
+
 ### Stable IDs; do not reuse
 
 Each Queue row has a numeric ID. Once assigned, it stays — even if the row is deleted. New rows take the next unused integer. This makes cross-references in plan docs, commit messages, and PR descriptions stable.
