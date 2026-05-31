@@ -111,8 +111,8 @@ lint: $(GOLANGCI_LINT) ## Run gofmt, go vet, and golangci-lint across all worksp
 	done
 
 .PHONY: lint-status
-lint-status: ## Lint docs/STATUS.md format rules
-	@scripts/lint-status.sh
+lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
+	scripts/lint-status.sh
 
 ##@ e2e
 
