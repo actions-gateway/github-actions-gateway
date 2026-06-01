@@ -283,4 +283,154 @@ spec:
 		Expect(logs).To(MatchRegexp(`BODY_BYTES=([1-9][0-9]*)`),
 			"expected non-empty response body from api.github.com/zen; logs:\n%s", logs)
 	})
+
+	// E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked is the negative
+	// counterpart to E2E_GMC_TenantProvisioning_ProxyConnectWorks. It confirms
+	// that the workload NetworkPolicy blocks direct egress to GitHub from a
+	// workload-labelled pod when the proxy is bypassed (--noproxy '*'). Without
+	// this assertion, a regression that broadens workload egress to GitHub CIDRs
+	// (defeating the per-tenant egress-IP guarantee) would still pass the
+	// positive ProxyConnectWorks test and ship silently.
+	It("E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked: workload pod cannot reach GitHub directly", func() {
+		const curlPodName = "workload-direct-egress-probe"
+
+		By("deploying a workload-labelled curl pod that bypasses the proxy")
+		manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    actions-gateway/component: workload
+spec:
+  restartPolicy: Never
+  containers:
+  - name: curl
+    image: curlimages/curl:8.10.1
+    imagePullPolicy: IfNotPresent
+    command: ["curl"]
+    args:
+    - "--silent"
+    - "--show-error"
+    - "--noproxy"
+    - "*"
+    - "--max-time"
+    - "5"
+    - "--connect-timeout"
+    - "5"
+    - "--output"
+    - "/dev/null"
+    - "--write-out"
+    - "HTTP_CODE=%%{http_code}\n"
+    - "https://api.github.com/zen"
+`, curlPodName, tenantNS)
+
+		Expect(utils.ApplyManifest(manifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
+				"-n", tenantNS, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the curl pod to terminate")
+		var finalPhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", curlPodName,
+				"-n", tenantNS, "-o", "jsonpath={.status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"curl pod still in phase %q", out)
+			finalPhase = out
+		}, 90*time.Second, 2*time.Second).Should(Succeed())
+
+		logsCmd := exec.Command("kubectl", "logs", curlPodName, "-n", tenantNS)
+		logs, _ := utils.Run(logsCmd)
+
+		// NetworkPolicy drops produce a connect timeout (curl exits 28, pod
+		// Failed). The crucial invariant: the workload pod must NOT have
+		// completed an HTTP exchange with api.github.com.
+		Expect(finalPhase).To(Equal("Failed"),
+			"workload pod direct egress to GitHub should be blocked by NetworkPolicy; got phase=%s logs:\n%s", finalPhase, logs)
+		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=200"),
+			"workload pod direct egress to GitHub should be blocked; got HTTP 200, logs:\n%s", logs)
+	})
+
+	// E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI verifies the M-12 split:
+	// worker pods (workload-labelled, NOT carrying the AGC app label) are
+	// selected only by the workload NetworkPolicy and so have no egress to the
+	// Kubernetes API server. The AGC NetworkPolicy adds 443/6443-to-anywhere
+	// only for pods labelled app=actions-gateway-controller, so a workload-only
+	// pod (a stand-in for a worker) must time out when reaching kubernetes.default.
+	It("E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI: worker-labelled pod cannot reach the K8s API server", func() {
+		const curlPodName = "worker-k8s-api-probe"
+
+		By("deploying a workload-only-labelled curl pod (simulating a worker)")
+		manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    actions-gateway/component: workload
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+  - name: curl
+    image: curlimages/curl:8.10.1
+    imagePullPolicy: IfNotPresent
+    command: ["curl"]
+    args:
+    - "--silent"
+    - "--show-error"
+    - "--noproxy"
+    - "*"
+    - "--insecure"
+    - "--max-time"
+    - "5"
+    - "--connect-timeout"
+    - "5"
+    - "--output"
+    - "/dev/null"
+    - "--write-out"
+    - "HTTP_CODE=%%{http_code}\n"
+    - "https://kubernetes.default.svc:443/version"
+`, curlPodName, tenantNS)
+
+		Expect(utils.ApplyManifest(manifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", curlPodName,
+				"-n", tenantNS, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the curl pod to terminate")
+		var finalPhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", curlPodName,
+				"-n", tenantNS, "-o", "jsonpath={.status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"curl pod still in phase %q", out)
+			finalPhase = out
+		}, 90*time.Second, 2*time.Second).Should(Succeed())
+
+		logsCmd := exec.Command("kubectl", "logs", curlPodName, "-n", tenantNS)
+		logs, _ := utils.Run(logsCmd)
+
+		// kubernetes.default.svc resolves via DNS (allowed by the workload NP),
+		// but the TCP connection on 443 must be dropped because the workload NP
+		// only permits egress to proxy pods on proxyPort. A successful HTTP
+		// exchange would indicate the M-12 split has regressed.
+		Expect(finalPhase).To(Equal("Failed"),
+			"worker-labelled pod must not reach the K8s API server; got phase=%s logs:\n%s", finalPhase, logs)
+		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=200"),
+			"worker-labelled pod must not reach the K8s API server; got HTTP 200, logs:\n%s", logs)
+		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=401"),
+			"worker-labelled pod must not reach the K8s API server; got HTTP 401 (unauthenticated reply means TCP succeeded), logs:\n%s", logs)
+		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=403"),
+			"worker-labelled pod must not reach the K8s API server; got HTTP 403 (forbidden reply means TCP succeeded), logs:\n%s", logs)
+	})
 })
