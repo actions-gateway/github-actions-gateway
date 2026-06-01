@@ -15,7 +15,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 
-Last touched: 2026-05-31
+Last touched: 2026-06-01
 
 ---
 
@@ -49,7 +49,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 |---|---|---|---|---|---|
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | **Verify first** whether existing Tier-A suite already covers this — if so, delete this row. Otherwise: live probe against kind cluster + real GitHub App (both available since Q6). |
 | <a id="Q7b"></a>Q7b | [Worker egress runtime negatives on Calico/Cilium CNI](plan/worker-egress-proxy.md#known-limitation-runtime-negative-case-enforcement-under-kindnet) | `security` `infra` `tests` | 🔲 | M | Two CI iterations showed kindnet's `kube-network-policies` does not drop egress for the Q7 negative cases (external-IP + cross-namespace pod). Re-run `WorkloadEgressBlockedToNonProxyPod` + `WorkerCannotReachK8sAPI` on a kind cluster with Calico or Cilium installed. |
-| <a id="Q21"></a>Q21 | [Pin worker Dockerfile base image digest (M-19)](plan/security.md) | `security` `infra` | 🔲 | S | Resolve `ghcr.io/actions/actions-runner:2.327.1` to `@sha256:…`; tie the digest update to the runner-version bump procedure. |
 | <a id="Q9"></a>Q9 | [M3-tests remaining items (H2/M/L)](plan/milestone-3-tests.md) | `milestone` `tests` | 🔲 | M | **Unblocked** — M3 metric assertions (H1) landed. Highest-leverage remaining: **H2** (rerun-API 5xx contract), **H3** (decryption-failure fallback), **M3** (`activePodCount` Pending branch). Worth picking up after 5c–5g. |
 | <a id="Q22"></a>Q22 | [Repo hygiene: SECURITY.md + dependabot config](plan/security.md) | `security` `docs` | 🔲 | S | Disclosure policy + automated dep updates across 7 go.mod files. |
 | <a id="Q23"></a>Q23 | [CI security scanning (govulncheck + trivy)](plan/security.md) | `security` `infra` | 🔲 | M | Per-module workspace-aware `govulncheck`; `trivy image` against each built Dockerfile in PR CI. |
@@ -63,7 +62,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q33"></a>Q33 | [K8s audit — §D CRD design polish](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | 🟡 Missing `+listType=map` on conditions, CEL immutability on `gitHubAppRef.name`/`securityProfile` (silent security downgrades), `MinItems`/`omitempty`/`categories`. See [k8s-best-practices.md §D](plan/k8s-best-practices.md#d-crd-design-polish-). |
 | <a id="Q34"></a>Q34 | [K8s audit — §E Manifest defaults & HA](plan/k8s-best-practices.md#e-manifest-defaults--ha-) | `infra` | 🔲 | M | 🟡 GMC `replicas: 1`, no PDB/PriorityClass/`startupProbe`, ServiceMonitor/NP commented out (secure-by-default regression), no `terminationGracePeriodSeconds`. See [k8s-best-practices.md §E](plan/k8s-best-practices.md#e-manifest-defaults--ha-). |
 | <a id="Q35"></a>Q35 | [K8s audit — §F Observability & operational](plan/k8s-best-practices.md#f-observability--operational-) | `infra` | 🔲 | M | 🟡 Two logger libs (`slog`+`zap`) emit incompatible JSON; no tracing; AGC missing health probes; AGC hard-codes `zap.UseDevMode(true)` in production. See [k8s-best-practices.md §F](plan/k8s-best-practices.md#f-observability--operational-). |
-| <a id="Q36"></a>Q36 | [K8s audit — §G Supply chain (labels + build flags)](plan/k8s-best-practices.md#g-supply-chain-) | `security` `infra` | 🔲 | S | 🟡 G2 missing `org.opencontainers.image.*` labels on any Dockerfile (SBOM scanners miss provenance); G3 `go build` missing `-trimpath -ldflags=-buildid=` for SLSA-L3 reproducibility. G1 (worker image digest pin) is tracked by [Q21](#Q21). |
+| <a id="Q36"></a>Q36 | [K8s audit — §G Supply chain (labels + build flags)](plan/k8s-best-practices.md#g-supply-chain-) | `security` `infra` | 🔲 | S | 🟡 G2 missing `org.opencontainers.image.*` labels on any Dockerfile (SBOM scanners miss provenance); G3 `go build` missing `-trimpath -ldflags=-buildid=` for SLSA-L3 reproducibility. G1 (worker image digest pin) closed 2026-06-01. |
 | <a id="Q38"></a>Q38 | Go best-practices: unify Go versions across modules | `infra` | 🔲 | S | Three `go` directives across 9 `go.mod` files (`1.26`/`1.26.0`/`1.26.3`); CLAUDE.md requires one. Pin all to `1.26.3`. See [go-best-practices.md §1](plan/go-best-practices.md#1-unify-go-versions). |
 | <a id="Q39"></a>Q39 | Go best-practices: fix CLAUDE.md async-channel violation | `bug` | 🔲 | S | `cmd/agc/internal/listener/goroutine.go:121` `StartRenewLoop` hides done channel inside `stop` closure — CLAUDE.md async-channel rule violation. See [go-best-practices.md §2](plan/go-best-practices.md#2-async-channel-violation-startrenewloop). |
 | <a id="Q40"></a>Q40 | Go best-practices: misc idiom cleanup | `bug` | 🔲 | S | Silent unmarshal swallow, `max` builtin shadow, `broker.BrokerClient` stutter, residual `interface{}` in non-test code, dead `_ = name` comment. See [go-best-practices.md §4](plan/go-best-practices.md#4-misc-idiom-cleanup). |
