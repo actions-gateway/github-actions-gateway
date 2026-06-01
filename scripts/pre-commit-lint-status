@@ -8,7 +8,12 @@
 # will validate it. A validation failure prevents the commit.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# `git rev-parse --show-toplevel` works in both the main checkout and
+# linked worktrees. Deriving the path from $BASH_SOURCE breaks in
+# worktrees because git invokes the symlinked hook by its symlink path
+# under .git/hooks/, bash does not follow the symlink when resolving
+# $BASH_SOURCE, and REPO_ROOT then points at .git rather than the worktree.
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 if git diff --cached --name-only | grep -q "^docs/STATUS.md$"; then
     echo "Linting docs/STATUS.md..."
