@@ -91,7 +91,7 @@ The shipped kustomize bases are not HA-by-default and disable several secure-by-
 
 | # | Sev | Finding | Location | Fix |
 |---|---|---|---|---|
-| G1 | 🟡 | `ghcr.io/actions/actions-runner:2.327.1` not pinned to a digest. Tag mutable upstream. | `cmd/worker/Dockerfile` | Pin digest; gate refresh on the same release process as runner version. |
+| G1 | ✅ | ~~`ghcr.io/actions/actions-runner:2.327.1` not pinned to a digest.~~ Pinned 2026-06-01 to `@sha256:551dc313…`; bump procedure documented in Dockerfile header. | `cmd/worker/Dockerfile` | — |
 | G2 | 🟡 | No `org.opencontainers.image.*` labels on any Dockerfile — SBOM scanners miss provenance. | all four Dockerfiles | Add `source`/`revision`/`version`/`licenses` labels. |
 | G3 | 🟢 | `go build` missing `-trimpath -ldflags=-buildid=` for reproducibility (SLSA-L3 friendly). | all four Dockerfiles | Add the flags. |
 

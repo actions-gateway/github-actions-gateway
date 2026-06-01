@@ -21,12 +21,24 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ## PATH, so prepend it here — the wrapper resolves the binary via
 ## exec.LookPath("Runner.Worker").
 ##
-## Pin this to a digest once GHCR auth is available:
-##   docker buildx imagetools inspect ghcr.io/actions/actions-runner:2.327.1
-## The version must match the runner version used during agent registration
-## (cmd/agc/internal/agentpool) so GitHub does not reject POST /sessions with
-## a version-too-old error.
-FROM ghcr.io/actions/actions-runner:2.327.1
+## Pinned to the multi-arch manifest-index digest for supply-chain integrity
+## (M-19 in docs/plan/security.md). The version must match the runner version
+## used during agent registration (DefaultWorkerImage in
+## cmd/agc/internal/provisioner/provisioner.go and the runnerVersion stored in
+## agent Secrets by cmd/agc/internal/agentpool) so GitHub does not reject
+## POST /sessions with a version-too-old error.
+##
+## Runner-version bump procedure:
+##   1. Pick the new ghcr.io/actions/actions-runner tag (X.Y.Z).
+##   2. Re-resolve the digest:
+##        docker buildx imagetools inspect ghcr.io/actions/actions-runner:X.Y.Z
+##      Use the top-level "Digest:" line (the OCI image index), not a
+##      per-platform manifest.
+##   3. Update this FROM line AND DefaultWorkerImage in
+##      cmd/agc/internal/provisioner/provisioner.go to the same X.Y.Z@sha256:….
+##   4. Update the "2.327.1" string in cmd/agc/internal/agentpool tests so the
+##      registered runnerVersion matches what GitHub expects.
+FROM ghcr.io/actions/actions-runner:2.327.1@sha256:551dc313e6b6ef1ca7b9594d8090a7a6cc7aeb663f1079ba2fec07e9158f3259
 ENV PATH=/home/runner/bin:$PATH
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]
