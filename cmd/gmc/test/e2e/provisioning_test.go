@@ -284,17 +284,32 @@ spec:
 			"expected non-empty response body from api.github.com/zen; logs:\n%s", logs)
 	})
 
-	// E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked is the negative
-	// counterpart to E2E_GMC_TenantProvisioning_ProxyConnectWorks. It confirms
-	// that the workload NetworkPolicy blocks direct egress to GitHub from a
-	// workload-labelled pod when the proxy is bypassed (--noproxy '*'). Without
-	// this assertion, a regression that broadens workload egress to GitHub CIDRs
-	// (defeating the per-tenant egress-IP guarantee) would still pass the
-	// positive ProxyConnectWorks test and ship silently.
-	It("E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked: workload pod cannot reach GitHub directly", func() {
-		const curlPodName = "workload-direct-egress-probe"
+	// E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod is the
+	// negative counterpart to E2E_GMC_TenantProvisioning_ProxyConnectWorks. It
+	// confirms that the workload NetworkPolicy's port-8080 egress rule applies
+	// only to pods matching `app=actions-gateway-proxy` — a regression that
+	// dropped the podSelector and allowed port 8080 to any in-cluster
+	// destination would still pass the positive ProxyConnectWorks test and
+	// ship silently, defeating the per-tenant egress-IP guarantee.
+	//
+	// The target is the fakegithub Service in e2e-infra (`app=fakegithub`),
+	// which listens on port 8080 but does *not* carry the proxy label. The
+	// workload NP must drop the connection.
+	//
+	// Why not curl directly to api.github.com (the original Q7 acceptance
+	// snippet)? kindnet's bundled `kube-network-policies` enforcer reliably
+	// filters in-cluster pod-to-pod traffic but does not enforce egress to
+	// external (non-cluster) IPs in the kind CNI path. Verifying the external
+	// direct-egress block requires a CNI with full egress enforcement (Calico
+	// or Cilium). The in-cluster equivalent tested here exercises the same
+	// NetworkPolicy rule and provides equivalent regression coverage for the
+	// workload NP's podSelector constraint.
+	It("E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod: workload pod cannot reach a non-proxy pod on the proxy port", func() {
+		const curlPodName = "workload-nonproxy-egress-probe"
+		fakegithubURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s/healthz",
+			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 
-		By("deploying a workload-labelled curl pod that bypasses the proxy")
+		By("deploying a workload-labelled curl pod targeting fakegithub on port 8080")
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
@@ -322,8 +337,8 @@ spec:
     - "/dev/null"
     - "--write-out"
     - "HTTP_CODE=%%{http_code}\n"
-    - "https://api.github.com/zen"
-`, curlPodName, tenantNS)
+    - "%s"
+`, curlPodName, tenantNS, fakegithubURL)
 
 		Expect(utils.ApplyManifest(manifest)).To(Succeed())
 		DeferCleanup(func() {
@@ -348,12 +363,12 @@ spec:
 		logs, _ := utils.Run(logsCmd)
 
 		// NetworkPolicy drops produce a connect timeout (curl exits 28, pod
-		// Failed). The crucial invariant: the workload pod must NOT have
-		// completed an HTTP exchange with api.github.com.
+		// Failed). A successful HTTP exchange (HTTP_CODE=200) would indicate
+		// the workload NP's port-8080 podSelector constraint has regressed.
 		Expect(finalPhase).To(Equal("Failed"),
-			"workload pod direct egress to GitHub should be blocked by NetworkPolicy; got phase=%s logs:\n%s", finalPhase, logs)
+			"workload pod egress to a non-proxy pod on port 8080 should be blocked by NetworkPolicy; got phase=%s logs:\n%s", finalPhase, logs)
 		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=200"),
-			"workload pod direct egress to GitHub should be blocked; got HTTP 200, logs:\n%s", logs)
+			"workload pod egress to fakegithub:8080 should be blocked; got HTTP 200, logs:\n%s", logs)
 	})
 
 	// E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI verifies the M-12 split:

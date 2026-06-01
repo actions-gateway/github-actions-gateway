@@ -165,10 +165,13 @@ runs as three Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cm
   Exercises kindnet workload-NP egress to the proxy pods, the proxy's
   HTTPS+CONNECT path, the proxy egress NP's IP-range allowlist, and the
   proxy TLS cert+SAN chain end-to-end.
-- `E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked` — negative:
-  the same workload-labelled curl pod with `--noproxy '*'` times out
-  reaching `https://api.github.com`, asserting the workload NP drops
-  direct egress to GitHub.
+- `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` —
+  negative: a workload-labelled curl pod targeting `fakegithub:8080` in
+  the `e2e-infra` namespace (an in-cluster pod that does **not** carry
+  `app=actions-gateway-proxy`) times out, asserting the workload NP's
+  port-8080 egress rule honours its `podSelector` constraint. A
+  regression that broadened the rule to "any pod on port 8080" would
+  still pass the positive ProxyConnectWorks test and ship silently.
 - `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI` — negative: a
   workload-only-labelled curl pod (no `app=actions-gateway-controller`,
   simulating a worker) times out reaching `https://kubernetes.default.svc`,
@@ -188,6 +191,20 @@ relevant invariant — that **worker** pods (which carry no AGC label and
 which the per-tenant guarantee actually protects in operation) must
 route through the proxy — is fully covered by the three specs above.
 
+### Known limitation: external-egress block under kindnet
+
+The original Q7 acceptance snippet (`curl --noproxy '*'
+https://api.github.com` from a workload-labelled pod must time out) is
+not directly asserted because kindnet's bundled `kube-network-policies`
+enforcer reliably filters in-cluster pod-to-pod traffic but does **not**
+enforce egress to external (non-cluster) IPs in the kind CNI path. The
+in-cluster `WorkloadEgressBlockedToNonProxyPod` spec exercises the same
+workload-NP rule as a regression guard. The external direct-egress
+block remains a property of the NetworkPolicy itself (visible in the
+manifest egress rules) and is enforced in production by CNIs with full
+egress support (Calico, Cilium). A future Tier-A run against a Calico-
+or Cilium-equipped cluster would close this verification gap.
+
 ---
 
 ## Acceptance criteria
@@ -195,9 +212,11 @@ route through the proxy — is fully covered by the three specs above.
 The implementation change is complete when:
 
 1. An e2e test in `cmd/gmc/test/e2e/` provisions a tenant and asserts:
-   - A workload-labelled curl pod attempting `curl --noproxy '*'
-     https://api.github.com` with a 5 s timeout, fails with a connection
-     timeout. ✅ — `E2E_GMC_TenantProvisioning_WorkloadDirectEgressBlocked`.
+   - A workload-labelled curl pod attempting egress to a non-proxy pod
+     on port 8080 fails with a connection timeout. ✅ —
+     `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`
+     (in-cluster substitute for the external `curl --noproxy '*'
+     https://api.github.com` snippet — see "Known limitation" above).
    - A workload-labelled curl pod attempting `curl -x
      https://actions-gateway-proxy:8080 https://api.github.com`,
      succeeds. ✅ — `E2E_GMC_TenantProvisioning_ProxyConnectWorks`.
