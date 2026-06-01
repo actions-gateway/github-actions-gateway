@@ -6,7 +6,6 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -305,56 +304,62 @@ spec:
 	// caught here, even though we cannot prove kindnet's enforcer honours
 	// the policy at runtime in CI.
 	It("E2E_GMC_TenantProvisioning_WorkloadNPSpec: workload and AGC NetworkPolicies have the expected egress shape", func() {
-		By("checking the workload NetworkPolicy restricts egress to DNS + proxy podSelector")
+		// Dump each NP as YAML and assert on substrings. YAML is more robust
+		// than jsonpath here: a previous iteration of this spec used
+		// `{range .spec.egress[*]}…{end}` and CI returned only the first
+		// egress rule's output, masking whether the proxy-podSelector rule
+		// was missing or whether jsonpath was truncating. YAML sidesteps the
+		// ambiguity — every rule appears verbatim.
+
+		By("dumping the workload NetworkPolicy as YAML")
+		workloadYAML, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", workloadName,
+			"-n", tenantNS, "-o", "yaml"))
+		Expect(err).NotTo(HaveOccurred(), "fetch workload NP YAML")
+
 		// policyTypes must include Egress (otherwise the NP imposes no egress
 		// restriction at all).
-		out, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", workloadName,
-			"-n", tenantNS, "-o", "jsonpath={.spec.policyTypes}"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(ContainSubstring("Egress"),
-			"workload NP missing Egress in policyTypes: %s", out)
+		Expect(workloadYAML).To(ContainSubstring("- Egress"),
+			"workload NP missing Egress in policyTypes:\n%s", workloadYAML)
 
-		// The egress rules must contain *exactly* a DNS rule (no `to:` peers,
-		// port 53 UDP+TCP) and a proxy-podSelector rule (port 8080 to pods
-		// matching app=actions-gateway-proxy). A regression that adds a third
-		// broader rule (e.g., to: []) would defeat the per-tenant egress-IP
-		// guarantee; this assertion locks the rule count.
-		out, err = utils.Run(exec.Command("kubectl", "get", "networkpolicy", workloadName,
-			"-n", tenantNS, "-o", "jsonpath={range .spec.egress[*]}{.ports[*].port}|{.to[*].podSelector.matchLabels}{\"\\n\"}{end}"))
-		Expect(err).NotTo(HaveOccurred())
-		// Expected lines (order is preserved by the controller-runtime client):
-		//   53 53|     <- DNS rule, no `to:` peers
-		//   8080|map[app:actions-gateway-proxy]
-		Expect(out).To(ContainSubstring("53 53|"),
-			"workload NP missing DNS egress rule (53 UDP+TCP with no `to:`): %s", out)
-		Expect(out).To(ContainSubstring("8080|map[app:actions-gateway-proxy]"),
-			"workload NP missing proxy-podSelector egress rule (8080 to app=actions-gateway-proxy): %s", out)
-		// Lock the rule count at exactly 2 by asserting no extra newline-separated
-		// row appears.
-		lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-		Expect(lines).To(HaveLen(2),
-			"workload NP must have exactly 2 egress rules (DNS, proxy-podSelector); got %d:\n%s",
-			len(lines), out)
+		// DNS egress rule: port 53 on both UDP and TCP, no `to:` peers
+		// (allows DNS to any destination).
+		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*UDP`),
+			"workload NP missing DNS UDP egress rule:\n%s", workloadYAML)
+		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*TCP`),
+			"workload NP missing DNS TCP egress rule:\n%s", workloadYAML)
 
-		By("checking the AGC NetworkPolicy adds K8s API egress only for the AGC podSelector")
-		// AGC NP must select app=actions-gateway-controller pods only; worker
+		// Proxy egress rule: port 8080 to pods matching app=actions-gateway-proxy.
+		// A regression that dropped the podSelector and allowed 8080 to any
+		// destination would defeat the per-tenant egress-IP guarantee; the
+		// `MatchRegexp` here keeps the port and the podSelector tied together.
+		Expect(workloadYAML).To(ContainSubstring("port: 8080"),
+			"workload NP missing port-8080 egress rule:\n%s", workloadYAML)
+		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*8080.*podSelector:.*matchLabels:.*app:\s*actions-gateway-proxy`),
+			"workload NP port-8080 egress rule missing podSelector app=actions-gateway-proxy (regression: rule broadened to any destination):\n%s", workloadYAML)
+
+		// The workload NP must NOT contain any egress to GitHub CIDRs — that
+		// is the proxy NP's job. The most likely regression is an ipBlock
+		// peer (any IPv4 cidr) appearing in the workload egress.
+		Expect(workloadYAML).NotTo(ContainSubstring("ipBlock:"),
+			"workload NP must not list any ipBlock egress peers (GitHub CIDRs belong on the proxy NP):\n%s", workloadYAML)
+
+		By("dumping the AGC NetworkPolicy as YAML")
+		agcYAML, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", agcName,
+			"-n", tenantNS, "-o", "yaml"))
+		Expect(err).NotTo(HaveOccurred(), "fetch AGC NP YAML")
+
+		// AGC NP must select app=actions-gateway-controller pods only — worker
 		// pods (workload-labelled, no AGC label) must not be selected here.
-		out, err = utils.Run(exec.Command("kubectl", "get", "networkpolicy", agcName,
-			"-n", tenantNS, "-o", "jsonpath={.spec.podSelector.matchLabels}"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(ContainSubstring("app:actions-gateway-controller"),
-			"AGC NP must select only pods labelled app=actions-gateway-controller; got %s", out)
+		Expect(agcYAML).To(MatchRegexp(`(?s)podSelector:.*matchLabels:.*app:\s*actions-gateway-controller`),
+			"AGC NP must select pods labelled app=actions-gateway-controller:\n%s", agcYAML)
 
-		// AGC NP egress must include both 443 and 6443 (the post-DNAT-port
-		// trap documented in docs/development/networkpolicy-port-matching.md
-		// — a 443-only rule silently drops k8s API access on kind, where the
-		// Service translates 10.96.0.1:443 → node:6443).
-		out, err = utils.Run(exec.Command("kubectl", "get", "networkpolicy", agcName,
-			"-n", tenantNS, "-o", "jsonpath={.spec.egress[*].ports[*].port}"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(ContainSubstring("443"),
-			"AGC NP missing apiserver port 443 in egress rules: %s", out)
-		Expect(out).To(ContainSubstring("6443"),
-			"AGC NP missing apiserver port 6443 in egress rules (kind apiserver Service port-translates to 6443; a 443-only rule drops k8s API): %s", out)
+		// AGC NP egress must include both 443 and 6443. See
+		// docs/development/networkpolicy-port-matching.md: kind exposes the
+		// apiserver on 6443 via Service port-translation, so a 443-only rule
+		// silently drops k8s API access there.
+		Expect(agcYAML).To(ContainSubstring("port: 443"),
+			"AGC NP missing apiserver port 443:\n%s", agcYAML)
+		Expect(agcYAML).To(ContainSubstring("port: 6443"),
+			"AGC NP missing apiserver port 6443 (kind apiserver Service port-translates to 6443; a 443-only rule drops k8s API):\n%s", agcYAML)
 	})
 })
