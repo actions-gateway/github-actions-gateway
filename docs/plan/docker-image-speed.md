@@ -292,7 +292,7 @@ Dependabot keeps these up to date automatically.
 | `golang:1.26` | ✅ — all four builder stages |
 | `golang:1.24` | ✅ — worker builder stage (also switched from alpine) |
 | `gcr.io/distroless/static:nonroot` | ✅ — all four runtime stages |
-| `ghcr.io/actions/actions-runner:2.327.1` | ⏳ — deferred; requires GHCR auth to resolve digest |
+| `ghcr.io/actions/actions-runner:2.327.1` | ✅ — pinned 2026-06-01 to `@sha256:551dc313…` (M-19) |
 
 ### Files
 

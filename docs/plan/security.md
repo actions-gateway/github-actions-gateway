@@ -57,7 +57,7 @@ by-design / accepted.
 | **M-16** | `safeName` collision risk | Medium | — | ✅ Done 2026-05-25 | Hash suffix in both `safeName` and `labelSafe` |
 | **M-17** | Proxy servers lack `ReadHeaderTimeout` (slowloris) | High | — | ✅ Done 2026-05-31 | `ReadHeaderTimeout: 5s` + `IdleTimeout: 60s` on both `healthSrv` and `proxySrv` |
 | **M-18** | CONNECT relay has no idle/lifetime deadline | Medium | — | ✅ Done 2026-05-31 | Per-read idle deadline (5m) + absolute lifetime cap (6h); `actions_gateway_proxy_tunnel_duration_seconds` histogram |
-| **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ❌ Open | Floating-tag base ships tenant runtime |
+| **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ✅ Done 2026-06-01 | `ghcr.io/actions/actions-runner:2.327.1@sha256:551dc313…` + bump procedure documented in Dockerfile header |
 | **L-1** | JWT `iat` without `jti` | Informational | — | ✅ Done | `ID: newUUID()` sets `jti` |
 | **L-2** | `http.DefaultClient` has no timeout | Low | — | ✅ Done | 60s timeout client injected into broker, registrar, IP-range fetcher |
 | **L-3** | `math/rand` for jitter | Informational | — | ✅ Done | `//nolint:gosec // jitter, not crypto` |
@@ -820,31 +820,27 @@ by-design / accepted.
   3. Add an `actions_gateway_proxy_tunnel_duration_seconds` histogram
      so the chosen ceilings are observable.
 
-### M-19. Worker Dockerfile base image is not digest-pinned
+### M-19. Worker Dockerfile base image is not digest-pinned — **Resolved 2026-06-01**
 
-- **Location:** [cmd/worker/Dockerfile:24-28](../../cmd/worker/Dockerfile)
+- **Location:** [cmd/worker/Dockerfile](../../cmd/worker/Dockerfile)
 - **Category:** OWASP A08:2025 — Software and Data Integrity Failures (supply chain)
-- **Why Medium:** The runtime stage is
+- **Why Medium (historical):** The runtime stage was
   `FROM ghcr.io/actions/actions-runner:2.327.1` — a floating tag
   pointing at the binary that actually runs tenant workflow code.
   All four other Dockerfiles in the repo (`agc`, `gmc`, `proxy`,
-  `fakegithub`) pin both stages by `@sha256:…`. The TODO already in
-  this Dockerfile acknowledges the gap. A compromised GHCR push or a
-  tag-mutation event on `actions/actions-runner` would silently swap
-  the worker binary on the next `docker build`.
-- **Description:** The wrapper builder stage correctly pins
-  `golang:1.26@sha256:2d6c80…`, but the runtime base does not.
-  Operators rebuilding the worker image from this repo therefore
-  inherit whatever bytes are at the tag at build time.
-- **Mitigation:**
-  1. Resolve the digest:
-     `docker buildx imagetools inspect ghcr.io/actions/actions-runner:2.327.1`
-     and record the manifest digest.
-  2. Update the Dockerfile to
-     `FROM ghcr.io/actions/actions-runner:2.327.1@sha256:…`.
-  3. Tie the digest update to the runner-version bump procedure (the
-     version must match `cmd/agc/internal/agentpool` per the existing
-     Dockerfile comment).
+  `fakegithub`) pinned both stages by `@sha256:…`. A compromised
+  GHCR push or a tag-mutation event on `actions/actions-runner`
+  would have silently swapped the worker binary on the next
+  `docker build`.
+- **Resolution:** Pinned to
+  `ghcr.io/actions/actions-runner:2.327.1@sha256:551dc313e6b6ef1ca7b9594d8090a7a6cc7aeb663f1079ba2fec07e9158f3259`
+  (the multi-arch OCI image-index digest, resolved via
+  `docker buildx imagetools inspect`). The Dockerfile header now
+  documents the runner-version bump procedure: re-resolve the index
+  digest, update both the Dockerfile FROM and
+  `DefaultWorkerImage` in `cmd/agc/internal/provisioner/provisioner.go`,
+  and update the `2.327.1` test fixtures in
+  `cmd/agc/internal/agentpool`.
 
 ---
 
