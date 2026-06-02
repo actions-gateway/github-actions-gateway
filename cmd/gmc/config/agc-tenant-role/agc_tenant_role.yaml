@@ -9,6 +9,14 @@
 # per-tenant Role at reconcile time — lets the GMC ServiceAccount stay narrow:
 # it no longer needs `rbac.authorization.k8s.io/roles: create` nor the
 # `escalate` verb. It only needs `bind` on this specific ClusterRole name.
+#
+# This file lives outside `config/default`'s kustomization tree on purpose:
+# kustomize's `namePrefix: gmc-` (under config/default) would rename the
+# ClusterRole to `gmc-agc-tenant-role`, but kustomize does NOT rewrite
+# `rules[].resourceNames`, so the GMC's `bind` permission would no longer
+# match the ClusterRole. The unprefixed name is also the right contract:
+# this is a public API surface (the AGC permission contract), not an
+# internal GMC resource. The Makefile `deploy` target applies it explicitly.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

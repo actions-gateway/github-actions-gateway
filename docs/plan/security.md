@@ -1193,7 +1193,7 @@ full rationale.
     AGC process. Exfiltration requires live API calls visible in the
     audit log.
 
-  - **Permission set documented** (`cmd/gmc/config/rbac/agc_tenant_role.yaml`):
+  - **Permission set documented** (`cmd/gmc/config/agc-tenant-role/agc_tenant_role.yaml`):
     the shipped ClusterRole that per-tenant RoleBindings reference. Its
     header comment explains why `list`/`watch` on `secrets` are required
     and points to the cache-disable as the substitute control.
