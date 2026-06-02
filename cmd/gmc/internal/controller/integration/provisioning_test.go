@@ -90,13 +90,9 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 			&corev1.ServiceAccount{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
-	// Role: actions-gateway-controller
-	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
-			&rbacv1.Role{})
-	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
-
-	// RoleBinding: actions-gateway-controller
+	// RoleBinding: actions-gateway-controller — binds the AGC SA to the shipped
+	// agc-tenant-role ClusterRole. No per-tenant Role is created (see §B B1 in
+	// docs/plan/k8s-best-practices.md).
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName},
 			&rbacv1.RoleBinding{})

@@ -1193,12 +1193,13 @@ full rationale.
     AGC process. Exfiltration requires live API calls visible in the
     audit log.
 
-  - **Role comment updated** (`cmd/gmc/internal/controller/builder.go`
-    `buildAGCRole`): documents why `list`/`watch` are required and points
-    to the cache-disable as the substitute control.
+  - **Permission set documented** (`cmd/gmc/config/rbac/agc_tenant_role.yaml`):
+    the shipped ClusterRole that per-tenant RoleBindings reference. Its
+    header comment explains why `list`/`watch` on `secrets` are required
+    and points to the cache-disable as the substitute control.
 
   `list`/`watch` on all Secrets in the tenant namespace remain in the
-  Role. `resourceNames` restriction is not viable (dynamic names, no glob
+  ClusterRole. `resourceNames` restriction is not viable (dynamic names, no glob
   support). KEP-4601 (GA in k8s 1.34) does not extend `rbacv1.PolicyRule`
   — it helps webhook authorizers, not standard RBAC. Split-SA was
   evaluated and declined (D-3 reasoning: AGC compromise already implies

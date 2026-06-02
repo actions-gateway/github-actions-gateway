@@ -131,16 +131,28 @@ rules:
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - agc-tenant-role
   resources:
-  - rolebindings
-  - roles
+  - clusterroles
   verbs:
   - bind
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
   - create
   - delete
-  - escalate
   - get
   - list
   - patch
   - update
   - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - delete
+  - get

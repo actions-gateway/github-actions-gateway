@@ -16,6 +16,9 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -69,6 +72,14 @@ func TestMain(m *testing.M) {
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: testScheme})
 	if err != nil {
+		panic(err)
+	}
+
+	// Install the agc-tenant-role ClusterRole. In production this ships with
+	// the GMC kustomize bundle (cmd/gmc/config/rbac/agc_tenant_role.yaml); in
+	// envtest we install it programmatically so per-tenant RoleBindings can
+	// actually grant their referenced permissions to impersonated SAs.
+	if err := installAGCTenantClusterRole(ctx, k8sClient); err != nil {
 		panic(err)
 	}
 
@@ -134,6 +145,26 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	}()
 
 	return ipRangeReconciler
+}
+
+// installAGCTenantClusterRole mirrors cmd/gmc/config/rbac/agc_tenant_role.yaml.
+// The production install applies it once at GMC install time; envtest needs the
+// same singleton for per-tenant RoleBindings to grant any permission.
+func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
+	cr := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "agc-tenant-role"},
+		Rules: []rbacv1.PolicyRule{
+			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"pods/status"}, Verbs: []string{"get"}},
+			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
+			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups"}, Verbs: []string{"get", "list", "watch", "update", "patch"}},
+			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups/status", "runnergroups/finalizers"}, Verbs: []string{"get", "update", "patch"}},
+		},
+	}
+	if err := c.Create(ctx, cr); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
 
 type stubIPFetcher struct {
