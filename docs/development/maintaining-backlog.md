@@ -8,6 +8,18 @@
 2. **Run `gh pr list` before picking a task.** A Queue row already covered by an open PR should be skipped, not re-started. The open PR — not a `▶ Started` marker — is the real "in-flight" signal.
 3. **Verify 🚫 blockers are still real before treating an item as blocked.** A previous session may have silently completed the dependency without flipping the row. Grep for the deliverables (test names, env vars, code paths) before skipping.
 
+## Flake fixes go first
+
+When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work. Then pick it up next.
+
+The reasoning: flake cost compounds. A 1-hour flake fix saves N hours of cumulative CI wait + diagnostic time + context-switch overhead across every future PR that hits it. Even a low-frequency flake (1-in-5 reruns) on a 10-minute job adds up to roughly half a wasted runner-hour per ten PRs, plus the human investigation time on each occurrence.
+
+The convention overrides default Queue ordering even when other items are 🔴 critical security — security items are typically M/L-sized and will themselves benefit from flake-free CI during their multi-session work. Annotate the row's Notes with "**Top of queue per flakes-first rule**" with a link to this section so the priority is self-documenting.
+
+Exceptions:
+- A flake whose root cause is genuinely an outside-the-repo service (GitHub API outage, registry hiccup) and that has not recurred in many runs — file but don't bump.
+- A flake whose fix is blocked on infrastructure not yet built (e.g. requires a CNI that the cluster doesn't have) — file, mark 🚫, and don't bump.
+
 ## Format rules that exist to reduce churn
 
 ### `Last touched:` is one line, date only
