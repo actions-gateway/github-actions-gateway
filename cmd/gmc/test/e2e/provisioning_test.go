@@ -185,10 +185,13 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	// 4 of the 5 PR #59 bugs at local-iteration speed.
 	It("E2E_GMC_TenantProvisioning_ProxyConnectWorks: curl through proxy reaches GitHub", func() {
 		By("waiting for proxy NetworkPolicy to be populated with GitHub IP ranges")
-		// The IPRangeReconciler refreshes the cache on Manager start, then the
-		// periodic reconciler patches the proxy NP with GitHub CIDRs. Until that
-		// completes the NP only permits DNS — CONNECT to api.github.com would
-		// silently drop. Wait for at least one ipBlock egress peer to appear.
+		// The IPRangeReconciler refreshes the cache on Manager start, which both
+		// seeds the proxy NP's ipBlock allowlist at creation and patches existing
+		// NPs. Until that first fetch lands the NP only permits DNS — CONNECT to
+		// api.github.com would silently drop. The initial fetch is retried on a
+		// capped backoff (Q61 fix) so a transient outage self-heals in seconds
+		// rather than waiting the 24h refresh interval. Wait for at least one
+		// ipBlock egress peer to appear.
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "networkpolicy", proxyName,
 				"-n", tenantNS,
