@@ -4,15 +4,15 @@ Three issues identified during the documentation audit require code or design ch
 
 ## Status at a glance
 
-Last refreshed 2026-05-25.
+Last refreshed 2026-06-01.
 
 | # | Fix | Files affected | Status |
 |---|---|---|---|
 | 1 | Expose `maxEvictionRetries` / `evictionRetryDelay` on `RunnerGroup` CRD | `cmd/agc/api/v1alpha1/runnergroup_types.go`, `cmd/agc/internal/provisioner/provisioner.go` | ✅ Done — fields added to spec; `HandlerFor` reads per-RG overrides |
-| 2 | Per-key merge for `proxy.resources` (fix HPA silent failure) | `cmd/gmc/internal/controller/builder.go:248-250` | ❌ Open — full replacement still in place |
+| 2 | Per-key merge for `proxy.resources` (fix HPA silent failure) | `cmd/gmc/internal/controller/builder.go:273-278`, `cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go:138-151` | ✅ Done — per-key merge in builder; webhook emits warning when `requests` set without `cpu` |
 | 3 | Credential rotation: pod-template annotation, Secret watch, `CredentialUnavailable` condition | `cmd/gmc/internal/controller/builder.go`, `cmd/gmc/internal/controller/actionsgateway_controller.go`, `docs/getting-started.md` | ✅ Done — all three sub-changes shipped; 3 integration tests + 1 unit test added |
 
-All three are local, low-risk fixes that don't depend on each other.
+All three fixes shipped.
 
 ---
 
@@ -84,7 +84,9 @@ Run `make generate manifests` after the type change. The generated CRD YAML in `
 
 ---
 
-## 2. Fix proxy resource override dropping CPU request (HPA silent failure)
+## 2. Fix proxy resource override dropping CPU request (HPA silent failure) — ✅ Done
+
+Per-key merge implemented in `builder.go:273-278`; webhook warning for `requests`-set-without-`cpu` in `actionsgateway_webhook.go:138-151`. Builder unit tests at `builder_test.go:140-185` and webhook tests at `actionsgateway_webhook_test.go:182-223` cover the four cases (default, partial override, limits-only, full override) and the warning. The original problem and design are kept below for historical reference.
 
 ### Problem
 
