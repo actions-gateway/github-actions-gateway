@@ -1,0 +1,24 @@
+{
+  "name": "actions-gateway-agent",
+  "build": { "dockerfile": "Dockerfile" },
+
+  // NET_ADMIN/NET_RAW let init-firewall.sh program iptables + ipset.
+  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+
+  "workspaceFolder": "/workspace",
+
+  // Lock down egress BEFORE the agent does anything. postStartCommand runs as
+  // the container user, which is allowed to sudo only this one script.
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+
+  "remoteUser": "agent",
+
+  // Credentials are injected from the host environment at run time. Prefer a
+  // SHORT-LIVED, repo-scoped token here, not a long-lived PAT or the App PEM.
+  // See README.md "Scoped credentials" — env vars are readable by the agent
+  // process, so the token's blast radius is the real control, not secrecy.
+  "containerEnv": {
+    "GH_TOKEN": "${localEnv:AGENT_GH_TOKEN}",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+  }
+}

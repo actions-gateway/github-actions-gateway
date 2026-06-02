@@ -1,0 +1,19 @@
+{
+  "//": "Container-only deny rules. Baked into the agent user's ~/.claude/settings.json so repo-level settings cannot relax them. deny > ask > allow in Claude Code, so these win regardless of permission mode. These complement (do not replace) the network firewall: the firewall stops exfiltration over arbitrary hosts, but GitHub is an *allowed* host, so a secret read into a PR body would still escape — denying reads of credential material closes that channel.",
+  "permissions": {
+    "deny": [
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(**/.ssh/**)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/secrets/**)",
+      "Read(/run/secrets/**)",
+      "Read(/etc/agent/**)",
+      "Bash(security find-generic-password:*)",
+      "Bash(sudo:*)"
+    ]
+  }
+}
