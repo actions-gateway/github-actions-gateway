@@ -162,6 +162,49 @@ stateful queue subsystem. If a future requirement genuinely needs durable
 cross-restart job state (it does not today), revisit this section before
 building it.
 
+## Relationship to Kueue (why an off-the-shelf k8s queue isn't the admission layer)
+
+[Kueue](https://kueue.sigs.k8s.io/) is the popular Kubernetes-native job
+queueing / quota manager (ClusterQueue, LocalQueue, ResourceFlavor, Cohort
+borrowing, `WorkloadPriorityClass` preemption). It is a natural thing to reach
+for when someone asks "why not just put a priority queue in front of the
+runners?" — and it is sometimes layered under ARC for GPU/quota management
+(e.g. the pattern vendors like Exostellar use; *specifics to verify in the
+[Q60](../STATUS.md) competitive analysis*). So the design must say explicitly
+why GAG does not delegate admission to it.
+
+**Kueue gates the wrong layer for this problem.** Per its own docs, Kueue
+"decides when a job should wait, when a job should be admitted to start (as in
+pods can be created), and when a job should be preempted" — it operates *only*
+on Kubernetes resources and controls **pod creation**. GAG's admission
+decision, by contrast, has to happen one layer up: at `acquirejob` against the
+**GitHub broker**, before any Kubernetes object exists. Kueue has no visibility
+into the broker and cannot queue a job that is not yet a Kubernetes workload.
+
+**Even as a complement, the layering fights the broker contract.** Suppose a
+cluster already runs Kueue and GAG's worker pods participate in a ClusterQueue.
+The moment Kueue *defers* a worker pod (its whole job), GAG is back in the
+failure shape this plan exists to fix: the job was already claimed from GitHub
+at `acquirejob`, the 10-minute lock is ticking, and the pod that would do the
+work is sitting in a Kueue queue. GitHub's "claim within ~2 min, then you own
+it and must run it" semantics are fundamentally incompatible with queueing the
+work *after* the claim. Admission has to be decided **before** the claim —
+upstream of anything Kueue can act on.
+
+**Operational mismatch too.** Kueue requires cluster-admin install (CRDs,
+webhooks, cluster-wide controller). GAG's stated requirement is self-service
+tenant onboarding without cluster-admin involvement per team
+([Appendix D intro](../design/appendix-d-alternatives-considered.md)). Making
+Kueue a hard dependency regresses that.
+
+**Where Kueue *is* complementary:** in clusters that already run it, GAG's
+worker pods can still be Kueue-managed for cluster-level quota/preemption at the
+pod layer — GAG's per-`RunnerGroup` admission gate (this plan) and Kueue's
+cluster-wide quota are not mutually exclusive. GAG's gate decides *whether to
+claim*; Kueue, if present, can still arbitrate the resulting pod against
+cluster quota. The point is that Kueue **augments** the pod layer; it cannot
+**replace** the pre-acquire gate. This is the comparison to land in the docs.
+
 ## Scope / testing
 
 - **Code:** `handleJob` admit hook (`goroutine.go`), reservation counter +
@@ -177,6 +220,21 @@ building it.
   flow), [`03-api-contracts.md`](../design/03-api-contracts.md) if any
   RunnerGroup field is added, and a troubleshooting note for "jobs not being
   acquired despite queued work" (gate saturated).
+- **Document the *why*, not just the *what* (required, not optional).** When
+  this ships, the rationale must land in **human-facing docs**, not only this
+  plan doc. Specifically:
+  - Add a section to [`appendix-d-alternatives-considered.md`](../design/appendix-d-alternatives-considered.md)
+    (it already runs D.1–D.4; this is a natural **D.5 — Kueue / k8s job-queue
+    managers**) capturing two things: (1) why admission is gated *before*
+    `acquirejob` rather than via a durable internal queue, and (2) the
+    **Kueue comparison** from the "Relationship to Kueue" section above —
+    Kueue gates pod creation *below* the broker layer, cannot see the
+    `acquirejob` decision, and so augments rather than replaces GAG's gate.
+  - Add a short line to the README's ARC/KEDA comparison block noting that GAG
+    handles admission at the broker-claim layer (where a k8s queue manager like
+    Kueue structurally cannot operate), linking to the appendix for depth.
+  - Keep this plan doc's "Rejected alternative" and "Relationship to Kueue"
+    sections as the source the appendix is distilled from.
 - **Test tier:** unit-test the reservation arithmetic (double-admit under
   burst, release on failure, restart resets). The acquired-then-cancelled
   outcome and the redelivery-after-skip behavior are **Tier-A kind e2e**
