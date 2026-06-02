@@ -234,6 +234,7 @@ func main() {
 		AGCImage:    agcImage,
 		ProxyImage:  proxyImage,
 		AGCExtraEnv: agcExtraEnv,
+		Recorder:    mgr.GetEventRecorderFor("actionsgateway-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
 		os.Exit(1)

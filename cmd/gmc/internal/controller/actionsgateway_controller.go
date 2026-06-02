@@ -7,7 +7,8 @@
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete;bind;escalate
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete;bind
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
@@ -37,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -64,6 +66,9 @@ type ActionsGatewayReconciler struct {
 	ProxyImage  string
 	Log         *slog.Logger
 	AGCExtraEnv []corev1.EnvVar // extra env vars forwarded to AGC pods (e.g. for tests)
+	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
+	// May be nil in unit tests; callers must nil-check before use.
+	Recorder record.EventRecorder
 }
 
 // Reconcile reconciles an ActionsGateway CR.
@@ -578,28 +583,55 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 	return r.Update(ctx, &existing)
 }
 
-// applyNamespacePSA stamps Pod Security Admission labels on the tenant namespace.
-// The enforce/warn/audit levels are set to the ActionsGateway's SecurityProfile
-// (defaulting to "baseline"). Callers must have namespaces get+update permission.
+// psaFieldManager is the Server-Side Apply field manager that owns the PSA
+// label keys on tenant namespaces. A distinct manager (rather than the
+// controller-runtime default) lets an out-of-band edit by an administrator
+// be detected as a conflict on the next reconcile.
+const psaFieldManager = "actionsgateway-controller-psa"
+
+// applyNamespacePSA stamps Pod Security Admission labels on the tenant namespace
+// using Server-Side Apply so the controller declares ownership only of the six
+// PSA label keys. Other labels on the namespace are left untouched.
+//
+// The function first applies without ForceOwnership so a conflict surfaces if
+// another manager (typically a human admin) has taken ownership of a PSA key
+// — that conflict is emitted as a Warning Event on the ActionsGateway and the
+// apply is retried with ForceOwnership to re-establish the controller's
+// invariant. Without this, admin edits would silently round-trip every
+// reconcile with no operator-visible signal.
 func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
 	profile := ag.Spec.SecurityProfile
 	if profile == "" {
 		profile = "baseline"
 	}
-	var ns corev1.Namespace
-	if err := r.Get(ctx, types.NamespacedName{Name: ag.Namespace}, &ns); err != nil {
+	desired := &corev1.Namespace{
+		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ag.Namespace,
+			Labels: map[string]string{
+				"pod-security.kubernetes.io/enforce":         profile,
+				"pod-security.kubernetes.io/enforce-version": "latest",
+				"pod-security.kubernetes.io/warn":            profile,
+				"pod-security.kubernetes.io/warn-version":    "latest",
+				"pod-security.kubernetes.io/audit":           profile,
+				"pod-security.kubernetes.io/audit-version":   "latest",
+			},
+		},
+	}
+
+	err := r.Patch(ctx, desired.DeepCopy(), client.Apply, client.FieldOwner(psaFieldManager))
+	if err == nil {
+		return nil
+	}
+	if !apierrors.IsConflict(err) {
 		return err
 	}
-	if ns.Labels == nil {
-		ns.Labels = make(map[string]string)
+	if r.Recorder != nil {
+		r.Recorder.Eventf(ag, corev1.EventTypeWarning, "PSALabelsOverridden",
+			"Reconciling Pod Security Admission labels on namespace %q to SecurityProfile=%q after detecting an out-of-band modification: %v",
+			ag.Namespace, profile, err)
 	}
-	ns.Labels["pod-security.kubernetes.io/enforce"] = profile
-	ns.Labels["pod-security.kubernetes.io/enforce-version"] = "latest"
-	ns.Labels["pod-security.kubernetes.io/warn"] = profile
-	ns.Labels["pod-security.kubernetes.io/warn-version"] = "latest"
-	ns.Labels["pod-security.kubernetes.io/audit"] = profile
-	ns.Labels["pod-security.kubernetes.io/audit-version"] = "latest"
-	return r.Update(ctx, &ns)
+	return r.Patch(ctx, desired, client.Apply, client.FieldOwner(psaFieldManager), client.ForceOwnership)
 }
 
 // labelSafe converts a string to a safe Kubernetes DNS label segment and appends
