@@ -38,6 +38,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
 | Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
 | e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
+| Agent workflow automation | `infra` | ⚠️ | Sandbox (egress lockdown + scoped tokens) in PR #107; go-live + auto-merge open as [Q62](#Q62)/[Q63](#Q63) — [plan](plan/agent-workflow-automation.md) |
 
 ---
 
@@ -82,6 +83,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q51"></a>Q51 | Reconcile documented vs emitted Prometheus metrics | `infra` `docs` `bug` | 🔲 | M | 6 documented metrics never registered in code (headline `pod_creation_latency_seconds` + 5 others). Per-metric decision: implement, re-point, or mark `(planned)`. See [docs-six-layer-audit.md](plan/docs-six-layer-audit.md) Layer 3. |
 | <a id="Q55"></a>Q55 | Verify provisioner-test goleak cascade fix held in CI | `tests` `bug` | 🔲 | S | Intermittent ~20-test goleak cascade in `internal/provisioner` fixed by `waitForPodCreated` helper in 59c0714; delete row once CI is clean. If flakes recur, migrate remaining ~18 Eventually-on-Pod sites to the helper. |
 | <a id="Q60"></a>Q60 | [Competitive analysis — GAG vs ARC-adjacent runner/queue tooling](design/appendix-d-alternatives-considered.md) | `docs` | 🔲 | M | Competitive analysis vs ARC-adjacent tooling: Kueue, Exostellar (verify the Kueue-under-ARC GPU pattern), KEDA. Expands [appendix-d](design/appendix-d-alternatives-considered.md). Narrow Kueue-vs-admission angle is in [Q59](#Q59). |
+| <a id="Q62"></a>Q62 | [Agent sandbox go-live: dedicated App + branch protection](plan/agent-workflow-automation.md) | `infra` `security` | 🔲 | S | Create a least-privilege agent GitHub App (`contents`+`pull_requests` write) and protect `main`; the `actions-gateway-test` runner App can't be reused (422 — no contents/PR, has `administration:write`). Prerequisite for the PR #107 sandbox. |
+| <a id="Q63"></a>Q63 | [Auto-merge + CI auto-fix wiring](plan/agent-workflow-automation.md) | `infra` | 🚫 | M | Blocked by [Q62](#Q62). Agent ends with `gh pr merge --auto`; failed CI dispatches the Claude Code GitHub Action to fix on-branch. Touches `.github/workflows/`. |
 | <a id="Q17"></a>Q17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | 💤 | M | low priority; pick up when CI latency is the bottleneck |
 | <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | 💤 | M | deferred until a real Prometheus/Alertmanager setup exists |
 | <a id="Q19"></a>Q19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | 💤 | L | explicit non-commitments; build only when a named trigger fires |
