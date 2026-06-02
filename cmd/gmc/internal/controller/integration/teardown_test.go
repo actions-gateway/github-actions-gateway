@@ -85,9 +85,9 @@ func TestGMC_TenantTeardown_RemovesOnlyOwnedResources(t *testing.T) {
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: agcName},
-			&rbacv1.Role{})
+			&rbacv1.RoleBinding{})
 		return apierrors.IsNotFound(err)
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "Role in team-a should be deleted")
+	}, 20*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "RoleBinding in team-a should be deleted")
 
 	// Assert team-b resources are untouched.
 	var depB appsv1.Deployment

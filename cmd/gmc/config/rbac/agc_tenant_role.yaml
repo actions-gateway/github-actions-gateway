@@ -1,0 +1,42 @@
+---
+# agc-tenant-role is the permission set granted to every AGC ServiceAccount.
+# It is a singleton ClusterRole shipped with the GMC install. Per-tenant
+# isolation comes from RoleBindings (one per ActionsGateway namespace) that
+# reference this ClusterRole — a RoleBinding to a ClusterRole only grants
+# permissions inside the RoleBinding's namespace.
+#
+# Shipping this as a static ClusterRole — instead of having the GMC create a
+# per-tenant Role at reconcile time — lets the GMC ServiceAccount stay narrow:
+# it no longer needs `rbac.authorization.k8s.io/roles: create` nor the
+# `escalate` verb. It only needs `bind` on this specific ClusterRole name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agc-tenant-role
+  labels:
+    app.kubernetes.io/name: actions-gateway
+    app.kubernetes.io/component: agc-tenant-role
+    app.kubernetes.io/managed-by: kustomize
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get"]
+# list/watch on secrets is required: the agent pool enumerates its own
+# per-runner Secrets to reconcile pool state. RBAC does not support glob
+# resourceNames and the agent Secret names are dynamic, so we cannot
+# constrain by name. The "don't hold Secret bodies in process memory"
+# property from W3 is preserved at the AGC's manager level by
+# Client.Cache.DisableFor[*corev1.Secret] — reads go direct to the API
+# server rather than being held in the controller-runtime cache.
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: ["actions-gateway.github.com"]
+  resources: ["runnergroups"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["actions-gateway.github.com"]
+  resources: ["runnergroups/status", "runnergroups/finalizers"]
+  verbs: ["get", "update", "patch"]

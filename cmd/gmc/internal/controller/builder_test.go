@@ -262,49 +262,16 @@ func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
 	assert.Equal(t, proxyPort, rule.Ports[0].Port.IntVal)
 }
 
-func TestBuildRole_AGCPermissions(t *testing.T) {
+// TestAGCRoleBinding_TargetsTenantClusterRole locks in that the per-tenant
+// RoleBinding references the shipped agc-tenant-role ClusterRole — not a
+// namespaced Role. Per-tenant Role creation was removed so the GMC can
+// avoid holding `escalate` (k8s-best-practices.md §B B1).
+func TestAGCRoleBinding_TargetsTenantClusterRole(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	role := buildAGCRole(ag)
-	require.NotEmpty(t, role.Rules)
-
-	for _, rule := range role.Rules {
-		for _, verb := range rule.Verbs {
-			assert.NotEqual(t, "*", verb, "wildcard verb found in rule: %v", rule)
-		}
-	}
-}
-
-// TestBuildRole_SecretsVerbs_IncludesListWatch verifies the AGC's Role has the
-// list/watch verbs the agent pool needs to enumerate per-runner Secrets. An
-// earlier revision removed these to "tighten" RBAC, which broke
-// agentpool.Pool.listSecrets() and stalled session registration in e2e.
-//
-// The "don't hold Secret bodies in the controller cache" property that
-// removing list/watch was trying to provide is now enforced separately at the
-// AGC's manager via Client.Cache.DisableFor[*corev1.Secret] (in cmd/agc/main.go) —
-// Secret reads go direct to the API server instead of being held in the
-// controller-runtime cache.
-func TestBuildRole_SecretsVerbs_IncludesListWatch(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	role := buildAGCRole(ag)
-
-	var verbs []string
-	for _, rule := range role.Rules {
-		isSecrets := false
-		for _, r := range rule.Resources {
-			if r == "secrets" {
-				isSecrets = true
-			}
-		}
-		if !isSecrets {
-			continue
-		}
-		verbs = append(verbs, rule.Verbs...)
-	}
-	require.NotEmpty(t, verbs, "AGC Role must include a secrets rule")
-	for _, expected := range []string{"get", "list", "watch", "create", "delete"} {
-		assert.Contains(t, verbs, expected, "AGC secrets rule must include %q", expected)
-	}
+	rb := buildAGCRoleBinding(ag)
+	assert.Equal(t, "ClusterRole", rb.RoleRef.Kind, "RoleBinding must reference the shipped ClusterRole, not a per-tenant Role")
+	assert.Equal(t, agcTenantRoleName, rb.RoleRef.Name)
+	assert.Equal(t, "rbac.authorization.k8s.io", rb.RoleRef.APIGroup)
 }
 
 func TestBuildHPA_MinMaxReplicas(t *testing.T) {
@@ -496,8 +463,8 @@ func TestBuildProxyServiceAddr_Format(t *testing.T) {
 func TestBuildAGCRoleBinding_WiresCorrectSA(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	rb := buildAGCRoleBinding(ag)
-	assert.Equal(t, "Role", rb.RoleRef.Kind)
-	assert.Equal(t, agcSAName, rb.RoleRef.Name)
+	assert.Equal(t, "ClusterRole", rb.RoleRef.Kind)
+	assert.Equal(t, agcTenantRoleName, rb.RoleRef.Name)
 	require.Len(t, rb.Subjects, 1)
 	assert.Equal(t, agcSAName, rb.Subjects[0].Name)
 	assert.Equal(t, ag.Namespace, rb.Subjects[0].Namespace)

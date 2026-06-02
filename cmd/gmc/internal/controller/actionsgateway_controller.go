@@ -8,7 +8,15 @@
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete;bind;escalate
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// Per-tenant RoleBindings reference the shipped agc-tenant-role ClusterRole.
+// `bind` is scoped to that single name so a compromised GMC cannot wire its
+// SA into arbitrary ClusterRoles. Without this, the api server would require
+// the GMC to itself hold every permission inside agc-tenant-role (or escalate).
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=agc-tenant-role
+// Legacy cleanup: pre-v0.X installs created a per-tenant Role with the AGC
+// permission set; reconcileDelete still removes those during upgrade.
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
@@ -135,10 +143,8 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("worker ServiceAccount: %w", err)
 	}
 
-	// 3 & 4. Role + RoleBinding.
-	if err := r.applyRole(ctx, buildAGCRole(ag)); err != nil {
-		return fmt.Errorf("AGC Role: %w", err)
-	}
+	// 3 & 4. RoleBinding — binds the AGC SA to the shipped agc-tenant-role ClusterRole.
+	// (Pre-v0.X installs created a per-tenant Role here; reconcileDelete still GCs it.)
 	if err := r.applyRoleBinding(ctx, buildAGCRoleBinding(ag)); err != nil {
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
@@ -410,20 +416,6 @@ func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, desi
 	return r.Update(ctx, &existing)
 }
 
-func (r *ActionsGatewayReconciler) applyRole(ctx context.Context, desired *rbacv1.Role) error {
-	var existing rbacv1.Role
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Rules = desired.Rules
-	return r.Update(ctx, &existing)
-}
-
 func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
 	var existing rbacv1.RoleBinding
 	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
@@ -433,8 +425,15 @@ func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired
 	if err != nil {
 		return err
 	}
+	// roleRef is immutable. On upgrade (pre-v0.X bindings reference the per-tenant
+	// Role; new bindings reference the agc-tenant-role ClusterRole), delete and recreate.
+	if existing.RoleRef != desired.RoleRef {
+		if err := r.Delete(ctx, &existing); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		return r.Create(ctx, desired)
+	}
 	existing.Labels = desired.Labels
-	existing.RoleRef = desired.RoleRef
 	existing.Subjects = desired.Subjects
 	return r.Update(ctx, &existing)
 }

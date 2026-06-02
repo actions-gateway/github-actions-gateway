@@ -29,6 +29,12 @@ const (
 	proxyAppName = gmcnames.ProxyName
 	agcAppName   = agcnames.ControllerName
 
+	// agcTenantRoleName is the shipped singleton ClusterRole that defines
+	// the AGC permission set. Per-tenant RoleBindings reference it; the GMC
+	// holds `bind` on this exact name so it never needs `escalate` or to
+	// hold the AGC's full permission set itself.
+	agcTenantRoleName = "agc-tenant-role"
+
 	// agcCredsVolumeName / agcCredsMountPath define how the GitHub App Secret is
 	// projected into the AGC pod. Keys (appId, installationId, privateKey) are
 	// mounted as read-only files; no credential ever appears in an env var.
@@ -82,31 +88,15 @@ func buildWorkerServiceAccount(ag *gmcv1alpha1.ActionsGateway) *corev1.ServiceAc
 	}
 }
 
-// buildAGCRole builds the namespace-scoped Role for the AGC ServiceAccount.
-func buildAGCRole(ag *gmcv1alpha1.ActionsGateway) *rbacv1.Role {
-	return &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{Name: agcSAName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
-		Rules: []rbacv1.PolicyRule{
-			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
-			{APIGroups: []string{""}, Resources: []string{"pods/status"}, Verbs: []string{"get"}},
-			// list/watch are required: the agent pool enumerates its own per-runner
-			// Secrets to reconcile pool state (agentpool.Pool.listSecrets). RBAC does
-			// not support glob resourceNames and the agent Secret names are dynamic,
-			// so we cannot constrain by name. The "don't hold Secret bodies in process
-			// memory" property from W3 is preserved at the AGC's manager level by
-			// Client.Cache.DisableFor[*corev1.Secret] — reads go direct to the API
-			// server rather than being held in the controller-runtime cache.
-			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
-			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups"}, Verbs: []string{"get", "list", "watch", "update", "patch"}},
-			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups/status", "runnergroups/finalizers"}, Verbs: []string{"get", "update", "patch"}},
-		},
-	}
-}
-
+// buildAGCRoleBinding binds the per-tenant AGC ServiceAccount to the shipped
+// agc-tenant-role ClusterRole. A RoleBinding to a ClusterRole scopes those
+// permissions to the binding's namespace only. This pattern lets the GMC
+// avoid `escalate` and avoid holding the AGC's full permission set itself —
+// it only needs `bind` on the agc-tenant-role ClusterRole name.
 func buildAGCRoleBinding(ag *gmcv1alpha1.ActionsGateway) *rbacv1.RoleBinding {
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{Name: agcSAName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
-		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "Role", Name: agcSAName},
+		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: agcTenantRoleName},
 		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: agcSAName, Namespace: ag.Namespace}},
 	}
 }

@@ -19,7 +19,8 @@ import (
 )
 
 // newImpersonatedClient returns a client that impersonates the given ServiceAccount.
-// The SA must be bound to a Role in its namespace before this is called.
+// The SA must be bound to the agc-tenant-role ClusterRole (via a per-tenant
+// RoleBinding the GMC creates) before this is called.
 func newImpersonatedClient(t *testing.T, ns, saName string) client.Client {
 	t.Helper()
 	cfg := rest.CopyConfig(testEnv.Config)
@@ -53,7 +54,7 @@ func TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 
-	// Wait for the AGC ServiceAccount and Role to be created in nsA.
+	// Wait for the AGC ServiceAccount and RoleBinding to be created in nsA.
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: agcName},
 			&corev1.ServiceAccount{})
@@ -61,7 +62,7 @@ func TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied(t *testing.T) {
 
 	g.Eventually(func() error {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsA, Name: agcName},
-			&rbacv1.Role{})
+			&rbacv1.RoleBinding{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 
 	// Use the AGC SA from nsA impersonated client.
@@ -83,7 +84,7 @@ func TestGMC_AGCRBACScopeEnforcement_CrossNamespaceDenied(t *testing.T) {
 	}
 }
 
-func TestGMC_AGCRole_PermitsOwnNamespace(t *testing.T) {
+func TestGMC_AGCRoleBinding_PermitsOwnNamespace(t *testing.T) {
 	const nsName = "team-rbac-own"
 	createNamespace(t, nsName)
 	createGitHubAppSecret(t, nsName, "github-app")
