@@ -117,6 +117,30 @@ kubectl get runnergroup -n <namespace> -o yaml | grep -A 10 conditions
 
 ---
 
+## Proxy NetworkPolicy Has an Empty GitHub Allowlist
+
+**Symptoms.** On a freshly provisioned tenant, all proxy egress to GitHub is silently dropped: `curl` through the proxy times out (no `502`), the AGC cannot acquire jobs, and token refresh fails. The proxy `NetworkPolicy` exists but its `ipBlock` egress peers are empty.
+
+**Likely cause.** The IP Range Reconciler's initial `api.github.com/meta` fetch failed or stalled at GMC startup. The cached ranges seed each proxy `NetworkPolicy`'s `ipBlock` allowlist; until the first fetch lands, the allowlist is empty. The reconciler retries the initial fetch on a capped exponential backoff (1s→30s), so a transient outage normally self-heals within seconds — but a sustained inability to reach `api.github.com` from the GMC pod (egress firewall, DNS, or a long GitHub outage) leaves the allowlist empty until connectivity returns.
+
+**Diagnostics.**
+
+```sh
+# Inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
+kubectl get networkpolicy -n <namespace> actions-gateway-proxy \
+  -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
+
+# Look for retry warnings in the GMC log.
+kubectl logs -n gmc-system deploy/gmc-controller-manager \
+  | grep -i "GitHub IP-range"
+```
+
+**Resolution.**
+- Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing proxy `NetworkPolicy`.
+- If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set `spec.proxy.managedNetworkPolicy: false` so the reconciler leaves the policy alone.
+
+---
+
 ## Worker Pods Stuck Pending
 
 **Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds. `pod_creation_latency_seconds` p95 exceeds the 15s SLO target.

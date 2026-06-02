@@ -78,7 +78,7 @@ func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
 	}
 
 	// Run one tick synchronously.
-	r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slogDefault())
 
 	// Check that the proxy NetworkPolicy was updated with the new CIDRs.
 	var updated networkingv1.NetworkPolicy
@@ -118,7 +118,7 @@ func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
 
 	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slogDefault())
 
 	// Proxy NetworkPolicy should not contain the GitHub CIDR.
 	var updated networkingv1.NetworkPolicy
@@ -151,7 +151,7 @@ func TestIPRangeReconciler_FetchError(t *testing.T) {
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
 
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{err: errors.New("network error")}}
-	r.reconcileAll(ctx, slogDefault()) // must not panic
+	_ = r.reconcileAll(ctx, slogDefault()) // must not panic
 
 	// Proxy NetworkPolicy should be unchanged.
 	var updated networkingv1.NetworkPolicy
@@ -181,7 +181,7 @@ func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
 
 	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
 	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	r.reconcileAll(ctx, slogDefault())
+	_ = r.reconcileAll(ctx, slogDefault())
 
 	// Workload NP must still have the proxy egress rule (PodSelector on the proxy
 	// app label) — the reconciler must not touch it.
@@ -389,6 +389,118 @@ func TestIPRangeReconciler_Start_TickerFiresOnInterval(t *testing.T) {
 		"ticker should fire at least once after the immediate reconcile")
 	cancel()
 	require.NoError(t, <-done)
+}
+
+// flakyFetcher fails its first failCount calls, then returns cidrs. It models a
+// transient outage or stall on the initial api.github.com/meta fetch.
+type flakyFetcher struct {
+	mu        sync.Mutex
+	calls     int
+	failCount int
+	cidrs     []net.IPNet
+}
+
+func (f *flakyFetcher) FetchIPRanges(_ context.Context) ([]net.IPNet, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if f.calls <= f.failCount {
+		return nil, errors.New("transient fetch failure")
+	}
+	return f.cidrs, nil
+}
+
+func (f *flakyFetcher) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+func proxyNPHasCIDR(t *testing.T, fc client.Client, ns, cidr string) bool {
+	t.Helper()
+	var np networkingv1.NetworkPolicy
+	if err := fc.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: npProxyName}, &np); err != nil {
+		return false
+	}
+	for _, rule := range np.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == cidr {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestIPRangeReconciler_Start_RetriesInitialFetch is the regression test for Q61.
+// The IPRangeReconciler used to run the initial fetch exactly once on Start; a
+// transient failure left the cache (and every proxy NetworkPolicy's ipBlock
+// egress allowlist) empty until the next Interval tick — 24h in production —
+// surfacing as the ProxyConnectWorks e2e flake. Start must now retry the initial
+// fetch on a sub-Interval cadence until it succeeds and patches the proxy NP.
+func TestIPRangeReconciler_Start_RetriesInitialFetch(t *testing.T) {
+	scheme := newIPRangeScheme(t)
+
+	ag := &gmcv1alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
+		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
+	}
+	np := buildProxyNetworkPolicy(ag, nil)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
+
+	const cidr = "140.82.112.0/20"
+	ff := &flakyFetcher{failCount: 2, cidrs: []net.IPNet{parseCIDR(t, cidr)}}
+	r := &IPRangeReconciler{
+		Client:         fc,
+		Fetcher:        ff,
+		Cache:          &IPRangeCache{},
+		Interval:       time.Hour, // ticker must not fire during the test — only the retry loop should
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     5 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Start(ctx) }()
+
+	require.Eventually(t, func() bool { return proxyNPHasCIDR(t, fc, "team-a", cidr) },
+		2*time.Second, 5*time.Millisecond,
+		"initial fetch should be retried until it succeeds and patches the proxy NP")
+	assert.GreaterOrEqual(t, ff.count(), 3, "two failures plus the successful retry")
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
+// TestIPRangeReconciler_Start_RetryStopsOnCancel ensures the initial-fetch retry
+// loop honours context cancellation when the fetch never recovers, rather than
+// spinning forever.
+func TestIPRangeReconciler_Start_RetryStopsOnCancel(t *testing.T) {
+	scheme := newIPRangeScheme(t)
+	fc := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	r := &IPRangeReconciler{
+		Client:         fc,
+		Fetcher:        &stubFetcher{err: errors.New("always fails")},
+		Interval:       time.Hour,
+		InitialBackoff: 10 * time.Millisecond,
+		MaxBackoff:     20 * time.Millisecond,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Start(ctx) }()
+
+	// Let the retry loop run a few iterations, then cancel mid-retry.
+	time.Sleep(30 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("Start did not exit within 1s of cancellation during the retry loop")
+	}
 }
 
 func TestIPRangeReconciler_Start_CancelExitsCleanly(t *testing.T) {

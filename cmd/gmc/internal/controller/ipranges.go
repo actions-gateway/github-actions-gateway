@@ -133,6 +133,12 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	return cidrs, nil
 }
 
+// Default bounds for the initial-fetch retry loop in Start. See reconcileInitial.
+const (
+	defaultInitialBackoff = 1 * time.Second
+	defaultMaxBackoff     = 30 * time.Second
+)
+
 // IPRangeReconciler is a controller-runtime Runnable that periodically
 // refreshes NetworkPolicy egress rules for all managed ActionsGateway CRs.
 //
@@ -144,6 +150,12 @@ type IPRangeReconciler struct {
 	Cache    *IPRangeCache
 	Interval time.Duration
 	Log      *slog.Logger
+
+	// InitialBackoff and MaxBackoff bound the capped exponential backoff used
+	// to retry the initial fetch in Start (see reconcileInitial). Zero selects
+	// defaultInitialBackoff / defaultMaxBackoff; tests set small values.
+	InitialBackoff time.Duration
+	MaxBackoff     time.Duration
 }
 
 // Start implements manager.Runnable. It runs until ctx is cancelled.
@@ -157,8 +169,9 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 		log = slog.Default()
 	}
 
-	// Run once immediately on start, then on each tick.
-	r.reconcileAll(ctx, log)
+	// Run an initial reconcile immediately, retrying with backoff until the
+	// first fetch succeeds, then refresh on each tick.
+	r.reconcileInitial(ctx, log)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -167,7 +180,52 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			r.reconcileAll(ctx, log)
+			_ = r.reconcileAll(ctx, log)
+		}
+	}
+}
+
+// reconcileInitial runs reconcileAll, retrying with capped exponential backoff
+// until the first fetch succeeds or ctx is cancelled.
+//
+// The first successful fetch populates the IP-range cache. Every managed proxy
+// NetworkPolicy's ipBlock egress allowlist is derived from that cache (by both
+// ActionsGatewayReconciler at NP-creation time and reconcileAll's patch pass),
+// so until the first fetch lands, proxy egress to GitHub is empty and silently
+// dropped. Because the periodic refresh Interval is 24h in production, a single
+// transient failure or stall on the very first fetch would otherwise leave
+// egress broken for a full day — observed as the ProxyConnectWorks e2e flake
+// (Q61). Retrying the initial fetch on a sub-Interval cadence closes that gap;
+// the subsequent patch pass repairs any NP that was created with the empty
+// cache during the retry window.
+func (r *IPRangeReconciler) reconcileInitial(ctx context.Context, log *slog.Logger) {
+	initial := r.InitialBackoff
+	if initial <= 0 {
+		initial = defaultInitialBackoff
+	}
+	maxBackoff := r.MaxBackoff
+	if maxBackoff <= 0 {
+		maxBackoff = defaultMaxBackoff
+	}
+
+	backoff := initial
+	for {
+		if err := r.reconcileAll(ctx, log); err == nil {
+			return
+		}
+		log.Warn("retrying initial GitHub IP-range fetch", "backoff", backoff.String())
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 		}
 	}
 }
@@ -175,14 +233,20 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 // ReconcileNow triggers an immediate reconciliation of all ActionsGateway CRs.
 // Intended for use in integration tests.
 func (r *IPRangeReconciler) ReconcileNow(ctx context.Context) {
-	r.reconcileAll(ctx, slog.Default())
+	_ = r.reconcileAll(ctx, slog.Default())
 }
 
-func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) {
+// reconcileAll fetches the current GitHub IP ranges, updates the cache, and
+// patches every managed proxy NetworkPolicy. It returns an error if the fetch
+// or the ActionsGateway list fails — the two cases that leave no NetworkPolicy
+// patched, which reconcileInitial retries. Per-CR patch failures are logged but
+// not returned: the next tick and the per-CR reconcile recover individual CRs,
+// and one bad CR must not block the retry loop from completing.
+func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) error {
 	cidrs, err := r.Fetcher.FetchIPRanges(ctx)
 	if err != nil {
 		log.Error("failed to fetch GitHub IP ranges", "error", err)
-		return
+		return err
 	}
 	if r.Cache != nil {
 		r.Cache.Set(cidrs)
@@ -191,7 +255,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	var agList gmcv1alpha1.ActionsGatewayList
 	if err := r.List(ctx, &agList); err != nil {
 		log.Error("failed to list ActionsGateways", "error", err)
-		return
+		return err
 	}
 
 	for i := range agList.Items {
@@ -206,6 +270,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 			log.Error("failed to patch NetworkPolicy", "namespace", ag.Namespace, "name", ag.Name, "error", err)
 		}
 	}
+	return nil
 }
 
 func (r *IPRangeReconciler) patchNetworkPolicy(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, cidrs []net.IPNet) error {
