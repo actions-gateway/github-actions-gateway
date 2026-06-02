@@ -57,6 +57,8 @@ Use the per-module test commands in [`docs/development/testing.md`](docs/develop
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
+**Flake fixes go first.** If a CI test passes on rerun without a code change, file a Queue item for it and move that item to the top of the Queue before continuing other work — flake cost compounds across every future PR. See [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#flake-fixes-go-first).
+
 **Pick the right tier for the bug class.** Unit and envtest tests can't observe behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A kind e2e test (see [`docs/design/07-test-plan.md`](docs/design/07-test-plan.md) §7.3 and [`docs/development/testing.md`](docs/development/testing.md)) is the only thing that proves it works. PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
 
 For iterating against a real kind cluster — image-tag caching, debugging distroless pods, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop — see `docs/development/kind-iteration.md`.
