@@ -38,7 +38,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -68,7 +69,7 @@ type ActionsGatewayReconciler struct {
 	AGCExtraEnv []corev1.EnvVar // extra env vars forwarded to AGC pods (e.g. for tests)
 	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
 	// May be nil in unit tests; callers must nil-check before use.
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // Reconcile reconciles an ActionsGateway CR.
@@ -604,22 +605,16 @@ func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gm
 	if profile == "" {
 		profile = "baseline"
 	}
-	desired := &corev1.Namespace{
-		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Namespace"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: ag.Namespace,
-			Labels: map[string]string{
-				"pod-security.kubernetes.io/enforce":         profile,
-				"pod-security.kubernetes.io/enforce-version": "latest",
-				"pod-security.kubernetes.io/warn":            profile,
-				"pod-security.kubernetes.io/warn-version":    "latest",
-				"pod-security.kubernetes.io/audit":           profile,
-				"pod-security.kubernetes.io/audit-version":   "latest",
-			},
-		},
-	}
+	desired := corev1ac.Namespace(ag.Namespace).WithLabels(map[string]string{
+		"pod-security.kubernetes.io/enforce":         profile,
+		"pod-security.kubernetes.io/enforce-version": "latest",
+		"pod-security.kubernetes.io/warn":            profile,
+		"pod-security.kubernetes.io/warn-version":    "latest",
+		"pod-security.kubernetes.io/audit":           profile,
+		"pod-security.kubernetes.io/audit-version":   "latest",
+	})
 
-	err := r.Patch(ctx, desired.DeepCopy(), client.Apply, client.FieldOwner(psaFieldManager))
+	err := r.Apply(ctx, desired, client.FieldOwner(psaFieldManager))
 	if err == nil {
 		return nil
 	}
@@ -627,11 +622,11 @@ func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gm
 		return err
 	}
 	if r.Recorder != nil {
-		r.Recorder.Eventf(ag, corev1.EventTypeWarning, "PSALabelsOverridden",
+		r.Recorder.Eventf(ag, nil, corev1.EventTypeWarning, "PSALabelsOverridden", "ReapplyPSALabels",
 			"Reconciling Pod Security Admission labels on namespace %q to SecurityProfile=%q after detecting an out-of-band modification: %v",
 			ag.Namespace, profile, err)
 	}
-	return r.Patch(ctx, desired, client.Apply, client.FieldOwner(psaFieldManager), client.ForceOwnership)
+	return r.Apply(ctx, desired, client.FieldOwner(psaFieldManager), client.ForceOwnership)
 }
 
 // labelSafe converts a string to a safe Kubernetes DNS label segment and appends
