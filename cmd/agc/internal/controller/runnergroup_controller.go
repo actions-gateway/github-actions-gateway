@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -22,8 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const finalizerName = "actions-gateway.github.com/agentpool-cleanup"
@@ -71,6 +76,11 @@ type RunnerGroupReconciler struct {
 	pools          map[types.NamespacedName]*agentpool.Pool
 
 	conditionCh chan conditionUpdate
+
+	// reconcileCount counts Reconcile invocations. Test-only observability (see
+	// ReconcileCountForTest) — it lets integration tests assert that an external
+	// event such as a worker Pod lifecycle event actually triggered a reconcile.
+	reconcileCount atomic.Int64
 }
 
 // BrokerConfig holds the connection parameters for the broker client used by
@@ -107,11 +117,84 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RunnerGroup{}).
+		// Watch the worker pods this RunnerGroup's provisioner creates so that
+		// pod lifecycle events — a job being acquired (pod created), a pod
+		// reaching a terminal phase, and eviction (phase → Failed, *not* a
+		// delete: completed worker pods linger until GC) — re-trigger a
+		// reconcile. Without this the controller only reconciles on RunnerGroup
+		// writes, so status.ActiveSessions and any listener-pushed conditions go
+		// stale between Generation bumps (k8s-best-practices §A A3 / Q63). The
+		// watch reuses the manager's shared Pod informer (the same one Q64's
+		// InformerPodWaiter drives), so it adds no second cache.
+		//
+		// Deliberately Pods only: the A3 finding also names agent Secrets, but a
+		// Secret watch would establish a Secret informer and cache Secret material
+		// in-process, violating W3/H-2 (no Secret bodies in cache). The manager's
+		// DisableFor[*corev1.Secret] and the absence of any Secret Watch are
+		// load-bearing security properties, so the Secret half is intentionally
+		// not implemented.
+		Watches(
+			&corev1.Pod{},
+			handler.EnqueueRequestsFromMapFunc(r.podToRunnerGroup),
+			builder.WithPredicates(workerPodPredicate()),
+		).
 		Complete(r)
+}
+
+// podToRunnerGroup maps a worker Pod event to a reconcile request for the
+// RunnerGroup that owns it. Worker pods carry the owning group's name in the
+// provisioner.LabelRunnerGroup label and run in the group's namespace. A Pod
+// without the label maps to no request (defence-in-depth; workerPodPredicate
+// already filters these out).
+func (r *RunnerGroupReconciler) podToRunnerGroup(_ context.Context, obj client.Object) []ctrl.Request {
+	rgName := obj.GetLabels()[provisioner.LabelRunnerGroup]
+	if rgName == "" {
+		return nil
+	}
+	return []ctrl.Request{{NamespacedName: types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      rgName,
+	}}}
+}
+
+// workerPodPredicate restricts the Pod watch to this project's worker pods and
+// to the events that carry new information for the RunnerGroup's status:
+//
+//   - Create — a job was acquired and a worker pod started.
+//   - Delete — a worker pod was removed (e.g. GC or manual kubectl delete).
+//   - Update — only when the pod's phase changed (e.g. Running → Failed on
+//     eviction, Running → Succeeded on completion). Worker pods are not deleted
+//     on completion, so eviction surfaces as a phase update rather than a
+//     delete; skipping non-phase updates avoids reconcile churn from status
+//     heartbeats that do not change the group's observable state.
+//
+// Generic events are ignored.
+func workerPodPredicate() predicate.Predicate {
+	hasLabel := func(obj client.Object) bool {
+		_, ok := obj.GetLabels()[provisioner.LabelRunnerGroup]
+		return ok
+	}
+	return predicate.Funcs{
+		CreateFunc:  func(e event.CreateEvent) bool { return hasLabel(e.Object) },
+		DeleteFunc:  func(e event.DeleteEvent) bool { return hasLabel(e.Object) },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if !hasLabel(e.ObjectNew) {
+				return false
+			}
+			oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
+			newPod, ok2 := e.ObjectNew.(*corev1.Pod)
+			if !ok1 || !ok2 {
+				return false
+			}
+			return oldPod.Status.Phase != newPod.Status.Phase
+		},
+	}
 }
 
 // Reconcile is called by controller-runtime on RunnerGroup events.
 func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.reconcileCount.Add(1)
 	if r.Log == nil {
 		r.Log = slog.Default()
 	}
@@ -420,6 +503,15 @@ func (r *RunnerGroupReconciler) SetConditionForTest(ns, name string, cond metav1
 	case r.conditionCh <- conditionUpdate{namespace: ns, name: name, condition: cond}:
 	default:
 	}
+}
+
+// ReconcileCountForTest returns the number of times Reconcile has been invoked.
+// Intended for use in integration tests only — it lets a test detect when the
+// controller has quiesced (count stops increasing) and then assert that an
+// external event, such as a worker Pod lifecycle event delivered through the
+// Pod watch, triggered a fresh reconcile.
+func (r *RunnerGroupReconciler) ReconcileCountForTest() int64 {
+	return r.reconcileCount.Load()
 }
 
 // LocalStateCountForTest returns the number of RunnerGroups for which the

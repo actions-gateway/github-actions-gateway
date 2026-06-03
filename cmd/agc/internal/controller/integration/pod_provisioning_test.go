@@ -270,23 +270,19 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	}, 15*time.Second, 1*time.Millisecond)
 
 	sessions := brokerStub.RegisteredSessions()
+	acquiresBefore := brokerStub.AcquireJobCalls()
 	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
 
-	// Wait for the provisioner to acquire the job (job Secret appears) and then
-	// back off due to the ceiling (job Secret is deleted without creating a pod).
+	// The provisioner must acquire the job, then back off due to the ceiling
+	// without creating a worker pod. We assert on the monotonic acquire-job
+	// counter rather than trying to catch the transient job Secret: the ceiling
+	// path creates and immediately deletes that Secret within a single provision
+	// call, so observing it is racy — especially now the controller's worker-Pod
+	// watch pre-warms the Pod informer, which makes activePodCount's List return
+	// instantly and shrinks the Secret's lifetime below the poll interval.
 	require.Eventually(t, func() bool {
-		var secrets corev1.SecretList
-		_ = k8sClient.List(ctx, &secrets,
-			client.InNamespace(nsName),
-			client.MatchingLabels{"actions-gateway/runner-group": "ceiling-rg"},
-		)
-		for _, s := range secrets.Items {
-			if strings.HasPrefix(s.Name, "job-") {
-				return true
-			}
-		}
-		return false
-	}, 10*time.Second, 25*time.Millisecond, "provisioner should create job Secret when job is acquired")
+		return brokerStub.AcquireJobCalls() > acquiresBefore
+	}, 10*time.Second, 25*time.Millisecond, "provisioner should acquire the job")
 
 	require.Eventually(t, func() bool {
 		var secrets corev1.SecretList
