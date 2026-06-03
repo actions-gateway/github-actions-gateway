@@ -157,6 +157,13 @@ type Provisioner struct {
 	// runs without the per-tenant egress proxy.
 	ProxyTLSSecretName string
 
+	// Waiter blocks until a worker pod reaches a terminal phase. When set
+	// (production wires an InformerPodWaiter via main.go), completion is
+	// event-driven off the shared Pod informer. When nil, provision falls back
+	// to polling Client every PollInterval — used by the fake-client unit tests,
+	// which have no informer, and as a defensive fallback.
+	Waiter PodWaiter
+
 	// TokenFunc returns a valid GitHub App installation token for API calls.
 	// If nil, eviction auto-retry is logged but the rerun API is not called.
 	TokenFunc func(ctx context.Context) (string, error)
@@ -292,8 +299,8 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	}
 	log.Info("worker pod created", "pod", podName, "priorityClass", priorityClass)
 
-	// 5. Watch for pod completion.
-	phase, reason, err := p.waitForPodCompletion(ctx, rg.Namespace, podName)
+	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
+	phase, reason, err := p.waitForCompletion(ctx, rg.Namespace, podName)
 	if err != nil {
 		// Context cancelled or unrecoverable watch error.
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
@@ -734,7 +741,20 @@ func (p *Provisioner) applyResourceDefaults(spec *corev1.PodSpec) {
 	}
 }
 
-// waitForPodCompletion polls until the pod reaches a terminal phase.
+// waitForCompletion blocks until the pod reaches a terminal phase, delegating to
+// the event-driven Waiter when one is wired (production) and otherwise falling
+// back to the poll loop (fake-client unit tests). Returns the final phase, reason
+// (for eviction detection), and any error.
+func (p *Provisioner) waitForCompletion(ctx context.Context, namespace, podName string) (corev1.PodPhase, string, error) {
+	if p.Waiter != nil {
+		return p.Waiter.WaitForCompletion(ctx, namespace, podName)
+	}
+	return p.waitForPodCompletion(ctx, namespace, podName)
+}
+
+// waitForPodCompletion polls until the pod reaches a terminal phase. It is the
+// fallback used when no Waiter is wired; production replaces it with the
+// event-driven InformerPodWaiter (see Provisioner.Waiter).
 // Returns the final phase, reason (for eviction detection), and any error.
 func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podName string) (corev1.PodPhase, string, error) {
 	interval := p.PollInterval
