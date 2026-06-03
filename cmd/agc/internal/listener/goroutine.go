@@ -367,9 +367,11 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		renewInterval = 60 * time.Second
 	}
 	jobID := strconv.FormatInt(msg.MessageID, 10)
-	stop := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
+	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
 		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval)
-	defer stop()
+	// Cancel the renew loop and wait for it to exit before returning, so the
+	// goroutine never outlives the job it renews.
+	defer func() { stop(); <-renewDone }()
 
 	if cfg.Metrics != nil {
 		cfg.Metrics.JobsAcquiredTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
@@ -382,8 +384,10 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 }
 
 // StartRenewLoop starts a per-job renewal goroutine that ticks on the given interval.
-// The returned stop function cancels the loop and blocks until it exits;
-// callers must call it when the job completes to avoid goroutine leaks.
+// It returns a stop function that cancels the loop and a done channel that closes
+// once the loop goroutine has fully exited. Callers must call stop when the job
+// completes to avoid goroutine leaks; they may then wait on done if they need to
+// guarantee the goroutine has stopped before releasing shared resources.
 func StartRenewLoop(
 	ctx context.Context,
 	client *broker.BrokerClient,
@@ -393,11 +397,11 @@ func StartRenewLoop(
 	clk Clock,
 	log *slog.Logger,
 	renewInterval time.Duration,
-) (stop func()) {
+) (stop func(), done <-chan struct{}) {
 	stopCtx, cancel := context.WithCancel(ctx)
-	done := make(chan struct{})
+	doneCh := make(chan struct{})
 	go func() {
-		defer close(done)
+		defer close(doneCh)
 		for {
 			select {
 			case <-stopCtx.Done():
@@ -421,7 +425,7 @@ func StartRenewLoop(
 			}
 		}
 	}()
-	return func() { cancel(); <-done }
+	return cancel, doneCh
 }
 
 func setCondition(cfg Config, condType string, status metav1.ConditionStatus, reason, msg string) {
