@@ -242,6 +242,16 @@ func run() error {
 	}
 	prov.TokenFunc = tokenMgr.Token
 
+	// Detect worker-pod completion off the shared Pod informer rather than
+	// polling per session: one event handler serves every in-flight session, so
+	// detection is near-immediate and no per-session ticker is spawned. Run it
+	// as a manager Runnable so the handler is registered after the cache syncs.
+	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(), nil)
+	if err := mgr.Add(podWaiter); err != nil {
+		return fmt.Errorf("add pod completion watcher: %w", err)
+	}
+	prov.Waiter = podWaiter
+
 	// Choose registrar:
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
 	//   STUB_AUTH_URL / STUB_BROKER_URL set  → StubRegistrar with those URLs (testing)
