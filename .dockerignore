@@ -1,8 +1,8 @@
 # See https://docs.docker.com/engine/reference/builder/#dockerignore-file.
 #
-# Applied to every image whose build context is the repo root: gmc, agc,
-# fakegithub, worker. (The proxy image uses context cmd/proxy and has its
-# own cmd/proxy/.dockerignore.)
+# Applied to every image — all share the repo-root build context: gmc, agc,
+# proxy, fakegithub, worker (see docker-bake.hcl, where _common sets
+# context = ".").
 #
 # Strategy: exclude everything, re-include only the Go source and module
 # manifests builds actually need. This keeps the layer-cache key tight —
