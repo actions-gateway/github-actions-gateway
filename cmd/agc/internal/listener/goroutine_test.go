@@ -618,7 +618,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -631,6 +631,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	}
 
 	stop()
+	<-done
 	clk.Stop()
 	// Close server and drain connections before goleak.
 	srv.Close()
@@ -648,10 +649,17 @@ func TestRenewLoop_StopsOnStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
 	stop() // should not hang
+
+	// done must close once the loop goroutine exits after stop().
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("done channel did not close after stop()")
+	}
+
 	clk.Stop()
-	time.Sleep(30 * time.Millisecond)
 	goleak.VerifyNone(t)
 }
 
@@ -676,7 +684,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -690,6 +698,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	assert.Equal(t, int32(3), calls.Load(), "loop must not exit on non-OK responses")
 
 	stop()
+	<-done
 	clk.Stop()
 	srv.Close()
 	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
@@ -716,10 +725,11 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
 
 	// Stop before any tick fires.
 	stop()
+	<-done
 	clk.Stop()
 
 	// Give any in-flight requests time to complete, then verify no calls.
