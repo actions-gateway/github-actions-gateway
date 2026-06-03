@@ -14,6 +14,10 @@ KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
 # Override with test/kind-config-1worker.yaml if you only need the standard suite and want a faster cluster.
 KIND_CONFIG   ?= test/kind-config-2worker.yaml
+# KIND_NODE_IMAGE pins the node image (and thus the cluster's K8s version) when set.
+# Left empty here so local runs use the installed kind's default; CI sets it to a
+# digest-pinned kindest/node so the image can be cached and reused across runs.
+KIND_NODE_IMAGE ?=
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 
 # Local OCI registry that kind nodes pull from. scripts/kind-with-registry.sh
@@ -33,7 +37,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .DEFAULT_GOAL := help
 
 .PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
-        e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
+        e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock
 
@@ -119,10 +123,16 @@ queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock I
 .PHONY: e2e-up
 e2e-up: e2e-cluster e2e-images e2e ## One-shot: create cluster, build+push images, run all e2e suites
 
+.PHONY: e2e-registry
+e2e-registry: ## Start just the local OCI registry (no-op if already running)
+	REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
+		scripts/start-registry.sh
+
 .PHONY: e2e-cluster
 e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
 	KIND_CLUSTER=$(KIND_CLUSTER) KIND_CONFIG=$(KIND_CONFIG) \
 		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
+		KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
 		scripts/kind-with-registry.sh
 
 .PHONY: apply-cert-manager

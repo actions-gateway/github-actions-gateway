@@ -3,10 +3,12 @@
 # wired to use it. Idempotent: safe to re-run.
 #
 # Environment:
-#   KIND_CLUSTER   — cluster name (required)
-#   KIND_CONFIG    — kind cluster config file (required)
-#   REGISTRY_NAME  — registry container name (default: kind-registry)
-#   REGISTRY_PORT  — host port the registry binds to (default: 5000)
+#   KIND_CLUSTER     — cluster name (required)
+#   KIND_CONFIG      — kind cluster config file (required)
+#   REGISTRY_NAME    — registry container name (default: kind-registry)
+#   REGISTRY_PORT    — host port the registry binds to (default: 5000)
+#   KIND_NODE_IMAGE  — pin the node image, e.g. kindest/node:vX.Y.Z@sha256:...
+#                      (optional; when unset kind picks its release default)
 #
 # After this script runs:
 #   * Images pushed to localhost:${REGISTRY_PORT}/... from the host are
@@ -24,34 +26,11 @@ set -euo pipefail
 REGISTRY_NAME=${REGISTRY_NAME:-kind-registry}
 REGISTRY_PORT=${REGISTRY_PORT:-5000}
 
-# 1. Start the registry container if it isn't already running.
-running="$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null || true)"
-if [ "${running}" != 'true' ]; then
-  echo "==> starting registry container ${REGISTRY_NAME} on host 127.0.0.1:${REGISTRY_PORT}"
-  docker run \
-    -d --restart=always \
-    -p "127.0.0.1:${REGISTRY_PORT}:5000" \
-    --network bridge \
-    --name "${REGISTRY_NAME}" \
-    registry:2 >/dev/null
-else
-  echo "==> registry container ${REGISTRY_NAME} already running"
-fi
-
-# Wait for the registry to accept connections — `docker run -d` returns once
-# the container is started, not when registry:2 is actually listening. Without
-# this, a fast caller (buildx push) can race and fail on the first attempt.
-echo "==> waiting for registry to accept connections"
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS "http://127.0.0.1:${REGISTRY_PORT}/v2/" >/dev/null 2>&1; then
-    break
-  fi
-  if [ "${i}" = '10' ]; then
-    echo "registry did not become ready within 10s" >&2
-    exit 1
-  fi
-  sleep 1
-done
+# 1. Bring up the registry (idempotent). Extracted into start-registry.sh so CI
+#    can start it early and build images against it while this script goes on to
+#    create the cluster.
+REGISTRY_NAME="${REGISTRY_NAME}" REGISTRY_PORT="${REGISTRY_PORT}" \
+  "$(dirname "$0")/start-registry.sh"
 
 # 2. Create the kind cluster (with a containerd patch enabling certs.d) if it
 #    does not already exist. The patch tells containerd to honour per-registry
@@ -60,9 +39,16 @@ if kind get clusters 2>/dev/null | grep -qx "${KIND_CLUSTER}"; then
   echo "==> kind cluster ${KIND_CLUSTER} already exists"
 else
   echo "==> creating kind cluster ${KIND_CLUSTER} (config: ${KIND_CONFIG})"
+  # Pin the node image when KIND_NODE_IMAGE is set (CI does, to make the cluster
+  # K8s version deterministic and to let a pre-pulled/cached image be reused).
+  create_args=(--name "${KIND_CLUSTER}" --config=-)
+  if [[ -n "${KIND_NODE_IMAGE:-}" ]]; then
+    echo "==> using pinned node image ${KIND_NODE_IMAGE}"
+    create_args+=(--image "${KIND_NODE_IMAGE}")
+  fi
   # Concatenate the user's config file with the containerd patch and feed the
   # result to kind via stdin.
-  cat "${KIND_CONFIG}" - <<EOF | kind create cluster --name "${KIND_CLUSTER}" --config=-
+  cat "${KIND_CONFIG}" - <<EOF | kind create cluster "${create_args[@]}"
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry]

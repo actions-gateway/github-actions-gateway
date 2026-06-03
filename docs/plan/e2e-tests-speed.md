@@ -660,3 +660,34 @@ default min/max replica values.
 | 13 | JUnit report for PR test summary | 30 min | readability | ✓ Done |
 | 10 | Isolate GMC restart from parallel run | 30 min | variance reduction | ✓ Done |
 | 14 | Deterministic HPA scale-up test | 1 hour | removes flakiness; CI-safe | ✓ Done |
+
+---
+
+## Round 2 — CI pipeline (job-level) optimizations
+
+Round 1 (above) optimized the test phase. This round targets the **setup/scaffolding** around it, with a hard constraint: *no increase in billed Actions minutes*. The e2e job runs on a single `ubuntu-latest` runner, so wall-clock == billed minutes 1:1 — every change below cuts both, and none shard across runners or upsize the runner (the two moves that would trade minutes for latency).
+
+| # | Change | Effort | Savings | Status |
+|---|---|---|---|---|
+| 15 | `concurrency: cancel-in-progress` (PR-scoped) | 5 min | up to ~35 min per superseded PR push | ✓ Done |
+| 16 | Overlap image build with cluster create + cert-manager | 1 hour | ~2 min/run (cold cache) | ✓ Done |
+| 17 | Pin `kind` to a release binary (was `go install @latest`) | 15 min | ~20–40 s + reproducibility | ✓ Done |
+| 18 | Cache the kind node image across runs | 15 min | node-image pull time + Docker Hub rate-limit flake removal | ✓ Done |
+
+### 15. Cancel superseded PR runs
+
+`.github/workflows/e2e-test.yml` had no `concurrency` block, so every push to an open PR ran the full ~35 min job to completion even after a newer push made it moot. Added a workflow-level `concurrency` group keyed on `github.ref`, with `cancel-in-progress` gated to `pull_request` events so pushes to `main` (each a distinct post-merge gate) are never cancelled. The key uses `github.ref` rather than `github.head_ref`: for a PR it resolves to the unique `refs/pull/<n>/merge`, so a fork PR cannot pick a colliding source-branch name to cancel another PR's in-progress runs. Pure minutes saver, zero latency cost.
+
+### 16. Overlap build with cluster bring-up
+
+The image build (`docker buildx bake`) is the long pole on a cold GHA cache (~8 min) and depends only on the local registry, not the kind cluster. The registry bring-up was split out of `scripts/kind-with-registry.sh` into `scripts/start-registry.sh` (and a `make e2e-registry` target) so CI can start the registry first, kick the bake off in the background, and create the cluster + apply cert-manager (~2 min) underneath it. A `trap` kills the background build if cluster bring-up fails; the build's exit code is surfaced via `wait`.
+
+### 17. Pin kind to a release binary
+
+`go install sigs.k8s.io/kind@latest` compiled kind from source every run (~20–40 s) and pinned nothing — a new kind release could change CI behavior with no code change. Replaced with a checksum-verified download of a pinned `kind` release binary (`KIND_VERSION`, `KIND_BINARY_SHA256` in the workflow env).
+
+### 18. Cache the kind node image
+
+The ~1 GB `kindest/node` image was pulled from Docker Hub on every run — slow and a flake source under Hub rate limits. Added an `actions/cache` step keyed on the digest-pinned `KIND_NODE_IMAGE`, with a load-or-pull step that `docker save`s the image on a miss and `docker load`s it on a hit. The cluster is created with `KIND_NODE_IMAGE` set (via the new optional flag threaded through `kind-with-registry.sh`), pinning the cluster's K8s version. kind is handed the **tag-only** ref because `docker save`/`load` drops the registry digest, so a `@sha256:` ref would miss the pre-loaded image and trigger a re-pull; the pull/save still use the digest, so the cached content is pinned.
+
+> Not done: caching the cert-manager images. Their pull already overlaps the background build (§16), and caching them would mean reintroducing a slow `kind load` or containerd surgery for little wall-clock gain.
