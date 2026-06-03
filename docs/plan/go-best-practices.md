@@ -28,9 +28,9 @@ are now redundant because the workspace covers them — likely candidates are
 **Acceptance:** `grep -h '^go ' **/go.mod | sort -u` returns a single line.
 CI green.
 
-## 2. Async-channel violation: `StartRenewLoop`
+## 2. Async-channel violation: `StartRenewLoop` ✅ DONE
 
-**Queue row:** #39 · **Size:** S · **Label:** `bug`
+**Queue row:** #39 · **Size:** S · **Label:** `bug` · **Status:** shipped — `StartRenewLoop` now returns `(stop func(), done <-chan struct{})`; `handleJob` waits on `done`; test asserts `done` closes after `stop()`.
 
 `cmd/agc/internal/listener/goroutine.go:121` `StartRenewLoop` currently
 returns `stop func()` and hides the done-channel inside the returned
