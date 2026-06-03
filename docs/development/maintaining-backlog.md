@@ -38,16 +38,18 @@ Do **not** append a session narrative, do **not** preserve prior entries with "E
 
 A multi-paragraph `Last refreshed:` block is the single largest source of merge conflicts in this file. Every concurrent branch edits it, every session feels pressure to imitate the prior format and add their own entry. Resist.
 
-### Queue `Notes` column: ≤2 sentences
+### Queue `Notes` column: ≤2 sentences, hard cap 250 characters
 
 `Notes` answers two questions only:
 
 - **What is this item, in one sentence?** (often just a pointer: "→ M3/M4 kind end-to-end" for blocked items.)
 - **What unblocks it or what's the next concrete step?**
 
+**The 250-character cap is hard and lint-enforced** ([`scripts/lint-status.sh`](../../scripts/lint-status.sh) rule 3, run by the pre-commit hook and CI). Count before you commit — a markdown link counts its full `[text](url)` source length, so two short sentences with one link can blow the cap (this is the usual way it's exceeded). When you edit a Notes cell, check its length up front rather than waiting for the hook to reject the commit. The cap is configurable via the `NOTES_MAX_CHARS` env var but defaults to 250 everywhere.
+
 Anything longer — dry-run write-ups, root-cause analyses, design rationale — belongs in the linked plan doc, not the row. Plan docs aren't high-contention; STATUS.md is.
 
-If a row's Notes is growing past two sentences, that's the signal to move the content to `docs/plan/<plan>.md` and replace the row Notes with a link.
+If a row's Notes is growing past two sentences (or nears 250 chars), that's the signal to move the content to `docs/plan/<plan>.md` and replace the row Notes with a link.
 
 ### Don't use `▶ Started` markers for solo work
 
