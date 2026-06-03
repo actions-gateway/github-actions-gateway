@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#161B22"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#326CE5"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <linearGradient id="tier" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#326CE5" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#2DD4BF" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <!-- subtle dot grid -->
+  <g fill="#1F2A3A" opacity="0.6">
+    <circle cx="1090" cy="90"  r="2"/><circle cx="1140" cy="90" r="2"/><circle cx="1190" cy="90" r="2"/><circle cx="1240" cy="90" r="2"/>
+    <circle cx="1090" cy="140" r="2"/><circle cx="1140" cy="140" r="2"/><circle cx="1190" cy="140" r="2"/><circle cx="1240" cy="140" r="2"/>
+  </g>
+
+  <!-- Accent bar -->
+  <rect x="80" y="96" width="64" height="6" rx="3" fill="url(#accent)"/>
+
+  <!-- Kicker -->
+  <text x="80" y="148" fill="#8B949E" font-size="22" font-weight="600" letter-spacing="3">KUBERNETES OPERATOR · SELF-HOSTED RUNNERS</text>
+
+  <!-- Title -->
+  <text x="78" y="236" fill="#E6EDF3" font-size="74" font-weight="800" letter-spacing="-1.5">GitHub Actions</text>
+  <text x="78" y="318" fill="#E6EDF3" font-size="74" font-weight="800" letter-spacing="-1.5">Gateway</text>
+
+  <!-- Tagline -->
+  <text x="80" y="372" fill="#ADBAC7" font-size="27" font-weight="400">Pack a shared quota without starving expensive runners —</text>
+  <text x="80" y="410" fill="#2DD4BF" font-size="27" font-weight="600">higher utilization, lower cost.</text>
+  <text x="80" y="448" fill="#8B949E" font-size="22" font-weight="400">An Actions Runner Controller (ARC) alternative.</text>
+
+  <!-- Feature pills (ARC differentiators) -->
+  <g font-size="21" font-weight="600">
+    <g>
+      <rect x="80"  y="470" width="268" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="214" y="503" fill="#9FE7DC" text-anchor="middle">Oversubscribe safely</text>
+    </g>
+    <g>
+      <rect x="364" y="470" width="256" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="492" y="503" fill="#9FB8F0" text-anchor="middle">Auto eviction retry</text>
+    </g>
+    <g>
+      <rect x="636" y="470" width="276" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="774" y="503" fill="#9FE7DC" text-anchor="middle">Per-tenant egress IPs</text>
+    </g>
+    <g>
+      <rect x="928" y="470" width="312" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="1084" y="503" fill="#9FB8F0" text-anchor="middle">4,000&#215; lighter listeners</text>
+    </g>
+  </g>
+
+  <!-- Right-side four-tier motif -->
+  <g transform="translate(964, 196)">
+    <text x="118" y="-24" fill="#566273" font-size="18" font-weight="600" letter-spacing="2" text-anchor="middle">FOUR TIERS</text>
+    <rect x="0"  y="0"   width="236" height="44" rx="8" fill="url(#tier)" opacity="1.00"/>
+    <rect x="0"  y="56"  width="236" height="44" rx="8" fill="url(#tier)" opacity="0.82"/>
+    <rect x="0"  y="112" width="236" height="44" rx="8" fill="url(#tier)" opacity="0.64"/>
+    <rect x="0"  y="168" width="236" height="44" rx="8" fill="url(#tier)" opacity="0.46"/>
+    <g fill="#0B1220" font-size="17" font-weight="700">
+      <text x="118" y="28"  text-anchor="middle">Gateway Manager</text>
+      <text x="118" y="84"  text-anchor="middle">Gateway Controller</text>
+      <text x="118" y="140" text-anchor="middle">Egress Proxy</text>
+      <text x="118" y="196" text-anchor="middle">Worker Pod</text>
+    </g>
+  </g>
+
+  <!-- Footer / repo handle -->
+  <text x="80" y="586" fill="#566273" font-size="22" font-weight="500">github.com/actions-gateway/github-actions-gateway</text>
+</svg>
