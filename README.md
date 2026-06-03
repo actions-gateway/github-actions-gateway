@@ -1,8 +1,8 @@
 # GitHub Actions Gateway
 
-> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes clusters.
+> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and give each tenant isolated egress IPs.
 
-A Kubernetes operator for self-hosted GitHub Actions runners, built for multi-tenant clusters where each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`.
+Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`, all driven by one Kubernetes operator.
 
 GitHub Actions Gateway (GAG) brings four properties that Actions Runner Controller (ARC) scale-set mode does not provide together:
 
