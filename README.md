@@ -6,7 +6,7 @@ Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside the
 
 GitHub Actions Gateway (GAG) brings four properties that Actions Runner Controller (ARC) scale-set mode does not provide together:
 
-- **Priority-tiered scheduling across a shared `ResourceQuota`.** Guarantee that GPU runners always claim at least N slots, even when cheap CPU runner pods flood the quota first.
+- **Priority-tiered scheduling across a shared `ResourceQuota`.** Reserve a floor of slots for expensive GPU runners that a flood of cheap CPU pods can't starve, then let higher tiers burst opportunistically into spare capacity — so you can oversubscribe the quota for higher utilization and lower cost instead of holding idle headroom in reserve.
 - **Automatic eviction retry.** When a worker pod is preempted, OOM-killed, or lost to a node failure, GAG fast-cancels the GitHub-side job lock and calls the rerun API, with a per-job retry budget — no manual rerun needed.
 - **Per-tenant dedicated egress IP pool.** Every tenant's GitHub traffic exits through a tenant-specific HTTPS CONNECT proxy pool, enabling per-team IP allowlisting on the GitHub side and containing rate-limit or abuse blast radius to one tenant.
 - **Self-service multi-tenant onboarding via one CR.** A team creates a single `ActionsGateway` CR in their own namespace and receives a fully isolated gateway instance: RBAC, NetworkPolicies, `ResourceQuota`, egress proxy, controller, and every runner group they declared.
