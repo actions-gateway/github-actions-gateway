@@ -11,9 +11,11 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -202,6 +204,136 @@ func TestReconcile_Delete(t *testing.T) {
 		client.MatchingLabels{"actions-gateway/runner-group": "del-rg"},
 	))
 	assert.Empty(t, secrets.Items)
+}
+
+// nextEvent returns the next emitted event string, failing if none arrives
+// within a short window.
+func nextEvent(t *testing.T, rec *events.FakeRecorder) string {
+	t.Helper()
+	select {
+	case e := <-rec.Events:
+		return e
+	case <-time.After(time.Second):
+		t.Fatal("expected an event but none was recorded")
+		return ""
+	}
+}
+
+// A8: mergeCondition delegates to meta.SetStatusCondition, so a condition's
+// LastTransitionTime is preserved across reconciles that don't change its
+// Status (only advancing on a genuine transition) — not rewritten every time.
+func TestReconcile_ConditionTransitionTimeStable(t *testing.T) {
+	rg := newRunnerGroup("default", "ltt-rg", 1)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	key := types.NamespacedName{Namespace: "default", Name: "ltt-rg"}
+
+	reconcile(t, r, key) // add finalizer; initialises conditionCh
+	reconcile(t, r, key) // provision agents
+
+	readLTT := func() metav1.Time {
+		t.Helper()
+		var got v1alpha1.RunnerGroup
+		require.NoError(t, fb.Get(context.Background(), key, &got))
+		c := apimeta.FindStatusCondition(got.Status.Conditions, "RateLimited")
+		require.NotNil(t, c, "expected RateLimited condition to be present")
+		return c.LastTransitionTime
+	}
+
+	// Use explicit, whole-second LastTransitionTime values so the assertions are
+	// deterministic (the fake client persists metav1.Time at second granularity).
+	t0 := metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	tLater := metav1.NewTime(time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC))
+
+	// First observation: condition appears with the supplied LastTransitionTime.
+	r.SetConditionForTest("default", "ltt-rg", metav1.Condition{
+		Type: "RateLimited", Status: metav1.ConditionTrue, Reason: "SustainedRateLimit", Message: "first",
+		LastTransitionTime: t0,
+	})
+	reconcile(t, r, key)
+	assert.True(t, readLTT().Time.Equal(t0.Time), "first observation should keep the supplied LastTransitionTime")
+
+	// Same Status, different Message, and a *different* supplied time → the merge
+	// must preserve the original time rather than churn it.
+	r.SetConditionForTest("default", "ltt-rg", metav1.Condition{
+		Type: "RateLimited", Status: metav1.ConditionTrue, Reason: "SustainedRateLimit", Message: "updated message",
+		LastTransitionTime: tLater,
+	})
+	reconcile(t, r, key)
+	assert.True(t, readLTT().Time.Equal(t0.Time),
+		"LastTransitionTime must not change when Status is unchanged")
+
+	// Genuine Status transition → LastTransitionTime must advance to the new time.
+	r.SetConditionForTest("default", "ltt-rg", metav1.Condition{
+		Type: "RateLimited", Status: metav1.ConditionFalse, Reason: "Recovered", Message: "ok",
+		LastTransitionTime: tLater,
+	})
+	reconcile(t, r, key)
+	assert.True(t, readLTT().Time.Equal(tLater.Time),
+		"LastTransitionTime must advance on a Status transition")
+}
+
+// A1: a token-manager failure surfaces as a Warning Event on the RunnerGroup.
+func TestReconcile_TokenError_EmitsWarningEvent(t *testing.T) {
+	rg := newRunnerGroup("default", "tokenevt-rg", 2)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	rec := events.NewFakeRecorder(16)
+	r := &controller.RunnerGroupReconciler{
+		Client:       fb,
+		TokenManager: token.NewManagerWithExpiredToken(),
+		Registrar:    agentpool.NewStubRegistrar(),
+		Recorder:     rec,
+	}
+	key := types.NamespacedName{Namespace: "default", Name: "tokenevt-rg"}
+
+	reconcile(t, r, key)                      // add finalizer (token not fetched yet)
+	require.Error(t, reconcileErr(t, r, key)) // token fetch fails
+
+	evt := nextEvent(t, rec)
+	assert.Contains(t, evt, "Warning")
+	assert.Contains(t, evt, "TokenUnavailable")
+}
+
+// A9: a NotFound reconcile drops the in-memory multiplexer/pool state so it
+// cannot leak across the object's lifetime.
+func TestReconcile_NotFoundCleansLocalState(t *testing.T) {
+	rg := newRunnerGroup("default", "gone-rg", 2)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	key := types.NamespacedName{Namespace: "default", Name: "gone-rg"}
+
+	reconcile(t, r, key) // add finalizer
+	reconcile(t, r, key) // provision → populates local state
+
+	mux, pools := r.LocalStateCountForTest()
+	require.Equal(t, 1, mux, "expected one tracked multiplexer after provisioning")
+	require.Equal(t, 1, pools, "expected one tracked pool after provisioning")
+
+	// Make the object fully disappear: clear the finalizer, then delete so the
+	// fake client removes it entirely (a true NotFound on the next reconcile).
+	var updated v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(context.Background(), key, &updated))
+	updated.Finalizers = nil
+	require.NoError(t, fb.Update(context.Background(), &updated))
+	require.NoError(t, fb.Delete(context.Background(), &updated))
+
+	reconcile(t, r, key) // NotFound → cleanupLocalState
+
+	mux, pools = r.LocalStateCountForTest()
+	assert.Equal(t, 0, mux, "multiplexer state must be dropped on NotFound")
+	assert.Equal(t, 0, pools, "pool state must be dropped on NotFound")
 }
 
 func TestReconcile_VersionTooOldCondition(t *testing.T) {

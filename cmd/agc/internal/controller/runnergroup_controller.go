@@ -15,8 +15,12 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -54,6 +58,11 @@ type RunnerGroupReconciler struct {
 	Log          *slog.Logger
 	Provisioner  *provisioner.Provisioner
 	AgentKeyType agentpool.KeyType // defaults to KeyTypeEd25519 when empty
+
+	// Recorder emits Kubernetes Events on the reconciled RunnerGroup so that
+	// credential, agent-pool, and listener failures surface in `kubectl describe
+	// runnergroup`. May be nil in unit tests; callers must nil-check before use.
+	Recorder events.EventRecorder
 
 	// in-process state; rebuilt from Secrets on restart.
 	multiplexersMu sync.Mutex
@@ -120,7 +129,15 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// 1. Fetch the RunnerGroup.
 	var rg v1alpha1.RunnerGroup
 	if err := r.Get(ctx, req.NamespacedName, &rg); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if apierrors.IsNotFound(err) {
+			// The object is gone (finalizer cleanup already completed, or it was
+			// removed out from under us across a reconciler restart). Drop any
+			// in-memory multiplexer/pool state for this key so it cannot leak.
+			// Idempotent: a no-op when reconcileDelete already cleaned up.
+			r.cleanupLocalState(req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
 	}
 
 	// 2. Drain pending condition updates from listener goroutines.
@@ -144,6 +161,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	instToken, err := r.TokenManager.Token(ctx)
 	if err != nil {
 		log.Error("failed to get installation token", "error", err)
+		r.recordEvent(&rg, corev1.EventTypeWarning, "TokenUnavailable", "GetToken",
+			"failed to obtain GitHub App installation token: %v", err)
 		return ctrl.Result{}, err
 	}
 
@@ -151,6 +170,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	pool := r.getOrCreatePool(req.NamespacedName, rg.Namespace, rg.Name, rg.Spec.RunnerLabels)
 	if err := pool.EnsureAgents(ctx, rg.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
+		r.recordEvent(&rg, corev1.EventTypeWarning, "AgentPoolError", "EnsureAgents",
+			"failed to provision agent Secrets: %v", err)
 		return ctrl.Result{}, err
 	}
 
@@ -167,6 +188,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if mux.ActiveCount() == 0 && rg.Spec.MaxListeners > 0 {
 		if startErr := mux.Start(ctx); startErr != nil {
 			log.Warn("multiplexer restart failed", "error", startErr)
+			r.recordEvent(&rg, corev1.EventTypeWarning, "ListenerStartFailed", "StartMultiplexer",
+				"failed to restart listener goroutines: %v", startErr)
 		}
 	}
 
@@ -185,7 +208,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *RunnerGroupReconciler) reconcileDelete(ctx context.Context, log *slog.Logger, rg *v1alpha1.RunnerGroup) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rg.Namespace, Name: rg.Name}
 
-	// Stop the multiplexer if running.
+	// Stop the multiplexer first so no new agents are claimed while we deregister.
 	r.multiplexersMu.Lock()
 	if mux, ok := r.multiplexers[key]; ok {
 		mux.Stop()
@@ -202,18 +225,47 @@ func (r *RunnerGroupReconciler) reconcileDelete(ctx context.Context, log *slog.L
 			instToken = ""
 		}
 		if err := pool.DeleteAll(ctx, instToken); err != nil {
+			r.recordEvent(rg, corev1.EventTypeWarning, "AgentDeregistrationFailed", "Delete",
+				"failed to deregister/delete agent Secrets: %v", err)
 			return ctrl.Result{}, fmt.Errorf("pool.DeleteAll: %w", err)
 		}
-		r.poolsMu.Lock()
-		delete(r.pools, key)
-		r.poolsMu.Unlock()
 	}
+
+	// Drop any remaining in-memory state for this RunnerGroup.
+	r.cleanupLocalState(key)
 
 	controllerutil.RemoveFinalizer(rg, finalizerName)
 	if err := r.Update(ctx, rg); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// cleanupLocalState stops and removes any in-memory multiplexer and agent pool
+// for the given RunnerGroup. It never touches the API server, so it is safe on
+// both the deletion path and a NotFound reconcile, and it is idempotent —
+// calling it more than once for the same key is a no-op.
+func (r *RunnerGroupReconciler) cleanupLocalState(key types.NamespacedName) {
+	r.multiplexersMu.Lock()
+	if mux, ok := r.multiplexers[key]; ok {
+		mux.Stop()
+		delete(r.multiplexers, key)
+	}
+	r.multiplexersMu.Unlock()
+
+	r.poolsMu.Lock()
+	delete(r.pools, key)
+	r.poolsMu.Unlock()
+}
+
+// recordEvent emits a Kubernetes Event on the RunnerGroup when a Recorder is
+// wired. The Recorder may be nil in unit tests, so callers go through here
+// rather than dereferencing it directly.
+func (r *RunnerGroupReconciler) recordEvent(rg *v1alpha1.RunnerGroup, eventtype, reason, action, note string, args ...interface{}) {
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(rg, nil, eventtype, reason, action, note, args...)
 }
 
 // getOrCreatePool returns the Pool for the given RunnerGroup, creating it if needed.
@@ -323,14 +375,11 @@ done:
 	}
 }
 
+// mergeCondition upserts a condition into rg.Status.Conditions keyed by Type.
+// It delegates to meta.SetStatusCondition so LastTransitionTime advances only on
+// an actual status transition rather than being rewritten on every reconcile.
 func (r *RunnerGroupReconciler) mergeCondition(rg *v1alpha1.RunnerGroup, cond metav1.Condition) {
-	for i, existing := range rg.Status.Conditions {
-		if existing.Type == cond.Type {
-			rg.Status.Conditions[i] = cond
-			return
-		}
-	}
-	rg.Status.Conditions = append(rg.Status.Conditions, cond)
+	meta.SetStatusCondition(&rg.Status.Conditions, cond)
 }
 
 func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, ready bool) {
@@ -342,14 +391,23 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 		reason = "ListenerActive"
 		msg = "At least one listener goroutine is running."
 	}
+	prev := meta.FindStatusCondition(rg.Status.Conditions, "Ready")
 	r.mergeCondition(rg, metav1.Condition{
 		Type:               "Ready",
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
 		ObservedGeneration: rg.Generation,
-		LastTransitionTime: metav1.Now(),
 	})
+	// Emit an Event only on a genuine Ready transition (or first observation),
+	// never on every reconcile, to avoid event spam.
+	if prev == nil || prev.Status != status {
+		etype := corev1.EventTypeNormal
+		if !ready {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(rg, etype, reason, "Reconcile", msg)
+	}
 }
 
 // SetConditionForTest enqueues a condition update as if it came from a listener
@@ -362,4 +420,18 @@ func (r *RunnerGroupReconciler) SetConditionForTest(ns, name string, cond metav1
 	case r.conditionCh <- conditionUpdate{namespace: ns, name: name, condition: cond}:
 	default:
 	}
+}
+
+// LocalStateCountForTest returns the number of RunnerGroups for which the
+// reconciler currently holds an in-memory multiplexer and the number for which
+// it holds an agent pool. Intended for use in unit tests only — it lets tests
+// assert that cleanupLocalState dropped the per-RunnerGroup state.
+func (r *RunnerGroupReconciler) LocalStateCountForTest() (multiplexers, pools int) {
+	r.multiplexersMu.Lock()
+	multiplexers = len(r.multiplexers)
+	r.multiplexersMu.Unlock()
+	r.poolsMu.Lock()
+	pools = len(r.pools)
+	r.poolsMu.Unlock()
+	return multiplexers, pools
 }

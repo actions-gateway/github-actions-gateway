@@ -99,10 +99,10 @@ Key design questions to resolve in implementation:
      soft state lost on AGC restart (acceptable — fail-safe, like the eviction
      counter; budget resets generously, never starves).
      **Leading candidate.**
-   - **Informer-backed pod cache** (ties into [Q32](../STATUS.md), which already
+   - **Informer-backed pod cache** (ties into [Q64](../STATUS.md), which already
      wants the provisioner to *watch* pods instead of polling). The admit check
      reads the cache instead of the API server. Best long-term; pairs naturally
-     with Q32's `Owns(&Pod)`.
+     with [Q63](../STATUS.md)'s RunnerGroup `Owns(&Pod)`.
    - Keep the live `List` but move it pre-acquire. Simplest, slowest, racy.
 
 2. **Reservation vs. observed count.** A pure observed-pod count
@@ -247,7 +247,7 @@ cluster quota. The point is that Kueue **augments** the pod layer; it cannot
 - Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs.
   redelivered. The whole priority of this work hinges on the answer.
 - Decide reservation-counter vs. informer-cache for the gate's count source —
-  ideally settle it *with* [Q32](../STATUS.md) so the provisioner grows one
+  ideally settle it *with* [Q64](../STATUS.md) so the provisioner grows one
   pod-watching mechanism, not two.
 - Should the gate be per-`RunnerGroup` only, or also enforce an AGC-wide
   aggregate ceiling? Per-RG matches today's `ceilingCheck`; an aggregate cap

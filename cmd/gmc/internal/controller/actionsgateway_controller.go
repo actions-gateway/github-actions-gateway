@@ -50,6 +50,7 @@ import (
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -321,7 +322,12 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	ag.Status.ProxyReadyReplicas = proxyReady
 	ag.Status.ObservedGeneration = gen
 
-	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
+	if err := r.Status().Update(ctx, ag); err != nil {
+		if apierrors.IsConflict(err) {
+			// Our in-memory ag is stale; requeue to re-Get and recompute rather
+			// than silently dropping the status write.
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return ctrl.Result{}, err
 	}
 	// If not all components are ready yet, re-check after a short delay.
@@ -356,7 +362,10 @@ func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context,
 		LastTransitionTime: now,
 		ObservedGeneration: gen,
 	})
-	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
+	if err := r.Status().Update(ctx, ag); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -389,6 +398,11 @@ func (r *ActionsGatewayReconciler) secretToActionsGateway(ctx context.Context, o
 func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv1alpha1.ActionsGateway{}).
+		// The reconciler mutates per-tenant in-memory state and assumes a single
+		// writer; serialise it explicitly rather than relying on the implicit
+		// default. Raising this requires making reconcileResources/apply* helpers
+		// safe under concurrent reconciles of distinct ActionsGateways first.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Owns(&appsv1.Deployment{}).
 		// WatchesMetadata caches only ObjectMeta (name, namespace, resourceVersion)
 		// for Secrets — no .data ever enters the in-process cache. This gives
