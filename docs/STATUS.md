@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q64"></a>Q64 | [K8s audit §A4 — replace provisioner 5s poll with a Pod informer](plan/k8s-best-practices.md#a-controller-correctness-) | `infra` `speed` `bug` | 🔲 | M | 🔴 Provisioner polls pod state every 5s via `r.Get` (~200 gets/s at 1,000 sessions; 5s detection latency on a 10s job). Replace with a single shared cache-backed Pod informer filtered by `managedBy`. Split from Q32 §A; pairs with [Q63](#Q63). |
 | <a id="Q63"></a>Q63 | [K8s audit §A3 — RunnerGroup Pod watch (self-heal `ActiveSessions`)](plan/k8s-best-practices.md#a-controller-correctness-) | `bug` `infra` | 🔲 | M | 🔴 RunnerGroup controller has no `Owns()`/`Watches` on worker Pods, so evicted pods leave `ActiveSessions` stale until the next Generation bump. Add a label-filtered Pod watch. Split from Q32 §A; pairs with [Q59](#Q59). |
 | <a id="Q26"></a>Q26 | [Remove over-declared `watch` verb on AGC Role](plan/security.md) | `security` | 🔲 | S | One-line cleanup; no Secret informer is registered. H-2 residual notes it. Overlaps partially with k8s-audit §B B4 ([Q57](#Q57)). |
 | <a id="Q25"></a>Q25 | [Restrict `:8081` health/metrics ingress (L-8)](plan/security.md) | `security` | 🔲 | S | Explicit NP ingress rule on proxy + AGC permitting only kubelet probe + Prometheus scrape selector. |
