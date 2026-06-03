@@ -31,8 +31,10 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -40,7 +42,29 @@ const (
 	labelManagedBy   = "app.kubernetes.io/managed-by"
 	labelRunnerGroup = "actions-gateway/runner-group"
 	labelPlanID      = "actions-gateway/plan-id"
-	managerName      = names.ControllerName
+
+	// Recommended Kubernetes labels (app.kubernetes.io/*) stamped on every
+	// worker pod so k9s, Prometheus relabel rules, and `kubectl get -l` work
+	// out of the box without operators learning the project-specific keys.
+	labelAppName      = "app.kubernetes.io/name"
+	labelAppInstance  = "app.kubernetes.io/instance"
+	labelAppComponent = "app.kubernetes.io/component"
+	labelAppPartOf    = "app.kubernetes.io/part-of"
+
+	// workerAppName / workerComponent / partOf are the recommended-label
+	// values for worker pods.
+	workerAppName   = "actions-runner"
+	workerComponent = "runner"
+	partOf          = "actions-gateway"
+
+	// securityProfilePrivileged / securityProfileRestricted are the PSA
+	// enforcement levels (mirrored from ActionsGateway.spec.securityProfile)
+	// that gate how much of the secure-by-default worker SecurityContext
+	// buildPod stamps. Any other value (including the empty string and the
+	// "baseline" default) gets the baseline hardening set.
+	securityProfilePrivileged = "privileged"
+	securityProfileRestricted = "restricted"
+	managerName               = names.ControllerName
 
 	// DefaultWorkerImage is the fallback worker image when RunnerGroup.Spec.WorkerImage
 	// is empty. Combine with an immutable digest for production deployments.
@@ -81,6 +105,16 @@ const (
 	proxyCAFileName   = "tls.crt"
 )
 
+// defaultWorkerCPU / defaultWorkerMemory are the resource requests *and*
+// limits stamped on a worker container when the tenant PodTemplate omits them.
+// Without these a worker pod is Best-Effort QoS: the first thing the kubelet
+// evicts under node pressure, which burns the eviction-retry budget fast.
+// Setting requests == limits makes a single-container worker pod Guaranteed QoS.
+var (
+	defaultWorkerCPU    = resource.MustParse("500m")
+	defaultWorkerMemory = resource.MustParse("1Gi")
+)
+
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
 	Client             client.Client
@@ -94,6 +128,20 @@ type Provisioner struct {
 	DefaultWorkerImage string
 	// WorkerSA is the ServiceAccount name assigned to worker pods.
 	WorkerSA string
+
+	// SecurityProfile mirrors the tenant's ActionsGateway.spec.securityProfile
+	// (baseline, restricted, or privileged), propagated from the GMC via the
+	// SECURITY_PROFILE env var. It controls how much of the secure-by-default
+	// worker SecurityContext buildPod stamps:
+	//   - "" / "baseline": runAsNonRoot + seccomp RuntimeDefault (does not break
+	//     in-job privilege escalation such as sudo);
+	//   - "restricted": the full PSA-restricted container floor (also
+	//     allowPrivilegeEscalation=false + drop ALL capabilities), required or
+	//     else the namespace's PodSecurity admission rejects the pod;
+	//   - "privileged": no SecurityContext defaults, so DinD / host-capability
+	//     workloads can opt in via their PodTemplate.
+	// Resource defaults are stamped on every profile.
+	SecurityProfile string
 	// HTTPProxy, HTTPSProxy, and NoProxy are injected into the runner container
 	// env of every worker pod. Set from the AGC's own environment by main.go.
 	HTTPProxy  string
@@ -572,6 +620,12 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 	template.Spec.HostIPC = false
 	template.Spec.RestartPolicy = corev1.RestartPolicyNever
 
+	// Secure-by-default pod hardening. Both helpers gap-fill: an explicit value
+	// in the tenant PodTemplate always wins, so a tenant can still opt out of
+	// any individual default (e.g. runAsNonRoot:false for a root-based image).
+	p.applySecurityDefaults(&template.Spec)
+	p.applyResourceDefaults(&template.Spec)
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -583,6 +637,11 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 				// "actions-gateway/component: workload" matches the workload NetworkPolicy
 				// podSelector so worker egress is restricted to the per-tenant proxy only.
 				"actions-gateway/component": "workload",
+				// Recommended app.kubernetes.io/* labels for tooling interop.
+				labelAppName:      workerAppName,
+				labelAppInstance:  rg.Name,
+				labelAppComponent: workerComponent,
+				labelAppPartOf:    partOf,
 			},
 		},
 		Spec: template.Spec,
@@ -593,6 +652,86 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 	}
 
 	return pod
+}
+
+// applySecurityDefaults stamps a secure-by-default SecurityContext onto the
+// worker PodSpec, scaled to the tenant's PSA profile. It gap-fills only: any
+// field the tenant set explicitly in the PodTemplate is preserved.
+//
+//   - privileged: no-op. This profile exists precisely so DinD and
+//     host-capability workloads can opt out; stamping defaults would defeat it.
+//   - baseline (and the empty default): pod-level runAsNonRoot + seccomp
+//     RuntimeDefault. Both are compatible with the standard non-root runner
+//     image and, crucially, do not block in-job privilege escalation (sudo),
+//     which baseline PSA permits and many CI jobs rely on.
+//   - restricted: additionally stamps the per-container PSA-restricted floor
+//     (allowPrivilegeEscalation=false + drop ALL capabilities). Without it the
+//     namespace's PodSecurity admission rejects the pod. Blocking sudo/caps is
+//     expected here because the tenant explicitly chose high isolation.
+func (p *Provisioner) applySecurityDefaults(spec *corev1.PodSpec) {
+	profile := strings.ToLower(strings.TrimSpace(p.SecurityProfile))
+	if profile == securityProfilePrivileged {
+		return
+	}
+
+	if spec.SecurityContext == nil {
+		spec.SecurityContext = &corev1.PodSecurityContext{}
+	}
+	if spec.SecurityContext.RunAsNonRoot == nil {
+		spec.SecurityContext.RunAsNonRoot = ptr.To(true)
+	}
+	if spec.SecurityContext.SeccompProfile == nil {
+		spec.SecurityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
+	}
+
+	if profile != securityProfileRestricted {
+		return
+	}
+
+	harden := func(containers []corev1.Container) {
+		for i := range containers {
+			if containers[i].SecurityContext == nil {
+				containers[i].SecurityContext = &corev1.SecurityContext{}
+			}
+			sc := containers[i].SecurityContext
+			if sc.AllowPrivilegeEscalation == nil {
+				sc.AllowPrivilegeEscalation = ptr.To(false)
+			}
+			if sc.Capabilities == nil {
+				sc.Capabilities = &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}
+			}
+			if sc.RunAsNonRoot == nil {
+				sc.RunAsNonRoot = ptr.To(true)
+			}
+			if sc.SeccompProfile == nil {
+				sc.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
+			}
+		}
+	}
+	harden(spec.Containers)
+	harden(spec.InitContainers)
+}
+
+// applyResourceDefaults stamps default CPU/memory requests and limits onto any
+// regular worker container that declares neither, on every profile. Init
+// containers are left untouched: their requests inflate the pod's effective
+// scheduling footprint and are usually short-lived setup steps. Gap-fill only —
+// a container that sets either requests or limits keeps the tenant's values.
+func (p *Provisioner) applyResourceDefaults(spec *corev1.PodSpec) {
+	for i := range spec.Containers {
+		r := &spec.Containers[i].Resources
+		if len(r.Requests) > 0 || len(r.Limits) > 0 {
+			continue
+		}
+		r.Requests = corev1.ResourceList{
+			corev1.ResourceCPU:    defaultWorkerCPU,
+			corev1.ResourceMemory: defaultWorkerMemory,
+		}
+		r.Limits = corev1.ResourceList{
+			corev1.ResourceCPU:    defaultWorkerCPU,
+			corev1.ResourceMemory: defaultWorkerMemory,
+		}
+	}
 }
 
 // waitForPodCompletion polls until the pod reaches a terminal phase.

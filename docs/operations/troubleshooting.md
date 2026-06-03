@@ -613,6 +613,36 @@ kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceed
 
 ---
 
+## Worker Pod Fails to Start After Secure-by-Default SecurityContext
+
+**Symptoms.** A worker pod that previously ran now stays in `CreateContainerConfigError` or `Pending`, or is rejected at admission. `kubectl describe pod` shows one of:
+- `Error: container has runAsNonRoot and image will run as root` — the AGC stamped `runAsNonRoot: true` (every profile except `privileged`) but the worker image's default user is `root` (UID 0).
+- A PodSecurity admission denial naming `allowPrivilegeEscalation != false` or `unrestricted capabilities` — the namespace is on `securityProfile: restricted` and a tenant container needs `sudo` or extra capabilities.
+
+**Likely causes.**
+- The worker image runs as root by default (common for custom or third-party runner images). The AGC's secure-by-default `runAsNonRoot: true` then blocks it. The shipped `ghcr.io/actions/actions-runner` image runs as UID 1001 and is unaffected.
+- A job under `restricted` calls `sudo` or installs packages requiring capabilities the PSA-restricted floor drops.
+
+**Diagnostics.**
+
+```sh
+# See the exact rejection / config error
+kubectl describe pod -n <tenant-namespace> <pod> | sed -n '/Events:/,$p'
+
+# Confirm the namespace's enforced PSA profile
+kubectl get ns <tenant-namespace> -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}'; echo
+
+# Confirm the SECURITY_PROFILE the AGC is running with
+kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SECURITY_PROFILE")].value}'; echo
+```
+
+**Resolution.**
+- Root-based image that must run as root: the defaults are gap-fill only — set an explicit `securityContext.runAsNonRoot: false` (and `runAsUser`/`runAsGroup` as needed) on the runner container in the RunnerGroup `podTemplate`. No profile escalation is required for `baseline`.
+- Job genuinely needs `sudo`/capabilities: move that workload to a `baseline` `ActionsGateway` (the default), which does not stamp the privilege-escalation/capability floor. Reserve `restricted` for workloads that can run without them.
+- Workload needs a real privileged container (DinD, kernel modules): set `securityProfile: privileged` on the `ActionsGateway` and pair it with a sandbox runtime — see [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+
+---
+
 ## Worker Pod Crashes With `configuredSettings` ArgumentNullException
 
 **Symptoms.** Worker pod reaches `Running`, the entrypoint wrapper logs `payload loaded` and starts Runner.Worker, but Runner.Worker exits non-zero almost immediately with a stack trace containing `System.ArgumentNullException: Value cannot be null. (Parameter 'configuredSettings')` originating from `Runner.Common.ConfigurationStore.GetSettings()`. The job is never reported back to GitHub.
