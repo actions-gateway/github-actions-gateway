@@ -32,6 +32,14 @@ rules:
 - apiGroups: [""]
   resources: ["pods/status"]
   verbs: ["get"]
+# events: the RunnerGroup reconciler emits Kubernetes Events (via an
+# EventRecorder) on credential, agent-pool, listener, and deregistration
+# failures, plus Ready-condition transitions, so operators see them in
+# `kubectl describe runnergroup`. create+patch is the standard event-client
+# permission set (patch supports event series aggregation).
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
 # list on secrets is required: the agent pool enumerates its own per-runner
 # Secrets to reconcile pool state. RBAC does not support glob resourceNames and
 # the agent Secret names are dynamic, so we cannot constrain by name. To limit

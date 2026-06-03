@@ -274,6 +274,7 @@ func run() error {
 		Metrics:      m,
 		Provisioner:  prov,
 		AgentKeyType: agentKeyType,
+		Recorder:     mgr.GetEventRecorder("runnergroup-controller"),
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
 			RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),

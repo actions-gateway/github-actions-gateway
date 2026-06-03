@@ -151,6 +151,15 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 # Check RunnerGroup conditions
 kubectl get runnergroup -n <namespace> -o yaml | grep -A 10 conditions
+
+# Check RunnerGroup events — the AGC emits Warning events for the common failures.
+kubectl describe runnergroup -n <namespace> <name>
+# Look for:
+#   TokenUnavailable          — GitHub App installation token could not be fetched (Secret/appId/installationId).
+#   AgentPoolError            — agent Secret provisioning (EnsureAgents) failed.
+#   ListenerStartFailed       — listener goroutines could not be (re)started.
+#   AgentDeregistrationFailed — agent Secret cleanup on scale-down/delete failed.
+#   NoActiveSessions / ListenerActive — Ready condition transitions.
 ```
 
 **Resolution.**
