@@ -11,6 +11,14 @@ on:
       - 'docs/STATUS.md'
       - 'scripts/lint-status.sh'
       - '.github/workflows/status-lint.yml'
+
+# Cancel superseded runs of this workflow on the same PR; pushes to main are
+# never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
+# for a PR that is the unique refs/pull/<n>/merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint-status:
     runs-on: ubuntu-latest
