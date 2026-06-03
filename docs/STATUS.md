@@ -14,6 +14,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **New item identified:** insert it in the Queue at the right priority position with the next unused ID. Batch audit-discovery items in one commit.
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 - **`Last touched:` is one line, date only.** Do not append session narrative.
+- **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
 Last touched: 2026-06-03
 
