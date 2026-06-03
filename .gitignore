@@ -1,20 +1,28 @@
 .context
-# Claude local state — ephemeral, machine-local (keep settings.json / commands / agents / skills / hooks tracked)
-.claude/worktrees/
-.claude/settings.local.json
-.claude/.credentials.json
-.claude/scheduled_tasks.lock
-.claude/shell-snapshots/
-.claude/history.jsonl
-.claude/todos/
-.claude/tasks/
-.claude/projects/
-.claude/sessions/
-.claude/session-env/
-.claude/cache/
-.claude/telemetry/
-.claude/backups/
-.claude/downloads/
+# Claude Code state under .claude/ — default-ignore everything, then opt the
+# shareable config back in. This is an allowlist on purpose: Claude Code writes
+# machine-local runtime files here (credentials, sessions, cache, telemetry,
+# scheduler locks, worktrees, …) and new artifact types appear over time, so
+# ignoring by default keeps unknown future files out of commits without us
+# having to enumerate each one.
+#
+# NOTE: we ignore the directory's *contents* (.claude/*), not the directory
+# itself (.claude/). Git never descends into a fully-ignored directory, so
+# ignoring .claude/ would make every negation below a no-op.
+.claude/*
+# Opt the version-controlled, shareable config back in. Negating a directory
+# lets git descend into it; these stay un-tracked until such files exist.
+!.claude/settings.json
+!.claude/commands/
+!.claude/agents/
+!.claude/skills/
+!.claude/hooks/
+# Belt-and-suspenders: credentials must NEVER be committed, even if a file lands
+# inside one of the re-included directories above. .claude/* only matches direct
+# children (not nested paths), and the directory negations re-expose whole
+# subtrees — so this final rule (last match wins) re-ignores credentials
+# anywhere under .claude/.
+.claude/**/.credentials.json
 CLAUDE.local.md
 # binary build output
 /.build/
