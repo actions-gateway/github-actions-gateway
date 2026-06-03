@@ -15,7 +15,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 
-Last touched: 2026-06-02
+Last touched: 2026-06-03
 
 ---
 
@@ -47,7 +47,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q32"></a>Q32 | [K8s audit — §A Controller correctness](plan/k8s-best-practices.md#a-controller-correctness-) | `bug` `infra` | 🔲 | M | 🔴 No `EventRecorder` anywhere; RunnerGroup has no Pod `Owns()` (stale `ActiveSessions`); provisioner polls instead of watching; finalizer race leaks pool maps. See [k8s-best-practices.md §A](plan/k8s-best-practices.md#a-controller-correctness-). |
+| <a id="Q64"></a>Q64 | [K8s audit §A4 — replace provisioner 5s poll with a Pod informer](plan/k8s-best-practices.md#a-controller-correctness-) | `infra` `speed` `bug` | 🔲 | M | 🔴 Provisioner polls pod state every 5s via `r.Get` (~200 gets/s at 1,000 sessions; 5s detection latency on a 10s job). Replace with a single shared cache-backed Pod informer filtered by `managedBy`. Split from Q32 §A; pairs with [Q63](#Q63). |
+| <a id="Q63"></a>Q63 | [K8s audit §A3 — RunnerGroup Pod watch (self-heal `ActiveSessions`)](plan/k8s-best-practices.md#a-controller-correctness-) | `bug` `infra` | 🔲 | M | 🔴 RunnerGroup controller has no `Owns()`/`Watches` on worker Pods, so evicted pods leave `ActiveSessions` stale until the next Generation bump. Add a label-filtered Pod watch. Split from Q32 §A; pairs with [Q59](#Q59). |
 | <a id="Q26"></a>Q26 | [Remove over-declared `watch` verb on AGC Role](plan/security.md) | `security` | 🔲 | S | One-line cleanup; no Secret informer is registered. H-2 residual notes it. Overlaps partially with k8s-audit §B B4 ([Q57](#Q57)). |
 | <a id="Q25"></a>Q25 | [Restrict `:8081` health/metrics ingress (L-8)](plan/security.md) | `security` | 🔲 | S | Explicit NP ingress rule on proxy + AGC permitting only kubelet probe + Prometheus scrape selector. |
 | <a id="Q24"></a>Q24 | [Enforce `@sha256:` syntax on AGC_IMAGE/PROXY_IMAGE at GMC startup](plan/security.md) | `security` | 🔲 | S | Reject non-digest references; promoted from the security plan's "out of scope but worth noting" note. |
@@ -55,6 +56,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q23"></a>Q23 | [CI security scanning (govulncheck + trivy)](plan/security.md) | `security` `infra` | 🔲 | M | Per-module workspace-aware `govulncheck`; `trivy image` against each built Dockerfile in PR CI. |
 | <a id="Q27"></a>Q27 | [Security operations runbook](plan/security.md) | `security` `docs` | 🔲 | S | Convert abuse heuristics from `05-security.md` into operator alerts (Secret list rate, eviction retries exhausted, etc). |
 | <a id="Q33"></a>Q33 | [K8s audit — §D CRD design polish](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | 🟡 Missing `+listType=map` on conditions, CEL immutability on `gitHubAppRef.name`/`securityProfile` (silent security downgrades), `MinItems`/`omitempty`/`categories`. See [k8s-best-practices.md §D](plan/k8s-best-practices.md#d-crd-design-polish-). |
+| <a id="Q65"></a>Q65 | [K8s audit §A6 — migrate GMC `apply*` helpers to CreateOrPatch](plan/k8s-best-practices.md#a-controller-correctness-) | `infra` | 🔲 | M | 🟡 Eleven `apply*` helpers do read-modify-write without `IsConflict` handling; migrate to `controllerutil.CreateOrPatch`. Split from Q32 §A. |
 | <a id="Q34"></a>Q34 | [K8s audit — §E Manifest defaults & HA](plan/k8s-best-practices.md#e-manifest-defaults--ha-) | `infra` | 🔲 | M | 🟡 GMC `replicas: 1`, no PDB/PriorityClass/`startupProbe`, ServiceMonitor/NP commented out (secure-by-default regression), no `terminationGracePeriodSeconds`. See [k8s-best-practices.md §E](plan/k8s-best-practices.md#e-manifest-defaults--ha-). |
 | <a id="Q35"></a>Q35 | [K8s audit — §F Observability & operational](plan/k8s-best-practices.md#f-observability--operational-) | `infra` | 🔲 | M | 🟡 Two logger libs (`slog`+`zap`) emit incompatible JSON; no tracing; AGC missing health probes; AGC hard-codes `zap.UseDevMode(true)` in production. See [k8s-best-practices.md §F](plan/k8s-best-practices.md#f-observability--operational-). |
 | <a id="Q36"></a>Q36 | [K8s audit — §G Supply chain (labels + build flags)](plan/k8s-best-practices.md#g-supply-chain-) | `security` `infra` | 🔲 | S | 🟡 G2 missing `org.opencontainers.image.*` labels on any Dockerfile (SBOM scanners miss provenance); G3 `go build` missing `-trimpath -ldflags=-buildid=` for SLSA-L3 reproducibility. G1 (worker image digest pin) closed 2026-06-01. |
@@ -69,7 +71,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q13"></a>Q13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🚫 | L | Blocked by [Q12](#Q12). **Highest "right thing" risk — project pitch is thousands of virtual sessions per AGC and nothing pins that claim.** Consider whether a minimal harness could run on the M3 Tier-C kind setup before [Q12](#Q12) lands. |
 | <a id="Q14"></a>Q14 | [M5 polaris/kube-bench posture scan](plan/milestone-5.md) | `milestone` `security` | 🚫 | S | Blocked by [Q12](#Q12). |
 | <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
-| <a id="Q59"></a>Q59 | [Pre-acquisition admission control (capacity-gated `acquirejob`)](plan/acquire-admission-control.md) | `infra` `speed` | 🔲 | L | AGC acquires jobs before checking pod capacity, so ceiling-held jobs are claimed-then-dropped under pressure. Add a capacity gate before `acquirejob` (not a durable queue — GitHub is the queue). Pairs with [Q32](#Q32) pod-watch. |
+| <a id="Q59"></a>Q59 | [Pre-acquisition admission control (capacity-gated `acquirejob`)](plan/acquire-admission-control.md) | `infra` `speed` | 🔲 | L | AGC acquires jobs before checking pod capacity, so ceiling-held jobs are claimed-then-dropped under pressure. Add a capacity gate before `acquirejob` (not a durable queue — GitHub is the queue). Pairs with [Q63](#Q63) pod-watch. |
 | <a id="Q45"></a>Q45 | Compress Progress table — drop Notes column | `docs` | 🔲 | S | Most cells just say "see plan" or restate the plan doc; the plan link in the row's name already carries the detail. Reduces edit surface and width. |
 | <a id="Q47"></a>Q47 | Append-by-default for new low-priority Queue rows | `docs` | 🔲 | S | Loosen "insert at right priority position" to "append unless re-prioritizing" so row order stays stable in diffs across parallel sessions. Re-prioritization becomes a deliberate separate commit. |
 | <a id="Q52"></a>Q52 | Markdown link + anchor check CI gate | `docs` `infra` `tests` | 🔲 | S | Add GitHub-slug-aware markdown link/anchor checker to `unit-test.yml`. The L2 validation script in [docs-six-layer-audit.md](plan/docs-six-layer-audit.md) is a working reference. |
