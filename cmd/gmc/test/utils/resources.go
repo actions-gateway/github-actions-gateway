@@ -32,13 +32,25 @@ func ApplyManifest(yaml string) error {
 }
 
 // CreateNamespace creates a namespace and applies the given labels.
+//
+// Every namespace created here is a GMC-managed tenant namespace, so it is
+// stamped with the actions-gateway.github.com/tenant=true marker label that the
+// namespace-psa-guard ValidatingAdmissionPolicy requires before the GMC may
+// patch Pod Security Admission labels on it (see
+// cmd/gmc/config/admission-policy/namespace-psa-guard.yaml). Without it the GMC
+// reconcile is denied at the PSA-stamping step and never provisions tenant
+// resources. A caller may override the marker by passing it in labels.
 func CreateNamespace(name string, labels map[string]string) {
 	cmd := exec.Command("kubectl", "create", "namespace", name, "--dry-run=client", "-o", "yaml")
 	yaml, err := Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "generate namespace yaml")
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply namespace %s", name)
 
+	merged := map[string]string{"actions-gateway.github.com/tenant": "true"}
 	for k, v := range labels {
+		merged[k] = v
+	}
+	for k, v := range merged {
 		cmd = exec.Command("kubectl", "label", "--overwrite", "namespace", name, fmt.Sprintf("%s=%s", k, v))
 		_, err = Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "label namespace %s", name)
