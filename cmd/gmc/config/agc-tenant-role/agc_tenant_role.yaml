@@ -32,13 +32,18 @@ rules:
 - apiGroups: [""]
   resources: ["pods/status"]
   verbs: ["get"]
-# list/watch on secrets is required: the agent pool enumerates its own
-# per-runner Secrets to reconcile pool state. RBAC does not support glob
-# resourceNames and the agent Secret names are dynamic, so we cannot
-# constrain by name. The "don't hold Secret bodies in process memory"
-# property from W3 is preserved at the AGC's manager level by
-# Client.Cache.DisableFor[*corev1.Secret] — reads go direct to the API
-# server rather than being held in the controller-runtime cache.
+# list on secrets is required: the agent pool enumerates its own per-runner
+# Secrets to reconcile pool state. RBAC does not support glob resourceNames and
+# the agent Secret names are dynamic, so we cannot constrain by name. To limit
+# what that list exposes, the pool enumerates with a metadata-only
+# PartialObjectMetadataList (k8s-best-practices §B B4 / Q57) — bulk lists return
+# names and labels only, never the agent credential bodies. Bodies are read
+# per-name via `get`. The "don't hold Secret bodies in process memory" property
+# from W3 is preserved at the AGC's manager level by
+# Client.Cache.DisableFor[*corev1.Secret] — both the metadata list and the
+# per-name gets go direct to the API server rather than being held in the
+# controller-runtime cache. `watch` is over-declared and unused (no Secret
+# informer is registered); its removal is tracked as Q26.
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "watch", "create", "delete"]

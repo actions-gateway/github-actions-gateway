@@ -168,12 +168,17 @@ func run() error {
 		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
 		//    the controller-runtime cache and hit the API server directly, so
 		//    Secret bodies never buffer in-process beyond the duration of a call.
+		//    This covers the agentpool's metadata-only PartialObjectMetadataList
+		//    too: its GVK resolves to Secret, which matches DisableFor.
 		// 2. SetupWithManager registers no Watches or WatchesMetadata for Secrets
 		//    — no Secret informer (full or metadata-only) is ever established, so
 		//    nothing caches Secret data or metadata in the background.
 		// 3. The AGC Role grants list+watch on Secrets (list needed by agentpool
-		//    for EnsureAgents; watch is over-declared and unused by the controller).
-		//    Any exfiltration via list requires live API server calls in the audit log.
+		//    to enumerate its agent Secrets; watch is over-declared and unused by
+		//    the controller). The agentpool lists metadata only and reads bodies
+		//    per-name via Get (k8s-best-practices §B B4 / Q57), so bulk lists never
+		//    transfer credential bodies; any read still requires live API server
+		//    calls in the audit log.
 		Client: client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: []client.Object{&corev1.Secret{}},

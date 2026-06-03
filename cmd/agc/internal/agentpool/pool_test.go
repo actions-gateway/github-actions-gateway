@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // deregErrRegistrar delegates Register to a StubRegistrar but always errors on Deregister.
@@ -278,4 +279,52 @@ func TestPool_EnsureAgents_StoresEncodedJITConfig(t *testing.T) {
 		assert.Equal(t, "aGVsbG8tand0LWNvbmZpZw==", string(s.Data["encodedJITConfig"]),
 			"Secret %s must carry the JIT blob", s.Name)
 	}
+}
+
+// TestPool_EnumeratesSecretsAsMetadataOnly pins the k8s-best-practices §B B4
+// fix: the pool must enumerate its agent Secrets with a metadata-only
+// PartialObjectMetadataList, never a full SecretList that would pull every
+// agent's credential body (private key, JIT config) in a single bulk read.
+// Bodies are fetched only per-name via Get, for the paths that genuinely need
+// them (reload, deregistration on scale-down/delete).
+func TestPool_EnumeratesSecretsAsMetadataOnly(t *testing.T) {
+	ctx := context.Background()
+
+	var listTypes []string
+	secretGets := 0
+	c := fake.NewClientBuilder().WithScheme(scheme()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				listTypes = append(listTypes, fmt.Sprintf("%T", list))
+				return cl.List(ctx, list, opts...)
+			},
+			Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*corev1.Secret); ok {
+					secretGets++
+				}
+				return cl.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+
+	reg := agentpool.NewStubRegistrar()
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.327.1",
+		[]string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
+
+	// Exercise every code path that enumerates Secrets: create, reload via
+	// LoadAgents, scale-down (which deregisters and deletes the excess), and
+	// teardown.
+	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
+	_, err := pool.LoadAgents(ctx)
+	require.NoError(t, err)
+	require.NoError(t, pool.EnsureAgents(ctx, 1, "token")) // scale down: 1 excess agent
+	require.NoError(t, pool.DeleteAll(ctx, "token"))
+
+	require.NotEmpty(t, listTypes, "pool must list Secrets at least once")
+	for _, ty := range listTypes {
+		assert.Equal(t, "*v1.PartialObjectMetadataList", ty,
+			"pool must enumerate Secrets as metadata only, but issued a %s", ty)
+	}
+	// reload after a 2-agent create reads both bodies per-name; the scale-down
+	// reads the excess agent's body to obtain its agentId for deregistration.
+	assert.Positive(t, secretGets, "bodies must be fetched per-name via Get, not via the bulk list")
 }
