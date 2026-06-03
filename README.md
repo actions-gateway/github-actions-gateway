@@ -1,6 +1,6 @@
 # GitHub Actions Gateway
 
-> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and give each tenant isolated egress IPs.
+> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and isolate every tenant's GitHub egress for per-team IP allowlisting and contained blast radius.
 
 Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`, all driven by one Kubernetes operator.
 
