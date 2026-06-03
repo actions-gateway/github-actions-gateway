@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q56"></a>Q56 | [K8s audit §B B2 — gate GMC cluster-wide `namespaces:patch`](plan/k8s-best-practices.md#b-rbac--cluster-wide-privilege-) | `security` | 🔲 | M | 🔴 GMC `namespaces:patch` cluster-wide lets a compromised GMC relabel `kube-system` PSA. Needs ValidatingAdmissionPolicy or per-CR Namespace webhook. Split from Q30. |
 | <a id="Q57"></a>Q57 | [K8s audit §B B4 — AGC `secrets:list` metadata-only watch](plan/k8s-best-practices.md#b-rbac--cluster-wide-privilege-) | `security` | 🔲 | M | 🟡 AGC `listSecrets` (cache disabled) returns full Secret bodies on every list. Fix: `PartialObjectMetadata` watch + per-name `Get`. Split from Q30. |
 | <a id="Q31"></a>Q31 | [K8s audit — §C Worker/proxy pod security defaults](plan/k8s-best-practices.md#c-worker--proxy-pod-security-defaults-) | `security` | 🔲 | S | 🔴 Worker/proxy pods get no default `SecurityContext` (`runAsNonRoot`/RO-rootfs/cap-drop/seccomp) or resource limits; blocks PSA `restricted`. See [k8s-best-practices.md §C](plan/k8s-best-practices.md#c-worker--proxy-pod-security-defaults-). |
 | <a id="Q39"></a>Q39 | Go best-practices: fix CLAUDE.md async-channel violation | `bug` | 🔲 | S | `cmd/agc/internal/listener/goroutine.go:121` `StartRenewLoop` hides done channel inside `stop` closure — CLAUDE.md async-channel rule violation. See [go-best-practices.md §2](plan/go-best-practices.md#2-async-channel-violation-startrenewloop). |
