@@ -165,6 +165,37 @@ host namespace sharing or expose Kubernetes API credentials inside
 the worker pod. These invariants are non-negotiable across all
 profiles.
 
+### Secure-by-default pod SecurityContext and resources
+
+Floor invariants above are non-negotiable. *On top of them*, the AGC
+stamps a secure-by-default `SecurityContext` and resource requests/limits
+onto every worker pod. These defaults **gap-fill only** — an explicit
+value in the tenant `PodTemplate` always wins, so a tenant can opt out of
+any individual default (e.g. `runAsNonRoot: false` for a root-based image)
+without escalating to the `privileged` profile.
+
+The hardening scales to the namespace's PSA profile (propagated to the AGC
+via the `SECURITY_PROFILE` env var the GMC sets on the AGC Deployment):
+
+| Profile | SecurityContext defaults stamped |
+|---|---|
+| `baseline` *(default)* | Pod-level `runAsNonRoot: true` + `seccompProfile: RuntimeDefault`. Deliberately **not** `allowPrivilegeEscalation: false` or capability drop — `baseline` PSA permits in-job privilege escalation (`sudo`) and many CI jobs rely on it. |
+| `restricted` | The above, plus the per-container PSA-restricted floor: `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`. Without these the namespace's PodSecurity admission would reject the pod, so the AGC stamps them to make the profile usable rather than self-blocking. |
+| `privileged` | None — this profile exists precisely so DinD / host-capability workloads can opt in via their own `PodTemplate`. |
+
+`readOnlyRootFilesystem` is **not** defaulted on any profile: the GitHub
+Actions runner writes to its work, diagnostics, and home directories at
+runtime, so a read-only root would break essentially every job, and it is
+not part of the PSA `restricted` floor. Tenants who can run with a
+read-only root may set it (plus the writable `emptyDir` mounts the runner
+needs) explicitly in their `PodTemplate`.
+
+Resource requests **and** limits default to `500m` CPU / `1Gi` memory on
+every profile when the tenant container declares neither. This moves a
+worker pod off Best-Effort QoS — the first thing the kubelet evicts under
+node pressure, which otherwise burns the eviction-retry budget fast. A
+single-container worker pod with the defaults is Guaranteed QoS.
+
 ---
 
 ← [Operational Flows](04-operational-flows.md) | [Back to index](README.md) | Next: [Implementation Phases →](06-implementation-phases.md)

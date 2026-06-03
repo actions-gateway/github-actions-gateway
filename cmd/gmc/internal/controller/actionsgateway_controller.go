@@ -610,10 +610,7 @@ const TenantNamespaceMarkerLabel = "actions-gateway.github.com/tenant"
 // invariant. Without this, admin edits would silently round-trip every
 // reconcile with no operator-visible signal.
 func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
-	profile := ag.Spec.SecurityProfile
-	if profile == "" {
-		profile = "baseline"
-	}
+	profile := securityProfileOrDefault(ag.Spec.SecurityProfile)
 	desired := corev1ac.Namespace(ag.Namespace).WithLabels(map[string]string{
 		"pod-security.kubernetes.io/enforce":         profile,
 		"pod-security.kubernetes.io/enforce-version": "latest",

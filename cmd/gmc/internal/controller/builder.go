@@ -64,9 +64,24 @@ const (
 	// covers all Kubernetes Services (e.g. fakegithub.e2e-infra.svc.cluster.local) so
 	// the proxy is only used for external (GitHub.com) traffic as intended.
 	defaultNoProxy = "svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12"
+
+	// defaultSecurityProfile is the PSA enforcement level applied when an
+	// ActionsGateway omits spec.securityProfile. Mirrors the CRD's
+	// +kubebuilder:default; kept here so hand-applied CRs without the field
+	// still get baseline rather than an empty (unenforced) profile.
+	defaultSecurityProfile = "baseline"
 )
 
 func ptr[T any](v T) *T { return &v }
+
+// securityProfileOrDefault returns the configured security profile, falling
+// back to defaultSecurityProfile when unset.
+func securityProfileOrDefault(profile string) string {
+	if profile == "" {
+		return defaultSecurityProfile
+	}
+	return profile
+}
 
 func managedLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
 	return map[string]string{
@@ -446,6 +461,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		// AGC surfaces it). Symmetric to the proxy-CA mount the AGC itself
 		// already consumes for outbound API calls.
 		{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecretName},
+		// SECURITY_PROFILE mirrors spec.securityProfile so the AGC's pod
+		// provisioner scales the secure-by-default worker SecurityContext to the
+		// namespace's PSA level. Default to baseline when unset (the API server
+		// applies the CRD default, but be explicit so a hand-applied CR without
+		// the field still gets the hardened defaults rather than none).
+		{Name: "SECURITY_PROFILE", Value: securityProfileOrDefault(ag.Spec.SecurityProfile)},
 	}
 	env = append(env, extraEnv...)
 

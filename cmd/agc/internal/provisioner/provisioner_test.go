@@ -20,6 +20,7 @@ import (
 	"go.uber.org/goleak"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -1643,3 +1644,162 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
 }
+
+// runAndGetPod fires the provisioner's job handler for rg in a goroutine,
+// waits for the worker pod to be created, then completes it so the handler
+// returns cleanly (keeping goleak happy). It returns the created pod.
+func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner, fc client.Client, rg *v1alpha1.RunnerGroup, planID, ns string) *corev1.Pod {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", planID, stubPayload(1), "")
+	}()
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, ns) != nil
+	}, 2*time.Second, 5*time.Millisecond)
+	pod := findPod(ctx, t, fc, ns)
+	require.NotNil(t, pod)
+	completePod(ctx, t, fc, ns, pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+	return pod
+}
+
+// TestBuildPod_BaselineSecurityDefaults verifies that under the default
+// (baseline) profile the worker pod gets pod-level runAsNonRoot + seccomp
+// RuntimeDefault, but NOT the per-container allowPrivilegeEscalation/cap-drop
+// floor — baseline PSA permits in-job privilege escalation (sudo), and many CI
+// jobs rely on it.
+func TestBuildPod_BaselineSecurityDefaults(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	// SecurityProfile left empty — exercises the empty-string -> baseline path.
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-baseline", "team-a")
+
+	require.NotNil(t, pod.Spec.SecurityContext)
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
+	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
+	require.NotNil(t, pod.Spec.SecurityContext.SeccompProfile)
+	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, pod.Spec.SecurityContext.SeccompProfile.Type)
+
+	// No restricted-only container floor under baseline.
+	sc := pod.Spec.Containers[0].SecurityContext
+	if sc != nil {
+		assert.Nil(t, sc.AllowPrivilegeEscalation, "baseline must not block in-job privilege escalation")
+		assert.Nil(t, sc.Capabilities, "baseline must not drop capabilities")
+	}
+}
+
+// TestBuildPod_RestrictedSecurityDefaults verifies that the restricted profile
+// stamps the full PSA-restricted container floor so the namespace's PodSecurity
+// admission accepts the pod.
+func TestBuildPod_RestrictedSecurityDefaults(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.SecurityProfile = "restricted"
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-restricted", "team-a")
+
+	require.NotNil(t, pod.Spec.SecurityContext)
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
+	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
+
+	sc := pod.Spec.Containers[0].SecurityContext
+	require.NotNil(t, sc)
+	require.NotNil(t, sc.AllowPrivilegeEscalation)
+	assert.False(t, *sc.AllowPrivilegeEscalation)
+	require.NotNil(t, sc.Capabilities)
+	assert.Equal(t, []corev1.Capability{"ALL"}, sc.Capabilities.Drop)
+	require.NotNil(t, sc.SeccompProfile)
+	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, sc.SeccompProfile.Type)
+}
+
+// TestBuildPod_PrivilegedSkipsSecurityDefaults verifies that the privileged
+// profile stamps no SecurityContext defaults (so DinD/host-cap workloads can
+// opt in via their PodTemplate), while resource defaults still apply.
+func TestBuildPod_PrivilegedSkipsSecurityDefaults(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.SecurityProfile = "privileged"
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-priv", "team-a")
+
+	assert.Nil(t, pod.Spec.SecurityContext, "privileged profile must not stamp pod SecurityContext")
+	assert.Nil(t, pod.Spec.Containers[0].SecurityContext, "privileged profile must not stamp container SecurityContext")
+
+	// Resource defaults apply on every profile.
+	assert.Equal(t, defaultCPU(), pod.Spec.Containers[0].Resources.Requests.Cpu().String())
+}
+
+// TestBuildPod_ResourceDefaults verifies default CPU/memory requests+limits are
+// stamped when the tenant omits them, yielding Guaranteed QoS.
+func TestBuildPod_ResourceDefaults(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-res", "team-a")
+
+	res := pod.Spec.Containers[0].Resources
+	assert.Equal(t, "500m", res.Requests.Cpu().String())
+	assert.Equal(t, "1Gi", res.Requests.Memory().String())
+	assert.Equal(t, "500m", res.Limits.Cpu().String())
+	assert.Equal(t, "1Gi", res.Limits.Memory().String())
+}
+
+// TestBuildPod_TenantOverridesPreserved verifies the defaults are gap-fill only:
+// a tenant's explicit runAsNonRoot:false and explicit resources both survive.
+func TestBuildPod_TenantOverridesPreserved(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+	runAsRoot := false
+	rg.Spec.PodTemplate.Spec.SecurityContext = &corev1.PodSecurityContext{RunAsNonRoot: &runAsRoot}
+	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{
+		Name: "runner",
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m")},
+		},
+	}}
+
+	pod := runAndGetPod(ctx, t, p, fc, rg, "plan-override", "team-a")
+
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
+	assert.False(t, *pod.Spec.SecurityContext.RunAsNonRoot, "tenant runAsNonRoot:false must be preserved")
+	// Seccomp still gap-filled because the tenant left it unset.
+	require.NotNil(t, pod.Spec.SecurityContext.SeccompProfile)
+	// Tenant resources preserved; no default stamped over them.
+	assert.Equal(t, "250m", pod.Spec.Containers[0].Resources.Requests.Cpu().String())
+	assert.True(t, pod.Spec.Containers[0].Resources.Limits.Cpu().IsZero(), "tenant-set resources must not be overwritten with defaults")
+}
+
+// TestBuildPod_RecommendedLabels verifies worker pods carry the recommended
+// app.kubernetes.io/* labels for tooling interop.
+func TestBuildPod_RecommendedLabels(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-labels", "team-a")
+
+	assert.Equal(t, "actions-runner", pod.Labels["app.kubernetes.io/name"])
+	assert.Equal(t, "mygroup", pod.Labels["app.kubernetes.io/instance"])
+	assert.Equal(t, "runner", pod.Labels["app.kubernetes.io/component"])
+	assert.Equal(t, "actions-gateway", pod.Labels["app.kubernetes.io/part-of"])
+	// Existing NetworkPolicy-matching label must be unchanged.
+	assert.Equal(t, "workload", pod.Labels["actions-gateway/component"])
+}
+
+// defaultCPU returns the default worker CPU request as a string for assertions.
+func defaultCPU() string { return "500m" }

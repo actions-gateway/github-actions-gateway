@@ -232,6 +232,10 @@ func run() error {
 	// pod. Empty (the default) disables the mount and is appropriate for
 	// any deployment without a per-tenant egress proxy.
 	prov.ProxyTLSSecretName = os.Getenv("PROXY_TLS_SECRET_NAME")
+	// SECURITY_PROFILE mirrors the tenant's ActionsGateway.spec.securityProfile.
+	// The GMC sets it on the AGC Deployment so the provisioner can scale the
+	// secure-by-default worker SecurityContext to the namespace's PSA level.
+	prov.SecurityProfile = os.Getenv("SECURITY_PROFILE")
 	prov.HTTPClient = httpClient
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img
