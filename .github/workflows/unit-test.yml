@@ -19,7 +19,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Fine-grained path gate. The coarse paths-ignore above still lets non-code,
+  # non-docs files (e.g. .gitignore, LICENSE) trigger this workflow, so classify
+  # the diff and skip the jobs when nothing they cover changed. Mirrors
+  # e2e-test.yml. On push to main the jobs always run, so outputs only matter on PRs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      status: ${{ steps.filter.outputs.status }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'broker/**'
+              - 'cmd/**'
+              - 'githubapp/**'
+              - 'test/**'
+              - 'vendor/**'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'tools/**'
+              - '.golangci.yml'
+              - 'Makefile'
+              - '.github/workflows/unit-test.yml'
+            status:
+              - 'docs/STATUS.md'
+              - 'scripts/lint-status.sh'
+              - '.github/workflows/unit-test.yml'
+
   lint:
+    needs: [changes]
+    # gofmt/golangci need code; lint-status needs the STATUS.md filter.
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -58,6 +96,8 @@ jobs:
       - name: lint STATUS.md
         run: make lint-status
   unit-test:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
