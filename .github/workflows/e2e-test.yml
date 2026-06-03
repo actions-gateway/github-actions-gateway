@@ -114,16 +114,20 @@ jobs:
       - name: Load or pull kind node image
         run: |
           tar=/tmp/kind-node-image/node.tar
+          node_tag="${KIND_NODE_IMAGE%@*}"                                  # kindest/node:vX.Y.Z
+          node_digest_ref="${KIND_NODE_IMAGE%%:*}@${KIND_NODE_IMAGE##*@}"   # kindest/node@sha256:...
           if [[ -f "$tar" ]]; then
             echo "==> loading kind node image from cache"
             docker load -i "$tar"
           else
             echo "==> pulling kind node image ${KIND_NODE_IMAGE}"
             docker pull "${KIND_NODE_IMAGE}"
+            # `docker pull name:tag@digest` stores the image under the digest ref
+            # only, not the tag — re-tag so it can be saved by (and on a later run
+            # loaded/used as) the tag-only ref kind is given.
+            docker tag "$node_digest_ref" "$node_tag"
             mkdir -p /tmp/kind-node-image
-            # Save by tag (digest refs aren't valid `docker save` arguments); the
-            # content digest survives save/load so kind still matches it locally.
-            docker save -o "$tar" "${KIND_NODE_IMAGE%@*}"
+            docker save -o "$tar" "$node_tag"
           fi
 
       - name: Start local image registry
