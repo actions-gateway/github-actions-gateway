@@ -4,11 +4,11 @@ Backlog items tracked in `docs/STATUS.md` Queue rows #38, #39, #40, #41. Each
 item is independently shippable. None block any milestone. Pick them up
 opportunistically when touching the affected packages.
 
-## 1. Unify Go versions
+## 1. Unify Go versions ✅ DONE
 
-**Queue row:** #38 · **Size:** S · **Label:** `infra`
+**Queue row:** #38 · **Size:** S · **Label:** `infra` · **Status:** shipped — all 9 `go.mod` files pinned to `1.26.3` (matches `go.work` and CI's `go-version-file: go.work`).
 
-Three distinct `go` directives are in use across 9 `go.mod` files:
+Three distinct `go` directives were in use across 9 `go.mod` files:
 
 | Version | Modules |
 |---|---|
@@ -17,16 +17,19 @@ Three distinct `go` directives are in use across 9 `go.mod` files:
 | `1.26.3`  | `cmd/worker` (matches `go.work`) |
 
 CLAUDE.md is explicit: *"All go modules in the repo must use the same Go
-version."* Pin every `go.mod` to `1.26.3` (the highest currently in use and
-the version `go.work` already targets).
+version."* Every `go.mod` is now pinned to `1.26.3` (the highest previously
+in use and the version `go.work` already targets).
 
-While editing the `go.mod` files, also drop the `replace` directives that
-are now redundant because the workspace covers them — likely candidates are
-`broker/`, `cmd/agc/`, `cmd/gmc/`, `cmd/probe/`. Verify with
-`go work edit -json` before deleting.
+The per-module `replace` directives in `broker/`, `cmd/agc/`, `cmd/gmc/`,
+`cmd/probe/` were **kept**, not dropped. They are not redundant under this
+vendored workspace: the cross-module `require`s use the
+`v0.0.0-00010101000000-000000000000` placeholder, and `go work vendor`
+cannot resolve those to local paths from the `use` directives alone — it
+needs the `replace`s. Removing them breaks `go work vendor` and the
+vendored Docker builds.
 
-**Acceptance:** `grep -h '^go ' **/go.mod | sort -u` returns a single line.
-CI green.
+**Acceptance:** `grep -h '^go ' **/go.mod | sort -u` returns a single line
+(`go 1.26.3`). Build + vet + unit tests green across all modules.
 
 ## 2. Async-channel violation: `StartRenewLoop` ✅ DONE
 

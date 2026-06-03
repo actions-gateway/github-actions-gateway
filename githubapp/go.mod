@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/githubapp
 
-go 1.26
+go 1.26.3
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
