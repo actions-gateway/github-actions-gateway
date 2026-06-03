@@ -17,7 +17,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Fine-grained path gate. The coarse paths-ignore above still lets non-code,
+  # non-docs files (e.g. .gitignore, LICENSE) trigger this workflow, so classify
+  # the diff and skip the test job when no code changed. Mirrors e2e-test.yml.
+  # On push to main the job always runs, so the output only matters on PRs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'broker/**'
+              - 'cmd/**'
+              - 'githubapp/**'
+              - 'test/**'
+              - 'vendor/**'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'Makefile'
+              - '.github/workflows/integration-test.yml'
+
   integration-test:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
