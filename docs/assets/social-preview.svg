@@ -38,22 +38,22 @@
   <text x="80" y="448" fill="#8B949E" font-size="22" font-weight="400">An Actions Runner Controller (ARC) alternative.</text>
 
   <!-- Feature pills (ARC differentiators) -->
-  <g font-size="21" font-weight="600">
+  <g font-size="20" font-weight="600">
     <g>
-      <rect x="80"  y="470" width="268" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="214" y="503" fill="#9FE7DC" text-anchor="middle">Guaranteed scheduling</text>
+      <rect x="80"  y="470" width="328" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="244" y="503" fill="#9FE7DC" text-anchor="middle">Floor + opportunistic burst</text>
     </g>
     <g>
-      <rect x="364" y="470" width="256" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="492" y="503" fill="#9FB8F0" text-anchor="middle">Auto eviction retry</text>
+      <rect x="422" y="470" width="246" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="545" y="503" fill="#9FB8F0" text-anchor="middle">Auto eviction retry</text>
     </g>
     <g>
-      <rect x="636" y="470" width="276" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="774" y="503" fill="#9FE7DC" text-anchor="middle">Per-tenant egress IPs</text>
+      <rect x="682" y="470" width="268" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="816" y="503" fill="#9FE7DC" text-anchor="middle">Per-tenant egress IPs</text>
     </g>
     <g>
-      <rect x="928" y="470" width="312" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="1084" y="503" fill="#9FB8F0" text-anchor="middle">4,000&#215; lighter listeners</text>
+      <rect x="964" y="470" width="300" height="52" rx="26" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="1114" y="503" fill="#9FB8F0" text-anchor="middle">4,000&#215; lighter listeners</text>
     </g>
   </g>
 
