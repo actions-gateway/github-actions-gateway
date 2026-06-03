@@ -75,6 +75,50 @@ kubectl get actionsgateway -n <namespace> <name> -o jsonpath='{.status.condition
 
 ---
 
+## Tenant Namespace Missing the Managed-Tenant Marker Label
+
+**Symptoms.** An `ActionsGateway` never becomes `Ready`. `kubectl describe` shows a
+`Warning` event with reason `NamespaceMarkerMissing`, and the GMC log reports a
+`Forbidden` error stamping Pod Security Admission labels, citing the
+`namespace-psa-guard` admission policy. This is common immediately after upgrading a
+cluster whose tenant namespaces predate the policy (see
+[Upgrade — Migration Notes](upgrade.md#migration-notes)).
+
+**Cause.** The GMC's cluster-wide `namespaces:patch` grant is gated by the
+`namespace-psa-guard` ValidatingAdmissionPolicy, which denies the GMC any namespace
+that is not labelled `actions-gateway.github.com/tenant: "true"`. The label confines
+the grant to managed tenants so a compromised GMC cannot relabel `kube-system` PSA
+(see [Security §5.1/§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
+The GMC never sets this label itself — a trusted administrator must apply it.
+
+**Diagnostics.**
+
+```sh
+# Confirm the warning event
+kubectl describe actionsgateway -n <namespace> <name> | grep -A2 NamespaceMarkerMissing
+
+# Check whether the marker label is present
+kubectl get namespace <namespace> \
+  -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'   # want: true
+
+# Confirm the policy and its binding are installed
+kubectl get validatingadmissionpolicy gmc-namespace-psa-guard
+kubectl get validatingadmissionpolicybinding gmc-namespace-psa-guard-binding
+```
+
+**Resolution.** Apply the marker label as an administrator, then the GMC reconciler
+retries automatically:
+
+```sh
+kubectl label namespace <namespace> actions-gateway.github.com/tenant=true
+```
+
+If the GMC's ServiceAccount is installed under a non-default namespace or name, also
+confirm the policy's `matchConditions` username
+(`system:serviceaccount:gmc-system:gmc-controller-manager`) matches your install.
+
+---
+
 ## AGC CrashLoopBackOff or Not Acquiring Jobs
 
 **Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_active_sessions` is zero and `actions_gateway_jobs_acquired_total` is not incrementing even when jobs are queued.
