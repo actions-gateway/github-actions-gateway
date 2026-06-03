@@ -14,6 +14,8 @@ Make the smallest change that achieves the goal. If you notice problems outside 
 - New near-term or long-term work → add to the Queue in `docs/STATUS.md` in priority order.
 - Long-horizon non-commitments → `docs/design/appendix-g-future-enhancements.md`.
 
+Capture knowledge durably, don't leave it in chat. When the user states a standing preference or decision, persist it in the repo (CLAUDE.md, the relevant `docs/` file, or memory) rather than applying it once and moving on. When follow-up work surfaces mid-task, record it on the Queue — including the *why* of any decision it depends on — instead of only mentioning it in the response.
+
 Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
 
 ## Workflow
@@ -72,6 +74,8 @@ Examples of regressions that must not silently become defaults:
 - Removing a validation, admission check, or network policy
 - Relaxing a pod security profile
 
+**Keep secrets out of environment variables.** Prefer writing a secret to a file and reading it from there, deleting the file as soon as it is no longer needed (e.g. `mktemp` + `--from-file`), over passing it through an env var. Env vars leak into process listings, logs, and child processes.
+
 When in doubt, ask before shipping.
 
 ## Documentation conventions
@@ -89,6 +93,7 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 - After pushing, check whether a PR exists (`gh pr view`). If one does, update its description with `gh pr edit` to reflect any new commits.
 - Always commit `docs/STATUS.md` changes in their own isolated commit, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating it makes rebase conflicts trivial to resolve.
 - If a change doesn't belong in the current PR, open a separate PR for it. Working multiple PRs in parallel is fine and preferable to bundling unrelated concerns.
+- Act only on your own branch and PR. Never re-run, edit, or push to a PR or branch owned by another session. When CI fails on another session's PR, reproduce the failure locally rather than touching their PR.
 - Queue items in `docs/STATUS.md` have `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — the `Q` is what stops GitHub from auto-linking the number to PR/issue 44.
 
 ## Agent reference docs
