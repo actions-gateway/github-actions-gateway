@@ -35,6 +35,30 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
+### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
+
+The GMC's cluster-wide `namespaces:patch` grant is now gated by the
+`namespace-psa-guard` ValidatingAdmissionPolicy (shipped in
+`cmd/gmc/config/admission-policy/namespace-psa-guard.yaml`, applied by `make deploy`).
+It denies the GMC any namespace patch unless the namespace already carries
+`actions-gateway.github.com/tenant: "true"`. **Existing tenant namespaces created
+before this change do not have the label**, so after upgrade the GMC cannot stamp
+their Pod Security Admission labels and each affected `ActionsGateway` will emit a
+`NamespaceMarkerMissing` warning event.
+
+Before (or immediately after) upgrading, label every existing tenant namespace:
+
+```sh
+# Label all namespaces that currently hold an ActionsGateway CR.
+kubectl get actionsgateway -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\n"}{end}' \
+  | sort -u \
+  | xargs -I{} kubectl label namespace {} actions-gateway.github.com/tenant=true --overwrite
+```
+
+For a phased rollout where you cannot label every namespace up front, temporarily set
+the binding's `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are
+logged but not enforced, label the namespaces, then restore `[Deny]`.
+
 ### AGC Deployment renamed from `actions-gateway-agc` to `actions-gateway-controller`
 
 Deployments and resources created by the GMC are now named `actions-gateway-controller`

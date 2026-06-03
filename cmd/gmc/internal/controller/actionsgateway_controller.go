@@ -589,6 +589,16 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 // be detected as a conflict on the next reconcile.
 const psaFieldManager = "actionsgateway-controller-psa"
 
+// TenantNamespaceMarkerLabel is the label a trusted administrator must apply to a
+// tenant namespace to mark it as managed by the GMC. The namespace-psa-guard
+// ValidatingAdmissionPolicy (config/admission-policy/namespace-psa-guard.yaml)
+// denies the GMC ServiceAccount any namespace patch unless the existing namespace
+// already carries this label set to "true" — confining the GMC's cluster-wide
+// namespaces:patch grant to managed tenants so a compromised GMC cannot relabel
+// kube-system PSA (k8s best-practices audit finding B2 / Queue Q56). The GMC never
+// sets this label itself; doing so would defeat the control.
+const TenantNamespaceMarkerLabel = "actions-gateway.github.com/tenant"
+
 // applyNamespacePSA stamps Pod Security Admission labels on the tenant namespace
 // using Server-Side Apply so the controller declares ownership only of the six
 // PSA label keys. Other labels on the namespace are left untouched.
@@ -616,6 +626,18 @@ func (r *ActionsGatewayReconciler) applyNamespacePSA(ctx context.Context, ag *gm
 	err := r.Apply(ctx, desired, client.FieldOwner(psaFieldManager))
 	if err == nil {
 		return nil
+	}
+	if apierrors.IsForbidden(err) {
+		// The namespace-psa-guard ValidatingAdmissionPolicy denied the patch —
+		// almost always because the tenant namespace was never labeled as managed.
+		// Surface an actionable signal rather than an opaque reconcile error; a
+		// retry will not help until the operator applies the marker label.
+		if r.Recorder != nil {
+			r.Recorder.Eventf(ag, nil, corev1.EventTypeWarning, "NamespaceMarkerMissing", "ApplyPSALabels",
+				"Cannot stamp Pod Security Admission labels on namespace %q: the admission policy denied the update. Label the namespace with %s=true to mark it a managed tenant namespace, then reconciliation will proceed: %v",
+				ag.Namespace, TenantNamespaceMarkerLabel, err)
+		}
+		return err
 	}
 	if !apierrors.IsConflict(err) {
 		return err

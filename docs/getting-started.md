@@ -19,7 +19,18 @@ make install
 make deploy IMG=<registry>/gmc:tag
 ```
 
-## 2. Create a GitHub App credential Secret
+## 2. Create and mark the tenant namespace
+
+Create the tenant namespace and mark it as managed by the GMC. The marker label
+authorizes the GMC to stamp Pod Security Admission labels on it; the
+`namespace-psa-guard` admission policy denies the GMC any namespace that lacks it.
+
+```sh
+kubectl create namespace team-a
+kubectl label namespace team-a actions-gateway.github.com/tenant=true
+```
+
+## 3. Create a GitHub App credential Secret
 
 Create this in the tenant's namespace:
 
@@ -39,7 +50,7 @@ stringData:
     -----END RSA PRIVATE KEY-----
 ```
 
-## 3. Create an ActionsGateway resource
+## 4. Create an ActionsGateway resource
 
 ```yaml
 apiVersion: actions.gateway/v1alpha1

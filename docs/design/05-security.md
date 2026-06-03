@@ -10,7 +10,7 @@ The two-tier architecture introduces both stronger isolation guarantees and new 
 
 | Threat Vector | Impact | Mitigation Strategy |
 | --- | --- | --- |
-| **GMC Privilege Escalation** (Blast Radius: All Tenants) | Critical | The GMC's ClusterRole is tightly scoped: it may read `ActionsGateway` CRs cluster-wide, but write access for Deployments, Roles, RoleBindings, NetworkPolicies, and ResourceQuotas is limited to namespaces where an `ActionsGateway` CR exists. No pod exec or cluster-wide Secret read. **Explicit blast radius if compromised:** a compromised GMC can (a) enumerate every `ActionsGateway` CR in the cluster, learning each tenant's `gitHubAppRef` name and namespace; (b) list/watch Secret *metadata* (names and namespaces only — see below); (c) issue `get` on specific Secrets to read GitHub App private keys; (d) deploy arbitrary workloads into any namespace that already has an `ActionsGateway` CR (but not into namespaces without one). It CANNOT exec into pods, read Secrets outside the `gitHubAppRef` list, or create new namespaces. GMC pod runs with non-root user, read-only root filesystem, no host mounts, and `seccompProfile: {type: RuntimeDefault}`. Image is digest-pinned. Treat the GMC pod as a Tier-0 workload for monitoring and access. |
+| **GMC Privilege Escalation** (Blast Radius: All Tenants) | Critical | The GMC's ClusterRole is tightly scoped: it may read `ActionsGateway` CRs cluster-wide, but write access for Deployments, Roles, RoleBindings, NetworkPolicies, and ResourceQuotas is limited to namespaces where an `ActionsGateway` CR exists. No pod exec or cluster-wide Secret read. **Explicit blast radius if compromised:** a compromised GMC can (a) enumerate every `ActionsGateway` CR in the cluster, learning each tenant's `gitHubAppRef` name and namespace; (b) list/watch Secret *metadata* (names and namespaces only — see below); (c) issue `get` on specific Secrets to read GitHub App private keys; (d) deploy arbitrary workloads into any namespace that already has an `ActionsGateway` CR (but not into namespaces without one). It CANNOT exec into pods, read Secrets outside the `gitHubAppRef` list, or create new namespaces. The GMC holds cluster-wide `namespaces:patch` only to stamp Pod Security Admission labels, but a `ValidatingAdmissionPolicy` (`namespace-psa-guard`) confines that grant to namespaces an administrator has marked `actions-gateway.github.com/tenant: "true"` and to the six `pod-security.kubernetes.io/*` label keys, so a compromised GMC cannot relabel `kube-system` PSA to `privileged` (see [§5.3](#53-security-profiles-and-the-privileged-opt-in)). GMC pod runs with non-root user, read-only root filesystem, no host mounts, and `seccompProfile: {type: RuntimeDefault}`. Image is digest-pinned. Treat the GMC pod as a Tier-0 workload for monitoring and access. |
 | **Admission Webhook Unavailability or Bypass** | Medium | The reserved-namespace validating webhook serves as a safety check, not a security boundary — namespace isolation is enforced by RBAC and NetworkPolicy regardless of webhook state. The webhook uses `failurePolicy: Fail` so requests are rejected when the webhook pod is unhealthy rather than silently bypassed. Serving certificates are managed by cert-manager with automatic rotation; the CA bundle is injected via `caBundle` from the cert-manager-managed Secret. Webhook pod runs `replicas: 2` behind a Service with `podAntiAffinity` to survive single-node loss without stalling tenant onboarding. |
 | **Tenant Namespace Escape via Overpermissioned AGC** | Critical | Each AGC's ServiceAccount is bound by a RoleBinding limited to its own namespace. The AGC cannot list or touch resources in any other tenant namespace. |
 | **Cross-Tenant GitHub App Credential Leakage** | High | `ActionsGateway` is namespace-scoped, so a tenant's `gitHubAppRef` defaults to their own namespace — another tenant cannot reference it. The GMC mounts credentials into the AGC Pod only; worker pods never have access to the Secret object. Secrets are immutable; rotation creates a new Secret and updates the CR reference, producing a clean Deployment rollout. Old Secrets are not readable by running Pods once the rollout completes. The GMC's ClusterRole grants Secret `get` on specific names only. **Two-layer cache isolation:** the GMC uses `WatchesMetadata` (not a full Secret watch) so the in-process informer cache holds only Secret ObjectMeta (name, namespace, resourceVersion — no `.data`); and `client.Cache.DisableFor[*corev1.Secret]` ensures `r.Get()` calls bypass the cache entirely and hit the API server directly, so actual key material is never resident in memory beyond the duration of a single reconcile call. |
@@ -56,6 +56,36 @@ stamps the corresponding label on the tenant namespace.
 The default is `baseline`. A tenant must explicitly set
 `securityProfile: privileged` on the `ActionsGateway` to allow
 privileged worker pods — there is no silent path to it.
+
+### Constraining the GMC's PSA-stamping privilege
+
+Stamping a PSA label on a namespace requires `patch` on `namespaces`,
+which is cluster-scoped — RBAC cannot express "only namespaces the GMC
+manages". Left unconstrained, a compromised GMC pod could relabel
+`kube-system` (or any namespace) to `privileged`. Two controls confine
+the grant:
+
+- **A trusted marker label.** A namespace is eligible for GMC
+  management only if an administrator has labelled it
+  `actions-gateway.github.com/tenant: "true"`. This is a tenant
+  onboarding pre-condition (see
+  [Tenant Onboarding](../operations/tenant-onboarding.md)). The GMC
+  never sets this label itself — doing so would defeat the control.
+- **The `namespace-psa-guard` ValidatingAdmissionPolicy.** Scoped to
+  the GMC ServiceAccount only, it denies any namespace `UPDATE` unless
+  the *existing* namespace already carries the marker (read from
+  `oldObject`, which the requester cannot forge), and denies any change
+  to a namespace label other than the six `pod-security.kubernetes.io/*`
+  keys or to any annotation. It ships in
+  `cmd/gmc/config/admission-policy/namespace-psa-guard.yaml` and is
+  applied by `make deploy`.
+
+The policy deliberately does **not** ban writing `privileged` outright,
+because `securityProfile: privileged` is a supported per-tenant opt-in
+and the GMC legitimately stamps it on those tenants' namespaces. The
+marker scope confines the blast radius to GMC-managed tenant
+namespaces; pinning a tenant's profile against silent downgrade within
+its own namespace is a separate concern tracked in the backlog.
 
 ### Mixing privileged and non-privileged workloads
 

@@ -10,7 +10,12 @@ This checklist walks from pre-conditions through first successful job. For the f
 
 Before beginning, confirm all of the following:
 
-- [ ] **Namespace exists.** The tenant's Kubernetes namespace has been created: `kubectl get namespace <tenant-namespace>`.
+- [ ] **Namespace exists and is marked as a managed tenant.** The tenant's Kubernetes namespace has been created and carries the marker label `actions-gateway.github.com/tenant=true`:
+  ```sh
+  kubectl create namespace <tenant-namespace>   # if it does not exist yet
+  kubectl label namespace <tenant-namespace> actions-gateway.github.com/tenant=true
+  ```
+  This label is what authorizes the GMC to stamp Pod Security Admission labels on the namespace. The `namespace-psa-guard` admission policy denies the GMC any namespace it has *not* been marked for, so an unlabelled namespace will leave the `ActionsGateway` stuck with a `NamespaceMarkerMissing` warning event. Apply the label with a trusted (administrator) identity — the GMC must never set it itself. Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'` → `true`.
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
