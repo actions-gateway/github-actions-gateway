@@ -67,7 +67,7 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
 6. **Stage:** The AGC commits a short-lived Kubernetes Secret containing the decrypted job payload to the tenant namespace, then creates the Ephemeral Worker Pod mounted with that Secret and `automountServiceAccountToken: false`.
 7. **Handoff:** The worker pod boots, the entrypoint wrapper feeds the payload into Named Pipes, and the .NET `Runner.Worker` engine takes over.
 8. **Stream:** The worker pod streams live execution logs to GitHub's Twirp Results Service via the proxy pool.
-9. **Complete:** The worker container exits with code `0` on success (non-zero on workflow failure). The AGC's pod watch loop observes the terminal pod phase.
+9. **Complete:** The worker container exits with code `0` on success (non-zero on workflow failure). A single event handler on the AGC's shared Pod informer observes the terminal pod phase and wakes the waiting session goroutine — detection is event-driven, not polled, so completion is noticed near-immediately regardless of how many sessions are in flight.
 10. **Stop renewing:** The RenewJob goroutine detects pod completion and exits cleanly.
 11. **Reclaim:** The AGC deletes the associated job Secret and Kubernetes garbage-collects the completed pod.
 
