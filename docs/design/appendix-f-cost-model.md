@@ -159,7 +159,9 @@ The `actions_gateway_job_duration_seconds` histogram per RunnerGroup helps ident
 
 ### Priority Tier Tuning
 
-For tenants using `priorityTiers`, the first tier (with `PreemptLowerPriority`) guarantees GPU floor pods will schedule even under cluster contention — at the cost of potentially evicting lower-priority CPU workloads. Evicted CPU jobs are cheap to re-run; the GPU floor guarantee is typically worth it. Keep the first tier's `threshold` small (the minimum number of GPU pods that must schedule immediately) and use `preemptionPolicy: Never` for higher tiers to avoid unnecessary disruption.
+Priority tiers are a utilization lever, not only a fairness control. Without the floor guarantee, keeping GPU runners schedulable under a shared quota means reserving idle headroom so a GPU pod always has room — paid-for capacity that sits empty. The floor lets you instead pack the quota with cheap work and admit more runner demand than the floors reserve (safe oversubscription, arbitrated by the Kubernetes scheduler), raising utilization and throughput of the same cluster and lowering cost per job. The headroom you would otherwise hold idle is the saving.
+
+The trade-off is preemption cost. For tenants using `priorityTiers`, the first tier (with `PreemptLowerPriority`) guarantees GPU floor pods will schedule even under cluster contention — at the cost of potentially evicting lower-priority CPU workloads. Evicted CPU jobs are cheap to re-run; the GPU floor guarantee is typically worth it. Keep the first tier's `threshold` small (the minimum number of GPU pods that must schedule immediately) and use `preemptionPolicy: Never` for higher tiers to avoid unnecessary disruption.
 
 ---
 
