@@ -39,8 +39,11 @@ import (
 )
 
 const (
-	labelManagedBy   = "app.kubernetes.io/managed-by"
-	labelRunnerGroup = "actions-gateway/runner-group"
+	labelManagedBy = "app.kubernetes.io/managed-by"
+	// LabelRunnerGroup is stamped on every worker pod (and job Secret) with the
+	// owning RunnerGroup's name as its value. It is the contract the RunnerGroup
+	// controller's Pod watch filters and maps on, so it is exported.
+	LabelRunnerGroup = "actions-gateway/runner-group"
 	labelPlanID      = "actions-gateway/plan-id"
 
 	// Recommended Kubernetes labels (app.kubernetes.io/*) stamped on every
@@ -464,7 +467,7 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 // activePodCount returns the number of Running or Pending worker pods for the given group.
 func (p *Provisioner) activePodCount(ctx context.Context, namespace, groupName string) (int32, error) {
 	var podList corev1.PodList
-	sel := labels.Set{labelRunnerGroup: groupName}
+	sel := labels.Set{LabelRunnerGroup: groupName}
 	if err := p.Client.List(ctx, &podList,
 		client.InNamespace(namespace),
 		client.MatchingLabels(sel),
@@ -512,7 +515,7 @@ func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string,
 			Namespace: rg.Namespace,
 			Labels: map[string]string{
 				labelManagedBy:   managerName,
-				labelRunnerGroup: rg.Name,
+				LabelRunnerGroup: rg.Name,
 			},
 		},
 		Data: data,
@@ -639,7 +642,7 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 			Namespace: rg.Namespace,
 			Labels: map[string]string{
 				labelManagedBy:   managerName,
-				labelRunnerGroup: rg.Name,
+				LabelRunnerGroup: rg.Name,
 				labelPlanID:      safeName(podName), // use pod name fragment as stable label
 				// "actions-gateway/component: workload" matches the workload NetworkPolicy
 				// podSelector so worker egress is restricted to the per-tenant proxy only.

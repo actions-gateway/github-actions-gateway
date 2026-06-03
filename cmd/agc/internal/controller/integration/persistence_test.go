@@ -45,7 +45,7 @@ func TestAGC_AgentSecretPersistence(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 
 	// First controller instance: creates 2 agents and registers them with "GitHub".
-	cancelFirst, firstDone := startAGCReconcilerOpts(t, provisionerOptions{registrar: reg})
+	_, cancelFirst, firstDone := startAGCReconcilerOpts(t, provisionerOptions{registrar: reg})
 
 	require.Eventually(t, func() bool {
 		var secrets corev1.SecretList
