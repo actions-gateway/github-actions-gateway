@@ -113,12 +113,13 @@ func (p *Pool) secretName(index int) string {
 // EnsureAgents reconciles the pool to exactly count agents.
 // Idempotent: safe to call on every reconcile loop.
 func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) error {
-	existing, err := p.listSecrets(ctx)
+	existing, err := p.listSecretMeta(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Build index set of existing secrets.
+	// Build index set of existing secrets. Only labels are needed here, so the
+	// metadata-only list above suffices — no Secret bodies are fetched.
 	existingIdx := make(map[int]bool)
 	for _, s := range existing {
 		idxStr := s.Labels[labelAgentIndex]
@@ -146,26 +147,36 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		if err != nil {
 			continue
 		}
-		if int32(idx) >= count {
-			// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
-			// claimed this agent; deleting its Secret while it is in use will cause the
-			// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
-			agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
-			a := agentFromSecret(s, agentID, idx)
-			if err := p.registrar.Deregister(ctx, token, a.AgentID); err != nil {
-				slog.Warn("failed to deregister agent; continuing", "index", a.Index, "agentID", a.AgentID, "error", err)
+		if int32(idx) < count {
+			continue
+		}
+		// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
+		// claimed this agent; deleting its Secret while it is in use will cause the
+		// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
+		//
+		// Fetch the body only for the specific Secret being torn down — the
+		// agentId is needed to deregister the agent from GitHub.
+		full, err := p.getSecret(ctx, s.Name)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue // already gone
 			}
-			sec := s // capture
-			if delErr := p.client.Delete(ctx, &sec); delErr != nil && !errors.IsNotFound(delErr) {
-				return fmt.Errorf("agentpool: delete secret %s: %w", s.Name, delErr)
-			}
+			return fmt.Errorf("agentpool: get secret %s: %w", s.Name, err)
+		}
+		agentID, _ := strconv.ParseInt(string(full.Data["agentId"]), 10, 64)
+		if err := p.registrar.Deregister(ctx, token, agentID); err != nil {
+			slog.Warn("failed to deregister agent; continuing", "index", idx, "agentID", agentID, "error", err)
+		}
+		if delErr := p.client.Delete(ctx, full); delErr != nil && !errors.IsNotFound(delErr) {
+			return fmt.Errorf("agentpool: delete secret %s: %w", s.Name, delErr)
 		}
 	}
 
 	// Reload agents into memory. p.client is configured with
 	// Cache.DisableFor[*corev1.Secret] in production (cmd/agc/main.go, W4 /
-	// H-2) and matched in the envtest suite, so this List goes straight to
-	// the API server — no informer-cache lag relative to the Creates above.
+	// H-2) and matched in the envtest suite, so the metadata list and per-name
+	// Gets in reload go straight to the API server — no informer-cache lag
+	// relative to the Creates above.
 	return p.reload(ctx)
 }
 
@@ -233,16 +244,26 @@ func (p *Pool) LoadAgents(ctx context.Context) ([]*Agent, error) {
 	return out, nil
 }
 
-// reload refreshes the in-memory agent list from Kubernetes Secrets.
+// reload refreshes the in-memory agent list from Kubernetes Secrets. It
+// enumerates the pool's Secrets as metadata, then fetches each body by name —
+// the bodies are needed to reconstruct agent credentials, but they never flow
+// through the bulk list.
 func (p *Pool) reload(ctx context.Context) error {
-	secrets, err := p.listSecrets(ctx)
+	metas, err := p.listSecretMeta(ctx)
 	if err != nil {
 		return err
 	}
 
-	agents := make([]*Agent, 0, len(secrets))
-	for _, s := range secrets {
-		a, err := secretToAgent(s)
+	agents := make([]*Agent, 0, len(metas))
+	for _, m := range metas {
+		full, err := p.getSecret(ctx, m.Name)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue // deleted between list and get
+			}
+			return err
+		}
+		a, err := secretToAgent(*full)
 		if err != nil {
 			continue
 		}
@@ -283,18 +304,25 @@ func (p *Pool) ReleaseAgent(a *Agent) {
 // DeleteAll deregisters all agents from GitHub and deletes all Secrets.
 // Called when a RunnerGroup is deleted.
 func (p *Pool) DeleteAll(ctx context.Context, token string) error {
-	secrets, err := p.listSecrets(ctx)
+	metas, err := p.listSecretMeta(ctx)
 	if err != nil {
 		return err
 	}
 	var lastErr error
-	for _, s := range secrets {
-		agentID, _ := strconv.ParseInt(string(s.Data["agentId"]), 10, 64)
+	for _, m := range metas {
+		full, err := p.getSecret(ctx, m.Name)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue // already gone
+			}
+			lastErr = err
+			continue
+		}
+		agentID, _ := strconv.ParseInt(string(full.Data["agentId"]), 10, 64)
 		if agentID > 0 {
 			_ = p.registrar.Deregister(ctx, token, agentID) // best-effort
 		}
-		sec := s
-		if delErr := p.client.Delete(ctx, &sec); delErr != nil && !errors.IsNotFound(delErr) {
+		if delErr := p.client.Delete(ctx, full); delErr != nil && !errors.IsNotFound(delErr) {
 			lastErr = delErr
 		}
 	}
@@ -305,9 +333,25 @@ func (p *Pool) DeleteAll(ctx context.Context, token string) error {
 	return lastErr
 }
 
-// listSecrets returns all agent Secrets for this pool.
-func (p *Pool) listSecrets(ctx context.Context) ([]corev1.Secret, error) {
-	var list corev1.SecretList
+// listSecretMeta enumerates this pool's agent Secrets as metadata only.
+//
+// It deliberately uses a PartialObjectMetadataList so the bulk enumeration —
+// run on every reconcile (EnsureAgents, reload) — never pulls Secret bodies
+// (agent private keys, JIT configs) over the wire or into process memory. Only
+// names and labels come back. The few paths that need the body (reload's
+// in-memory rebuild, deregistration on scale-down/delete) fetch it per-name via
+// getSecret. This keeps the GitHub App / agent credential material off the
+// bulk-list path entirely (k8s-best-practices.md §B B4).
+//
+// The list carries an explicit Secret GVK. The AGC manager client is
+// configured with Cache.DisableFor[*corev1.Secret] (cmd/agc/main.go); when
+// controller-runtime's shouldBypassCache strips the "List" suffix it matches
+// that disabled GVK, so this read bypasses the cache and starts no Secret
+// (metadata) informer — preserving the W3/H-2 "no Secret data buffered in the
+// controller-runtime cache" property.
+func (p *Pool) listSecretMeta(ctx context.Context) ([]metav1.PartialObjectMetadata, error) {
+	var list metav1.PartialObjectMetadataList
+	list.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("SecretList"))
 	if err := p.client.List(ctx, &list,
 		client.InNamespace(p.namespace),
 		client.MatchingLabels{
@@ -320,12 +364,16 @@ func (p *Pool) listSecrets(ctx context.Context) ([]corev1.Secret, error) {
 	return list.Items, nil
 }
 
-// agentFromSecret creates a minimal Agent with only the fields needed for deregistration.
-func agentFromSecret(s corev1.Secret, agentID int64, index int) *Agent {
-	return &Agent{
-		Index:   index,
-		AgentID: agentID,
+// getSecret fetches a single agent Secret body by name. Like the metadata list
+// above, this Get bypasses the controller-runtime cache (DisableFor) and hits
+// the API server directly, so the body is held in process only for the
+// duration of the call.
+func (p *Pool) getSecret(ctx context.Context, name string) (*corev1.Secret, error) {
+	var sec corev1.Secret
+	if err := p.client.Get(ctx, client.ObjectKey{Namespace: p.namespace, Name: name}, &sec); err != nil {
+		return nil, err
 	}
+	return &sec, nil
 }
 
 func secretToAgent(s corev1.Secret) (*Agent, error) {

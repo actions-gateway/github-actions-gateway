@@ -36,7 +36,7 @@ by-design / accepted.
 |---|---|---|---|---|---|
 | **C-1** | RunnerGroup PodTemplate not validated | Critical | W2 | ✅ Done 2026-05-23 | PSA labels + CEL `XValidation` rejecting `privileged: true` |
 | **H-1** | GitHub App key in env var | High | W3 | ✅ Done 2026-05-23 | File mount at `/etc/actions-gateway/github-app/` mode `0o400` |
-| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list` retained (needed by agentpool); `watch` over-declared (no informer registered); Secret cache disabled; residual accepted per D-3. See §GMC-1 for GMC's separate credential watch design. |
+| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list` retained (needed by agentpool) but now metadata-only at the app level (Q57); `watch` over-declared (no informer registered); Secret cache disabled; residual RBAC `list` capability accepted per D-3. See §GMC-1 for GMC's separate credential watch design. |
 | **M-1** | Workers can bypass proxy to GitHub | Medium | W1 | ✅ Done 2026-05-23 | Three split NetworkPolicies (`buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`) |
 | **M-2** | Proxy has no destination allowlist | Informational | — | ⓘ By design | Appendix G §G.1 records revisit conditions |
 | **M-3** | AES-CBC padding-oracle-shaped errors | Medium | W6 | ✅ Done 2026-05-23 | Single `errInvalidPadding` sentinel + `crypto/subtle` constant-time |
@@ -265,10 +265,10 @@ by-design / accepted.
   Secret in the tenant namespace (e.g. a developer's `ghcr-pull-token` or
   `slack-webhook`). The broad `create` would let it stage a Secret that another
   workload mounts.
-- **Mitigation (implemented, partially):** Three controls landed:
+- **Mitigation (implemented, partially):** Four controls landed:
 
   1. **`list`/`watch` were initially removed** (commit where W4 first
-     shipped), but this broke `agentpool.Pool.listSecrets` — the agent
+     shipped), but this broke the agent pool's Secret enumeration — the
      pool must enumerate its own per-runner Secrets to reconcile state
      (`EnsureAgents`). `list` was restored (dc80293).
 
@@ -289,10 +289,26 @@ by-design / accepted.
      compromised AGC binary *could* exercise `watch` out-of-band, but the
      legitimate controller never does.
 
-- **Residual risk (accepted):** The AGC Role grants `list` on all Secrets
-  in the tenant namespace. A compromised AGC can enumerate user-managed
-  Secrets (e.g. `ghcr-pull-token`, `slack-webhook`). The `watch` verb is
-  over-declared and unused by the controller. Two paths to closing `list`
+  4. **Metadata-only bulk list** (Q57, k8s-audit §B B4) —
+     `agentpool.Pool.listSecretMeta` enumerates the pool's Secrets with a
+     `PartialObjectMetadataList`, so the bulk list run on every reconcile
+     returns only names and labels, never Secret bodies (agent private
+     keys, JIT configs). The bodies are fetched per-name via `Get` only on
+     the paths that need them (`reload`, deregistration on
+     scale-down/delete). This closes the application-level exposure where
+     every reconcile pulled the full credential set in one call. The
+     metadata list's GVK resolves to Secret, which matches the DisableFor
+     set above, so it also bypasses the cache and starts no informer.
+     Asserted by `TestPool_EnumeratesSecretsAsMetadataOnly`.
+
+- **Residual risk (accepted):** The AGC Role still grants the `list` *verb*
+  on all Secrets in the tenant namespace, so a compromised AGC binary could
+  issue a full-body `list` out-of-band to enumerate user-managed Secrets
+  (e.g. `ghcr-pull-token`, `slack-webhook`) — RBAC cannot scope `list` by
+  name or label (see below). The legitimate code path no longer does this
+  (control 4), and any such read still hits the API server in the audit log.
+  The `watch` verb is over-declared and unused by the controller. Two paths
+  to closing `list`
   were evaluated and rejected for v1:
 
   - **`resourceNames` restriction** — not viable: RBAC doesn't support
@@ -1453,14 +1469,16 @@ pure-logic properties. No cluster required.
 
 **W4 residual risk (H-2 accepted):** The AGC Role grants `get`, `list`,
 `watch`, `create`, and `delete` on all Secrets in the tenant namespace.
-`list`/`watch` are required by `agentpool.Pool.listSecrets`; narrowing them
-by label is not possible through standard `rbacv1.PolicyRule` (no
-`LabelSelector` field even in k8s.io/api v0.35 / KEP-4601 GA). The
-substitute control is `Client.Cache.DisableFor[*corev1.Secret]` in the AGC
-manager — Secret bodies are never held in-process. Do not write a test
-asserting that `list` or `get` on an unrelated Secret is denied; both are
-currently allowed and the design knowingly accepts this. See H-2 for full
-rationale.
+`list` is required by the agent pool's Secret enumeration
+(`agentpool.Pool.listSecretMeta`); narrowing it by label is not possible
+through standard `rbacv1.PolicyRule` (no `LabelSelector` field even in
+k8s.io/api v0.35 / KEP-4601 GA). The substitute controls are
+`Client.Cache.DisableFor[*corev1.Secret]` in the AGC manager (Secret bodies
+are never held in-process) and the metadata-only bulk list (Q57) so the
+legitimate `list` path returns no bodies; bodies are read per-name via
+`get`. Do not write a test asserting that `list` or `get` on an unrelated
+Secret is denied; both are currently allowed and the design knowingly
+accepts this. See H-2 for full rationale.
 
 #### Integration tests
 
