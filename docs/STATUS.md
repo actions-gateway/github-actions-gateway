@@ -47,7 +47,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q38"></a>Q38 | Go best-practices: unify Go versions across modules | `infra` | 🔲 | S | Three `go` directives across 9 `go.mod` files (`1.26`/`1.26.0`/`1.26.3`); CLAUDE.md requires one. Pin all to `1.26.3`. See [go-best-practices.md §1](plan/go-best-practices.md#1-unify-go-versions). |
 | <a id="Q32"></a>Q32 | [K8s audit — §A Controller correctness](plan/k8s-best-practices.md#a-controller-correctness-) | `bug` `infra` | 🔲 | M | 🔴 No `EventRecorder` anywhere; RunnerGroup has no Pod `Owns()` (stale `ActiveSessions`); provisioner polls instead of watching; finalizer race leaks pool maps. See [k8s-best-practices.md §A](plan/k8s-best-practices.md#a-controller-correctness-). |
 | <a id="Q26"></a>Q26 | [Remove over-declared `watch` verb on AGC Role](plan/security.md) | `security` | 🔲 | S | One-line cleanup; no Secret informer is registered. H-2 residual notes it. Overlaps partially with k8s-audit §B B4 ([Q57](#Q57)). |
 | <a id="Q25"></a>Q25 | [Restrict `:8081` health/metrics ingress (L-8)](plan/security.md) | `security` | 🔲 | S | Explicit NP ingress rule on proxy + AGC permitting only kubelet probe + Prometheus scrape selector. |
