@@ -173,9 +173,10 @@ func run() error {
 		// 2. SetupWithManager registers no Watches or WatchesMetadata for Secrets
 		//    — no Secret informer (full or metadata-only) is ever established, so
 		//    nothing caches Secret data or metadata in the background.
-		// 3. The AGC Role grants list+watch on Secrets (list needed by agentpool
-		//    to enumerate its agent Secrets; watch is over-declared and unused by
-		//    the controller). The agentpool lists metadata only and reads bodies
+		// 3. The AGC Role grants list (not watch) on Secrets — list is needed by
+		//    the agentpool to enumerate its agent Secrets; watch was removed (Q26)
+		//    because no Secret informer is established and granting it would be
+		//    dead privilege. The agentpool lists metadata only and reads bodies
 		//    per-name via Get (k8s-best-practices §B B4 / Q57), so bulk lists never
 		//    transfer credential bodies; any read still requires live API server
 		//    calls in the audit log.

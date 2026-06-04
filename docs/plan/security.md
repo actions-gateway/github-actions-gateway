@@ -36,7 +36,7 @@ by-design / accepted.
 |---|---|---|---|---|---|
 | **C-1** | RunnerGroup PodTemplate not validated | Critical | W2 | ✅ Done 2026-05-23 | PSA labels + CEL `XValidation` rejecting `privileged: true` |
 | **H-1** | GitHub App key in env var | High | W3 | ✅ Done 2026-05-23 | File mount at `/etc/actions-gateway/github-app/` mode `0o400` |
-| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list` retained (needed by agentpool) but now metadata-only at the app level (Q57); `watch` over-declared (no informer registered); Secret cache disabled; residual RBAC `list` capability accepted per D-3. See §GMC-1 for GMC's separate credential watch design. |
+| **H-2** | AGC Role grants broad Secret access | High | W4 | ⚠️ Partial | `list` retained (needed by agentpool) but now metadata-only at the app level (Q57); `watch` removed (Q26 — no informer registered); Secret cache disabled; residual RBAC `list` capability accepted per D-3. See §GMC-1 for GMC's separate credential watch design. |
 | **M-1** | Workers can bypass proxy to GitHub | Medium | W1 | ✅ Done 2026-05-23 | Three split NetworkPolicies (`buildProxyNetworkPolicy`, `buildWorkloadNetworkPolicy`, `buildAGCNetworkPolicy`) |
 | **M-2** | Proxy has no destination allowlist | Informational | — | ⓘ By design | Appendix G §G.1 records revisit conditions |
 | **M-3** | AES-CBC padding-oracle-shaped errors | Medium | W6 | ✅ Done 2026-05-23 | Single `errInvalidPadding` sentinel + `crypto/subtle` constant-time |
@@ -279,15 +279,15 @@ by-design / accepted.
      bodies from memory; any exfiltration requires live API server calls
      that appear in the audit log.
 
-  3. **No Secret informer registered** —
+  3. **No Secret informer registered, and `watch` not granted** —
      `RunnerGroupReconciler.SetupWithManager` registers only
-     `For(&v1alpha1.RunnerGroup{})`. There is no `Watches` or
-     `WatchesMetadata` call for Secrets. The `watch` verb in the AGC Role
-     is therefore **over-declared**: the RBAC grants it, but the AGC's
-     controller machinery never establishes a Secret informer (full or
-     metadata-only), so no Secret data or metadata buffers in-process. A
-     compromised AGC binary *could* exercise `watch` out-of-band, but the
-     legitimate controller never does.
+     `For(&v1alpha1.RunnerGroup{})` (plus a Pod watch). There is no
+     `Watches` or `WatchesMetadata` call for Secrets, so no Secret informer
+     (full or metadata-only) is ever established and no Secret data or
+     metadata buffers in-process. Because the controller never establishes
+     a Secret informer, the AGC Role omits the `watch` verb on Secrets
+     entirely (Q26) — the RBAC contract matches the code, so a compromised
+     AGC binary cannot exercise `watch` out-of-band either.
 
   4. **Metadata-only bulk list** (Q57, k8s-audit §B B4) —
      `agentpool.Pool.listSecretMeta` enumerates the pool's Secrets with a
@@ -307,8 +307,8 @@ by-design / accepted.
   (e.g. `ghcr-pull-token`, `slack-webhook`) — RBAC cannot scope `list` by
   name or label (see below). The legitimate code path no longer does this
   (control 4), and any such read still hits the API server in the audit log.
-  The `watch` verb is over-declared and unused by the controller. Two paths
-  to closing `list`
+  The `watch` verb was removed from the AGC Role (Q26), so only `list`
+  remains as residual. Two paths to closing `list`
   were evaluated and rejected for v1:
 
   - **`resourceNames` restriction** — not viable: RBAC doesn't support
@@ -332,9 +332,8 @@ by-design / accepted.
   **Decision:** accept `list` in combination with the cache-disable
   control and the no-informer property. Revisit if a real exploit path
   surfaces or if Kubernetes adds label-selector support to `PolicyRule`.
-  The over-declared `watch` verb can be removed from the AGC Role once
-  confirmed no informer path needs it — low priority, zero functional
-  impact.
+  The previously over-declared `watch` verb has been removed from the AGC
+  Role (Q26), confirmed by the absence of any Secret informer path.
 
 ---
 
