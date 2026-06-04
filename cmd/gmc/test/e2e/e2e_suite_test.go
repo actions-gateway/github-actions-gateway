@@ -168,13 +168,19 @@ func setupGMC() {
 	// --allow-agc-extra-env=true tells GMC to forward AGC_EXTRA_* env vars from its
 	// own pod to the AGC Deployments it creates. This is required for e2e tests so
 	// that AGC pods can reach fakegithub instead of real GitHub.
+	// --allow-floating-image-tags=true lets the suite use locally-built tag refs
+	// (e.g. localhost:5000/agc:e2e-...) instead of digest-pinned images, which the
+	// GMC otherwise requires for AGC_IMAGE/PROXY_IMAGE.
 	cmd = exec.Command("kubectl", "patch", "deployment", "gmc-controller-manager",
 		"-n", gmcNamespace,
 		"--type=json",
-		`-p=[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-agc-extra-env=true"}]`,
+		`-p=[`+
+			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-agc-extra-env=true"},`+
+			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-floating-image-tags=true"}`+
+			`]`,
 	)
 	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "patch GMC args to enable allow-agc-extra-env")
+	Expect(err).NotTo(HaveOccurred(), "patch GMC args to enable allow-agc-extra-env and allow-floating-image-tags")
 
 	cmd = exec.Command("kubectl", "set", "env",
 		"deployment/gmc-controller-manager",

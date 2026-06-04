@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -75,6 +76,10 @@ func main() {
 	var allowAgcExtraEnv bool
 	flag.BoolVar(&allowAgcExtraEnv, "allow-agc-extra-env", false,
 		"Forward AGC_EXTRA_* environment variables from the GMC pod to AGC Deployments. Intended for testing only.")
+	var allowFloatingImageTags bool
+	flag.BoolVar(&allowFloatingImageTags, "allow-floating-image-tags", false,
+		"Permit non-digest-pinned AGC_IMAGE/PROXY_IMAGE references (floating tags). "+
+			"Intended for dev/test only; production requires the name@sha256:<digest> form.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -198,6 +203,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Require AGC_IMAGE/PROXY_IMAGE to be pinned by sha256 digest so a mutated
+	// tag cannot silently swap the AGC or proxy code that runs inside a tenant's
+	// gateway (supply-chain hardening; security plan M-19 follow-up). Dev/test
+	// uses floating tags, so an explicit --allow-floating-image-tags opt-out is
+	// offered — but the secure form stays the default.
+	if allowFloatingImageTags {
+		setupLog.Info("WARNING: --allow-floating-image-tags is set; AGC_IMAGE/PROXY_IMAGE digest pinning is NOT enforced (do not use in production)")
+	} else {
+		for _, img := range []struct{ name, ref string }{
+			{"AGC_IMAGE", agcImage},
+			{"PROXY_IMAGE", proxyImage},
+		} {
+			if err := validateImageDigest(img.name, img.ref); err != nil {
+				setupLog.Error(err, "image reference is not digest-pinned")
+				os.Exit(1)
+			}
+		}
+	}
+
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 
 	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
@@ -292,4 +316,21 @@ func mustEnv(name string) (string, error) {
 		return "", fmt.Errorf("required environment variable %s is not set", name)
 	}
 	return v, nil
+}
+
+// digestPinnedRE matches an image reference pinned by a sha256 digest, e.g.
+// "ghcr.io/org/agc:v1@sha256:<64 lowercase hex>". The digest is the trailing
+// component of the reference, so the match is anchored to the end of the string.
+var digestPinnedRE = regexp.MustCompile(`@sha256:[0-9a-f]{64}$`)
+
+// validateImageDigest returns an error unless ref is pinned by a sha256 digest.
+// Floating tags let a registry serve different bytes for the same reference, so
+// the GMC rejects them by default for the images it injects into tenant
+// gateways (overridable with --allow-floating-image-tags for dev/test).
+func validateImageDigest(name, ref string) error {
+	if !digestPinnedRE.MatchString(ref) {
+		return fmt.Errorf("%s=%q is not digest-pinned; expected the form name@sha256:<64 hex digits> "+
+			"(pass --allow-floating-image-tags to bypass in dev/test)", name, ref)
+	}
+	return nil
 }
