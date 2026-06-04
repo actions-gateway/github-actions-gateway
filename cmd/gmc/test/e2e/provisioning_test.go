@@ -225,7 +225,7 @@ spec:
   restartPolicy: Never
   containers:
   - name: curl
-    image: curlimages/curl:8.10.1
+    image: %s
     imagePullPolicy: IfNotPresent
     command: ["sh", "-c"]
     args:
@@ -250,7 +250,7 @@ spec:
       items:
       - key: tls.crt
         path: tls.crt
-`, curlPodName, tenantNS, proxyURL)
+`, curlPodName, tenantNS, curlImage, proxyURL)
 
 		Expect(utils.ApplyManifest(manifest)).To(Succeed())
 		DeferCleanup(func() {

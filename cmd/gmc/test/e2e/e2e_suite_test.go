@@ -43,6 +43,12 @@ var (
 	proxyImage      string
 	fakegithubImage string
 	workerImage     string
+	// curlImage is the image used by the curl-based test pods (proxy
+	// connectivity, cross-tenant isolation, metrics scrape). It defaults to the
+	// upstream Docker Hub ref for local runs; CI overrides E2E_CURL_IMAGE to a
+	// local-registry mirror so the kind nodes never pull from Docker Hub (which
+	// flakes under anonymous rate limits — HTTP 429).
+	curlImage string
 
 	shouldCleanupCertManager bool
 
@@ -64,6 +70,7 @@ type suiteData struct {
 	ProxyImage      string `json:"proxyImage"`
 	FakegithubImage string `json:"fakegithubImage"`
 	WorkerImage     string `json:"workerImage"`
+	CurlImage       string `json:"curlImage"`
 	RSAKeyPEM       []byte `json:"rsaKeyPEM"`
 }
 
@@ -78,6 +85,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImg := envOrDefault("PROXY_IMG", "localhost:5000/proxy:e2e")
 		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "localhost:5000/fakegithub:e2e")
 		workerImg := envOrDefault("WORKER_IMG", "localhost:5000/worker:e2e")
+		curlImg := envOrDefault("E2E_CURL_IMAGE", "curlimages/curl:8.10.1")
 
 		By("generating test RSA private key")
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -96,6 +104,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImage = proxyImg
 		fakegithubImage = fakegithubImg
 		workerImage = workerImg
+		curlImage = curlImg
 
 		configureKubectlKubeRC()
 		setupCertManager()
@@ -109,6 +118,7 @@ var _ = SynchronizedBeforeSuite(
 			ProxyImage:      proxyImg,
 			FakegithubImage: fakegithubImg,
 			WorkerImage:     workerImg,
+			CurlImage:       curlImg,
 			RSAKeyPEM:       rsaKeyPEM,
 		})
 		Expect(err).NotTo(HaveOccurred())
@@ -123,6 +133,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImage = sd.ProxyImage
 		fakegithubImage = sd.FakegithubImage
 		workerImage = sd.WorkerImage
+		curlImage = sd.CurlImage
 		testRSAKeyPEM = sd.RSAKeyPEM
 	},
 )

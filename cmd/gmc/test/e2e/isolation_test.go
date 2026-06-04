@@ -94,7 +94,7 @@ spec:
   restartPolicy: Never
   containers:
   - name: curl
-    image: curlimages/curl:8.10.1
+    image: %s
     imagePullPolicy: IfNotPresent
     command: ["curl"]
     args:
@@ -109,7 +109,7 @@ spec:
     - "--write-out"
     - "HTTP_CODE=%%{http_code}\n"
     - "http://%s:8080/healthz"
-`, curlPodName, nsA, clusterIP)
+`, curlPodName, nsA, curlImage, clusterIP)
 
 		Expect(utils.ApplyManifest(manifest)).To(Succeed())
 		DeferCleanup(func() {
