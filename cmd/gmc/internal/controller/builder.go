@@ -43,7 +43,25 @@ const (
 
 	proxyServiceName = gmcnames.ProxyName
 	proxyPort        = int32(8080)
-	proxyHealthPort  = int32(8081)
+	// healthMetricsPort is the shared health + Prometheus-metrics listener port
+	// for both the proxy (/healthz, /readyz, /metrics) and the AGC
+	// (controller-runtime metrics). The GMC pins the AGC manager's metrics bind
+	// address to this port (cmd/agc/main.go) so the metrics-scrape ingress rule
+	// below provably targets the live listener rather than a framework default.
+	healthMetricsPort = int32(8081)
+
+	// metricsScrapeNamespaceLabel / metricsScrapeNamespaceValue select the
+	// namespace(s) permitted to scrape the proxy and AGC health/metrics port.
+	// Mirrors the kubebuilder convention used by the GMC's own
+	// allow-metrics-traffic NetworkPolicy
+	// (cmd/gmc/config/network-policy/allow-metrics-traffic.yaml): an operator
+	// labels their Prometheus namespace `metrics: enabled`. Kubelet probe
+	// traffic originates from the node and is exempted from NetworkPolicy
+	// enforcement by every CNI this project targets, so no explicit kubelet
+	// ingress rule is needed — and node IPs are not portably expressible as a
+	// NetworkPolicy peer anyway.
+	metricsScrapeNamespaceLabel = "metrics"
+	metricsScrapeNamespaceValue = "enabled"
 
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = gmcnames.ProxyName
@@ -116,6 +134,24 @@ func buildAGCRoleBinding(ag *gmcv1alpha1.ActionsGateway) *rbacv1.RoleBinding {
 	}
 }
 
+// metricsScrapeIngressRule returns a NetworkPolicy ingress rule that permits
+// Prometheus scrapes of the health/metrics port (healthMetricsPort) from any
+// namespace labelled metrics=enabled. It is applied to both the proxy and AGC
+// NetworkPolicies so per-tenant traffic-volume metrics (CONNECT counts, active
+// tunnels, dial errors) are reachable only by the operator's monitoring stack,
+// not by every pod in the tenant namespace (L-8). See metricsScrapeNamespaceLabel
+// for why kubelet probe traffic needs no explicit rule.
+func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
+	return networkingv1.NetworkPolicyIngressRule{
+		From: []networkingv1.NetworkPolicyPeer{{
+			NamespaceSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{metricsScrapeNamespaceLabel: metricsScrapeNamespaceValue},
+			},
+		}},
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(healthMetricsPort))}},
+	}
+}
+
 // buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
 // Proxy pods may reach GitHub CIDRs on 443 (for CONNECT tunneling) and DNS.
 // Only workload pods (AGC and workers) may initiate connections to the proxy.
@@ -142,15 +178,19 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 		})
 	}
 
-	// Ingress: only workload pods (AGC and workers) may connect to the proxy on proxyPort.
-	ingress := []networkingv1.NetworkPolicyIngressRule{{
-		From: []networkingv1.NetworkPolicyPeer{{
-			PodSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{labelComponent: componentWorkload},
-			},
-		}},
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
-	}}
+	// Ingress: only workload pods (AGC and workers) may connect to the proxy on
+	// proxyPort; only monitoring namespaces may scrape the health/metrics port.
+	ingress := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{labelComponent: componentWorkload},
+				},
+			}},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+		},
+		metricsScrapeIngressRule(),
+	}
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: npProxyName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
@@ -225,6 +265,13 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // The egress rule has no `To` restriction because the Kubernetes API server
 // is not a regular pod; its ClusterIP/node IPs are not predictable at
 // controller deploy time across all cloud providers.
+//
+// Ingress: the policy declares PolicyTypeIngress (default-deny) and admits only
+// monitoring-namespace scrapes of the metrics port. Nothing else connects to
+// the AGC on ingress — it is a pure client (it long-polls the GitHub broker,
+// calls the k8s API, and dials the proxy), so default-deny closes L-8: without
+// this, the AGC NP carried no ingress policy type and any pod in the namespace
+// could scrape per-tenant metrics off the controller-runtime metrics server.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
@@ -233,7 +280,8 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
+			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
@@ -331,7 +379,7 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 						Resources: res,
 						Ports: []corev1.ContainerPort{
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
-							{Name: "health", ContainerPort: proxyHealthPort, Protocol: corev1.ProtocolTCP},
+							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						Env: []corev1.EnvVar{
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
@@ -344,12 +392,12 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 						}},
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(proxyHealthPort)},
+								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
 							},
 						},
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
-								HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(proxyHealthPort)},
+								HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(healthMetricsPort)},
 							},
 						},
 						SecurityContext: &corev1.SecurityContext{
@@ -530,6 +578,13 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 						Name:  "agc",
 						Image: agcImage,
 						Env:   env,
+						// The AGC pins its controller-runtime metrics server to
+						// healthMetricsPort (cmd/agc/main.go); declaring the port
+						// documents the listener that buildAGCNetworkPolicy's
+						// metrics-scrape ingress rule admits.
+						Ports: []corev1.ContainerPort{
+							{Name: "metrics", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
+						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      agcCredsVolumeName,

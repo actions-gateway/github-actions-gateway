@@ -249,7 +249,8 @@ func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildProxyNetworkPolicy(ag, nil)
 
-	require.Len(t, np.Spec.Ingress, 1)
+	// Two ingress rules: workload→proxyPort and monitoring→healthMetricsPort.
+	require.Len(t, np.Spec.Ingress, 2)
 	rule := np.Spec.Ingress[0]
 	require.Len(t, rule.From, 1)
 	peer := rule.From[0]
@@ -260,6 +261,59 @@ func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
 	// Must restrict to proxyPort only.
 	require.Len(t, rule.Ports, 1)
 	assert.Equal(t, proxyPort, rule.Ports[0].Port.IntVal)
+}
+
+// TestBuildProxyNetworkPolicy_MetricsScrapeIngress locks in L-8: the proxy's
+// :8081 health/metrics port is reachable only from namespaces labelled
+// metrics=enabled (the operator's Prometheus), not from arbitrary pods.
+func TestBuildProxyNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildProxyNetworkPolicy(ag, nil)
+	assertMetricsScrapeIngress(t, np)
+}
+
+// TestBuildAGCNetworkPolicy_MetricsScrapeIngress locks in L-8 for the AGC: the
+// policy must declare PolicyTypeIngress (default-deny) and admit metrics scrapes
+// only from monitoring namespaces. Before the fix the AGC NP carried no ingress
+// policy type at all, so any pod in the namespace could scrape per-tenant
+// controller-runtime metrics.
+func TestBuildAGCNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildAGCNetworkPolicy(ag)
+
+	assert.Contains(t, np.Spec.PolicyTypes, networkingv1.PolicyTypeIngress,
+		"AGC NP must declare PolicyTypeIngress so ingress defaults to deny")
+	assertMetricsScrapeIngress(t, np)
+}
+
+// assertMetricsScrapeIngress verifies np carries an ingress rule that admits
+// healthMetricsPort from namespaces labelled metrics=enabled, and that the rule
+// does not permit arbitrary pods or IPs.
+func assertMetricsScrapeIngress(t *testing.T, np *networkingv1.NetworkPolicy) {
+	t.Helper()
+	found := false
+	for _, rule := range np.Spec.Ingress {
+		hasMetricsPort := false
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == healthMetricsPort {
+				hasMetricsPort = true
+			}
+		}
+		if !hasMetricsPort {
+			continue
+		}
+		found = true
+		require.Len(t, rule.From, 1, "metrics-scrape rule must have exactly one peer")
+		peer := rule.From[0]
+		require.NotNil(t, peer.NamespaceSelector,
+			"metrics-scrape rule must select by namespace, not pod or IP")
+		assert.Equal(t, metricsScrapeNamespaceValue,
+			peer.NamespaceSelector.MatchLabels[metricsScrapeNamespaceLabel],
+			"metrics-scrape rule must restrict to the monitoring namespace selector")
+		assert.Nil(t, peer.PodSelector, "metrics-scrape rule must not allow arbitrary pods")
+		assert.Nil(t, peer.IPBlock, "metrics-scrape rule must not allow arbitrary IPs")
+	}
+	assert.True(t, found, "expected an ingress rule for the health/metrics port %d", healthMetricsPort)
 }
 
 // TestAGCRoleBinding_TargetsTenantClusterRole locks in that the per-tenant
@@ -583,11 +637,11 @@ func TestBuildProxyDeployment_Probes(t *testing.T) {
 	require.NotNil(t, c.LivenessProbe)
 	require.NotNil(t, c.LivenessProbe.HTTPGet)
 	assert.Equal(t, "/healthz", c.LivenessProbe.HTTPGet.Path)
-	assert.Equal(t, proxyHealthPort, c.LivenessProbe.HTTPGet.Port.IntVal)
+	assert.Equal(t, healthMetricsPort, c.LivenessProbe.HTTPGet.Port.IntVal)
 	require.NotNil(t, c.ReadinessProbe)
 	require.NotNil(t, c.ReadinessProbe.HTTPGet)
 	assert.Equal(t, "/readyz", c.ReadinessProbe.HTTPGet.Path)
-	assert.Equal(t, proxyHealthPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
+	assert.Equal(t, healthMetricsPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
 }
 
 func TestManagedLabels_ContainsOwnerRef(t *testing.T) {

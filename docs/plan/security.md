@@ -65,7 +65,7 @@ by-design / accepted.
 | **L-5** | PEM parser asymmetry | Informational | — | ✅ Done 2026-05-23 | Unified PKCS#1+PKCS#8 parsing (via W9) |
 | **L-6** | `mustEnv` calls `os.Exit` | Informational | — | ✅ Done | All three return errors |
 | **L-7** | Stub URLs default to `stub.example.com` | Informational | — | ✅ Done | Both stub URLs required together when `GITHUB_ORG_URL` unset |
-| **L-8** | `:8081` health/metrics port not constrained by NP ingress | Low | — | ❌ Open | Add scrape-source selector alongside M-8 follow-up |
+| **L-8** | `:8081` health/metrics port not constrained by NP ingress | Low | — | ✅ Done 2026-06-04 | Proxy + AGC NP ingress restricted to namespaces labelled `metrics: enabled`; AGC metrics pinned to `:8081` (Q25) |
 
 ### Open work
 
@@ -942,6 +942,24 @@ by-design / accepted.
 
 ### L-8. Proxy/AGC `:8081` health/metrics port not constrained by NetworkPolicy ingress
 
+- **Status (2026-06-04): Done (Q25).** Both the proxy and AGC NetworkPolicies
+  now carry an explicit ingress rule admitting the `:8081` health/metrics port
+  only from namespaces labelled `metrics: enabled` (the kubebuilder convention
+  the GMC's own [allow-metrics-traffic.yaml](../../cmd/gmc/config/network-policy/allow-metrics-traffic.yaml)
+  already uses). The AGC NP previously declared no ingress policy type at all, so
+  any pod in the tenant namespace could scrape its metrics; it now declares
+  `PolicyTypeIngress` (default-deny) plus the scrape rule. The AGC's
+  controller-runtime metrics server was relying on the framework default port
+  (`:8080`); it is now pinned to `:8081` in
+  [cmd/agc/main.go](../../cmd/agc/main.go) so the listener and the policy agree
+  by construction. Kubelet probe traffic needs no rule — it originates from the
+  node and is exempted from NetworkPolicy enforcement by every CNI this project
+  targets (and node IPs are not portably expressible as a NetworkPolicy peer).
+  Operators must label their Prometheus namespace `metrics: enabled` to scrape;
+  see [troubleshooting.md](../operations/troubleshooting.md). The metrics
+  endpoints remain unauthenticated plain HTTP gated only by the NetworkPolicy;
+  authenticated secure-serving (as the GMC already does) is tracked as a
+  follow-up.
 - **Location:** [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go)
   (NetworkPolicy section)
 - **Category:** OWASP A05:2025 — Security Misconfiguration

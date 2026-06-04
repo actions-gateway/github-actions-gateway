@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 func main() {
@@ -56,6 +57,17 @@ func main() {
 const (
 	credsDir       = "/etc/actions-gateway/github-app"
 	proxyCACertDir = "/etc/actions-gateway/proxy-ca"
+
+	// metricsBindAddress pins the controller-runtime metrics server to a known
+	// port instead of relying on the framework default (":8080" in
+	// controller-runtime v0.24). The GMC's per-tenant AGC NetworkPolicy admits
+	// Prometheus scrapes only on this port (healthMetricsPort in
+	// cmd/gmc/internal/controller/builder.go), so the listener and the policy
+	// must agree by construction — an implicit default could drift out from
+	// under the policy on a dependency bump and silently break (or, worse,
+	// re-expose) metrics. Plain HTTP, gated by the NetworkPolicy namespace
+	// selector; authenticated secure-serving is a separate follow-up.
+	metricsBindAddress = ":8081"
 )
 
 func run() error {
@@ -162,8 +174,9 @@ func run() error {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{namespace: {}}
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Cache:  cacheOpts,
+		Scheme:  scheme,
+		Cache:   cacheOpts,
+		Metrics: metricsserver.Options{BindAddress: metricsBindAddress},
 		// Three-part Secret isolation (see plan/security.md §H-2):
 		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
 		//    the controller-runtime cache and hit the API server directly, so

@@ -177,6 +177,8 @@ A highly secure, short-lived pod optimized to do exactly one thing: execute a si
 
 Both the GMC and AGC expose Prometheus metrics via a `/metrics` endpoint (standard `controller-runtime` metrics server). The following metrics are the minimum required for production operation; additional `controller-runtime` built-ins (reconcile latency, queue depth, etc.) are emitted automatically.
 
+The per-tenant proxy and AGC serve health/metrics on `:8081`, and their NetworkPolicies admit ingress to that port only from namespaces labelled `metrics: enabled` — so per-tenant traffic-volume metrics are reachable by the operator's monitoring stack but not by every pod in the tenant namespace. Operators must label their Prometheus namespace `metrics: enabled` to scrape (see [troubleshooting](../operations/troubleshooting.md)). Kubelet probes are unaffected — node-sourced traffic is exempt from NetworkPolicy enforcement.
+
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
 | `actions_gateway_active_sessions` | Gauge | `namespace`, `runner_group` | Currently open long-poll sessions |
