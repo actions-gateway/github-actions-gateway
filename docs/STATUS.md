@@ -12,6 +12,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **Starting an S item:** complete it, delete the row.
 - **Starting an M/L item:** create or update a plan doc in `docs/plan/`; delete the row here when done. (Skip the `▶ Started` marker unless you have a specific reason — the open PR is the in-flight signal.)
 - **New item identified:** decide its priority *first*, then insert it at that position (not the bottom by default) with the next unused ID. See [prioritize new items on entry](development/maintaining-backlog.md#prioritize-new-items-on-entry). Batch audit-discovery items in one commit.
+- **Parked item (explicit trigger, no near-term intent):** put it in [Deferred](#deferred), not the Queue; move it back into the Queue at the right priority when its trigger fires. See [deferred items live below the Queue](development/maintaining-backlog.md#deferred-items-live-below-the-queue-not-in-it).
 - **⚠️ item fully done:** move it to the Progress table as ✅.
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
@@ -44,7 +45,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 
 ## Queue
 
-Specific actionable items in priority order. Pick from the top; skip 🚫 items until their blocker clears.
+Specific actionable items in priority order. Pick from the top; skip 🚫 items until their blocker clears. Intentionally parked items live in [Deferred](#deferred) below, out of the priority ordering.
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
@@ -79,6 +80,15 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q55"></a>Q55 | Verify provisioner-test goleak cascade fix held in CI | `tests` `bug` | 🔲 | S | Intermittent ~20-test goleak cascade in `internal/provisioner` fixed by `waitForPodCreated` helper in 59c0714; delete row once CI is clean. If flakes recur, migrate remaining ~18 Eventually-on-Pod sites to the helper. |
 | <a id="Q60"></a>Q60 | [Competitive analysis — GAG vs ARC-adjacent runner/queue tooling](design/appendix-d-alternatives-considered.md) | `docs` | 🔲 | M | Competitive analysis vs ARC-adjacent tooling: Kueue, Exostellar (verify the Kueue-under-ARC GPU pattern), KEDA. Expands [appendix-d](design/appendix-d-alternatives-considered.md). Narrow Kueue-vs-admission angle is in [Q59](#Q59). |
 | <a id="Q62"></a>Q62 | Short per-attempt timeout on IP-range `/meta` fetch | `infra` `speed` | 🔲 | S | GMC HTTP client's 60s timeout is shared; a stalled `/meta` fetch burns 60s before the Q61 backoff retries. Add a ~10s per-attempt `context.WithTimeout` in `HTTPGitHubIPRangeFetcher.FetchIPRanges`. Follow-on to Q61. |
-| <a id="Q17"></a>Q17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | 💤 | M | low priority; pick up when CI latency is the bottleneck |
-| <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | 💤 | M | deferred until a real Prometheus/Alertmanager setup exists |
-| <a id="Q19"></a>Q19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | 💤 | L | explicit non-commitments; build only when a named trigger fires |
+
+---
+
+## Deferred
+
+Intentionally parked items. These carry **no priority position** and are **not** picked from the top of the Queue — each waits on an explicit trigger before it returns to active work. Keeping them out of the Queue stops them from diluting the priority ordering. When an item's trigger fires, move its row back into the Queue at the position it then deserves (see [prioritize new items on entry](development/maintaining-backlog.md#prioritize-new-items-on-entry)).
+
+| ID | Item | Labels | Sz | Trigger to revive |
+|---|---|---|---|---|
+| <a id="Q17"></a>Q17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | M | CI latency becomes the bottleneck. |
+| <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | M | A real Prometheus/Alertmanager setup exists to document against. |
+| <a id="Q19"></a>Q19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | L | A named trigger fires — these are explicit non-commitments (see [Appendix G](design/appendix-g-future-enhancements.md)). |
