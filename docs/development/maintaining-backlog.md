@@ -20,6 +20,19 @@ Exceptions:
 - A flake whose root cause is genuinely an outside-the-repo service (GitHub API outage, registry hiccup) and that has not recurred in many runs — file but don't bump.
 - A flake whose fix is blocked on infrastructure not yet built (e.g. requires a CNI that the cluster doesn't have) — file, mark 🚫, and don't bump.
 
+## Prioritize new items on entry
+
+When you identify a new item, decide its priority **before** adding it — place it at the Queue position it deserves, not at the bottom by default. The Queue is read top-to-bottom ("Pick from the top"), so position *is* the priority signal. A row appended to the bottom is a row you've silently declared the lowest priority in the project; make that an explicit judgement, not a fallback you reach for to avoid deciding.
+
+To place a new row, compare it against its prospective neighbours:
+
+- **Severity / blast radius.** A correctness or security defect that can reach users outranks a cleanup or docs item. `bug`, `security`, and flake items generally sort high; `docs` and idiom-cleanup items generally sort low — but judge the specific item, not the label.
+- **Leverage.** Work that unblocks other Queue items, or removes a recurring cost (see [flake fixes go first](#flake-fixes-go-first)), sorts above equal-severity work that doesn't.
+- **Blocked vs. ready.** A new item blocked by an unlanded dependency goes *below* that dependency, marked 🚫 with `Blocked by [QN](#QN)` in its Notes (see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers)). Ready work sorts above blocked work of similar severity.
+- **Size as a tiebreaker only.** Between two items of equal priority, a smaller (S) item that clears quickly may go first — but never let size override severity.
+
+If you genuinely can't tell where it belongs, slot it next to the nearest comparable item rather than defaulting to the bottom, and note the reasoning in the commit message. Re-prioritizing later (moving existing rows) is a deliberate, separate STATUS.md commit — don't bundle a reshuffle with the addition of a new row.
+
 ## Format rules that exist to reduce churn
 
 ### `Last touched:` is one line, date only
