@@ -33,6 +33,23 @@ To place a new row, compare it against its prospective neighbours:
 
 If you genuinely can't tell where it belongs, slot it next to the nearest comparable item rather than defaulting to the bottom, and note the reasoning in the commit message. Re-prioritizing later (moving existing rows) is a deliberate, separate STATUS.md commit — don't bundle a reshuffle with the addition of a new row.
 
+## Deferred items live below the Queue, not in it
+
+The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit external trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon."
+
+Such items move to the **Deferred** section below the Queue in `docs/STATUS.md`. A row belongs in Deferred when **all** of these hold:
+
+- It has a concrete trigger condition that must fire first (a dependency that isn't on the Queue, a tool/cluster that doesn't exist yet, a usage threshold not yet hit).
+- There is no near-term intent to do it — reviving it is conditional, not scheduled.
+- It is still a real commitment (otherwise it's a non-commitment and belongs in [`appendix-g-future-enhancements.md`](../design/appendix-g-future-enhancements.md), not STATUS.md at all).
+
+Mechanics:
+
+- The Deferred table keeps each row's stable `Q`-prefixed ID and inline anchor, so cross-references (`[Q19](#Q19)`) keep resolving. IDs are not reused when an item moves sections.
+- Its columns drop `St` (every row is implicitly 💤) and replace `Notes` with **`Trigger to revive`** — one phrase naming the condition that returns it to the Queue.
+- **When a trigger fires, move the row back into the Queue at the position it then deserves** (see [Prioritize new items on entry](#prioritize-new-items-on-entry)) — don't just flip a status in place.
+- This is the home for the three statuses that aren't actionable-now: a genuinely-parked item enters Deferred directly rather than being added to the Queue and immediately marked 💤. (A 🚫 *blocked-by-another-Queue-item* row stays in the Queue, below its blocker — see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers) — because it revives automatically the moment the blocker lands.)
+
 ## Format rules that exist to reduce churn
 
 ### `Last touched:` is one line, date only
