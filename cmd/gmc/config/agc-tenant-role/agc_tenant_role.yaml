@@ -50,11 +50,11 @@ rules:
 # from W3 is preserved at the AGC's manager level by
 # Client.Cache.DisableFor[*corev1.Secret] — both the metadata list and the
 # per-name gets go direct to the API server rather than being held in the
-# controller-runtime cache. `watch` is over-declared and unused (no Secret
-# informer is registered); its removal is tracked as Q26.
+# controller-runtime cache. `watch` is deliberately omitted: no Secret informer
+# is registered, so granting watch would be dead privilege (Q26).
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["get", "list", "watch", "create", "delete"]
+  verbs: ["get", "list", "create", "delete"]
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups"]
   verbs: ["get", "list", "watch", "update", "patch"]

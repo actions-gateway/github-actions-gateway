@@ -132,7 +132,8 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// in-process, violating W3/H-2 (no Secret bodies in cache). The manager's
 		// DisableFor[*corev1.Secret] and the absence of any Secret Watch are
 		// load-bearing security properties, so the Secret half is intentionally
-		// not implemented.
+		// not implemented. The AGC Role's Secret rule therefore omits the watch
+		// verb (Q26).
 		Watches(
 			&corev1.Pod{},
 			handler.EnqueueRequestsFromMapFunc(r.podToRunnerGroup),
