@@ -27,6 +27,15 @@ Two options:
   ```
 - Or set `imagePullPolicy: Always` on the deployment template (only viable for components where you control the spec).
 
+### GMC rejects floating `AGC_IMAGE`/`PROXY_IMAGE` tags by default
+
+The GMC requires `AGC_IMAGE` and `PROXY_IMAGE` to be pinned by `@sha256:` digest, so a floating tag like `localhost:5000/agc:e2e-d667096-v2` makes it exit at startup with a "not digest-pinned" error. For local iteration, start the GMC with `--allow-floating-image-tags=true` (the e2e suite patches this flag in automatically):
+
+```bash
+kubectl patch deployment -n gmc-system gmc-controller-manager --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-floating-image-tags=true"}]'
+```
+
 ### `kubectl rollout restart` is sometimes a no-op
 
 If the deployment spec hash hasn't changed, no new pod gets created. After bumping a referenced Secret/ConfigMap, or to force a fresh pull, run:

@@ -79,7 +79,7 @@ by-design / accepted.
 
 ### Out of scope, flagged separately
 
-- Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.
+- ~~Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.~~ **Done 2026-06-04** — GMC rejects non-`@sha256:` references at startup (Q24); `--allow-floating-image-tags` opt-out for dev/test.
 - Explicit `imagePullPolicy` on worker pods.
 
 ---
@@ -981,10 +981,11 @@ by-design / accepted.
 
 ## Out-of-scope but worth noting
 
-- **No image-digest pinning in `buildAGCDeployment` / `buildProxyDeployment`.**
-  The design says digest-pinning SHOULD be used; the GMC accepts whatever
-  `AGC_IMAGE` / `PROXY_IMAGE` env var holds. Recommend enforcing
-  `image@sha256:…` syntax at GMC startup.
+- ~~**No image-digest pinning in `buildAGCDeployment` / `buildProxyDeployment`.**~~
+  **Done 2026-06-04 (Q24).** The GMC now rejects `AGC_IMAGE` / `PROXY_IMAGE`
+  references not in `image@sha256:<64 hex>` form at startup
+  (`validateImageDigest` in `cmd/gmc/cmd/main.go`). Floating tags are an
+  explicit dev/test opt-out via `--allow-floating-image-tags`.
 - **No `imagePullPolicy` set on tenant worker pods.** With digest-pinned
   worker images this is moot, but in the floating-tag case Kubernetes
   defaults to `Always` (good) only for `:latest`; other tags use
@@ -1390,9 +1391,9 @@ Independent items, scheduled opportunistically.
 
 ### Out of scope (flagged separately)
 
-- **Image-digest pinning** of `AGC_IMAGE` and `PROXY_IMAGE` at GMC
-  startup. Recommend rejecting any image reference not in
-  `image@sha256:…` form.
+- ~~**Image-digest pinning** of `AGC_IMAGE` and `PROXY_IMAGE` at GMC
+  startup.~~ **Done 2026-06-04 (Q24).** GMC rejects any reference not in
+  `image@sha256:<64 hex>` form; `--allow-floating-image-tags` opt-out for dev/test.
 - **`imagePullPolicy`** explicitly set on worker pods. With
   digest-pinned images this is moot, but in the floating-tag case
   Kubernetes defaults to `IfNotPresent` for non-`:latest` tags,
