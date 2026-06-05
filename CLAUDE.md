@@ -62,7 +62,7 @@ The `claude-workspace-guard` plugin runs as a `PreToolUse` hook and prompts for 
 - **Keep guarded file args inside the worktree.** Reading/writing paths outside it — including the parent repo path or another worktree — prompts. This reinforces the "edit via worktree paths only" rule.
 - **Avoid `$VAR`, `$(...)`, and leading `~` in a guarded command's file arguments.** The guard treats any runtime-expanded token as outside-workspace and prompts *even when it would resolve inside the worktree*. Use a literal relative or absolute in-workspace path instead (e.g. write the path out rather than `$HOME/...` or `~/...`).
 - **Don't `cd` outside the worktree before a guarded command,** and avoid bare `cd`/`cd -`/`cd $HOME` — they lose cwd tracking so later relative paths prompt. Stay in the worktree and use relative paths.
-- **Write temp files inside the worktree, not `/tmp`.** `cp`/`mv`/`tee`/`dd` and `>` redirects to `/tmp` (or any outside path) prompt; `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and `/dev/fd/N` are exempt.
+- **Write temp files inside the worktree, not `/tmp`.** Use the gitignored `tmp/` directory at the repo root. `cp`/`mv`/`tee`/`dd` and `>` redirects to `/tmp` (or any outside path) prompt; `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and `/dev/fd/N` are exempt.
 
 ## Testing
 
