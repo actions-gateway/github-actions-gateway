@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-03
+Last touched: 2026-06-04
 
 ---
 
@@ -49,7 +49,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q22"></a>Q22 | [Repo hygiene: SECURITY.md + dependabot config](plan/security.md) | `security` `docs` | 🔲 | S | Disclosure policy + automated dep updates across 7 go.mod files. |
 | <a id="Q23"></a>Q23 | [CI security scanning (govulncheck + trivy)](plan/security.md) | `security` `infra` | 🔲 | M | Per-module workspace-aware `govulncheck`; `trivy image` against each built Dockerfile in PR CI. |
 | <a id="Q27"></a>Q27 | [Security operations runbook](plan/security.md) | `security` `docs` | 🔲 | S | Convert abuse heuristics from `05-security.md` into operator alerts (Secret list rate, eviction retries exhausted, etc). |
 | <a id="Q69"></a>Q69 | [Authenticated secure-serving for proxy + AGC metrics](plan/security.md) | `security` `infra` | 🔲 | M | Proxy + AGC `/metrics` (:8081) are unauthenticated plain HTTP, gated only by the L-8 NetworkPolicy namespace selector. GMC already does authenticated secure-serving (cert-manager metrics cert); extend it to the per-tenant proxy + AGC. |
