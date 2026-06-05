@@ -64,6 +64,14 @@ updates:
       go-deps:
         patterns: ["*"]
 
+  - package-ecosystem: "gomod"
+    directory: "/test/fakegithub"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-deps:
+        patterns: ["*"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
