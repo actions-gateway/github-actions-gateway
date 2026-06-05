@@ -6,7 +6,7 @@ opportunistically when touching the affected packages.
 
 ## 1. Unify Go versions ✅ DONE
 
-**Queue row:** #38 · **Size:** S · **Label:** `infra` · **Status:** shipped — all 9 `go.mod` files pinned to `1.26.3` (matches `go.work` and CI's `go-version-file: go.work`).
+**Queue row:** #38 · **Size:** S · **Label:** `infra` · **Status:** shipped — all 9 `go.mod` files pinned to a single version (matches `go.work` and CI's `go-version-file: go.work`). Subsequently bumped `1.26.3` → `1.26.4` repo-wide as part of the Q23 govulncheck remediation (stdlib CVE fix for GO-2026-5037/5038/5039); the single-version invariant held through that bump.
 
 Three distinct `go` directives were in use across 9 `go.mod` files:
 
@@ -17,8 +17,9 @@ Three distinct `go` directives were in use across 9 `go.mod` files:
 | `1.26.3`  | `cmd/worker` (matches `go.work`) |
 
 CLAUDE.md is explicit: *"All go modules in the repo must use the same Go
-version."* Every `go.mod` is now pinned to `1.26.3` (the highest previously
-in use and the version `go.work` already targets).
+version."* Every `go.mod` was first unified on `1.26.3` (the highest previously
+in use and the version `go.work` then targeted); the Q23 remediation later moved
+the whole set to `1.26.4` in lockstep.
 
 The per-module `replace` directives in `broker/`, `cmd/agc/`, `cmd/gmc/`,
 `cmd/probe/` were **kept**, not dropped. They are not redundant under this
@@ -29,7 +30,7 @@ needs the `replace`s. Removing them breaks `go work vendor` and the
 vendored Docker builds.
 
 **Acceptance:** `grep -h '^go ' **/go.mod | sort -u` returns a single line
-(`go 1.26.3`). Build + vet + unit tests green across all modules.
+(`go 1.26.4`). Build + vet + unit tests green across all modules.
 
 ## 2. Async-channel violation: `StartRenewLoop` ✅ DONE
 
