@@ -54,6 +54,16 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 - Prefer `awk -v name="$value" '...'` over `sed` for substitutions involving variables — `sed` delimiter and metacharacter (`/`, `&`, `\`) issues are a common source of bugs.
 - When capturing the exit code of a pipeline via `wait`, wrap it in a subshell (`( cmd | other ) &`) so `$!` is the subshell's PID and `wait` reflects the pipeline result under `pipefail`, not just the last process's exit code.
 
+### Minimizing Bash approval prompts (workspace-guard)
+
+The `claude-workspace-guard` plugin runs as a `PreToolUse` hook and prompts for approval whenever a *guarded* file command resolves a path outside the project root (the worktree). Guarded commands are the file readers/writers: `grep`/`rg`/`sed`/`awk`/`jq`/`yq`/`cat`/`head`/`tail`/`sort`/`wc`/`diff`/`file`/`hexdump` (plus `less`/`more`/`tac`/`rev`/`nl`/`uniq`/`xxd`/`od`/`strings`/`cmp`/`zcat`-family) and `cp`/`mv`/`tee`/`rm`/`dd`. In-workspace paths and pure pipelines run silently. Keep prompts rare:
+
+- **Prefer the dedicated Read/Grep/Glob tools over bash `cat`/`grep`/`rg`/`sed`/`head`/`tail`.** They bypass the guard entirely (and the harness already prefers them).
+- **Keep guarded file args inside the worktree.** Reading/writing paths outside it — including the parent repo path or another worktree — prompts. This reinforces the "edit via worktree paths only" rule.
+- **Avoid `$VAR`, `$(...)`, and leading `~` in a guarded command's file arguments.** The guard treats any runtime-expanded token as outside-workspace and prompts *even when it would resolve inside the worktree*. Use a literal relative or absolute in-workspace path instead (e.g. write the path out rather than `$HOME/...` or `~/...`).
+- **Don't `cd` outside the worktree before a guarded command,** and avoid bare `cd`/`cd -`/`cd $HOME` — they lose cwd tracking so later relative paths prompt. Stay in the worktree and use relative paths.
+- **Write temp files inside the worktree, not `/tmp`.** `cp`/`mv`/`tee`/`dd` and `>` redirects to `/tmp` (or any outside path) prompt; `/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, and `/dev/fd/N` are exempt.
+
 ## Testing
 
 Use the per-module test commands in [`docs/development/testing.md`](docs/development/testing.md) — `go test ./...` from the repo root does not work (Go workspace). That doc is the canonical source for run commands, test-scope selection, and the integration/e2e tiers.
