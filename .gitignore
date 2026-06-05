@@ -11,6 +11,11 @@
 # Credentials never tracked, even if nested in an allowlisted dir (last match wins).
 .claude/**/.credentials.json
 CLAUDE.local.md
+# Scratch space for agent/dev temp files — keeps cp/mv/tee/rm and `>` redirects
+# inside the workspace so claude-workspace-guard doesn't prompt. The .gitkeep is
+# tracked so the dir exists on clone; everything else here is never tracked.
+/tmp/*
+!/tmp/.gitkeep
 # binary build output
 /.build/
 # Local-build of the fakegithub helper (`make` at repo root drops it here);
