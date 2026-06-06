@@ -91,6 +91,18 @@ The `Maintaining this file` section in STATUS.md historically said to mark M/L i
 
 Only set `▶ Started` if you have a specific reason to broadcast in-progress state beyond the open PR (e.g. an exploratory task with no PR yet, an item you've reserved but won't start for several days). Default to not setting it.
 
+### Don't pre-assign release versions to backlog items
+
+Do **not** tag Queue rows with speculative future release versions (`1.1`, `1.2`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?").
+
+The reasoning:
+
+- **It generates churn for no signal.** Post-release version estimates are guesses that move, and every re-estimate is another commit on this high-contention file. Same family as the banned sub-IDs and renumbering.
+- **Position already encodes priority.** The Queue is read top-to-bottom; a version tag duplicates that ordering coarsely and can drift out of agreement with it.
+- **Undefined versions anchor nothing.** A `1.1` tag with no `1.1` scope doc just asserts a roadmap that doesn't exist.
+
+The "when" of an item is already partitioned without versions: a release label (e.g. `1.0-gate`, defined by [release-1.0.md](../plan/release-1.0.md)) marks what blocks that tag; an un-labelled Queue row is "after that release, priority = its position"; [Deferred](#deferred-items-live-below-the-queue-not-in-it) is "parked until a trigger"; [appendix-g](../design/appendix-g-future-enhancements.md) is "long-horizon non-commitment." The right pattern is the one `1.0-gate` followed: **scope the release in a plan doc first, then add the label** — not the reverse.
+
 ### Use `Blocked by [QN](#QN)` for cross-item blockers
 
 When a 🚫 Queue row is blocked by another Queue item, start its Notes with `Blocked by [QN](#QN)` (or comma-separated for multiple). External dependencies that have no Queue ID — "needs a cluster with gVisor installed", a third-party sign-off — stay as plain prose.
@@ -143,4 +155,5 @@ A plan that is partially complete should stay in `docs/plan/`. Archive is for "e
 - **Carrying root-cause writeups in Queue Notes.** That's what plan docs are for.
 - **Splitting bulk discovery into many one-row commits.** That maximizes rebase pain.
 - **Renumbering existing IDs to "tidy up".** IDs are pointers; renumbering invalidates every external reference.
+- **Pre-assigning future release versions to items.** A version tag with no scoped release behind it is churn without signal — [scope the release first, then label](#dont-pre-assign-release-versions-to-backlog-items).
 - **Editing STATUS.md alongside a code change.** Conflicts on the code commit cascade into the STATUS.md edit. Always a separate commit.
