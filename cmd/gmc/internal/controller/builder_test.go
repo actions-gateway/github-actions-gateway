@@ -249,7 +249,7 @@ func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildProxyNetworkPolicy(ag, nil)
 
-	// Two ingress rules: workload→proxyPort and monitoring→healthMetricsPort.
+	// Two ingress rules: workload→proxyPort and monitoring→metricsPort.
 	require.Len(t, np.Spec.Ingress, 2)
 	rule := np.Spec.Ingress[0]
 	require.Len(t, rule.From, 1)
@@ -264,8 +264,8 @@ func TestBuildProxyNetworkPolicy_IngressFromWorkloadOnly(t *testing.T) {
 }
 
 // TestBuildProxyNetworkPolicy_MetricsScrapeIngress locks in L-8: the proxy's
-// :8081 health/metrics port is reachable only from namespaces labelled
-// metrics=enabled (the operator's Prometheus), not from arbitrary pods.
+// mTLS metrics port is reachable only from namespaces labelled metrics=enabled
+// (the operator's Prometheus), not from arbitrary pods.
 func TestBuildProxyNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildProxyNetworkPolicy(ag, nil)
@@ -287,7 +287,7 @@ func TestBuildAGCNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
 }
 
 // assertMetricsScrapeIngress verifies np carries an ingress rule that admits
-// healthMetricsPort from namespaces labelled metrics=enabled, and that the rule
+// metricsPort from namespaces labelled metrics=enabled, and that the rule
 // does not permit arbitrary pods or IPs.
 func assertMetricsScrapeIngress(t *testing.T, np *networkingv1.NetworkPolicy) {
 	t.Helper()
@@ -295,7 +295,7 @@ func assertMetricsScrapeIngress(t *testing.T, np *networkingv1.NetworkPolicy) {
 	for _, rule := range np.Spec.Ingress {
 		hasMetricsPort := false
 		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == healthMetricsPort {
+			if port.Port != nil && port.Port.IntVal == metricsPort {
 				hasMetricsPort = true
 			}
 		}
@@ -313,7 +313,7 @@ func assertMetricsScrapeIngress(t *testing.T, np *networkingv1.NetworkPolicy) {
 		assert.Nil(t, peer.PodSelector, "metrics-scrape rule must not allow arbitrary pods")
 		assert.Nil(t, peer.IPBlock, "metrics-scrape rule must not allow arbitrary IPs")
 	}
-	assert.True(t, found, "expected an ingress rule for the health/metrics port %d", healthMetricsPort)
+	assert.True(t, found, "expected an ingress rule for the metrics port %d", metricsPort)
 }
 
 // TestAGCRoleBinding_TargetsTenantClusterRole locks in that the per-tenant
@@ -728,6 +728,107 @@ func TestBuildProxyDeployment_TLSMount(t *testing.T) {
 	env := envMap(c.Env)
 	assert.Equal(t, proxyTLSMountPath+"/"+corev1.TLSCertKey, env["PROXY_TLS_CERT_FILE"].Value)
 	assert.Equal(t, proxyTLSMountPath+"/"+corev1.TLSPrivateKeyKey, env["PROXY_TLS_KEY_FILE"].Value)
+}
+
+func findVolume(vols []corev1.Volume, name string) *corev1.Volume {
+	for i := range vols {
+		if vols[i].Name == name {
+			return &vols[i]
+		}
+	}
+	return nil
+}
+
+func findMount(mounts []corev1.VolumeMount, name string) *corev1.VolumeMount {
+	for i := range mounts {
+		if mounts[i].Name == name {
+			return &mounts[i]
+		}
+	}
+	return nil
+}
+
+func hasPort(ports []corev1.ContainerPort, name string, port int32) bool {
+	for _, p := range ports {
+		if p.Name == name && p.ContainerPort == port {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBuildMetricsTLSSecret(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	b, err := generateMetricsCerts(ag)
+	require.NoError(t, err)
+
+	s := buildMetricsTLSSecret(ag, b)
+	assert.Equal(t, metricsTLSSecretName, s.Name)
+	assert.Equal(t, ag.Namespace, s.Namespace)
+	assert.Equal(t, corev1.SecretTypeTLS, s.Type)
+	assert.Equal(t, b.serverCertPEM, s.Data[corev1.TLSCertKey])
+	assert.Equal(t, b.serverKeyPEM, s.Data[corev1.TLSPrivateKeyKey])
+	assert.Equal(t, b.caPEM, s.Data[metricsCACertKey])
+	// The server bundle must NOT carry the scraper client key.
+	assert.NotEqual(t, b.clientKeyPEM, s.Data[corev1.TLSPrivateKeyKey])
+}
+
+func TestBuildMetricsClientSecret(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	b, err := generateMetricsCerts(ag)
+	require.NoError(t, err)
+
+	s := buildMetricsClientSecret(ag, b)
+	assert.Equal(t, metricsClientSecretName, s.Name)
+	assert.Equal(t, corev1.SecretTypeTLS, s.Type)
+	assert.Equal(t, b.clientCertPEM, s.Data[corev1.TLSCertKey])
+	assert.Equal(t, b.clientKeyPEM, s.Data[corev1.TLSPrivateKeyKey])
+	assert.Equal(t, b.caPEM, s.Data[metricsCACertKey])
+}
+
+func TestBuildProxyDeployment_MetricsTLSMount(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildProxyDeployment(ag, "proxy:latest")
+
+	vol := findVolume(dep.Spec.Template.Spec.Volumes, metricsTLSVolumeName)
+	require.NotNil(t, vol, "metrics-tls volume must be present on the proxy")
+	require.NotNil(t, vol.Secret)
+	assert.Equal(t, metricsTLSSecretName, vol.Secret.SecretName)
+
+	c := dep.Spec.Template.Spec.Containers[0]
+	mount := findMount(c.VolumeMounts, metricsTLSVolumeName)
+	require.NotNil(t, mount, "metrics-tls VolumeMount must be present on the proxy")
+	assert.Equal(t, metricsTLSMountPath, mount.MountPath)
+	assert.True(t, mount.ReadOnly)
+
+	assert.True(t, hasPort(c.Ports, "metrics", metricsPort), "proxy must declare the metrics containerPort")
+	assert.True(t, hasPort(c.Ports, "health", healthMetricsPort), "proxy must keep the health containerPort")
+
+	env := envMap(c.Env)
+	assert.Equal(t, metricsTLSMountPath+"/"+corev1.TLSCertKey, env["PROXY_METRICS_TLS_CERT_FILE"].Value)
+	assert.Equal(t, metricsTLSMountPath+"/"+corev1.TLSPrivateKeyKey, env["PROXY_METRICS_TLS_KEY_FILE"].Value)
+	assert.Equal(t, metricsTLSMountPath+"/"+metricsCACertKey, env["PROXY_METRICS_CLIENT_CA_FILE"].Value)
+}
+
+func TestBuildAGCDeployment_MetricsTLSMount(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "https://proxy:8080", nil)
+
+	vol := findVolume(dep.Spec.Template.Spec.Volumes, metricsTLSVolumeName)
+	require.NotNil(t, vol, "metrics-tls volume must be present on the AGC")
+	require.NotNil(t, vol.Secret)
+	assert.Equal(t, metricsTLSSecretName, vol.Secret.SecretName)
+	// The AGC mounts the full server bundle (no Items projection) — it needs the
+	// server key to serve mTLS, unlike the proxy-CA mount which is cert-only.
+	assert.Empty(t, vol.Secret.Items, "AGC metrics-tls mount must include the server key, not just the cert")
+
+	c := dep.Spec.Template.Spec.Containers[0]
+	mount := findMount(c.VolumeMounts, metricsTLSVolumeName)
+	require.NotNil(t, mount, "metrics-tls VolumeMount must be present on the AGC")
+	assert.Equal(t, metricsTLSMountPath, mount.MountPath)
+	assert.True(t, mount.ReadOnly)
+
+	assert.True(t, hasPort(c.Ports, "metrics", metricsPort), "AGC must declare the metrics containerPort on metricsPort")
 }
 
 func TestBuildAGCDeployment_NilExtraEnvNoLeaks(t *testing.T) {

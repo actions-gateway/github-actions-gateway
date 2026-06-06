@@ -162,6 +162,12 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("proxy TLS cert: %w", err)
 	}
 
+	// 7b. Metrics mTLS bundle — the server Secret is mounted by both the proxy
+	// and AGC Deployments, so it must exist before either is applied.
+	if err := r.ensureMetricsCerts(ctx, ag); err != nil {
+		return fmt.Errorf("metrics TLS certs: %w", err)
+	}
+
 	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
 	if err := r.applyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
@@ -595,6 +601,64 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 	existing.Labels = desired.Labels
 	existing.OwnerReferences = desired.OwnerReferences
 	return r.Update(ctx, &existing)
+}
+
+// ensureMetricsCerts ensures the per-tenant metrics mTLS bundle exists and is not
+// near expiry. It (re)generates a CA + server cert + scraper client cert and writes
+// two Secrets: the server bundle (metricsTLSSecretName, mounted into the AGC and
+// proxy) and the scraper client bundle (metricsClientSecretName, published for the
+// monitoring stack). Both carry an owner reference on the ActionsGateway so they
+// are garbage-collected on delete (the GMC has no Secret delete permission). The
+// whole bundle is regenerated together when either Secret is missing or the server
+// cert is within metricsCertRenewBefore of expiry — mirroring ensureProxyCert.
+func (r *ActionsGatewayReconciler) ensureMetricsCerts(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	var serverSec corev1.Secret
+	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsTLSSecretName}, &serverSec)
+	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
+		return serverErr
+	}
+	var clientSec corev1.Secret
+	clientErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsClientSecretName}, &clientSec)
+	if clientErr != nil && !apierrors.IsNotFound(clientErr) {
+		return clientErr
+	}
+
+	if !apierrors.IsNotFound(serverErr) && !apierrors.IsNotFound(clientErr) {
+		if cert, err := parseCertPEM(serverSec.Data[corev1.TLSCertKey]); err == nil {
+			if time.Until(cert.NotAfter) > metricsCertRenewBefore {
+				return nil // both Secrets present and the server cert is not near expiry
+			}
+		}
+	}
+
+	bundle, err := generateMetricsCerts(ag)
+	if err != nil {
+		return fmt.Errorf("generate metrics certs: %w", err)
+	}
+
+	if err := r.applyOwnedSecret(ctx, ag, buildMetricsTLSSecret(ag, bundle), &serverSec, serverErr); err != nil {
+		return fmt.Errorf("metrics server Secret: %w", err)
+	}
+	if err := r.applyOwnedSecret(ctx, ag, buildMetricsClientSecret(ag, bundle), &clientSec, clientErr); err != nil {
+		return fmt.Errorf("metrics client Secret: %w", err)
+	}
+	return nil
+}
+
+// applyOwnedSecret creates desired (when getErr is NotFound) or updates the
+// existing Secret's data/labels/owner-refs, setting an owner reference on the
+// ActionsGateway so the Secret is GC'd on CR delete.
+func (r *ActionsGatewayReconciler) applyOwnedSecret(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired, existing *corev1.Secret, getErr error) error {
+	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set owner reference: %w", err)
+	}
+	if apierrors.IsNotFound(getErr) {
+		return r.Create(ctx, desired)
+	}
+	existing.Data = desired.Data
+	existing.Labels = desired.Labels
+	existing.OwnerReferences = desired.OwnerReferences
+	return r.Update(ctx, existing)
 }
 
 // psaFieldManager is the Server-Side Apply field manager that owns the PSA

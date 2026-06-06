@@ -65,7 +65,7 @@ by-design / accepted.
 | **L-5** | PEM parser asymmetry | Informational | — | ✅ Done 2026-05-23 | Unified PKCS#1+PKCS#8 parsing (via W9) |
 | **L-6** | `mustEnv` calls `os.Exit` | Informational | — | ✅ Done | All three return errors |
 | **L-7** | Stub URLs default to `stub.example.com` | Informational | — | ✅ Done | Both stub URLs required together when `GITHUB_ORG_URL` unset |
-| **L-8** | `:8081` health/metrics port not constrained by NP ingress | Low | — | ✅ Done 2026-06-04 | Proxy + AGC NP ingress restricted to namespaces labelled `metrics: enabled`; AGC metrics pinned to `:8081` (Q25) |
+| **L-8** | `:8081` health/metrics port not constrained by NP ingress | Low | — | ✅ Done 2026-06-04 | Proxy + AGC NP ingress restricted to namespaces labelled `metrics: enabled` (Q25). Q69 then moved `/metrics` to a dedicated mTLS port `:8443` (client cert signed by a per-tenant GMC-issued CA); `:8081` now carries only the proxy's plaintext kubelet probes. See [q69-authenticated-metrics.md](q69-authenticated-metrics.md). |
 
 ### Open work
 

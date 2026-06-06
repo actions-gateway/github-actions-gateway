@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 func main() {
@@ -61,13 +60,21 @@ const (
 	// metricsBindAddress pins the controller-runtime metrics server to a known
 	// port instead of relying on the framework default (":8080" in
 	// controller-runtime v0.24). The GMC's per-tenant AGC NetworkPolicy admits
-	// Prometheus scrapes only on this port (healthMetricsPort in
+	// Prometheus scrapes only on this port (metricsPort in
 	// cmd/gmc/internal/controller/builder.go), so the listener and the policy
 	// must agree by construction — an implicit default could drift out from
 	// under the policy on a dependency bump and silently break (or, worse,
-	// re-expose) metrics. Plain HTTP, gated by the NetworkPolicy namespace
-	// selector; authenticated secure-serving is a separate follow-up.
-	metricsBindAddress = ":8081"
+	// re-expose) metrics. Served over mTLS (see metricsCertDir) so only a
+	// scraper holding a CA-signed client cert can read it (Q69).
+	metricsBindAddress = ":8443"
+
+	// metricsCertDir is where the GMC mounts the metrics mTLS server bundle
+	// (ca.crt + tls.crt + tls.key). When present, the metrics endpoint is served
+	// over HTTPS requiring a client cert signed by ca.crt. When absent (local
+	// dev/test where the GMC has not mounted it), metrics fall back to plain
+	// HTTP — mirroring the proxy's TLS-when-mounted pattern. The GMC always
+	// mounts it in production, so the effective default there is mTLS.
+	metricsCertDir = "/etc/actions-gateway/metrics-tls"
 )
 
 func run() error {
@@ -173,10 +180,14 @@ func run() error {
 	if namespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{namespace: {}}
 	}
+	metricsOpts, err := buildMetricsOptions(metricsCertDir, ctrl.Log.WithName("metrics"))
+	if err != nil {
+		return fmt.Errorf("configure metrics server: %w", err)
+	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:  scheme,
 		Cache:   cacheOpts,
-		Metrics: metricsserver.Options{BindAddress: metricsBindAddress},
+		Metrics: metricsOpts,
 		// Three-part Secret isolation (see plan/security.md §H-2):
 		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
 		//    the controller-runtime cache and hit the API server directly, so

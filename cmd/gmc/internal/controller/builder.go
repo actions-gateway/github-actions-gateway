@@ -43,15 +43,24 @@ const (
 
 	proxyServiceName = gmcnames.ProxyName
 	proxyPort        = int32(8080)
-	// healthMetricsPort is the shared health + Prometheus-metrics listener port
-	// for both the proxy (/healthz, /readyz, /metrics) and the AGC
-	// (controller-runtime metrics). The GMC pins the AGC manager's metrics bind
-	// address to this port (cmd/agc/main.go) so the metrics-scrape ingress rule
-	// below provably targets the live listener rather than a framework default.
+	// healthMetricsPort is the proxy's plaintext health listener port
+	// (/healthz, /readyz) probed by the kubelet. It carries no Prometheus
+	// metrics anymore — those moved to the mTLS metricsPort below so blanket
+	// client-cert enforcement on the metrics listener does not break the
+	// certless kubelet probes. The AGC has no health probes, so this port is
+	// unused on the AGC side.
 	healthMetricsPort = int32(8081)
 
+	// metricsPort is the dedicated mTLS Prometheus-metrics listener port for
+	// both the proxy and the AGC. Each serves /metrics over HTTPS and requires a
+	// client certificate signed by the per-tenant metrics CA (see
+	// metrics_cert.go); the metrics-scrape NetworkPolicy ingress rule targets
+	// this port. The GMC pins the AGC manager's metrics bind address here
+	// (cmd/agc/main.go) so the ingress rule provably matches the live listener.
+	metricsPort = int32(8443)
+
 	// metricsScrapeNamespaceLabel / metricsScrapeNamespaceValue select the
-	// namespace(s) permitted to scrape the proxy and AGC health/metrics port.
+	// namespace(s) permitted to scrape the proxy and AGC metrics port.
 	// Mirrors the kubebuilder convention used by the GMC's own
 	// allow-metrics-traffic NetworkPolicy
 	// (cmd/gmc/config/network-policy/allow-metrics-traffic.yaml): an operator
@@ -135,12 +144,13 @@ func buildAGCRoleBinding(ag *gmcv1alpha1.ActionsGateway) *rbacv1.RoleBinding {
 }
 
 // metricsScrapeIngressRule returns a NetworkPolicy ingress rule that permits
-// Prometheus scrapes of the health/metrics port (healthMetricsPort) from any
-// namespace labelled metrics=enabled. It is applied to both the proxy and AGC
+// Prometheus scrapes of the mTLS metrics port (metricsPort) from any namespace
+// labelled metrics=enabled. It is applied to both the proxy and AGC
 // NetworkPolicies so per-tenant traffic-volume metrics (CONNECT counts, active
 // tunnels, dial errors) are reachable only by the operator's monitoring stack,
-// not by every pod in the tenant namespace (L-8). See metricsScrapeNamespaceLabel
-// for why kubelet probe traffic needs no explicit rule.
+// not by every pod in the tenant namespace (L-8). The plaintext kubelet probe
+// port (healthMetricsPort) carries no metrics and needs no rule — see
+// metricsScrapeNamespaceLabel for why kubelet probe traffic is already exempt.
 func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 	return networkingv1.NetworkPolicyIngressRule{
 		From: []networkingv1.NetworkPolicyPeer{{
@@ -148,7 +158,7 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 				MatchLabels: map[string]string{metricsScrapeNamespaceLabel: metricsScrapeNamespaceValue},
 			},
 		}},
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(healthMetricsPort))}},
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(metricsPort))}},
 	}
 }
 
@@ -364,15 +374,29 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 							}},
 						},
 					},
-					Volumes: []corev1.Volume{{
-						Name: proxyTLSVolumeName,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName:  proxyTLSSecretName,
-								DefaultMode: &tlsMode,
+					Volumes: []corev1.Volume{
+						{
+							Name: proxyTLSVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName:  proxyTLSSecretName,
+									DefaultMode: &tlsMode,
+								},
 							},
 						},
-					}},
+						{
+							// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key).
+							// The proxy serves /metrics over mTLS on metricsPort and
+							// verifies scraper client certs against ca.crt.
+							Name: metricsTLSVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName:  metricsTLSSecretName,
+									DefaultMode: &tlsMode,
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{{
 						Name:      "proxy",
 						Image:     proxyImage,
@@ -380,16 +404,28 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 						Ports: []corev1.ContainerPort{
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
+							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						Env: []corev1.EnvVar{
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
 							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+							{Name: "PROXY_METRICS_PORT", Value: fmt.Sprintf("%d", metricsPort)},
+							{Name: "PROXY_METRICS_TLS_CERT_FILE", Value: metricsTLSMountPath + "/" + corev1.TLSCertKey},
+							{Name: "PROXY_METRICS_TLS_KEY_FILE", Value: metricsTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+							{Name: "PROXY_METRICS_CLIENT_CA_FILE", Value: metricsTLSMountPath + "/" + metricsCACertKey},
 						},
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      proxyTLSVolumeName,
-							MountPath: proxyTLSMountPath,
-							ReadOnly:  true,
-						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      proxyTLSVolumeName,
+								MountPath: proxyTLSMountPath,
+								ReadOnly:  true,
+							},
+							{
+								Name:      metricsTLSVolumeName,
+								MountPath: metricsTLSMountPath,
+								ReadOnly:  true,
+							},
+						},
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
@@ -443,6 +479,45 @@ func buildProxyCertSecret(ag *gmcv1alpha1.ActionsGateway, certPEM, keyPEM []byte
 		Data: map[string][]byte{
 			corev1.TLSCertKey:       certPEM,
 			corev1.TLSPrivateKeyKey: keyPEM,
+		},
+	}
+}
+
+// buildMetricsTLSSecret constructs the server bundle Secret mounted into the AGC
+// and proxy pods: the metrics CA cert (to verify scraper client certs) plus the
+// metrics server cert+key. It is a kubernetes.io/tls Secret with an extra ca.crt key.
+func buildMetricsTLSSecret(ag *gmcv1alpha1.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      metricsTLSSecretName,
+			Namespace: ag.Namespace,
+			Labels:    managedLabels(ag),
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       b.serverCertPEM,
+			corev1.TLSPrivateKeyKey: b.serverKeyPEM,
+			metricsCACertKey:        b.caPEM,
+		},
+	}
+}
+
+// buildMetricsClientSecret constructs the scraper bundle Secret published for the
+// monitoring stack: the metrics CA cert (to verify the metrics server) plus the
+// scraper client cert+key (to authenticate to the AGC/proxy metrics listeners).
+// It is never mounted into AGC/proxy pods.
+func buildMetricsClientSecret(ag *gmcv1alpha1.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      metricsClientSecretName,
+			Namespace: ag.Namespace,
+			Labels:    managedLabels(ag),
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       b.clientCertPEM,
+			corev1.TLSPrivateKeyKey: b.clientKeyPEM,
+			metricsCACertKey:        b.caPEM,
 		},
 	}
 }
@@ -573,17 +648,30 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 								},
 							},
 						},
+						{
+							// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key).
+							// The AGC's controller-runtime metrics server serves
+							// /metrics over mTLS on metricsPort and verifies scraper
+							// client certs against ca.crt.
+							Name: metricsTLSVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName:  metricsTLSSecretName,
+									DefaultMode: &credMode,
+								},
+							},
+						},
 					},
 					Containers: []corev1.Container{{
 						Name:  "agc",
 						Image: agcImage,
 						Env:   env,
 						// The AGC pins its controller-runtime metrics server to
-						// healthMetricsPort (cmd/agc/main.go); declaring the port
-						// documents the listener that buildAGCNetworkPolicy's
-						// metrics-scrape ingress rule admits.
+						// metricsPort (cmd/agc/main.go); declaring the port documents
+						// the listener that buildAGCNetworkPolicy's metrics-scrape
+						// ingress rule admits.
 						Ports: []corev1.ContainerPort{
-							{Name: "metrics", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
+							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
@@ -594,6 +682,11 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 							{
 								Name:      proxyCACertVolumeName,
 								MountPath: proxyCACertMountPath,
+								ReadOnly:  true,
+							},
+							{
+								Name:      metricsTLSVolumeName,
+								MountPath: metricsTLSMountPath,
 								ReadOnly:  true,
 							},
 						},
