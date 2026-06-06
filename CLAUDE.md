@@ -70,6 +70,8 @@ The `claude-workspace-guard` plugin runs as a `PreToolUse` hook and prompts for 
 
 Use the per-module test commands in [`docs/development/testing.md`](docs/development/testing.md) — `go test ./...` from the repo root does not work (Go workspace). That doc is the canonical source for run commands, test-scope selection, and the integration/e2e tiers.
 
+**Run `make check` before concluding work or requesting review.** It is the one-command fast gate: gofmt + golangci-lint + `docs/STATUS.md` lint + unit tests, mirroring `.github/workflows/unit-test.yml` exactly — a green `make check` means a green unit-test workflow. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers stay separate; run them when the change warrants it. A sub-second subset (gofmt on staged Go files + STATUS.md lint) also runs at commit time via the tracked pre-commit hook in `.githooks/` — installed by `make hooks` or `scripts/setup.sh`; bypass once with `git commit --no-verify`.
+
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
 **Flake fixes go first.** If a CI test passes on rerun without a code change, file a Queue item for it and move that item to the top of the Queue before continuing other work — flake cost compounds across every future PR. See [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#flake-fixes-go-first).
@@ -117,6 +119,7 @@ When working on specific tasks, read the relevant doc before starting:
 
 | Task | Reference |
 |---|---|
+| Running the pre-review gate (`make check`) or the pre-commit hook | `docs/development/testing.md` |
 | Running integration tests, editing CI workflows | `docs/development/testing.md` |
 | Standing up / iterating against a kind cluster | `docs/development/kind-iteration.md` (design context in `docs/design/07-test-plan.md` §7.3) |
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |

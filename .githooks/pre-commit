@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Fast pre-commit gate — the cheapest backpressure, run at commit time so
+# trivially-fixable mistakes never cost a CI round-trip. Kept sub-second on
+# purpose: the slower checks (golangci-lint, unit tests, govulncheck) live in
+# `make check` and CI, so this hook stays fast enough that nobody reaches for
+# --no-verify out of habit. Bypass a single commit with `git commit --no-verify`.
+#
+# Installed by `make hooks` or scripts/setup.sh, both of which point
+# core.hooksPath at this tracked directory. The relative path resolves per
+# worktree, so one install covers the main checkout and every linked worktree.
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 1. gofmt — reject staged Go files that aren't gofmt-simplified. Checks the
+#    working-tree copy of each staged file, matching how CI's gofmt gate runs.
+staged_go="$(git diff --cached --name-only --diff-filter=ACM -- '*.go')"
+if [[ -n "$staged_go" ]]; then
+    existing=()
+    while IFS= read -r f; do
+        [[ -f "$REPO_ROOT/$f" ]] && existing+=("$REPO_ROOT/$f")
+    done <<< "$staged_go"
+    if (( ${#existing[@]} > 0 )); then
+        unformatted="$(gofmt -l -s "${existing[@]}")"
+        if [[ -n "$unformatted" ]]; then
+            echo "pre-commit: these staged Go files are not gofmt-simplified:" >&2
+            echo "$unformatted" >&2
+            echo "fix with: gofmt -s -w <file>" >&2
+            exit 1
+        fi
+    fi
+fi
+
+# 2. lint-status — validate docs/STATUS.md format when it is staged (the
+#    250-char Notes cap and friends; see scripts/lint-status.sh).
+if git diff --cached --name-only --diff-filter=ACM | grep -qx 'docs/STATUS.md'; then
+    echo "pre-commit: linting docs/STATUS.md..."
+    "$REPO_ROOT/scripts/lint-status.sh"
+fi
