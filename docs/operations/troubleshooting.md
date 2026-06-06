@@ -281,16 +281,24 @@ These are not bugs. They bound goroutine and file-descriptor exhaustion from slo
 
 **Diagnostics.**
 
+The proxy serves `/metrics` over mutual TLS on `:8443` (not `:8081`, which now
+carries only the plaintext `/healthz` + `/readyz` probes). Scraping requires the
+per-tenant scraper client certificate the GMC publishes — see
+[Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
+for how to fetch the bundle. With the bundle written to `scraper.crt` /
+`scraper.key` / `metrics-ca.crt`:
+
 ```sh
+ns=<namespace>
 # Distribution of tunnel lifetimes; a heavy tail near 21600s (6h) or
 # a spike at 300s (5m idle) indicates clients hitting the caps.
-kubectl exec -n <namespace> deploy/actions-gateway-proxy -- \
-  wget -qO- localhost:8081/metrics | \
+curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
+  "https://actions-gateway-proxy.$ns.svc:8443/metrics" | \
   grep actions_gateway_proxy_tunnel_duration_seconds_bucket
 
 # Active vs. total tunnels — healthy ratio is "active << total".
-kubectl exec -n <namespace> deploy/actions-gateway-proxy -- \
-  wget -qO- localhost:8081/metrics | \
+curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
+  "https://actions-gateway-proxy.$ns.svc:8443/metrics" | \
   grep -E 'actions_gateway_proxy_connections_(active|total)'
 ```
 
@@ -301,6 +309,44 @@ For idle hits: examine the workflow step that stalls. A workflow `sleep`-ing ins
 For lifetime-cap hits: split very long-running uploads or streams across multiple HTTP requests. The 6h cap is a safety net for stuck connections; a legitimately-long single stream should be rare.
 
 To change the defaults during an incident, patch the proxy Deployment with environment overrides — note that there is no env-var knob today; defaults are baked into the Server struct and require a code change to adjust. File a Queue item if a tenant repeatedly hits either cap on a legitimate workload.
+
+---
+
+## Metrics scrape returns a TLS / connection error
+
+**Symptoms.** Prometheus (or a manual `curl`) of a per-tenant proxy or AGC
+`/metrics` endpoint fails with one of:
+
+- `remote error: tls: certificate required` / `bad certificate` — no client cert, or one signed by the wrong CA.
+- `connection refused` on `:8081/metrics` — the metrics endpoint moved to `:8443` (mTLS); `:8081` now serves only `/healthz` + `/readyz`.
+- `context deadline exceeded` / no route — the scraper namespace is not labelled `metrics: enabled`, so the NetworkPolicy drops the connection before the handshake.
+
+**Cause.** The proxy and AGC serve `/metrics` over **mutual TLS** on `:8443`
+(Q69). A scraper must (1) connect from a namespace labelled `metrics: enabled`
+and (2) present a client certificate signed by the per-tenant metrics CA the GMC
+issues. Both halves are required.
+
+**Resolution.**
+
+1. Label the monitoring namespace so the NetworkPolicy admits it:
+   ```sh
+   kubectl label namespace <prometheus-namespace> metrics=enabled
+   ```
+2. Fetch the scraper client bundle the GMC publishes in each tenant namespace and
+   point the scrape at `:8443` with `scheme: https`:
+   ```sh
+   ns=<tenant-namespace>
+   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.tls\.crt}' | base64 -d > scraper.crt
+   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.tls\.key}' | base64 -d > scraper.key
+   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.ca\.crt}'  | base64 -d > metrics-ca.crt
+   curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
+     "https://actions-gateway-proxy.$ns.svc:8443/metrics" | head
+   ```
+   Delete the extracted key file when finished. For a `ServiceMonitor`, mount the
+   bundle and reference it from `tlsConfig` (`cert`/`keySecret`/`ca`).
+3. If the cert is rejected after a CA rotation, the GMC re-issues the whole
+   bundle ~30 days before expiry but pods read certs at startup — restart the
+   proxy/AGC pods (and re-fetch the client bundle) after a rotation.
 
 ---
 

@@ -4,11 +4,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,8 +22,21 @@ import (
 type Server struct {
 	// Addr is the listen address for CONNECT requests. Default ":8080".
 	Addr string
-	// HealthAddr is the listen address for /healthz and /metrics. Default ":8081".
+	// HealthAddr is the listen address for /healthz and /readyz (plaintext,
+	// kubelet probes). Default ":8081".
 	HealthAddr string
+	// MetricsAddr is the listen address for the mTLS /metrics endpoint. When the
+	// metrics mTLS files below are all set, /metrics is served here over HTTPS
+	// requiring a CA-signed client cert; otherwise /metrics is served plaintext
+	// on HealthAddr (dev/test fallback).
+	MetricsAddr string
+	// MetricsTLSCertFile / MetricsTLSKeyFile / MetricsClientCAFile configure the
+	// mTLS metrics listener. All three must be set to enable it: the first two
+	// are the server cert+key, the third is the CA that scraper client certs are
+	// verified against (Q69).
+	MetricsTLSCertFile  string
+	MetricsTLSKeyFile   string
+	MetricsClientCAFile string
 	// DialTimeout is the upstream TCP dial timeout. Default 10s.
 	DialTimeout time.Duration
 	// ReadHeaderTimeout caps how long the server waits for request headers on
@@ -46,6 +61,12 @@ type Server struct {
 	connectionsTotal  *prometheus.CounterVec
 	dialErrors        *prometheus.CounterVec
 	tunnelDuration    *prometheus.HistogramVec
+
+	// metricsGatherer is the registry the /metrics endpoint serves — the same
+	// one the proxy metrics above are registered on, so a custom registry (tests,
+	// or multiple in-process servers) is served consistently instead of always
+	// falling back to the global default registry.
+	metricsGatherer prometheus.Gatherer
 
 	// ready is closed by ListenAndServe once the CONNECT listener has bound.
 	// /readyz returns 200 only after this channel is closed, so the kubelet
@@ -86,6 +107,14 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 	}, nil)
 	reg.MustRegister(active, total, dialErr, tunnelDur)
 
+	// Serve from the same registry the metrics were registered on. A
+	// *prometheus.Registry satisfies both Registerer and Gatherer; the default
+	// registerer is also the default gatherer.
+	gatherer, ok := reg.(prometheus.Gatherer)
+	if !ok {
+		gatherer = prometheus.DefaultGatherer
+	}
+
 	return &Server{
 		Addr:              addr,
 		HealthAddr:        healthAddr,
@@ -95,6 +124,7 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		connectionsTotal:  total,
 		dialErrors:        dialErr,
 		tunnelDuration:    tunnelDur,
+		metricsGatherer:   gatherer,
 		ready:             make(chan struct{}),
 	}
 }
@@ -108,6 +138,19 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 // /readyz flips to 200 — no race window where the EndpointSlice points at a
 // pod whose CONNECT port is still unbound.
 func (s *Server) ListenAndServe(ctx context.Context) error {
+	metricsEnabled := s.MetricsTLSCertFile != "" && s.MetricsTLSKeyFile != "" && s.MetricsClientCAFile != ""
+
+	// Build the metrics mTLS config first so a bad cert fails fast, before any
+	// listener is bound.
+	var metricsTLS *tls.Config
+	if metricsEnabled {
+		var err error
+		metricsTLS, err = s.metricsTLSConfig()
+		if err != nil {
+			return fmt.Errorf("configure metrics mTLS: %w", err)
+		}
+	}
+
 	connectLn, err := net.Listen("tcp", s.Addr)
 	if err != nil {
 		return fmt.Errorf("bind connect listener: %w", err)
@@ -120,6 +163,17 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		return fmt.Errorf("bind health listener: %w", err)
 	}
 	s.HealthAddr = healthLn.Addr().String()
+
+	var metricsLn net.Listener
+	if metricsEnabled {
+		metricsLn, err = net.Listen("tcp", s.MetricsAddr)
+		if err != nil {
+			_ = connectLn.Close()
+			_ = healthLn.Close()
+			return fmt.Errorf("bind metrics listener: %w", err)
+		}
+		s.MetricsAddr = metricsLn.Addr().String()
+	}
 
 	close(s.ready)
 
@@ -137,7 +191,12 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		w.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("/readyz", s.handleReadyz)
-	mux.Handle("/metrics", promhttp.Handler())
+	if !metricsEnabled {
+		// Dev/test fallback: serve metrics plaintext on the health port when no
+		// mTLS bundle is configured. In production the GMC always mounts the
+		// bundle, so metrics are served over mTLS on the dedicated listener below.
+		mux.Handle("/metrics", promhttp.HandlerFor(s.metricsGatherer, promhttp.HandlerOpts{}))
+	}
 	healthSrv := &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: readHeaderTimeout,
@@ -161,22 +220,70 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){},
 	}
 
-	errCh := make(chan error, 2)
+	var metricsSrv *http.Server
+	if metricsEnabled {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.HandlerFor(s.metricsGatherer, promhttp.HandlerOpts{}))
+		metricsSrv = &http.Server{
+			Handler:           metricsMux,
+			TLSConfig:         metricsTLS,
+			ReadHeaderTimeout: readHeaderTimeout,
+			IdleTimeout:       httpIdleTimeout,
+			// HTTP/1.1 only — consistent with the CONNECT listener and avoids the
+			// h2-over-ALPN surprise documented on proxySrv below.
+			TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){},
+		}
+	}
+
+	errCh := make(chan error, 3)
 	go func() { errCh <- healthSrv.Serve(healthLn) }()
 	if s.TLSCertFile != "" && s.TLSKeyFile != "" {
 		go func() { errCh <- proxySrv.ServeTLS(connectLn, s.TLSCertFile, s.TLSKeyFile) }()
 	} else {
 		go func() { errCh <- proxySrv.Serve(connectLn) }()
 	}
+	if metricsSrv != nil {
+		// Cert+key live in metricsSrv.TLSConfig.Certificates, so ServeTLS gets "".
+		go func() { errCh <- metricsSrv.ServeTLS(metricsLn, "", "") }()
+	}
 
 	select {
 	case <-ctx.Done():
 		_ = proxySrv.Shutdown(context.Background())
 		_ = healthSrv.Shutdown(context.Background())
+		if metricsSrv != nil {
+			_ = metricsSrv.Shutdown(context.Background())
+		}
 		return nil
 	case err := <-errCh:
 		return err
 	}
+}
+
+// metricsTLSConfig builds the mTLS server config for the metrics listener:
+// the server cert+key plus the CA that scraper client certificates are verified
+// against. RequireAndVerifyClientCert means the TLS handshake itself rejects any
+// client that does not present a CA-signed certificate.
+func (s *Server) metricsTLSConfig() (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(s.MetricsTLSCertFile, s.MetricsTLSKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load metrics server cert/key: %w", err)
+	}
+	caPEM, err := os.ReadFile(s.MetricsClientCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("read metrics client CA %s: %w", s.MetricsClientCAFile, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("no certificates parsed from %s", s.MetricsClientCAFile)
+	}
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    pool,
+		MinVersion:   tls.VersionTLS12,
+		NextProtos:   []string{"http/1.1"},
+	}, nil
 }
 
 // handleReadyz returns 200 only once the CONNECT listener has bound. The

@@ -10,6 +10,7 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -154,6 +155,33 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
 			&policyv1.PodDisruptionBudget{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	// Metrics mTLS Secrets (Q69). Names are the literal on-cluster names from
+	// metrics_cert.go (unexported there). The server bundle is mounted into the
+	// AGC + proxy; the client bundle is published for the scraper.
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-metrics-tls"},
+			&corev1.Secret{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	var metricsServerSec corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-metrics-tls"}, &metricsServerSec))
+	assert.Equal(t, corev1.SecretTypeTLS, metricsServerSec.Type)
+	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey, "ca.crt"} {
+		assert.NotEmpty(t, metricsServerSec.Data[k], "metrics server Secret must carry %s", k)
+	}
+
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-metrics-client"},
+			&corev1.Secret{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	var metricsClientSec corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway-metrics-client"}, &metricsClientSec))
+	assert.Equal(t, corev1.SecretTypeTLS, metricsClientSec.Type)
+	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey, "ca.crt"} {
+		assert.NotEmpty(t, metricsClientSec.Data[k], "metrics client Secret must carry %s", k)
+	}
 }
 
 func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {
