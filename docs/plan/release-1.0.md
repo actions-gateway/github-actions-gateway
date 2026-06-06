@@ -151,10 +151,10 @@ are validated.
 ### F. Engineering quality gates — *gating*
 
 CI-enforced quality measurements that keep an AI-developed, multi-session
-codebase from regressing silently between sessions. Both are cheap to wire;
-the deliverable is as much the **agreed threshold** as the plumbing. Each is
-ratchet/threshold-shaped, not a one-time fix — so they gate by *not getting
-worse*, which avoids manufacturing low-value tests or churn.
+codebase from regressing silently between sessions. Most are cheap to wire;
+where a threshold applies, the deliverable is as much the **agreed bar** as
+the plumbing, and those gate by *not getting worse* to avoid manufacturing
+low-value tests or churn.
 
 - [ ] **Test coverage measured + gated** ([Q77](../STATUS.md), *gating*):
   `unit-test.yml` reports per-module `go test` coverage. **Threshold
@@ -170,6 +170,28 @@ worse*, which avoids manufacturing low-value tests or churn.
   suppress false positives on table-driven tests and the divergent pod-spec
   builders. Catches the copy-paste-drift class that bit the AGC/proxy
   `SecurityContext` blocks (extracted in the builder.go helper refactor).
+- [ ] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
+  `make test` and `unit-test.yml` add the race detector to the *unit* path,
+  not just integration. The multiplexing core (agentpool, listener/mux,
+  broker, token) is where data races hide and is currently never
+  race-checked in the gate — the class the [Q76](../STATUS.md) pool race
+  belongs to. No threshold: `-race` is pass/fail; the only call is
+  fast-job-vs-separate-job since it roughly doubles unit runtime.
+- [ ] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enable
+  gosec across all modules. The `//nolint:gosec` markers already in the tree
+  (`broker/crypto.go` SHA-1, listener jitter) anticipate it but are dead
+  until it runs. Initial findings triaged into a suppression list with a
+  per-entry justification — the same pattern as the planned `polaris.yaml`.
+- [ ] **`errcheck` across all modules** ([Q81](../STATUS.md), *gating*):
+  promote errcheck from GMC-only (`cmd/gmc/.golangci.yml`) to the root
+  `.golangci.yml`, so unchecked errors are caught in
+  agc/broker/proxy/worker/githubapp/probe too. Fix or explicitly justify
+  the batch it surfaces.
+- [ ] **Install artifact validates** ([Q66](../STATUS.md), *gating*; folds
+  [Q73](../STATUS.md) CRD drift): `yamllint` + `kubeconform` on the
+  manifests, and once the Helm chart ([Q12](../STATUS.md)) exists,
+  `helm lint` + kubeconform on the rendered output. A malformed
+  RBAC/CRD/policy file is a release defect for an install-artifact product.
 
 ---
 
@@ -206,7 +228,8 @@ Track 2 (packaging — the keystone):
 
 Independent (any time):
   D (Q35 AGC logging/probes; Q34 manifests; Q51/Q72 metrics)
-  F (Q77 coverage gate; Q78 dup-check) — CI-only, no cluster needed
+  F (Q77 coverage; Q78 dup-check; Q79 -race; Q80 gosec; Q81 errcheck;
+     Q66 manifest validation) — CI-only, no cluster needed
   E (docs honesty pass) — finish last, once A–D outcomes are known
 ```
 
@@ -236,7 +259,7 @@ Suggested sequence:
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
 | E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
-| F. Engineering quality | Q77 coverage gate, Q78 dup-check | — |
+| F. Engineering quality | Q77 coverage, Q78 dup-check, Q79 `-race` unit, Q80 gosec, Q81 errcheck, Q66 install-artifact validation | — |
 
 **1.0 = all gating boxes ticked.** Recommended items that slip become
 ordinary post-1.0 Queue entries.
