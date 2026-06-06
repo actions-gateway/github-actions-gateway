@@ -26,6 +26,7 @@ package controller
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -422,146 +423,131 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// applyServiceAccount creates or updates a ServiceAccount.
+// The apply* helpers below all use controllerutil.CreateOrPatch rather than a
+// hand-rolled Get→mutate→Update. CreateOrPatch re-reads the object inside the
+// call, runs the mutate closure to set only the controller-managed fields, and
+// writes a minimal merge patch (creating the object when absent). This is
+// conflict-safe: a concurrent writer touching unmanaged fields is neither
+// clobbered (the patch only carries the fields we set) nor forces an avoidable
+// IsConflict on this reconcile, which the previous full-object Update could.
+// applyNamespacePSA stays on Server-Side Apply (it already detects and reports
+// out-of-band PSA-label edits via field-manager conflicts).
+
+// errRoleRefImmutable signals that an existing RoleBinding references a
+// different (immutable) roleRef than desired, so it must be deleted and
+// recreated rather than patched. It never escapes applyRoleBinding.
+var errRoleRefImmutable = errors.New("rolebinding roleRef changed; recreate required")
+
+// applyServiceAccount creates the ServiceAccount or patches its managed labels.
 func (r *ActionsGatewayReconciler) applyServiceAccount(ctx context.Context, desired *corev1.ServiceAccount) error {
-	var existing corev1.ServiceAccount
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	return r.Update(ctx, &existing)
+	obj := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		return nil
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired *rbacv1.RoleBinding) error {
-	var existing rbacv1.RoleBinding
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	// roleRef is immutable. On upgrade (pre-v0.X bindings reference the per-tenant
-	// Role; new bindings reference the agc-tenant-role ClusterRole), delete and recreate.
-	if existing.RoleRef != desired.RoleRef {
-		if err := r.Delete(ctx, &existing); err != nil && !apierrors.IsNotFound(err) {
-			return err
+	obj := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		// roleRef is immutable. On upgrade (pre-v0.X bindings reference the
+		// per-tenant Role; new bindings reference the agc-tenant-role
+		// ClusterRole) the binding must be deleted and recreated — a patch would
+		// be rejected. A non-empty ResourceVersion means obj already existed
+		// (CreateOrPatch populated it from the live object).
+		if obj.ResourceVersion != "" && obj.RoleRef != desired.RoleRef {
+			return errRoleRefImmutable
+		}
+		obj.Labels = desired.Labels
+		obj.RoleRef = desired.RoleRef
+		obj.Subjects = desired.Subjects
+		return nil
+	})
+	if errors.Is(err, errRoleRefImmutable) {
+		if delErr := r.Delete(ctx, obj); delErr != nil && !apierrors.IsNotFound(delErr) {
+			return delErr
 		}
 		return r.Create(ctx, desired)
 	}
-	existing.Labels = desired.Labels
-	existing.Subjects = desired.Subjects
-	return r.Update(ctx, &existing)
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, desired *networkingv1.NetworkPolicy) error {
-	var existing networkingv1.NetworkPolicy
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	return r.Update(ctx, &existing)
+	obj := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return nil
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyResourceQuota(ctx context.Context, desired *corev1.ResourceQuota) error {
-	var existing corev1.ResourceQuota
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	return r.Update(ctx, &existing)
+	obj := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return nil
+	})
+	return err
 }
 
-// applyDeployment creates or updates a Deployment and sets an owner reference so
+// applyDeployment creates or patches a Deployment and sets an owner reference so
 // that the Owns(&appsv1.Deployment{}) watch on the controller fires when the
 // Deployment's status changes (e.g. ReadyReplicas increases after pod startup).
 func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *appsv1.Deployment) error {
-	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
-		return err
-	}
-	var existing appsv1.Deployment
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	existing.OwnerReferences = desired.OwnerReferences
-	return r.Update(ctx, &existing)
+	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyService(ctx context.Context, desired *corev1.Service) error {
-	var existing corev1.Service
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec.Selector = desired.Spec.Selector
-	existing.Spec.Ports = desired.Spec.Ports
-	return r.Update(ctx, &existing)
+	obj := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		// Set only controller-managed Spec fields: ClusterIP and other
+		// server-assigned fields on an existing Service must be preserved.
+		obj.Spec.Type = desired.Spec.Type
+		obj.Spec.Selector = desired.Spec.Selector
+		obj.Spec.Ports = desired.Spec.Ports
+		return nil
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyPDB(ctx context.Context, desired *policyv1.PodDisruptionBudget) error {
-	var existing policyv1.PodDisruptionBudget
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	return r.Update(ctx, &existing)
+	obj := &policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return nil
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyHPA(ctx context.Context, desired *autoscalingv2.HorizontalPodAutoscaler) error {
-	var existing autoscalingv2.HorizontalPodAutoscaler
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	return r.Update(ctx, &existing)
+	obj := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return nil
+	})
+	return err
 }
 
 func (r *ActionsGatewayReconciler) applyRunnerGroup(ctx context.Context, desired *agcv1alpha1.RunnerGroup) error {
-	var existing agcv1alpha1.RunnerGroup
-	err := r.Get(ctx, types.NamespacedName{Namespace: desired.Namespace, Name: desired.Name}, &existing)
-	if apierrors.IsNotFound(err) {
-		return r.Create(ctx, desired)
-	}
-	if err != nil {
-		return err
-	}
-	existing.Labels = desired.Labels
-	existing.Spec = desired.Spec
-	return r.Update(ctx, &existing)
+	obj := &agcv1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Spec = desired.Spec
+		return nil
+	})
+	return err
 }
 
 // ensureProxyCert ensures the proxy TLS Secret exists and contains a cert valid for
@@ -590,17 +576,7 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 		return fmt.Errorf("generate proxy cert: %w", err)
 	}
 
-	desired := buildProxyCertSecret(ag, certPEM, keyPEM)
-	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
-		return fmt.Errorf("set owner reference on proxy cert secret: %w", err)
-	}
-	if apierrors.IsNotFound(getErr) {
-		return r.Create(ctx, desired)
-	}
-	existing.Data = desired.Data
-	existing.Labels = desired.Labels
-	existing.OwnerReferences = desired.OwnerReferences
-	return r.Update(ctx, &existing)
+	return r.applyOwnedSecret(ctx, ag, buildProxyCertSecret(ag, certPEM, keyPEM))
 }
 
 // ensureMetricsCerts ensures the per-tenant metrics mTLS bundle exists and is not
@@ -636,29 +612,28 @@ func (r *ActionsGatewayReconciler) ensureMetricsCerts(ctx context.Context, ag *g
 		return fmt.Errorf("generate metrics certs: %w", err)
 	}
 
-	if err := r.applyOwnedSecret(ctx, ag, buildMetricsTLSSecret(ag, bundle), &serverSec, serverErr); err != nil {
+	if err := r.applyOwnedSecret(ctx, ag, buildMetricsTLSSecret(ag, bundle)); err != nil {
 		return fmt.Errorf("metrics server Secret: %w", err)
 	}
-	if err := r.applyOwnedSecret(ctx, ag, buildMetricsClientSecret(ag, bundle), &clientSec, clientErr); err != nil {
+	if err := r.applyOwnedSecret(ctx, ag, buildMetricsClientSecret(ag, bundle)); err != nil {
 		return fmt.Errorf("metrics client Secret: %w", err)
 	}
 	return nil
 }
 
-// applyOwnedSecret creates desired (when getErr is NotFound) or updates the
-// existing Secret's data/labels/owner-refs, setting an owner reference on the
-// ActionsGateway so the Secret is GC'd on CR delete.
-func (r *ActionsGatewayReconciler) applyOwnedSecret(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired, existing *corev1.Secret, getErr error) error {
-	if err := controllerutil.SetControllerReference(ag, desired, r.Scheme); err != nil {
-		return fmt.Errorf("set owner reference: %w", err)
-	}
-	if apierrors.IsNotFound(getErr) {
-		return r.Create(ctx, desired)
-	}
-	existing.Data = desired.Data
-	existing.Labels = desired.Labels
-	existing.OwnerReferences = desired.OwnerReferences
-	return r.Update(ctx, existing)
+// applyOwnedSecret creates or patches a Secret, setting an owner reference on
+// the ActionsGateway so the Secret is GC'd on CR delete. Like the other apply*
+// helpers it uses CreateOrPatch and writes only the controller-managed
+// type/data/labels, so a concurrent writer is not clobbered.
+func (r *ActionsGatewayReconciler) applyOwnedSecret(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *corev1.Secret) error {
+	obj := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		obj.Type = desired.Type
+		obj.Data = desired.Data
+		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+	})
+	return err
 }
 
 // psaFieldManager is the Server-Side Apply field manager that owns the PSA
