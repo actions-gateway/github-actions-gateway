@@ -107,7 +107,7 @@ func TestGMC_ApplyHelpers_NoSteadyStateChurn(t *testing.T) {
 }
 
 type churnError struct {
-	label    string
+	label     string
 	want, got string
 }
 
