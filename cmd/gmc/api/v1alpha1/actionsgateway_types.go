@@ -51,13 +51,13 @@ type ProxyConfig struct {
 	ManagedNetworkPolicy *bool `json:"managedNetworkPolicy,omitempty"`
 }
 
-// AllowProfileDowngradeAnnotation, when set to "true" on an ActionsGateway,
-// permits an update that lowers spec.securityProfile to a less-restrictive
-// level (e.g. restricted -> baseline). Without it, the GMC validating webhook
-// rejects such downgrades so that a stray re-apply — or a manifest that drops
-// the field and lets it re-default to baseline — cannot silently weaken a
-// tenant's Pod Security Admission isolation. Relaxing isolation must be a
-// deliberate, auditable act. See docs/design/05-security.md §5.3.
+// AllowProfileDowngradeAnnotation is the annotation key that, when set to "true"
+// on an ActionsGateway, permits an update that lowers spec.securityProfile to a
+// less-restrictive level (e.g. restricted -> baseline). Without it, the GMC
+// validating webhook rejects such downgrades so that a stray re-apply — or a
+// manifest that drops the field and lets it re-default to baseline — cannot
+// silently weaken a tenant's Pod Security Admission isolation. Relaxing
+// isolation must be a deliberate, auditable act. See docs/design/05-security.md §5.3.
 const AllowProfileDowngradeAnnotation = "actions-gateway.github.com/allow-profile-downgrade"
 
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
