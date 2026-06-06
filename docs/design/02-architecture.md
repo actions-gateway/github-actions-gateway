@@ -10,99 +10,52 @@ The architecture has two flows worth diagramming separately: **provisioning** (h
 
 **Provisioning flow** — what happens when a tenant applies an `ActionsGateway` CR.
 
-```mermaid
-flowchart TB
-  subgraph tenant["Tenant namespace"]
-    cr["ActionsGateway CR<br/>(namespace-scoped)"]
-    res["<b>Tenant namespace resources created by GMC</b><br/>• ServiceAccount + Role + RoleBinding (RBAC)<br/>• NetworkPolicy + ResourceQuota (guardrails)<br/>• Proxy Deployment + Service + HPA + PDB<br/>• AGC Deployment (replicas: 1, App creds mounted)<br/>• RunnerGroup CRs (bootstrap)"]
-  end
-  subgraph system["System namespace"]
-    gmc["Gateway Manager Controller<br/>(GMC)"]
-  end
-  cr -->|"watch (1)"| gmc
-  gmc -->|"reconciles (2)"| res
-  classDef ns fill:#eef4ff,stroke:#4f6bed,color:#1a2b5e;
-  classDef sys fill:#eafaf1,stroke:#27ae60,color:#145a32;
-  class tenant ns;
-  class system sys;
 ```
-
-<details>
-<summary>Text version</summary>
-
-```text
   Tenant namespace                           System namespace
-  ----------------                           ----------------
-  +-----------------------+                  +----------------------------+
-  |  ActionsGateway CR    |  ──watch (1)──>  |  Gateway Manager Controller|
-  |  (namespace-scoped)   |                  |          (GMC)             |
-  +-----------------------+                  +----------------------------+
-          │                                          │
-          │              ┌──── reconciles (2) ───────┘
-          ▼              ▼
-  +------------------------------------------------------------+
-  |  Tenant namespace resources created by GMC                 |
-  |  ────────────────────────────────────────────────────────  |
-  |  • ServiceAccount + Role + RoleBinding   (RBAC)            |
-  |  • NetworkPolicy + ResourceQuota         (guardrails)      |
-  |  • Proxy Deployment + Service + HPA + PDB                  |
-  |  • AGC Deployment  (replicas: 1, App creds mounted)        |
-  |  • RunnerGroup CRs (bootstrap)                             |
-  +------------------------------------------------------------+
-```
+  ════════════════                           ════════════════
 
-</details>
+  ┌──────────────────────┐                 ┌──────────────────────────────┐
+  │  ActionsGateway CR   │─── watch (1) ──▶│  Gateway Manager Controller  │
+  │  (namespace-scoped)  │                 │            (GMC)             │
+  └──────────────────────┘                 └───────────────┬──────────────┘
+                ┌──────────── reconciles (2) ──────────────┘
+                ▼
+  ┌──────────────────────────────────────────────────────────┐
+  │  Tenant namespace resources created by GMC               │
+  │  ─────────────────────────────────────────               │
+  │    • ServiceAccount + Role + RoleBinding   (RBAC)        │
+  │    • NetworkPolicy + ResourceQuota         (guardrails)  │
+  │    • Proxy Deployment + Service + HPA + PDB              │
+  │    • AGC Deployment   (replicas: 1, App creds mounted)   │
+  │    • RunnerGroup CRs  (bootstrap)                        │
+  └──────────────────────────────────────────────────────────┘
+```
 
 **Runtime flow** — what happens once the gateway is running and a job arrives.
 
-```mermaid
-flowchart TB
-  gh["GitHub Actions Backend"]
-  proxy["Egress Proxy Pool (HPA-managed)<br/>proxy-0 ... proxy-N"]
-  agc["AGC (1 replica)<br/>• session loops<br/>• token manager<br/>• renewjob goroutines"]
-  worker["Ephemeral Worker Pod<br/>(Runner.Worker)"]
-  k8s["Kubernetes API Server"]
-
-  gh <-->|all egress| proxy
-  agc -->|"HTTP(S)_PROXY"| proxy
-  worker -->|"HTTP(S)_PROXY"| proxy
-  agc -->|Create Secret + Pod| k8s
-  k8s -->|spawned by K8s scheduler| worker
-  classDef ext fill:#fff4e6,stroke:#e67e22,color:#7e3b00;
-  class gh ext;
 ```
-
-<details>
-<summary>Text version</summary>
-
-```text
-                          GitHub Actions Backend
-                                  ▲
-                                  │ all egress
-                                  ▼
-                          +---------------------+
-                          |  Egress Proxy Pool  |  (HPA-managed)
-                          |  proxy-0 ... proxy-N|
-                          +---------------------+
-                              ▲              ▲
-              HTTP(S)_PROXY   │              │   HTTP(S)_PROXY
-                              │              │
-                  +---------------------+    +----------------------+
-                  |  AGC (1 replica)    |    | Ephemeral Worker Pod |
-                  |  • session loops    |    | (Runner.Worker)      |
-                  |  • token manager   |    +----------------------+
-                  |  • renewjob goros  |             ▲
-                  +---------------------+             │
-                              │                       │ spawned by
-                              │ Create Secret + Pod   │ K8s scheduler
-                              ▼                       │
-                  +---------------------+             │
-                  |  Kubernetes API     | ────────────┘
-                  |  Server             |
-                  +---------------------+
+                 ┌──────────────────────────┐
+                 │  GitHub Actions Backend  │
+                 └─────────────┬────────────┘
+                               ↕ all egress
+        ┌──────────────────────┴─────────────────────┐
+        │      Egress Proxy Pool (HPA-managed)       │
+        │             proxy-0 … proxy-N              │
+        └────────┬──────────────────────────────┬────┘
+                 ▲                              ▲
+ HTTP(S)_PROXY   │                              │ HTTP(S)_PROXY
+    ┌────────────┴────────────┐    ┌────────────┴───────────┐
+    │  AGC (1 replica)        │    │  Ephemeral Worker Pod  │
+    │  • session loops        │    │    (Runner.Worker)     │
+    │  • token manager        │    └────────────┬───────────┘
+    │  • renewjob goroutines  │                 ▲
+    └────────────┬────────────┘                 │ spawned by
+                 │ Create Secret + Pod          │ K8s scheduler
+                 │                              │
+    ┌────────────▼────────────┐                 │
+    │  Kubernetes API Server  ├─────────────────┘
+    └─────────────────────────┘
 ```
-
-</details>
 
 All AGC and worker traffic to GitHub flows through the proxy pool; Kubernetes API traffic from the AGC stays in-cluster (excluded via `NO_PROXY`).
 

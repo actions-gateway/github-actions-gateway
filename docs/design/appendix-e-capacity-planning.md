@@ -96,30 +96,12 @@ For most RunnerGroups the default of 10 is the right starting point and requires
 
 A GitHub App installation is scoped to an organization or a specific set of repositories. Within that scope, all repos can target any RunnerGroup by label — there is no per-repo RunnerGroup configuration required.
 
-```mermaid
-flowchart LR
-  subgraph org["Organization: my-org"]
-    a["repo-a<br/>runs-on: [self-hosted, gpu-2x]"]
-    b["repo-b<br/>runs-on: [self-hosted, gpu-2x]"]
-    c["repo-c<br/>runs-on: [self-hosted, gpu-2x]"]
-  end
-  rg(["same RunnerGroup"])
-  a --> rg
-  b --> rg
-  c --> rg
 ```
-
-<details>
-<summary>Text version</summary>
-
-```text
 Organization: my-org
   ├── repo-a  (workflow: runs-on: [self-hosted, gpu-2x])   ──┐
   ├── repo-b  (workflow: runs-on: [self-hosted, gpu-2x])   ──┤── same RunnerGroup
   └── repo-c  (workflow: runs-on: [self-hosted, gpu-2x])   ──┘
 ```
-
-</details>
 
 The only case that requires separate `ActionsGateway` CRs for repo-boundary reasons is when repos live in **different GitHub organizations** — because each org needs its own App installation, and each installation maps to exactly one `ActionsGateway` CR.
 
@@ -138,21 +120,10 @@ As a rough check: `number of RunnerGroups × 72 req/hr` should stay well below 1
 
 Each `ActionsGateway` CR requires its own namespace. If multiple shards are needed within a single team, the standard pattern is one namespace per installation:
 
-```mermaid
-flowchart LR
-  ns1["team-a/<br/>namespace 1"] --> i1(["ActionsGateway CR<br/>GitHub App install 1"])
-  ns2["team-a-overflow/<br/>namespace 2"] --> i2(["ActionsGateway CR<br/>GitHub App install 2"])
 ```
-
-<details>
-<summary>Text version</summary>
-
-```text
 team-a/                    ← namespace 1, ActionsGateway CR, GitHub App install 1
 team-a-overflow/           ← namespace 2, ActionsGateway CR, GitHub App install 2
 ```
-
-</details>
 
 Label the RunnerGroups consistently across installations (`gpu-2x`, `gpu-8x`, etc.) and split workflows between them based on priority or throughput class. There is no cross-installation load balancing built into this system; job routing is determined solely by which repos are covered by each installation's scope.
 
@@ -170,34 +141,7 @@ The Gateway Manager Controller (GMC) multi-tenant model provisions one `ActionsG
 
 ## E.8. Decision Guide
 
-The guide is a checklist: walk every question top to bottom (dotted links), branching on each independently.
-
-```mermaid
-flowchart TB
-  start(["New runner requirement arriving"])
-  q1{"Existing RunnerGroup with same GPU count,<br/>memory, and tooling requirements?"}
-  q2{"Simultaneous job bursts being lost<br/>(acquisition timeout)?"}
-  q3{"RateLimited condition appearing<br/>during peak periods?"}
-  q4{"Repos in a different GitHub organization?"}
-
-  start --> q1
-  q1 -->|Yes| a1["Target the existing RunnerGroup's label.<br/>No new RunnerGroup needed."]
-  q1 -->|No| a2["Create a new RunnerGroup with the right pod shape;<br/>set maxListeners to cover expected burst.<br/>Keep steady-state RunnerGroup count below ~150."]
-  q1 -.->|next| q2
-  q2 -->|No| b1["Default maxListeners (10) is sufficient."]
-  q2 -->|Yes| b2["Increase maxListeners on the affected RunnerGroup<br/>to cover peak simultaneous arrival rate."]
-  q2 -.->|next| q3
-  q3 -->|No| c1["No action needed."]
-  q3 -->|Yes| c2["Reduce RunnerGroup count, reduce maxListeners on<br/>high-burst groups, or shard to a second<br/>ActionsGateway CR (separate App installation)."]
-  q3 -.->|next| q4
-  q4 -->|No| d1["Same ActionsGateway CR can serve them all."]
-  q4 -->|Yes| d2["Separate ActionsGateway CR required<br/>(separate installation)."]
 ```
-
-<details>
-<summary>Text version</summary>
-
-```text
 New runner requirement arriving:
 │
 ├─ Does an existing RunnerGroup have the same GPU count, memory,
@@ -224,8 +168,6 @@ New runner requirement arriving:
     ├─ No  → Same ActionsGateway CR can serve them all.
     └─ Yes → Separate ActionsGateway CR required (separate installation).
 ```
-
-</details>
 
 ---
 
