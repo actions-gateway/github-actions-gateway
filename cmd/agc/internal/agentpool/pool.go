@@ -150,9 +150,11 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		if int32(idx) < count {
 			continue
 		}
-		// TODO(milestone-3): pool claim/reload race — a listener goroutine may have
+		// TODO(Q76): pool claim/reload race — a listener goroutine may have
 		// claimed this agent; deleting its Secret while it is in use will cause the
-		// goroutine's next CreateSession to fail. Add a claimed-set guard before M3.
+		// goroutine's next CreateSession to fail. reload() (below) compounds this by
+		// resetting p.available to all agents every reconcile, dropping the claimed
+		// set entirely. Needs a claimed-set guard that survives reload.
 		//
 		// Fetch the body only for the specific Secret being torn down — the
 		// agentId is needed to deregister the agent from GitHub.
