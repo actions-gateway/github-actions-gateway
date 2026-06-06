@@ -698,6 +698,44 @@ kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath=
 
 ---
 
+## securityProfile Downgrade Rejected by Admission Webhook
+
+**Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync that changes an existing `ActionsGateway`'s `spec.securityProfile` to a *less restrictive* level is rejected by the GMC validating webhook with:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+securityProfile downgrade from "restricted" to "baseline" is not permitted
+without the "actions-gateway.github.com/allow-profile-downgrade" annotation
+set to "true"; downgrading relaxes Pod Security Admission isolation and must
+be deliberate
+```
+
+The profiles rank `privileged` (least restrictive) < `baseline` < `restricted` (most restrictive); any move *down* that ranking is a downgrade — including `baseline → privileged`.
+
+**Likely causes.**
+- A deliberate relaxation — e.g. rolling back a `baseline → restricted` hardening attempt that broke the tenant's pods at PSA admission.
+- **Unintentional drift:** re-applying an older manifest, or a Helm/Kustomize render that **omits** `securityProfile` (it then re-defaults to `baseline`) while the live object is on `restricted`. An empty/absent value is compared as `baseline`, so an omitted field reads as a downgrade — this is the guard working as intended, catching a silent weakening.
+
+**Diagnostics.**
+
+```sh
+# Current (live) profile vs what your manifest sets
+kubectl get actionsgateway -n <tenant-namespace> <name> -o jsonpath='{.spec.securityProfile}'; echo
+```
+
+**Resolution.**
+- **If the downgrade is intended:** add the opt-in annotation, then change the profile (one apply works if both are in the manifest):
+  ```sh
+  kubectl annotate actionsgateway -n <tenant-namespace> <name> \
+    actions-gateway.github.com/allow-profile-downgrade=true --overwrite
+  ```
+  Remove the annotation afterward if you want future accidental downgrades to keep being blocked. PSA enforce is namespace-scoped, so the new (looser) profile applies to *future* worker pods once the GMC re-stamps the namespace label; pods already running are not re-evaluated.
+- **If the downgrade is accidental (drift):** do **not** add the annotation — fix the manifest to match the live profile (set `securityProfile: restricted`, or stop omitting it) so GitOps stops trying to weaken the namespace.
+
+> Note: this guard catches *silent* downgrades; it is not an absolute boundary. Anyone with edit access to the CR can set the annotation, and an operator with direct namespace `patch` rights can change the PSA labels regardless. See [§5.3 — No silent profile downgrades](../design/05-security.md#no-silent-profile-downgrades).
+
+---
+
 ## Worker Pod Crashes With `configuredSettings` ArgumentNullException
 
 **Symptoms.** Worker pod reaches `Running`, the entrypoint wrapper logs `payload loaded` and starts Runner.Worker, but Runner.Worker exits non-zero almost immediately with a stack trace containing `System.ArgumentNullException: Value cannot be null. (Parameter 'configuredSettings')` originating from `Runner.Common.ConfigurationStore.GetSettings()`. The job is never reported back to GitHub.
