@@ -56,6 +56,25 @@ The metrics port is named `metrics` in the Service spec.
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC. |
 
+### Proxy metrics
+
+The per-tenant egress proxy exposes its own metrics on its health/metrics
+port (`:8081`, restricted by the L-8 NetworkPolicy — see
+[security.md L-8](../plan/security.md)). Each proxy is a separate scrape
+target; these metrics carry no intrinsic `namespace` label, so attach one
+via the `ServiceMonitor`/scrape config if you need per-tenant attribution.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_proxy_connections_active` | Gauge | — | Currently open CONNECT tunnels. |
+| `actions_gateway_proxy_connections_total` | Counter | — | Total CONNECT tunnels opened. |
+| `actions_gateway_proxy_dial_errors_total` | Counter | — | Upstream dial failures (e.g. blocked-destination attempts). |
+| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | — | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+
+For abuse/compromise detection built on these metrics (slowloris,
+eviction-retry loops, credential-harvesting), see
+[security-operations.md](security-operations.md).
+
 ---
 
 ## Symptom → Metric Mapping

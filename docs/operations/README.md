@@ -6,7 +6,8 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 |---|---|---|
 | [runbook.md](runbook.md) | On-call SRE | Production runbook — high-level operational procedures. For initial setup see [Getting Started](../getting-started.md). |
 | [troubleshooting.md](troubleshooting.md) | On-call SRE, platform engineer | Symptom → diagnosis → remediation, organised by observable failure mode. |
-| [observability.md](observability.md) | SRE, platform engineer | Prometheus metrics reference for GMC and AGC, including standard `controller-runtime` metrics. |
+| [observability.md](observability.md) | SRE, platform engineer | Prometheus metrics reference for GMC, AGC, and proxy, including standard `controller-runtime` metrics. |
+| [security-operations.md](security-operations.md) | On-call SRE, platform security | Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks. |
 | [tenant-onboarding.md](tenant-onboarding.md) | Platform engineer | Step-by-step checklist for onboarding a new tenant team. |
 | [upgrade.md](upgrade.md) | Platform engineer | Upgrade and rollback procedures. Strategy intent lives in [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). |
 | [../design/08-glossary.md](../design/08-glossary.md) | All | Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers). |

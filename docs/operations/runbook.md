@@ -58,6 +58,8 @@ In brief: create a new Secret with the new private key, then change `spec.gitHub
 
 Reference the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md) for threshold derivation.
 
+The alerts below cover availability and SLO breaches. For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, credential harvesting), see [security-operations.md](security-operations.md).
+
 ### Which Metrics to Alert On
 
 | Metric | Recommended threshold | Severity | Notes |
@@ -199,6 +201,7 @@ Before handing off to the next on-call:
 ## Reference Links
 
 - [Troubleshooting Guide](troubleshooting.md) — symptom → diagnosis → resolution for each failure mode
+- [Security Operations](security-operations.md) — abuse-detection alerts and compromise-response playbooks
 - [Observability](observability.md) — full metrics reference
 - [Getting Started](../getting-started.md) — initial setup and credential rotation
 - [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md)
