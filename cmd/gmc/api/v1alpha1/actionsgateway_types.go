@@ -52,6 +52,19 @@ type ProxyConfig struct {
 }
 
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
+//
+// The securityProfile no-downgrade rule below runs only on update (it references
+// oldSelf). securityProfile may be *upgraded* (e.g. baseline->restricted) but
+// never downgraded: the rule ranks the profiles privileged(0) < baseline(1) <
+// restricted(2) and rejects any update that lowers the rank, closing the
+// silent-security-downgrade hole (D5) while still allowing in-place hardening.
+//
+// gitHubAppRef.name is deliberately NOT pinned: changing it is the supported
+// credential-rotation mechanism (point the tenant at a freshly-minted App
+// Secret), exercised by TestGMC_TenantProvisioning_CredentialRotation. An
+// immutability rule there would break rotation, so it is omitted.
+//
+// +kubebuilder:validation:XValidation:rule="{'privileged':0,'baseline':1,'restricted':2}[self.securityProfile] >= {'privileged':0,'baseline':1,'restricted':2}[oldSelf.securityProfile]",message="securityProfile may be upgraded (e.g. baseline->restricted) but not downgraded; downgrading is a silent security regression — recreate the ActionsGateway instead"
 type ActionsGatewaySpec struct {
 	GitHubAppRef SecretReference `json:"gitHubAppRef"`
 	// +optional
@@ -77,19 +90,24 @@ type ActionsGatewayStatus struct {
 	// +optional
 	// +listType=map
 	// +listMapKey=type
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
-	ProxyReadyReplicas int32              `json:"proxyReadyReplicas"`
-	ActiveSessions     int32              `json:"activeSessions"`
-	ObservedGeneration int64              `json:"observedGeneration"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// +optional
+	ProxyReadyReplicas int32 `json:"proxyReadyReplicas,omitempty"`
+	// +optional
+	ActiveSessions int32 `json:"activeSessions,omitempty"`
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // ActionsGateway is a namespace-scoped CRD managed by the GMC.
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=ag
+// +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="ProxyReady",type=integer,JSONPath=".status.proxyReadyReplicas"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=".status.conditions[?(@.type=='Ready')].reason"
+// +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=".status.observedGeneration"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 type ActionsGateway struct {
 	metav1.TypeMeta   `json:",inline"`

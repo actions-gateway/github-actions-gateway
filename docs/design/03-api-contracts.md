@@ -149,11 +149,24 @@ type ActionsGatewaySpec struct {
     // and automountServiceAccountToken to false on every worker pod.
     // PSA is the safety net; the AGC's invariants are the floor.
     //
+    // securityProfile may be UPGRADED in place (e.g. baseline -> restricted)
+    // but never DOWNGRADED: a spec-level CEL rule ranks the profiles
+    // privileged(0) < baseline(1) < restricted(2) and rejects any update that
+    // lowers the rank, so a tenant cannot be silently weakened. To genuinely
+    // relax the profile, recreate the ActionsGateway.
+    //
     // +optional
     // +kubebuilder:default=baseline
     // +kubebuilder:validation:Enum=baseline;restricted;privileged
     SecurityProfile string `json:"securityProfile,omitempty"`
 }
+
+// The spec carries one update-only CEL rule enforcing the no-downgrade
+// invariant above (gitHubAppRef.name is intentionally left mutable so that
+// credential rotation by Secret name keeps working — see the Secret-rotation
+// note later in this document):
+//
+//   +kubebuilder:validation:XValidation:rule="{'privileged':0,'baseline':1,'restricted':2}[self.securityProfile] >= {'privileged':0,'baseline':1,'restricted':2}[oldSelf.securityProfile]",message="securityProfile may be upgraded but not downgraded"
 
 // ActionsGatewayStatus uses standard Kubernetes Conditions for compatibility
 // with kubectl wait, Argo CD health checks, and kstatus.
@@ -163,13 +176,16 @@ type ActionsGatewayStatus struct {
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ProxyReadyReplicas is the number of proxy pods currently Ready.
-    ProxyReadyReplicas int32 `json:"proxyReadyReplicas"`
+    // +optional
+    ProxyReadyReplicas int32 `json:"proxyReadyReplicas,omitempty"`
 
     // ActiveSessions is the number of currently open long-poll sessions
     // across all RunnerGroups managed by this gateway's AGC.
-    ActiveSessions int32 `json:"activeSessions"`
+    // +optional
+    ActiveSessions int32 `json:"activeSessions,omitempty"`
 
-    ObservedGeneration int64 `json:"observedGeneration"`
+    // +optional
+    ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // Condition types for ActionsGateway:
@@ -291,6 +307,14 @@ type RunnerGroupSpec struct {
     // +kubebuilder:validation:Minimum=1
     MaxWorkers *int32 `json:"maxWorkers,omitempty"`
 
+    // RunnerLabels is the label set matched against workflow runs-on values.
+    // At least one label is required (MinItems=1): an empty set would silently
+    // match every workflow run. Each item must be non-empty, at most 256 chars,
+    // and contain no whitespace or commas (comma is the runs-on list separator).
+    //
+    // +kubebuilder:validation:MinItems=1
+    // +kubebuilder:validation:items:MaxLength=256
+    // +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
     RunnerLabels []string `json:"runnerLabels"`
 
     // PriorityTiers defines a list of PriorityClass assignments and their
@@ -469,14 +493,20 @@ type WorkerPodTemplate = corev1.PodTemplateSpec
 
 type RunnerGroupStatus struct {
     // Conditions contains the current observed conditions of the runner group.
-    // Known condition types: Ready, Degraded.
+    // Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld.
+    // The listType=map / listMapKey=type markers let server-side apply merge
+    // conditions by type instead of treating the slice as atomic.
+    //
+    // +optional
+    // +listType=map
+    // +listMapKey=type
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ActiveSessions is the number of currently open long-poll sessions
     // managed by this RunnerGroup.
     ActiveSessions int32 `json:"activeSessions"`
 
-    ObservedGeneration int64 `json:"observedGeneration"`
+    ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 ```
 

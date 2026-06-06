@@ -8,6 +8,8 @@ metadata:
 spec:
   group: actions-gateway.github.com
   names:
+    categories:
+    - actions-gateway
     kind: RunnerGroup
     listKind: RunnerGroupList
     plural: runnergroups
@@ -26,6 +28,14 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .status.observedGeneration
+      name: ObservedGen
+      priority: 1
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -8615,10 +8625,16 @@ spec:
                   when omitted.
                 type: string
               runnerLabels:
-                description: RunnerLabels is the label set matched against workflow
-                  runs-on values.
+                description: |-
+                  RunnerLabels is the label set matched against workflow runs-on values.
+                  At least one label is required: an empty set would silently match every
+                  workflow run. Each label must be non-empty and contain no whitespace or
+                  commas (comma is the runs-on list separator).
                 items:
+                  maxLength: 256
+                  pattern: ^[^,\s]+$
                   type: string
+                minItems: 1
                 type: array
               workerImage:
                 description: WorkerImage is the fully-qualified container image for
@@ -8706,6 +8722,9 @@ spec:
                   - type
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
               observedGeneration:
                 format: int64
                 type: integer
