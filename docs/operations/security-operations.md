@@ -1,0 +1,269 @@
+# Security Operations: Abuse Detection & Response
+
+Audience: on-call SRE and platform security. This runbook turns the abuse
+heuristics in the [threat model](../design/05-security.md) into concrete,
+operator-actionable detections. It complements — does not replace — the
+availability/SLO alerting in [observability.md](observability.md) and the
+incident-response procedures in [runbook.md](runbook.md).
+
+The signals here detect **abuse or compromise** (a misbehaving tenant, a
+compromised AGC/GMC, a saturation attack), not ordinary capacity
+degradation. Each row of [§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)
+and [§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)
+of the threat model that says "operators should monitor X" is mapped below
+to the metric or audit-log query that surfaces it.
+
+Two detection substrates are used:
+
+- **Prometheus metrics** — emitted by the controllers and proxy today.
+  See [observability.md](observability.md) for the full reference and how
+  to scrape them. Alert rules are in [§ Prometheus abuse alerts](#prometheus-abuse-alerts)
+  below.
+- **API-server audit log** — the only substrate that can see a compromised
+  AGC/GMC issuing RBAC-permitted-but-anomalous calls (e.g. a full-body
+  Secret `list`). These detections require an audit policy that captures
+  the relevant verbs; the controllers cannot self-report calls made
+  out-of-band by a compromised binary. A sample audit policy is tracked
+  separately (see [§ Audit-log abuse detections](#audit-log-abuse-detections)).
+
+---
+
+## Threat → signal map
+
+| Threat (from [05-security.md](../design/05-security.md)) | Abuse signal | Detection substrate | Severity |
+|---|---|---|---|
+| **Eviction-Retry API Misuse** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — compromised AGC looping `rerun-failed-jobs` | `eviction_retries_total` rate climbs without matching node pressure; `eviction_retries_exhausted_total` increments | Metric | Ticket → Page on sustained climb |
+| **Proxy Pool Exhaustion / slowloris** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-17/M-18) | `proxy_connections_active` pinned near capacity; `proxy_tunnel_duration_seconds` mass in the 6h bucket | Metric | Page |
+| **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_dial_errors_total` spike (workers repeatedly dialing blocked destinations) | Metric | Ticket |
+| **DoS via Resource Exhaustion** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — rogue workflow exhausting tenant quota | `kube_resourcequota` used/hard ratio sustained at 1.0 | Metric (kube-state-metrics) | Ticket |
+| **`ActionsGateway` CR in reserved namespace / spec probing** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | Admission webhook `403` rejection rate | Metric (controller-runtime) | Ticket |
+| **Cross-Tenant GitHub App Credential Leakage / key compromise** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `token_refresh_errors_total` spike (key revoked out-of-band, or a forged token rejected) | Metric | Page |
+| **Mass tenant provisioning** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC deploying workloads | `managed_gateways` jumps unexpectedly | Metric | Page |
+| **AGC overpermissioned Secret access** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), H-2 residual) — compromised AGC binary issuing a full-body Secret `list` | AGC ServiceAccount `list secrets` in audit log (legit code path is metadata-only — see [security.md H-2](../plan/security.md)) | Audit log | Page |
+| **GMC privilege escalation** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC reading Secrets / patching namespaces | GMC ServiceAccount `get secrets` beyond reconcile cadence; `namespaces patch` denied by `namespace-psa-guard` | Audit log | Page |
+
+---
+
+## Prometheus abuse alerts
+
+These rules reference metrics that are emitted today
+([observability.md § Full Metrics Reference](observability.md#full-metrics-reference)).
+Drop them into the same `PrometheusRule` group as the SLO alerts, or a
+dedicated `actions-gateway-security` group. Tune thresholds to your fleet.
+
+```yaml
+groups:
+  - name: actions-gateway-security
+    rules:
+
+      # Page: eviction-retry loop — sustained re-queue rate without a
+      # matching node-pressure event suggests rerun-failed-jobs abuse
+      # (compromised AGC) rather than genuine eviction churn.
+      - alert: ActionsGatewayEvictionRetryAbuse
+        expr: |
+          sum by (namespace, runner_group) (
+            rate(actions_gateway_eviction_retries_total[15m])
+          ) > 0.05
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sustained eviction-retry rate in {{ $labels.namespace }}/{{ $labels.runner_group }}"
+          description: "Eviction retries have run >0.05/s for 30m. Correlate with node pressure; if nodes are healthy, suspect a rerun loop and inspect the AGC."
+
+      # Page: proxy connection pool saturation (slowloris / tunnel flood).
+      # Pair with HPA: if replicas are already at maxReplicas this is a
+      # ceiling, not headroom.
+      - alert: ActionsGatewayProxyConnectionsSaturated
+        expr: |
+          actions_gateway_proxy_connections_active > 500
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxy CONNECT tunnels saturated in {{ $labels.namespace }}"
+          description: "Active tunnels > 500 for 5m. Check for slowloris (many long-lived tunnels) via the tunnel-duration histogram."
+
+      # Page: tunnels accumulating in the top (6h) duration bucket means
+      # connections are riding the absolute lifetime cap — the M-18
+      # slowloris signature.
+      - alert: ActionsGatewayProxyLongLivedTunnels
+        expr: |
+          increase(
+            actions_gateway_proxy_tunnel_duration_seconds_bucket{le="3600"}[1h]
+          ) -
+          increase(
+            actions_gateway_proxy_tunnel_duration_seconds_bucket{le="1800"}[1h]
+          ) > 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusually long proxy tunnels in {{ $labels.namespace }}"
+          description: ">20 tunnels lasted 30m–1h in the last hour. GitHub long-polls are sticky but minutes-long; hour-long tunnels warrant inspection."
+
+      # Ticket: dial-error spike — workers repeatedly hitting blocked
+      # destinations (SSRF probing, or a misconfigured workload).
+      - alert: ActionsGatewayProxyDialErrorSpike
+        expr: |
+          rate(actions_gateway_proxy_dial_errors_total[5m]) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Proxy upstream dial errors spiking in {{ $labels.namespace }}"
+          description: "Dial errors >1/s for 10m. The proxy only reaches GitHub CIDRs + DNS; a spike suggests a workload probing blocked destinations."
+
+      # Page: token-refresh error spike can mean the GitHub App key was
+      # revoked out-of-band — the expected first symptom of key compromise
+      # response, or of an attacker's forged token being rejected.
+      - alert: ActionsGatewayTokenRefreshAbuse
+        expr: |
+          increase(actions_gateway_token_refresh_errors_total[10m]) > 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Token refresh failures in {{ $labels.namespace }}"
+          description: "If no operator rotated the key, treat as possible key compromise. See runbook.md § GitHub App Key Compromise."
+
+      # Page: unexpected jump in managed gateways — a compromised GMC
+      # provisioning workloads, or runaway CR creation.
+      - alert: ActionsGatewayManagedGatewaysJump
+        expr: |
+          increase(actions_gateway_managed_gateways[10m]) > 5
+        labels:
+          severity: critical
+        annotations:
+          summary: "Managed ActionsGateway count jumped"
+          description: "More than 5 new ActionsGateway CRs in 10m. Confirm this matches an expected onboarding; otherwise inspect the GMC and CR audit trail."
+
+      # Ticket: tenant quota pinned at 100% — resource-exhaustion DoS or a
+      # genuinely undersized quota. ResourceQuota is the hard cap, so this
+      # is contained, but sustained saturation is worth a look.
+      - alert: ActionsGatewayQuotaExhausted
+        expr: |
+          kube_resourcequota{type="used"}
+            / ignoring(type) kube_resourcequota{type="hard"} >= 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant ResourceQuota saturated in {{ $labels.namespace }}"
+          description: "Quota at 100% for 30m. Distinguish legitimate demand (raise namespaceQuota) from a job-flood (inspect workflow sources)."
+
+      # Ticket: admission webhook rejecting CRs — a tenant repeatedly
+      # probing reserved namespaces or invalid specs.
+      - alert: ActionsGatewayWebhookRejections
+        expr: |
+          rate(controller_runtime_webhook_requests_total{code="403"}[10m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Admission webhook rejecting ActionsGateway requests"
+          description: "Sustained 403s from the validating webhook. Check which principal is submitting CRs to reserved namespaces or with invalid specs."
+```
+
+> **Note on labels.** The proxy metrics (`actions_gateway_proxy_*`) carry no
+> intrinsic `namespace` label — each per-tenant proxy is a separate scrape
+> target. The `{{ $labels.namespace }}` interpolation above resolves from
+> the `namespace` label your `ServiceMonitor`/scrape config attaches to the
+> target, not from the metric itself. If your scrape config does not add it,
+> drop the interpolation.
+
+---
+
+## Audit-log abuse detections
+
+The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC
+calls that are *permitted* but *anomalous* — are invisible to Prometheus.
+The legitimate code paths avoid them (the AGC enumerates its Secrets
+metadata-only per [H-2](../plan/security.md); the GMC reads Secret bodies
+only during a reconcile via a cache-bypassing `Get`), so any of the calls
+below originating from a controller ServiceAccount indicates the binary is
+doing something its source does not.
+
+Detecting these requires an **API-server audit policy** that logs the
+relevant verbs at `Metadata` level or higher, shipped to a security
+information and event management (SIEM) system or log-based alerting
+backend. A sample policy and its wiring are tracked as a
+separate deliverable; this runbook specifies *what to alert on* once that
+policy is in place.
+
+| Detection | Audit predicate | Why it matters | Response |
+|---|---|---|---|
+| **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:actions-gateway-controller`) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
+| **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway/runner-group=*` or the AGC's `gitHubAppRef` | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
+| **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `gitHubAppRef` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
+| **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
+| **GMC workload creation outside reconcile** | `verb=create resource=deployments|roles|rolebindings` by the GMC SA in a namespace with no corresponding `ActionsGateway` CR change | The GMC only provisions in response to CR reconciles. Creation without a triggering CR edit is lateral movement. | Isolate the GMC; diff provisioned resources against live `ActionsGateway` CRs. |
+
+Until the audit policy lands, these threats are mitigated structurally
+(RBAC scope, cache-bypass, the `namespace-psa-guard` VAP, no Secret
+informer) but are **not observable** — there is no alert that fires if a
+compromised binary exercises its standing permissions. Closing that gap is
+the value of the audit policy.
+
+---
+
+## Response playbooks
+
+For the full credential-rotation procedure see
+[runbook.md § GitHub App Key Compromise](runbook.md#github-app-key-compromise).
+The abuse-specific first moves:
+
+### Suspected compromised AGC (tenant-scoped)
+
+1. **Contain.** Scale the AGC to zero so it stops acting:
+   `kubectl scale deploy/actions-gateway-controller -n <namespace> --replicas=0`.
+   In-flight jobs will be cancelled by GitHub when `renewjob` lapses; this
+   is acceptable during a suspected breach.
+2. **Rotate.** Rotate the tenant's GitHub App key
+   ([runbook.md § GitHub App Key Compromise](runbook.md#github-app-key-compromise)) —
+   the AGC held it in memory.
+3. **Scope.** Check the API-server audit log for Secret `get`/`list` calls
+   by the AGC ServiceAccount; enumerate which tenant Secrets may have been
+   read.
+4. **Verify the image.** Confirm the running AGC image digest matches the
+   GMC-pinned `AGC_IMAGE` (digest pinning is enforced — see
+   [§5.2 Supply-Chain](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
+
+### Suspected compromised GMC (cluster-scoped, Tier-0)
+
+1. **Contain.** Scale the GMC to zero:
+   `kubectl scale deploy/gmc-controller-manager -n gmc-system --replicas=0`.
+   Existing tenant gateways keep running (the GMC is not in the data path —
+   see [runbook.md § GMC Total Failure](runbook.md#gmc-total-failure)); only
+   provisioning and reconcile pause.
+2. **Rotate everything.** A compromised GMC can read every tenant's
+   `gitHubAppRef` Secret. Rotate **all** tenant GitHub App keys.
+3. **Scope.** Audit GMC ServiceAccount `get secrets` and
+   `create`/`patch` calls; reconcile provisioned resources against live
+   `ActionsGateway` CRs to find anything created off-CR.
+4. **Verify the image.** Confirm the GMC image digest against the deployed
+   manifest before scaling back up.
+
+### Proxy saturation / slowloris
+
+1. **Confirm the shape.** Long-lived tunnels in the
+   `proxy_tunnel_duration_seconds` top bucket + pinned
+   `proxy_connections_active` ⇒ slowloris. Spread across many short tunnels
+   ⇒ genuine burst (let the HPA absorb it).
+2. **Identify the source.** The proxy serves one tenant; the offending
+   tunnels originate from worker pods in that tenant namespace. Inspect
+   recent worker pods for the responsible workflow.
+3. **Mitigate.** The proxy enforces a per-read idle deadline (5m) and a 6h
+   absolute lifetime cap (M-18), so hung tunnels self-terminate. If a single
+   workflow is the culprit, cancel its run in the GitHub Actions UI; the
+   worker pod and its tunnels are released on job completion.
+
+---
+
+## Reference Links
+
+- [Threat model (05-security.md)](../design/05-security.md) — the abuse heuristics this runbook operationalises
+- [observability.md](observability.md) — full metrics reference and SLO alerting
+- [runbook.md](runbook.md) — incident response and day-2 operations
+- [troubleshooting.md](troubleshooting.md) — symptom → diagnosis → remediation
+- [Security review findings (plan/security.md)](../plan/security.md) — per-finding status, including H-2 and the audit-policy follow-on
