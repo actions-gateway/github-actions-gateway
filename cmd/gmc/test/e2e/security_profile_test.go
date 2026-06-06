@@ -66,11 +66,15 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 	})
 
 	It("E2E_GMC_PSALabelPrivileged: privileged securityProfile stamps pod-security enforce=privileged", func() {
-		By("patching ActionsGateway to use privileged securityProfile")
+		// baseline -> privileged is a downgrade (privileged is the least
+		// restrictive profile), so the GMC validating webhook requires the
+		// explicit allow-profile-downgrade annotation. Set it in the same merge
+		// patch; this also exercises the opt-in path end-to-end.
+		By("patching ActionsGateway to privileged securityProfile with the downgrade opt-in annotation")
 		cmd := exec.Command("kubectl", "patch", "actionsgateway", agName,
 			"-n", ns,
 			"--type=merge",
-			"-p", `{"spec":{"securityProfile":"privileged"}}`,
+			"-p", `{"metadata":{"annotations":{"actions-gateway.github.com/allow-profile-downgrade":"true"}},"spec":{"securityProfile":"privileged"}}`,
 		)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
