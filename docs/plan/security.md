@@ -57,7 +57,7 @@ by-design / accepted.
 | **M-16** | `safeName` collision risk | Medium | — | ✅ Done 2026-05-25 | Hash suffix in both `safeName` and `labelSafe` |
 | **M-17** | Proxy servers lack `ReadHeaderTimeout` (slowloris) | High | — | ✅ Done 2026-05-31 | `ReadHeaderTimeout: 5s` + `IdleTimeout: 60s` on both `healthSrv` and `proxySrv` |
 | **M-18** | CONNECT relay has no idle/lifetime deadline | Medium | — | ✅ Done 2026-05-31 | Per-read idle deadline (5m) + absolute lifetime cap (6h); `actions_gateway_proxy_tunnel_duration_seconds` histogram |
-| **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ✅ Done 2026-06-01 | `ghcr.io/actions/actions-runner:2.327.1@sha256:551dc313…` + bump procedure documented in Dockerfile header |
+| **M-19** | Worker Dockerfile base image not digest-pinned | Medium | — | ✅ Done 2026-06-01 | `ghcr.io/actions/actions-runner:2.334.0@sha256:b6614fce…` (bumped from 2.327.1 for upstream CVEs) + bump procedure documented in Dockerfile header |
 | **L-1** | JWT `iat` without `jti` | Informational | — | ✅ Done | `ID: newUUID()` sets `jti` |
 | **L-2** | `http.DefaultClient` has no timeout | Low | — | ✅ Done | 60s timeout client injected into broker, registrar, IP-range fetcher |
 | **L-3** | `math/rand` for jitter | Informational | — | ✅ Done | `//nolint:gosec // jitter, not crypto` |
@@ -80,6 +80,7 @@ by-design / accepted.
 ### Out of scope, flagged separately
 
 - ~~Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.~~ **Done 2026-06-04** — GMC rejects non-`@sha256:` references at startup (Q24); `--allow-floating-image-tags` opt-out for dev/test.
+- ~~CI supply-chain scanning (govulncheck + trivy).~~ **Done (Q23)** — `security-scan.yml` runs `govulncheck` across all modules and `trivy` over all five images; the four distroless images block on fixable HIGH/CRITICAL, the upstream-based worker image is report-only with base bumps automated via the dependabot `docker` ecosystem (Q70). See [testing.md § Security scanning](../development/testing.md#security-scanning).
 - Explicit `imagePullPolicy` on worker pods.
 
 ---

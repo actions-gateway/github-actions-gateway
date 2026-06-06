@@ -70,3 +70,25 @@ Both pass reliably on a local machine with more cores. To run them locally, drop
 ## CI workflows and scripts
 
 CI must use the same per-module commands as [Running tests](#running-tests) above — never `go test ./...` from the repo root, which does not work with the Go workspace layout.
+
+## Security scanning
+
+The `security-scan.yml` workflow runs two supply-chain gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites. Both have local equivalents so you can reproduce a CI verdict before pushing.
+
+**govulncheck** — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs). It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path. Run it locally with:
+
+```
+make vulncheck
+```
+
+A finding usually means bumping the Go toolchain (`go` directive in `go.work` + every `go.mod`, kept in lockstep) for a stdlib CVE, or `go get`-ing the fixed dependency version for a module CVE.
+
+**trivy** — builds each of the five images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries. Run it locally (requires `trivy` and `docker` on `PATH`) with:
+
+```
+make trivy-scan
+```
+
+The four images we build from a minimal/distroless base (`gmc`, `agc`, `proxy`, `fakegithub`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest. The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is **report-only** (findings printed, never blocks). Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [`STATUS.md`](../STATUS.md) Q70.
+
+Both gates are path-gated (they skip when a PR touches only docs/non-code files) and use `go-version-file: go.work`, so the toolchain version flows automatically.

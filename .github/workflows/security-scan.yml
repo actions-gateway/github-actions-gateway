@@ -1,0 +1,158 @@
+name: security-scan
+
+# Two independent supply-chain gates that the existing unit/integration/e2e
+# workflows don't cover:
+#   - govulncheck: per-module, workspace-aware scan for known vulnerabilities
+#     reachable from our code (stdlib + dependency CVEs).
+#   - trivy: scans every built image (OS packages + bundled Go libraries) for
+#     fixable HIGH/CRITICAL CVEs.
+# Both fail the PR so a regression cannot merge silently.
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+# Cancel superseded runs of this workflow on the same PR; pushes to main are
+# never cancelled (each is a distinct post-merge gate). Mirrors unit-test.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Fine-grained path gate. The coarse paths-ignore above still lets non-code
+  # files (e.g. .gitignore, LICENSE) trigger this workflow, so classify the diff
+  # and skip the scan jobs when nothing they cover changed. Mirrors
+  # unit-test.yml. On push to main the jobs always run.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'broker/**'
+              - 'cmd/**'
+              - 'githubapp/**'
+              - 'test/**'
+              - 'vendor/**'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'tools/**'
+              - 'docker-bake.hcl'
+              - 'Makefile'
+              - '.github/workflows/security-scan.yml'
+
+  # govulncheck is symbol-precise: it only fails on vulnerabilities actually
+  # reachable from our code, not every CVE in the dependency graph. Run it per
+  # workspace module (it is module-scoped) mirroring the lint job's loop.
+  govulncheck:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.work
+      - name: build govulncheck
+        run: make govulncheck
+      - name: run govulncheck across workspace modules
+        run: |
+          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
+            echo "==> govulncheck $dir"
+            (cd "$dir" && "$GITHUB_WORKSPACE/.build/govulncheck" ./...)
+          done
+
+  # Build each image and scan it. One matrix leg per Dockerfile so a finding
+  # points straight at the offending image and the five builds run in parallel.
+  #
+  # exit-code per leg: the four images we build FROM a minimal/distroless base
+  # block the PR (exit-code 1) — their only packages are ones we chose, so a
+  # finding is actionable here. The worker image is built FROM the upstream
+  # ghcr.io/actions/actions-runner and inherits dozens of HIGH/CRITICAL CVEs in
+  # the bundled node20 runtime and the runner's own Go binaries that we cannot
+  # fix without forking the runner. Gating PRs on those would red-gate unrelated
+  # work, so worker is report-only (exit-code 0): findings are printed for
+  # visibility but never block. Runner-base CVEs are addressed by bumping the
+  # pinned tag (tracked via the dependabot 'docker' ecosystem + Q70).
+  trivy:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gmc
+            dockerfile: cmd/gmc/Dockerfile
+            exit-code: '1'
+          - name: agc
+            dockerfile: cmd/agc/Dockerfile
+            exit-code: '1'
+          - name: proxy
+            dockerfile: cmd/proxy/Dockerfile
+            exit-code: '1'
+          - name: fakegithub
+            dockerfile: test/fakegithub/Dockerfile
+            exit-code: '1'
+          - name: worker
+            dockerfile: cmd/worker/Dockerfile
+            # report-only — see the per-leg exit-code note on the job above.
+            exit-code: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: build ${{ matrix.name }} image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          tags: local/${{ matrix.name }}:scan
+          # Read-only reuse of the e2e bake's gha cache scopes (docker-bake.hcl);
+          # no cache-to so these scan builds never evict the e2e build cache.
+          cache-from: type=gha,scope=${{ matrix.name }}
+      # Cache trivy's data dir (vuln DB + scan cache) so each run avoids
+      # re-pulling the ~50 MB DB from the registry — the DB pull is otherwise a
+      # rate-limit flake source. The DB refreshes every few hours; the run_id
+      # key always misses and writes a fresh entry, while restore-keys load the
+      # most recent prior DB so a refresh is incremental, not a cold pull.
+      - name: cache trivy data
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.trivy-cache
+          key: trivy-data-${{ github.run_id }}
+          restore-keys: |
+            trivy-data-
+      - name: trivy scan ${{ matrix.name }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
+        with:
+          image-ref: local/${{ matrix.name }}:scan
+          format: table
+          # Only fixable HIGH/CRITICAL findings fail the gate. ignore-unfixed
+          # drops CVEs with no released fix (nothing actionable in this repo).
+          # exit-code is per-leg (1 = block, 0 = report-only); see the job note.
+          # Mirrors `make trivy-scan` so local and CI verdicts match.
+          exit-code: ${{ matrix.exit-code }}
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library

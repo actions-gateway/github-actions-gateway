@@ -79,3 +79,21 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # Track base-image (FROM) updates for every Dockerfile so the digest pins —
+  # golang builder, distroless runtime, and the upstream actions-runner that the
+  # worker image inherits its CVEs from — get automated bump PRs. The worker
+  # trivy leg is report-only precisely because these are upstream; this is the
+  # channel that keeps them current (see Q70 in docs/STATUS.md).
+  - package-ecosystem: "docker"
+    directories:
+      - "/cmd/gmc"
+      - "/cmd/agc"
+      - "/cmd/proxy"
+      - "/cmd/worker"
+      - "/test/fakegithub"
+    schedule:
+      interval: "weekly"
+    groups:
+      docker-base:
+        patterns: ["*"]

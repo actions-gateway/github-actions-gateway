@@ -9,6 +9,7 @@ KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 GINKGO         := $(REPO_ROOT)/.build/ginkgo
 GOLANGCI_LINT  := $(REPO_ROOT)/.build/golangci-lint
+GOVULNCHECK    := $(REPO_ROOT)/.build/govulncheck
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
@@ -39,7 +40,8 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status queue-unblock
+        ginkgo golangci-lint lint lint-status queue-unblock \
+        vulncheck govulncheck trivy-scan
 
 ##@ General
 
@@ -117,6 +119,40 @@ lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
 	@scripts/queue-unblock.sh $(ID)
+
+##@ Security
+
+# trivy image scan parameters, mirrored exactly by the CI `trivy` job so local
+# and CI verdicts match. ignore-unfixed drops CVEs with no released fix (nothing
+# actionable here); only fixable HIGH/CRITICAL findings fail the scan.
+TRIVY_SEVERITY ?= HIGH,CRITICAL
+# Each entry is "<name>=<dockerfile>" — the five images the CI trivy matrix scans.
+TRIVY_IMAGES   := gmc=cmd/gmc/Dockerfile agc=cmd/agc/Dockerfile proxy=cmd/proxy/Dockerfile worker=cmd/worker/Dockerfile fakegithub=test/fakegithub/Dockerfile
+# Images scanned report-only (findings printed, never fail the scan): the worker
+# image is built FROM the upstream actions-runner and carries upstream CVEs we
+# cannot fix. Matches the worker leg's exit-code 0 in security-scan.yml.
+TRIVY_REPORT_ONLY := worker
+
+.PHONY: vulncheck
+vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
+	@set -euo pipefail; \
+	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
+		echo "==> govulncheck $$dir"; \
+		(cd "$$dir" && $(GOVULNCHECK) ./...) || exit 1; \
+	done
+
+.PHONY: trivy-scan
+trivy-scan: ## Build each image locally and scan it with trivy (requires trivy + docker on PATH; matches the CI trivy gate)
+	@command -v trivy >/dev/null 2>&1 || { echo "trivy not found on PATH — install: https://trivy.dev/latest/getting-started/installation/" >&2; exit 1; }
+	@set -euo pipefail; \
+	for entry in $(TRIVY_IMAGES); do \
+		name="$${entry%%=*}"; dockerfile="$${entry#*=}"; \
+		code=1; for ro in $(TRIVY_REPORT_ONLY); do [[ "$$ro" == "$$name" ]] && code=0; done; \
+		echo "==> building local/$$name:trivy from $$dockerfile"; \
+		docker buildx build --load -t "local/$$name:trivy" -f "$$dockerfile" .; \
+		echo "==> trivy image local/$$name:trivy (exit-code $$code)"; \
+		trivy image --severity "$(TRIVY_SEVERITY)" --ignore-unfixed --exit-code "$$code" "local/$$name:trivy" || exit 1; \
+	done
 
 ##@ e2e
 
@@ -221,10 +257,13 @@ e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster a
 ##@ Tools
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) ## Build all vendored build tools into .build/
+tools: $(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GINKGO) $(GOLANGCI_LINT) $(GOVULNCHECK) ## Build all vendored build tools into .build/
 
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Build golangci-lint into .build/
+
+.PHONY: govulncheck
+govulncheck: $(GOVULNCHECK) ## Build govulncheck into .build/
 
 .PHONY: setup-envtest
 setup-envtest: $(SETUP_ENVTEST) ## Build setup-envtest into .build/
@@ -251,3 +290,7 @@ $(GINKGO):
 $(GOLANGCI_LINT):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+
+$(GOVULNCHECK):
+	mkdir -p $(REPO_ROOT)/.build
+	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ golang.org/x/vuln/cmd/govulncheck
