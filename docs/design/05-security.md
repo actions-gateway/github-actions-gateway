@@ -84,8 +84,23 @@ The policy deliberately does **not** ban writing `privileged` outright,
 because `securityProfile: privileged` is a supported per-tenant opt-in
 and the GMC legitimately stamps it on those tenants' namespaces. The
 marker scope confines the blast radius to GMC-managed tenant
-namespaces; pinning a tenant's profile against silent downgrade within
-its own namespace is a separate concern tracked in the backlog.
+namespaces.
+
+### No silent profile downgrades
+
+Separately from the GMC's stamping privilege, the `ActionsGateway` CRD
+itself prevents a tenant's profile from being *weakened* in place. A
+spec-level CEL `XValidation` rule ranks the profiles
+`privileged(0) < baseline(1) < restricted(2)` and, on update, rejects
+any change that lowers the rank. So `baseline → restricted` (hardening)
+is allowed, but `restricted → baseline` or `baseline → privileged`
+(a security regression) is refused at admission — there is no quiet
+`kubectl edit`/`kubectl apply` path that downgrades isolation. To
+genuinely relax a tenant's profile, an operator must delete and recreate
+the `ActionsGateway`, which is an explicit, auditable action. The rule
+runs only on update (it references `oldSelf`), so initial creation at any
+profile is unaffected. (`gitHubAppRef.name` is deliberately *not* pinned:
+changing it is the supported credential-rotation mechanism — see §3.2.)
 
 ### Mixing privileged and non-privileged workloads
 

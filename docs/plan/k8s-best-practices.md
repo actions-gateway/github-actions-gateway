@@ -48,17 +48,17 @@ The operator-created pods (worker pods from AGC, proxy pods from GMC) are the hi
 
 ## D. CRD design polish 🟡
 
-Mostly cosmetic + future-proofing; no security implications except D5.
+Mostly cosmetic + future-proofing; no security implications except D5. **D1–D6 closed 2026-06-06 ([Q33](../STATUS.md)); D7 deferred to v1beta1 graduation.**
 
 | # | Sev | Finding | Location | Fix |
 |---|---|---|---|---|
-| D1 | 🟡 | No printer column for `observedGeneration` / Reason on RunnerGroup — operators can't see generation skew. | [runnergroup_types.go:117](../../cmd/agc/api/v1alpha1/runnergroup_types.go) | Add `+kubebuilder:printcolumn` for `ObservedGen` and `Reason`. |
-| D2 | 🟡 | `RunnerGroupStatus.Conditions` missing `+listType=map` / `+listMapKey=type` markers — server-side apply treats as atomic list, causing churn. | [runnergroup_types.go:100](../../cmd/agc/api/v1alpha1/runnergroup_types.go) | Mirror the markers already on `ActionsGatewayStatus.Conditions` (L78–L80). |
-| D3 | 🟡 | `ProxyReadyReplicas`, `ActiveSessions`, `ObservedGeneration` lack `+optional` / `omitempty` — always serialized as `0` on new objects. | [actionsgateway_types.go:81](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go) | Mark `+optional`; add `,omitempty` JSON tags. |
-| D4 | 🟡 | No `categories=actions-gateway` on either CRD — `kubectl get all -l ...` and group selectors don't pick up the CRs. | both CRDs | Add the category. |
-| D5 | 🟡 | No immutability / CEL `XValidation` on `gitHubAppRef.name` or `securityProfile` — silent security downgrades (e.g. `restricted` → `baseline`) possible. | [actionsgateway_types.go:56](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go), L72 | Add CEL rule pinning the field, or a webhook that rejects/audits downgrade. |
-| D6 | 🟡 | `RunnerLabels` has no `MinItems=1` or per-item pattern — empty list silently matches every workflow. | [runnergroup_types.go:49](../../cmd/agc/api/v1alpha1/runnergroup_types.go) | `+kubebuilder:validation:MinItems=1` + items `Pattern`. |
-| D7 | 🟢 | No conversion-webhook scaffolding for `v1alpha1` — fine today, will matter at v1beta1 graduation. | both CRDs | Stub `Hub`/`Convertible` interfaces. |
+| D1 | ✅ | ~~No printer column for `observedGeneration` / Reason on RunnerGroup — operators can't see generation skew.~~ Fixed 2026-06-06: both CRDs now carry `Reason` + `ObservedGen` columns at `priority=1` (shown only under `kubectl get … -o wide`, keeping the default view narrow). | [runnergroup_types.go](../../cmd/agc/api/v1alpha1/runnergroup_types.go), [actionsgateway_types.go](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go) | — |
+| D2 | ✅ | ~~`RunnerGroupStatus.Conditions` missing `+listType=map` / `+listMapKey=type` markers — server-side apply treats as atomic list, causing churn.~~ Fixed 2026-06-06: mirrored the markers already on `ActionsGatewayStatus.Conditions`. | [runnergroup_types.go](../../cmd/agc/api/v1alpha1/runnergroup_types.go) | — |
+| D3 | ✅ | ~~`ProxyReadyReplicas`, `ActiveSessions`, `ObservedGeneration` lack `+optional` / `omitempty` — always serialized as `0` on new objects.~~ Fixed 2026-06-06: marked `+optional` + `,omitempty` (matches the k8s `DeploymentStatus` convention). `ProxyReadyReplicas` keeps its printer column; a fresh object now shows empty rather than a misleading `0`. | [actionsgateway_types.go](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go) | — |
+| D4 | ✅ | ~~No `categories=actions-gateway` on either CRD — `kubectl get all -l ...` and group selectors don't pick up the CRs.~~ Fixed 2026-06-06: `categories=actions-gateway` added to both CRDs (`kubectl get actions-gateway` now lists both kinds). | both CRDs | — |
+| D5 | ✅ | ~~No immutability / CEL `XValidation` on `gitHubAppRef.name` or `securityProfile` — silent security downgrades (e.g. `restricted` → `baseline`) possible.~~ Fixed 2026-06-06 for `securityProfile` via a spec-level CEL rule ranking `privileged(0) < baseline(1) < restricted(2)` and rejecting any update that lowers the rank (upgrades/hardening still allowed). **`gitHubAppRef.name` was deliberately *not* pinned**: changing it is the supported credential-rotation mechanism ([03-api-contracts §3.2](../design/03-api-contracts.md#32-github-app-credentials-secret-schema), `TestGMC_TenantProvisioning_CredentialRotation`) — an immutability rule there would break rotation. Covered by `TestCRD_ActionsGateway_SecurityProfile_NoDowngrade` / `_UpgradeAllowed`. | [actionsgateway_types.go](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go) | — |
+| D6 | ✅ | ~~`RunnerLabels` has no `MinItems=1` or per-item pattern — empty list silently matches every workflow.~~ Fixed 2026-06-06: `MinItems=1` + per-item `MaxLength=256` and `Pattern=^[^,\s]+$` (no whitespace/commas; comma is the runs-on separator). Covered by `TestCRD_RunnerGroup_RunnerLabels_Validation`. | [runnergroup_types.go](../../cmd/agc/api/v1alpha1/runnergroup_types.go) | — |
+| D7 | 💤 | No conversion-webhook scaffolding for `v1alpha1` — fine today, will matter at v1beta1 graduation. **Deferred** (see `STATUS.md` Deferred); revive when graduating the API to v1beta1. | both CRDs | Stub `Hub`/`Convertible` interfaces. |
 
 ## E. Manifest defaults & HA 🟡
 

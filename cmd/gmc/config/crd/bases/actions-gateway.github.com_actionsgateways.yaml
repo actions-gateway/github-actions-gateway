@@ -8,6 +8,8 @@ metadata:
 spec:
   group: actions-gateway.github.com
   names:
+    categories:
+    - actions-gateway
     kind: ActionsGateway
     listKind: ActionsGatewayList
     plural: actionsgateways
@@ -23,6 +25,14 @@ spec:
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .status.observedGeneration
+      name: ObservedGen
+      priority: 1
+      type: integer
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -49,7 +59,19 @@ spec:
           metadata:
             type: object
           spec:
-            description: ActionsGatewaySpec is the desired state of an ActionsGateway.
+            description: |-
+              ActionsGatewaySpec is the desired state of an ActionsGateway.
+
+              The securityProfile no-downgrade rule below runs only on update (it references
+              oldSelf). securityProfile may be *upgraded* (e.g. baseline->restricted) but
+              never downgraded: the rule ranks the profiles privileged(0) < baseline(1) <
+              restricted(2) and rejects any update that lowers the rank, closing the
+              silent-security-downgrade hole (D5) while still allowing in-place hardening.
+
+              gitHubAppRef.name is deliberately NOT pinned: changing it is the supported
+              credential-rotation mechanism (point the tenant at a freshly-minted App
+              Secret), exercised by TestGMC_TenantProvisioning_CredentialRotation. An
+              immutability rule there would break rotation, so it is omitted.
             properties:
               gitHubAppRef:
                 description: |-
@@ -8826,10 +8848,16 @@ spec:
                         when omitted.
                       type: string
                     runnerLabels:
-                      description: RunnerLabels is the label set matched against workflow
-                        runs-on values.
+                      description: |-
+                        RunnerLabels is the label set matched against workflow runs-on values.
+                        At least one label is required: an empty set would silently match every
+                        workflow run. Each label must be non-empty and contain no whitespace or
+                        commas (comma is the runs-on list separator).
                       items:
+                        maxLength: 256
+                        pattern: ^[^,\s]+$
                         type: string
+                      minItems: 1
                       type: array
                     workerImage:
                       description: WorkerImage is the fully-qualified container image
@@ -8866,6 +8894,12 @@ spec:
             required:
             - gitHubAppRef
             type: object
+            x-kubernetes-validations:
+            - message: securityProfile may be upgraded (e.g. baseline->restricted)
+                but not downgraded; downgrading is a silent security regression —
+                recreate the ActionsGateway instead
+              rule: '{''privileged'':0,''baseline'':1,''restricted'':2}[self.securityProfile]
+                >= {''privileged'':0,''baseline'':1,''restricted'':2}[oldSelf.securityProfile]'
           status:
             description: ActionsGatewayStatus is the observed state of an ActionsGateway.
             properties:
@@ -8937,10 +8971,6 @@ spec:
               proxyReadyReplicas:
                 format: int32
                 type: integer
-            required:
-            - activeSessions
-            - observedGeneration
-            - proxyReadyReplicas
             type: object
         type: object
     served: true

@@ -113,6 +113,86 @@ func TestCRD_ProxyConfig_MinExceedsMax_Rejected(t *testing.T) {
 		"error message should reference the ordering constraint")
 }
 
+// TestCRD_ActionsGateway_SecurityProfile_NoDowngrade verifies the D5 immutability
+// rule: securityProfile may be upgraded (baseline -> restricted) but a downgrade
+// (restricted -> baseline) is rejected as a silent security regression.
+func TestCRD_ActionsGateway_SecurityProfile_NoDowngrade(t *testing.T) {
+	const nsName = "team-cel-profile-downgrade"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("downgrade-ag", nsName, "github-app")
+	ag.Spec.SecurityProfile = "restricted"
+	require.NoError(t, k8sClient.Create(ctx, ag), "restricted profile must be accepted at create")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+
+	// Re-fetch to obtain the current resourceVersion before mutating.
+	var fetched gmcv1alpha1.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "downgrade-ag"}, &fetched))
+	fetched.Spec.SecurityProfile = "baseline"
+	err := k8sClient.Update(ctx, &fetched)
+	require.Error(t, err, "downgrading securityProfile restricted -> baseline must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+	assert.Contains(t, err.Error(), "downgraded", "error message should explain the downgrade is rejected")
+}
+
+// TestCRD_ActionsGateway_SecurityProfile_UpgradeAllowed verifies the D5 rule still
+// permits in-place hardening (baseline -> restricted).
+func TestCRD_ActionsGateway_SecurityProfile_UpgradeAllowed(t *testing.T) {
+	const nsName = "team-cel-profile-upgrade"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("upgrade-ag", nsName, "github-app")
+	ag.Spec.SecurityProfile = "baseline"
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+
+	var fetched gmcv1alpha1.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "upgrade-ag"}, &fetched))
+	fetched.Spec.SecurityProfile = "restricted"
+	require.NoError(t, k8sClient.Update(ctx, &fetched),
+		"upgrading securityProfile baseline -> restricted must be accepted")
+}
+
+// TestCRD_RunnerGroup_RunnerLabels_Validation verifies the D6 rule: an empty
+// runnerLabels list (which would silently match every workflow) is rejected by
+// MinItems, and a label containing whitespace is rejected by the item Pattern.
+func TestCRD_RunnerGroup_RunnerLabels_Validation(t *testing.T) {
+	const nsName = "team-cel-runnerlabels"
+	createNamespace(t, nsName)
+
+	minimalPodTemplate := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+	}
+
+	emptyLabels := &agcv1alpha1.RunnerGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "empty-labels", Namespace: nsName},
+		Spec: agcv1alpha1.RunnerGroupSpec{
+			MaxListeners: 1,
+			RunnerLabels: []string{},
+			PodTemplate:  minimalPodTemplate,
+		},
+	}
+	err := k8sClient.Create(ctx, emptyLabels)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), emptyLabels)) })
+	require.Error(t, err, "RunnerGroup with empty runnerLabels must be rejected (MinItems=1)")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+
+	whitespaceLabel := &agcv1alpha1.RunnerGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "whitespace-label", Namespace: nsName},
+		Spec: agcv1alpha1.RunnerGroupSpec{
+			MaxListeners: 1,
+			RunnerLabels: []string{"self hosted"},
+			PodTemplate:  minimalPodTemplate,
+		},
+	}
+	err = k8sClient.Create(ctx, whitespaceLabel)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), whitespaceLabel)) })
+	require.Error(t, err, "RunnerGroup with a whitespace-containing label must be rejected by the item Pattern")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+}
+
 func TestCRD_RunnerGroup_CELValidation_MaxWorkersConflict(t *testing.T) {
 	const nsName = "team-cel-maxworkers"
 	createNamespace(t, nsName)

@@ -46,6 +46,12 @@ type RunnerGroupSpec struct {
 	MaxWorkers *int32 `json:"maxWorkers,omitempty"`
 
 	// RunnerLabels is the label set matched against workflow runs-on values.
+	// At least one label is required: an empty set would silently match every
+	// workflow run. Each label must be non-empty and contain no whitespace or
+	// commas (comma is the runs-on list separator).
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:MaxLength=256
+	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
@@ -97,6 +103,9 @@ type RunnerGroupSpec struct {
 type RunnerGroupStatus struct {
 	// Conditions contains the current observed conditions of the runner group.
 	// Known types: Ready, Degraded, RateLimited, RunnerVersionTooOld.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// ActiveSessions is the number of currently open long-poll sessions.
@@ -110,10 +119,12 @@ type RunnerGroupStatus struct {
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Namespaced,shortName=rg
+// +kubebuilder:resource:scope=Namespaced,shortName=rg,categories=actions-gateway
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=".spec.maxListeners"
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=".status.activeSessions"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=".status.conditions[?(@.type=='Ready')].reason"
+// +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=".status.observedGeneration"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp"
 type RunnerGroup struct {
 	metav1.TypeMeta   `json:",inline"`
