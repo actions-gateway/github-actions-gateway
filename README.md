@@ -43,49 +43,23 @@ Running many runner groups for one tenant in a shared Kubernetes namespace creat
 
 A four-tier system:
 
-```mermaid
-flowchart LR
-  subgraph system["System namespace"]
-    gmc["Gateway Manager Controller<br/>(GMC)"]
-  end
-  subgraph tenant["Tenant namespace"]
-    cr["ActionsGateway CR<br/>(namespace-scoped)"]
-    subgraph res["Provisioned by GMC"]
-      proxy["Egress Proxy Pool<br/>HPA-managed, per-tenant egress IPs"]
-      agc["Actions Gateway Controller<br/>AGC — goroutine multiplexer"]
-      workers["Ephemeral Worker Pods<br/>one per job, GC'd on completion"]
-    end
-  end
-  cr -->|watch| gmc
-  gmc -->|provisions| res
-  classDef ns fill:#eef4ff,stroke:#4f6bed,color:#1a2b5e;
-  classDef sys fill:#eafaf1,stroke:#27ae60,color:#145a32;
-  class tenant ns;
-  class system sys;
 ```
+  Tenant namespace                         System namespace
+  ════════════════                         ════════════════
 
-<details>
-<summary>Text version</summary>
-
-```text
-  Tenant namespace                           System namespace
-  ----------------                           ----------------
-  +-----------------------+                  +----------------------------+
-  |  ActionsGateway CR    |  ──watch──────>  |  Gateway Manager Controller|
-  |  (namespace-scoped)   |                  |          (GMC)             |
-  +-----------------------+                  +----------------------------+
-          │                                          │
-          │              ┌──── provisions ───────────┘
-          ▼              ▼
-  +------------------------------------------------------------+
-  |  Tenant namespace                                          |
-  |  • Egress Proxy Pool  (HPA-managed, per-tenant egress IPs) |
-  |  • Actions Gateway Controller  (AGC, goroutine multiplexer)|
-  |  • Ephemeral Worker Pods  (one per job, GC'd on completion)|
-  +------------------------------------------------------------+
+  ┌──────────────────────┐               ┌──────────────────────────────┐
+  │  ActionsGateway CR   │──── watch ───▶│  Gateway Manager Controller  │
+  │  (namespace-scoped)  │               │            (GMC)             │
+  └──────────────────────┘               └───────────────┬──────────────┘
+                ┌────────────── provisions ──────────────┘
+                ▼
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Tenant namespace                                                    │
+  │    • Egress Proxy Pool           HPA-managed, per-tenant egress IPs  │
+  │    • Actions Gateway Controller  AGC, goroutine multiplexer          │
+  │    • Ephemeral Worker Pods       one per job, GC'd on completion     │
+  └──────────────────────────────────────────────────────────────────────┘
 ```
-
-</details>
 
 **Tier 1 — Gateway Manager Controller (GMC).** A cluster-scoped operator deployed once by the platform team. It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant — role-based access control (RBAC), network policies, resource quotas, egress proxy, and AGC — entirely within the tenant's existing namespace.
 
