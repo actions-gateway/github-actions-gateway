@@ -10,7 +10,36 @@ This document covers the network topology of a deployed gateway: which component
 
 ## Component Connection Map
 
+```mermaid
+flowchart LR
+  subgraph system["System namespace (gmc-system)"]
+    gmc["GMC"]
+  end
+  subgraph tenant["Tenant namespace"]
+    agc["AGC"]
+    worker["Worker Pod"]
+    proxy["Proxy ClusterIP Service"]
+  end
+  k8s["K8s API Server<br/>(in-cluster)"]
+  github["GitHub (external)"]
+
+  gmc -->|"(1)"| k8s
+  agc -->|"(2) via service CIDR"| k8s
+  agc -->|"(3)"| proxy
+  worker -->|"(5)"| proxy
+  proxy -->|"(4)"| github
+  classDef ns fill:#eef4ff,stroke:#4f6bed,color:#1a2b5e;
+  classDef sys fill:#eafaf1,stroke:#27ae60,color:#145a32;
+  classDef ext fill:#fff4e6,stroke:#e67e22,color:#7e3b00;
+  class tenant ns;
+  class system sys;
+  class github ext;
 ```
+
+<details>
+<summary>Text version</summary>
+
+```text
   System namespace (gmc-system)
   ─────────────────────────────────────────
   GMC ──(1)──── K8s API Server (in-cluster) ──────────────────────
@@ -24,6 +53,8 @@ This document covers the network topology of a deployed gateway: which component
                       │
   Worker Pod ──(5)───┘
 ```
+
+</details>
 
 All GitHub-bound traffic — from both the AGC and worker pods — is routed through the per-tenant egress proxy pool. Kubernetes API traffic from the AGC travels directly in-cluster and bypasses the proxy.
 
