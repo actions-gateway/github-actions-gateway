@@ -148,6 +148,29 @@ are validated.
   `helm upgrade` flow (including the cert-manager toggle and the CRD
   upgrade note), not the per-binary `cmd/*/config/` bases.
 
+### F. Engineering quality gates — *gating*
+
+CI-enforced quality measurements that keep an AI-developed, multi-session
+codebase from regressing silently between sessions. Both are cheap to wire;
+the deliverable is as much the **agreed threshold** as the plumbing. Each is
+ratchet/threshold-shaped, not a one-time fix — so they gate by *not getting
+worse*, which avoids manufacturing low-value tests or churn.
+
+- [ ] **Test coverage measured + gated** ([Q77](../STATUS.md), *gating*):
+  `unit-test.yml` reports per-module `go test` coverage. **Threshold
+  decision:** start report-only for one cycle to establish a baseline, then
+  enforce a *no-regression ratchet* — the build fails if a module's coverage
+  drops below its recorded floor. Prefer the ratchet over an arbitrary
+  absolute percentage. Generated code (`zz_generated*`,
+  `api/v1alpha1/groupversion_info.go`) and thin `main`/wiring packages are
+  excluded from the floor so the number reflects logic, not boilerplate.
+- [ ] **Code-duplication check** ([Q78](../STATUS.md), *gating*): `dupl`
+  enabled in `.golangci.yml`. **Threshold decision:** start at the
+  conventional 150-token threshold, then tune up only as far as needed to
+  suppress false positives on table-driven tests and the divergent pod-spec
+  builders. Catches the copy-paste-drift class that bit the AGC/proxy
+  `SecurityContext` blocks (extracted in the builder.go helper refactor).
+
 ---
 
 ## Explicitly out of scope (post-1.0)
@@ -183,6 +206,7 @@ Track 2 (packaging — the keystone):
 
 Independent (any time):
   D (Q35 AGC logging/probes; Q34 manifests; Q51/Q72 metrics)
+  F (Q77 coverage gate; Q78 dup-check) — CI-only, no cluster needed
   E (docs honesty pass) — finish last, once A–D outcomes are known
 ```
 
@@ -196,7 +220,8 @@ Suggested sequence:
    is swapped in. If it doesn't run before tag, the bucket-E egress
    caveat ships in its place.
 4. **C: Q14 posture scan** (then optionally Q28/Q29) once Q12 lands.
-5. **D: Q35/Q34 operability fixes** — parallelizable, no cluster needed.
+5. **D: Q35/Q34 operability fixes** and **F: Q77/Q78 CI quality gates** —
+   parallelizable, no cluster needed.
 6. **E: docs honesty pass** — last, so the scale/sandbox caveats and the
    new install flow are written against what actually shipped.
 
@@ -211,6 +236,7 @@ Suggested sequence:
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
 | E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
+| F. Engineering quality | Q77 coverage gate, Q78 dup-check | — |
 
 **1.0 = all gating boxes ticked.** Recommended items that slip become
 ordinary post-1.0 Queue entries.
