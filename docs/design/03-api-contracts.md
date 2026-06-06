@@ -356,7 +356,7 @@ type RunnerGroupSpec struct {
     // when PodTemplate does not already define a container named "runner".
     // Production deployments SHOULD reference an immutable digest, e.g.
     // "ghcr.io/my-org/actions-runner-worker@sha256:abc...". Tag-only references
-    // (e.g. ":2.327.1") are accepted but discouraged because they undermine the
+    // (e.g. ":2.334.0") are accepted but discouraged because they undermine the
     // upgrade-rollback semantics described in §2.6. Combine with
     // imagePullPolicy: IfNotPresent (digest pin) or Always (tag).
     //
@@ -367,7 +367,7 @@ type RunnerGroupSpec struct {
     // Omitting this field causes the AGC to use its operator-configured default.
     // The compile-time constant DefaultWorkerImage in
     // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
-    // (currently "ghcr.io/actions/actions-runner:2.327.1", aligned with the
+    // (currently "ghcr.io/actions/actions-runner:2.334.0", aligned with the
     // ARC gha-runner-scale-set chart default). Operators override it at AGC
     // startup via the --worker-image flag; tenants can then override further
     // per-RunnerGroup with this field without affecting other groups.
