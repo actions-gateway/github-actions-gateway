@@ -21,7 +21,8 @@ to say so plainly.
 Phrased as one sentence: **an operator can `helm install` the chart,
 onboard two isolated tenants that each run a real GitHub job through the
 egress proxy, and every security control we document is one we have
-actually observed enforcing.**
+either observed enforcing or whose validation limits the docs state
+plainly.**
 
 ---
 
@@ -50,23 +51,27 @@ DoD rows.
   `E2E_GMC_TenantProvisioning` with real GitHub App creds and confirm
   GitHub accepts the pinned runner `2.334.0` at session creation.
 
-### B. Security & isolation proof — *gating*
+### B. Security & isolation proof — *gating + recommended*
 
-A 1.0 that *claims* egress isolation must have *observed* egress being
-blocked, not just asserted the NetworkPolicy spec exists.
+The security *control* (the egress NetworkPolicy) must ship
+enforced-by-default; *observing* the negative path actually drop traffic
+is recommended, not gating, because it needs a special-CNI cluster — the
+same expense class as the deferred gVisor/load-test work. The honesty
+caveat in bucket E covers the gap until Q7b runs.
 
-- [ ] **Worker egress negatives enforced** ([Q7b](../STATUS.md)):
-  re-run `WorkloadEgressBlockedToNonProxyPod` + `WorkerCannotReachK8sAPI`
-  on a `kind` cluster with Calico or Cilium (kindnet does not enforce
-  egress, so the current green is from the positive case only). Either
-  the negatives pass, or the docs are downgraded to state the
-  enforcement requirement explicitly.
 - [ ] **No secure-by-default regression in shipped manifests**
-  (the security half of [Q34](../STATUS.md)): the install artifact must
-  not ship with NetworkPolicy / ServiceMonitor commented out. Anything
-  off-by-default that weakens a security property is a documented,
-  explicit opt-*out*, never a silent default (secure-by-default
-  principle; see [security design](../design/05-security.md)).
+  (the security half of [Q34](../STATUS.md), *gating*): the install
+  artifact must not ship with NetworkPolicy / ServiceMonitor commented
+  out. Anything off-by-default that weakens a security property is a
+  documented, explicit opt-*out*, never a silent default
+  (secure-by-default principle; see
+  [security design](../design/05-security.md)).
+- [ ] **Worker egress negatives observed enforcing** ([Q7b](../STATUS.md),
+  *recommended*): re-run `WorkloadEgressBlockedToNonProxyPod` +
+  `WorkerCannotReachK8sAPI` on a `kind` cluster with Calico or Cilium
+  (kindnet does not enforce egress, so today's green is positive-case
+  only). Deferred from gating per its special-cluster cost; the egress
+  claim is caveated in the docs (bucket E) until it runs.
 
 ### C. Packaging & supply chain — *gating + recommended*
 
@@ -127,6 +132,13 @@ are validated.
   target, not yet validated at scale** (1.0 ships without the
   [Q13](../STATUS.md) load run). Remove or qualify any phrasing that
   reads as a measured result.
+- [ ] **Egress enforcement scope stated honestly**: docs state that
+  worker egress isolation is validated positive-case (job traffic flows
+  through the proxy) but the negative path (non-proxy egress blocked) is
+  enforced by the cluster CNI and is **unverified under the default
+  kindnet test setup** — production operators must run a CNI that
+  enforces egress NetworkPolicy (Calico/Cilium). Lifts when
+  [Q7b](../STATUS.md) runs.
 - [ ] **Sandboxed runtime stated as untested opt-in**: gVisor/Kata
   docs ([Appendix B](../design/appendix-b-worker-isolation.md)) say the
   path is *documented and supported in spec but not exercised on a real
@@ -161,7 +173,7 @@ Two independent tracks land in parallel; packaging is the long pole.
 ```
 Track 1 (live validation — needs real GitHub App creds + kind):
   A (M4 multi-tenant + e2e job + Q71 runner version)
-        └─ B-egress (Q7b, on a Calico/Cilium kind cluster)
+        └─ B-egress (Q7b — RECOMMENDED, needs Calico/Cilium kind cluster)
 
 Track 2 (packaging — the keystone):
   C-Q12 (install artifact)
@@ -179,8 +191,10 @@ Suggested sequence:
 1. **Q12 install artifact** — unblocks the entire C track; start first.
 2. **A: M4 live validation + Q71** — one focused session with real
    creds against `kind`; flips four ⚠️/❌ DoD rows at once.
-3. **B: Q7b egress negatives** — needs a Calico/Cilium cluster; can
-   piggyback on the same live session if the CNI is swapped in.
+3. **B: Q7b egress negatives** (*recommended, not gating*) — needs a
+   Calico/Cilium cluster; piggyback on the same live session if the CNI
+   is swapped in. If it doesn't run before tag, the bucket-E egress
+   caveat ships in its place.
 4. **C: Q14 posture scan** (then optionally Q28/Q29) once Q12 lands.
 5. **D: Q35/Q34 operability fixes** — parallelizable, no cluster needed.
 6. **E: docs honesty pass** — last, so the scale/sandbox caveats and the
@@ -193,10 +207,10 @@ Suggested sequence:
 | Bucket | Gating items | Recommended items |
 |---|---|---|
 | A. Functional + live proof | M4 multi-tenant, delete-isolation, e2e proxy job, Q71 | — |
-| B. Security/isolation | Q7b egress negatives, Q34 secure-by-default | — |
+| B. Security/isolation | Q34 secure-by-default | Q7b egress negatives |
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
-| E. Docs honesty | capacity reframe, sandbox caveat, ops install flow | — |
+| E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
 
 **1.0 = all gating boxes ticked.** Recommended items that slip become
 ordinary post-1.0 Queue entries.
