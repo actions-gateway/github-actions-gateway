@@ -37,7 +37,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
+.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock \
@@ -55,6 +55,23 @@ help: ## Display this help message
 
 .PHONY: all
 all: generate build test ## Generate, build, and test all modules
+
+# The one-command pre-review gate. Run this before requesting review or opening a
+# PR: it runs exactly what the unit-test CI workflow runs (gofmt + golangci-lint,
+# STATUS.md format lint, unit tests), so a green `make check` means a green
+# unit-test workflow. The slower security gates (vulncheck, trivy-scan) and the
+# integration/e2e tiers stay separate so this loop stays fast.
+.PHONY: check
+check: lint lint-status test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + unit tests (mirrors the unit-test CI workflow)
+
+# Install the tracked git hooks for this clone by pointing core.hooksPath at the
+# in-repo .githooks/ directory. The path is relative, so it resolves correctly in
+# the main checkout and every linked worktree. Run once after cloning (scripts/setup.sh
+# does this for you). Bypass a single commit with `git commit --no-verify`.
+.PHONY: hooks
+hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
+	git config core.hooksPath .githooks
+	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods

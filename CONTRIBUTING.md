@@ -19,11 +19,14 @@ ln -s ~/workspace/claude-skills/model-advisor    ~/.claude/skills/model-advisor
 ln -s ~/workspace/claude-skills/tech-docs-layers ~/.claude/skills/tech-docs-layers
 ```
 
-Build the vendored tool binaries before doing anything else:
+Build the vendored tool binaries and install the git hooks before doing anything else:
 
 ```bash
 make tools   # builds controller-gen, setup-envtest, ginkgo, kubebuilder into .build/
+make hooks   # installs the tracked pre-commit hook (core.hooksPath -> .githooks)
 ```
+
+`scripts/setup.sh` runs `make hooks` for you. The pre-commit hook is a sub-second gate (gofmt on staged Go files, plus the `docs/STATUS.md` format lint when that file is staged); bypass a single commit with `git commit --no-verify`.
 
 ## Design first
 
@@ -54,9 +57,19 @@ The repo uses a `go.work` workspace. `go test ./...` from the root does **not** 
 
 Integration tests require `KUBEBUILDER_ASSETS`. See [`docs/development/testing.md`](docs/development/testing.md) for setup.
 
+## The pre-review gate
+
+Before requesting review or opening a PR, run the one-command gate:
+
+```bash
+make check   # gofmt + golangci-lint + STATUS.md lint + unit tests
+```
+
+`make check` runs exactly what `.github/workflows/unit-test.yml` runs, so a green `make check` means a green unit-test workflow — run it locally to avoid burning CI. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers are kept separate so this loop stays fast; run them when your change warrants it.
+
 ## Linting
 
-`make lint` runs `gofmt -s` and `golangci-lint` across every workspace module. `golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`. CI runs the same gates in `.github/workflows/unit-test.yml` — run it locally before pushing to avoid burning CI.
+`make lint` runs `gofmt -s` and `golangci-lint` across every workspace module. `golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`. CI runs the same gates in `.github/workflows/unit-test.yml`.
 
 For the full e2e suite against a local kind cluster:
 

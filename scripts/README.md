@@ -10,5 +10,6 @@ Developer and CI helper scripts. All scripts follow the bash conventions in [CLA
 | [run-parallel.sh](run-parallel.sh) | Run multiple commands in parallel with labeled, real-time output. Useful for running per-module tests concurrently. |
 | [probe-live-run.sh](probe-live-run.sh) | End-to-end setup and execution of the Milestone 1 wire-protocol probe against a real GitHub App installation. |
 | [probe-investigations-cd.sh](probe-investigations-cd.sh) | Runs Milestone 1 Investigations C and D against real GitHub. |
-| [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`). |
-| [pre-commit-lint-status](pre-commit-lint-status) | Optional git pre-commit hook. Enable with `ln -s ../../scripts/pre-commit-lint-status .git/hooks/pre-commit`. |
+| [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`), by `make check`, and by the pre-commit hook. |
+
+The tracked git hooks live in [`.githooks/`](../.githooks/). Install them with `make hooks` (or `scripts/setup.sh`, which does it for you); the pre-commit hook runs a sub-second gate (gofmt on staged Go files, plus `lint-status.sh` when `docs/STATUS.md` is staged). Bypass a single commit with `git commit --no-verify`.

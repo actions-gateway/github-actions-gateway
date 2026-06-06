@@ -21,6 +21,12 @@ go build ./...
 echo "==> go build ./cmd/probe/..."
 go build ./cmd/probe/...
 
+echo "==> installing git hooks (core.hooksPath -> .githooks)"
+git config core.hooksPath .githooks
+
 echo ""
 echo "Setup complete. Run tests with:"
 echo "  go test -race ./..."
+echo ""
+echo "Before requesting review, run the fast pre-review gate:"
+echo "  make check"
