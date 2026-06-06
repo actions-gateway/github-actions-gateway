@@ -51,20 +51,25 @@ type ProxyConfig struct {
 	ManagedNetworkPolicy *bool `json:"managedNetworkPolicy,omitempty"`
 }
 
+// AllowProfileDowngradeAnnotation, when set to "true" on an ActionsGateway,
+// permits an update that lowers spec.securityProfile to a less-restrictive
+// level (e.g. restricted -> baseline). Without it, the GMC validating webhook
+// rejects such downgrades so that a stray re-apply — or a manifest that drops
+// the field and lets it re-default to baseline — cannot silently weaken a
+// tenant's Pod Security Admission isolation. Relaxing isolation must be a
+// deliberate, auditable act. See docs/design/05-security.md §5.3.
+const AllowProfileDowngradeAnnotation = "actions-gateway.github.com/allow-profile-downgrade"
+
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
 //
-// The securityProfile no-downgrade rule below runs only on update (it references
-// oldSelf). securityProfile may be *upgraded* (e.g. baseline->restricted) but
-// never downgraded: the rule ranks the profiles privileged(0) < baseline(1) <
-// restricted(2) and rejects any update that lowers the rank, closing the
-// silent-security-downgrade hole (D5) while still allowing in-place hardening.
-//
-// gitHubAppRef.name is deliberately NOT pinned: changing it is the supported
-// credential-rotation mechanism (point the tenant at a freshly-minted App
-// Secret), exercised by TestGMC_TenantProvisioning_CredentialRotation. An
-// immutability rule there would break rotation, so it is omitted.
-//
-// +kubebuilder:validation:XValidation:rule="{'privileged':0,'baseline':1,'restricted':2}[self.securityProfile] >= {'privileged':0,'baseline':1,'restricted':2}[oldSelf.securityProfile]",message="securityProfile may be upgraded (e.g. baseline->restricted) but not downgraded; downgrading is a silent security regression — recreate the ActionsGateway instead"
+// securityProfile changes are gated by the GMC validating webhook rather than a
+// CRD CEL rule: an *upgrade* (e.g. baseline->restricted) is always allowed, but
+// a *downgrade* is rejected unless the object carries
+// AllowProfileDowngradeAnnotation set to "true". The webhook is used (not CEL)
+// because the decision depends on metadata.annotations, which a spec-scoped CEL
+// XValidation rule cannot read. gitHubAppRef.name is deliberately mutable —
+// changing it is the supported credential-rotation mechanism, exercised by
+// TestGMC_TenantProvisioning_CredentialRotation.
 type ActionsGatewaySpec struct {
 	GitHubAppRef SecretReference `json:"gitHubAppRef"`
 	// +optional

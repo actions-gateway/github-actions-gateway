@@ -173,6 +173,72 @@ func TestWebhook_UpdateRejectsPrivilegedContainer(t *testing.T) {
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
+// agWithProfile returns a tenant-namespace AG with the given securityProfile.
+func agWithProfile(profile string) *gmcv1alpha1.ActionsGateway {
+	ag := newAG("team-a")
+	ag.Spec.SecurityProfile = profile
+	return ag
+}
+
+func TestWebhook_UpdateAllowsProfileUpgrade(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	// baseline -> restricted is a hardening upgrade; always allowed.
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("baseline"), agWithProfile("restricted"))
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateAllowsSameProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), agWithProfile("restricted"))
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateRejectsProfileDowngrade(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	// restricted -> baseline relaxes isolation; rejected without the opt-in annotation.
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), agWithProfile("baseline"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "downgrade")
+	assert.Contains(t, err.Error(), gmcv1alpha1.AllowProfileDowngradeAnnotation)
+}
+
+// TestWebhook_UpdateRejectsDowngradeToPrivileged covers baseline -> privileged,
+// which is a downgrade because privileged is the *least* restrictive profile.
+func TestWebhook_UpdateRejectsDowngradeToPrivileged(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("baseline"), agWithProfile("privileged"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "downgrade")
+}
+
+func TestWebhook_UpdateAllowsProfileDowngradeWithAnnotation(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	newObj := agWithProfile("baseline")
+	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), newObj)
+	require.NoError(t, err, "an explicit allow-downgrade annotation must permit the downgrade")
+}
+
+// TestWebhook_UpdateRejectsDowngradeWithWrongAnnotationValue ensures only the
+// literal "true" opts in — a present-but-falsey value must not relax isolation.
+func TestWebhook_UpdateRejectsDowngradeWithWrongAnnotationValue(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	newObj := agWithProfile("baseline")
+	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "yes"}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), newObj)
+	require.Error(t, err)
+}
+
+// TestWebhook_UpdateTreatsEmptyProfileAsBaseline ensures a manifest that drops
+// securityProfile (so it re-defaults to baseline) is treated as a downgrade
+// from restricted, not a no-op.
+func TestWebhook_UpdateTreatsEmptyProfileAsBaseline(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), agWithProfile(""))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "downgrade")
+}
+
 func TestWebhook_DeleteNoOp(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("")
 	_, err := v.ValidateDelete(context.Background(), newAG("team-a"))

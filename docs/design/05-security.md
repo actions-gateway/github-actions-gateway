@@ -88,19 +88,43 @@ namespaces.
 
 ### No silent profile downgrades
 
-Separately from the GMC's stamping privilege, the `ActionsGateway` CRD
-itself prevents a tenant's profile from being *weakened* in place. A
-spec-level CEL `XValidation` rule ranks the profiles
-`privileged(0) < baseline(1) < restricted(2)` and, on update, rejects
-any change that lowers the rank. So `baseline → restricted` (hardening)
-is allowed, but `restricted → baseline` or `baseline → privileged`
-(a security regression) is refused at admission — there is no quiet
-`kubectl edit`/`kubectl apply` path that downgrades isolation. To
-genuinely relax a tenant's profile, an operator must delete and recreate
-the `ActionsGateway`, which is an explicit, auditable action. The rule
-runs only on update (it references `oldSelf`), so initial creation at any
-profile is unaffected. (`gitHubAppRef.name` is deliberately *not* pinned:
+Separately from the GMC's stamping privilege, the GMC validating
+webhook (`ValidateUpdate`) prevents a tenant's profile from being
+*silently* weakened. The profiles are ranked
+`privileged(0) < baseline(1) < restricted(2)`; on update the webhook
+compares the old and new rank:
+
+- An **upgrade** (`baseline → restricted`) — hardening — is always
+  allowed. So is a no-op change.
+- A **downgrade** (`restricted → baseline`, or anything → `privileged`)
+  is **rejected** unless the object carries the annotation
+  `actions-gateway.github.com/allow-profile-downgrade: "true"`.
+
+This closes the accidental path without trapping operators. A stray
+`kubectl apply` of an older manifest — or one that *drops* the field and
+lets it re-default to `baseline` — does not carry the annotation, so it
+is refused rather than quietly relaxing isolation (an empty value is
+treated as its `baseline` default for the comparison, so dropping the
+field cannot sneak a downgrade through). But a *deliberate* relaxation —
+for example rolling back a `baseline → restricted` hardening attempt that
+turned out to break the tenant's pods at admission — needs only a
+two-field edit (set the annotation, set the profile), not a destructive
+recreate of the whole `ActionsGateway`. Requiring the explicit annotation
+keeps the relaxation auditable while keeping the safe direction
+(hardening) cheap and the unsafe direction (relaxing) intentional.
+
+The check is a webhook rather than a CRD CEL `XValidation` rule because
+the decision depends on `metadata.annotations`, which a spec-scoped CEL
+rule cannot read. (`gitHubAppRef.name` is deliberately left mutable:
 changing it is the supported credential-rotation mechanism — see §3.2.)
+
+This is a guard against *accidental/silent* downgrade, not an absolute
+boundary: an operator who holds the `allow-profile-downgrade` annotation
+write (i.e. edit access to the CR) is trusted to relax the profile on
+purpose, and one with direct namespace `patch` rights could edit the PSA
+labels regardless. A *compromised GMC* relabelling namespaces is a
+separate threat, constrained by the `namespace-psa-guard`
+ValidatingAdmissionPolicy above, not by this rule.
 
 ### Mixing privileged and non-privileged workloads
 
