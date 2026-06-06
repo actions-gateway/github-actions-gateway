@@ -9,7 +9,7 @@
 **Goal:** Make the system production-deployable. Two themes:
 
 1. **Packaging and posture** — ship the operator and proxy via a
-   reproducible install path (Helm chart or Kustomize overlay) with
+   reproducible install path (Helm chart, per §1.1) with
    hardened defaults that pass an automated posture audit.
 2. **Load validation** — prove the design's headline capacity claim
    (1,000 concurrent virtual runner sessions across 10 tenants) on a
@@ -25,9 +25,9 @@ inherits those and concentrates on what remains.
 
 **Definition of Done:**
 
-- A reproducible install artifact (Helm chart or Kustomize root) exists
-  under `deploy/` (or `charts/`) and produces a working tenant from a
-  single `helm install` / `kubectl apply -k`.
+- A reproducible install artifact (Helm chart, per D-M5-1 §1.1) exists
+  under `charts/actions-gateway/` and produces a working tenant from a
+  single `helm install`.
 - `kube-bench` or `polaris` scan against the installed stack returns
   zero critical findings.
 - `test/load/` harness simulates 1,000 concurrent sessions across 10
@@ -54,7 +54,7 @@ load-testing, and the posture audit.
 | Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
 | Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
-| Production Helm chart or Kustomize overlays | ❌ Open | No `charts/` or `deploy/` directory; only per-binary `cmd/*/config/` kustomize bases exist |
+| Production Helm chart (`charts/actions-gateway/`) | ❌ Open | Decided Helm over Kustomize (D-M5-1, §1.1); no `charts/` dir yet. `cmd/*/config/` kustomize bases stay as the dev source-of-truth + chart scaffolding input |
 | `test/load/` multi-tenant load harness | ❌ Open | Directory does not exist |
 | 1,000 concurrent sessions × 10 tenants — load test | ❌ Open | Blocked on harness |
 | Proxy HPA verified under burst | ⚠️ Partial | Unit/integration coverage and e2e §7.3 spec for 50-job burst exist; 1,000-session scale not run |
@@ -71,68 +71,106 @@ installed (operator concern, not code).
 
 ---
 
-## 1. Packaging (Helm chart or Kustomize overlay)
+## 1. Packaging (Helm chart)
 
-### 1.1 Choose the install vehicle
+### 1.1 Install vehicle — decided: Helm chart
 
-Two viable shapes:
+**Decision (D-M5-1): ship a Helm chart** under
+`charts/actions-gateway/` as the 1.0 install artifact. The existing
+`cmd/gmc/config/` and `cmd/agc/config/` kustomize bases are **retained
+as the dev/CI source of truth** (they back `make manifests` and the
+envtest/e2e tiers) — they are *not* a second shipped distribution path.
 
-- **Kustomize overlay** under `deploy/`, composed from the existing
-  `cmd/gmc/config/` and `cmd/agc/config/` kustomize bases. Lowest
-  effort; reuses the kubebuilder-generated layout. Operators apply
-  `kubectl apply -k deploy/`.
-- **Helm chart** under `charts/actions-gateway/`. Higher effort; gives
-  operators templated values, `helm upgrade --atomic` rollback, and a
-  single artifact to publish to an OCI registry.
+**Why Helm over a Kustomize overlay.** The original plan defaulted to
+Kustomize on author-effort grounds ("the bases already exist"). That is
+the wrong axis for a *distribution* vehicle. GAG is a third-party-
+installed platform operator — the same category as
+actions-runner-controller, cert-manager, and prometheus-operator, all
+of which ship Helm as their primary artifact. The reasons that matters
+here:
 
-**Recommended starting point:** Kustomize overlay. The kubebuilder
-bases already exist; an overlay is straightforward to assemble and
-test. A Helm chart can wrap the same manifests later if operator
-demand justifies the maintenance cost.
+- **Versioned, named releases.** "Install GAG 1.0" becomes one OCI
+  chart ref, not "clone the repo and `apply` this overlay at this SHA."
+- **Real day-2 lifecycle.** `helm upgrade` / `rollback --atomic` track
+  what was installed. Kustomize has no installed-state notion; upgrades
+  are `apply` + manual prune, and removed resources orphan silently.
+- **A values UX for the axes operators actually tune** (`gmc.image`,
+  `proxy.image`, `agc.image`, `leaderElection.enabled`,
+  `metrics.enabled`, default `securityProfile`, `certManager.enabled`)
+  instead of patch overlays each operator has to fork and re-base.
 
-**Decision required (D-M5-1):** Helm or Kustomize for v1. Default if
-undecided: Kustomize.
+Kustomize's genuine edge — GitOps where you own the repo — is an
+in-house pattern; it is the weaker fit for an artifact handed to other
+orgs.
 
-### 1.2 Contents of the install root
+**Effort is smaller than it looks.** The repo is on kubebuilder 4.14,
+whose `helm/v1-alpha` plugin scaffolds a chart from the existing
+`config/` bases (`kubebuilder edit --plugins=helm/v1-alpha`) rather
+than hand-authoring templates. Keep the kustomize bases authoritative
+for dev; generate and then maintain the chart as the shipped artifact.
 
-Regardless of vehicle, the artifact must produce:
+**Two gotchas this introduces (both must be handled in §1.2):**
 
-- The two CRDs (`ActionsGateway`, `RunnerGroup`) installed cluster-wide
-- The GMC Deployment + RBAC + webhook configuration in `gmc-system`
-- The IP-range refresh schedule and proxy image references
+1. **cert-manager dependency.** The validating webhook's serving cert
+   comes from kubebuilder's `config/certmanager/` today (CA injected
+   via cert-manager annotation), so cert-manager is already an install
+   prerequisite under *either* vehicle. Helm handles it better: expose
+   a `certManager.enabled` value and ship a self-signed-cert hook as
+   the fallback so operators without cert-manager can still install.
+2. **Helm never upgrades CRDs.** Charts' `crds/` directory installs CRDs
+   but skips them on `helm upgrade`. For an API still on `v1alpha1`
+   with field changes ahead, that breaks day-2. Template the two CRDs
+   into `templates/` with `helm.sh/resource-policy: keep` so they
+   upgrade — accepting the trade-off that Helm no longer delete-protects
+   them. Record this in [upgrade.md](../operations/upgrade.md).
+
+### 1.2 Contents of the chart
+
+The chart must produce:
+
+- The two CRDs (`ActionsGateway`, `RunnerGroup`) — in `templates/` with
+  `helm.sh/resource-policy: keep` (per §1.1 gotcha 2), not `crds/`, so
+  they upgrade.
+- The GMC Deployment + RBAC + webhook configuration in `gmc-system`.
+- The webhook serving cert: cert-manager-issued when
+  `certManager.enabled=true` (default), self-signed-cert hook otherwise
+  (per §1.1 gotcha 1).
+- The IP-range refresh schedule and proxy image references.
 - An optional sample `ActionsGateway` CR with safe defaults
-- Image references pinned by digest (per security plan "out of scope
-  but flagged" — image-digest pinning recommendation)
+  (`values.yaml`-gated, off by default).
+- Image references pinned by digest (per security plan image-digest
+  pinning recommendation) — chart `appVersion` tracks the release tag,
+  `values.yaml` carries the digests.
 
 ### 1.3 Operator-facing values
 
-If Helm: enumerate every value an operator might tune
-(`gmc.image`, `proxy.image`, `agc.image`, `leaderElection.enabled`,
-`metrics.enabled`, `securityProfile` default, `kindOfRegistry`). If
-Kustomize: provide overlay variants (`overlays/staging/`,
-`overlays/production/`) that demonstrate the same axes via patches.
+Enumerate every value an operator might tune in `values.yaml`:
+`gmc.image`, `proxy.image`, `agc.image`, `leaderElection.enabled`,
+`metrics.enabled`, `securityProfile` (default), `certManager.enabled`,
+and `sampleGateway.create`. Each gets a documented default and a comment
+in `values.yaml`; the README table mirrors them.
 
 ### 1.4 Files
 
 ```
-deploy/                              # if Kustomize
-├── kustomization.yaml
-├── overlays/
-│   ├── staging/
-│   └── production/
-└── samples/
-    └── actionsgateway-sample.yaml
-```
-
-or
-
-```
-charts/actions-gateway/              # if Helm
-├── Chart.yaml
-├── values.yaml
+charts/actions-gateway/
+├── Chart.yaml                       # appVersion = release tag
+├── values.yaml                      # every tunable from §1.3, documented
 ├── templates/
-└── README.md
+│   ├── crds/                        # CRDs as templates (resource-policy: keep)
+│   ├── gmc-deployment.yaml
+│   ├── rbac.yaml
+│   ├── webhook.yaml
+│   ├── certmanager.yaml             # gated on .Values.certManager.enabled
+│   ├── selfsigned-cert-hook.yaml    # fallback when certManager disabled
+│   ├── iprange-schedule.yaml
+│   └── sample-gateway.yaml          # gated on .Values.sampleGateway.create
+└── README.md                        # values reference + install/upgrade flow
 ```
+
+The kustomize bases under `cmd/*/config/` stay in place as the dev/CI
+source of truth and the scaffolding input for the chart (§1.1); they are
+not published.
 
 ---
 
@@ -285,7 +323,7 @@ scale rather than reimplementing:
 
 | ID | Question | Affects | Default if undecided |
 |---|---|---|---|
-| D-M5-1 | Helm chart vs Kustomize overlay for v1 install artifact | §1 | Kustomize overlay |
+| D-M5-1 | Helm chart vs Kustomize overlay for v1 install artifact | §1 | **Decided: Helm chart** (§1.1) — kustomize bases retained as dev source-of-truth |
 | D-M5-2 | polaris vs kubescape for CI posture audit | §3 | polaris (narrower scope, easier to gate CI on) |
 | D-M5-3 | Load harness language — Go (consistent with rest of repo) vs k6/Locust (richer reporting) | §2 | Go; reuse existing fakegithub + controller-runtime client |
 | D-M5-4 | Sandbox runtime to validate — gVisor, Kata, or both | §4 | gVisor (lower install cost on most cloud K8s) |
@@ -299,7 +337,7 @@ scale rather than reimplementing:
 | 1,000-session run exposes goroutine leak undetected by current goleak tests | Medium | High | Run harness with `-race` and periodic `pprof` snapshots; capture full goroutine dump on assertion failure |
 | polaris flags rules we've explicitly chosen against the design (e.g. no liveness probe on workers) | High | Low | Suppression list lives in `polaris.yaml` with a comment per suppression citing the design doc |
 | Staging cluster doesn't support gVisor (no nested-virt, restrictive cloud) | Medium | Low | Mark gVisor validation as opt-in; document the runtime requirement in the runbook |
-| Helm chart maintenance overhead if chosen and demand never materializes | Medium | Medium | Default to Kustomize per D-M5-1; revisit once a real operator asks for Helm |
+| Helm chart maintenance overhead (templates drift from the kustomize bases) | Medium | Medium | Bases stay the source of truth (§1.1); scaffold the chart from them via the kubebuilder `helm/v1-alpha` plugin and add a CI drift check that re-renders and diffs |
 | Load harness becomes flaky in CI (timing-sensitive HPA assertions) | Medium | Medium | Run full load test nightly, not per-PR; per-PR runs `load-test-quick` (100 concurrent) |
 
 ---
