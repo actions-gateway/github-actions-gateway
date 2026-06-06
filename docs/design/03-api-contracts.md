@@ -150,23 +150,24 @@ type ActionsGatewaySpec struct {
     // PSA is the safety net; the AGC's invariants are the floor.
     //
     // securityProfile may be UPGRADED in place (e.g. baseline -> restricted)
-    // but never DOWNGRADED: a spec-level CEL rule ranks the profiles
-    // privileged(0) < baseline(1) < restricted(2) and rejects any update that
-    // lowers the rank, so a tenant cannot be silently weakened. To genuinely
-    // relax the profile, recreate the ActionsGateway.
+    // freely. A DOWNGRADE (relaxing isolation, e.g. restricted -> baseline, or
+    // anything -> privileged) is rejected by the GMC validating webhook unless
+    // the object carries the annotation
+    // actions-gateway.github.com/allow-profile-downgrade: "true". This keeps a
+    // stray re-apply — or a manifest that drops the field and lets it
+    // re-default to baseline — from silently weakening a tenant, while still
+    // letting an operator roll back a failed hardening attempt with a two-field
+    // edit rather than recreating the ActionsGateway. The webhook is used (not
+    // a CRD CEL rule) because the decision reads metadata.annotations, which a
+    // spec-scoped CEL XValidation rule cannot see. gitHubAppRef.name is left
+    // mutable so credential rotation by Secret name keeps working — see the
+    // Secret-rotation note later in this document.
     //
     // +optional
     // +kubebuilder:default=baseline
     // +kubebuilder:validation:Enum=baseline;restricted;privileged
     SecurityProfile string `json:"securityProfile,omitempty"`
 }
-
-// The spec carries one update-only CEL rule enforcing the no-downgrade
-// invariant above (gitHubAppRef.name is intentionally left mutable so that
-// credential rotation by Secret name keeps working — see the Secret-rotation
-// note later in this document):
-//
-//   +kubebuilder:validation:XValidation:rule="{'privileged':0,'baseline':1,'restricted':2}[self.securityProfile] >= {'privileged':0,'baseline':1,'restricted':2}[oldSelf.securityProfile]",message="securityProfile may be upgraded but not downgraded"
 
 // ActionsGatewayStatus uses standard Kubernetes Conditions for compatibility
 // with kubectl wait, Argo CD health checks, and kstatus.

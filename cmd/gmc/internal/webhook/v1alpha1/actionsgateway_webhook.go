@@ -87,12 +87,16 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 	return proxyResourceWarnings(obj), nil
 }
 
-// ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef or privileged containers.
-func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, _, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
+// ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef,
+// privileged containers, or a silent securityProfile downgrade.
+func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if err := validateGitHubAppRef(newObj); err != nil {
 		return nil, err
 	}
 	if err := validateRunnerGroups(newObj); err != nil {
+		return nil, err
+	}
+	if err := validateSecurityProfileTransition(oldObj, newObj); err != nil {
 		return nil, err
 	}
 	return proxyResourceWarnings(newObj), nil
@@ -133,6 +137,53 @@ func validateRunnerGroups(ag *gmcv1alpha1.ActionsGateway) error {
 		}
 	}
 	return nil
+}
+
+// securityProfileRank orders the Pod Security Admission profiles from least to
+// most restrictive. A downgrade is any update that lowers the rank. An empty
+// value maps to the baseline default (see effectiveProfile).
+var securityProfileRank = map[string]int{
+	"privileged": 0,
+	"baseline":   1,
+	"restricted": 2,
+}
+
+// effectiveProfile returns the securityProfile, substituting the baseline
+// default for an empty value so an old/new comparison matches what the GMC
+// actually stamps on the namespace.
+func effectiveProfile(profile string) string {
+	if profile == "" {
+		return "baseline"
+	}
+	return profile
+}
+
+// validateSecurityProfileTransition rejects an update that lowers
+// spec.securityProfile to a less-restrictive level (e.g. restricted -> baseline)
+// unless the new object carries AllowProfileDowngradeAnnotation set to "true".
+// Upgrades and no-op changes are always allowed. Gating relaxation on an
+// explicit annotation means a stray re-apply — or a manifest that drops the
+// field and lets it re-default — cannot silently weaken a tenant's isolation,
+// while a deliberate rollback (e.g. after a failed hardening attempt) needs only
+// a two-field edit rather than recreating the whole ActionsGateway.
+func validateSecurityProfileTransition(oldObj, newObj *gmcv1alpha1.ActionsGateway) error {
+	oldRank, oldOK := securityProfileRank[effectiveProfile(oldObj.Spec.SecurityProfile)]
+	newRank, newOK := securityProfileRank[effectiveProfile(newObj.Spec.SecurityProfile)]
+	if !oldOK || !newOK {
+		// Unknown values are rejected by the CRD enum; nothing to compare here.
+		return nil
+	}
+	if newRank >= oldRank {
+		return nil // upgrade or no change
+	}
+	if newObj.Annotations[gmcv1alpha1.AllowProfileDowngradeAnnotation] == "true" {
+		return nil // explicit, deliberate downgrade
+	}
+	return fmt.Errorf(
+		"securityProfile downgrade from %q to %q is not permitted without the %q annotation set to \"true\"; "+
+			"downgrading relaxes Pod Security Admission isolation and must be deliberate",
+		effectiveProfile(oldObj.Spec.SecurityProfile), effectiveProfile(newObj.Spec.SecurityProfile),
+		gmcv1alpha1.AllowProfileDowngradeAnnotation)
 }
 
 // proxyResourceWarnings returns a warning when proxy.resources.requests is set
