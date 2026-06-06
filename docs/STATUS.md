@@ -49,7 +49,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q27"></a>Q27 | [Security operations runbook](plan/security.md) | `security` `docs` | 🔲 | S | Convert abuse heuristics from `05-security.md` into operator alerts (Secret list rate, eviction retries exhausted, etc). |
 | <a id="Q69"></a>Q69 | [Authenticated secure-serving for proxy + AGC metrics](plan/security.md) | `security` `infra` | 🔲 | M | Proxy + AGC `/metrics` (:8081) are unauthenticated plain HTTP, gated only by the L-8 NetworkPolicy namespace selector. GMC already does authenticated secure-serving (cert-manager metrics cert); extend it to the per-tenant proxy + AGC. |
 | <a id="Q33"></a>Q33 | [K8s audit — §D CRD design polish](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | 🟡 Missing `+listType=map` on conditions, CEL immutability on `gitHubAppRef.name`/`securityProfile` (silent security downgrades), `MinItems`/`omitempty`/`categories`. See [k8s-best-practices.md §D](plan/k8s-best-practices.md#d-crd-design-polish-). |
 | <a id="Q65"></a>Q65 | [K8s audit §A6 — migrate GMC `apply*` helpers to CreateOrPatch](plan/k8s-best-practices.md#a-controller-correctness-) | `infra` | 🔲 | M | 🟡 Eleven `apply*` helpers do read-modify-write without `IsConflict` handling; migrate to `controllerutil.CreateOrPatch`. Split from Q32 §A. |
