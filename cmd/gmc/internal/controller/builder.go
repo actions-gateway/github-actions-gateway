@@ -110,6 +110,30 @@ func securityProfileOrDefault(profile string) string {
 	return profile
 }
 
+// hardenedContainerSecurityContext returns the restricted container
+// SecurityContext applied to every GMC-managed container (AGC and proxy):
+// non-root, read-only root filesystem, no privilege escalation, all Linux
+// capabilities dropped, and the RuntimeDefault seccomp profile. Defining it once
+// keeps the security baseline from drifting between Deployments — hardening (or
+// accidentally relaxing) one container must not silently leave the other behind.
+func hardenedContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsNonRoot:             ptr(true),
+		ReadOnlyRootFilesystem:   ptr(true),
+		AllowPrivilegeEscalation: ptr(false),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+}
+
+// nonrootPodSecurityContext returns the pod-level SecurityContext shared by the
+// AGC and proxy Deployments: fsGroup 65532 so the distroless nonroot UID can read
+// group-owned mounted Secrets (cert/key files projected with mode 0o440). See the
+// TLS-mode comment in buildProxyDeployment for the 0o440-vs-0o400 rationale.
+func nonrootPodSecurityContext() *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
+}
+
 func managedLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
 	return map[string]string{
 		labelManagedBy:               labelManagerValue,
@@ -340,17 +364,13 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 		res.Limits[k] = v
 	}
 
-	false_ := false
-	true_ := true
-
 	// The proxy container image is gcr.io/distroless/static:nonroot which runs
-	// as UID 65532. Mode 0o440 (rw-r-----) plus fsGroup 65532 below means the
-	// non-root container reads the cert via group ownership without making it
+	// as UID 65532. Mode 0o440 (rw-r-----) plus fsGroup 65532 (nonrootPodSecurityContext)
+	// means the non-root container reads the cert via group ownership without making it
 	// world-readable. Mode 0o400 alone leaves files owned by root:root and the
 	// container can't open them at all — that was the regression that surfaced
 	// in e2e: `open /etc/actions-gateway/proxy-tls/tls.crt: permission denied`.
 	tlsMode := int32(0o440)
-	nonrootGID := int64(65532)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
@@ -360,9 +380,7 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": proxyAppName, labelManagedBy: labelManagerValue}},
 				Spec: corev1.PodSpec{
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &nonrootGID,
-					},
+					SecurityContext: nonrootPodSecurityContext(),
 					Affinity: &corev1.Affinity{
 						PodAntiAffinity: &corev1.PodAntiAffinity{
 							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
@@ -436,13 +454,7 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 								HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(healthMetricsPort)},
 							},
 						},
-						SecurityContext: &corev1.SecurityContext{
-							RunAsNonRoot:             &true_,
-							ReadOnlyRootFilesystem:   &true_,
-							AllowPrivilegeEscalation: &false_,
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-							SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-						},
+						SecurityContext: hardenedContainerSecurityContext(),
 					}},
 				},
 			},
@@ -598,10 +610,6 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	// for why 0o400 alone leaves the file unreadable to the non-root AGC user.
 	credMode := int32(0o440)
 	caMode := int32(0o444)
-	nonrootGID := int64(65532)
-
-	false_ := false
-	true_ := true
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
@@ -619,9 +627,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &nonrootGID,
-					},
+					SecurityContext:    nonrootPodSecurityContext(),
 					Volumes: []corev1.Volume{
 						{
 							Name: agcCredsVolumeName,
@@ -690,13 +696,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 								ReadOnly:  true,
 							},
 						},
-						SecurityContext: &corev1.SecurityContext{
-							RunAsNonRoot:             &true_,
-							ReadOnlyRootFilesystem:   &true_,
-							AllowPrivilegeEscalation: &false_,
-							Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
-							SeccompProfile:           &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
-						},
+						SecurityContext: hardenedContainerSecurityContext(),
 					}},
 				},
 			},
