@@ -78,9 +78,9 @@ const (
 	// --worker-image (env: WORKER_IMAGE); the per-RunnerGroup workerImage field
 	// overrides further.
 	//
-	// The version (2.327.1) MUST match the FROM line in cmd/worker/Dockerfile —
+	// The version (2.334.0) MUST match the FROM line in cmd/worker/Dockerfile —
 	// see the runner-version bump procedure in that file's header comment.
-	DefaultWorkerImage = "ghcr.io/actions/actions-runner:2.327.1"
+	DefaultWorkerImage = "ghcr.io/actions/actions-runner:2.334.0"
 
 	payloadMountPath = "/run/secrets/job-payload"
 	payloadKey       = "payload"
