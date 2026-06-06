@@ -14,6 +14,8 @@ Make the smallest change that achieves the goal. If you notice problems outside 
 - New near-term or long-term work → add to the Queue in `docs/STATUS.md` in priority order.
 - Long-horizon non-commitments → `docs/design/appendix-g-future-enhancements.md`.
 
+The full fix/flag/defer/decline policy, the classification taxonomy, and what we do and don't measure are in `docs/development/technical-debt.md`.
+
 Capture knowledge durably, don't leave it in chat. When the user states a standing preference or decision, persist it in the repo (CLAUDE.md, the relevant `docs/` file, or memory) rather than applying it once and moving on. When follow-up work surfaces mid-task, record it on the Queue — including the *why* of any decision it depends on — instead of only mentioning it in the response.
 
 Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
@@ -125,6 +127,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Building binaries | `docs/development/building.md` |
+| Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — also run `gh pr list` and skip any Queue item already covered by an open PR |
 | Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes have a **hard 250-char cap** (lint-enforced; a markdown link counts its full source length). Count before committing. |
 | Updating API/CRD docs after a field change | `docs/design/03-api-contracts.md` |
