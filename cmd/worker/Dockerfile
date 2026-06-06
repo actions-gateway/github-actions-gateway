@@ -36,9 +36,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ##      per-platform manifest.
 ##   3. Update this FROM line AND DefaultWorkerImage in
 ##      cmd/agc/internal/provisioner/provisioner.go to the same X.Y.Z@sha256:….
-##   4. Update the "2.327.1" string in cmd/agc/internal/agentpool tests so the
-##      registered runnerVersion matches what GitHub expects.
-FROM ghcr.io/actions/actions-runner:2.327.1@sha256:551dc313e6b6ef1ca7b9594d8090a7a6cc7aeb663f1079ba2fec07e9158f3259
+##   4. Update the prior runner-version string in cmd/agc/internal/agentpool
+##      tests so the registered runnerVersion matches what GitHub expects.
+FROM ghcr.io/actions/actions-runner:2.334.0@sha256:b6614fce332517f74d0a76e7c762fb08e4f2ff13dcf333183397c8a5725b6e8e
 ENV PATH=/home/runner/bin:$PATH
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]
