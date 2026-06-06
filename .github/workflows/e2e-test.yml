@@ -114,7 +114,7 @@ jobs:
         # run, which is both slow and a flake source under Hub rate limits.
         # Keyed on the digest-pinned image so a kind bump invalidates it.
         id: kind-node-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/kind-node-image
           key: kind-node-${{ env.KIND_NODE_IMAGE }}
@@ -147,7 +147,7 @@ jobs:
         # Avoids even the single runner-side Docker Hub pull on warm runs.
         # Keyed on the pinned upstream tag so a curl bump invalidates it.
         id: curl-image-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/curl-image
           key: curl-image-${{ env.E2E_CURL_UPSTREAM }}

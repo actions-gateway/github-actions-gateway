@@ -79,7 +79,7 @@ jobs:
       # cache, so every PR re-analyzes cold. Key invalidates on linter version
       # (tools/go.sum), config, or any module's deps changing.
       - name: cache golangci-lint analyzer
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml', '**/go.sum') }}
