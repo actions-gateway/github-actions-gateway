@@ -5,6 +5,7 @@ Developer workflow references. Read the relevant doc before starting a task in t
 | Doc | When to read |
 |---|---|
 | [building.md](building.md) | Building binaries — repo `Makefile` targets, `.build/` layout. |
+| [backpressure.md](backpressure.md) | The developer/agent feedback loops — pre-commit hook, `make check`, CI tiers, what each mechanism catches, and a graded assessment of the result. |
 | [testing.md](testing.md) | Running integration tests, editing CI workflows, picking the right test scope. |
 | [kind-iteration.md](kind-iteration.md) | Iterating against a local `kind` cluster — image-tag caching, distroless debugging, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop. Design context in [docs/design/07-test-plan.md](../design/07-test-plan.md) §7.3. |
 | [networkpolicy-port-matching.md](networkpolicy-port-matching.md) | Canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC apiserver egress rule works around. |
