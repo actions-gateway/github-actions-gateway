@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
 # Update with: docker buildx imagetools inspect golang:1.26
-FROM golang:1.26@sha256:2d6c80227255c3112a4d08e67ba98e58efd3846daf15d9d7d4c389565d881b1a AS builder
+FROM golang:1.26@sha256:68cb6d68bed024785b69195b89af7ac7a444f27791435f98647edff595aa0479 AS builder
 WORKDIR /src
 # Build context is the repo root so the workspace vendor/ is available.
 # `go build` auto-selects -mod=vendor when go.work and vendor/ are present.
