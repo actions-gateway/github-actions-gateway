@@ -49,6 +49,8 @@ When you change any module's `go.mod` (add, upgrade, or remove a dep):
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit so they stay in sync.
 
+If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
+
 Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
 
 ## Worktrees
