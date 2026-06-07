@@ -761,7 +761,7 @@ kubectl exec -n <tenant-namespace> <pod> -c runner -- ls -la /home/runner/.runne
 ```
 
 **Resolution.**
-- If the agent Secret is missing `encodedJITConfig`: scale the agent pool to zero (`maxListeners: 0` on the RunnerGroup), wait for Secrets to be deleted, then scale back up. New agents will be registered via `generate-jitconfig` and carry the blob.
+- If the agent Secret is missing `encodedJITConfig`: scale the agent pool to zero (`maxListeners: 0` on the RunnerGroup), wait for Secrets to be deleted, then scale back up. New agents will be registered via `generate-jitconfig` and carry the blob. An agent whose session is in flight is not torn down mid-job — its Secret is deleted on a later reconcile once the session completes (the controller logs `skipping scale-down delete of in-use agent`), so wait for active jobs to drain before expecting the count to reach zero.
 - If the worker image puts `$HOME` elsewhere: set `RUNNER_HOME_DIR` on the runner container env via the RunnerGroup `podTemplate`.
 - If a custom registrar is in use: ensure it populates `AgentCredentials.EncodedJITConfig` with the raw blob from GitHub's response (the wrapper only knows how to decode that exact format).
 
