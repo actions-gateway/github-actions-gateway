@@ -8,9 +8,11 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
 
 ## Logging
 
-The GMC and AGC emit **structured JSON logs at info level by default** — ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting. No flag needs to be set in production; the JSON default is what the GMC-provisioned AGC Deployment runs with.
+All four components — the GMC, the per-tenant AGC, the egress proxy, and the worker wrapper — emit **structured JSON logs at info level by default**, one JSON shape per process stream, ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting. No flag needs to be set in production; the JSON default is what the GMC-provisioned Deployments run with.
 
-For local development, pass `--zap-devel` to switch to human-readable console logs at debug level, or use the finer-grained `--zap-encoder` / `--zap-log-level` flags. These are controller-runtime's standard `zap` flags; run a controller with `--help` for the full set. (The per-tenant egress proxy logs via `slog` and is unaffected by these flags.)
+The controllers (GMC, AGC) take controller-runtime's standard `zap` flags. For local development, pass `--zap-devel` to switch to human-readable console logs at debug level, or use the finer-grained `--zap-encoder` / `--zap-log-level` flags (run a controller with `--help` for the full set). Application code paths that log through the Go standard library's `log/slog` are bridged onto the same `zap` logger, so `--zap-log-level` governs **every** line a controller emits — not just the manager's own — and the whole process shares one JSON schema.
+
+The egress proxy and the worker wrapper are not controllers; they read their level from the `LOG_LEVEL` environment variable (`info` | `debug`, default `info`).
 
 ---
 
