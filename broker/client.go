@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // VersionTooOldError is returned by CreateSession when GitHub rejects the
@@ -486,13 +488,13 @@ func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) erro
 	return nil
 }
 
-// capBody returns at most n bytes of b as a string, preventing unbounded error
+// capBody returns at most n bytes of b as a string with credential-shaped
+// substrings redacted, preventing unbounded — or credential-bearing — error
 // messages from being logged or returned when a server sends a large response.
+// It delegates to githubapp.SanitizeBody, the single redaction implementation
+// shared across the repo (see githubapp/sanitize.go).
 func capBody(b []byte, n int) string {
-	if len(b) > n {
-		return string(b[:n])
-	}
-	return string(b)
+	return githubapp.SanitizeBody(b, n)
 }
 
 // parseRateLimitError builds a *RateLimitError from a 429 response, honoring
