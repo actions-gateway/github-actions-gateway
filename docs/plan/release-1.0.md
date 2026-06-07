@@ -187,6 +187,14 @@ low-value tests or churn.
   `.golangci.yml`, so unchecked errors are caught in
   agc/broker/proxy/worker/githubapp/probe too. Fix or explicitly justify
   the batch it surfaces.
+- [ ] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over
+  `scripts/**` in `unit-test.yml`/`make check`. Today only inline workflow
+  `run:` blocks are checked (via `actionlint`); the standalone helper scripts
+  (`setup.sh`, `kind-with-registry.sh`, `start-registry.sh`, …) and CI install
+  paths ship unlinted — a quoting/`set -e` defect there breaks the install or
+  e2e flow this product gates on. Fix or justify the batch it surfaces; once
+  green, the shared image-pull-retry helper deferred from #150 can be extracted
+  with lint coverage intact.
 - [ ] **Install artifact validates** ([Q66](../STATUS.md), *gating*; folds
   [Q73](../STATUS.md) CRD drift): `yamllint` + `kubeconform` on the
   manifests, and once the Helm chart ([Q12](../STATUS.md)) exists,
@@ -229,7 +237,7 @@ Track 2 (packaging — the keystone):
 Independent (any time):
   D (Q35 AGC logging/probes; Q34 manifests; Q51/Q72 metrics)
   F (Q77 coverage; Q78 dup-check; Q79 -race; Q80 gosec; Q81 errcheck;
-     Q66 manifest validation) — CI-only, no cluster needed
+     Q84 shellcheck; Q66 manifest validation) — CI-only, no cluster needed
   E (docs honesty pass) — finish last, once A–D outcomes are known
 ```
 
@@ -259,7 +267,7 @@ Suggested sequence:
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
 | E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
-| F. Engineering quality | Q77 coverage, Q78 dup-check, Q79 `-race` unit, Q80 gosec, Q81 errcheck, Q66 install-artifact validation | — |
+| F. Engineering quality | Q77 coverage, Q78 dup-check, Q79 `-race` unit, Q80 gosec, Q81 errcheck, Q84 shellcheck, Q66 install-artifact validation | — |
 
 **1.0 = all gating boxes ticked.** Recommended items that slip become
 ordinary post-1.0 Queue entries.
