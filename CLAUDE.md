@@ -38,6 +38,14 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
    - **General** → `README.md`, `CONTRIBUTING.md`, and any other `docs/` file that describes the changed behaviour. Also update `.github/workflows/` if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. `go-version-file`, test commands, module paths).
    - Update `docs/STATUS.md`: remove the completed Queue row; update the Progress table if a plan-level status changed (⚠️ → ✅ or a new ⚠️ item appeared).
 4. **Commit when done** — once a task is complete and validated, commit with git. Keep commits small and focused. Never commit broken code or failing tests. **Always commit `docs/STATUS.md` changes in their own isolated commit**, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating its changes makes rebase conflicts trivial to resolve.
+5. **Open a PR when the task is finished** — after committing and pushing the branch, open a PR with `gh pr create`. But first, stop and ask yourself: **"Is this ready for review?"** Open the PR only when you can honestly answer yes to all of:
+   - `make check` is green (and any heavier tier the change warranted — integration/e2e, `make vulncheck`, `make trivy-scan`).
+   - The diff matches the design intent, is well tested, and contains no stray debug code, TODOs, or unrelated changes.
+   - Every doc the change touches per step 3 is updated (design **and** operator-facing), and `docs/STATUS.md` reflects the completed work.
+   - The PR is scoped to one concern — split unrelated work into its own PR rather than bundling.
+   - The PR description explains *what* changed and *why*, references the Queue item by bare ID (e.g. `Q44`, not `#44`), and notes how it was tested.
+
+   If any answer is no, finish the work first — don't open the PR to "get feedback" on something you already know is incomplete. If the task is ambiguous enough that you're unsure it's review-ready, say so and ask rather than opening a half-baked PR.
 
 ## Code standards
 
@@ -111,7 +119,7 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 - Use small, focused commits.
 - Follow the Conventional Commits standard.
 - Amending an unpushed commit is fine — fix up the message or staged changes before pushing without asking. Once a commit is pushed, prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
-- After pushing, check whether a PR exists (`gh pr view`). If one does, update its description with `gh pr edit` to reflect any new commits.
+- After pushing, check whether a PR exists (`gh pr view`). If one exists, update its description with `gh pr edit` to reflect any new commits; if none exists and the task is finished, open one with `gh pr create` — but only after passing the "is this ready for review?" self-check in Workflow step 5.
 - Always commit `docs/STATUS.md` changes in their own isolated commit, separate from code and plan-doc changes. `docs/STATUS.md` is high-contention across concurrent branches; isolating it makes rebase conflicts trivial to resolve.
 - If a change doesn't belong in the current PR, open a separate PR for it. Working multiple PRs in parallel is fine and preferable to bundling unrelated concerns.
 - Act only on your own branch and PR. Never re-run, edit, or push to a PR or branch owned by another session. When CI fails on another session's PR, reproduce the failure locally rather than touching their PR.
