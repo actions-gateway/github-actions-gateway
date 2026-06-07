@@ -18,15 +18,29 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 )
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Structured JSON with an explicit level source. LOG_LEVEL (info|debug,
+	// default info) gives the proxy the same single level knob as the
+	// controllers (k8s audit F1) that the GMC can crank per tenant without a
+	// code change (logging-audit Theme G); the previous nil HandlerOptions
+	// hard-coded info with no level source.
+	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevelFromEnv()}))
 	if err := run(log); err != nil {
 		log.Error("startup failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+// logLevelFromEnv maps LOG_LEVEL (info|debug, default info) to a slog.Level.
+func logLevelFromEnv() slog.Level {
+	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
+		return slog.LevelDebug
+	}
+	return slog.LevelInfo
 }
 
 func run(log *slog.Logger) error {
