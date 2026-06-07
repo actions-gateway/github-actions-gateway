@@ -12,6 +12,10 @@
 // Flags:
 //
 //	--agent-key-type  rsa (default) | ed25519 (opt-in; loses session-key encryption)
+//	--zap-devel       Development-mode logging (console encoder, debug level).
+//	                  Defaults to true; production deployments pass --zap-devel=false
+//	                  for structured JSON. See zap.Options.BindFlags for the full set
+//	                  (--zap-encoder, --zap-log-level, etc.).
 package main
 
 import (
@@ -40,15 +44,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func main() {
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
-	log := ctrl.Log.WithName("agc")
-
 	if err := run(); err != nil {
-		log.Error(err, "startup failed")
+		// run() configures the logger immediately after flag parsing; ctrl.Log
+		// buffers and replays anything logged before SetLogger is called, so a
+		// failure at any point in run() is still surfaced here.
+		ctrl.Log.WithName("agc").Error(err, "startup failed")
 		os.Exit(1)
 	}
 }
@@ -75,13 +80,35 @@ const (
 	// HTTP — mirroring the proxy's TLS-when-mounted pattern. The GMC always
 	// mounts it in production, so the effective default there is mTLS.
 	metricsCertDir = "/etc/actions-gateway/metrics-tls"
+
+	// healthProbeBindAddress pins the controller-runtime health/ready endpoint
+	// (/healthz, /readyz) to a known port. The GMC's buildAGCDeployment stamps
+	// kubelet liveness/readiness/startup probes on this same port
+	// (healthMetricsPort in cmd/gmc/internal/controller/builder.go), so the
+	// listener and the probes must agree by construction. Unlike the metrics
+	// port, this listener is plaintext and certless so the kubelet can reach it
+	// without a client cert, and carries no sensitive data (healthz.Ping only).
+	// The AGC NetworkPolicy needs no ingress rule for it — kubelet probes
+	// originate from the node, which CNIs admit to local pods regardless of
+	// policy (the same reason the GMC and proxy health ports carry no NP rule).
+	healthProbeBindAddress = ":8081"
 )
 
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
 	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
 		"Key type for new agent registrations: rsa (default) or ed25519 (opt-in; loses session-key encryption)")
+	// Bind zap's logging flags (--zap-devel, --zap-encoder, --zap-log-level, …)
+	// instead of hard-coding development mode. Defaulting Development:true keeps
+	// the AGC consistent with the GMC (cmd/gmc/cmd/main.go), which seeds the same
+	// default; production deployments pass --zap-devel=false to emit structured
+	// JSON that log aggregators can parse. This removes the hard-coded
+	// pretty-printed console logs that previously shipped in production.
+	zapOpts := zap.Options{Development: true}
+	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
+
 	agentKeyType := agentpool.KeyType(*agentKeyTypeFlag)
 	switch agentKeyType {
 	case agentpool.KeyTypeEd25519, agentpool.KeyTypeRSA:
@@ -188,6 +215,10 @@ func run() error {
 		Scheme:  scheme,
 		Cache:   cacheOpts,
 		Metrics: metricsOpts,
+		// Expose /healthz and /readyz so the kubelet can detect a wedged AGC and
+		// restart it. The bind address must match the probe port the GMC stamps
+		// on the AGC Deployment (see healthProbeBindAddress).
+		HealthProbeBindAddress: healthProbeBindAddress,
 		// Three-part Secret isolation (see plan/security.md §H-2):
 		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
 		//    the controller-runtime cache and hit the API server directly, so
@@ -212,6 +243,18 @@ func run() error {
 	})
 	if err != nil {
 		return fmt.Errorf("create manager: %w", err)
+	}
+
+	// Register the health/ready checks the kubelet probes hit. healthz.Ping
+	// returns ok once the manager's health server is listening, which only
+	// happens after mgr.Start (below). The AGC blocks on its initial token
+	// fetch before mgr.Start, so the AGC Deployment's startupProbe budget is
+	// sized to cover that window — see the probe comment in builder.go.
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return fmt.Errorf("add healthz check: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return fmt.Errorf("add readyz check: %w", err)
 	}
 
 	// ── 6. Start token manager ───────────────────────────────────────────────
