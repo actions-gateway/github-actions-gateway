@@ -12,9 +12,9 @@
 // Flags:
 //
 //	--agent-key-type  rsa (default) | ed25519 (opt-in; loses session-key encryption)
-//	--zap-devel       Development-mode logging (console encoder, debug level).
-//	                  Defaults to true; production deployments pass --zap-devel=false
-//	                  for structured JSON. See zap.Options.BindFlags for the full set
+//	--zap-devel       Opt into development-mode logging (console encoder, debug
+//	                  level). The default is production logging: structured JSON
+//	                  at info level. See zap.Options.BindFlags for the full set
 //	                  (--zap-encoder, --zap-log-level, etc.).
 package main
 
@@ -100,12 +100,14 @@ func run() error {
 	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
 		"Key type for new agent registrations: rsa (default) or ed25519 (opt-in; loses session-key encryption)")
 	// Bind zap's logging flags (--zap-devel, --zap-encoder, --zap-log-level, …)
-	// instead of hard-coding development mode. Defaulting Development:true keeps
-	// the AGC consistent with the GMC (cmd/gmc/cmd/main.go), which seeds the same
-	// default; production deployments pass --zap-devel=false to emit structured
-	// JSON that log aggregators can parse. This removes the hard-coded
-	// pretty-printed console logs that previously shipped in production.
-	zapOpts := zap.Options{Development: true}
+	// and default to production logging: structured JSON at info level, which log
+	// aggregators can parse. The GMC stamps no logging args onto the AGC
+	// Deployment, so this default is what actually ships in production — correct
+	// by default rather than relying on an operator remembering to flip a flag
+	// (the original hard-coded UseDevMode(true) emitted console logs in prod).
+	// Developers pass --zap-devel for human-readable console logs at debug level
+	// when running locally. Kept consistent with the GMC (cmd/gmc/cmd/main.go).
+	zapOpts := zap.Options{Development: false}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
