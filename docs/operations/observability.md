@@ -35,6 +35,49 @@ spec:
 
 The metrics port is named `metrics` in the Service spec.
 
+### Install-time scraping prerequisites (GMC manager)
+
+The default GMC install (`config/default`) now ships the manager NetworkPolicy
+**enabled by default**. Selecting the manager pod flips it to default-deny on
+ingress, so its `/metrics` endpoint admits traffic only from namespaces carrying
+the right label:
+
+- **Scraping the GMC manager metrics:** label your Prometheus namespace
+  `metrics: enabled`, or no scrape will reach the manager:
+  ```bash
+  kubectl label namespace <prometheus-namespace> metrics=enabled
+  ```
+
+The validating-webhook port (container `9443`) is intentionally re-allowed from
+**any source** — the kube-apiserver that calls it is not a pod in a labeled
+namespace, so a source restriction there would silently break every
+`ActionsGateway` admission (`failurePolicy: Fail`). The webhook is TLS +
+caBundle authenticated, so the sensitive surface stays the `metrics: enabled`
+restriction above. No namespace label is required for CR admission.
+
+This applies to the **GMC manager** only. The per-tenant AGC and proxy metrics
+are governed by the per-tenant NetworkPolicies the GMC generates (the AGC NP
+already admits monitoring-namespace scrapes of the metrics port).
+
+> Runtime enforcement of these policies depends on the CNI; kindnet's
+> `kube-network-policies` does not drop all egress negatives (see the worker
+> egress limitation in [troubleshooting.md](troubleshooting.md)). The manager NP
+> is verified by manifest review and is pending a Tier-A runtime check.
+
+Two related integrations stay **opt-in** (not enabled by the default base), each
+behind its kustomize comment block — they will become Helm values toggles when
+the chart lands:
+
+- **`ServiceMonitor` (`../prometheus`):** out-of-box Prometheus Operator
+  scraping. Pure observability wiring; left opt-in because the `ServiceMonitor`
+  CRD only exists once the Prometheus Operator is installed, so enabling it
+  unconditionally would break `kubectl apply` on clusters without it.
+- **cert-manager metrics certificate (`[METRICS-WITH-CERTS]`):** replaces
+  controller-runtime's self-signed metrics cert with a cert-manager-issued one
+  so scrapers verify it instead of using `insecure_skip_verify`. The endpoint is
+  already TLS + RBAC-authn gated, so this is defense-in-depth; left opt-in
+  because it hard-requires cert-manager at install time.
+
 ---
 
 ## Full Metrics Reference
