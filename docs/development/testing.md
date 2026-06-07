@@ -24,6 +24,14 @@ Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per 
 
 A sub-second subset (gofmt on staged Go files + the STATUS.md lint) also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`. Install it once with `make hooks` (or `scripts/setup.sh`); bypass a single commit with `git commit --no-verify`.
 
+#### Resource auto-throttle on macOS
+
+`make lint`/`make test`/`make check` lint each module with `golangci-lint` (which fans out one worker per logical CPU and ignores `GOMAXPROCS`/`GOFLAGS`) and run `go test` across every module. On a small Mac this can saturate every core; the casualty is the WindowServer compositor, which then misses its kernel watchdog and restarts — the whole GUI freezes (it shows up as `WindowServer … userspace_watchdog_timeout` in **Console ▸ Crash Reports**).
+
+To prevent that, the Makefile auto-throttles these phases **only on an interactive macOS shell**: it runs them at background QoS (`taskpolicy -b`, so the scheduler always preempts them in favour of the GUI) and caps parallelism to physical-cores − 2 (`golangci-lint -j`, `go test -p`, `GOMAXPROCS`). The detection and sizing live in [`scripts/local-throttle.sh`](../../scripts/local-throttle.sh).
+
+It is a no-op everywhere else: when the `CI` environment variable is set (GitHub Actions et al.) or the OS is not macOS, the throttle expands to nothing and the gate runs at full speed — so the Linux CI runners that mirror this gate are unaffected. To opt out locally (e.g. a Mac with cores to spare), set `CI=1` for the run: `CI=1 make check`.
+
 ## Integration tests
 
 Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
