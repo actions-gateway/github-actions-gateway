@@ -2,18 +2,33 @@
 
 ## Workspace layout
 
-This repo uses a `go.work` workspace with no root-level Go module. The workspace modules are:
+This repo uses a `go.work` workspace with no root-level Go module. The workspace modules are listed below in dependency order (leaf first). The **Internal deps** column lists the other workspace modules each one imports via `replace` directives:
 
-| Directory | Module path |
-|---|---|
-| `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` |
-| `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` |
-| `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` |
-| `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` |
-| `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` |
-| `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` |
-| `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` |
-| `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` |
+| Directory | Module path | Internal deps |
+|---|---|---|
+| `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` | — |
+| `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` | `githubapp` |
+| `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` | `broker`, `githubapp` |
+| `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` | `broker`, `githubapp` |
+| `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `broker`, `githubapp`, `agc` |
+| `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | — |
+| `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` | — |
+| `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` | — |
+
+### Dependency direction
+
+The internal-dep edges form a directed acyclic graph that fans out from the two shared libraries (each arrow reads "depends on"):
+
+```
+probe ─┐
+agc ───┼─► broker ─► githubapp
+gmc ───┘
+gmc ─► agc
+
+proxy, worker, fakegithub   (standalone — no internal deps)
+```
+
+`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances). **Keep edges pointing toward the leaves:** a new import that makes `githubapp` or `broker` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead. Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 
