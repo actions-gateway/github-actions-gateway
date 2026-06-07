@@ -24,13 +24,18 @@ Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per 
 
 A sub-second subset (gofmt on staged Go files + the STATUS.md lint) also runs automatically at commit time via the tracked pre-commit hook in `.githooks/`. Install it once with `make hooks` (or `scripts/setup.sh`); bypass a single commit with `git commit --no-verify`.
 
-#### Resource auto-throttle on macOS
+#### Resource auto-throttle on GUI dev machines
 
-`make lint`/`make test`/`make check` lint each module with `golangci-lint` (which fans out one worker per logical CPU and ignores `GOMAXPROCS`/`GOFLAGS`) and run `go test` across every module. On a small Mac this can saturate every core; the casualty is the WindowServer compositor, which then misses its kernel watchdog and restarts — the whole GUI freezes (it shows up as `WindowServer … userspace_watchdog_timeout` in **Console ▸ Crash Reports**).
+`make lint`/`make test`/`make check` lint each module with `golangci-lint` (which fans out one worker per logical CPU and ignores `GOMAXPROCS`/`GOFLAGS`) and run `go test` across every module. On a small machine this can saturate every core and make the desktop unresponsive. On macOS it is worst: the WindowServer compositor misses its kernel watchdog and restarts — the whole GUI freezes (it shows up as `WindowServer … userspace_watchdog_timeout` in **Console ▸ Crash Reports**). On a Linux/WSL desktop you instead get input lag and compositor stutter while the build runs.
 
-To prevent that, the Makefile auto-throttles these phases **only on an interactive macOS shell**: it runs them at background QoS (`taskpolicy -b`, so the scheduler always preempts them in favour of the GUI) and caps parallelism to physical-cores − 2 (`golangci-lint -j`, `go test -p`, `GOMAXPROCS`). The detection and sizing live in [`scripts/local-throttle.sh`](../../scripts/local-throttle.sh).
+To prevent that, the Makefile auto-throttles these phases on an **interactive, GUI-bearing dev shell**: it runs them at background/idle priority (macOS: `taskpolicy -b`; Linux/WSL: `nice -n 19`, plus `ionice -c 3` when available) so the scheduler always preempts them in favour of the desktop, and caps parallelism to physical-cores − 2 (`golangci-lint -j`, `go test -p`, `GOMAXPROCS`). Detection and sizing live in [`scripts/local-throttle.sh`](../../scripts/local-throttle.sh).
 
-It is a no-op everywhere else: when the `CI` environment variable is set (GitHub Actions et al.) or the OS is not macOS, the throttle expands to nothing and the gate runs at full speed — so the Linux CI runners that mirror this gate are unaffected. To opt out locally (e.g. a Mac with cores to spare), set `CI=1` for the run: `CI=1 make check`.
+It is a no-op everywhere the throttle would only slow things down for no benefit, so those runs go at full speed:
+- **CI** — the `CI` environment variable is set (GitHub Actions et al.).
+- **Headless / SSH Linux shells** — no graphical session (`DISPLAY`/`WAYLAND_DISPLAY` unset), so build servers and remote shells are unaffected.
+- **Unsupported OSes** — native Windows (Git Bash/MSYS); use WSL2, which reports as Linux and follows the Linux rule.
+
+To opt out locally (e.g. a machine with cores to spare), set `CI=1` for the run: `CI=1 make check`.
 
 ## Integration tests
 

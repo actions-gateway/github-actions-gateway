@@ -106,14 +106,16 @@ build-proxy: ## Build the proxy binary
 # it is produced. Propagates through `make check` too (e.g. `make check V=1`).
 GOTEST_V := $(if $(or $(V),$(VERBOSE)),-v,)
 
-# --- Local resource auto-throttle (interactive macOS only) -----------------
-# scripts/local-throttle.sh detects an interactive macOS shell and emits a
-# parallelism cap (physical cores − 2) plus a background-QoS command prefix
-# (taskpolicy -b). Without it a full `make check` saturates every core and
-# starves the WindowServer compositor until its watchdog restarts it — the GUI
-# freezes. On CI (the CI env var is set) or on Linux the script prints nothing,
-# so all of these expand empty and the gate runs at full speed. Detail and
-# rationale live in the script header.
+# --- Local resource auto-throttle (interactive GUI dev shell) --------------
+# scripts/local-throttle.sh detects an interactive, GUI-bearing dev shell and
+# emits a parallelism cap (physical cores − 2) plus a background-priority
+# command prefix (macOS: taskpolicy -b; Linux/WSL: nice -n 19 [+ ionice -c 3]).
+# Without it a full `make check` saturates every core and makes the desktop
+# unresponsive — on macOS the WindowServer watchdog then restarts the
+# compositor and the GUI freezes. On CI (the CI env var is set), on headless or
+# SSH Linux shells (no DISPLAY/WAYLAND_DISPLAY), and on unsupported OSes the
+# script prints nothing, so all of these expand empty and the gate runs at full
+# speed. Detail and rationale live in the script header.
 THROTTLE_JOBS   := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" jobs)
 THROTTLE_PREFIX := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" prefix)
 # Per-process env + flags derived from the cap; empty (no-op) when not throttling.
