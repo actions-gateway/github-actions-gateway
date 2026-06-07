@@ -28,7 +28,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -75,7 +74,6 @@ type ActionsGatewayReconciler struct {
 	IPCache     *IPRangeCache
 	AGCImage    string
 	ProxyImage  string
-	Log         *slog.Logger
 	AGCExtraEnv []corev1.EnvVar // extra env vars forwarded to AGC pods (e.g. for tests)
 	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
 	// May be nil in unit tests; callers must nil-check before use.

@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,6 +39,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -111,6 +113,15 @@ func run() error {
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
+	// Bridge log/slog onto the same zap logger. The listener, provisioner, and
+	// agentpool packages log through log/slog; without this, slog.Default() is
+	// the stdlib TEXT handler, so a single AGC pod would emit mixed zap-JSON +
+	// stdlib-text on one stream that a log pipeline cannot parse (k8s audit F1).
+	// Routing slog through ctrl.Log gives the whole process one JSON shape and
+	// one level source (--zap-log-level). The named loggers injected below
+	// inherit this same sink; the bridge also catches any slog.Default() call
+	// site that is not explicitly wired.
+	slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))
 
 	agentKeyType := agentpool.KeyType(*agentKeyTypeFlag)
 	switch agentKeyType {
@@ -308,7 +319,8 @@ func run() error {
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
 	httpClient := &http.Client{Timeout: 60 * time.Second}
-	prov := provisioner.NewProvisioner(mgr.GetClient(), m, nil)
+	prov := provisioner.NewProvisioner(mgr.GetClient(), m,
+		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("provisioner"))))
 	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")
 	prov.HTTPProxy = os.Getenv("HTTP_PROXY")
 	prov.HTTPSProxy = os.Getenv("HTTPS_PROXY")
@@ -333,7 +345,8 @@ func run() error {
 	// polling per session: one event handler serves every in-flight session, so
 	// detection is near-immediate and no per-session ticker is spawned. Run it
 	// as a manager Runnable so the handler is registered after the cache syncs.
-	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(), nil)
+	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(),
+		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("podwaiter"))))
 	if err := mgr.Add(podWaiter); err != nil {
 		return fmt.Errorf("add pod completion watcher: %w", err)
 	}
@@ -366,6 +379,7 @@ func run() error {
 
 	r := &controller.RunnerGroupReconciler{
 		Client:       mgr.GetClient(),
+		Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
 		TokenManager: tokenMgr,
 		Registrar:    registrar,
 		Metrics:      m,

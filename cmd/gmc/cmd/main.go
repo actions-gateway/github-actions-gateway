@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -30,6 +31,7 @@ import (
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
+	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -92,6 +94,13 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	// Bridge log/slog onto the same zap logger so the IPRange reconciler (which
+	// logs through log/slog) emits the same structured JSON at the same level
+	// source as the manager. Without this, slog.Default() is the stdlib TEXT
+	// handler and the GMC would emit mixed JSON+text on one stream (k8s audit
+	// F1). The named logger injected into the IPRange reconciler below inherits
+	// this sink; the bridge also catches any unwired slog.Default() call site.
+	slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -275,6 +284,7 @@ func main() {
 		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
 		Cache:    ipCache,
 		Interval: ipInterval,
+		Log:      slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")
 		os.Exit(1)
