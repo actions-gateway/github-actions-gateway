@@ -40,6 +40,16 @@ var _ = Describe("Manager", Ordered, func() {
 			"pod-security.kubernetes.io/enforce=restricted")
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
+
+		// The default install now ships the manager NetworkPolicy enabled, which
+		// admits the /metrics endpoint (:8443) only from namespaces labeled
+		// 'metrics: enabled'. The curl-metrics pod below scrapes from this same
+		// namespace, so label it (as an operator would label their Prometheus
+		// namespace) or the scrape is dropped wherever the CNI enforces the NP.
+		By("labeling the namespace to allow metrics scraping under the manager NetworkPolicy")
+		cmd = exec.Command("kubectl", "label", "--overwrite", "ns", namespace, "metrics=enabled")
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with metrics=enabled")
 	})
 
 	// AfterSuite handles controller teardown; only clean up test-specific resources here.
@@ -116,7 +126,10 @@ var _ = Describe("Manager", Ordered, func() {
 				podOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve controller-manager pod information")
 				podNames := utils.GetNonEmptyLines(podOutput)
-				g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod running")
+				// The manager runs replicas: 2 for HA (leader election). Either
+				// replica serves the metrics endpoint and reports readiness, so
+				// the subsequent checks inspect whichever pod we pick first.
+				g.Expect(podNames).To(HaveLen(2), "expected 2 controller pods running (HA default)")
 				controllerPodName = podNames[0]
 				g.Expect(controllerPodName).To(ContainSubstring("controller-manager"))
 
