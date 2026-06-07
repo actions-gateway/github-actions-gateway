@@ -43,12 +43,12 @@ const (
 
 	proxyServiceName = gmcnames.ProxyName
 	proxyPort        = int32(8080)
-	// healthMetricsPort is the proxy's plaintext health listener port
-	// (/healthz, /readyz) probed by the kubelet. It carries no Prometheus
-	// metrics anymore — those moved to the mTLS metricsPort below so blanket
-	// client-cert enforcement on the metrics listener does not break the
-	// certless kubelet probes. The AGC has no health probes, so this port is
-	// unused on the AGC side.
+	// healthMetricsPort is the plaintext health listener port (/healthz,
+	// /readyz) probed by the kubelet on both the proxy and the AGC pods. It
+	// carries no Prometheus metrics — those moved to the mTLS metricsPort below
+	// so blanket client-cert enforcement on the metrics listener does not break
+	// the certless kubelet probes. The AGC manager pins its health bind address
+	// to this port (healthProbeBindAddress in cmd/agc/main.go).
 	healthMetricsPort = int32(8081)
 
 	// metricsPort is the dedicated mTLS Prometheus-metrics listener port for
@@ -692,10 +692,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 						Image: agcImage,
 						Env:   env,
 						// The AGC pins its controller-runtime metrics server to
-						// metricsPort (cmd/agc/main.go); declaring the port documents
-						// the listener that buildAGCNetworkPolicy's metrics-scrape
-						// ingress rule admits.
+						// metricsPort and its health server to healthMetricsPort
+						// (cmd/agc/main.go); declaring the ports documents the
+						// listeners — metrics is the one buildAGCNetworkPolicy's
+						// metrics-scrape ingress rule admits, health is kubelet-only.
 						Ports: []corev1.ContainerPort{
+							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
 							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						VolumeMounts: []corev1.VolumeMount{
@@ -714,6 +716,36 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 								MountPath: metricsTLSMountPath,
 								ReadOnly:  true,
 							},
+						},
+						// StartupProbe gates liveness/readiness during the AGC's
+						// cold start. Unlike the proxy (whose health server binds
+						// immediately), the AGC blocks in main.go waiting up to 2m
+						// for its initial GitHub App token *before* mgr.Start binds
+						// the health listener. A bare livenessProbe (~30s budget)
+						// would kill the pod mid-token-wait and crash-loop it during
+						// any GitHub slowness, so the startup budget must exceed that
+						// window: 36 × 5s = 180s. If the token fetch genuinely fails,
+						// main.go exits(1) on its own 2m timeout and the kubelet
+						// restarts the pod — the startupProbe never masks a real
+						// failure beyond that.
+						StartupProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
+							},
+							FailureThreshold: 36,
+							PeriodSeconds:    5,
+						},
+						LivenessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
+							},
+							PeriodSeconds: 20,
+						},
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{Path: "/readyz", Port: intstr.FromInt32(healthMetricsPort)},
+							},
+							PeriodSeconds: 10,
 						},
 						SecurityContext: hardenedContainerSecurityContext(),
 					}},

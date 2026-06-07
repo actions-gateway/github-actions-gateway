@@ -662,6 +662,37 @@ func TestBuildProxyDeployment_Probes(t *testing.T) {
 	assert.Equal(t, healthMetricsPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
 }
 
+func TestBuildAGCDeployment_Probes(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	c := dep.Spec.Template.Spec.Containers[0]
+
+	// Health listener port must be declared on the container.
+	assert.True(t, hasPort(c.Ports, "health", healthMetricsPort),
+		"AGC container must declare the health port the kubelet probes")
+
+	require.NotNil(t, c.LivenessProbe)
+	require.NotNil(t, c.LivenessProbe.HTTPGet)
+	assert.Equal(t, "/healthz", c.LivenessProbe.HTTPGet.Path)
+	assert.Equal(t, healthMetricsPort, c.LivenessProbe.HTTPGet.Port.IntVal)
+
+	require.NotNil(t, c.ReadinessProbe)
+	require.NotNil(t, c.ReadinessProbe.HTTPGet)
+	assert.Equal(t, "/readyz", c.ReadinessProbe.HTTPGet.Path)
+	assert.Equal(t, healthMetricsPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
+
+	// The startupProbe gives the AGC's blocking initial-token fetch room before
+	// liveness takes over; its budget (failureThreshold × periodSeconds) must
+	// exceed the 2m token-wait window in cmd/agc/main.go.
+	require.NotNil(t, c.StartupProbe)
+	require.NotNil(t, c.StartupProbe.HTTPGet)
+	assert.Equal(t, "/healthz", c.StartupProbe.HTTPGet.Path)
+	assert.Equal(t, healthMetricsPort, c.StartupProbe.HTTPGet.Port.IntVal)
+	budget := c.StartupProbe.FailureThreshold * c.StartupProbe.PeriodSeconds
+	assert.GreaterOrEqual(t, budget, int32(150),
+		"startupProbe budget must exceed the 2m initial-token-fetch window")
+}
+
 func TestManagedLabels_ContainsOwnerRef(t *testing.T) {
 	ag := newTestAG("my-gateway", "my-ns")
 	labels := managedLabels(ag)
