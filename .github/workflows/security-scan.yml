@@ -127,21 +127,7 @@ jobs:
         # ${BUILDKIT_IMAGE}, pulled from Docker Hub with no retry of its own — a
         # timeout/rate-limit flake source. Pre-pull with retries so the buildx
         # boot below finds it in the local image cache and never touches Hub.
-        run: |
-          set -euo pipefail
-          pulled=false
-          for attempt in 1 2 3 4 5; do
-            if docker pull "${BUILDKIT_IMAGE}"; then
-              pulled=true
-              break
-            fi
-            echo "buildkit image pull attempt ${attempt} failed; retrying in 5s" >&2
-            sleep 5
-          done
-          if [[ "$pulled" != true ]]; then
-            echo "failed to pull ${BUILDKIT_IMAGE} after 5 attempts" >&2
-            exit 1
-          fi
+        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
       - uses: docker/setup-buildx-action@v4
         with:
           # Pin the builder to the buildkit image pre-pulled above so the boot
