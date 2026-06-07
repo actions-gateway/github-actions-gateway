@@ -115,6 +115,16 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 - Act only on your own branch and PR. Never re-run, edit, or push to a PR or branch owned by another session. When CI fails on another session's PR, reproduce the failure locally rather than touching their PR.
 - Queue items in `docs/STATUS.md` have `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — the `Q` is what stops GitHub from auto-linking the number to PR/issue 44.
 
+### Avoiding branch-guard prompts
+
+This repo uses branch-guard, a hook that prompts before git/edit operations on a protected branch (main/master) or destructive git commands. To keep work flowing:
+
+- **Work on a feature branch, not main/master.** Commit, push, merge, and rebase all run without a prompt on a `claude/*` or feature branch; the same on main/master prompts. Use `git switch -c claude/<topic>` (or a worktree) before editing or committing.
+- **Push the worktree's own branch.** `git push` / `git push -u origin HEAD` auto-approves; pushing a different branch or a refspec like `HEAD:main` prompts.
+- **Prefer fast-forward pulls.** `git pull --ff-only` is auto-approved; a bare `git pull` (which may merge or rebase) prompts.
+- **Run git commands on their own, not chained with non-git commands.** `git commit && <other>` won't auto-approve — the trailing command can't ride along. Run them as separate commands.
+- **Expect a prompt for destructive commands** (`reset --hard`, `clean -f`, `branch -D`, `restore <path>`, `config --global`) — that's by design.
+
 ## Agent reference docs
 
 When working on specific tasks, read the relevant doc before starting:

@@ -100,7 +100,9 @@ states its scope is to "catch regressions of the bugs and idiom violations
 tracked in Queue items 38–41." `scripts/lint-status.sh` exists solely because
 the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
 The `claude-workspace-guard` PreToolUse hook is real-time backpressure on file
-operations. Each is a repeated correction turned into an automated gate.
+operations, and `claude-branch-guard` is the same on git operations — prompting
+before commits, pushes, or destructive commands on a protected branch. Each is a
+repeated correction turned into an automated gate.
 
 ### Compress success, expand failure — A−
 The agent-loop path is non-verbose by default (native compress-success /
