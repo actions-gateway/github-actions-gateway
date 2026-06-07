@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-06
+Last touched: 2026-06-07
 
 ---
 
@@ -76,6 +76,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q79"></a>Q79 | Run unit tests under `-race` in CI | `tests` `infra` `1.0-gate` | 🔲 | S | `make test` + `unit-test.yml` run plain `go test`; only integration tests use `-race`, so the concurrency core (agentpool, listener/mux, broker) is never race-checked in the gate. Add `-race` to the unit path. See [§F](plan/release-1.0.md). |
 | <a id="Q80"></a>Q80 | Enable `gosec` security linter across modules | `security` `infra` `1.0-gate` | 🔲 | S | No security linting anywhere; `//nolint:gosec` markers (broker/crypto.go, listener) already anticipate it but are dead. Enable `gosec`; triage findings into a justified suppression list. See [§F](plan/release-1.0.md). |
 | <a id="Q81"></a>Q81 | `errcheck` across all modules (currently GMC-only) | `infra` `1.0-gate` | 🔲 | S | `errcheck` runs only in `cmd/gmc/.golangci.yml`; the root config (agc/broker/proxy/worker/githubapp/probe) omits it, so unchecked errors ship uncaught. Add it to root `.golangci.yml`; fix or justify the batch surfaced. See [§F](plan/release-1.0.md). |
+| <a id="Q84"></a>Q84 | Shellcheck gate for `scripts/**` | `infra` `tests` `1.0-gate` | 🔲 | S | Standalone `scripts/*.sh` get no shellcheck — only inline workflow `run:` blocks do (via actionlint). Add a `shellcheck scripts/**` step to `unit-test.yml`/`make check`; fix or justify the batch surfaced. See [§F](plan/release-1.0.md). |
 | <a id="Q68"></a>Q68 | Enforce single Go version across all workspace files | `infra` `tests` | 🔲 | S | CLAUDE.md's "all go modules use the same Go version" rule is unenforced; the 2 `go.work.gen` files drifted to 1.26/1.26.0, breaking `make manifests`. Add a CI check that the `go` directive matches across go.work, all go.mod, and go.work.gen. |
 | <a id="Q73"></a>Q73 | Sync GMC's bundled RunnerGroup CRD with the AGC source | `infra` `bug` | 🔲 | S | GMC's bundled RunnerGroup CRD (`…runnergroups.yaml`) drifted from AGC source: missing fields + different PodTemplateSpec (k8s.io/api skew), risking silent field pruning on deploy. Add a sync target + drift CI check. Overlaps [Q68](#Q68). |
 | <a id="Q75"></a>Q75 | Exercise GMC validating webhook in envtest (not just e2e) | `tests` `infra` | 🔲 | M | GMC webhook checks (gitHubAppRef, privileged-container, profile downgrade) are tested only via direct calls + e2e. Wire envtest `WebhookInstallOptions` to catch admission-through-apiserver at integration tier (mind `failurePolicy=fail` readiness). |
