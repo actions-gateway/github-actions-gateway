@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 func main() {
@@ -246,10 +247,11 @@ func run() error {
 	}
 
 	// Register the health/ready checks the kubelet probes hit. healthz.Ping
-	// returns ok once the manager's health server is listening, which only
-	// happens after mgr.Start (below). The AGC blocks on its initial token
-	// fetch before mgr.Start, so the AGC Deployment's startupProbe budget is
-	// sized to cover that window — see the probe comment in builder.go.
+	// returns ok once the manager's health server is listening (bound early in
+	// mgr.Start, independently of the initial-token Runnable below), so a wedged
+	// AGC is restarted rather than running invisibly. The AGC Deployment's
+	// startupProbe gives cache-sync grace before liveness takes over — see the
+	// probe comment in builder.go.
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("add healthz check: %w", err)
 	}
@@ -264,28 +266,43 @@ func run() error {
 	tokenMgr.Logger = ctrl.Log.WithName("token")
 	tokenMgr.Start(ctx)
 
-	// Wait for the first token before starting the reconciler.
+	// Acquire the first token as a manager Runnable rather than a blocking
+	// pre-Start call. This matters for the health probes: mgr.Start binds the
+	// /healthz + /readyz server (healthProbeBindAddress) early — within
+	// cache-sync time of pod start — independently of this fetch. A blocking
+	// pre-Start wait would instead leave the health endpoint unbound for the
+	// whole token exchange (up to 2m), so the kubelet's probes would fail and
+	// the AGC Deployment would never report ready replicas under a slow token
+	// exchange — coupling rollout success to GitHub reachability at startup.
 	//
-	// Bound this with a timeout so a GitHub outage at startup fails fast rather
-	// than blocking indefinitely. Parent is the signal-handler ctx so a SIGTERM
-	// during the wait cancels immediately. Bookended by log lines so a stuck
-	// fetch is visible — without the lines the previous unbounded call produced
-	// a pod that was Running 1/1 with zero log output indefinitely.
+	// Fail-fast is preserved: if the token cannot be obtained within the
+	// deadline the Runnable returns an error, which stops the manager and makes
+	// run() exit non-zero so the kubelet restarts the pod — the same outcome as
+	// the previous blocking wait. Running the reconciler before the token is
+	// ready is safe: token.Manager.Token blocks on the first fetch, and
+	// RunnerGroupReconciler.Reconcile requeues on a Token() error, so no
+	// reconcile acts on a missing token.
 	//
-	// 2 minutes is deliberate: the in-loop backoff (5s → 10s → 20s → 40s → 60s)
-	// fits ~6 attempts in this budget, which absorbs slow-startup transients
-	// (kube-proxy programming, Service endpoint sync, image pull contention on
-	// a 2-CPU runner) that resolve in the 30–90s window. Beyond 2 minutes you're
-	// almost certainly in persistent-failure territory where kubelet's
-	// CrashLoopBackOff escalation produces equivalent restart cadence either
-	// way, and the per-attempt error log lines already surface the cause.
-	ctrl.Log.Info("waiting for initial GitHub App token")
-	tokenCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	if _, err := tokenMgr.Token(tokenCtx); err != nil {
-		return fmt.Errorf("initial token fetch: %w", err)
+	// Bookended by log lines so a stuck fetch is visible. 2 minutes is
+	// deliberate: the in-loop backoff (5s → 10s → 20s → 40s → 60s) fits ~6
+	// attempts in this budget, which absorbs slow-startup transients (kube-proxy
+	// programming, Service endpoint sync, image pull contention on a 2-CPU
+	// runner) that resolve in the 30–90s window. Beyond 2 minutes you're almost
+	// certainly in persistent-failure territory where kubelet's CrashLoopBackOff
+	// escalation produces equivalent restart cadence either way, and the
+	// per-attempt error log lines already surface the cause.
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		ctrl.Log.Info("waiting for initial GitHub App token")
+		tokenCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		if _, err := tokenMgr.Token(tokenCtx); err != nil {
+			return fmt.Errorf("initial token fetch: %w", err)
+		}
+		ctrl.Log.Info("initial token acquired")
+		return nil
+	})); err != nil {
+		return fmt.Errorf("add initial-token runnable: %w", err)
 	}
-	ctrl.Log.Info("initial token acquired")
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
 	httpClient := &http.Client{Timeout: 60 * time.Second}

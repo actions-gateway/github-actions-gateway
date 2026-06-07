@@ -681,16 +681,16 @@ func TestBuildAGCDeployment_Probes(t *testing.T) {
 	assert.Equal(t, "/readyz", c.ReadinessProbe.HTTPGet.Path)
 	assert.Equal(t, healthMetricsPort, c.ReadinessProbe.HTTPGet.Port.IntVal)
 
-	// The startupProbe gives the AGC's blocking initial-token fetch room before
-	// liveness takes over; its budget (failureThreshold × periodSeconds) must
-	// exceed the 2m token-wait window in cmd/agc/main.go.
+	// The startupProbe gives the AGC manager's informer cache room to sync
+	// before liveness takes over; its budget (failureThreshold × periodSeconds)
+	// should match the GMC manager's 150s grace.
 	require.NotNil(t, c.StartupProbe)
 	require.NotNil(t, c.StartupProbe.HTTPGet)
 	assert.Equal(t, "/healthz", c.StartupProbe.HTTPGet.Path)
 	assert.Equal(t, healthMetricsPort, c.StartupProbe.HTTPGet.Port.IntVal)
 	budget := c.StartupProbe.FailureThreshold * c.StartupProbe.PeriodSeconds
 	assert.GreaterOrEqual(t, budget, int32(150),
-		"startupProbe budget must exceed the 2m initial-token-fetch window")
+		"startupProbe budget must give the informer cache room to sync")
 }
 
 func TestManagedLabels_ContainsOwnerRef(t *testing.T) {
