@@ -12,7 +12,7 @@ COPY . .
 # -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
 # build ID — together they make the binary bit-for-bit reproducible (SLSA-L3).
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags=-buildid= -C cmd/gmc -o /bin/manager ./cmd/main.go
+    CGO_ENABLED=0 go build -C cmd/gmc -trimpath -ldflags=-buildid= -o /bin/manager ./cmd/main.go
 
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
