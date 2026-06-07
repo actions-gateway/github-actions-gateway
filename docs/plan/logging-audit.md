@@ -75,6 +75,20 @@ and every line is parseable JSON.
 
 ## Theme B — Credential-leak surface (Q86) — `security`
 
+✅ **Resolved** — a single shared redactor, `githubapp.SanitizeBody(body, max)`
+(`githubapp/sanitize.go`), now caps **and** redacts every upstream body before
+it is interpolated into an error or log. It strips GitHub token formats
+(`gh[pousr]_`, `github_pat_`), JWTs, the JSON values of sensitive keys
+(`access_token`, `refresh_token`, `token`, `encoded_jit_config`,
+`client_secret`, `private_key`, `password`, `secret`), and long opaque base64
+blobs; redaction runs before capping so a secret straddling the cap boundary
+cannot survive in the tail. Applied at all sites: `runner_auth.go` (:248/:259),
+`github_registrar.go` (generate-jitconfig + deregister), `broker/client.go`
+(via `capBody`), and `cmd/probe/main.go`. `broker` reuses the helper rather than
+duplicating redaction (the `broker → githubapp` module edge already existed via
+`replace`; both are GitHub-domain libs and there is no standalone broker
+binary). Note added to [05-security.md](../design/05-security.md) §5.2.
+
 No **direct** secret logging exists anywhere — tokens, keys, and PEM are never
 logged, and that posture must be preserved. But several error paths interpolate
 the upstream HTTP **response body** into an error that callers log. Two are
