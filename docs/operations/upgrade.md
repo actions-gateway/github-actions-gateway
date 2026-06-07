@@ -76,6 +76,27 @@ instead of `actions-gateway-agc`. After upgrading the GMC:
    any Prometheus alerts, Grafana dashboards, or PodMonitor selectors that reference the old
    label before upgrading.
 
+### GMC manager NetworkPolicy is now enabled by default
+
+The default install (`config/default`) now ships the GMC manager NetworkPolicy
+enabled. This flips the controller-manager pod to default-deny ingress and
+admits its `:8443` `/metrics` endpoint **only** from namespaces labelled
+`metrics: enabled`. **If your Prometheus runs in an unlabelled namespace, GMC
+manager scrapes will start failing after upgrade.** Label it before (or right
+after) upgrading:
+
+```sh
+kubectl label namespace <prometheus-namespace> metrics=enabled --overwrite
+```
+
+The validating-webhook port (`9443`) is re-allowed from any source, so CR
+admission is unaffected. This change also adds a `PodDisruptionBudget`
+(`minAvailable: 1`) and `priorityClassName: system-cluster-critical` to the
+manager — no operator action required. Runtime NetworkPolicy enforcement depends
+on your CNI; see [observability.md](observability.md). The cert-manager metrics
+certificate and the Prometheus `ServiceMonitor` remain **opt-in** behind their
+kustomize comment blocks.
+
 ---
 
 ## GMC Upgrade

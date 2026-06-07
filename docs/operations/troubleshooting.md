@@ -883,6 +883,37 @@ kubectl run dbg-scrape --rm -i --restart=Never --quiet \
   `metrics: enabled` label off namespaces that should not see per-tenant
   traffic-volume metrics.
 
+**Same label gates the GMC manager metrics.** Since the §E manifest-defaults
+work, the GMC install ships the manager NetworkPolicy enabled by default, which
+flips the controller-manager pod to default-deny ingress and admits `:8443`
+`/metrics` only from `metrics: enabled` namespaces. If the GMC manager scrape
+target is `down`, apply the same label to the Prometheus namespace:
+`kubectl label ns <prometheus-namespace> metrics=enabled`. The validating-webhook
+port (`9443`) is re-allowed from any source by design (the apiserver caller is
+not a labeled pod), so admission is unaffected by this label.
+
+---
+
+## Proxy Replica Stuck Pending After Enabling HA Defaults
+
+**Symptom.** One of the two proxy replicas is `Pending`; `kubectl describe pod`
+shows `didn't match pod anti-affinity rules` / `node(s) didn't match pod
+anti-affinity`. The proxy Deployment never reaches full availability.
+
+**Cause.** The proxy pool uses **required** pod anti-affinity on
+`kubernetes.io/hostname` so replicas land on distinct nodes (a single node
+failure must never drop the whole tenant's egress pool, and co-located replicas
+defeat the PodDisruptionBudget). With the default `proxy.minReplicas: 2`, the
+scheduler needs **at least two schedulable nodes**. On a single-node dev/kind
+cluster (e.g. `test/kind-config-1worker.yaml`, where the control-plane is
+tainted and only one worker is schedulable) the second replica can never place.
+
+**Resolution.**
+- Production: ensure the cluster has at least `proxy.minReplicas` schedulable
+  nodes for the proxy pods (the default kind config ships two workers).
+- Single-node dev clusters: set `spec.proxy.minReplicas: 1` on the
+  `ActionsGateway` to run a single proxy replica.
+
 ---
 
 ← [Back to Operations](.)
