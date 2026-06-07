@@ -87,8 +87,16 @@ type Pool struct {
 	keyType       KeyType
 
 	mu        sync.Mutex
-	agents    []*Agent // sorted by index; populated by LoadAgents or EnsureAgents
-	available []*Agent // agents not currently claimed
+	agents    []*Agent       // sorted by index; populated by LoadAgents or EnsureAgents
+	byIndex   map[int]*Agent // index → pooled agent, mirrors agents
+	available []*Agent       // agents not currently claimed
+	// claimed holds the indexes of agents a listener goroutine currently holds.
+	// It is keyed by the stable agent index (not the *Agent pointer) so it
+	// survives reload(), which rebuilds the agents/available slices with fresh
+	// pointers on every reconcile. Without it, reload() would drop the claimed
+	// set, re-add in-use agents to available (double-claim) and let scale-down
+	// delete a Secret out from under a running session (Q76).
+	claimed map[int]bool
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
@@ -140,6 +148,12 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		}
 	}
 
+	// Drop now-excess agents (index >= count) from the claimable set up front, under
+	// the lock, so no listener can claim one in the window between here and the reload
+	// below while we tear it down. Agents that are still claimed are left in place and
+	// deleted by a later reconcile once released — see the claimed skip below.
+	p.dropExcessFromAvailable(count)
+
 	// Delete excess agents.
 	for _, s := range existing {
 		idxStr := s.Labels[labelAgentIndex]
@@ -150,12 +164,16 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		if int32(idx) < count {
 			continue
 		}
-		// TODO(Q76): pool claim/reload race — a listener goroutine may have
-		// claimed this agent; deleting its Secret while it is in use will cause the
-		// goroutine's next CreateSession to fail. reload() (below) compounds this by
-		// resetting p.available to all agents every reconcile, dropping the claimed
-		// set entirely. Needs a claimed-set guard that survives reload.
-		//
+		// Don't tear down an agent a listener goroutine still holds — deleting its
+		// Secret mid-session breaks the in-flight job (Q76). A later reconcile deletes
+		// it once released (the claimed set is re-checked then).
+		p.mu.Lock()
+		inUse := p.claimed[idx]
+		p.mu.Unlock()
+		if inUse {
+			slog.Info("skipping scale-down delete of in-use agent; will retry after release", "index", idx)
+			continue
+		}
 		// Fetch the body only for the specific Secret being torn down — the
 		// agentId is needed to deregister the agent from GitHub.
 		full, err := p.getSecret(ctx, s.Name)
@@ -276,11 +294,43 @@ func (p *Pool) reload(ctx context.Context) error {
 	})
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.agents = agents
-	p.available = make([]*Agent, len(agents))
-	copy(p.available, agents)
-	p.mu.Unlock()
+	p.byIndex = make(map[int]*Agent, len(agents))
+	for _, a := range agents {
+		p.byIndex[a.Index] = a
+	}
+	// Rebuild available as every present, unclaimed agent — agents is the single
+	// source of truth. The claimed set is preserved across the reload (keyed by
+	// stable index, not pointer) so a currently-held agent never reappears in
+	// available; claims whose Secret has since been deleted are pruned out.
+	newClaimed := make(map[int]bool, len(p.claimed))
+	p.available = make([]*Agent, 0, len(agents))
+	for _, a := range agents {
+		if p.claimed[a.Index] {
+			newClaimed[a.Index] = true
+			continue
+		}
+		p.available = append(p.available, a)
+	}
+	p.claimed = newClaimed
 	return nil
+}
+
+// dropExcessFromAvailable removes agents with index >= count from the available
+// set under the lock, so they cannot be claimed while EnsureAgents tears them
+// down. It does not touch the claimed set: an excess agent that is still claimed
+// stays claimed and is deleted by a later reconcile once released.
+func (p *Pool) dropExcessFromAvailable(count int32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	kept := p.available[:0]
+	for _, a := range p.available {
+		if int32(a.Index) < count {
+			kept = append(kept, a)
+		}
+	}
+	p.available = kept
 }
 
 // ClaimAgent atomically marks an agent as in-use and returns it.
@@ -293,14 +343,25 @@ func (p *Pool) ClaimAgent() *Agent {
 	}
 	a := p.available[0]
 	p.available = p.available[1:]
+	if p.claimed == nil {
+		p.claimed = make(map[int]bool)
+	}
+	p.claimed[a.Index] = true
 	return a
 }
 
-// ReleaseAgent returns an agent to the available pool.
+// ReleaseAgent returns an agent to the available pool. It re-adds the current
+// pooled agent for the index (not the caller's possibly-stale snapshot), and
+// only if that index still exists in the pool — a concurrent scale-down or
+// DeleteAll may have removed it while it was claimed, in which case the release
+// is a no-op beyond clearing the claim.
 func (p *Pool) ReleaseAgent(a *Agent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.available = append(p.available, a)
+	delete(p.claimed, a.Index)
+	if cur, ok := p.byIndex[a.Index]; ok {
+		p.available = append(p.available, cur)
+	}
 }
 
 // DeleteAll deregisters all agents from GitHub and deletes all Secrets.
@@ -330,7 +391,9 @@ func (p *Pool) DeleteAll(ctx context.Context, token string) error {
 	}
 	p.mu.Lock()
 	p.agents = nil
+	p.byIndex = nil
 	p.available = nil
+	p.claimed = nil
 	p.mu.Unlock()
 	return lastErr
 }
