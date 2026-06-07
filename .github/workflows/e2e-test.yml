@@ -121,21 +121,7 @@ jobs:
         # e2e local registry would not help: that registry isn't up yet at this
         # point, and seeding it would still require this same one Hub pull — so a
         # retried runner-side pull is the simpler equivalent.
-        run: |
-          set -euo pipefail
-          pulled=false
-          for attempt in 1 2 3 4 5; do
-            if docker pull "${BUILDKIT_IMAGE}"; then
-              pulled=true
-              break
-            fi
-            echo "buildkit image pull attempt ${attempt} failed; retrying in 5s" >&2
-            sleep 5
-          done
-          if [[ "$pulled" != true ]]; then
-            echo "failed to pull ${BUILDKIT_IMAGE} after 5 attempts" >&2
-            exit 1
-          fi
+        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -206,19 +192,8 @@ jobs:
             docker load -i "$tar"
           else
             echo "==> pulling ${E2E_CURL_UPSTREAM}"
-            pulled=false
-            for attempt in 1 2 3; do
-              if docker pull "${E2E_CURL_UPSTREAM}"; then
-                pulled=true
-                break
-              fi
-              echo "pull attempt ${attempt} failed; retrying in 15s" >&2
-              sleep 15
-            done
-            if [[ "$pulled" != true ]]; then
-              echo "failed to pull ${E2E_CURL_UPSTREAM} after 3 attempts" >&2
-              exit 1
-            fi
+            PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+              scripts/pull-image-with-retry.sh "${E2E_CURL_UPSTREAM}"
             mkdir -p /tmp/curl-image
             docker save -o "$tar" "${E2E_CURL_UPSTREAM}"
           fi
