@@ -717,22 +717,18 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 								ReadOnly:  true,
 							},
 						},
-						// StartupProbe gates liveness/readiness during the AGC's
-						// cold start. Unlike the proxy (whose health server binds
-						// immediately), the AGC blocks in main.go waiting up to 2m
-						// for its initial GitHub App token *before* mgr.Start binds
-						// the health listener. A bare livenessProbe (~30s budget)
-						// would kill the pod mid-token-wait and crash-loop it during
-						// any GitHub slowness, so the startup budget must exceed that
-						// window: 36 × 5s = 180s. If the token fetch genuinely fails,
-						// main.go exits(1) on its own 2m timeout and the kubelet
-						// restarts the pod — the startupProbe never masks a real
-						// failure beyond that.
+						// StartupProbe gives the AGC manager's informer cache room to
+						// sync before liveness takes over (30 × 5s = 150s), mirroring
+						// the GMC manager's probe. The AGC binds its health listener
+						// early in mgr.Start — independently of the initial GitHub App
+						// token fetch, which runs as a manager Runnable (see
+						// cmd/agc/main.go) — so this budget covers cache sync, not the
+						// token exchange.
 						StartupProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
 							},
-							FailureThreshold: 36,
+							FailureThreshold: 30,
 							PeriodSeconds:    5,
 						},
 						LivenessProbe: &corev1.Probe{
