@@ -9,9 +9,11 @@ WORKDIR /src
 # Build context is the repo root so the workspace vendor/ is available.
 # `go build` auto-selects -mod=vendor when go.work and vendor/ are present.
 COPY . .
+# -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
+# build ID — together they make the binary bit-for-bit reproducible (SLSA-L3).
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -o /wrapper ./cmd/worker
+    go build -trimpath -ldflags=-buildid= -o /wrapper ./cmd/worker
 
 ## Stage 2: runner image with the wrapper as ENTRYPOINT.
 ## Built on top of ghcr.io/actions/actions-runner (the ARC gha-runner-scale-set
@@ -40,5 +42,16 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ##      tests so the registered runnerVersion matches what GitHub expects.
 FROM ghcr.io/actions/actions-runner:2.334.0@sha256:b6614fce332517f74d0a76e7c762fb08e4f2ff13dcf333183397c8a5725b6e8e
 ENV PATH=/home/runner/bin:$PATH
+# OpenContainers image labels carry provenance for SBOM scanners. REVISION and
+# VERSION arrive as build args (wired from GIT_SHA in docker-bake.hcl); the
+# defaults cover a bare `docker build` with no args. Declared in the final stage
+# so changing them re-runs only the cheap label layer, not the build.
+ARG REVISION="unknown"
+ARG VERSION="dev"
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="worker" \
+      org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps Runner.Worker with a job-payload entrypoint"
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]

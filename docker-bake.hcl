@@ -19,6 +19,13 @@ variable "IMAGE_REGISTRY" {
   default = "localhost:5000"
 }
 
+// VERSION stamps org.opencontainers.image.version. Defaults empty so the
+// _common args fall back to GIT_SHA; set it to a release tag (e.g. v1.0.0)
+// when cutting a versioned build.
+variable "VERSION" {
+  default = ""
+}
+
 // GHA_CACHE controls GitHub Actions cache export/import. Empty by default so
 // local invocations don't fail with "ActionsRuntimeToken required"; CI sets it
 // to "true" after docker/setup-buildx-action has injected the cache env vars.
@@ -36,6 +43,13 @@ group "default" {
 target "_common" {
   context = "."
   output  = ["type=registry"]
+  // Provenance for the org.opencontainers.image.* labels each Dockerfile sets.
+  // REVISION is the build's git SHA; VERSION falls back to it when no release
+  // tag is supplied.
+  args = {
+    REVISION = GIT_SHA
+    VERSION  = VERSION != "" ? VERSION : GIT_SHA
+  }
 }
 
 target "gmc" {

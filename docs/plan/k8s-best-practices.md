@@ -108,13 +108,13 @@ The shipped kustomize bases were not HA-by-default and disabled several integrat
 | F5 | ✅ | ~~AGC hard-codes `zap.UseDevMode(true)` — pretty colored logs in production.~~ Fixed: both controllers bind `zap.Options.BindFlags` and **default to structured JSON** (info level) — correct-by-default, since the AGC Deployment ships with no logging args; `--zap-devel` opts into console/debug for local dev. | [agc/main.go](../../cmd/agc/main.go), [gmc/main.go](../../cmd/gmc/cmd/main.go) | — |
 | F6 | ✅ | ~~AGC has no `HealthProbeBindAddress` wired and the AGC Deployment carries no liveness/readiness probes — wedged AGC is invisible.~~ Fixed: AGC wires `HealthProbeBindAddress: ":8081"` + `healthz.Ping`; the GMC stamps liveness/readiness + a startup probe (180s budget covering the initial-token wait) on the AGC Deployment. | [main.go](../../cmd/agc/main.go), [builder.go](../../cmd/gmc/internal/controller/builder.go) | — |
 
-## G. Supply chain 🟡
+## G. Supply chain ✅
 
 | # | Sev | Finding | Location | Fix |
 |---|---|---|---|---|
 | G1 | ✅ | ~~`ghcr.io/actions/actions-runner:2.327.1` not pinned to a digest.~~ Pinned 2026-06-01 to `@sha256:551dc313…`; bump procedure documented in Dockerfile header. | `cmd/worker/Dockerfile` | — |
-| G2 | 🟡 | No `org.opencontainers.image.*` labels on any Dockerfile — SBOM scanners miss provenance. | all four Dockerfiles | Add `source`/`revision`/`version`/`licenses` labels. |
-| G3 | 🟢 | `go build` missing `-trimpath -ldflags=-buildid=` for reproducibility (SLSA-L3 friendly). | all four Dockerfiles | Add the flags. |
+| G2 | ✅ | ~~No `org.opencontainers.image.*` labels on any Dockerfile — SBOM scanners miss provenance.~~ Added `source`/`revision`/`version`/`title`/`description` labels to all four production Dockerfiles; `REVISION`/`VERSION` wired from `GIT_SHA` via `docker-bake.hcl` `_common` args. `licenses` deliberately omitted — the repo has no LICENSE file yet (tracked as a Queue item); stamping a guessed SPDX id would falsify provenance. | all four Dockerfiles, `docker-bake.hcl` | — |
+| G3 | ✅ | ~~`go build` missing `-trimpath -ldflags=-buildid=` for reproducibility (SLSA-L3 friendly).~~ Added to the `go build` in all four production Dockerfiles. | all four Dockerfiles | — |
 
 ## H. Test coverage 🟡
 
