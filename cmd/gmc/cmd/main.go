@@ -80,8 +80,13 @@ func main() {
 	flag.BoolVar(&allowFloatingImageTags, "allow-floating-image-tags", false,
 		"Permit non-digest-pinned AGC_IMAGE/PROXY_IMAGE references (floating tags). "+
 			"Intended for dev/test only; production requires the name@sha256:<digest> form.")
+	// Default to production logging: structured JSON at info level, which log
+	// aggregators can parse out of the box. Developers pass --zap-devel for
+	// human-readable console logs at debug level when running locally. Keeping
+	// JSON the default (rather than an opt-in flag the deploy must remember to
+	// set) is the same right-by-default stance the AGC uses (cmd/agc/main.go).
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

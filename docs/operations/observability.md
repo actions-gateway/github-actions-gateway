@@ -6,6 +6,14 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
 
 ---
 
+## Logging
+
+The GMC and AGC emit **structured JSON logs at info level by default** — ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting. No flag needs to be set in production; the JSON default is what the GMC-provisioned AGC Deployment runs with.
+
+For local development, pass `--zap-devel` to switch to human-readable console logs at debug level, or use the finer-grained `--zap-encoder` / `--zap-log-level` flags. These are controller-runtime's standard `zap` flags; run a controller with `--help` for the full set. (The per-tenant egress proxy logs via `slog` and is unaffected by these flags.)
+
+---
+
 ## How to Access Metrics
 
 **Port forward (ad-hoc):**
