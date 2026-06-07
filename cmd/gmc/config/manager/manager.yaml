@@ -21,7 +21,11 @@ spec:
     matchLabels:
       control-plane: controller-manager
       app.kubernetes.io/name: gmc
-  replicas: 1
+  # Two replicas for HA: leader election (--leader-elect) is already wired, so
+  # the standby takes over reconciliation if the active manager's node drains.
+  # Paired with the PodDisruptionBudget (pdb.yaml) so a voluntary disruption
+  # never evicts both at once.
+  replicas: 2
   template:
     metadata:
       annotations:
@@ -84,6 +88,16 @@ spec:
           capabilities:
             drop:
             - "ALL"
+        # startupProbe gates liveness/readiness until the informer cache has
+        # synced. Up to 30 × 5s = 150s of cold-start grace on a large cluster
+        # before the liveness probe (which would otherwise race cache-sync and
+        # restart-loop the manager) takes over.
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          failureThreshold: 30
+          periodSeconds: 5
         livenessProbe:
           httpGet:
             path: /healthz
@@ -108,4 +122,8 @@ spec:
         volumeMounts: []
       volumes: []
       serviceAccountName: controller-manager
+      # The GMC is cluster-critical control-plane: it provisions and reconciles
+      # every tenant gateway. Schedule it ahead of ordinary workloads and protect
+      # it from preemption under node pressure.
+      priorityClassName: system-cluster-critical
       terminationGracePeriodSeconds: 10

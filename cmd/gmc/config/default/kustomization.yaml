@@ -23,15 +23,22 @@ resources:
 - ../webhook
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
 - ../certmanager
-# [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
+# [PROMETHEUS] ServiceMonitor for Prometheus scraping. Opt-in (not default): the
+# ServiceMonitor CRD only exists once the Prometheus Operator is installed, so
+# enabling this unconditionally would break `kubectl apply` on clusters without
+# it. Uncomment all 'PROMETHEUS' sections to enable. See docs/operations/observability.md.
 #- ../prometheus
 # [METRICS] Expose the controller manager metrics service.
 - metrics_service.yaml
-# [NETWORK POLICY] Protect the /metrics endpoint and Webhook Server with NetworkPolicy.
-# Only Pod(s) running a namespace labeled with 'metrics: enabled' will be able to gather the metrics.
-# Only CR(s) which requires webhooks and are applied on namespaces labeled with 'webhooks: enabled' will
-# be able to communicate with the Webhook Server.
-#- ../network-policy
+# [NETWORK POLICY] Protect the manager's /metrics endpoint with NetworkPolicy.
+# Enabled by default (secure-by-default): selecting the manager pod flips it to
+# default-deny ingress; /metrics (:8443) then admits only namespaces labeled
+# 'metrics: enabled' (scrapers), while the validating-webhook port (9443) is
+# re-allowed from any source because the kube-apiserver that calls it is not a
+# labeled-namespace pod (see network-policy/allow-webhook-traffic.yaml). Label
+# your Prometheus namespace 'metrics: enabled' or scraping breaks — see
+# docs/operations/observability.md. Requires a CNI that enforces NetworkPolicy.
+- ../network-policy
 
 # Uncomment the patches line if you enable Metrics
 patches:
@@ -42,8 +49,12 @@ patches:
     kind: Deployment
 
 # Uncomment the patches line if you enable Metrics and CertManager
-# [METRICS-WITH-CERTS] To enable metrics protected with certManager, uncomment the following line.
-# This patch will protect the metrics with certManager self-signed certs.
+# [METRICS-WITH-CERTS] Opt-in (not default): swap controller-runtime's self-signed
+# metrics cert for a cert-manager-issued one so scrapers can verify it instead of
+# using insecure_skip_verify. The /metrics endpoint is already TLS + RBAC-authn
+# gated (metrics_auth_role), so this is defense-in-depth, not a required control;
+# it is kept opt-in because it hard-requires cert-manager at install time.
+# Uncomment all 'CERTMANAGER' / 'METRICS-WITH-CERTS' sections to enable.
 #- path: cert_metrics_manager_patch.yaml
 #  target:
 #    kind: Deployment
