@@ -1,8 +1,8 @@
 # Cross-module logging audit
 
-**Status:** Theme A (F1) being resolved as the 1.0-gate JSON-unification PR;
-Themes B–G filed to the [STATUS Queue](../STATUS.md) (Q86–Q89). Theme C folds
-into Theme G.
+**Status:** Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix
+below); Themes B–G filed to the [STATUS Queue](../STATUS.md) (Q86–Q89). Theme C
+folds into Theme G.
 
 A cross-module audit of every log call site in the repo (`cmd/agc`, `cmd/gmc`,
 `cmd/worker`, `cmd/proxy`, `broker/`, `githubapp/`, `cmd/probe`). It found one
@@ -17,6 +17,8 @@ Q86–Q89. Queue Notes stay short; the evidence and fixes live here.
 ---
 
 ## Theme A — Format fragmentation (F1) — `1.0-gate`
+
+✅ **Resolved** — the Fix below has shipped.
 
 **The defect.** `slog.SetDefault` is never called anywhere, so `slog.Default()`
 returns the stdlib **TEXT** handler. The controllers configure `zap` (JSON) via
