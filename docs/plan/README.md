@@ -61,6 +61,7 @@ markers per item.
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ⚠️ Phase 1 done; Phase 2 has open drift items (image vars, envtest, `all` semantics) |
 | [k8s-best-practices.md](k8s-best-practices.md) | Project-wide Kubernetes best-practices audit (RBAC, pod security, controller correctness, CRD polish, manifests, observability, supply chain) | ⚠️ Findings logged; fixes open as STATUS Queue Q30–Q36 |
 | [go-best-practices.md](go-best-practices.md) | Small Go-idiom cleanups: unify module versions, fix async-channel violation, extend goleak coverage, misc | ⚠️ Findings logged; fixes open as STATUS Queue Q38–Q41 |
+| [logging-audit.md](logging-audit.md) | Cross-module log-call-site audit: format fragmentation (slog/zap), credential-leak surface, hot-path spam, correlation, per-tenant log level | ⚠️ Theme A (F1, JSON unify) being resolved as the 1.0-gate PR; Themes B–G open as STATUS Queue Q86–Q89 |
 | [acquire-admission-control.md](acquire-admission-control.md) | Gate worker-pod capacity *before* `acquirejob` so jobs aren't claimed-then-dropped under pressure; durable internal queue considered and rejected | ⓘ Design sketch — open as STATUS Queue Q59 |
 
 ## Archive
