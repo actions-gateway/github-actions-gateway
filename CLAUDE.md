@@ -115,7 +115,7 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 - Act only on your own branch and PR. Never re-run, edit, or push to a PR or branch owned by another session. When CI fails on another session's PR, reproduce the failure locally rather than touching their PR.
 - Queue items in `docs/STATUS.md` have `Q`-prefixed IDs (e.g. `Q44`). Use the bare ID in commit messages and PR bodies — the `Q` is what stops GitHub from auto-linking the number to PR/issue 44.
 
-### Avoiding branch-guard prompts
+### Minimizing git/gh approval prompts (branch-guard)
 
 This repo uses branch-guard, a hook that prompts before git/edit operations on a protected branch (main/master) or destructive git commands. To keep work flowing:
 
