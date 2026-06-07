@@ -19,6 +19,21 @@ ln -s ~/workspace/claude-skills/model-advisor    ~/.claude/skills/model-advisor
 ln -s ~/workspace/claude-skills/tech-docs-layers ~/.claude/skills/tech-docs-layers
 ```
 
+Two guard plugins are also recommended — `PreToolUse` hooks that keep AI-assisted work on the rails this repo expects (worktree-scoped edits, `claude/*` feature branches). Install both from within Claude Code:
+
+```
+/plugin marketplace add karlkfi/claude-workspace-guard
+/plugin install workspace-guard@workspace-guard
+
+/plugin marketplace add karlkfi/claude-branch-guard
+/plugin install branch-guard@claude-branch-guard
+```
+
+- [`workspace-guard`](https://github.com/karlkfi/claude-workspace-guard) — path-aware bash permissions: prompts when a guarded file command targets a path outside the project root.
+- [`branch-guard`](https://github.com/karlkfi/claude-branch-guard) — prompts before commits, pushes, or destructive git commands on a protected branch (`main`/`master`).
+
+Restart Claude Code after installing so the hooks register (`python3` and `git` must be on your `PATH`).
+
 Build the vendored tool binaries and install the git hooks before doing anything else:
 
 ```bash
