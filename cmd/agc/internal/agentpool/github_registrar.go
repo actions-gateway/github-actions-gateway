@@ -37,6 +37,8 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // GithubRegistrar implements Registrar using the GitHub Actions runner JIT config API.
@@ -94,7 +96,7 @@ func (r *GithubRegistrar) Register(ctx context.Context, token string, params Reg
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("generate jit config: unexpected status %d: %s", resp.StatusCode, respBody)
+		return nil, fmt.Errorf("generate jit config: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(respBody, 512))
 	}
 
 	var result struct {
@@ -133,7 +135,7 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deregister runner: unexpected status %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("deregister runner: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 512))
 	}
 	return nil
 }

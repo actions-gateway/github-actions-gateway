@@ -388,7 +388,7 @@ func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Broke
 
 	logger.Info("AcknowledgeRunnerRequest response",
 		"status", resp.StatusCode,
-		"body", string(respBody),
+		"body", githubapp.SanitizeBody(respBody, 512),
 	)
 	// Return a compact status string for the top-level log line.
 	return fmt.Sprintf("HTTP-%d", resp.StatusCode)

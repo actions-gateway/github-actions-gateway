@@ -245,7 +245,7 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("runner token endpoint returned %d: %s", resp.StatusCode, body)
+		return "", fmt.Errorf("runner token endpoint returned %d: %s", resp.StatusCode, SanitizeBody(body, 512))
 	}
 
 	var tokenResp struct {
@@ -256,7 +256,7 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 		return "", fmt.Errorf("parse runner token response: %w", err)
 	}
 	if tokenResp.AccessToken == "" {
-		return "", fmt.Errorf("runner token response missing access_token: %s", body)
+		return "", fmt.Errorf("runner token response missing access_token: %s", SanitizeBody(body, 512))
 	}
 	return tokenResp.AccessToken, nil
 }
