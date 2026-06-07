@@ -106,15 +106,31 @@ build-proxy: ## Build the proxy binary
 # it is produced. Propagates through `make check` too (e.g. `make check V=1`).
 GOTEST_V := $(if $(or $(V),$(VERBOSE)),-v,)
 
+# --- Local resource auto-throttle (interactive macOS only) -----------------
+# scripts/local-throttle.sh detects an interactive macOS shell and emits a
+# parallelism cap (physical cores − 2) plus a background-QoS command prefix
+# (taskpolicy -b). Without it a full `make check` saturates every core and
+# starves the WindowServer compositor until its watchdog restarts it — the GUI
+# freezes. On CI (the CI env var is set) or on Linux the script prints nothing,
+# so all of these expand empty and the gate runs at full speed. Detail and
+# rationale live in the script header.
+THROTTLE_JOBS   := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" jobs)
+THROTTLE_PREFIX := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" prefix)
+# Per-process env + flags derived from the cap; empty (no-op) when not throttling.
+# go test reads GOMAXPROCS/-p; golangci-lint ignores both and needs -j.
+THROTTLE_ENV    := $(if $(THROTTLE_JOBS),GOMAXPROCS=$(THROTTLE_JOBS),)
+GOTEST_P        := $(if $(THROTTLE_JOBS),-p $(THROTTLE_JOBS),)
+GOLANGCI_J      := $(if $(THROTTLE_JOBS),-j $(THROTTLE_JOBS),)
+
 .PHONY: test
 test: ## Run unit tests for all modules (V=1 streams output live for debugging a hang)
-	cd broker     && go test $(GOTEST_V) ./...
-	cd githubapp  && go test $(GOTEST_V) ./...
-	cd cmd/agc   && go test $(GOTEST_V) ./...
-	cd cmd/gmc   && go test $(GOTEST_V) ./...
-	cd cmd/probe && go test $(GOTEST_V) ./...
-	cd cmd/proxy && go test $(GOTEST_V) ./...
-	cd cmd/worker && go test $(GOTEST_V) ./...
+	cd broker     && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd githubapp  && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd cmd/agc   && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd cmd/gmc   && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd cmd/probe && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd cmd/proxy && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
+	cd cmd/worker && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test $(GOTEST_P) $(GOTEST_V) ./...
 
 .PHONY: test-integration
 test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
@@ -134,7 +150,7 @@ lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modul
 	@set -euo pipefail; \
 	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
 		echo "==> golangci-lint $$dir"; \
-		(cd "$$dir" && $(GOLANGCI_LINT) run --config $(REPO_ROOT)/.golangci.yml ./...) || exit 1; \
+		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) $(GOLANGCI_LINT) run $(GOLANGCI_J) --config $(REPO_ROOT)/.golangci.yml ./...) || exit 1; \
 	done
 
 .PHONY: lint-status
