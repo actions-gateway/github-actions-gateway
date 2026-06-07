@@ -132,7 +132,7 @@ This repo uses branch-guard, a hook that prompts before git/edit operations on a
 - **Work on a feature branch, not main/master.** Commit, push, merge, and rebase all run without a prompt on a `claude/*` or feature branch; the same on main/master prompts. Use `git switch -c claude/<topic>` (or a worktree) before editing or committing.
 - **Push the worktree's own branch.** `git push` / `git push -u origin HEAD` auto-approves; pushing a different branch or a refspec like `HEAD:main` prompts.
 - **Prefer fast-forward pulls.** `git pull --ff-only` is auto-approved; a bare `git pull` (which may merge or rebase) prompts.
-- **Run git commands on their own, not chained with non-git commands.** `git commit && <other>` won't auto-approve — the trailing command can't ride along. Run them as separate commands.
+- **Run git/gh commands on their own — don't interleave `echo` labels or other non-git commands, even with `;`.** A single non-git segment defeats auto-approval for the *whole* chain, so `git log … ; echo "---" ; git log …` and `git commit && <other>` both prompt — the extra command can't ride along. Run each as a separate call, or pipe read-only output through a pager (`git log | head`, `gh pr checks 123 | head -20`), which stays auto-approved.
 - **Expect a prompt for destructive commands** (`reset --hard`, `clean -f`, `branch -D`, `restore <path>`, `config --global`) — that's by design.
 
 ## Agent reference docs
