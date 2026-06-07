@@ -1,0 +1,19 @@
+# PodDisruptionBudget for the GMC controller-manager. With replicas: 2 and
+# minAvailable: 1, a voluntary disruption (node drain, cluster upgrade) can
+# evict at most one replica at a time, so leader election always has a standby
+# to fail over to and tenant reconciliation never fully stops.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: gmc
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+      app.kubernetes.io/name: gmc

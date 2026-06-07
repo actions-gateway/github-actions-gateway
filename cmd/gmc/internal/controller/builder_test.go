@@ -133,7 +133,8 @@ func TestBuildProxyDeployment_DefaultResources(t *testing.T) {
 	c := dep.Spec.Template.Spec.Containers[0]
 	assert.Equal(t, resource.MustParse("10m"), c.Resources.Requests[corev1.ResourceCPU])
 	assert.Equal(t, resource.MustParse("32Mi"), c.Resources.Requests[corev1.ResourceMemory])
-	assert.Equal(t, resource.MustParse("100m"), c.Resources.Limits[corev1.ResourceCPU])
+	// 500m, not 100m: a 100m limit throttles before the HPA 60%-util signal trips.
+	assert.Equal(t, resource.MustParse("500m"), c.Resources.Limits[corev1.ResourceCPU])
 	assert.Equal(t, resource.MustParse("64Mi"), c.Resources.Limits[corev1.ResourceMemory])
 }
 
@@ -624,10 +625,27 @@ func TestBuildProxyDeployment_AntiAffinity(t *testing.T) {
 	require.NotNil(t, dep.Spec.Template.Spec.Affinity)
 	aa := dep.Spec.Template.Spec.Affinity.PodAntiAffinity
 	require.NotNil(t, aa)
-	require.Len(t, aa.PreferredDuringSchedulingIgnoredDuringExecution, 1)
-	term := aa.PreferredDuringSchedulingIgnoredDuringExecution[0]
-	assert.Equal(t, int32(100), term.Weight)
-	assert.Equal(t, "kubernetes.io/hostname", term.PodAffinityTerm.TopologyKey)
+	// Required, not preferred: replicas must land on distinct nodes so a single
+	// node failure never drops the whole tenant egress pool (and to honour the PDB).
+	require.Empty(t, aa.PreferredDuringSchedulingIgnoredDuringExecution)
+	require.Len(t, aa.RequiredDuringSchedulingIgnoredDuringExecution, 1)
+	term := aa.RequiredDuringSchedulingIgnoredDuringExecution[0]
+	assert.Equal(t, "kubernetes.io/hostname", term.TopologyKey)
+	assert.Equal(t, proxyAppName, term.LabelSelector.MatchLabels["app"])
+}
+
+func TestBuildProxyDeployment_TerminationGracePeriod(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildProxyDeployment(ag, "proxy:latest")
+	require.NotNil(t, dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+	assert.Equal(t, int64(60), *dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+}
+
+func TestBuildAGCDeployment_TerminationGracePeriod(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	require.NotNil(t, dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
+	assert.Equal(t, int64(60), *dep.Spec.Template.Spec.TerminationGracePeriodSeconds)
 }
 
 func TestBuildProxyDeployment_Probes(t *testing.T) {

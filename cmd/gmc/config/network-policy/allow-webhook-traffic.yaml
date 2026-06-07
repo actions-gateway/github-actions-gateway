@@ -1,6 +1,30 @@
-# This NetworkPolicy allows ingress traffic to your webhook server running
-# as part of the controller-manager from specific namespaces and pods. CR(s) which uses webhooks
-# will only work when applied in namespaces labeled with 'webhook: enabled'
+# Allows ingress to the GMC validating-webhook server (container port 9443 on
+# the controller-manager pod).
+#
+# Why port 9443, not 443: the webhook Service is `port: 443 -> targetPort: 9443`
+# and NetworkPolicy port matches are evaluated against the *post-DNAT*
+# destination port — the pod's container port (9443) — not the Service port.
+# This is the same kube-proxy DNAT trap documented for the AGC NP's 443/6443
+# rule (see docs/development/networkpolicy-port-matching.md). The original
+# kubebuilder scaffold allowed `port: 443`, which never matches the post-DNAT
+# 9443 even from an allowed source.
+#
+# Why no `from` source restriction: the webhook is invoked by the
+# kube-apiserver, whose source is NOT a pod in any labeled namespace — across
+# kind, managed, and self-hosted clusters the apiserver may run host-networked
+# on a control-plane node or entirely off-cluster, so a namespaceSelector can
+# never reliably match it. The original scaffold admitted only namespaces
+# labeled `webhook: enabled`; combined with `failurePolicy: Fail` that silently
+# drops every apiserver admission call and rejects all ActionsGateway
+# create/update once any ingress NetworkPolicy makes the manager pod
+# default-deny. Restricting by source is therefore unsafe here.
+#
+# The webhook server presents a cert verified by the apiserver against the
+# ValidatingWebhookConfiguration caBundle, and a stray pod POSTing a crafted
+# AdmissionReview cannot affect real admission decisions, so allowing the
+# webhook port from any source is an acceptable trade-off. The sensitive
+# surface — the manager's /metrics endpoint (:8443) — stays restricted to
+# `metrics: enabled` namespaces in allow-metrics-traffic.yaml.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -17,11 +41,8 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    # This allows ingress traffic from any namespace with the label webhook: enabled
-    - from:
-      - namespaceSelector:
-          matchLabels:
-            webhook: enabled # Only from namespaces with this label
-      ports:
-        - port: 443
+    # No `from` — admits the kube-apiserver (see header). The metrics port is
+    # protected separately by allow-metrics-traffic.yaml.
+    - ports:
+        - port: 9443
           protocol: TCP

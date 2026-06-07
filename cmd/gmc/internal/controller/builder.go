@@ -353,7 +353,10 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 			corev1.ResourceMemory: resource.MustParse("32Mi"),
 		},
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("100m"),
+			// 500m, not 100m: a 100m limit throttles the proxy before the HPA's
+			// 60%-utilization signal can trip, so the pool never scales out under
+			// real CONNECT load. Operators can override via spec.proxy.resources.
+			corev1.ResourceCPU:    resource.MustParse("500m"),
 			corev1.ResourceMemory: resource.MustParse("64Mi"),
 		},
 	}
@@ -381,14 +384,25 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": proxyAppName, labelManagedBy: labelManagerValue}},
 				Spec: corev1.PodSpec{
 					SecurityContext: nonrootPodSecurityContext(),
+					// 60s lets in-flight CONNECT tunnels drain on rollout/eviction;
+					// the proxy's SIGTERM handler closes the listener and shuts the
+					// servers down (cmd/proxy/proxy.go) within this window rather than
+					// being SIGKILLed mid-tunnel.
+					TerminationGracePeriodSeconds: ptr(int64(60)),
+					// Required (not preferred) anti-affinity: proxy replicas must
+					// land on distinct nodes so a single node failure or drain never
+					// takes the whole tenant's egress pool down at once. Preferred
+					// scheduling let both replicas co-locate, which silently defeated
+					// the PodDisruptionBudget. Trade-off: the proxy pool needs at
+					// least Spec.Proxy.MinReplicas schedulable nodes — on a
+					// single-node dev/kind cluster (test/kind-config-1worker.yaml)
+					// the second replica stays Pending; set proxy.minReplicas=1
+					// there. The default kind config ships two worker nodes.
 					Affinity: &corev1.Affinity{
 						PodAntiAffinity: &corev1.PodAntiAffinity{
-							PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
-								Weight: 100,
-								PodAffinityTerm: corev1.PodAffinityTerm{
-									LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
-									TopologyKey:   "kubernetes.io/hostname",
-								},
+							RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{{
+								LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
+								TopologyKey:   "kubernetes.io/hostname",
 							}},
 						},
 					},
@@ -628,6 +642,11 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agcSAName,
 					SecurityContext:    nonrootPodSecurityContext(),
+					// 60s lets the AGC's signal handler (ctrl.SetupSignalHandler in
+					// cmd/agc/main.go) drain in-flight session work and release its
+					// listener-renewal lock cleanly on rollout instead of losing the
+					// lock to a SIGKILL.
+					TerminationGracePeriodSeconds: ptr(int64(60)),
 					Volumes: []corev1.Volume{
 						{
 							Name: agcCredsVolumeName,
