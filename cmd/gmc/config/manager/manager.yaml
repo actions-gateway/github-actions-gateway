@@ -126,4 +126,8 @@ spec:
       # every tenant gateway. Schedule it ahead of ordinary workloads and protect
       # it from preemption under node pressure.
       priorityClassName: system-cluster-critical
+      # 10s is shorter than the 15s leader lease, but --leader-elect-release-on-cancel
+      # (on by default) makes the active manager release the lease on SIGTERM, so the
+      # standby takes over in ~RetryPeriod (2s) rather than waiting out the lease.
+      # No rollout reconcile gap, so the short grace period is fine (k8s audit F3).
       terminationGracePeriodSeconds: 10

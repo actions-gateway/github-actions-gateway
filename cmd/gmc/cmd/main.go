@@ -64,6 +64,29 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	// Leader-election timing knobs. Defaults match controller-runtime/client-go
+	// (15s/10s/2s) so existing deployments behave identically. They are exposed
+	// so operators can tune the failover/false-positive trade-off per cluster:
+	// larger values tolerate slower apiservers (fewer spurious lease losses),
+	// smaller values fail over faster (k8s audit F4). The invariant
+	// LeaseDuration > RenewDeadline > RetryPeriod×1.2 is validated below.
+	var leaderElectLeaseDuration, leaderElectRenewDeadline, leaderElectRetryPeriod time.Duration
+	flag.DurationVar(&leaderElectLeaseDuration, "leader-elect-lease-duration", 15*time.Second,
+		"Duration non-leader candidates wait before force-acquiring leadership.")
+	flag.DurationVar(&leaderElectRenewDeadline, "leader-elect-renew-deadline", 10*time.Second,
+		"Duration the acting leader retries refreshing leadership before giving up.")
+	flag.DurationVar(&leaderElectRetryPeriod, "leader-elect-retry-period", 2*time.Second,
+		"Interval between leader-election action attempts.")
+	// ReleaseOnCancel makes the active manager step down voluntarily on SIGTERM
+	// instead of holding the lease until it expires, so the standby takes over in
+	// ~RetryPeriod rather than ~LeaseDuration. This closes the rollout reconcile
+	// gap that terminationGracePeriodSeconds (10s) < LeaseDuration (15s) would
+	// otherwise leave (k8s audit F3). Safe here: main() exits immediately once
+	// mgr.Start returns, with no post-stop cleanup that could race the release.
+	var leaderElectReleaseOnCancel bool
+	flag.BoolVar(&leaderElectReleaseOnCancel, "leader-elect-release-on-cancel", true,
+		"Release the leader lease on graceful shutdown for faster failover. "+
+			"Only safe when the process exits promptly after the manager stops.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
@@ -169,6 +192,17 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	// Fail fast with a clear message on misordered leader-election timings rather
+	// than letting controller-runtime surface client-go's terser error deep in
+	// manager construction. Only meaningful when leader election is active.
+	if enableLeaderElection {
+		if err := validateLeaderElectionTimings(
+			leaderElectLeaseDuration, leaderElectRenewDeadline, leaderElectRetryPeriod); err != nil {
+			setupLog.Error(err, "invalid leader-election timing flags")
+			os.Exit(1)
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -176,6 +210,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "actions-gateway-gmc-leader",
+		LeaseDuration:          &leaderElectLeaseDuration,
+		RenewDeadline:          &leaderElectRenewDeadline,
+		RetryPeriod:            &leaderElectRetryPeriod,
 		// Two-layer Secret isolation:
 		// 1. WatchesMetadata on the controller registers a metadata-only informer
 		//    for Secrets (ObjectMeta only — no .data ever enters the cache), so
@@ -189,17 +226,12 @@ func main() {
 				DisableFor: []client.Object{&corev1.Secret{}},
 			},
 		},
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
+		// LeaderElectionReleaseOnCancel makes the leader step down voluntarily when
+		// the Manager ends, so the standby takes over in ~RetryPeriod instead of
+		// waiting out LeaseDuration. Defaults to true (--leader-elect-release-on-cancel);
+		// safe because main() exits immediately after mgr.Start returns, with no
+		// post-stop cleanup that could race the lease release (k8s audit F3).
+		LeaderElectionReleaseOnCancel: leaderElectReleaseOnCancel,
 	})
 	if err != nil {
 		setupLog.Error(err, "Failed to start manager")
@@ -331,6 +363,32 @@ func mustEnv(name string) (string, error) {
 		return "", fmt.Errorf("required environment variable %s is not set", name)
 	}
 	return v, nil
+}
+
+// leaderElectionJitterFactor mirrors client-go's leaderelection.JitterFactor:
+// the renew deadline must exceed retryPeriod×JitterFactor or client-go rejects
+// the config at manager construction. Kept in sync with the vendored constant.
+const leaderElectionJitterFactor = 1.2
+
+// validateLeaderElectionTimings enforces the same invariants client-go's
+// leaderelection applies (LeaseDuration > RenewDeadline > RetryPeriod×1.2, all
+// positive), but surfaces them at flag-parse time with an actionable message
+// instead of as a terse error buried in manager construction. Only relevant
+// when leader election is enabled.
+func validateLeaderElectionTimings(lease, renew, retry time.Duration) error {
+	if lease <= 0 || renew <= 0 || retry <= 0 {
+		return fmt.Errorf("leader-election durations must be positive: "+
+			"lease=%s renew=%s retry=%s", lease, renew, retry)
+	}
+	if lease <= renew {
+		return fmt.Errorf("--leader-elect-lease-duration (%s) must be greater than "+
+			"--leader-elect-renew-deadline (%s)", lease, renew)
+	}
+	if minRenew := time.Duration(leaderElectionJitterFactor * float64(retry)); renew <= minRenew {
+		return fmt.Errorf("--leader-elect-renew-deadline (%s) must be greater than "+
+			"--leader-elect-retry-period×%.1f (%s)", renew, leaderElectionJitterFactor, minRenew)
+	}
+	return nil
 }
 
 // digestPinnedRE matches an image reference pinned by a sha256 digest, e.g.

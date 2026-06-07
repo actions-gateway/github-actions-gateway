@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidateImageDigest(t *testing.T) {
 	const validDigest = "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -72,6 +75,67 @@ func TestValidateImageDigest(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("validateImageDigest(%q) = %v, want nil", tt.ref, err)
+			}
+		})
+	}
+}
+
+func TestValidateLeaderElectionTimings(t *testing.T) {
+	tests := []struct {
+		name                string
+		lease, renew, retry time.Duration
+		wantErr             bool
+	}{
+		{
+			name:  "controller-runtime defaults",
+			lease: 15 * time.Second, renew: 10 * time.Second, retry: 2 * time.Second,
+		},
+		{
+			name:  "tightened for fast failover",
+			lease: 9 * time.Second, renew: 6 * time.Second, retry: 2 * time.Second,
+		},
+		{
+			name:  "loosened for slow apiserver",
+			lease: 30 * time.Second, renew: 20 * time.Second, retry: 4 * time.Second,
+		},
+		{
+			name:  "lease equals renew",
+			lease: 10 * time.Second, renew: 10 * time.Second, retry: 2 * time.Second,
+			wantErr: true,
+		},
+		{
+			name:  "lease below renew",
+			lease: 8 * time.Second, renew: 10 * time.Second, retry: 2 * time.Second,
+			wantErr: true,
+		},
+		{
+			// renew (3s) must exceed retry×1.2 (3.6s); it does not.
+			name:  "renew not above retry times jitter",
+			lease: 10 * time.Second, renew: 3 * time.Second, retry: 3 * time.Second,
+			wantErr: true,
+		},
+		{
+			name:  "zero lease",
+			lease: 0, renew: 10 * time.Second, retry: 2 * time.Second,
+			wantErr: true,
+		},
+		{
+			name:  "negative retry",
+			lease: 15 * time.Second, renew: 10 * time.Second, retry: -1 * time.Second,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateLeaderElectionTimings(tt.lease, tt.renew, tt.retry)
+			if tt.wantErr && err == nil {
+				t.Errorf("validateLeaderElectionTimings(%s, %s, %s) = nil, want error",
+					tt.lease, tt.renew, tt.retry)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("validateLeaderElectionTimings(%s, %s, %s) = %v, want nil",
+					tt.lease, tt.renew, tt.retry, err)
 			}
 		})
 	}
