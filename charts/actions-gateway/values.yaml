@@ -128,6 +128,19 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# topologySpreadConstraints spreads the GMC replicas across nodes so a single
+# node failure cannot take out both — replicaCount: 2 and the PodDisruptionBudget
+# only deliver HA if the two pods are not co-located. The default is a soft
+# (whenUnsatisfiable: ScheduleAnyway) hostname spread: it expresses the
+# preference without blocking scheduling on single-node clusters (e.g. kind).
+# Set enabled: false to drop it, or raise the spread to zones via topologyKey:
+# topology.kubernetes.io/zone on multi-zone clusters.
+topologySpreadConstraints:
+  enabled: true
+  maxSkew: 1
+  topologyKey: kubernetes.io/hostname
+  whenUnsatisfiable: ScheduleAnyway
+
 # sampleGateway renders an example ActionsGateway CR in the release namespace.
 # OFF by default — a real tenant needs its own namespace, a GitHub App Secret,
 # and a reviewed quota (see docs/operations/tenant-onboarding.md). Intended for

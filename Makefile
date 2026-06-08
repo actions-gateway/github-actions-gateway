@@ -47,7 +47,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock \
-        vulncheck govulncheck trivy-scan
+        vulncheck govulncheck trivy-scan polaris-scan
 
 ##@ General
 
@@ -202,6 +202,18 @@ TRIVY_IMAGES   := gmc=cmd/gmc/Dockerfile agc=cmd/agc/Dockerfile proxy=cmd/proxy/
 # cannot fix. Matches the worker leg's exit-code 0 in security-scan.yml.
 TRIVY_REPORT_ONLY := worker
 
+# polaris posture-scan parameters, mirrored exactly by the CI `polaris` job.
+# POLARIS_RENDER_DIGEST is a placeholder sha256 digest used only to render the
+# chart for the scan: production installs pin gmc.image.digest, so auditing the
+# digest-pinned form reflects the SHIPPED posture. The un-pinned :latest default
+# still trips the gating `tagNotSpecified` danger check, so this does not mask a
+# real finding — it just lets the scan see the rest of the manifest. The value
+# must satisfy values.schema.json's sha256:[a-f0-9]{64} pattern.
+POLARIS_RENDER_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
+POLARIS_CHART         := $(REPO_ROOT)/charts/actions-gateway
+POLARIS_CONFIG        := $(POLARIS_CHART)/polaris.yaml
+POLARIS_RENDER        := $(REPO_ROOT)/.build/polaris-render.yaml
+
 .PHONY: vulncheck
 vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
 	@set -euo pipefail; \
@@ -222,6 +234,18 @@ trivy-scan: ## Build each image locally and scan it with trivy (requires trivy +
 		echo "==> trivy image local/$$name:trivy (exit-code $$code)"; \
 		trivy image --severity "$(TRIVY_SEVERITY)" --ignore-unfixed --exit-code "$$code" "local/$$name:trivy" || exit 1; \
 	done
+
+.PHONY: polaris-scan
+polaris-scan: ## Render the Helm chart and audit its Kubernetes posture with polaris (gates on danger findings; requires helm + polaris on PATH; matches the CI polaris gate)
+	@command -v helm >/dev/null 2>&1 || { echo "helm not found on PATH — install: https://helm.sh/docs/intro/install/" >&2; exit 1; }
+	@command -v polaris >/dev/null 2>&1 || { echo "polaris not found on PATH — install: https://polaris.docs.fairwinds.com/infrastructure-as-code/#cli" >&2; exit 1; }
+	@set -euo pipefail; \
+	mkdir -p "$(REPO_ROOT)/.build"; \
+	echo "==> helm template $(POLARIS_CHART) (digest-pinned posture)"; \
+	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" > "$(POLARIS_RENDER)"; \
+	echo "==> polaris audit (gate: danger findings fail; warnings reported)"; \
+	polaris audit --merge-config --config "$(POLARIS_CONFIG)" --audit-path "$(POLARIS_RENDER)" \
+		--format=pretty --only-show-failed-tests --set-exit-code-on-danger
 
 ##@ e2e
 

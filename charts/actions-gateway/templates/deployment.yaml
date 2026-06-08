@@ -110,6 +110,19 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.topologySpreadConstraints.enabled }}
+      # Spread the GMC replicas across nodes so a single node failure cannot
+      # evict both at once — replicaCount: 2 + the PDB only guarantee HA if the
+      # two pods are not co-located. ScheduleAnyway keeps the constraint a soft
+      # preference so single-node clusters (e.g. kind) stay schedulable.
+      topologySpreadConstraints:
+      - maxSkew: {{ .Values.topologySpreadConstraints.maxSkew }}
+        topologyKey: {{ .Values.topologySpreadConstraints.topologyKey }}
+        whenUnsatisfiable: {{ .Values.topologySpreadConstraints.whenUnsatisfiable }}
+        labelSelector:
+          matchLabels:
+            {{- include "actions-gateway.selectorLabels" . | nindent 12 }}
+      {{- end }}
       {{- if .Values.priorityClassName }}
       # GMC is cluster-critical control plane: schedule ahead of ordinary
       # workloads and protect from preemption under node pressure.
