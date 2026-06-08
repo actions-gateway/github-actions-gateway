@@ -195,6 +195,10 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | NetworkPolicy egress rule refreshes from GitHub meta API |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC |
 
+### Distributed tracing
+
+Beyond metrics, the AGC emits **OpenTelemetry traces** for the reconcile path (`RunnerGroup.Reconcile`) and the job-to-pod path (`Provisioner.provision`, with child spans for secret staging, pod-count, pod creation, and the wait for completion). Tracing is opt-in and off by default: with no OTLP endpoint configured the global provider stays the no-op default, so the spans cost effectively nothing. It is enabled — and fully configured (endpoint, sampler, resource attributes) — through the standard OpenTelemetry SDK environment variables, with no bespoke flag surface. See [observability](../operations/observability.md#distributed-tracing-agc) for the variables and the current enablement path.
+
 ---
 
 ## 2.6. Upgrade Strategy

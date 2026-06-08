@@ -16,6 +16,34 @@ The egress proxy and the worker wrapper are not controllers; they read their lev
 
 ---
 
+## Distributed Tracing (AGC)
+
+The per-tenant AGC emits **OpenTelemetry traces** for its two hottest operational paths:
+
+- **`RunnerGroup.Reconcile`** — one span per reconcile, attributed with `runnergroup.namespace` / `runnergroup.name`. Errors set the span status.
+- **`Provisioner.provision`** — one span per acquired job (the job-to-pod path), with child spans `stageJobSecret`, `countActivePods`, `createPod`, and `waitForCompletion`. The root span carries `runnergroup.*`, `plan.id`, `pod.name`, `active_pods`, `ceiling.held`, `priority_class`, and the final `pod.phase` / `pod.reason` / `duration_seconds`. `waitForCompletion` is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.
+
+Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.
+
+**Tracing is opt-in and off by default.** With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.
+
+### Enabling tracing
+
+The AGC reads the **standard OpenTelemetry SDK environment variables** — there is no bespoke flag. Tracing turns on as soon as an OTLP endpoint is configured:
+
+| Variable | Effect |
+|---|---|
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC collector address (e.g. `otel-collector.observability:4317`). Setting either one enables tracing. |
+| `OTEL_SDK_DISABLED=true` | Hard kill switch — forces tracing off even when an endpoint is set. |
+| `OTEL_SERVICE_NAME` / `OTEL_RESOURCE_ATTRIBUTES` | Override the default `service.name` (`actions-gateway-agc`) and add resource attributes. |
+| `OTEL_TRACES_SAMPLER`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TIMEOUT`, … | All other knobs are the SDK's standard env vars. |
+
+On shutdown the AGC flushes buffered spans (5 s budget) before exiting.
+
+> **Production wiring (GMC-managed AGCs):** the GMC builds the AGC Deployment, so these variables must be injected there. Today the only pass-through is the testing-gated `AGC_EXTRA_*` mechanism (`--allow-agc-extra-env` on the GMC, then `AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…` in the GMC pod env). A first-class, production-blessed path for forwarding `OTEL_*` to per-tenant AGCs is tracked as a follow-up in [`docs/STATUS.md`](../STATUS.md). Note OTLP auth headers can carry credentials; per the project's "no secrets in environment variables" stance, that follow-up will avoid plumbing `OTEL_EXPORTER_OTLP_HEADERS` through env.
+
+---
+
 ## How to Access Metrics
 
 **Port forward (ad-hoc):**

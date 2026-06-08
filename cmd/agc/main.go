@@ -37,6 +37,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/go-logr/logr"
@@ -50,6 +51,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
+
+// version is the AGC build version, stamped as the OpenTelemetry service.version
+// resource attribute. Overridable at build time via -ldflags "-X main.version=…".
+var version = "dev"
 
 func main() {
 	if err := run(); err != nil {
@@ -128,6 +133,28 @@ func run() error {
 	case agentpool.KeyTypeEd25519, agentpool.KeyTypeRSA:
 	default:
 		return fmt.Errorf("invalid --agent-key-type %q: must be ed25519 or rsa", agentKeyType)
+	}
+
+	// ── 0.4. Initialise OpenTelemetry tracing (opt-in, off by default) ───────
+	// tracing.Init installs an OTLP exporter only when an OTLP endpoint is
+	// configured (OTEL_EXPORTER_OTLP[_TRACES]_ENDPOINT) and OTEL_SDK_DISABLED is
+	// not "true"; otherwise the global no-op provider stays in place and the
+	// reconciler/provisioner spans are nearly free. Shutdown flushes buffered
+	// spans on exit. Using context.Background() (not the signal context) keeps the
+	// flush working after SIGTERM cancels mgr.Start.
+	tracingShutdown, tracingEnabled, err := tracing.Init(context.Background(), version, slog.Default())
+	if err != nil {
+		return fmt.Errorf("init tracing: %w", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := tracingShutdown(shutdownCtx); err != nil {
+			ctrl.Log.WithName("tracing").Error(err, "tracing shutdown")
+		}
+	}()
+	if tracingEnabled {
+		ctrl.Log.Info("OpenTelemetry tracing enabled", "service", tracing.ServiceName)
 	}
 
 	// ── 0.5. Configure proxy TLS cert pinning ───────────────────────────────

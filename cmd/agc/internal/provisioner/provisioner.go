@@ -28,7 +28,12 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -37,6 +42,11 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// tracer is the OpenTelemetry tracer for the provisioner. It resolves to the
+// global provider, which is the no-op provider unless main.go's tracing.Init
+// installed an exporter — so these spans cost almost nothing when tracing is off.
+var tracer = otel.Tracer(tracing.InstrumentationName)
 
 const (
 	labelManagedBy = "app.kubernetes.io/managed-by"
@@ -254,7 +264,7 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) error {
+func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) (err error) {
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -265,6 +275,23 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	if len(podName) > 63 {
 		podName = podName[:63]
 	}
+
+	// Root span for the whole job-provisioning path. Child spans below break out
+	// the latency of each phase (secret staging, pod-count, pod creation, and the
+	// wait for completion — usually the long pole). The deferred closure stamps
+	// the span's error status from the named return so any early exit is visible.
+	ctx, span := tracer.Start(ctx, "Provisioner.provision", trace.WithAttributes(
+		attribute.String("runnergroup.namespace", rg.Namespace),
+		attribute.String("runnergroup.name", rg.Name),
+		attribute.String("plan.id", planID),
+		attribute.String("pod.name", podName),
+	))
+	defer func() {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 
 	// Extract owner/repo/run_id for eviction retry (best-effort; missing is fine).
 	// A malformed payload only degrades eviction-retry context, so we log and
@@ -278,44 +305,65 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	runID := fmt.Sprintf("%d", runIDInt)
 
 	// 1. Stage the job Secret.
-	secret := p.buildSecret(rg, secretName, planID, payload, jitConfig)
-	if err := p.Client.Create(ctx, secret); err != nil {
+	if err = traceStep(ctx, "stageJobSecret", func(ctx context.Context) error {
+		secret := p.buildSecret(rg, secretName, planID, payload, jitConfig)
+		return p.Client.Create(ctx, secret)
+	}); err != nil {
 		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
 	}
 	log.Info("job Secret created", "secret", secretName)
 
 	// 2. Count active pods for ceiling check.
-	count, err := p.activePodCount(ctx, rg.Namespace, rg.Name)
-	if err != nil {
+	var count int32
+	if err = traceStep(ctx, "countActivePods", func(ctx context.Context) error {
+		var cErr error
+		count, cErr = p.activePodCount(ctx, rg.Namespace, rg.Name)
+		return cErr
+	}); err != nil {
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return fmt.Errorf("provisioner: count active pods: %w", err)
 	}
+	span.SetAttributes(attribute.Int("active_pods", int(count)))
 
 	// 3. Ceiling enforcement.
 	priorityClass, held := p.ceilingCheck(rg, count)
+	span.SetAttributes(attribute.Bool("ceiling.held", held), attribute.String("priority_class", priorityClass))
 	if held {
 		log.Info("pod held by concurrency ceiling", "activePods", count)
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
-		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
+		err = fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
+		return err
 	}
 
 	// 4. Build and create the pod (with quota retry).
-	pod := p.buildPod(rg, podName, secretName, priorityClass)
-	if err := p.createPodWithQuotaRetry(ctx, rg, pod, maxQuota, quotaDelay, log); err != nil {
+	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
+		pod := p.buildPod(rg, podName, secretName, priorityClass)
+		return p.createPodWithQuotaRetry(ctx, rg, pod, maxQuota, quotaDelay, log)
+	}); err != nil {
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
 	}
 	log.Info("worker pod created", "pod", podName, "priorityClass", priorityClass)
 
 	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
-	phase, reason, err := p.waitForCompletion(ctx, rg.Namespace, podName)
-	if err != nil {
+	var phase corev1.PodPhase
+	var reason string
+	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
+		var wErr error
+		phase, reason, wErr = p.waitForCompletion(ctx, rg.Namespace, podName)
+		return wErr
+	}); err != nil {
 		// Context cancelled or unrecoverable watch error.
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return err
 	}
 
 	duration := time.Since(start)
+	span.SetAttributes(
+		attribute.String("pod.phase", string(phase)),
+		attribute.String("pod.reason", reason),
+		attribute.Float64("duration_seconds", duration.Seconds()),
+	)
 	log.Info("worker pod completed", "pod", podName, "phase", phase, "reason", reason, "duration", duration)
 	if p.Metrics != nil {
 		p.Metrics.JobDuration.WithLabelValues(rg.Namespace, rg.Name).Observe(duration.Seconds())
@@ -328,6 +376,22 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 
 	// 7. Cleanup.
 	_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+	return nil
+}
+
+// traceStep runs fn inside a child span named name (parented to the span carried
+// by ctx), recording and stamping any error fn returns and always ending the
+// span. It centralises the start/record/end boilerplate for the provision
+// phases. When tracing is disabled the span is a no-op, so the only overhead is
+// the closure call.
+func traceStep(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 	return nil
 }
 
