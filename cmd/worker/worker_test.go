@@ -130,7 +130,7 @@ func TestMaterializeJITConfig_WritesAllThreeFiles(t *testing.T) {
 	runnerHome := t.TempDir()
 
 	runnerCfg := `{"agentId":1234,"serverUrl":"https://broker"}`
-	credsCfg := `{"scheme":"OAuth","data":{"clientId":"abc","authorizationUrl":"https://auth"}}`
+	credsCfg := `{"scheme":"OAuth","data":{"clientId":"abc","authorizationUrl":"https://auth"}}` //nolint:gosec // G101: synthetic test fixture, not a real credential
 	rsaParams := `{"modulus":"AA","exponent":"AQAB","d":"BB","p":"CC","q":"DD","dp":"EE","dq":"FF","inverseQ":"GG"}`
 
 	blob := encodeFixtureBlob(t, map[string]string{
@@ -285,7 +285,7 @@ func TestInstallProxyCATrust_AppendsToSystemBundle(t *testing.T) {
 	stagingDir := t.TempDir()
 	systemBundle := filepath.Join(stagingDir, "ca-certificates.crt")
 	systemContent := []byte("-----BEGIN CERTIFICATE-----\nFAKE-SYSTEM-CA\n-----END CERTIFICATE-----\n")
-	require.NoError(t, os.WriteFile(systemBundle, systemContent, 0o644))
+	require.NoError(t, os.WriteFile(systemBundle, systemContent, 0o644)) //nolint:gosec // G306: test fixture writing a fake public CA bundle
 	withSystemCABundleCandidates(t, []string{systemBundle})
 
 	caPath := filepath.Join(stagingDir, "tls.crt")
@@ -364,7 +364,7 @@ func TestWrapper_PropagatesProxyTrustEnvToChild(t *testing.T) {
 printenv > %q
 exit 0
 `, envFile)
-	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755))
+	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755)) //nolint:gosec // G306: test writes an executable stub script onto PATH
 
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
@@ -420,7 +420,7 @@ func TestWrapper_InvokesRunnerWorker_WithSpawnclientArgs(t *testing.T) {
 } > %q
 exit 0
 `, argsFile)
-	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755))
+	require.NoError(t, os.WriteFile(stubPath, []byte(script), 0o755)) //nolint:gosec // G306: test writes an executable stub script onto PATH
 
 	t.Setenv("PATH", stubDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)

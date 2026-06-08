@@ -177,11 +177,16 @@ low-value tests or churn.
   race-checked in the gate — the class the [Q76](../STATUS.md) pool race
   belongs to. No threshold: `-race` is pass/fail; the only call is
   fast-job-vs-separate-job since it roughly doubles unit runtime.
-- [ ] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enable
-  gosec across all modules. The `//nolint:gosec` markers already in the tree
-  (`broker/crypto.go` SHA-1, listener jitter) anticipate it but are dead
-  until it runs. Initial findings triaged into a suppression list with a
-  per-entry justification — the same pattern as the planned `polaris.yaml`.
+- [x] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enabled
+  gosec in the root `.golangci.yml`, so it runs per-module the same way CI
+  lints. Noisy/redundant rule families are excluded wholesale with a
+  per-family justification in the config (G104 redundant with errcheck;
+  G109/G115 integer-overflow on bounded conversions; G304 trusted-path file
+  reads; G703/G704/G706 experimental taint analysis vs. the forward proxy's
+  by-design dialing). Every remaining accept carries a targeted
+  `//nolint:gosec // Gxxx: reason`. The pre-existing dead markers
+  (`broker/crypto.go` SHA-1 G401/G505, listener jitter G404) now actively
+  suppress their findings — verified by strip-and-restore.
 - [x] **`errcheck` across all modules** ([Q81](../STATUS.md), *gating*):
   promoted errcheck from GMC-only (`cmd/gmc/.golangci.yml`) to the root
   `.golangci.yml`, so unchecked errors are caught in
