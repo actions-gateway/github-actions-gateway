@@ -30,12 +30,22 @@
 #     repo's `Bash(go build *)` / `Bash(go test *)` allowlist already trusts. It
 #     is also necessary — without it the rewritten `taskpolicy … go test …` form
 #     would no longer match that allowlist and would trigger a *new* prompt.
-#   * Compound command (contains `&&`, `|`, `;`, `$()`, …) carrying `-race`
-#     (the dangerous amplifier) -> block (exit 2) and tell the caller to use the
-#     documented compound-form prefix. We block rather than silently rewrite
-#     because auto-allowing an arbitrary compound command would bypass the
-#     permission system for its non-go segments.
-#   * Any other compound `go build`/`go test` (no `-race`)    -> allow unchanged.
+#   * A command we cannot safely auto-allow — a compound command (contains
+#     `&&`, `|`, `;`, `$()`, …) or one with a redirect (`>`, `<`) — carrying
+#     `-race` (the dangerous amplifier) -> block (exit 2) and tell the caller to
+#     use the documented prefix. We block rather than silently rewrite because
+#     auto-allowing such a command would let it ride past the permission system
+#     and the security-guard hooks (branch-guard, workspace-guard) on our allow.
+#   * Any other such `go build`/`go test` (no `-race`)         -> allow unchanged.
+#
+# Why redirects disqualify the transparent path: an outside-workspace redirect
+# target (`go test … > /tmp/out`) is exactly what the workspace-guard hook
+# prompts on. Claude Code does not document how a PreToolUse `allow` composes
+# with another hook's `ask`/`deny`, so — secure by default — we never emit
+# `allow` for a command a guard might care about. With chaining and redirects
+# both excluded, the auto-allowed class is a bare `go build`/`go test` with no
+# guarded file command, no git op, and no redirect: nothing for branch-guard or
+# workspace-guard to act on, whatever the (undocumented) hook composition order.
 #
 # Wired up by .claude/settings.json as a PreToolUse hook on the Bash matcher.
 # Requires jq; if jq is missing the hook is a no-op (fail-open).
@@ -68,9 +78,8 @@ already_throttled() {
 
 # is_compound returns success when the command contains shell control operators
 # that introduce additional commands (chaining, pipes, command substitution,
-# backgrounding, newlines). Simple file redirections (>, <) are NOT treated as
-# compound — they do not introduce a new command. A simple command can be safely
-# auto-allowed after the prefix is prepended; a compound one cannot.
+# backgrounding, newlines). Such a command cannot be auto-allowed: its other
+# segments would ride past the permission system on our `allow`.
 is_compound() {
 	local cmd="$1"
 	# Single quotes are intentional: these are literal substrings to match
@@ -78,6 +87,20 @@ is_compound() {
 	# shellcheck disable=SC2016
 	case "$cmd" in
 	*'|'* | *'&'* | *';'* | *'$('* | *'`'* | *$'\n'*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# has_redirect returns success when the command contains a redirection (`>`,
+# `>>`, `<`). Any redirect disqualifies the transparent auto-allow path: a
+# redirect to an outside-workspace path is exactly what workspace-guard prompts
+# on, and we must never auto-allow past that guard. fd-dups like `2>&1` are
+# swept up too — harmless to exclude (they fall back to the normal flow), and
+# not worth the fragile parsing it would take to tell them from file redirects.
+has_redirect() {
+	local cmd="$1"
+	case "$cmd" in
+	*'>'* | *'<'*) return 0 ;;
 	*) return 1 ;;
 	esac
 }
@@ -133,15 +156,19 @@ main() {
 	prefix="$("$throttle" prefix 2>/dev/null || true)"
 	[[ -n "$prefix" ]] || emit_allow_unchanged
 
-	if is_compound "$command"; then
-		# A compound command cannot be safely auto-allowed (its other segments
-		# would bypass the permission system). Block only the genuinely
-		# dangerous case — a compound carrying `-race` — and steer the caller to
-		# the documented compound-form prefix. Other compounds run unchanged.
+	if is_compound "$command" || has_redirect "$command"; then
+		# We can only safely auto-allow a bare, single go build/test. A compound
+		# command (its other segments would ride past the permission system) or
+		# one with a redirect (an outside-workspace target is what workspace-guard
+		# prompts on) must not be auto-allowed. Block only the genuinely dangerous
+		# case — one carrying `-race` — and steer the caller to the documented
+		# prefix; otherwise leave it for the normal permission flow (and the
+		# security-guard hooks) to handle.
 		if [[ "$command" == *-race* ]]; then
 			cat >&2 <<-'EOF'
-				Blocked: a heavy `go ... -race` inside a compound command bypasses the
-				auto-throttle and can saturate the machine — an unthrottled `-race` run
+				Blocked: a heavy `go ... -race` that the throttle hook can't safely
+				auto-throttle (compound command, or an output redirect) would run
+				unthrottled and can saturate the machine — an unthrottled `-race` run
 				has frozen the macOS GUI (WindowServer watchdog restart).
 
 				Re-run with the throttle prefix, e.g. from a module subdir:
