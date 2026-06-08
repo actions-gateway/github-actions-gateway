@@ -34,3 +34,10 @@ CLAUDE.local.md
 .venv/
 __pycache__/
 *.pyc
+# Go coverage profiles from a manual `go test -coverprofile`. scripts/coverage.sh
+# writes its profiles to TMPDIR, never in-tree; this only catches stray manual
+# runs. The committed coverage-baseline.txt (the ratchet floor) is NOT a profile
+# and is intentionally tracked.
+*.cover.out
+coverage.out
+cover.out

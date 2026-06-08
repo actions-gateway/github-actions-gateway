@@ -43,7 +43,8 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-race test-integration tools setup-envtest \
+.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-race test-integration \
+        cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock \
@@ -158,6 +159,26 @@ test-race: ## Run unit tests under the race detector (the CI unit gate; throttle
 		echo "==> go test -race $$dir"; \
 		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test -race -timeout 5m $(GOTEST_P) $(GOTEST_V) ./...) || exit 1; \
 	done
+
+# --- Test-coverage measurement + no-regression ratchet ---------------------
+# scripts/coverage.sh measures per-module unit-test coverage (the same per-module
+# `go test` the workspace requires — never a repo-root `./...`), filters out
+# generated/wiring code, and gates against the recorded floor in
+# coverage-baseline.txt. Like `make test`, the script applies the local throttle
+# prefix so a run on a GUI dev machine stays desktop-safe; on CI it is a no-op.
+# We gate by a no-regression ratchet, not an absolute percentage — see
+# docs/development/testing.md and docs/plan/release-1.0.md §F.
+.PHONY: cover
+cover: ## Report per-module unit-test coverage (writes nothing)
+	scripts/coverage.sh report
+
+.PHONY: cover-update
+cover-update: ## Re-record the coverage baseline floor (coverage-baseline.txt)
+	scripts/coverage.sh update
+
+.PHONY: cover-check
+cover-check: ## Fail if any module drops below its recorded coverage floor (the CI gate)
+	scripts/coverage.sh check
 
 .PHONY: test-integration
 test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
