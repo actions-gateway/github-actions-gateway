@@ -53,7 +53,8 @@ reproduce identically on any machine, even with no transcripts present.
 ## Results
 
 Snapshot at **2026-06-07** (project day 22; first commit 2026-05-16). "Day 7" is
-the [original tweet](https://twitter.com)'s published figures.
+the [original day-7 Bluesky post][post1]'s published figures; the charts here
+back the [day-22 follow-up][post2].
 
 | Metric | Day 7 | Day 22 | Source |
 |---|--:|--:|---|
@@ -87,8 +88,8 @@ Sonnet 4.6 (gold) to Opus 4.7 (purple), then Opus 4.8 (blue).
 
 ### E — Tokens vs. the codebase: cumulative growth
 ![E](charts/E_growth_timeseries.png)
-Each series normalized to its **day-7 tweet value** (1×), so the lines cross
-near the tweet and fan apart. Token spend grew ~5× while the code grew ~1.4×.
+Each series normalized to its **day-7 post value** (1×), so the lines cross
+near the post and fan apart. Token spend grew ~5× while the code grew ~1.4×.
 
 ### F — Anatomy of token usage (log scale)
 ![F](charts/F_token_anatomy.png)
@@ -140,15 +141,18 @@ full provenance.
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
   figure, not a measurement — the defensible measured-only floor is 53.7M. The
   git series is fully measured from 2026-05-16.
-- **Chart E baseline.** Normalized against the *published* day-7 tweet values
+- **Chart E baseline.** Normalized against the *published* day-7 post values
   (10M / 232 / 269 / 15.5k), not a recomputed day-7 — so endpoints stay
-  consistent with what was tweeted. The constants live in `make_charts.py`.
+  consistent with what was posted. The constants live in `make_charts.py`.
 - **Date basis differs by source.** Token dates are UTC (from message
   timestamps); git dates are author-local (`--date=short`). Close enough at
   daily granularity, but they can disagree by a day at midnight boundaries.
 - **`go_code` is approximate in the daily series** (non-blank minus line
   comments, so block comments count as code). `summary.json`'s HEAD snapshot
   uses an exact comment-aware split; the two agree to within ~0.1%.
-- **Messages are fuzzy.** The original tweet's "20k messages" came from a
+- **Messages are fuzzy.** The original post's "20k messages" came from a
   counter that can't be reconstructed from these logs; treat `assistant_msgs` /
   `user_msgs` as the well-defined replacements, not as the same quantity.
+
+[post1]: https://bsky.app/profile/karlkfi.bsky.social/post/3mmpo56ds6c23
+[post2]: https://bsky.app/profile/karlkfi.bsky.social/post/3mnqx3gztwk2e

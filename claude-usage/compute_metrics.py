@@ -430,7 +430,7 @@ def main():
             "last_measured_date": measured_dates[-1] if measured_dates else None,
             "first_project_date": min(git_rows) if git_rows else None,
             "chart_E_baseline": {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500,
-                                 "note": "published day-7 tweet values; chart E plots growth vs these"},
+                                 "note": "published day-7 Bluesky post values; chart E plots growth vs these"},
             "pro_to_max_date": PRO_TO_MAX,
         },
         "estimation": {

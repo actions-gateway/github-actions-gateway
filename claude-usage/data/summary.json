@@ -15,7 +15,7 @@
       "commits": 232,
       "tests": 269,
       "go_code": 15500,
-      "note": "published day-7 tweet values; chart E plots growth vs these"
+      "note": "published day-7 Bluesky post values; chart E plots growth vs these"
     },
     "pro_to_max_date": "2026-05-23"
   },
@@ -39,13 +39,13 @@
   },
   "totals": {
     "measured": {
-      "input": 738896,
-      "output": 10629318,
-      "cache_creation": 42823488,
-      "cache_read": 1908511440,
-      "assistant_msgs": 15786,
-      "user_msgs": 18120,
-      "headline_input_output_cachecreation": 54191702
+      "input": 739186,
+      "output": 10638216,
+      "cache_creation": 43081814,
+      "cache_read": 1912256080,
+      "assistant_msgs": 15802,
+      "user_msgs": 18136,
+      "headline_input_output_cachecreation": 54459216
     },
     "estimated": {
       "input": 6559,
@@ -57,15 +57,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 745455,
-      "output": 11108254,
-      "cache_creation": 44832913,
-      "cache_read": 1976030283,
-      "assistant_msgs": 16528,
-      "user_msgs": 18981,
-      "headline_input_output_cachecreation": 56686622,
-      "grand_total_incl_cache_read": 2032716905,
-      "cache_reuse_ratio": 44.08
+      "input": 745745,
+      "output": 11117152,
+      "cache_creation": 45091239,
+      "cache_read": 1979774923,
+      "assistant_msgs": 16544,
+      "user_msgs": 18997,
+      "headline_input_output_cachecreation": 56954136,
+      "grand_total_incl_cache_read": 2036729059,
+      "cache_reuse_ratio": 43.91
     }
   },
   "by_model": {
@@ -90,18 +90,18 @@
       "messages": 27
     },
     "Opus 4.8": {
-      "headline": 17585818,
-      "output": 3600775,
-      "messages": 4148
+      "headline": 17853332,
+      "output": 3609673,
+      "messages": 4164
     }
   },
   "head_snapshot": {
     "go_code": 20913,
     "go_comments": 4244,
-    "markdown_nonblank": 14011,
+    "markdown_nonblank": 14014,
     "yaml_handwritten": 2322,
     "yaml_generated": 25531,
     "tests": 393,
-    "commits": 619
+    "commits": 620
   }
 }
