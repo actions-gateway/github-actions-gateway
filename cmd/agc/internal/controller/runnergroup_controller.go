@@ -345,7 +345,7 @@ func (r *RunnerGroupReconciler) cleanupLocalState(key types.NamespacedName) {
 // recordEvent emits a Kubernetes Event on the RunnerGroup when a Recorder is
 // wired. The Recorder may be nil in unit tests, so callers go through here
 // rather than dereferencing it directly.
-func (r *RunnerGroupReconciler) recordEvent(rg *v1alpha1.RunnerGroup, eventtype, reason, action, note string, args ...interface{}) {
+func (r *RunnerGroupReconciler) recordEvent(rg *v1alpha1.RunnerGroup, eventtype, reason, action, note string, args ...any) {
 	if r.Recorder == nil {
 		return
 	}
@@ -398,7 +398,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 		if agentBrokerURL == "" {
 			agentBrokerURL = brokerCfg.BrokerURL
 		}
-		bc := &broker.BrokerClient{
+		bc := &broker.Client{
 			BrokerURL:     agentBrokerURL,
 			RunnerVersion: brokerCfg.RunnerVersion,
 			RunnerOS:      brokerCfg.RunnerOS,

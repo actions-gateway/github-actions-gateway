@@ -55,9 +55,9 @@ type Config struct {
 	Namespace string
 	Agent     *agentpool.Agent
 
-	// Broker is a per-goroutine BrokerClient instance. The goroutine sets
+	// Broker is a per-goroutine Client instance. The goroutine sets
 	// Broker.Token before each API call via the agent's OAuth credentials.
-	Broker     *broker.BrokerClient
+	Broker     *broker.Client
 	HTTPClient *http.Client // used for OAuth token fetch; nil uses http.DefaultClient
 
 	Conditions    ConditionUpdater
@@ -398,7 +398,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 // guarantee the goroutine has stopped before releasing shared resources.
 func StartRenewLoop(
 	ctx context.Context,
-	client *broker.BrokerClient,
+	client *broker.Client,
 	runServiceURL, planID, jobID string,
 	metrics *Metrics,
 	namespace string,

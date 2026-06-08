@@ -63,11 +63,11 @@ func (m *Multiplexer) Start(ctx context.Context) error {
 
 // SetMaxListeners updates the ceiling. If the new ceiling is lower than the
 // current active count, excess idle goroutines shut down at their next 202.
-func (m *Multiplexer) SetMaxListeners(max int32) {
-	if max < 1 {
-		max = 1
+func (m *Multiplexer) SetMaxListeners(maxListeners int32) {
+	if maxListeners < 1 {
+		maxListeners = 1
 	}
-	m.maxListeners.Store(max)
+	m.maxListeners.Store(maxListeners)
 }
 
 // SpawnReplacement spawns one additional listener goroutine if the active

@@ -181,7 +181,7 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 	//   - SigningMethodEdDSA.Sign expects ed25519.PrivateKey or crypto.Signer
 	var (
 		signingMethod jwt.SigningMethod
-		signingKey    interface{}
+		signingKey    any
 	)
 	switch k := privateKey.(type) {
 	case ed25519.PrivateKey:

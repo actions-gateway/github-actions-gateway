@@ -172,7 +172,7 @@ func run(logger *slog.Logger) error {
 		brokerToken = token
 	}
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerURL,
 		PoolID:        poolID,
 		Token:         brokerToken,
@@ -360,13 +360,13 @@ func run(logger *slog.Logger) error {
 //
 //	DELETE {poolBase}/messages/{messageId}?sessionId={sessionId}
 //
-// We make the call directly rather than via a dedicated BrokerClient method —
+// We make the call directly rather than via a dedicated Client method —
 // the method will only be added once Investigation A confirms this call is
 // required for correct delivery semantics.
 //
 // Document findings (HTTP status, response body, effect of omitting the call)
 // in docs/plan/milestone-1.md §8.A before closing Milestone 1.
-func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, messageID int64, sessionID string) string {
+func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Client, messageID int64, sessionID string) string {
 	url := fmt.Sprintf("%s/messages/%d?sessionId=%s", bc.PoolBase(), messageID, sessionID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
@@ -400,7 +400,7 @@ func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Broke
 // Before running with PROBE_SESSION_REUSE_TEST=true, queue a second workflow
 // job so it is waiting when the probe re-enters the poll loop. The probe polls
 // for up to 3 minutes and logs a clear CONFIRMED or inconclusive result.
-func investigateSessionReuse(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, sessionID string) {
+func investigateSessionReuse(ctx context.Context, logger *slog.Logger, bc *broker.Client, sessionID string) {
 	logger.Info("INVESTIGATION-C: re-entering GetMessage on same sessionId after AcquireJob",
 		"sessionId", sessionID,
 		"instruction", "queue a second workflow job NOW if not already queued")
@@ -453,11 +453,11 @@ func investigateSessionReuse(ctx context.Context, logger *slog.Logger, bc *broke
 // Before running with PROBE_JOB_DELIVERY_TEST=true, queue a second workflow
 // job after the first job is acquired. The probe registers a second session
 // and polls to see whether the second job is delivered. Polls for 3 minutes.
-func investigateJobDelivery(ctx context.Context, logger *slog.Logger, bc *broker.BrokerClient, agentID int64, agentName, runnerVersion string) {
+func investigateJobDelivery(ctx context.Context, logger *slog.Logger, bc *broker.Client, agentID int64, agentName, runnerVersion string) {
 	logger.Info("INVESTIGATION-D: registering second session after first job acquired",
 		"instruction", "queue a SECOND workflow job NOW if not already queued")
 
-	bc2 := &broker.BrokerClient{
+	bc2 := &broker.Client{
 		BrokerURL:     bc.BrokerURL,
 		PoolID:        bc.PoolID,
 		Token:         bc.Token,
