@@ -1,0 +1,3 @@
+# Charting deps for make_charts.py (compute_metrics.py is stdlib-only).
+matplotlib>=3.8
+numpy>=1.26

@@ -1,0 +1,69 @@
+{
+  "provenance": {
+    "snapshot_date": "2026-06-07",
+    "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
+    "transcript_files_read": 170,
+    "token_date_basis": "UTC date of message timestamp",
+    "git_date_basis": "author date (local), --date=short",
+    "token_dedup": "(message.id, requestId)",
+    "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
+    "first_token_date": "2026-05-19",
+    "last_token_date": "2026-06-08",
+    "archived_gap_note": "Project's first commits predate the earliest surviving transcript; those pre-transcript days have no token data and never will. Git series covers the full history.",
+    "chart_E_baseline": {
+      "tokens": 10000000,
+      "commits": 232,
+      "tests": 269,
+      "go_code": 15500,
+      "note": "published day-7 tweet values; chart E plots growth vs these"
+    },
+    "pro_to_max_date": "2026-05-23"
+  },
+  "totals": {
+    "input": 727007,
+    "output": 10504386,
+    "cache_creation": 42381987,
+    "cache_read": 1894677095,
+    "assistant_msgs": 15696,
+    "user_msgs": 18028,
+    "headline_input_output_cachecreation": 53613380,
+    "grand_total_incl_cache_read": 1948290475,
+    "cache_reuse_ratio": 44.7
+  },
+  "by_model": {
+    "Other": {
+      "headline": 0,
+      "output": 0,
+      "messages": 34
+    },
+    "Sonnet 4.6": {
+      "headline": 19565160,
+      "output": 4161016,
+      "messages": 7156
+    },
+    "Opus 4.7": {
+      "headline": 16947491,
+      "output": 2858751,
+      "messages": 4421
+    },
+    "Haiku 4.5": {
+      "headline": 93233,
+      "output": 8776,
+      "messages": 27
+    },
+    "Opus 4.8": {
+      "headline": 17007496,
+      "output": 3475843,
+      "messages": 4058
+    }
+  },
+  "head_snapshot": {
+    "go_code": 20913,
+    "go_comments": 4244,
+    "markdown_nonblank": 13886,
+    "yaml_handwritten": 2322,
+    "yaml_generated": 25531,
+    "tests": 393,
+    "commits": 617
+  }
+}
