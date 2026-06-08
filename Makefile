@@ -3,6 +3,12 @@
 # Requires Go 1.21+ for the -C flag.
 # Run `make` (or `make help`) for the list of available targets.
 
+# Run recipes under bash, not the platform /bin/sh. Several recipes use
+# `set -euo pipefail`, and on Linux (incl. GitHub Actions runners) /bin/sh is
+# dash, which rejects `-o pipefail` ("Illegal option -o pipefail"). bash is
+# present on every platform we build on (macOS, Linux CI).
+SHELL := bash
+
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
