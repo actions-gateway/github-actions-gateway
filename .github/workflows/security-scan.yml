@@ -36,6 +36,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      chart: ${{ steps.filter.outputs.chart }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -52,6 +53,10 @@ jobs:
               - 'go.work.sum'
               - 'tools/**'
               - 'docker-bake.hcl'
+              - 'Makefile'
+              - '.github/workflows/security-scan.yml'
+            chart:
+              - 'charts/**'
               - 'Makefile'
               - '.github/workflows/security-scan.yml'
 
@@ -170,3 +175,40 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           vuln-type: os,library
+
+  # polaris audits the Kubernetes security/best-practice posture of the SHIPPED
+  # install artifact: it renders the Helm chart (digest-pinned, matching the
+  # production posture) and checks the rendered manifests. The gate fails on
+  # `danger` findings only (privileged, host namespaces, dangerous capabilities,
+  # missing securityContext, a floating :latest image tag, …) — a real security
+  # regression in the chart cannot merge. `warning`-level findings are reported
+  # for visibility but do not block; the handful that are false positives against
+  # a Helm-packaged operator chart are tuned to `ignore` in
+  # charts/actions-gateway/polaris.yaml, each with a justifying comment.
+  # `make polaris-scan` runs this exact gate locally so local and CI verdicts
+  # match. CIS-benchmark (kube-bench) posture is cluster-level and runs against a
+  # live node, not static manifests — see docs/operations/security-operations.md
+  # for that operator runbook.
+  polaris:
+    needs: [changes]
+    if: needs.changes.outputs.chart == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # Pin the polaris release scanned. Bump deliberately (new checks can change
+      # the verdict); keep in step with the version `make polaris-scan` expects.
+      POLARIS_VERSION: 9.6.0
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v4
+      - name: install polaris
+        run: |
+          curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
+            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/polaris_linux_amd64.tar.gz"
+          tar -xzf "${RUNNER_TEMP}/polaris.tar.gz" -C "${RUNNER_TEMP}" polaris
+          sudo install "${RUNNER_TEMP}/polaris" /usr/local/bin/polaris
+          polaris version
+      - name: polaris posture scan (gate on danger findings)
+        run: make polaris-scan

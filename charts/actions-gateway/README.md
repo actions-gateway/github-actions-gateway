@@ -103,6 +103,8 @@ the binding to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |
 | `priorityClassName` | `system-cluster-critical` | GMC PriorityClass (`""` to disable). |
 | `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. |
+| `topologySpreadConstraints.enabled` | `true` | Spread the GMC replicas across nodes (soft, `ScheduleAnyway`) so one node failure can't evict both. Set `false` to drop it. |
+| `topologySpreadConstraints.{maxSkew,topologyKey,whenUnsatisfiable}` | `1` / `kubernetes.io/hostname` / `ScheduleAnyway` | Spread tuning; raise to `topology.kubernetes.io/zone` on multi-zone clusters. |
 | `sampleGateway.create` | `false` | Render an example `ActionsGateway` (dev only). |
 | `sampleGateway.securityProfile` | `baseline` | Profile for the sample CR (`baseline`/`restricted`/`privileged`). |
 | `sampleGateway.gitHubAppSecretName` | `github-app-v1` | GitHub App Secret name referenced by the sample CR. |
