@@ -110,6 +110,93 @@ func TestBuildAGCDeployment_ProxyEnv(t *testing.T) {
 	}
 }
 
+func TestBuildAGCDeployment_TracingOffByDefault(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+	// With no spec.tracing.endpoint, no OTEL_* env may be set — tracing stays
+	// off and the AGC keeps its no-op tracer provider.
+	for name := range env {
+		assert.False(t, strings.HasPrefix(name, "OTEL_"),
+			"tracing off (empty endpoint) must produce no OTEL_* env; got %q", name)
+	}
+}
+
+func TestBuildAGCDeployment_TracingEnabled(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.Tracing = gmcv1alpha1.TracingConfig{
+		Endpoint:   "https://otel-collector.observability:4317",
+		Insecure:   ptr(true),
+		Sampler:    "parentbased_traceidratio",
+		SamplerArg: "0.1",
+		ResourceAttributes: map[string]string{
+			"deployment.environment": "prod",
+			"team":                   "a",
+		},
+	}
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+
+	assert.Equal(t, "https://otel-collector.observability:4317", env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"].Value)
+	assert.Equal(t, "true", env["OTEL_EXPORTER_OTLP_TRACES_INSECURE"].Value)
+	assert.Equal(t, "parentbased_traceidratio", env["OTEL_TRACES_SAMPLER"].Value)
+	assert.Equal(t, "0.1", env["OTEL_TRACES_SAMPLER_ARG"].Value)
+	// Resource attributes are rendered with keys sorted so the value is stable
+	// across reconciles (random map order would churn the Deployment).
+	assert.Equal(t, "deployment.environment=prod,team=a", env["OTEL_RESOURCE_ATTRIBUTES"].Value)
+
+	// Auth headers must never be plumbed through env, regardless of config.
+	_, hasHeaders := env["OTEL_EXPORTER_OTLP_HEADERS"]
+	assert.False(t, hasHeaders, "OTLP auth headers must not be set via env")
+}
+
+func TestBuildAGCDeployment_TracingOmitsUnsetKnobs(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	// Endpoint only: TLS stays on (no INSECURE), and the optional knobs are absent.
+	ag.Spec.Tracing = gmcv1alpha1.TracingConfig{Endpoint: "otel:4317"}
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+
+	assert.Equal(t, "otel:4317", env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"].Value)
+	for _, name := range []string{
+		"OTEL_EXPORTER_OTLP_TRACES_INSECURE",
+		"OTEL_TRACES_SAMPLER",
+		"OTEL_TRACES_SAMPLER_ARG",
+		"OTEL_RESOURCE_ATTRIBUTES",
+	} {
+		_, ok := env[name]
+		assert.False(t, ok, "unset tracing knob must not emit %q", name)
+	}
+}
+
+func TestFormatResourceAttributes_Deterministic(t *testing.T) {
+	attrs := map[string]string{"z": "1", "a": "2", "m": "3"}
+	// Sorted-key rendering must be identical on repeated calls.
+	assert.Equal(t, "a=2,m=3,z=1", formatResourceAttributes(attrs))
+	assert.Equal(t, "a=2,m=3,z=1", formatResourceAttributes(attrs))
+	assert.Equal(t, "", formatResourceAttributes(nil))
+}
+
+func TestBuildAGCDeployment_TracingExtraEnvWins(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.Tracing = gmcv1alpha1.TracingConfig{Endpoint: "spec-endpoint:4317"}
+	// The testing-gated AGC_EXTRA_* passthrough is appended last, so a duplicate
+	// OTEL key supplied there overrides the spec-derived value (e2e fakegithub
+	// flows rely on AGC_EXTRA_ winning).
+	extra := []corev1.EnvVar{{Name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", Value: "extra-endpoint:4317"}}
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", extra)
+
+	// Both entries are present; the last one (extra) is what Kubernetes honors.
+	var vals []string
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" {
+			vals = append(vals, e.Value)
+		}
+	}
+	require.NotEmpty(t, vals)
+	assert.Equal(t, "extra-endpoint:4317", vals[len(vals)-1], "AGC_EXTRA_ override must be last")
+}
+
 func TestBuildAGCDeployment_CredentialAnnotation(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)

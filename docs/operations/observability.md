@@ -40,7 +40,39 @@ The AGC reads the **standard OpenTelemetry SDK environment variables** — there
 
 On shutdown the AGC flushes buffered spans (5 s budget) before exiting.
 
-> **Production wiring (GMC-managed AGCs):** the GMC builds the AGC Deployment, so these variables must be injected there. Today the only pass-through is the testing-gated `AGC_EXTRA_*` mechanism (`--allow-agc-extra-env` on the GMC, then `AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…` in the GMC pod env). A first-class, production-blessed path for forwarding `OTEL_*` to per-tenant AGCs is tracked as a follow-up in [`docs/STATUS.md`](../STATUS.md). Note OTLP auth headers can carry credentials; per the project's "no secrets in environment variables" stance, that follow-up will avoid plumbing `OTEL_EXPORTER_OTLP_HEADERS` through env.
+### Enabling tracing on GMC-managed AGCs
+
+The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do **not** set these env vars by hand — you declare tracing on the `ActionsGateway` CR and the GMC translates `spec.tracing` into the standard `OTEL_*` env on the AGC Deployment:
+
+```yaml
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: team-a
+  namespace: team-a
+spec:
+  gitHubAppRef:
+    name: team-a-github-app
+  tracing:
+    endpoint: https://otel-collector.observability:4317  # enables tracing
+    sampler: parentbased_traceidratio                    # optional
+    samplerArg: "0.1"                                     # optional — 10% of traces
+    resourceAttributes:                                   # optional
+      deployment.environment: prod
+    # insecure: true   # only for a plaintext in-cluster collector; TLS is the default
+```
+
+| `spec.tracing` field | AGC env it sets | Notes |
+|---|---|---|
+| `endpoint` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | **Setting it is what enables tracing.** Empty → no `OTEL_*` env, tracing stays off. |
+| `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext in-cluster collector. |
+| `sampler` | `OTEL_TRACES_SAMPLER` | One of `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio` (CRD-enforced enum). |
+| `samplerArg` | `OTEL_TRACES_SAMPLER_ARG` | Ratio in `[0,1]` for the ratio-based samplers. |
+| `resourceAttributes` | `OTEL_RESOURCE_ATTRIBUTES` | Rendered as a sorted `key=value` list. The AGC's own `service.name`/`service.version` take precedence. |
+
+> **No auth headers via env.** `spec.tracing` deliberately has no field for `OTEL_EXPORTER_OTLP_HEADERS`: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes). Authenticate the collector at the **network layer** instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.
+>
+> **Testing-only passthrough.** The `AGC_EXTRA_*` mechanism (`--allow-agc-extra-env` on the GMC, then `AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…` in the GMC pod env) still exists but is gated for tests only and not for production use. When both are present, `AGC_EXTRA_*` wins (it is appended last). Prefer `spec.tracing`.
 
 ---
 

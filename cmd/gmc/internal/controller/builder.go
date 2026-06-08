@@ -3,6 +3,7 @@ package controller
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -617,6 +618,10 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		// the field still gets the hardened defaults rather than none).
 		{Name: "SECURITY_PROFILE", Value: securityProfileOrDefault(ag.Spec.SecurityProfile)},
 	}
+	// Tracing config (spec.tracing) maps to the standard OTEL_* env the AGC
+	// reads. Appended before extraEnv so the testing-gated AGC_EXTRA_OTEL_*
+	// passthrough (when enabled) still wins on conflict.
+	env = append(env, tracingEnv(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
 	secretName := ag.Spec.GitHubAppRef.Name
@@ -761,6 +766,54 @@ func buildRunnerGroup(ag *gmcv1alpha1.ActionsGateway, spec agcv1alpha1.RunnerGro
 
 func fieldRef(path string) *corev1.EnvVarSource {
 	return &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: path}}
+}
+
+// tracingEnv translates spec.tracing into the standard OpenTelemetry OTEL_*
+// environment variables the AGC reads (cmd/agc/internal/tracing). It returns
+// nil when tracing is off — Endpoint is the opt-in switch, so an empty Endpoint
+// yields no OTEL_* env and the AGC keeps its no-op tracer provider. By design
+// there is no mapping for OTEL_EXPORTER_OTLP_HEADERS: auth headers can carry
+// credentials and this project keeps secrets out of environment variables.
+func tracingEnv(t gmcv1alpha1.TracingConfig) []corev1.EnvVar {
+	if t.Endpoint == "" {
+		return nil
+	}
+	env := []corev1.EnvVar{
+		{Name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", Value: t.Endpoint},
+	}
+	if t.Insecure != nil && *t.Insecure {
+		env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_TRACES_INSECURE", Value: "true"})
+	}
+	if t.Sampler != "" {
+		env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: t.Sampler})
+	}
+	if t.SamplerArg != "" {
+		env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER_ARG", Value: t.SamplerArg})
+	}
+	if attrs := formatResourceAttributes(t.ResourceAttributes); attrs != "" {
+		env = append(env, corev1.EnvVar{Name: "OTEL_RESOURCE_ATTRIBUTES", Value: attrs})
+	}
+	return env
+}
+
+// formatResourceAttributes renders a resource-attribute map as the
+// comma-separated key=value list OTEL_RESOURCE_ATTRIBUTES expects. Keys are
+// sorted so the rendered value is deterministic — without this the random map
+// iteration order would churn the AGC Deployment on every reconcile.
+func formatResourceAttributes(attrs map[string]string) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	pairs := make([]string, 0, len(keys))
+	for _, k := range keys {
+		pairs = append(pairs, k+"="+attrs[k])
+	}
+	return strings.Join(pairs, ",")
 }
 
 // buildNoProxy merges user-provided CIDRs with mandatory cluster-internal exclusions.

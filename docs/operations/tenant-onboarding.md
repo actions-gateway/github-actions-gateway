@@ -104,6 +104,21 @@ spec:
 kubectl apply -f actionsgateway.yaml
 ```
 
+**Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block. Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
+
+```yaml
+spec:
+  tracing:
+    endpoint: https://otel-collector.observability:4317
+    sampler: parentbased_traceidratio   # optional
+    samplerArg: "0.1"                    # optional — sample 10% of traces
+    resourceAttributes:                  # optional
+      deployment.environment: prod
+    # insecure: true   # only for a plaintext in-cluster collector; TLS is the default
+```
+
+There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector, mutual TLS, or a service mesh), not a CR secret. See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs).
+
 ---
 
 ## Step 3: Validate Provisioning

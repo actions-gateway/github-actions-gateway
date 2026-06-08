@@ -736,6 +736,28 @@ kubectl get actionsgateway -n <tenant-namespace> <name> -o jsonpath='{.spec.secu
 
 ---
 
+## Tracing Sampler Rejected by Admission
+
+**Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync that sets `spec.tracing.sampler` on an `ActionsGateway` is rejected at admission with a CRD validation error like:
+
+```
+ActionsGateway.actions-gateway.github.com "<name>" is invalid:
+spec.tracing.sampler: Unsupported value: "ratio": supported values:
+"always_on", "always_off", "traceidratio", "parentbased_always_on",
+"parentbased_always_off", "parentbased_traceidratio"
+```
+
+**Likely cause.** `spec.tracing.sampler` is a fixed enum mapping to the OpenTelemetry SDK's built-in samplers (it is forwarded verbatim as `OTEL_TRACES_SAMPLER`). A value outside that set — a typo, or one of the SDK's externally-configured samplers (`jaeger_remote`, `xray`) that this field intentionally does not expose — is rejected by the CRD schema before the object is stored.
+
+**Resolution.**
+- Pick a supported value. For probabilistic sampling use `parentbased_traceidratio` with `spec.tracing.samplerArg: "0.1"` (10%); for all/no traces use `parentbased_always_on` / `always_off`.
+- Leave `sampler` unset to use the SDK default (`parentbased_always_on`).
+- To *disable* tracing entirely, remove `spec.tracing.endpoint` (an empty endpoint emits no `OTEL_*` env and the AGC keeps its no-op tracer) — the sampler value is irrelevant when no endpoint is set.
+
+See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
+
+---
+
 ## Worker Pod Crashes With `configuredSettings` ArgumentNullException
 
 **Symptoms.** Worker pod reaches `Running`, the entrypoint wrapper logs `payload loaded` and starts Runner.Worker, but Runner.Worker exits non-zero almost immediately with a stack trace containing `System.ArgumentNullException: Value cannot be null. (Parameter 'configuredSettings')` originating from `Runner.Common.ConfigurationStore.GetSettings()`. The job is never reported back to GitHub.
