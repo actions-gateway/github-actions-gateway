@@ -164,12 +164,16 @@ low-value tests or churn.
   absolute percentage. Generated code (`zz_generated*`,
   `api/v1alpha1/groupversion_info.go`) and thin `main`/wiring packages are
   excluded from the floor so the number reflects logic, not boilerplate.
-- [ ] **Code-duplication check** ([Q78](../STATUS.md), *gating*): `dupl`
-  enabled in `.golangci.yml`. **Threshold decision:** start at the
-  conventional 150-token threshold, then tune up only as far as needed to
-  suppress false positives on table-driven tests and the divergent pod-spec
-  builders. Catches the copy-paste-drift class that bit the AGC/proxy
-  `SecurityContext` blocks (extracted in the builder.go helper refactor).
+- [x] **Code-duplication check** ([Q78](../STATUS.md), *gating*): enabled
+  `dupl` in the root `.golangci.yml` at the conventional 150-token threshold,
+  so it runs per-module the same way CI lints. Triage of the initial run found
+  the only clones above threshold were table-style test functions (the
+  cmd/agc ScaleUp/ScaleDown and VersionTooOld/RateLimited condition tests),
+  which read more clearly kept separate; these are suppressed by a single
+  `dupl`-on-`_test.go` exclusion. The exclusion is scoped to test files rather
+  than all of `internal/*` (as `cmd/gmc/.golangci.yml` does) so dupl stays
+  active on production code — including the builder.go `SecurityContext`
+  copy-paste this check is here to catch. Production code is clean at 150.
 - [ ] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
   `make test` and `unit-test.yml` add the race detector to the *unit* path,
   not just integration. The multiplexing core (agentpool, listener/mux,

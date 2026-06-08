@@ -11,6 +11,7 @@ run:
 linters:
   default: none
   enable:
+    - dupl
     - errcheck
     - gosec
     - govet
@@ -18,6 +19,13 @@ linters:
     - staticcheck
     - unused
   settings:
+    dupl:
+      # Token threshold for a clone to be reported. golangci-lint's default is
+      # 150; we keep it. Lower values (the dupl binary's own default is 50) drown
+      # the signal in trivial struct-literal and table-test boilerplate; 150
+      # catches the multi-statement copy-paste we care about (e.g. a duplicated
+      # SecurityContext builder block) without flagging short, idiomatic repeats.
+      threshold: 150
     gosec:
       # Whole-rule exclusions, each justified. These are either redundant with
       # a linter we already run, or fire pervasively as false positives on this
@@ -58,6 +66,17 @@ linters:
   exclusions:
     generated: lax
     rules:
+      # dupl: exclude test files. Table-style tests intentionally repeat the
+      # setup/reconcile/assert scaffolding per case (e.g. the ScaleUp/ScaleDown
+      # and VersionTooOld/RateLimited condition tests in cmd/agc), which reads
+      # more clearly kept separate than merged behind a helper. Scoping the
+      # exclusion to _test.go — rather than all of internal/* as
+      # cmd/gmc/.golangci.yml does — keeps dupl active on production code,
+      # including the builder.go SecurityContext copy-paste this linter is here
+      # to catch.
+      - path: _test\.go
+        linters:
+          - dupl
       # Kubebuilder-generated GroupVersion scaffolding still uses
       # scheme.Builder; not under our control until kubebuilder updates.
       - path: api/v1alpha1/groupversion_info\.go
