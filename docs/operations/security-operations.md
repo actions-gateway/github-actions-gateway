@@ -260,6 +260,91 @@ The abuse-specific first moves:
 
 ---
 
+## Posture scanning (preventive)
+
+The detections above catch abuse at runtime. Two scanners catch posture
+regressions *before* they reach a cluster — one in CI on every chart change,
+one a pre-production manual step against the live cluster.
+
+### Manifest posture — polaris (automated, in CI)
+
+[polaris](https://polaris.docs.fairwinds.com/) audits the Kubernetes
+security/best-practice posture of the **shipped install artifact**: the CI
+`polaris` job (in [`.github/workflows/security-scan.yml`](../../.github/workflows/security-scan.yml))
+renders the [Helm chart](../../charts/actions-gateway) and checks the rendered
+manifests. It runs on every PR that touches the chart or the `Makefile`, and on
+every push to `main`.
+
+- **What it gates.** The scan fails the PR on any `danger` finding — a
+  privileged container, a host namespace, dangerous capabilities, a missing
+  `securityContext`, a floating `:latest` image tag, and similar real
+  regressions. A change that weakens the chart's hardened defaults cannot merge.
+- **What it reports but does not block.** `warning`-level findings are printed
+  for visibility. The handful that are false positives against a Helm-packaged
+  operator chart (the controller's required ServiceAccount-token automount, the
+  cross-document NetworkPolicy match polaris can't resolve statically, the
+  `IfNotPresent` pull policy that is correct for a digest-pinned image, and
+  Helm's `app.kubernetes.io/instance` labelling) are tuned to `ignore` in
+  [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml),
+  each with a justifying comment. **Never relax a `danger` check to silence a
+  finding — fix the chart instead** (secure-by-default).
+- **Run it yourself.** `make polaris-scan` (needs `helm` and `polaris` on
+  `PATH`) runs the exact CI gate locally. It renders with a placeholder image
+  digest so the audit reflects the production, digest-pinned posture; the
+  un-pinned `:latest` default still trips the gating `tagNotSpecified` check, so
+  this does not mask a real finding.
+
+> The scan audits *workload posture in the generated manifests*. It does not
+> replace pinning real image digests (`gmc.image.digest`,
+> `agc.image.digest`, `proxy.image.digest` in `values.yaml`) at install time —
+> see [tenant-onboarding.md](tenant-onboarding.md) and the chart README.
+
+### CIS-benchmark posture — kube-bench (manual, pre-production)
+
+polaris scans our *manifests*; it cannot see how the *cluster itself* is
+configured (kubelet flags, API-server settings, etcd permissions, control-plane
+file modes). Those are the province of the
+[CIS Kubernetes Benchmark](https://www.cisecurity.org/benchmark/kubernetes),
+which [kube-bench](https://github.com/aquasecurity/kube-bench) checks against a
+**live node** — so it cannot run in our manifest-only CI and is instead a
+pre-production checklist item the cluster operator runs once per cluster (and
+after any control-plane upgrade).
+
+Run it as a Job on the cluster you are about to onboard tenants onto:
+
+```bash
+# Runs kube-bench on every node via the upstream Job manifest, then collects
+# the report. Requires cluster-admin. Pin to a released tag, not main.
+kubectl apply -f https://raw.githubusercontent.com/aquasecurity/kube-bench/v0.10.7/job.yaml
+kubectl wait --for=condition=complete job/kube-bench --timeout=120s
+kubectl logs job/kube-bench
+kubectl delete job kube-bench
+```
+
+Triage the report against this operator's needs:
+
+- **`[FAIL]` on control-plane / kubelet hardening** (e.g. `--anonymous-auth=false`,
+  `--authorization-mode` not `AlwaysAllow`, read-only etcd data dir,
+  `--protect-kernel-defaults=true`) — fix at the cluster layer before
+  onboarding. These are cluster-admin remediations, not chart settings; managed
+  control planes (EKS/GKE/AKS) pass most of them by default and expose the rest
+  as cluster config.
+- **NetworkPolicy / PodSecurity benchmark items** — this operator already
+  satisfies the workload half: the chart ships GMC NetworkPolicies
+  (`networkPolicy.enabled=true`) and the GMC stamps Pod Security Admission
+  labels per tenant `securityProfile`. Confirm the cluster has a
+  NetworkPolicy-enforcing CNI (Calico/Cilium; kindnet does **not** enforce) and
+  the `PodSecurity` admission plugin enabled, or those controls are inert.
+- **Findings that don't apply** (managed control plane hides the file, a check
+  for a component you don't run) — record the justification alongside the
+  cluster's onboarding ticket.
+
+The goal is **zero critical (`[FAIL]`) findings that this stack depends on**
+before the first production tenant (per
+[milestone-5.md](../plan/milestone-5.md) §3).
+
+---
+
 ## Reference Links
 
 - [Threat model (05-security.md)](../design/05-security.md) — the abuse heuristics this runbook operationalises
