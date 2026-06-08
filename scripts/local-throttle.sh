@@ -14,11 +14,21 @@
 #
 # To keep the machine usable, an interactive GUI dev shell throttles the heavy
 # phases two ways:
-#   1. Run them at low/background scheduling priority so foreground apps (the
-#      compositor included) always preempt them. This is the root-cause fix.
-#        - macOS: `taskpolicy -b` (background QoS — CPU and I/O).
+#   1. Run them at a low-priority QoS tier so foreground apps (the compositor
+#      included) preempt them, and — critically on macOS — so their disk I/O is
+#      throttled too. This is the root-cause fix.
+#        - macOS: `taskpolicy -c utility` (utility QoS — demotes CPU *and* disk
+#          I/O via the QoS band, the only way to throttle I/O on macOS since it
+#          has no ionice). The gentler `utility` tier is used rather than the
+#          lowest `-b`/background band: it still clamps aggregate build CPU and
+#          stays scheduled below the UI, but builds keep making real progress
+#          (measured 2–4× faster than `-b`). Why I/O and not just CPU: an
+#          unthrottled build already runs at a *lower* QoS than WindowServer yet
+#          still triggers the watchdog, so CPU priority alone is not the fix —
+#          the I/O demotion that `nice` cannot express on macOS is load-bearing.
 #        - Linux: `nice -n 19` (lowest CPU priority), plus `ionice -c 3` (idle
-#          I/O class) when ionice is installed.
+#          I/O class) when ionice is installed — the same CPU+I/O demotion, via
+#          Linux's separate knobs.
 #   2. Cap parallelism to (physical cores - 2), leaving cores for the UI. This
 #      is the only lever that reaches golangci-lint, which takes `-j` but reads
 #      no GOMAXPROCS/GOFLAGS env.
@@ -112,7 +122,11 @@ qos_prefix() {
 	local prefix
 	case "$(os_kind)" in
 		darwin)
-			printf '%s\n' "taskpolicy -b"
+			# utility QoS: demotes CPU + disk I/O below the UI (taskpolicy is the
+			# only macOS knob that throttles I/O — there is no ionice). Gentler
+			# than `-b`/background so the build keeps progressing (~2–4× faster)
+			# while still leaving headroom for the compositor.
+			printf '%s\n' "taskpolicy -c utility"
 			;;
 		linux)
 			prefix="nice -n 19"
