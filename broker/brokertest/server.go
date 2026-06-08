@@ -29,7 +29,7 @@ type Server struct {
 	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
 	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
 	bearerSessions      map[string]string                       // bearerToken → sessionID
-	acquireJobResponse  interface{}                             // custom AcquireJob response; nil uses default
+	acquireJobResponse  any                                     // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
 	renewJobCount       atomic.Int64
 	msgCounter          atomic.Int64
@@ -188,7 +188,7 @@ func (s *Server) ActiveSessionCount() int {
 
 // SetAcquireJobResponse configures the JSON body returned by the next /acquirejob call.
 // Pass nil to reset to the default response. The value is serialised with json.Marshal.
-func (s *Server) SetAcquireJobResponse(v interface{}) {
+func (s *Server) SetAcquireJobResponse(v any) {
 	s.mu.Lock()
 	s.acquireJobResponse = v
 	s.mu.Unlock()

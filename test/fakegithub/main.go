@@ -64,7 +64,7 @@ type server struct {
 	sessions        map[string]bool
 	jobQueues       map[string]chan message
 	bearerSessions  map[string]string // bearer → sessionID
-	acquireResponse interface{}       // nil = default
+	acquireResponse any               // nil = default
 	acquireCount    atomic.Int64
 }
 
@@ -112,7 +112,7 @@ func (s *server) handleInstallationToken(w http.ResponseWriter, r *http.Request)
 	token := fmt.Sprintf("inst-token-%d", s.tokenCounter.Add(1))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"token":      token,
 		"expires_at": time.Now().Add(time.Hour).Format(time.RFC3339),
 	})
@@ -209,7 +209,7 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(custom)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"plan": map[string]string{
 			"planId": fmt.Sprintf("plan-%d", n),
 		},
@@ -229,7 +229,7 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body interface{}
+	var body any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
 		return
@@ -290,7 +290,7 @@ func (s *server) handleSetAcquireJob(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	var v interface{}
+	var v any
 	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

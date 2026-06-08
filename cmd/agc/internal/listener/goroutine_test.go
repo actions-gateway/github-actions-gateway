@@ -253,7 +253,7 @@ func (r *condRecorder) Has(condType string) bool {
 func makeCfg(t *testing.T, oauthSrv, brokerSrv *httptest.Server) listener.Config {
 	t.Helper()
 	agent := makeAgent(t, oauthSrv.URL)
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:  brokerSrv.URL,
 		UseV2Flow:  true,
 		HTTPClient: brokerSrv.Client(),
@@ -613,7 +613,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	}))
 
 	clk := newFakeClock(time.Now())
-	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -644,7 +644,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 
 func TestRenewLoop_StopsOnStop(t *testing.T) {
 	clk := newFakeClock(time.Now())
-	bc := &broker.BrokerClient{BrokerURL: "http://127.0.0.1:0"} // unreachable
+	bc := &broker.Client{BrokerURL: "http://127.0.0.1:0"} // unreachable
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -679,7 +679,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	}))
 
 	clk := newFakeClock(time.Now())
-	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -720,7 +720,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	}))
 
 	clk := newFakeClock(time.Now())
-	bc := &broker.BrokerClient{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1026,7 +1026,7 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clk := newFakeClock(time.Now())
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerSrv.URL,
 		RunnerVersion: "2.327.1",
 		UseV2Flow:     true,
@@ -1179,7 +1179,7 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clk := newFakeClock(time.Now())
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerSrv.URL,
 		RunnerVersion: "2.327.1",
 		UseV2Flow:     true,
@@ -1297,7 +1297,7 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clk := newFakeClock(time.Now())
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerSrv.URL,
 		RunnerVersion: "2.327.1",
 		UseV2Flow:     true,
@@ -1407,7 +1407,7 @@ func TestListener_PlaintextSessionKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clk := newFakeClock(time.Now())
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerSrv.URL,
 		RunnerVersion: "2.327.1",
 		UseV2Flow:     true,
@@ -1505,7 +1505,7 @@ func TestListener_NoSessionKey(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	clk := newFakeClock(time.Now())
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     brokerSrv.URL,
 		RunnerVersion: "2.327.1",
 		UseV2Flow:     true,

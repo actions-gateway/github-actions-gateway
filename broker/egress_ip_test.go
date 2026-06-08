@@ -215,7 +215,7 @@ func TestEgressIPVariance_Live(t *testing.T) {
 		agentName = "egress-variance-test"
 	}
 
-	bc := &broker.BrokerClient{
+	bc := &broker.Client{
 		BrokerURL:     os.Getenv("GITHUB_BROKER_URL"),
 		UseV2Flow:     true,
 		RunnerVersion: os.Getenv("GITHUB_RUNNER_VERSION"),

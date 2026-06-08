@@ -267,8 +267,13 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	}
 
 	// Extract owner/repo/run_id for eviction retry (best-effort; missing is fine).
+	// A malformed payload only degrades eviction-retry context, so we log and
+	// continue rather than failing provisioning — but we no longer swallow the
+	// error silently, since that hid genuine payload corruption.
 	var ap acquirePayload
-	_ = json.Unmarshal(payload, &ap)
+	if err := json.Unmarshal(payload, &ap); err != nil {
+		log.Warn("could not parse AcquireJob payload for eviction-retry context; continuing without it", "error", err)
+	}
 	owner, repo, runIDInt := ap.repoInfo()
 	runID := fmt.Sprintf("%d", runIDInt)
 

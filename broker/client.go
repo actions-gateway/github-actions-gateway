@@ -63,13 +63,13 @@ func (e *SessionExpiredError) Error() string {
 	return fmt.Sprintf("broker: session expired (HTTP %d)", e.StatusCode)
 }
 
-// BrokerClient is the low-level HTTP client for the GitHub broker protocol.
+// Client is the low-level HTTP client for the GitHub broker protocol.
 // All methods are context-aware and propagate cancellation.
 //
 // BrokerURL is the static base URL used for CreateSession, GetMessage, and
 // DeleteSession. AcquireJob and RenewJob require the per-job run_service_url
 // passed as an explicit parameter — see the package-level two-URL model note.
-type BrokerClient struct {
+type Client struct {
 	// BrokerURL is the static base URL for session and message calls.
 	// It is the serverUrl value from the runner's .runner config file.
 	BrokerURL string
@@ -101,7 +101,7 @@ type BrokerClient struct {
 	// Token is the installation access token set before each call.
 	Token string
 	// PollMetrics records GetMessage polling error statistics.
-	// If nil, metrics calls are skipped (zero-value BrokerClient is safe).
+	// If nil, metrics calls are skipped (zero-value Client is safe).
 	PollMetrics PollMetricsRecorder
 }
 
@@ -110,7 +110,7 @@ type CreateSessionResult struct {
 	// SessionID is the unique identifier for this session.
 	SessionID string
 	// BrokerURL is the URL to use for subsequent GetMessage and DeleteSession calls.
-	// May differ from BrokerClient.BrokerURL if the server redirected.
+	// May differ from Client.BrokerURL if the server redirected.
 	BrokerURL string
 	// EncryptionKey is the RSA-encrypted symmetric key for message decryption.
 	// It must be RSA-OAEP (SHA-1) decrypted with the runner's private key to
@@ -151,7 +151,7 @@ func vstsURL(base, apiVersion string) string {
 // It trims any trailing slash from BrokerURL. If PoolID is zero it defaults to 1.
 // Exported so probe and gateway code can construct auxiliary VSTS paths (e.g.
 // the delete-message acknowledgement endpoint) without duplicating the logic.
-func (c *BrokerClient) PoolBase() string {
+func (c *Client) PoolBase() string {
 	poolID := c.PoolID
 	if poolID == 0 {
 		poolID = 1
@@ -160,7 +160,7 @@ func (c *BrokerClient) PoolBase() string {
 		strings.TrimRight(c.BrokerURL, "/"), poolID)
 }
 
-func (c *BrokerClient) httpClient() *http.Client {
+func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
@@ -168,7 +168,7 @@ func (c *BrokerClient) httpClient() *http.Client {
 }
 
 // newRequest builds a JSON POST request to url with body marshalled from v.
-func (c *BrokerClient) newJSONRequest(ctx context.Context, method, url string, body any) (*http.Request, error) {
+func (c *Client) newJSONRequest(ctx context.Context, method, url string, body any) (*http.Request, error) {
 	var r io.Reader
 	if body != nil {
 		buf, err := json.Marshal(body)
@@ -202,7 +202,7 @@ func (c *BrokerClient) newJSONRequest(ctx context.Context, method, url string, b
 //
 // A 400 response with a version-too-old message body is returned as a
 // *VersionTooOldError so callers can surface it as a non-retriable condition.
-func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentName, runnerVersion string) (*CreateSessionResult, error) {
+func (c *Client) CreateSession(ctx context.Context, agentID int64, agentName, runnerVersion string) (*CreateSessionResult, error) {
 	// The body follows the TaskAgentSession shape from the runner SDK:
 	//   ownerName         — machine/process that owns the session
 	//   agent             — TaskAgentReference: registered agent id, name, version
@@ -257,7 +257,7 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 	var respBody struct {
 		SessionID string `json:"sessionId"`
 		// GitHub may return an updated broker URL in the session response.
-		// Use it if present; fall back to BrokerClient.BrokerURL.
+		// Use it if present; fall back to Client.BrokerURL.
 		BrokerURL     string `json:"brokerURL"`
 		EncryptionKey *struct {
 			Encrypted bool   `json:"encrypted"`
@@ -287,7 +287,7 @@ func (c *BrokerClient) CreateSession(ctx context.Context, agentID int64, agentNa
 // Returns a non-nil *TaskAgentMessage when a job is available.
 // Callers are responsible for retrying on nil/nil with appropriate backoff.
 // Returns *RateLimitError on 429.
-func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
+func (c *Client) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
 	var reqURL string
 	if c.UseV2Flow {
 		// Broker v2 API: GET {serverUrl}message with status/version/os/arch params.
@@ -359,14 +359,14 @@ func (c *BrokerClient) GetMessage(ctx context.Context, sessionID string) (*TaskA
 
 // AcquireJob claims a job on the run service URL extracted from the message
 // body. runServiceURL must come from RunnerJobRequestBody.RunServiceURL, not
-// from BrokerClient.BrokerURL.
+// from Client.BrokerURL.
 //
 // Returns the parsed response, the raw response body bytes (forwarded opaquely
 // to the worker pod), and any error.
 //
 // PlanID extraction: the x-plan-id response header takes precedence over
 // AcquireJobResponse.Plan.PlanID from the body.
-func (c *BrokerClient) AcquireJob(ctx context.Context, runServiceURL string, reqData JobAcquisitionRequest) (*AcquireJobResponse, []byte, error) {
+func (c *Client) AcquireJob(ctx context.Context, runServiceURL string, reqData JobAcquisitionRequest) (*AcquireJobResponse, []byte, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, runServiceURL+"/acquirejob", reqData)
 	if err != nil {
 		return nil, nil, err
@@ -402,8 +402,8 @@ func (c *BrokerClient) AcquireJob(ctx context.Context, runServiceURL string, req
 
 // RenewJob renews the job lock on the run service URL. Must be called every
 // 60 seconds after AcquireJob succeeds. runServiceURL must come from
-// RunnerJobRequestBody.RunServiceURL, not from BrokerClient.BrokerURL.
-func (c *BrokerClient) RenewJob(ctx context.Context, runServiceURL string, reqData RenewJobRequest) (*RenewJobResponse, error) {
+// RunnerJobRequestBody.RunServiceURL, not from Client.BrokerURL.
+func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData RenewJobRequest) (*RenewJobResponse, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, runServiceURL+"/renewjob", reqData)
 	if err != nil {
 		return nil, err
@@ -437,7 +437,7 @@ func (c *BrokerClient) RenewJob(ctx context.Context, runServiceURL string, reqDa
 // The returned channel receives the first RenewJob error and is then closed.
 // On a clean context cancellation the channel is closed with no value sent.
 // The goroutine is guaranteed to have exited by the time the channel is closed.
-func (c *BrokerClient) RenewJobLoop(ctx context.Context, runServiceURL string, req RenewJobRequest, tickC <-chan time.Time) <-chan error {
+func (c *Client) RenewJobLoop(ctx context.Context, runServiceURL string, req RenewJobRequest, tickC <-chan time.Time) <-chan error {
 	errCh := make(chan error, 1)
 	go func() {
 		defer close(errCh)
@@ -464,7 +464,7 @@ func (c *BrokerClient) RenewJobLoop(ctx context.Context, runServiceURL string, r
 //
 // In v2 flow mode, sessionID is ignored: the server identifies the session
 // from the bearer token, and the URL is simply {BrokerURL}session.
-func (c *BrokerClient) DeleteSession(ctx context.Context, sessionID string) error {
+func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	var deleteURL string
 	if c.UseV2Flow {
 		deleteURL = strings.TrimRight(c.BrokerURL, "/") + "/session"

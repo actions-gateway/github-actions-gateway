@@ -22,13 +22,13 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-// newTestClient returns a BrokerClient pointed at the given httptest server.
+// newTestClient returns a Client pointed at the given httptest server.
 // PoolID is set to 1 so tests exercise the correct VSTS API path prefix:
 //
 //	/_apis/distributedtask/pools/1/sessions   (CreateSession, DeleteSession)
 //	/_apis/distributedtask/pools/1/messages   (GetMessage)
-func newTestClient(srv *httptest.Server) *broker.BrokerClient {
-	return &broker.BrokerClient{
+func newTestClient(srv *httptest.Server) *broker.Client {
+	return &broker.Client{
 		BrokerURL:  srv.URL,
 		PoolID:     1,
 		HTTPClient: srv.Client(),
@@ -92,7 +92,7 @@ func TestCreateSession_VersionTooOld(t *testing.T) {
 
 func TestCreateSession_FallsBackToBrokerURL(t *testing.T) {
 	t.Parallel()
-	// When the response body omits brokerURL, fall back to BrokerClient.BrokerURL.
+	// When the response body omits brokerURL, fall back to Client.BrokerURL.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]string{"sessionId": "sess-xyz"})
@@ -200,7 +200,7 @@ func TestAcquireJob_FallsBackToPlanIDFromBody(t *testing.T) {
 func TestAcquireJob_UsesRunServiceURL(t *testing.T) {
 	t.Parallel()
 	// runServiceSrv is a separate server from the broker — AcquireJob must
-	// target the runServiceURL parameter, not BrokerClient.BrokerURL.
+	// target the runServiceURL parameter, not Client.BrokerURL.
 	var acquireJobHit bool
 	runServiceSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		acquireJobHit = true
@@ -454,9 +454,9 @@ func TestRenewJobLoop_ErrorPropagated(t *testing.T) {
 
 // ── v2 flow ───────────────────────────────────────────────────────────────────
 
-// newV2TestClient returns a BrokerClient with UseV2Flow enabled, pointed at srv.
-func newV2TestClient(srv *httptest.Server) *broker.BrokerClient {
-	return &broker.BrokerClient{
+// newV2TestClient returns a Client with UseV2Flow enabled, pointed at srv.
+func newV2TestClient(srv *httptest.Server) *broker.Client {
+	return &broker.Client{
 		BrokerURL:     srv.URL,
 		UseV2Flow:     true,
 		RunnerVersion: "2.327.1",
@@ -519,7 +519,7 @@ func TestGetMessage_V2Flow_AdversarialRunnerOSEscaped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := &broker.BrokerClient{
+	c := &broker.Client{
 		BrokerURL:  srv.URL,
 		UseV2Flow:  true,
 		RunnerOS:   "linux&admin=true",
@@ -552,7 +552,7 @@ func TestGetMessage_V2Flow_NoOptionalParams(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := &broker.BrokerClient{
+	c := &broker.Client{
 		BrokerURL:  srv.URL,
 		UseV2Flow:  true,
 		HTTPClient: srv.Client(),

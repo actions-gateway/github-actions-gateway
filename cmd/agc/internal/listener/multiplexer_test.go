@@ -36,7 +36,7 @@ func newMuxWithServers(t *testing.T, maxListeners int32, mux *brokerMux) (*liste
 
 	factory := func(_ int) listener.Config {
 		agent := makeAgent(t, oauthSrv.URL)
-		bc := &broker.BrokerClient{
+		bc := &broker.Client{
 			BrokerURL:  brokerSrv.URL,
 			UseV2Flow:  true,
 			HTTPClient: brokerSrv.Client(),
@@ -103,7 +103,7 @@ func TestMultiplexer_SpawnOnAcquire(t *testing.T) {
 	factory := func(_ int) listener.Config {
 		spawnCount.Add(1)
 		agent := makeAgent(t, oauthSrv.URL)
-		bc := &broker.BrokerClient{
+		bc := &broker.Client{
 			BrokerURL:  brokerSrv.URL,
 			UseV2Flow:  true,
 			HTTPClient: brokerSrv.Client(),
@@ -297,7 +297,7 @@ func TestMultiplexer_ReleasesAgentOnExit(t *testing.T) {
 			Group:     "test-rg",
 			Namespace: "default",
 			Agent:     agent,
-			Broker: &broker.BrokerClient{
+			Broker: &broker.Client{
 				BrokerURL:  brokerSrv.URL,
 				UseV2Flow:  true,
 				HTTPClient: brokerSrv.Client(),
@@ -340,7 +340,7 @@ func newMuxWithServersWithThreshold(t *testing.T, maxListeners int32, mux *broke
 
 	factory := func(_ int) listener.Config {
 		agent := makeAgent(t, oauthSrv.URL)
-		bc := &broker.BrokerClient{
+		bc := &broker.Client{
 			BrokerURL:  brokerSrv.URL,
 			UseV2Flow:  true,
 			HTTPClient: brokerSrv.Client(),
