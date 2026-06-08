@@ -1,0 +1,42 @@
+# agc-tenant-role — the permission set granted to every AGC ServiceAccount.
+# A singleton ClusterRole; per-tenant isolation comes from RoleBindings (one
+# per ActionsGateway namespace) the GMC creates that reference it.
+#
+# The name is intentionally UNPREFIXED and must stay `agc-tenant-role`: the
+# GMC manager-role grants `bind` only on this exact resourceName, and the GMC
+# only has `bind` (not create/escalate) on it. Renaming it breaks provisioning.
+# It is also a public API surface (the AGC permission contract), not an
+# internal GMC resource. See cmd/gmc/config/agc-tenant-role/.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agc-tenant-role
+  labels:
+    app.kubernetes.io/name: actions-gateway
+    app.kubernetes.io/component: agc-tenant-role
+    app.kubernetes.io/part-of: actions-gateway
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get"]
+# events: the RunnerGroup reconciler emits Kubernetes Events on credential,
+# agent-pool, listener, and deregistration failures plus Ready transitions.
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# list on secrets: the agent pool enumerates its own per-runner Secrets to
+# reconcile pool state (metadata-only PartialObjectMetadataList — names/labels,
+# never credential bodies). watch is deliberately omitted (no Secret informer).
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["actions-gateway.github.com"]
+  resources: ["runnergroups"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["actions-gateway.github.com"]
+  resources: ["runnergroups/status", "runnergroups/finalizers"]
+  verbs: ["get", "update", "patch"]

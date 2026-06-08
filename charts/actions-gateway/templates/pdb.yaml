@@ -1,0 +1,18 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+# PodDisruptionBudget for the GMC controller-manager. With minAvailable: 1 a
+# voluntary disruption (node drain, cluster upgrade) evicts at most one replica
+# at a time, so leader election always has a standby and reconciliation never
+# fully stops.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "actions-gateway.managerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "actions-gateway.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,0 +1,39 @@
+{{- if .Values.sampleGateway.create }}
+# Example ActionsGateway for kicking the tyres on a dev cluster. OFF by default.
+# A real tenant needs its own namespace marked
+# `actions-gateway.github.com/tenant=true`, a GitHub App Secret, and a reviewed
+# quota — see docs/operations/tenant-onboarding.md. This renders into the
+# release namespace, which the GMC's webhook FORBIDS for ActionsGateway CRs, so
+# move it to a tenant namespace before applying for real.
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: actionsgateway-sample
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  gitHubAppRef:
+    name: {{ .Values.sampleGateway.gitHubAppSecretName | quote }}
+  securityProfile: {{ .Values.sampleGateway.securityProfile | quote }}
+  proxy:
+    minReplicas: 2
+    maxReplicas: 10
+  namespaceQuota:
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    pods: "50"
+  runnerGroups:
+    - name: default
+      runnerLabels: ["self-hosted", "linux"]
+      maxListeners: 10
+      maxWorkers: 20
+      podTemplate:
+        spec:
+          containers:
+            - name: runner
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+{{- end }}

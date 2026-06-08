@@ -1,0 +1,141 @@
+# Default values for the actions-gateway chart.
+#
+# This chart installs the Gateway Manager Controller (GMC) only. Per-tenant
+# Actions Gateway Controller (AGC) instances and egress proxy pools are
+# provisioned by the GMC at runtime from each ActionsGateway CR — they are not
+# chart resources. The agc.image / proxy.image values below are the references
+# the GMC *injects* into the gateways it creates, not images this chart runs.
+#
+# SECURE BY DEFAULT: every default here matches the hardened posture of the
+# cmd/gmc/config/ kustomize bases. Do not flip a security default to a
+# convenience default — the less-secure form is always an explicit opt-out.
+
+# namePrefix is prepended to every GMC resource name (default "gmc", which
+# reproduces the kustomize bases). Changing it also changes the ServiceAccount
+# identity that the namespace-psa-guard policy matches — keep it "gmc" unless
+# you understand that coupling.
+namePrefix: gmc
+
+# Number of GMC controller-manager replicas. Two by default for HA: leader
+# election (leaderElection.enabled) makes the standby take over if the active
+# manager's node drains. Paired with the PodDisruptionBudget below.
+replicaCount: 2
+
+# -- GMC controller-manager image (the operator this chart runs). --
+gmc:
+  image:
+    repository: ghcr.io/actions-gateway/gmc
+    # tag is used only when digest is empty. appVersion in Chart.yaml is the
+    # release this tag should track.
+    tag: ""
+    # digest (e.g. "sha256:abc123…") pins the image immutably. Leave the tag
+    # empty and set this in production. When both are empty the tag defaults
+    # to "latest" — acceptable only for local/dev installs.
+    digest: ""
+  imagePullPolicy: IfNotPresent
+
+# -- Images the GMC injects into the gateways it provisions. --
+# These are NOT run by this chart. The GMC REQUIRES both to be pinned by
+# sha256 digest and rejects floating tags at startup (validateImageDigest in
+# cmd/gmc/cmd/main.go) unless allowFloatingImageTags=true below. That is the
+# secure default: an unconfigured install fails closed at GMC startup until you
+# pin a digest here, rather than silently running a mutable tag inside tenant
+# gateways. Set agc.image.digest and proxy.image.digest before installing.
+agc:
+  image:
+    repository: ghcr.io/actions-gateway/agc
+    tag: ""
+    digest: ""
+proxy:
+  image:
+    repository: ghcr.io/actions-gateway/proxy
+    tag: ""
+    digest: ""
+
+# allowFloatingImageTags=true passes --allow-floating-image-tags to the GMC,
+# disabling the AGC_IMAGE/PROXY_IMAGE digest-pinning requirement. DEV/TEST
+# ONLY — do not enable in production. Leaving it false keeps the secure default.
+allowFloatingImageTags: false
+
+# leaderElection gates the --leader-elect flag. Keep enabled when replicaCount
+# > 1, or two active managers will fight over reconciliation.
+leaderElection:
+  enabled: true
+
+# metrics controls the controller-runtime metrics endpoint (HTTPS :8443,
+# TokenReview/SubjectAccessReview-gated).
+metrics:
+  enabled: true
+  # serviceMonitor emits a Prometheus-Operator ServiceMonitor. Opt-in (off by
+  # default): the ServiceMonitor CRD only exists once the Prometheus Operator
+  # is installed, so enabling it without that CRD breaks `helm install`. Label
+  # your Prometheus namespace `metrics: enabled` so the NetworkPolicy admits
+  # the scraper. See docs/operations/observability.md.
+  serviceMonitor:
+    enabled: false
+
+# networkPolicy ships the two GMC ingress policies (default-deny + metrics
+# allowlist + webhook allow). ON by default (secure-by-default): selecting the
+# manager pod flips it to default-deny ingress. Requires a CNI that enforces
+# NetworkPolicy (Calico/Cilium; kindnet does not). Disable only on a cluster
+# whose CNI cannot enforce policy, accepting the weaker posture.
+networkPolicy:
+  enabled: true
+
+# podDisruptionBudget keeps minAvailable: 1 so a voluntary disruption never
+# evicts both GMC replicas at once. Disable only for single-replica installs.
+podDisruptionBudget:
+  enabled: true
+
+# certManager controls how the validating webhook's serving cert is issued.
+#   enabled: true  (default) — cert-manager issues it via a self-signed Issuer
+#     + Certificate; the webhook caBundle is injected by cert-manager's
+#     ca-injector. Requires cert-manager installed in the cluster.
+#   enabled: false — the chart generates a self-signed serving cert at render
+#     time and writes both the webhook-server-cert Secret and the webhook
+#     caBundle directly, so the webhook installs with NO cert-manager present.
+#     Trade-off: the cert rotates on a `helm upgrade` that does not reuse the
+#     existing Secret — see docs/operations/upgrade.md.
+certManager:
+  enabled: true
+  # Validity (days) of the self-signed cert when certManager.enabled=false.
+  selfSignedCertDurationDays: 3650
+
+# admissionPolicy ships the namespace-psa-guard ValidatingAdmissionPolicy that
+# constrains the GMC's cluster-wide namespace patch grant to PSA labels on
+# marked tenant namespaces only. ON by default (secure-by-default). Requires
+# Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
+admissionPolicy:
+  enabled: true
+
+# resources for the GMC controller-manager container. Defaults match the
+# kustbase; tune for large clusters.
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+# priorityClassName schedules the GMC ahead of ordinary workloads and protects
+# it from preemption — it is cluster-critical control plane. Empty string
+# disables (e.g. on clusters without the built-in system-cluster-critical class).
+priorityClassName: system-cluster-critical
+
+# nodeSelector / tolerations / affinity for the GMC pod (optional).
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# sampleGateway renders an example ActionsGateway CR in the release namespace.
+# OFF by default — a real tenant needs its own namespace, a GitHub App Secret,
+# and a reviewed quota (see docs/operations/tenant-onboarding.md). Intended for
+# kicking the tyres on a dev cluster only.
+sampleGateway:
+  create: false
+  # securityProfile for the sample CR. baseline blocks privileged containers,
+  # host namespaces, hostPath, and dangerous caps. Tighten to "restricted" or
+  # (only with justification) "privileged".
+  securityProfile: baseline
+  gitHubAppSecretName: github-app-v1

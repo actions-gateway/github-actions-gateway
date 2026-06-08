@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "actions-gateway chart values",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "namePrefix": { "type": "string", "minLength": 1 },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "allowFloatingImageTags": { "type": "boolean" },
+    "priorityClassName": { "type": "string" },
+    "gmc": {
+      "type": "object",
+      "properties": {
+        "image": { "$ref": "#/definitions/image" },
+        "imagePullPolicy": { "$ref": "#/definitions/pullPolicy" }
+      },
+      "required": ["image"]
+    },
+    "agc": {
+      "type": "object",
+      "properties": { "image": { "$ref": "#/definitions/image" } },
+      "required": ["image"]
+    },
+    "proxy": {
+      "type": "object",
+      "properties": { "image": { "$ref": "#/definitions/image" } },
+      "required": ["image"]
+    },
+    "leaderElection": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "serviceMonitor": {
+          "type": "object",
+          "properties": { "enabled": { "type": "boolean" } }
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "admissionPolicy": {
+      "type": "object",
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "certManager": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "selfSignedCertDurationDays": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resources": { "type": "object" },
+    "nodeSelector": { "type": "object" },
+    "tolerations": { "type": "array" },
+    "affinity": { "type": "object" },
+    "sampleGateway": {
+      "type": "object",
+      "properties": {
+        "create": { "type": "boolean" },
+        "securityProfile": {
+          "type": "string",
+          "enum": ["baseline", "restricted", "privileged"]
+        },
+        "gitHubAppSecretName": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "definitions": {
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "digest": {
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64})?$"
+        }
+      },
+      "required": ["repository"]
+    },
+    "pullPolicy": {
+      "type": "string",
+      "enum": ["Always", "IfNotPresent", "Never"]
+    }
+  }
+}

@@ -54,7 +54,7 @@ load-testing, and the posture audit.
 | Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
 | Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
-| Production Helm chart (`charts/actions-gateway/`) | ❌ Open | Decided Helm over Kustomize (D-M5-1, §1.1); no `charts/` dir yet. `cmd/*/config/` kustomize bases stay as the dev source-of-truth + chart scaffolding input |
+| Production Helm chart (`charts/actions-gateway/`) | ⚠️ Partial | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12): GMC core (CRDs, RBAC, webhook, VAP, NetworkPolicies) — `helm lint` + `helm template` + `kubeconform` clean offline, both cert modes. Live `helm install`→working-tenant validation pending (track A, needs creds + kind); polaris scan is Q14, CI drift check folds into Q66. `cmd/*/config/` kustomize bases stay the dev source-of-truth |
 | `test/load/` multi-tenant load harness | ❌ Open | Directory does not exist |
 | 1,000 concurrent sessions × 10 tenants — load test | ❌ Open | Blocked on harness |
 | Proxy HPA verified under burst | ⚠️ Partial | Unit/integration coverage and e2e §7.3 spec for 50-job burst exist; 1,000-session scale not run |

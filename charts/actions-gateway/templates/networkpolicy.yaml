@@ -1,0 +1,54 @@
+{{- if .Values.networkPolicy.enabled }}
+# Selecting the manager pod with any ingress NetworkPolicy flips it to
+# default-deny ingress. The two policies below then re-admit exactly the
+# metrics scrapers (labeled namespaces) and the kube-apiserver webhook calls.
+# Requires a CNI that enforces NetworkPolicy (Calico/Cilium; kindnet does not).
+{{- if .Values.metrics.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-allow-metrics-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "actions-gateway.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only namespaces labeled `metrics: enabled` may scrape :8443.
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            metrics: enabled
+      ports:
+        - port: 8443
+          protocol: TCP
+---
+{{- end }}
+# Admits the validating-webhook port. Match is on the POST-DNAT container port
+# (9443), not the Service port (443) — NetworkPolicy evaluates the pod port.
+# No `from`: the kube-apiserver source is not a labeled-namespace pod (it may be
+# host-networked or off-cluster), so a namespaceSelector can never match it;
+# combined with failurePolicy: Fail a source restriction would drop every
+# admission call. The cert/RBAC controls (not the source) protect this port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-allow-webhook-traffic
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "actions-gateway.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 9443
+          protocol: TCP
+{{- end }}

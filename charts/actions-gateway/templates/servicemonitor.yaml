@@ -1,0 +1,26 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+# Prometheus-Operator ServiceMonitor. Opt-in: requires the monitoring.coreos.com
+# CRD (Prometheus Operator) installed, and the scraper's namespace labeled
+# `metrics: enabled` so the NetworkPolicy admits it. insecureSkipVerify is set
+# because the metrics endpoint uses controller-runtime's self-signed cert;
+# switch to a cert-manager-issued metrics cert for verified scraping (see
+# docs/operations/observability.md).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "actions-gateway.managerName" . }}-metrics-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  endpoints:
+    - path: /metrics
+      port: https
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      {{- include "actions-gateway.selectorLabels" . | nindent 6 }}
+{{- end }}
