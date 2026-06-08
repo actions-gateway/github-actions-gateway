@@ -52,6 +52,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.title="worker" \
-      org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps Runner.Worker with a job-payload entrypoint"
+      org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps Runner.Worker with a job-payload entrypoint" \
+      org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]

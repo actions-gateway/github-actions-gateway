@@ -1,5 +1,7 @@
 # GitHub Actions Gateway
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 > An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and isolate every tenant's GitHub egress for per-team IP allowlisting and contained blast radius.
 
 Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`, all driven by one Kubernetes operator.
@@ -158,3 +160,9 @@ test/            E2E test infrastructure (fakegithub stub, kind configs)
 tools/           Vendored build tools (controller-gen, setup-envtest)
 vendor/          Workspace-vendored runtime dependencies (`go work vendor`)
 ```
+
+## License
+
+GitHub Actions Gateway is licensed under the [Apache License 2.0](LICENSE)
+(SPDX identifier `Apache-2.0`). Each published container image also carries this
+in its `org.opencontainers.image.licenses` label.

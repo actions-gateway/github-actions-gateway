@@ -27,6 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.title="gmc" \
-      org.opencontainers.image.description="Gateway Manager Controller — provisions per-tenant Actions Gateway Controller instances from an ActionsGateway CR"
+      org.opencontainers.image.description="Gateway Manager Controller — provisions per-tenant Actions Gateway Controller instances from an ActionsGateway CR" \
+      org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=builder /bin/manager /manager
 ENTRYPOINT ["/manager"]
