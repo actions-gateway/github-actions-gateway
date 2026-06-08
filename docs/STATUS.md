@@ -50,6 +50,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q92"></a>Q92 | Auto-throttle bypassed by raw `go`/`go test -race` outside `make` | `infra` `bug` | 🔲 | S | Throttle (#159/#164) only wraps `make` recipes; raw `go build`/`go test -race` in parallel sessions bypass it; an unthrottled `-race` froze WindowServer. Add a PreToolUse hook wrapping heavy go cmds in taskpolicy -c utility/nice+ionice. |
 | <a id="Q91"></a>Q91 | Flaky `TestAGC_Reconciler_JobAcquisitionCycle` (envtest) | `tests` `bug` | 🔲 | S | Timed out on PR #160 CI then passed on rerun, no code change: "AcquireJob never called" / "didn't drain to 1". Reproduce + de-flake the burst-spawn/idle-drain timing. reconciler_test.go:250/257. |
 | <a id="Q35"></a>Q35 | [K8s audit — §F Observability & operational](plan/k8s-best-practices.md#f-observability--operational-) | `infra` `1.0-gate` | 🔲 | M | 🟡 F1/F3/F4/F5/F6 done (JSON unify; zap flag; health probes; leader-election release-on-cancel default + tuning flags). Left: **F2** OTel tracing only. See [§F](plan/k8s-best-practices.md#f-observability--operational-). |
 | <a id="Q71"></a>Q71 | Live-validate runner 2.334.0 registration (Tier C) | `tests` `1.0-gate` | 🔲 | S | Runner bumped 2.327.1→2.334.0 (#137); `runnerVersion` is a contract GitHub validates at session creation. Unit + Tier-A/B pass, Tier-C is CI-skipped. Run `E2E_GMC_TenantProvisioning` with real App creds to confirm GitHub accepts 2.334.0. |
