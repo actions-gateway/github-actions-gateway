@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -115,22 +114,10 @@ func startMetricsProxy(t *testing.T, ca *testCA) *Server {
 	srv.MetricsTLSKeyFile = keyFile
 	srv.MetricsClientCAFile = caFile
 
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-	})
-
-	require.Eventually(t, func() bool {
-		c, err := net.DialTimeout("tcp", srv.MetricsAddr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = c.Close()
-		return true
-	}, 2*time.Second, 10*time.Millisecond)
+	// Block until all listeners (including the mTLS metrics listener) are bound
+	// before returning, so the subtests' reads of srv.MetricsAddr / srv.HealthAddr
+	// don't race ListenAndServe's bind-time writes to those fields under -race.
+	startServer(t, srv)
 	return srv
 }
 

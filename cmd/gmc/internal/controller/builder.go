@@ -39,8 +39,8 @@ const (
 	// agcCredsVolumeName / agcCredsMountPath define how the GitHub App Secret is
 	// projected into the AGC pod. Keys (appId, installationId, privateKey) are
 	// mounted as read-only files; no credential ever appears in an env var.
-	agcCredsVolumeName = "github-app-credentials"
-	agcCredsMountPath  = "/etc/actions-gateway/github-app"
+	agcCredsVolumeName = "github-app-credentials"          //nolint:gosec // G101: a volume name, not a credential
+	agcCredsMountPath  = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
 
 	proxyServiceName = gmcnames.ProxyName
 	proxyPort        = int32(8080)

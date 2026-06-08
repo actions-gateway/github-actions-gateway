@@ -164,24 +164,40 @@ low-value tests or churn.
   absolute percentage. Generated code (`zz_generated*`,
   `api/v1alpha1/groupversion_info.go`) and thin `main`/wiring packages are
   excluded from the floor so the number reflects logic, not boilerplate.
-- [ ] **Code-duplication check** ([Q78](../STATUS.md), *gating*): `dupl`
-  enabled in `.golangci.yml`. **Threshold decision:** start at the
-  conventional 150-token threshold, then tune up only as far as needed to
-  suppress false positives on table-driven tests and the divergent pod-spec
-  builders. Catches the copy-paste-drift class that bit the AGC/proxy
-  `SecurityContext` blocks (extracted in the builder.go helper refactor).
-- [ ] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
-  `make test` and `unit-test.yml` add the race detector to the *unit* path,
-  not just integration. The multiplexing core (agentpool, listener/mux,
-  broker, token) is where data races hide and is currently never
-  race-checked in the gate — the class the [Q76](../STATUS.md) pool race
-  belongs to. No threshold: `-race` is pass/fail; the only call is
-  fast-job-vs-separate-job since it roughly doubles unit runtime.
-- [ ] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enable
-  gosec across all modules. The `//nolint:gosec` markers already in the tree
-  (`broker/crypto.go` SHA-1, listener jitter) anticipate it but are dead
-  until it runs. Initial findings triaged into a suppression list with a
-  per-entry justification — the same pattern as the planned `polaris.yaml`.
+- [x] **Code-duplication check** ([Q78](../STATUS.md), *gating*): enabled
+  `dupl` in the root `.golangci.yml` at the conventional 150-token threshold,
+  so it runs per-module the same way CI lints. Triage of the initial run found
+  the only clones above threshold were table-style test functions (the
+  cmd/agc ScaleUp/ScaleDown and VersionTooOld/RateLimited condition tests),
+  which read more clearly kept separate; these are suppressed by a single
+  `dupl`-on-`_test.go` exclusion. The exclusion is scoped to test files rather
+  than all of `internal/*` (as `cmd/gmc/.golangci.yml` does) so dupl stays
+  active on production code — including the builder.go `SecurityContext`
+  copy-paste this check is here to catch. Production code is clean at 150.
+- [x] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
+  the `unit-test.yml` job now runs the per-module unit tests under the race
+  detector, not just integration. The multiplexing core (agentpool,
+  listener/mux, broker, token) is where data races hide and was previously
+  never race-checked in the gate — the class the [Q76](../STATUS.md) pool
+  race belongs to. No threshold: `-race` is pass/fail. **Design decision on
+  the fast-job-vs-separate-job call** (it roughly doubles unit runtime): a
+  dedicated `make test-race` target carries the race flags and the same
+  local throttle/parallelism cap as `make test`, and CI invokes it; `make
+  test`/`make check` stay plain so the dev loop isn't silently turned into
+  an unthrottled `-race` run (which is the single command most likely to
+  trip the macOS WindowServer watchdog). The race gate is reproduced locally
+  with `make test-race`, documented alongside `make vulncheck` as a heavier
+  opt-in gate in [`docs/development/testing.md`](../development/testing.md).
+- [x] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enabled
+  gosec in the root `.golangci.yml`, so it runs per-module the same way CI
+  lints. Noisy/redundant rule families are excluded wholesale with a
+  per-family justification in the config (G104 redundant with errcheck;
+  G109/G115 integer-overflow on bounded conversions; G304 trusted-path file
+  reads; G703/G704/G706 experimental taint analysis vs. the forward proxy's
+  by-design dialing). Every remaining accept carries a targeted
+  `//nolint:gosec // Gxxx: reason`. The pre-existing dead markers
+  (`broker/crypto.go` SHA-1 G401/G505, listener jitter G404) now actively
+  suppress their findings — verified by strip-and-restore.
 - [x] **`errcheck` across all modules** ([Q81](../STATUS.md), *gating*):
   promoted errcheck from GMC-only (`cmd/gmc/.golangci.yml`) to the root
   `.golangci.yml`, so unchecked errors are caught in

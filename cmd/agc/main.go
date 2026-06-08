@@ -67,7 +67,7 @@ func main() {
 }
 
 const (
-	credsDir       = "/etc/actions-gateway/github-app"
+	credsDir       = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
 	proxyCACertDir = "/etc/actions-gateway/proxy-ca"
 
 	// metricsBindAddress pins the controller-runtime metrics server to a known

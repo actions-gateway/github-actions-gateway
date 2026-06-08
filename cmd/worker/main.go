@@ -172,7 +172,7 @@ func run() error {
 		_ = w2.Close()
 		return fmt.Errorf("find Runner.Worker: %w", err)
 	}
-	cmd := exec.Command(workerPath,
+	cmd := exec.Command(workerPath, //nolint:gosec // G204: workerPath is the discovered Runner.Worker binary, not user input
 		"spawnclient",
 		strconv.Itoa(workerReadFD), strconv.Itoa(workerWriteFD),
 	)
@@ -393,7 +393,7 @@ func installProxyCATrust(caPath, runnerHome string) ([]string, error) {
 		return nil, fmt.Errorf("create runner home %s: %w", runnerHome, err)
 	}
 	target := filepath.Join(runnerHome, proxyCABundleFile)
-	if err := os.WriteFile(target, combined.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(target, combined.Bytes(), 0o644); err != nil { //nolint:gosec // G306: a CA trust bundle holds public certs and must be world-readable for the runner
 		return nil, fmt.Errorf("write combined CA bundle %s: %w", target, err)
 	}
 	slog.Info("proxy CA trust installed",

@@ -244,6 +244,34 @@ func freeAddr(t *testing.T) string {
 	return addr
 }
 
+// startServer launches srv.ListenAndServe on a background context and blocks
+// until the server has bound all of its listeners — i.e. s.ready is closed.
+// Returning only after ready closes gives the caller a happens-before edge to
+// the bind-time writes ListenAndServe makes to the resolved s.Addr /
+// s.HealthAddr / s.MetricsAddr fields (each is rewritten from a ":0" request to
+// the concrete bound port). Without that edge, reading those fields from the
+// test goroutine races the serve goroutine's writes under -race. s.ready is the
+// same gate production consumers key off (the /readyz probe), so waiting on it
+// is both correct and faithful — and since the listeners are in LISTEN state by
+// the time it closes, a dial or request issued afterwards is accepted from the
+// kernel backlog even before the Serve loop calls Accept. Cancelling the
+// context and draining the serve goroutine are registered as a t.Cleanup.
+func startServer(t *testing.T, srv *Server) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.ListenAndServe(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	select {
+	case <-srv.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not bind its listeners (s.ready) within 2s")
+	}
+}
+
 func TestServer_ListenAndServeShutdown(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
@@ -254,15 +282,12 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- srv.ListenAndServe(ctx) }()
 
-	// Wait for proxy port to accept connections before cancelling.
-	require.Eventually(t, func() bool {
-		c, err := net.DialTimeout("tcp", srv.Addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = c.Close()
-		return true
-	}, 2*time.Second, 10*time.Millisecond)
+	// Wait for both listeners to bind (s.ready) before cancelling.
+	select {
+	case <-srv.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not bind its listeners (s.ready) within 2s")
+	}
 
 	cancel()
 	select {
@@ -327,28 +352,12 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 	srv.TLSCertFile = certPath
 	srv.TLSKeyFile = keyPath
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	// Wait for the TLS listener to be ready.
-	require.Eventually(t, func() bool {
-		c, err := tls.Dial("tcp", srv.Addr, &tls.Config{InsecureSkipVerify: true})
-		if err != nil {
-			return false
-		}
-		_ = c.Close()
-		return true
-	}, 2*time.Second, 10*time.Millisecond)
+	startServer(t, srv)
 
 	// Client advertises h2 first, then http/1.1. A correctly configured server
 	// must select http/1.1.
 	tlsConn, err := tls.Dial("tcp", srv.Addr, &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // G402: test client probing a self-signed local listener
 		NextProtos:         []string{"h2", "http/1.1"},
 	})
 	require.NoError(t, err)
@@ -386,20 +395,6 @@ func histogramCount(t *testing.T, reg *prometheus.Registry, name string) uint64 
 	return 0
 }
 
-// waitForListener blocks until a TCP listener at addr accepts a connection or
-// the deadline elapses.
-func waitForListener(t *testing.T, addr string) {
-	t.Helper()
-	require.Eventually(t, func() bool {
-		c, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = c.Close()
-		return true
-	}, 2*time.Second, 10*time.Millisecond)
-}
-
 // TestProxy_HealthPortReadHeaderTimeout asserts the slowloris guard on the
 // health server: an idle client that never sends headers must be disconnected
 // by the server within ReadHeaderTimeout (M-17).
@@ -410,15 +405,7 @@ func TestProxy_HealthPortReadHeaderTimeout(t *testing.T) {
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 	srv.ReadHeaderTimeout = 200 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	waitForListener(t, srv.HealthAddr)
+	startServer(t, srv)
 
 	c, err := net.Dial("tcp", srv.HealthAddr)
 	require.NoError(t, err)
@@ -449,15 +436,7 @@ func TestProxy_ConnectPortReadHeaderTimeout(t *testing.T) {
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 	srv.ReadHeaderTimeout = 200 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	waitForListener(t, srv.Addr)
+	startServer(t, srv)
 
 	c, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
@@ -488,15 +467,7 @@ func TestProxy_TunnelIdleTimeout(t *testing.T) {
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 	srv.TunnelIdleTimeout = 100 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	waitForListener(t, srv.Addr)
+	startServer(t, srv)
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
@@ -533,15 +504,7 @@ func TestProxy_TunnelLifetimeCap(t *testing.T) {
 	srv.MaxTunnelLifetime = 200 * time.Millisecond
 	srv.TunnelIdleTimeout = 10 * time.Second // long enough that idle won't fire first
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	waitForListener(t, srv.Addr)
+	startServer(t, srv)
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
@@ -576,15 +539,7 @@ func TestProxy_TunnelDurationHistogram(t *testing.T) {
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 	srv.TunnelIdleTimeout = 100 * time.Millisecond
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	waitForListener(t, srv.Addr)
+	startServer(t, srv)
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
@@ -612,24 +567,10 @@ func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	// cancel registered after goleak and echo ln.Close → runs before them (LIFO).
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
-
-	// Wait for proxy port to be ready.
-	require.Eventually(t, func() bool {
-		c, err := net.DialTimeout("tcp", srv.Addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = c.Close()
-		return true
-	}, 2*time.Second, 10*time.Millisecond)
+	// startServer's cancel/drain cleanup is registered after goleak's and the
+	// echo server's, so by LIFO it runs first — server stops before the echo
+	// listener closes and before goleak's leak check.
+	startServer(t, srv)
 
 	// Health endpoint returns 200.
 	resp, err := http.Get("http://" + srv.HealthAddr + "/healthz")
@@ -677,13 +618,7 @@ func TestServer_ReadyzImpliesConnectBound(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- srv.ListenAndServe(ctx) }()
-	t.Cleanup(func() {
-		cancel()
-		<-serverDone
-	})
+	startServer(t, srv)
 
 	// Poll /readyz until it returns 200 — and for every 200 response, the
 	// CONNECT port must already accept TCP. A single 200 paired with a
