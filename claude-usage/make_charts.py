@@ -11,7 +11,7 @@ off as measured data. Run:
 
 Outputs PNGs (1x + @2x) to claude-usage/charts/:
     A_model_inflection      daily token usage by model, with the Pro->Max marker
-    E_growth_timeseries     cumulative growth vs the day-7 tweet baseline (fan)
+    E_growth_timeseries     cumulative growth vs the day-7 post baseline (fan)
     F_token_anatomy         daily input/output/cache tokens on a log scale
     I_cumulative_cache      cumulative cache reads vs writes (stacked area)
 """
@@ -32,7 +32,7 @@ DATA = os.path.join(HERE, "data")
 CHARTS = os.path.join(HERE, "charts")
 
 PRO_TO_MAX = date(2026, 5, 23)
-# Published day-7 tweet values; chart E plots growth relative to these.
+# Published day-7 Bluesky post values; chart E plots growth relative to these.
 BASELINE = {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500}
 MODEL_COLORS = {
     "Sonnet 4.6": "#D4A24E", "Opus 4.7": "#7C5CBF",
@@ -169,11 +169,11 @@ def chart_E():
         ax.annotate(f"{vals[-1]:.1f}×", (dts[-1], vals[-1]), xytext=(8, lbl_dy.get(name, 0)),
                     textcoords="offset points", va="center", fontsize=11, fontweight="bold", color=col)
     ax.axhline(1.0, color="#999", ls=":", lw=1.2, zorder=1)
-    ax.text(dts[i_fm], 1.06, "day-7 tweet baseline (1×)", fontsize=9, color="#777")
+    ax.text(dts[i_fm], 1.06, "day-7 post baseline (1×)", fontsize=9, color="#777")
     ax.axvline(PRO_TO_MAX, color="#222", ls="--", lw=1.1, zorder=1)
     ax.text(PRO_TO_MAX, 5.4, " Pro→Max", fontsize=9.5, fontweight="bold", color="#222")
     ax.set_title("Tokens vs. the codebase: cumulative growth", fontsize=14, fontweight="bold", loc="left")
-    ax.set_ylabel("growth multiple  (× day-7 tweet value)", fontsize=11)
+    ax.set_ylabel("growth multiple  (× day-7 post value)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
