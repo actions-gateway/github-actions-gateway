@@ -1,0 +1,44 @@
+# Polaris configuration for the actions-gateway install artifact.
+#
+# Used with `polaris audit --merge-config --config charts/actions-gateway/polaris.yaml`
+# so the built-in check set (every danger check that flags a real security
+# regression — privileged, host namespaces, dangerous capabilities, missing
+# securityContext, floating image tags, …) stays ACTIVE and gating. This file
+# only flips a handful of checks to `ignore`, each one a documented exception
+# that is a false positive against a Helm-packaged operator chart, not a posture
+# the chart should change. See `make polaris-scan` and
+# .github/workflows/security-scan.yml for how it is invoked, and
+# docs/operations/security-operations.md for the operator-facing writeup.
+#
+# CI gates on DANGER findings only (`--set-exit-code-on-danger`); warnings are
+# reported for visibility. Do NOT relax a danger check here to silence a real
+# finding — fix the chart instead (secure-by-default; see CLAUDE.md).
+checks:
+  # The GMC controller-manager MUST mount its ServiceAccount token: that token
+  # is how controller-runtime authenticates to the apiserver to watch/reconcile.
+  # Disabling automount would break the controller, so this is not optional for
+  # this workload. (A non-controller pod with no apiserver access would keep the
+  # default `warning` and rightly be flagged.)
+  automountServiceAccountToken: ignore
+
+  # The chart ships GMC NetworkPolicies (templates/networkpolicy.yaml,
+  # networkPolicy.enabled=true by default — selecting the manager pod flips the
+  # namespace to default-deny ingress). Polaris evaluates each manifest in
+  # isolation and cannot match a NetworkPolicy to a pod across documents (the
+  # match is by namespace + selector at runtime), so it reports this as missing.
+  # False positive — coverage is verified by `helm template` shipping the
+  # policies, not by polaris.
+  missingNetworkPolicy: ignore
+
+  # Images are pinned by sha256 digest in production (gmc.image.digest; the CI
+  # scan renders with a representative digest). A digest reference is immutable,
+  # so imagePullPolicy: IfNotPresent is the correct, efficient choice — it avoids
+  # a redundant registry round-trip on every pod start. `Always` buys nothing
+  # against an immutable digest. (tagNotSpecified stays a gating DANGER check, so
+  # an un-pinned `:latest` install is still caught.)
+  pullPolicyNotAlways: ignore
+
+  # Helm sets app.kubernetes.io/instance to the release name by convention,
+  # which intentionally differs from metadata.name (the resource name). This is
+  # standard Helm labelling, not a misconfiguration.
+  metadataAndInstanceMismatched: ignore

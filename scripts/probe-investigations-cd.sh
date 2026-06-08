@@ -51,7 +51,12 @@ prompt_if_missing() {
     local var="$1" label="$2"
     if [[ -z "${!var:-}" ]]; then
         printf "  %s: " "$label"
+        # $var holds the NAME of the target variable; reading/exporting into the
+        # variable named by $var is the intended indirection here. SC2229/SC2163
+        # assume the literal-name mistake, which does not apply.
+        # shellcheck disable=SC2229
         read -r "$var"
+        # shellcheck disable=SC2163
         export "$var"
     fi
 }
@@ -121,9 +126,11 @@ trigger_dispatch() {
     warn "workflow_dispatch returned HTTP $http_code"
     if command -v gh &>/dev/null; then
         info "falling back to gh CLI dispatch"
-        gh workflow run probe-test.yml --repo "$GITHUB_OWNER_REPO" --ref main \
-            && info "dispatched via gh CLI" \
-            || warn "gh CLI dispatch also failed — trigger manually via Actions tab"
+        if gh workflow run probe-test.yml --repo "$GITHUB_OWNER_REPO" --ref main; then
+            info "dispatched via gh CLI"
+        else
+            warn "gh CLI dispatch also failed — trigger manually via Actions tab"
+        fi
     else
         warn "App may lack 'actions: write' permission."
         warn "Trigger the 'probe-test' workflow manually in the Actions tab NOW."
@@ -154,7 +161,8 @@ cleanup() {
         if [[ -f "$RUNNER_TMP/.runner" && -n "$REG_TOKEN" ]]; then
             echo
             echo "==> Deregistering temporary runner"
-            (cd "$RUNNER_TMP" && ./config.sh remove --token "$REG_TOKEN" 2>/dev/null || true)
+            # Best-effort deregistration: ignore any failure (cd or remove).
+            (cd "$RUNNER_TMP" && ./config.sh remove --token "$REG_TOKEN" 2>/dev/null) || true
         fi
         rm -rf "$RUNNER_TMP"
     fi

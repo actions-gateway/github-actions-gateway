@@ -218,19 +218,41 @@ low-value tests or churn.
   (~80 sites, mostly `resp.Body.Close()`/conn closes and test-helper
   `fmt.Fprint`/`io.Copy`) was fixed with real error checks or `_ =`
   ignores; no blanket suppression.
-- [ ] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over
-  `scripts/**` in `unit-test.yml`/`make check`. Today only inline workflow
-  `run:` blocks are checked (via `actionlint`); the standalone helper scripts
-  (`setup.sh`, `kind-with-registry.sh`, `start-registry.sh`, …) and CI install
-  paths ship unlinted — a quoting/`set -e` defect there breaks the install or
-  e2e flow this product gates on. Fix or justify the batch it surfaces; once
-  green, the shared image-pull-retry helper deferred from #150 can be extracted
-  with lint coverage intact.
-- [ ] **Install artifact validates** ([Q66](../STATUS.md), *gating*; folds
-  [Q73](../STATUS.md) CRD drift): `yamllint` + `kubeconform` on the
-  manifests, and once the Helm chart ([Q12](../STATUS.md)) exists,
-  `helm lint` + kubeconform on the rendered output. A malformed
-  RBAC/CRD/policy file is a release defect for an install-artifact product.
+- [x] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over the
+  standalone helper scripts in a dedicated `shellcheck` job in `unit-test.yml`
+  and a `make shellcheck` target wired into `make check`, so the local gate
+  matches CI. The glob is the git pathspec `scripts/*.sh` resolved through
+  `git ls-files` — tracked-only and recursive (git's default `*` spans `/`, so a
+  future `scripts/<subdir>/*.sh` is covered automatically without re-touching the
+  gate). The CI job **pins shellcheck (`v0.11.0`)** instead of the runner image's
+  drifting preinstalled copy, because its SC2015 heuristics differ between
+  releases — an unpinned gate gave a different verdict locally vs. CI. Previously
+  only inline workflow `run:` blocks were checked (via `actionlint`); the
+  standalone scripts (`setup.sh`, `kind-with-registry.sh`, `start-registry.sh`, …)
+  shipped unlinted — a quoting/`set -e` defect there breaks the install or e2e
+  flow this product gates on. Findings fixed across `probe-investigations-cd.sh`
+  and `probe-live-run.sh`: the `gh`-CLI-dispatch `A && B || C` (SC2015) became a
+  real `if/else`, and the best-effort `(cd … && remove … || true)` cleanups were
+  rewritten as `(cd … && remove …) || true` to drop the SC2015 pattern; the two
+  intentional dynamic-name `read`/`export` warnings (SC2229/SC2163) carry targeted
+  `# shellcheck disable` directives with a justifying comment. Now green, so the
+  shared image-pull-retry helper deferred from #150 can be extracted with lint
+  coverage intact.
+- [x] **Install artifact validates** ([Q66](../STATUS.md), *gating*): the
+  `manifest-validate.yml` workflow runs `yamllint` over the static manifests +
+  chart metadata and `kubeconform` (at the chart's 1.30.0 `kubeVersion` floor)
+  over the kustomize-rendered default overlay, the standalone opt-in manifests,
+  and the `helm template` output in both default and all-features form, plus
+  `helm lint`. Reproduced locally by `make manifest-validate`. yamllint is
+  tuned (in `.yamllint.yaml`) to catch real defects while relaxing cosmetic
+  rules that only fire on generated CRD/scaffold style; kubeconform's
+  `-ignore-missing-schemas` is scoped to third-party/custom kinds (cert-manager,
+  Prometheus Operator, our own CRs), with the CRDs that define them still
+  validated. A malformed RBAC/CRD/policy file — a release defect for an
+  install-artifact product — now fails CI. (This gate schema-validates each CRD
+  independently; the GMC-bundled-vs-AGC-source RunnerGroup CRD *drift* check
+  stays tracked separately as [Q73](../STATUS.md), since kubeconform does not
+  compare the two copies for field skew.)
 
 ---
 

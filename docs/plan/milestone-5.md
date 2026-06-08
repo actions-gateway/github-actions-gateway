@@ -54,12 +54,12 @@ load-testing, and the posture audit.
 | Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
 | Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
-| Production Helm chart (`charts/actions-gateway/`) | ⚠️ Partial | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12): GMC core (CRDs, RBAC, webhook, VAP, NetworkPolicies) — `helm lint` + `helm template` + `kubeconform` clean offline, both cert modes. Live `helm install`→working-tenant validation pending (track A, needs creds + kind); polaris scan is Q14, CI drift check folds into Q66. `cmd/*/config/` kustomize bases stay the dev source-of-truth |
+| Production Helm chart (`charts/actions-gateway/`) | ⚠️ Partial | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12): GMC core (CRDs, RBAC, webhook, VAP, NetworkPolicies) — `helm lint` + `helm template` + `kubeconform` clean offline, both cert modes. Live `helm install`→working-tenant validation pending (track A, needs creds + kind); polaris posture scan landed (Q14 — §3.2), CI drift check folds into Q66. `cmd/*/config/` kustomize bases stay the dev source-of-truth |
 | `test/load/` multi-tenant load harness | ❌ Open | Directory does not exist |
 | 1,000 concurrent sessions × 10 tenants — load test | ❌ Open | Blocked on harness |
 | Proxy HPA verified under burst | ⚠️ Partial | Unit/integration coverage and e2e §7.3 spec for 50-job burst exist; 1,000-session scale not run |
 | gVisor / Kata `RuntimeClass` opt-in | ⚠️ Documented | [Appendix B](../design/appendix-b-worker-isolation.md) documents the per-`RunnerGroup` opt-in pattern; not exercised on a real cluster |
-| `kube-bench` or `polaris` scan with zero critical findings | ❌ Open | No scan run yet |
+| `kube-bench` or `polaris` scan with zero critical findings | ✅ Done | polaris audits the rendered chart in CI (Q14), gating on `danger` findings — score 100, zero danger; `make polaris-scan` mirrors it. kube-bench is a live-cluster CIS scan → documented as a pre-production runbook in [security-operations.md](../operations/security-operations.md#cis-benchmark-posture--kube-bench-manual-pre-production) |
 
 ### Critical path
 
@@ -249,25 +249,52 @@ test/load/
 **Recommended:** polaris in CI for workload posture; kube-bench as a
 one-shot manual run against the staging cluster.
 
-### 3.2 Integration
+### 3.2 Integration — IMPLEMENTED (Q14)
 
-- Add a CI job that runs `polaris audit --format=score --resource <our manifests>`
-  against the rendered output of the install artifact (§1) and fails on
-  any "danger" finding.
-- Document the one-shot `kube-bench` procedure in
-  [docs/operations/runbook.md](../operations/runbook.md) as a
-  pre-production checklist item.
+Both halves landed:
 
-### 3.3 Expected findings to address
+- **polaris (automated, gating).** A `polaris` job in
+  [`.github/workflows/security-scan.yml`](../../.github/workflows/security-scan.yml)
+  renders the Helm chart (`helm template`, digest-pinned to reflect the
+  production posture) and runs
+  `polaris audit --merge-config --config charts/actions-gateway/polaris.yaml --set-exit-code-on-danger`.
+  It **fails the PR on any `danger` finding** (decision below) and runs on every
+  PR touching the chart or `Makefile`, plus every push to `main`.
+  [`make polaris-scan`](../../Makefile) runs the identical gate locally.
+- **kube-bench (manual, documented).** kube-bench is a CIS scan against a
+  **live node**, so it cannot run in our manifest-only CI. The expected
+  pre-production procedure (run the upstream Job, triage `[FAIL]`s, which are
+  cluster-admin vs. chart concerns) is documented as an operator runbook in
+  [security-operations.md](../operations/security-operations.md#cis-benchmark-posture--kube-bench-manual-pre-production).
 
-Based on the current pod specs, polaris is likely to flag:
+**Decision — gate on `danger`, report `warning` (block vs. report-only).**
+`danger` findings are real security regressions (privileged container, host
+namespace, dangerous capabilities, missing `securityContext`, a floating
+`:latest` image tag) — a chart change that introduces one must not merge, so the
+gate blocks. `warning` findings are heuristic and frequently false-positive
+against a Helm-packaged operator chart, so blocking on them would red-gate
+unrelated work; they are printed for visibility instead. The false-positive
+warnings are tuned to `ignore` in
+[`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml)
+(via `--merge-config`, so every default `danger` check stays active), each with
+a justifying comment. The digest-pinned default install scores **100** with zero
+danger findings.
 
-- Missing `livenessProbe` / `readinessProbe` on worker pods (by
-  design — workers are short-lived; suppress)
-- `runAsNonRoot` is already set on AGC and proxy; workers depend on
-  tenant `PodTemplate` (suppress per-namespace per `securityProfile`)
-- Image tags rather than digests (already in the security "out of
-  scope" list; address as part of §1.2)
+### 3.3 Findings triaged (Q14)
+
+The audit surfaced one `danger` and five `warning`s. Triage (fix what the chart
+should fix; record justified exceptions — never regress a secure default):
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| `tagNotSpecified` (`:latest`) | danger | **Kept gating.** Production installs pin `gmc.image.digest`; the CI scan renders with a digest so this passes, and an un-pinned `:latest` install still fails the gate. |
+| `topologySpreadConstraint` | warning | **Fixed in chart.** Added a soft (`ScheduleAnyway`) hostname spread to the GMC Deployment — `replicaCount: 2` + the PDB only deliver HA if the two pods aren't co-located. Configurable via `topologySpreadConstraints` in `values.yaml`. |
+| `automountServiceAccountToken` | warning | **Exception.** The controller-manager requires its SA token to reach the apiserver (controller-runtime). |
+| `missingNetworkPolicy` | warning | **Exception.** The chart ships GMC NetworkPolicies; polaris can't match them across documents in a static render. |
+| `pullPolicyNotAlways` | warning | **Exception.** Images are digest-pinned (immutable); `IfNotPresent` is correct and avoids a redundant pull. |
+| `metadataAndInstanceMismatched` | warning | **Exception.** Helm sets `app.kubernetes.io/instance` to the release name by convention. |
+
+No secure default was relaxed to silence a finding.
 
 ---
 
@@ -335,7 +362,7 @@ scale rather than reimplementing:
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | 1,000-session run exposes goroutine leak undetected by current goleak tests | Medium | High | Run harness with `-race` and periodic `pprof` snapshots; capture full goroutine dump on assertion failure |
-| polaris flags rules we've explicitly chosen against the design (e.g. no liveness probe on workers) | High | Low | Suppression list lives in `polaris.yaml` with a comment per suppression citing the design doc |
+| polaris flags rules we've explicitly chosen against the design (e.g. no liveness probe on workers) | High | Low | **Done (Q14).** Per-check exceptions live in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml), each with a justifying comment; `--merge-config` keeps every default danger check active |
 | Staging cluster doesn't support gVisor (no nested-virt, restrictive cloud) | Medium | Low | Mark gVisor validation as opt-in; document the runtime requirement in the runbook |
 | Helm chart maintenance overhead (templates drift from the kustomize bases) | Medium | Medium | Bases stay the source of truth (§1.1); scaffold the chart from them via the kubebuilder `helm/v1-alpha` plugin and add a CI drift check that re-renders and diffs |
 | Load harness becomes flaky in CI (timing-sensitive HPA assertions) | Medium | Medium | Run full load test nightly, not per-PR; per-PR runs `load-test-quick` (100 concurrent) |

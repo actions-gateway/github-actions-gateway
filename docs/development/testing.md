@@ -18,7 +18,7 @@ Run tests locally before pushing to a PR to avoid burning CI. Prefer the narrowe
 
 ### The `make check` pre-review gate
 
-For the one-command gate before requesting review, run `make check` from the repo root. It runs gofmt, `golangci-lint`, the `docs/STATUS.md` format lint, and the (plain) unit tests across every module. This is the fast local loop and covers the lint and unit-test *logic* the `.github/workflows/unit-test.yml` workflow enforces. The one CI step `make check` does **not** reproduce is the race detector: the CI `unit-test` job runs the same per-module unit tests under `-race` (see [the race gate](#the-race-detector-unit-gate) below), which roughly doubles their runtime. Reproduce that locally with `make test-race` — kept out of `make check` so the default dev gate doesn't become an unthrottled `-race` run. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers below stay separate too so this loop stays fast.
+For the one-command gate before requesting review, run `make check` from the repo root. It runs gofmt, `golangci-lint`, the `docs/STATUS.md` format lint, `shellcheck` over the helper scripts (see [the shell-lint gate](#the-shellcheck-gate) below), and the (plain) unit tests across every module. This is the fast local loop and covers the lint and unit-test *logic* the `.github/workflows/unit-test.yml` workflow enforces. The one CI step `make check` does **not** reproduce is the race detector: the CI `unit-test` job runs the same per-module unit tests under `-race` (see [the race gate](#the-race-detector-unit-gate) below), which roughly doubles their runtime. Reproduce that locally with `make test-race` — kept out of `make check` so the default dev gate doesn't become an unthrottled `-race` run. The slower security gates (`make vulncheck`, `make trivy-scan`, `make polaris-scan`), the [install-artifact validation](#install-artifact-validation) (`make manifest-validate`), and the integration/e2e tiers below stay separate too so this loop stays fast.
 
 Test output is non-verbose by default: `go test` prints one `ok <pkg>` line per passing package and the full output of any package that fails (compress success, expand failure). When debugging a **slow or hanging** test, add `V=1` (`make check V=1` or `make test V=1`) to stream output live — without `-v`, `go test` buffers each package's output until the package completes, so a hung test shows nothing (not even its `t.Log` lines) until it finishes or hits `-timeout`.
 
@@ -90,6 +90,16 @@ make cover-update  # re-record the baseline floor in coverage-baseline.txt
 
 Like `make test-race` and `make vulncheck`, `cover-check` is **not** part of `make check`: it re-runs the unit tests a second time (with `-cover` instead of `-race`), so folding it into the fast local loop would double its test time. Run it when a change adds or removes tests, or before a final pre-PR pass. Like the other heavy targets it applies the [local throttle](#resource-auto-throttle-on-gui-dev-machines), so a run on a GUI dev machine stays desktop-safe; on CI the prefix is a no-op.
 
+### The shellcheck gate
+
+`make shellcheck` runs `shellcheck` over every tracked shell script under `scripts/` and is wired into `make check`, so the local pre-review gate matches CI. The dedicated `shellcheck` job in `.github/workflows/unit-test.yml` runs the same `make shellcheck` target, gated on a `scripts` paths-filter (`scripts/**`, the `Makefile`, and the workflow itself) so a scripts-only change doesn't also trigger the full Go lint.
+
+**The CI job pins shellcheck (`v0.11.0`)** rather than using `ubuntu-latest`'s preinstalled copy — that version drifts with the runner image, and shellcheck's heuristics (e.g. when SC2015 fires on `A && B || true`) differ between releases, so an unpinned gate gives a different verdict locally vs. CI. Install the **same** version locally so `make shellcheck` matches the gate: see <https://github.com/koalaman/shellcheck#installing> (the target prints this hint if shellcheck is missing). When bumping the pin, update both the `SHELLCHECK_VERSION` env in the workflow and this paragraph.
+
+The file set is the git pathspec `scripts/*.sh` resolved through `git ls-files` — **tracked-only and recursive**: git's default `*` spans `/`, so the one pathspec already covers a future `scripts/<subdir>/*.sh` without re-touching the gate, while untracked scratch scripts are skipped. This complements `actionlint`, which only lints the inline `run:` blocks in workflows; before this gate the standalone helper scripts (`setup.sh`, `kind-with-registry.sh`, …) shipped unlinted.
+
+Accepted findings carry a targeted `# shellcheck disable=SCxxxx` directive with a justifying comment immediately above the line (see the dynamic-name `read`/`export` in `scripts/probe-investigations-cd.sh`); everything else is fixed to match the bash standards in `CLAUDE.md`.
+
 ## Integration tests
 
 Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
@@ -147,7 +157,7 @@ CI must use the same per-module commands as [Running tests](#running-tests) abov
 
 ## Security scanning
 
-The `security-scan.yml` workflow runs two supply-chain gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites. Both have local equivalents so you can reproduce a CI verdict before pushing.
+The `security-scan.yml` workflow runs three gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites — two supply-chain scans plus a Kubernetes posture scan. All three have local equivalents so you can reproduce a CI verdict before pushing.
 
 **govulncheck** — scans each workspace module for vulnerabilities reachable from our code (Go stdlib + dependency CVEs). It is symbol-precise: a CVE in a dependency only fails the gate if our code actually calls the affected path. Run it locally with:
 
@@ -165,4 +175,27 @@ make trivy-scan
 
 The four images we build from a minimal/distroless base (`gmc`, `agc`, `proxy`, `fakegithub`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest. The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is **report-only** (findings printed, never blocks). Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [`STATUS.md`](../STATUS.md) Q70.
 
-Both gates are path-gated (they skip when a PR touches only docs/non-code files) and use `go-version-file: go.work`, so the toolchain version flows automatically.
+**polaris** — audits the Kubernetes security/best-practice posture of the **shipped install artifact**: it renders the [Helm chart](../../charts/actions-gateway) (digest-pinned, matching the production posture) and checks the rendered manifests. The gate **fails on `danger` findings only** (privileged container, host namespace, dangerous capabilities, missing `securityContext`, a floating `:latest` image tag) — a real posture regression in the chart cannot merge — while `warning`s are reported for visibility. False-positive warnings against a Helm-packaged operator chart are tuned to `ignore` in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml) (via `--merge-config`, so every default `danger` check stays active), each with a justifying comment. Run it locally (requires `helm` and `polaris` on `PATH`) with:
+
+```
+make polaris-scan
+```
+
+This `polaris` job is path-gated on the chart (and `Makefile`). The operator-facing writeup — including the manual `kube-bench` CIS scan that complements polaris at the live-cluster layer — is in [security-operations.md](../operations/security-operations.md#posture-scanning-preventive).
+
+The three gates are path-gated (they skip when a PR touches only unrelated files); the two Go scans use `go-version-file: go.work`, so the toolchain version flows automatically.
+
+## Install-artifact validation
+
+The `manifest-validate.yml` workflow checks that the **shipped install artifact** is well-formed and schema-valid, so a malformed RBAC/CRD/policy file cannot merge silently. It is independent of the security gates above (validity, not posture) and path-gated on the manifests, the chart, and the `Makefile`. Run the exact gate locally (requires `yamllint`, `kubeconform`, `kustomize`, and `helm` on `PATH`) with:
+
+```
+make manifest-validate
+```
+
+It runs two layers over `cmd/*/config/**` and [`charts/actions-gateway`](../../charts/actions-gateway):
+
+- **yamllint** lints the hand-maintained and `controller-gen`/kustomize-generated YAML against [`.yamllint.yaml`](../../.yamllint.yaml). The config targets real defects (tabs, trailing whitespace, duplicate keys, a missing final newline, truthy typos) and relaxes the purely cosmetic rules that would only ever fire on machine-generated style — `line-length` (CRD `description` lines are verbatim Go doc comments well over 200 chars) and `indentation` (the scaffold mixes block-sequence indent styles). Helm templates are excluded — they embed `{{ ... }}` and are not parseable YAML; their rendered output is validated below instead.
+- **kubeconform** schema-validates the rendered manifests against the cluster API at the chart's `kubeVersion` floor (1.30.0 — validating the oldest supported version catches a field that does not exist there): the `kustomize build cmd/gmc/config/default` overlay, the standalone opt-in manifests not in that overlay, and `helm template` output in both default and all-optional-features form, plus `helm lint` on the chart. `-ignore-missing-schemas` skips only third-party/custom kinds whose schema is not in the upstream Kubernetes set (cert-manager `Certificate`/`Issuer`, the Prometheus Operator `ServiceMonitor`, and our own `ActionsGateway`/`RunnerGroup` CRs); the `CustomResourceDefinition`s that define them **are** validated, since that is a native `apiextensions` kind.
+
+The tool versions are pinned in the workflow (`KUSTOMIZE_VERSION`, `KUBECONFORM_VERSION`, `YAMLLINT_VERSION`); bump them deliberately, since a new kubeconform/kustomize can change rendering or validation behaviour. CI persists kubeconform's downloaded JSON schemas in an `actions/cache` keyed on the validated Kubernetes version so runs do not re-fetch the schema set from GitHub.

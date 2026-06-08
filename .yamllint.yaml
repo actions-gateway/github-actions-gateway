@@ -1,0 +1,45 @@
+# yamllint config for the static install manifests and Helm chart metadata.
+#
+# Scope (see `make manifest-validate`): the hand-maintained and
+# controller-gen/kustomize-generated YAML under cmd/*/config/** and the
+# non-template YAML in charts/actions-gateway/ (Chart.yaml, values.yaml,
+# polaris.yaml). Helm templates themselves are NOT linted here — they embed Go
+# template syntax ({{ ... }}) that is not parseable YAML; their rendered output
+# is validated with `helm lint` + kubeconform instead.
+#
+# Intent: catch real defects — tabs, trailing whitespace, duplicate keys, a
+# missing final newline, unparseable syntax, truthy typos — not to reformat
+# machine-generated output. The cosmetic rules that would only ever fire on
+# generated style we do not hand-author are relaxed, with the reason inline:
+extends: default
+
+# Helm renders everything under templates/ as a Go template, so those files are
+# not parseable YAML and are validated as rendered output instead (helm lint +
+# kubeconform). Skip them here so the whole chart directory can be passed to
+# yamllint and new Chart/values YAML is covered automatically.
+ignore: |
+  charts/actions-gateway/templates/
+
+rules:
+  # controller-gen emits CRD `description` lines well over 200 characters
+  # (verbatim Go doc comments) that cannot be wrapped without editing generated
+  # files, so a length cap would only flag content we do not control.
+  line-length: disable
+  # The kubebuilder scaffold and kustomize overlays mix block-sequence indent
+  # styles — a non-indented `command:` list beside an indented `args:` list in
+  # the same container, and a 1-space-offset `replacements:` block in the
+  # default overlay. The YAML is well-formed either way and reflows on
+  # `make generate`/kustomize edits; structural correctness is already proven by
+  # `kustomize build` + `kubeconform` + `helm lint`, so enforcing one sequence
+  # style here would only fight the generators.
+  indentation: disable
+  # kustomize bases and strategic-merge patches are single documents that
+  # routinely omit the `---` start marker; its presence is not a defect.
+  document-start: disable
+  # kustomize uses the commented-resource idiom `#- resource.yaml` (no space
+  # after `#`) to mark opt-in resources, and kubebuilder scaffold comments sit
+  # one space from inline content; neither affects correctness.
+  comments:
+    require-starting-space: false
+    min-spaces-from-content: 1
+  comments-indentation: disable

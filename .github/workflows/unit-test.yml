@@ -31,6 +31,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       status: ${{ steps.filter.outputs.status }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -54,6 +55,10 @@ jobs:
             status:
               - 'docs/STATUS.md'
               - 'scripts/lint-status.sh'
+              - '.github/workflows/unit-test.yml'
+            scripts:
+              - 'scripts/**'
+              - 'Makefile'
               - '.github/workflows/unit-test.yml'
 
   lint:
@@ -97,6 +102,39 @@ jobs:
           done
       - name: lint STATUS.md
         run: make lint-status
+  # Shellcheck the standalone helper scripts under scripts/. actionlint already
+  # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
+  # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
+  # not also trigger the full Go lint. `make shellcheck` is the single source of
+  # truth for the glob (tracked scripts/*.sh, recursive).
+  shellcheck:
+    needs: [changes]
+    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Pin the shellcheck version rather than using ubuntu-latest's preinstalled
+    # one: that version drifts with the runner image and its SC2015-style
+    # heuristics differ between releases, so an unpinned gate gives a different
+    # verdict locally vs. CI. Pinning makes `make shellcheck` reproducible; devs
+    # install the same version to match (see docs/development/testing.md).
+    env:
+      SHELLCHECK_VERSION: v0.11.0
+    steps:
+      - uses: actions/checkout@v6
+      - name: install pinned shellcheck
+        run: |
+          set -euo pipefail
+          base="shellcheck-${SHELLCHECK_VERSION}"
+          url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"
+          for attempt in 1 2 3; do
+            if curl -fsSL "$url" -o "$RUNNER_TEMP/sc.tar.xz"; then break; fi
+            echo "download attempt $attempt failed; retrying" >&2; sleep 5
+          done
+          tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
+          sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+      - name: shellcheck scripts
+        run: make shellcheck
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
