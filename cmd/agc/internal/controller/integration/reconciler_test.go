@@ -67,6 +67,25 @@ func enqueueJobWhenSessionAvailable(timeout time.Duration, alreadySeen map[strin
 	return ""
 }
 
+// enqueueJobOnOwnerSession blocks until the broker stub has an active session for
+// the given RunnerGroup that is not in alreadySeen, then enqueues a job on it and
+// returns its ID (or "" on timeout). Unlike enqueueJobWhenSessionAvailable it scopes
+// to one RunnerGroup's owner, so it never enqueues onto a session another test left
+// active on the shared stub.
+func enqueueJobOnOwnerSession(timeout time.Duration, group string, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		for _, id := range brokerStub.ActiveSessionsForOwner(group) {
+			if !alreadySeen[id] {
+				brokerStub.EnqueueJob(id, payload)
+				return id
+			}
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	return ""
+}
+
 // TestAGC_Reconciler_CreateStartsOneListener verifies that reconciling a RunnerGroup
 // creates exactly maxListeners agent Secrets, starts one listener goroutine at rest,
 // and surfaces the Ready=true condition.
@@ -222,28 +241,35 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 // least once, and the session count returns to 1 once burst goroutines idle-shut.
 func TestAGC_Reconciler_JobAcquisitionCycle(t *testing.T) {
 	const nsName = "agc-job-cycle-test"
+	const rgName = "cycle-rg"
 	createNSForAGC(t, nsName)
 
-	rg := newRunnerGroup(nsName, "cycle-rg", 2)
+	rg := newRunnerGroup(nsName, rgName, 2)
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 
 	startAGCReconciler(t)
 
-	// Wait for the permanent baseline session.
+	// Wait for cycle-rg's permanent baseline session. All session assertions in
+	// this test scope to cycle-rg's owner (ActiveSessionsForOwner) rather than the
+	// global RegisteredSessions/ActiveSessionCount counters, which accumulate across
+	// the package and flake the exact-count drain check below (Q91).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 1*time.Millisecond, "baseline session should be registered")
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
+	}, 15*time.Second, 1*time.Millisecond, "baseline session for cycle-rg should be registered")
 
 	acquireBefore := brokerStub.AcquireJobCalls()
 
-	// Enqueue a job; the goroutine will call AcquireJob and spawn a replacement.
-	sessions := brokerStub.RegisteredSessions()
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	// Enqueue a job on cycle-rg's baseline session; the goroutine calls AcquireJob
+	// and spawns a replacement.
+	seen := map[string]bool{}
+	baselineID := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, baselineID, "should have found cycle-rg's baseline session to enqueue on")
+	seen[baselineID] = true
 
-	// A replacement session should appear (burst goroutine spawned).
+	// A replacement session for cycle-rg should appear (burst goroutine spawned).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 2
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 2
 	}, 15*time.Second, 1*time.Millisecond, "replacement listener should spawn after job acquisition")
 
 	// AcquireJob must have been called at least once.
@@ -251,11 +277,11 @@ func TestAGC_Reconciler_JobAcquisitionCycle(t *testing.T) {
 		return brokerStub.AcquireJobCalls() > acquireBefore
 	}, 10*time.Second, 5*time.Millisecond, "AcquireJob must be called after job delivery")
 
-	// Burst goroutines idle-exit; active count drops back to 1.
+	// Burst goroutines idle-exit; cycle-rg's active session count drops back to 1.
 	// RenewJob is verified in TestAGC_SecretLifecycle_DeletedAfterPodCompletes where
 	// the provisioner keeps the job handler alive long enough for the 50ms renew tick.
 	assert.Eventually(t, func() bool {
-		return brokerStub.ActiveSessionCount() == 1
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) == 1
 	}, 30*time.Second, 10*time.Millisecond,
 		"burst listener goroutines should drain to 1 after job delivery")
 }
@@ -264,47 +290,49 @@ func TestAGC_Reconciler_JobAcquisitionCycle(t *testing.T) {
 // additional listener goroutines to spawn up to maxListeners.
 func TestAGC_Reconciler_BurstSpawnsAdditionalListeners(t *testing.T) {
 	const nsName = "agc-burst-test"
+	const rgName = "burst-rg"
 	createNSForAGC(t, nsName)
 
-	rg := newRunnerGroup(nsName, "burst-rg", 3)
+	rg := newRunnerGroup(nsName, rgName, 3)
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
 
 	startAGCReconciler(t)
 
-	// Wait for the initial session (permanent baseline listener).
+	// Scope all session assertions to burst-rg's owner so sessions other tests
+	// left active on the shared stub neither satisfy the spawn checks nor inflate
+	// the exact-count drain check (same contamination class as Q91).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
 	}, 15*time.Second, 1*time.Millisecond, "at least one session should be registered")
 
 	seen := map[string]bool{}
 
 	// Enqueue a job on the first session → spawns a second goroutine.
-	firstID := enqueueJobWhenSessionAvailable(15*time.Second, seen, broker.RunnerJobRequestBody{})
+	firstID := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, firstID, "should have found a session to enqueue on")
 	seen[firstID] = true
 
 	// Wait for the second session to appear (spawned replacement).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 2
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 2
 	}, 15*time.Second, 1*time.Millisecond, "second session should spawn after job delivery")
 
 	// Enqueue a job on the second session → spawns a third goroutine.
-	secondID := enqueueJobWhenSessionAvailable(15*time.Second, seen, broker.RunnerJobRequestBody{})
+	secondID := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
 	require.NotEmpty(t, secondID, "should have found a second session to enqueue on")
 	seen[secondID] = true
 
 	// Wait for the third session to appear (another spawned replacement).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 3
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 3
 	}, 15*time.Second, 1*time.Millisecond, "third session should spawn after second job delivery")
 
 	// Wait for extra goroutines to drain. Burst goroutines idle-shut after
-	// IdleThreshold consecutive empty polls and call DELETE /session.
-	// ActiveSessionCount tracks #POST − #DELETE, reaching 1 when only the
-	// permanent baseline remains.
+	// IdleThreshold consecutive empty polls and call DELETE /session, leaving only
+	// burst-rg's permanent baseline active.
 	assert.Eventually(t, func() bool {
-		return brokerStub.ActiveSessionCount() == 1
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) == 1
 	}, 30*time.Second, 10*time.Millisecond,
 		"extra listener goroutines should drain to 1 after jobs are delivered")
 }
