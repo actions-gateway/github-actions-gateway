@@ -2,14 +2,14 @@
   "provenance": {
     "snapshot_date": "2026-06-07",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 170,
+    "transcript_files_read": 171,
     "token_date_basis": "UTC date of message timestamp",
     "git_date_basis": "author date (local), --date=short",
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
-    "first_token_date": "2026-05-19",
-    "last_token_date": "2026-06-08",
-    "archived_gap_note": "Project's first commits predate the earliest surviving transcript; those pre-transcript days have no token data and never will. Git series covers the full history.",
+    "first_measured_date": "2026-05-19",
+    "last_measured_date": "2026-06-08",
+    "first_project_date": "2026-05-16",
     "chart_E_baseline": {
       "tokens": 10000000,
       "commits": 232,
@@ -19,27 +19,65 @@
     },
     "pro_to_max_date": "2026-05-23"
   },
+  "estimation": {
+    "method": "per-commit Pro-era rate x commits authored that day",
+    "rate_window_dates": [
+      "2026-05-19",
+      "2026-05-20",
+      "2026-05-21",
+      "2026-05-22"
+    ],
+    "rate_window_commits": 106,
+    "headline_tokens_per_commit": 86032,
+    "archived_dates": [
+      "2026-05-16",
+      "2026-05-17",
+      "2026-05-18"
+    ],
+    "archived_commits": 29,
+    "note": "Pre-transcript days (sessions archived before any were saved) are backfilled from the Pro-era per-commit rate and flagged estimated=1 in the CSVs. Measured days are never overwritten by estimates."
+  },
   "totals": {
-    "input": 727007,
-    "output": 10504386,
-    "cache_creation": 42381987,
-    "cache_read": 1894677095,
-    "assistant_msgs": 15696,
-    "user_msgs": 18028,
-    "headline_input_output_cachecreation": 53613380,
-    "grand_total_incl_cache_read": 1948290475,
-    "cache_reuse_ratio": 44.7
+    "measured": {
+      "input": 735637,
+      "output": 10542824,
+      "cache_creation": 42465775,
+      "cache_read": 1898452102,
+      "assistant_msgs": 15721,
+      "user_msgs": 18056,
+      "headline_input_output_cachecreation": 53744236
+    },
+    "estimated": {
+      "input": 6559,
+      "output": 478936,
+      "cache_creation": 2009425,
+      "cache_read": 67518843,
+      "assistant_msgs": 742,
+      "user_msgs": 861,
+      "headline_input_output_cachecreation": 2494920
+    },
+    "combined": {
+      "input": 742196,
+      "output": 11021760,
+      "cache_creation": 44475200,
+      "cache_read": 1965970945,
+      "assistant_msgs": 16463,
+      "user_msgs": 18917,
+      "headline_input_output_cachecreation": 56239156,
+      "grand_total_incl_cache_read": 2022210101,
+      "cache_reuse_ratio": 44.2
+    }
   },
   "by_model": {
+    "Sonnet 4.6": {
+      "headline": 22060080,
+      "output": 4639952,
+      "messages": 7898
+    },
     "Other": {
       "headline": 0,
       "output": 0,
       "messages": 34
-    },
-    "Sonnet 4.6": {
-      "headline": 19565160,
-      "output": 4161016,
-      "messages": 7156
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -52,18 +90,18 @@
       "messages": 27
     },
     "Opus 4.8": {
-      "headline": 17007496,
-      "output": 3475843,
-      "messages": 4058
+      "headline": 17138352,
+      "output": 3514281,
+      "messages": 4083
     }
   },
   "head_snapshot": {
     "go_code": 20913,
     "go_comments": 4244,
-    "markdown_nonblank": 13886,
+    "markdown_nonblank": 13988,
     "yaml_handwritten": 2322,
     "yaml_generated": 25531,
     "tests": 393,
-    "commits": 617
+    "commits": 618
   }
 }
