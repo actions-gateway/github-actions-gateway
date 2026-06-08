@@ -27,3 +27,10 @@ CLAUDE.local.md
 /cmd/probe/probe
 /cmd/proxy/proxy
 /cmd/worker/worker
+# Python virtualenv + bytecode for the claude-usage/ charting scripts
+# (README creates a .venv to install matplotlib/numpy). Unanchored so a venv
+# under claude-usage/ is covered too; the committed data/ and charts/ outputs
+# are not affected.
+.venv/
+__pycache__/
+*.pyc
