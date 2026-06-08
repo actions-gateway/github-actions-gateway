@@ -25,4 +25,3 @@ resources:
 - actionsgateway_admin_role.yaml
 - actionsgateway_editor_role.yaml
 - actionsgateway_viewer_role.yaml
-
