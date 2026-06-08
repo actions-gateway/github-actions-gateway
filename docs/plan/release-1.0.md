@@ -213,11 +213,21 @@ low-value tests or churn.
   e2e flow this product gates on. Fix or justify the batch it surfaces; once
   green, the shared image-pull-retry helper deferred from #150 can be extracted
   with lint coverage intact.
-- [ ] **Install artifact validates** ([Q66](../STATUS.md), *gating*; folds
-  [Q73](../STATUS.md) CRD drift): `yamllint` + `kubeconform` on the
-  manifests, and once the Helm chart ([Q12](../STATUS.md)) exists,
-  `helm lint` + kubeconform on the rendered output. A malformed
-  RBAC/CRD/policy file is a release defect for an install-artifact product.
+- [x] **Install artifact validates** ([Q66](../STATUS.md), *gating*): the
+  `manifest-validate.yml` workflow runs `yamllint` over the static manifests +
+  chart metadata and `kubeconform` (at the chart's 1.30.0 `kubeVersion` floor)
+  over the kustomize-rendered default overlay, the standalone opt-in manifests,
+  and the `helm template` output in both default and all-features form, plus
+  `helm lint`. Reproduced locally by `make manifest-validate`. yamllint is
+  tuned (in `.yamllint.yaml`) to catch real defects while relaxing cosmetic
+  rules that only fire on generated CRD/scaffold style; kubeconform's
+  `-ignore-missing-schemas` is scoped to third-party/custom kinds (cert-manager,
+  Prometheus Operator, our own CRs), with the CRDs that define them still
+  validated. A malformed RBAC/CRD/policy file — a release defect for an
+  install-artifact product — now fails CI. (This gate schema-validates each CRD
+  independently; the GMC-bundled-vs-AGC-source RunnerGroup CRD *drift* check
+  stays tracked separately as [Q73](../STATUS.md), since kubeconform does not
+  compare the two copies for field skew.)
 
 ---
 

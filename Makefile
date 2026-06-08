@@ -47,7 +47,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock \
-        vulncheck govulncheck trivy-scan polaris-scan
+        vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
 ##@ General
 
@@ -214,6 +214,37 @@ POLARIS_CHART         := $(REPO_ROOT)/charts/actions-gateway
 POLARIS_CONFIG        := $(POLARIS_CHART)/polaris.yaml
 POLARIS_RENDER        := $(REPO_ROOT)/.build/polaris-render.yaml
 
+# Install-artifact validation parameters, mirrored exactly by the CI
+# `manifest-validate` job (Q66). yamllint catches malformed/ill-formatted YAML;
+# kubeconform schema-validates the rendered manifests against the cluster API.
+# MANIFEST_K8S_VERSION is the chart's kubeVersion floor (Chart.yaml: >=1.30.0):
+# validating against the oldest supported version catches a field that does not
+# exist there. -ignore-missing-schemas skips resources whose schema is not in
+# the upstream Kubernetes set — cert-manager (Certificate/Issuer), the
+# Prometheus Operator (ServiceMonitor) and our own CRs (ActionsGateway/
+# RunnerGroup). Those are third-party/custom kinds; the CRDs that define them
+# ARE validated (CustomResourceDefinition is a native apiextensions kind).
+MANIFEST_K8S_VERSION ?= 1.30.0
+# kubeconform fetches missing schemas over the network. Set KUBECONFORM_CACHE to
+# a directory to persist them between runs (CI points it at a cached path to
+# avoid re-downloading the schema set every run); empty by default for local use.
+KUBECONFORM_CACHE    ?=
+KUBECONFORM_FLAGS    := -strict -summary -kubernetes-version $(MANIFEST_K8S_VERSION) -ignore-missing-schemas \
+                        $(if $(KUBECONFORM_CACHE),-cache $(KUBECONFORM_CACHE),)
+YAMLLINT_PATHS       := charts/actions-gateway cmd/agc/config cmd/gmc/config
+# Standalone manifests not emitted by `kustomize build cmd/gmc/config/default`
+# (they are opt-in or separately-applied resources). kustomization.yaml files
+# and strategic-merge/JSON6902 patch fragments are deliberately NOT listed: they
+# are not standalone manifests (no kind/apiVersion, or a bare patch array) and
+# kubeconform cannot parse them — their validity is proven when `kustomize
+# build` succeeds and by yamllint.
+MANIFEST_STANDALONE  := cmd/agc/config/rbac/role.yaml \
+                        cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml \
+                        cmd/gmc/config/admission-policy/namespace-psa-guard.yaml \
+                        cmd/gmc/config/agc-tenant-role/agc_tenant_role.yaml \
+                        cmd/gmc/config/prometheus/monitor.yaml \
+                        cmd/gmc/config/samples/actions-gateway.github.com_v1alpha1_actionsgateway.yaml
+
 .PHONY: vulncheck
 vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
 	@set -euo pipefail; \
@@ -246,6 +277,30 @@ polaris-scan: ## Render the Helm chart and audit its Kubernetes posture with pol
 	echo "==> polaris audit (gate: danger findings fail; warnings reported)"; \
 	polaris audit --merge-config --config "$(POLARIS_CONFIG)" --audit-path "$(POLARIS_RENDER)" \
 		--format=pretty --only-show-failed-tests --set-exit-code-on-danger
+
+.PHONY: manifest-validate
+manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
+	@command -v yamllint     >/dev/null 2>&1 || { echo "yamllint not found on PATH — install: https://yamllint.readthedocs.io/en/stable/quickstart.html" >&2; exit 1; }
+	@command -v kubeconform  >/dev/null 2>&1 || { echo "kubeconform not found on PATH — install: https://github.com/yannh/kubeconform#installation" >&2; exit 1; }
+	@command -v kustomize    >/dev/null 2>&1 || { echo "kustomize not found on PATH — install: https://kubectl.docs.kubernetes.io/installation/kustomize/" >&2; exit 1; }
+	@command -v helm         >/dev/null 2>&1 || { echo "helm not found on PATH — install: https://helm.sh/docs/intro/install/" >&2; exit 1; }
+	@set -euo pipefail; \
+	echo "==> yamllint (static manifests + chart metadata)"; \
+	yamllint --strict -c "$(REPO_ROOT)/.yamllint.yaml" $(YAMLLINT_PATHS); \
+	echo "==> kubeconform: kustomize-rendered GMC default overlay (k8s $(MANIFEST_K8S_VERSION))"; \
+	kustomize build "$(REPO_ROOT)/cmd/gmc/config/default" | kubeconform $(KUBECONFORM_FLAGS); \
+	echo "==> kubeconform: standalone manifests not in the default overlay"; \
+	(cd "$(REPO_ROOT)" && kubeconform $(KUBECONFORM_FLAGS) $(MANIFEST_STANDALONE)); \
+	echo "==> helm lint"; \
+	helm lint "$(POLARIS_CHART)"; \
+	echo "==> kubeconform: Helm chart render (default values)"; \
+	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \
+		| kubeconform $(KUBECONFORM_FLAGS); \
+	echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"; \
+	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \
+		--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
+		| kubeconform $(KUBECONFORM_FLAGS); \
+	echo "OK: install artifact validates"
 
 ##@ e2e
 
