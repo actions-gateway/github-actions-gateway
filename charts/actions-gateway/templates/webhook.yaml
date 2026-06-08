@@ -1,0 +1,36 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-validating-webhook-configuration
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+  {{- if .Values.certManager.enabled }}
+  annotations:
+    # cert-manager's ca-injector copies the Issuer's CA into the caBundle below.
+    cert-manager.io/inject-ca-from: {{ printf "%s/serving-cert" .Release.Namespace }}
+  {{- end }}
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-actions-gateway-github-com-v1alpha1-actionsgateway
+    {{- if not .Values.certManager.enabled }}
+    {{- include "actions-gateway.webhookCerts" . }}
+    caBundle: {{ b64enc $.agWebhookCerts.caCert }}
+    {{- end }}
+  failurePolicy: Fail
+  name: vactionsgateway-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - actions-gateway.github.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - actionsgateways
+  sideEffects: None

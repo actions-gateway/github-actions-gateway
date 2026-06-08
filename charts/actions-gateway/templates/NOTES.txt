@@ -1,0 +1,31 @@
+actions-gateway (Gateway Manager Controller) {{ .Chart.AppVersion }} installed
+into namespace "{{ .Release.Namespace }}" as release "{{ .Release.Name }}".
+
+Verify the controller is running:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "actions-gateway.managerName" . }}
+
+{{ if not .Values.allowFloatingImageTags -}}
+IMPORTANT — image digests required:
+  The GMC rejects floating AGC_IMAGE/PROXY_IMAGE tags and will crash-loop until
+  they are pinned by sha256 digest. Set these before/at install:
+    --set agc.image.digest=sha256:... --set proxy.image.digest=sha256:...
+  (or allowFloatingImageTags=true for DEV/TEST ONLY).
+{{ end -}}
+
+{{ if .Values.certManager.enabled -}}
+Webhook serving cert: issued by cert-manager (certManager.enabled=true). Ensure
+cert-manager is installed, or reinstall with --set certManager.enabled=false to
+use the built-in self-signed fallback.
+{{ else -}}
+Webhook serving cert: self-signed by the chart (certManager.enabled=false). It
+rotates on a `helm upgrade` that cannot reuse the existing Secret — see
+docs/operations/upgrade.md.
+{{ end -}}
+
+Onboard a tenant: docs/operations/tenant-onboarding.md
+{{- if .Values.sampleGateway.create }}
+
+WARNING: sampleGateway.create=true rendered an ActionsGateway into
+"{{ .Release.Namespace }}", which the webhook forbids for the GMC's own
+namespace. Move it to a marked tenant namespace before applying for real.
+{{- end }}

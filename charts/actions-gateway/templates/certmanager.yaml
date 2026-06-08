@@ -1,0 +1,47 @@
+{{- if .Values.certManager.enabled }}
+# cert-manager path (default). A self-signed Issuer mints the webhook serving
+# cert into the webhook-server-cert Secret; the ca-injector copies its CA into
+# the ValidatingWebhookConfiguration caBundle (see webhook.yaml annotation).
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+  - {{ printf "webhook-service.%s.svc" .Release.Namespace }}
+  - {{ printf "webhook-service.%s.svc.cluster.local" .Release.Namespace }}
+  issuerRef:
+    kind: Issuer
+    name: selfsigned-issuer
+  secretName: webhook-server-cert
+{{- else }}
+# Self-signed fallback (certManager.enabled=false). The chart generates the
+# serving cert at render time and writes it straight into the Secret the
+# manager mounts; the matching CA is set on the webhook caBundle in webhook.yaml.
+{{- include "actions-gateway.webhookCerts" . }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-server-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ b64enc $.agWebhookCerts.tlsCert }}
+  tls.key: {{ b64enc $.agWebhookCerts.tlsKey }}
+  ca.crt: {{ b64enc $.agWebhookCerts.caCert }}
+{{- end }}

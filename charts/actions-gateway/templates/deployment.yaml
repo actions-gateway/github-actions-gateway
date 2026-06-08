@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "actions-gateway.managerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "actions-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        {{- include "actions-gateway.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "actions-gateway.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: manager
+        image: {{ include "actions-gateway.image" .Values.gmc.image }}
+        imagePullPolicy: {{ .Values.gmc.imagePullPolicy }}
+        command:
+        - /manager
+        args:
+        {{- if .Values.metrics.enabled }}
+        - --metrics-bind-address=:8443
+        {{- end }}
+        {{- if .Values.leaderElection.enabled }}
+        - --leader-elect
+        {{- end }}
+        - --health-probe-bind-address=:8081
+        - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+        {{- if .Values.allowFloatingImageTags }}
+        # DEV/TEST ONLY: disables AGC_IMAGE/PROXY_IMAGE digest-pin enforcement.
+        - --allow-floating-image-tags
+        {{- end }}
+        env:
+        # POD_NAMESPACE is read by the admission webhook to forbid ActionsGateway
+        # CRs in the GMC's own install namespace. Downward API so custom installs
+        # are covered.
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # AGC_IMAGE / PROXY_IMAGE are injected into every gateway the GMC
+        # provisions. Required; digest-pinned unless allowFloatingImageTags.
+        - name: AGC_IMAGE
+          value: {{ include "actions-gateway.image" .Values.agc.image | quote }}
+        - name: PROXY_IMAGE
+          value: {{ include "actions-gateway.image" .Values.proxy.image | quote }}
+        ports:
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        # startupProbe gates liveness/readiness until the informer cache has
+        # synced (up to 30 × 5s = 150s of cold-start grace).
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          failureThreshold: 30
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: webhook-certs
+          readOnly: true
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: webhook-server-cert
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      # GMC is cluster-critical control plane: schedule ahead of ordinary
+      # workloads and protect from preemption under node pressure.
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      # 10s < the 15s leader lease; --leader-elect-release-on-cancel (default on)
+      # releases the lease on SIGTERM so the standby takes over in ~RetryPeriod.
+      terminationGracePeriodSeconds: 10

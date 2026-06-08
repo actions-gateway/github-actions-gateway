@@ -1,0 +1,30 @@
+apiVersion: v2
+name: actions-gateway
+description: |-
+  Gateway Manager Controller (GMC) for running GitHub Actions self-hosted
+  runners in a shared Kubernetes cluster with zero idle compute. Installs the
+  GMC, its CRDs (ActionsGateway, RunnerGroup), RBAC, validating webhook, and
+  admission policy. Per-tenant AGC instances and egress proxy pools are
+  provisioned by the GMC at runtime from each ActionsGateway CR — they are not
+  installed by this chart.
+type: application
+# Chart version: bump on every chart change (templates, values, packaging).
+version: 0.1.0
+# appVersion tracks the released GMC/AGC/proxy image tag. The actual image
+# references operators run live in values.yaml (pinned by digest in production).
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - github-actions
+  - self-hosted-runners
+  - multi-tenant
+  - operator
+home: https://github.com/actions-gateway/github-actions-gateway
+sources:
+  - https://github.com/actions-gateway/github-actions-gateway
+maintainers:
+  - name: actions-gateway maintainers
+annotations:
+  # cert-manager is an optional dependency, not a hard requirement: the chart
+  # falls back to a self-signed serving cert when certManager.enabled=false.
+  artifacthub.io/prerelease: "true"

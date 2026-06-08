@@ -1,0 +1,67 @@
+{{- if .Values.admissionPolicy.enabled }}
+# ValidatingAdmissionPolicy that constrains the GMC ServiceAccount's
+# cluster-wide `namespaces: patch/update` grant to PSA labels on marked tenant
+# namespaces only — the gate RBAC cannot express. Requires Kubernetes >= 1.30.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-namespace-psa-guard
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["namespaces"]
+  matchConditions:
+    # Only the GMC ServiceAccount is subject to this policy; every other
+    # principal is admitted unchanged.
+    - name: only-gmc-service-account
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace (include "actions-gateway.serviceAccountName" .) | quote }}
+  variables:
+    - name: markerKey
+      expression: "'actions-gateway.github.com/tenant'"
+    - name: psaPrefix
+      expression: "'pod-security.kubernetes.io/'"
+    - name: oldLabels
+      expression: "has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}"
+    - name: newLabels
+      expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+    - name: oldAnnotations
+      expression: "has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {}"
+    - name: newAnnotations
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+  validations:
+    # Constraint 1 — marker scope. The existing namespace must be a managed tenant.
+    - expression: "variables.markerKey in variables.oldLabels && variables.oldLabels[variables.markerKey] == 'true'"
+      messageExpression: "'the GMC service account may only modify namespaces labeled ' + variables.markerKey + '=true; namespace ' + object.metadata.name + ' is not a managed tenant namespace'"
+      reason: Forbidden
+    # Constraint 2a — only PSA labels may change; every other label is immutable.
+    - expression: >-
+        variables.oldLabels.all(k, k.startsWith(variables.psaPrefix) || (k in variables.newLabels && variables.newLabels[k] == variables.oldLabels[k]))
+        && variables.newLabels.all(k, k.startsWith(variables.psaPrefix) || (k in variables.oldLabels && variables.oldLabels[k] == variables.newLabels[k]))
+      message: "the GMC service account may only modify pod-security.kubernetes.io/* labels on tenant namespaces"
+      reason: Forbidden
+    # Constraint 2b — annotations are immutable to the GMC.
+    - expression: >-
+        variables.oldAnnotations.all(k, k in variables.newAnnotations && variables.newAnnotations[k] == variables.oldAnnotations[k])
+        && variables.newAnnotations.all(k, k in variables.oldAnnotations && variables.oldAnnotations[k] == variables.newAnnotations[k])
+      message: "the GMC service account may not modify annotations on namespaces"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-namespace-psa-guard-binding
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "actions-gateway.namePrefix" . }}-namespace-psa-guard
+  # Deny is the secure default. For an in-place upgrade of a cluster whose
+  # existing tenant namespaces are not yet labeled, temporarily set this to
+  # [Audit] (or label the namespaces first) — see docs/operations/upgrade.md.
+  validationActions: [Deny]
+{{- end }}
