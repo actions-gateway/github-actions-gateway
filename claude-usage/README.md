@@ -38,11 +38,11 @@ deterministically each run; measured rows are never overwritten by estimates.
 
 ```bash
 # 1. Snapshot the latest data (stdlib only — no venv needed):
-python3 usage-stats/compute_metrics.py
+python3 claude-usage/compute_metrics.py
 
 # 2. Render the charts (needs matplotlib + numpy):
-python3 -m venv .venv && .venv/bin/pip install -r usage-stats/requirements.txt
-.venv/bin/python usage-stats/make_charts.py
+python3 -m venv .venv && .venv/bin/pip install -r claude-usage/requirements.txt
+.venv/bin/python claude-usage/make_charts.py
 ```
 
 `compute_metrics.py` reads the transcripts for *this* machine's copy of the
