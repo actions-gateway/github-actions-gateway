@@ -66,7 +66,8 @@ cleanup() {
         if [[ -f "$RUNNER_TMP/.runner" && -n "$REG_TOKEN" ]]; then
             echo
             echo "==> Deregistering temporary runner"
-            (cd "$RUNNER_TMP" && ./config.sh remove --token "$REG_TOKEN" 2>/dev/null || true)
+            # Best-effort deregistration: ignore any failure (cd or remove).
+            (cd "$RUNNER_TMP" && ./config.sh remove --token "$REG_TOKEN" 2>/dev/null) || true
         fi
         rm -rf "$RUNNER_TMP"
     fi

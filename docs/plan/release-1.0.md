@@ -211,13 +211,17 @@ low-value tests or churn.
   matches CI. The glob is the git pathspec `scripts/*.sh` resolved through
   `git ls-files` — tracked-only and recursive (git's default `*` spans `/`, so a
   future `scripts/<subdir>/*.sh` is covered automatically without re-touching the
-  gate). Previously only inline workflow `run:` blocks were checked (via
-  `actionlint`); the standalone scripts (`setup.sh`, `kind-with-registry.sh`,
-  `start-registry.sh`, …) shipped unlinted — a quoting/`set -e` defect there
-  breaks the install or e2e flow this product gates on. The initial run surfaced
-  3 findings, all in `probe-investigations-cd.sh`: the `gh`-CLI-dispatch
-  `A && B || C` (SC2015) was rewritten as a real `if/else`; the two intentional
-  dynamic-name `read`/`export` warnings (SC2229/SC2163) carry targeted
+  gate). The CI job **pins shellcheck (`v0.11.0`)** instead of the runner image's
+  drifting preinstalled copy, because its SC2015 heuristics differ between
+  releases — an unpinned gate gave a different verdict locally vs. CI. Previously
+  only inline workflow `run:` blocks were checked (via `actionlint`); the
+  standalone scripts (`setup.sh`, `kind-with-registry.sh`, `start-registry.sh`, …)
+  shipped unlinted — a quoting/`set -e` defect there breaks the install or e2e
+  flow this product gates on. Findings fixed across `probe-investigations-cd.sh`
+  and `probe-live-run.sh`: the `gh`-CLI-dispatch `A && B || C` (SC2015) became a
+  real `if/else`, and the best-effort `(cd … && remove … || true)` cleanups were
+  rewritten as `(cd … && remove …) || true` to drop the SC2015 pattern; the two
+  intentional dynamic-name `read`/`export` warnings (SC2229/SC2163) carry targeted
   `# shellcheck disable` directives with a justifying comment. Now green, so the
   shared image-pull-retry helper deferred from #150 can be extracted with lint
   coverage intact.

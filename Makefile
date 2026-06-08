@@ -189,8 +189,10 @@ lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 # 'scripts/*.sh' matches recursively (git's default '*' spans '/'), so it covers
 # all tracked .sh files — including any future scripts/<subdir>/*.sh — while
 # skipping untracked scratch scripts. Mirrored by the `shellcheck` job in
-# unit-test.yml so the local gate matches CI. Without this, standalone helper
-# scripts ship unlinted: actionlint only covers inline workflow `run:` blocks.
+# unit-test.yml so the local gate matches CI — CI pins shellcheck v0.11.0; install
+# that version locally so verdicts match (shellcheck's heuristics drift between
+# releases). Without this, standalone helper scripts ship unlinted: actionlint
+# only covers inline workflow `run:` blocks.
 .PHONY: shellcheck
 shellcheck: ## Shellcheck all tracked scripts/*.sh (recursive; matches the CI shellcheck gate)
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found on PATH — install: https://github.com/koalaman/shellcheck#installing" >&2; exit 1; }
