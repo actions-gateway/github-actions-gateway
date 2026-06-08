@@ -1,6 +1,6 @@
 {
   "provenance": {
-    "snapshot_date": "2026-06-07",
+    "snapshot_date": "2026-06-08",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
     "transcript_files_read": 171,
     "token_date_basis": "UTC date of message timestamp",
@@ -39,13 +39,13 @@
   },
   "totals": {
     "measured": {
-      "input": 735637,
-      "output": 10542824,
-      "cache_creation": 42465775,
-      "cache_read": 1898452102,
-      "assistant_msgs": 15721,
-      "user_msgs": 18056,
-      "headline_input_output_cachecreation": 53744236
+      "input": 738896,
+      "output": 10629318,
+      "cache_creation": 42823488,
+      "cache_read": 1908511440,
+      "assistant_msgs": 15786,
+      "user_msgs": 18120,
+      "headline_input_output_cachecreation": 54191702
     },
     "estimated": {
       "input": 6559,
@@ -57,15 +57,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 742196,
-      "output": 11021760,
-      "cache_creation": 44475200,
-      "cache_read": 1965970945,
-      "assistant_msgs": 16463,
-      "user_msgs": 18917,
-      "headline_input_output_cachecreation": 56239156,
-      "grand_total_incl_cache_read": 2022210101,
-      "cache_reuse_ratio": 44.2
+      "input": 745455,
+      "output": 11108254,
+      "cache_creation": 44832913,
+      "cache_read": 1976030283,
+      "assistant_msgs": 16528,
+      "user_msgs": 18981,
+      "headline_input_output_cachecreation": 56686622,
+      "grand_total_incl_cache_read": 2032716905,
+      "cache_reuse_ratio": 44.08
     }
   },
   "by_model": {
@@ -90,18 +90,18 @@
       "messages": 27
     },
     "Opus 4.8": {
-      "headline": 17138352,
-      "output": 3514281,
-      "messages": 4083
+      "headline": 17585818,
+      "output": 3600775,
+      "messages": 4148
     }
   },
   "head_snapshot": {
     "go_code": 20913,
     "go_comments": 4244,
-    "markdown_nonblank": 13988,
+    "markdown_nonblank": 14011,
     "yaml_handwritten": 2322,
     "yaml_generated": 25531,
     "tests": 393,
-    "commits": 618
+    "commits": 619
   }
 }

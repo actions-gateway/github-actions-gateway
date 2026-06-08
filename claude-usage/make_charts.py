@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render the four kept charts from the persisted CSVs in usage-stats/data/.
+"""Render the four kept charts from the persisted CSVs in claude-usage/data/.
 
 Reads only the committed CSVs (never the raw transcripts), so the charts are
 reproducible even after the source sessions are archived. Rows flagged
@@ -7,9 +7,9 @@ reproducible even after the source sessions are archived. Rows flagged
 hatched bars, dashed lines, and a shaded band — so estimates are never passed
 off as measured data. Run:
 
-    python3 usage-stats/make_charts.py        # needs matplotlib + numpy
+    python3 claude-usage/make_charts.py        # needs matplotlib + numpy
 
-Outputs PNGs (1x + @2x) to usage-stats/charts/:
+Outputs PNGs (1x + @2x) to claude-usage/charts/:
     A_model_inflection      daily token usage by model, with the Pro->Max marker
     E_growth_timeseries     cumulative growth vs the day-7 tweet baseline (fan)
     F_token_anatomy         daily input/output/cache tokens on a log scale

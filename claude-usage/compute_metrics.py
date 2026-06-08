@@ -2,7 +2,7 @@
 """Compute and persist Claude Code usage metrics for this project over time.
 
 Reads the local Claude Code session transcripts (``~/.claude/projects/*<repo>*``)
-and this repo's git history, then writes daily time series to ``usage-stats/data/``.
+and this repo's git history, then writes daily time series to ``claude-usage/data/``.
 
 Why this exists: session transcripts can be **archived or deleted**, which would
 permanently lose the token/message history. So the token + message series are
@@ -14,13 +14,13 @@ counts represent the state at a date (which can legitimately go down).
 
 Run from anywhere:
 
-    python3 usage-stats/compute_metrics.py
+    python3 claude-usage/compute_metrics.py
 
 Environment:
     CLAUDE_PROJECTS_GLOB  Override the transcript glob. Default:
                           ~/.claude/projects/*github-actions-gateway*
 
-Outputs (all under usage-stats/data/):
+Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
     model_daily.csv     daily per-model headline tokens (merge-preserved)
     git_metrics.csv     daily cumulative commits, test count, Go code LOC (recomputed)
