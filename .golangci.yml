@@ -11,6 +11,7 @@ run:
 linters:
   default: none
   enable:
+    - errcheck
     - govet
     - ineffassign
     - staticcheck

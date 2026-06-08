@@ -93,7 +93,7 @@ func TestGenerateMetricsCerts_MTLSHandshake(t *testing.T) {
 	}}}
 	resp, err := withCert.Get(srv.URL)
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Without a client cert → handshake rejected.

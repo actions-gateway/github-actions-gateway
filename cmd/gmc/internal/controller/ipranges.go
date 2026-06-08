@@ -102,7 +102,7 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	if err != nil {
 		return nil, fmt.Errorf("fetch GitHub meta: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub meta returned %d", resp.StatusCode)

@@ -322,7 +322,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "upstream unavailable", http.StatusBadGateway)
 		return
 	}
-	defer upstream.Close()
+	defer func() { _ = upstream.Close() }()
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -333,7 +333,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, _ = io.WriteString(conn, "HTTP/1.1 200 Connection established\r\n\r\n")
 

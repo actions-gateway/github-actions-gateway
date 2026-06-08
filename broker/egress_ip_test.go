@@ -59,7 +59,7 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 		hj, ok := w.(http.Hijacker)
 		if !ok {
 			http.Error(w, "server does not support hijacking", http.StatusInternalServerError)
-			upstream.Close()
+			_ = upstream.Close()
 			return
 		}
 		// Hijack returns the raw conn plus the buffered writer that still holds
@@ -67,17 +67,17 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 		// client actually receives the 200 before we start tunnelling TLS bytes.
 		clientConn, brw, err := hj.Hijack()
 		if err != nil {
-			upstream.Close()
+			_ = upstream.Close()
 			return
 		}
 		if err := brw.Flush(); err != nil {
-			upstream.Close()
-			clientConn.Close()
+			_ = upstream.Close()
+			_ = clientConn.Close()
 			return
 		}
 		go func() {
-			defer upstream.Close()
-			defer clientConn.Close()
+			defer func() { _ = upstream.Close() }()
+			defer func() { _ = clientConn.Close() }()
 			// brw.Reader may have pre-buffered bytes from the client (e.g. a TLS
 			// ClientHello pipelined before we sent the 200 response). Read from
 			// brw.Reader, not clientConn, so those bytes reach the upstream.
@@ -90,7 +90,7 @@ func newCONNECTProxy(t *testing.T) *httptest.Server {
 			go func() {
 				defer close(clientDone)
 				io.Copy(upstream, brw.Reader) //nolint:errcheck
-				upstream.Close()
+				_ = upstream.Close()
 			}()
 			io.Copy(clientConn, upstream) //nolint:errcheck
 			<-clientDone
@@ -165,7 +165,7 @@ func TestCONNECTProxy_RejectsNonCONNECT(t *testing.T) {
 
 	resp, err := http.Get(proxy.URL + "/anything")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 

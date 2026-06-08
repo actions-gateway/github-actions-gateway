@@ -234,7 +234,7 @@ func (c *Client) CreateSession(ctx context.Context, agentID int64, agentName, ru
 	if err != nil {
 		return nil, fmt.Errorf("broker: CreateSession: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	rawBody, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusBadRequest {
@@ -330,7 +330,7 @@ func (c *Client) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMe
 	if err != nil {
 		return nil, fmt.Errorf("broker: GetMessage: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch resp.StatusCode {
 	case http.StatusAccepted: // 202 — no job queued
@@ -376,7 +376,7 @@ func (c *Client) AcquireJob(ctx context.Context, runServiceURL string, reqData J
 	if err != nil {
 		return nil, nil, fmt.Errorf("broker: AcquireJob: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -413,7 +413,7 @@ func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData Ren
 	if err != nil {
 		return nil, fmt.Errorf("broker: RenewJob: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -480,7 +480,7 @@ func (c *Client) DeleteSession(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("broker: DeleteSession: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("broker: DeleteSession: unexpected status %d", resp.StatusCode)

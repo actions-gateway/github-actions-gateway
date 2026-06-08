@@ -58,7 +58,7 @@ func startEchoServer(t *testing.T) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -66,8 +66,8 @@ func startEchoServer(t *testing.T) string {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
-				io.Copy(c, c)
+				defer func() { _ = c.Close() }()
+				_, _ = io.Copy(c, c)
 			}(conn)
 		}
 	}()
@@ -85,10 +85,10 @@ func TestProxy_Connect(t *testing.T) {
 
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Send CONNECT request.
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 
 	// Read 200 response.
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
@@ -115,7 +115,7 @@ func TestProxy_NonConnectMethod(t *testing.T) {
 
 	resp, err := http.Get(ts.URL + "/")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 }
 
@@ -131,10 +131,10 @@ func TestProxy_DialFailure(t *testing.T) {
 
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Target a port that has nothing listening.
-	fmt.Fprint(conn, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n")
+	_, _ = fmt.Fprint(conn, "CONNECT 127.0.0.1:1 HTTP/1.1\r\nHost: 127.0.0.1:1\r\n\r\n")
 
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestProxy_HalfClose(t *testing.T) {
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	require.NoError(t, err)
 
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -164,7 +164,7 @@ func TestProxy_HalfClose(t *testing.T) {
 
 	// Give relay goroutines time to notice and exit.
 	time.Sleep(50 * time.Millisecond)
-	tc.Close()
+	_ = tc.Close()
 	// goleak.VerifyNone above catches any leaked goroutines.
 }
 
@@ -183,7 +183,7 @@ func TestProxy_HealthEndpoint(t *testing.T) {
 
 	resp, err := http.Get(ts.URL + "/healthz")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
@@ -203,7 +203,7 @@ func TestProxy_Metrics(t *testing.T) {
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	require.NoError(t, err)
 
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -215,7 +215,7 @@ func TestProxy_Metrics(t *testing.T) {
 	assert.Equal(t, float64(1), gaugeValue(t, reg, "actions_gateway_proxy_connections_total"))
 
 	// Close connection — active gauge drops to 0.
-	conn.Close()
+	_ = conn.Close()
 	require.Eventually(t, func() bool {
 		return gaugeValue(t, reg, "actions_gateway_proxy_connections_active") == 0
 	}, time.Second, 5*time.Millisecond)
@@ -227,7 +227,7 @@ func metricsHandler(reg *prometheus.Registry) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mfs, _ := reg.Gather()
 		for _, mf := range mfs {
-			io.WriteString(w, mf.String())
+			_, _ = io.WriteString(w, mf.String())
 		}
 	})
 }
@@ -240,7 +240,7 @@ func freeAddr(t *testing.T) string {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := ln.Addr().String()
-	ln.Close()
+	_ = ln.Close()
 	return addr
 }
 
@@ -260,7 +260,7 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 
@@ -341,7 +341,7 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 
@@ -352,7 +352,7 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 		NextProtos:         []string{"h2", "http/1.1"},
 	})
 	require.NoError(t, err)
-	defer tlsConn.Close()
+	defer func() { _ = tlsConn.Close() }()
 
 	assert.Equal(t, "http/1.1", tlsConn.ConnectionState().NegotiatedProtocol,
 		"server must negotiate http/1.1 even when client offers h2 first — HTTP/2 must be disabled on the CONNECT listener")
@@ -395,7 +395,7 @@ func waitForListener(t *testing.T, addr string) {
 		if err != nil {
 			return false
 		}
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 }
@@ -422,7 +422,7 @@ func TestProxy_HealthPortReadHeaderTimeout(t *testing.T) {
 
 	c, err := net.Dial("tcp", srv.HealthAddr)
 	require.NoError(t, err)
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	// Send nothing. The server must close the connection after ReadHeaderTimeout.
 	// Cap our read at 3s so a hung server fails the test deterministically.
@@ -461,7 +461,7 @@ func TestProxy_ConnectPortReadHeaderTimeout(t *testing.T) {
 
 	c, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 
 	require.NoError(t, c.SetReadDeadline(time.Now().Add(3*time.Second)))
 	start := time.Now()
@@ -500,9 +500,9 @@ func TestProxy_TunnelIdleTimeout(t *testing.T) {
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, nil)
 	require.NoError(t, err)
@@ -545,9 +545,9 @@ func TestProxy_TunnelLifetimeCap(t *testing.T) {
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, nil)
 	require.NoError(t, err)
@@ -588,9 +588,9 @@ func TestProxy_TunnelDurationHistogram(t *testing.T) {
 
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	br := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(br, nil)
 	require.NoError(t, err)
@@ -627,22 +627,22 @@ func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 
 	// Health endpoint returns 200.
 	resp, err := http.Get("http://" + srv.HealthAddr + "/healthz")
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// CONNECT request through the proxy succeeds.
 	conn, err := net.Dial("tcp", srv.Addr)
 	require.NoError(t, err)
-	fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
+	_, _ = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", echoAddr, echoAddr)
 	connectResp, err := http.ReadResponse(bufio.NewReader(conn), nil)
-	conn.Close()
+	_ = conn.Close()
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, connectResp.StatusCode)
 }
@@ -693,14 +693,14 @@ func TestServer_ReadyzImpliesConnectBound(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			return false
 		}
 		// /readyz says ready — CONNECT port MUST be bound.
 		c, err := net.DialTimeout("tcp", srv.Addr, 100*time.Millisecond)
 		require.NoError(t, err, "/readyz returned 200 but CONNECT port refused TCP — Q42 regression")
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 }

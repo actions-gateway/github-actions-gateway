@@ -182,11 +182,13 @@ low-value tests or churn.
   (`broker/crypto.go` SHA-1, listener jitter) anticipate it but are dead
   until it runs. Initial findings triaged into a suppression list with a
   per-entry justification — the same pattern as the planned `polaris.yaml`.
-- [ ] **`errcheck` across all modules** ([Q81](../STATUS.md), *gating*):
-  promote errcheck from GMC-only (`cmd/gmc/.golangci.yml`) to the root
+- [x] **`errcheck` across all modules** ([Q81](../STATUS.md), *gating*):
+  promoted errcheck from GMC-only (`cmd/gmc/.golangci.yml`) to the root
   `.golangci.yml`, so unchecked errors are caught in
-  agc/broker/proxy/worker/githubapp/probe too. Fix or explicitly justify
-  the batch it surfaces.
+  agc/broker/proxy/worker/githubapp/probe too. The batch it surfaced
+  (~80 sites, mostly `resp.Body.Close()`/conn closes and test-helper
+  `fmt.Fprint`/`io.Copy`) was fixed with real error checks or `_ =`
+  ignores; no blanket suppression.
 - [ ] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over
   `scripts/**` in `unit-test.yml`/`make check`. Today only inline workflow
   `run:` blocks are checked (via `actionlint`); the standalone helper scripts

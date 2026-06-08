@@ -156,8 +156,8 @@ func run() error {
 	}
 	r2, w2, err := os.Pipe()
 	if err != nil {
-		r1.Close()
-		w1.Close()
+		_ = r1.Close()
+		_ = w1.Close()
 		return fmt.Errorf("create worker-output pipe: %w", err)
 	}
 
@@ -166,10 +166,10 @@ func run() error {
 	// ExtraFiles[1] = w2 → fd 4 in child (worker writes back)
 	workerPath, err := exec.LookPath(workerBin)
 	if err != nil {
-		r1.Close()
-		w1.Close()
-		r2.Close()
-		w2.Close()
+		_ = r1.Close()
+		_ = w1.Close()
+		_ = r2.Close()
+		_ = w2.Close()
 		return fmt.Errorf("find Runner.Worker: %w", err)
 	}
 	cmd := exec.Command(workerPath,
@@ -187,22 +187,22 @@ func run() error {
 		cmd.Env = append(os.Environ(), proxyTrustEnv...)
 	}
 	if err := cmd.Start(); err != nil {
-		r1.Close()
-		w1.Close()
-		r2.Close()
-		w2.Close()
+		_ = r1.Close()
+		_ = w1.Close()
+		_ = r2.Close()
+		_ = w2.Close()
 		return fmt.Errorf("start Runner.Worker: %w", err)
 	}
 
 	// Child inherited r1 and w2; close our copies so EOF propagates correctly.
-	r1.Close()
-	w2.Close()
+	_ = r1.Close()
+	_ = w2.Close()
 
 	// 5. Write payload to worker-input pipe concurrently.
 	// The write blocks until Runner.Worker opens the read end.
 	writeErr := make(chan error, 1)
 	go func() {
-		defer w1.Close()
+		defer func() { _ = w1.Close() }()
 		writeErr <- writeJobMessage(w1, payload)
 	}()
 
@@ -210,7 +210,7 @@ func run() error {
 	drainDone := make(chan struct{})
 	go func() {
 		defer close(drainDone)
-		defer r2.Close()
+		defer func() { _ = r2.Close() }()
 		_, _ = io.Copy(io.Discard, r2)
 	}()
 
