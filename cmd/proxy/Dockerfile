@@ -27,6 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.title="proxy" \
-      org.opencontainers.image.description="Per-tenant egress proxy providing isolated egress IPs for GitHub traffic"
+      org.opencontainers.image.description="Per-tenant egress proxy providing isolated egress IPs for GitHub traffic" \
+      org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=builder /bin/proxy /proxy
 ENTRYPOINT ["/proxy"]
