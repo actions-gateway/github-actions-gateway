@@ -223,10 +223,12 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).startResync"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
 		goleak.IgnoreTopFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleReadyItems.func1.1"),
-		// handleWaitingItems is the priorityqueue's other background worker. During
-		// async shutdown it can be blocked acquiring the queue mutex (top frame =
-		// sync.Mutex.Lock), so IgnoreTopFunction can't catch it — match by any frame.
+		// handleWaitingItems and handleAddBuffer are the priorityqueue's other
+		// background workers. During async shutdown either can be blocked acquiring
+		// the queue mutex (top frame = sync.Mutex.Lock), so IgnoreTopFunction can't
+		// catch them — match by any frame.
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleWaitingItems"),
+		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleAddBuffer"),
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
@@ -492,10 +494,12 @@ func TestAGC_Reconciler_ScaleDown(t *testing.T) {
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).startResync"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/util/workqueue.(*Type).processLoop"),
 		goleak.IgnoreTopFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleReadyItems.func1.1"),
-		// handleWaitingItems is the priorityqueue's other background worker. During
-		// async shutdown it can be blocked acquiring the queue mutex (top frame =
-		// sync.Mutex.Lock), so IgnoreTopFunction can't catch it — match by any frame.
+		// handleWaitingItems and handleAddBuffer are the priorityqueue's other
+		// background workers. During async shutdown either can be blocked acquiring
+		// the queue mutex (top frame = sync.Mutex.Lock), so IgnoreTopFunction can't
+		// catch them — match by any frame.
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleWaitingItems"),
+		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue.(*priorityqueue[...]).handleAddBuffer"),
 		goleak.IgnoreAnyFunction("net/http/httptest.(*Server).goServe.func1"),
 		goleak.IgnoreAnyFunction("net/http.(*conn).serve"),
 		goleak.IgnoreAnyFunction("golang.org/x/net/http2.(*clientConnReadLoop).run"),
