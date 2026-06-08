@@ -2,22 +2,27 @@
 
 ## Prerequisites
 
-- Kubernetes 1.11.3+
-- Go 1.24+
+- Kubernetes 1.30+ (GA `ValidatingAdmissionPolicy`)
+- A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the isolation controls to take effect
+- [cert-manager](https://cert-manager.io) installed, *or* install with `--set certManager.enabled=false` to use the chart's self-signed webhook cert
 - A GitHub App with a private key and installation ID
+- Go 1.24+ only if you build the images yourself
 
 ## 1. Deploy the GMC
 
+The shipped install artifact is the **`actions-gateway` Helm chart** ([reference](../charts/actions-gateway/README.md)). It installs the Gateway Manager Controller (GMC), its CRDs, RBAC, validating webhook, and admission policy. The GMC then provisions per-tenant AGC instances and proxy pools at runtime — they are not installed by the chart.
+
 ```sh
-# Build and push the GMC image
-make docker-build docker-push IMG=<registry>/gmc:tag
-
-# Install CRDs
-make install
-
-# Deploy the GMC
-make deploy IMG=<registry>/gmc:tag
+helm install gag charts/actions-gateway \
+  --namespace gmc-system --create-namespace \
+  --set gmc.image.digest=sha256:<gmc> \
+  --set agc.image.digest=sha256:<agc> \
+  --set proxy.image.digest=sha256:<proxy>
 ```
+
+The GMC requires the AGC and proxy images to be **pinned by digest** and crash-loops on floating tags — pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
+
+> **Dev/CI alternative.** The `cmd/gmc/config/` kustomize bases drive a `make install` / `make deploy IMG=<registry>/gmc:tag` flow used for local iteration. The Helm chart is the supported distribution artifact; the kustomize bases remain the dev source of truth.
 
 ## 2. Create and mark the tenant namespace
 

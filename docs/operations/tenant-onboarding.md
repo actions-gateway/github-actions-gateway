@@ -16,7 +16,7 @@ Before beginning, confirm all of the following:
   kubectl label namespace <tenant-namespace> actions-gateway.github.com/tenant=true
   ```
   This label is what authorizes the GMC to stamp Pod Security Admission labels on the namespace. The `namespace-psa-guard` admission policy denies the GMC any namespace it has *not* been marked for, so an unlabelled namespace will leave the `ActionsGateway` stuck with a `NamespaceMarkerMissing` warning event. Apply the label with a trusted (administrator) identity — the GMC must never set it itself. Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'` → `true`.
-- [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
+- [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`. Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.

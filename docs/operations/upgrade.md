@@ -114,6 +114,34 @@ The active replica releases its leader lease on graceful shutdown (`--leader-ele
 
 The invariant `lease-duration > renew-deadline > retry-period × 1.2` is validated at startup; a misordered set makes the GMC exit immediately with a message naming the offending flags.
 
+### GMC install and upgrade via Helm (recommended)
+
+The shipped install artifact is the **`actions-gateway` Helm chart** under [`charts/actions-gateway/`](../../charts/actions-gateway/README.md). It is the supported 1.0 install/upgrade vehicle; the `make install` / `make deploy` flow in the steps below is the dev/CI path that drives the kustomize bases directly.
+
+```sh
+# First install
+helm install gag charts/actions-gateway \
+  --namespace gmc-system --create-namespace \
+  --set gmc.image.digest=sha256:<gmc> \
+  --set agc.image.digest=sha256:<agc> \
+  --set proxy.image.digest=sha256:<proxy>
+
+# Upgrade in place (carries CRD field changes — see below)
+helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values \
+  --set gmc.image.digest=sha256:<new-gmc>
+
+# Roll back to the previous release
+helm rollback gag --namespace gmc-system
+```
+
+Three upgrade-time behaviors are specific to this chart:
+
+- **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
+- **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
+- **The `namespace-psa-guard` binding denies by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches will be denied. To stage the rollout you can temporarily set the binding to `Audit` by editing `validationActions` on the `ValidatingAdmissionPolicyBinding`, then flip it back to `Deny` once the labels are in place.
+
+The remaining steps describe the manual (kustomize/`make`) path used in dev/CI.
+
 ### Step 1: Upgrade the CRDs
 
 If the release includes CRD changes, apply them before rolling the operator:
