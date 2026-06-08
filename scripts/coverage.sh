@@ -154,8 +154,11 @@ cmd_check() {
 			failed=1
 			continue
 		fi
-		if [[ "$floor" == "n/a" ]]; then
-			# No floor to defend; nothing can regress below "no coverage".
+		# A floor of "n/a" or a numerically-zero floor defends nothing: you
+		# can't regress below "no coverage". Treating 0 like n/a also makes the
+		# gate robust to a no-test module reporting an empty profile (n/a) vs a
+		# 0.0% profile across Go versions — both mean the same here.
+		if [[ "$floor" == "n/a" ]] || awk -v f="$floor" 'BEGIN{exit !(f+0==0)}'; then
 			printf '  %-20s %s (no floor)\n' "$dir" "${now}$([[ "$now" != "n/a" ]] && echo '%')"
 			continue
 		fi
