@@ -527,7 +527,7 @@ func backoffDelay(consecutiveErrors int) time.Duration {
 
 // jitter returns a random duration in [lo, hi].
 func jitter(lo, hi time.Duration) time.Duration {
-	return lo + time.Duration(rand.Int63n(int64(hi-lo+1)))
+	return lo + time.Duration(rand.Int63n(int64(hi-lo+1))) //nolint:gosec // G404: retry jitter, not a security-sensitive value
 }
 
 // mustEnv returns the value of the named environment variable or an error.

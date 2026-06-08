@@ -12,11 +12,41 @@ linters:
   default: none
   enable:
     - errcheck
+    - gosec
     - govet
     - ineffassign
     - staticcheck
     - unused
   settings:
+    gosec:
+      # Whole-rule exclusions, each justified. These are either redundant with
+      # a linter we already run, or fire pervasively as false positives on this
+      # codebase's design. Everything NOT listed here stays enabled and is
+      # triaged per-occurrence with a targeted `//nolint:gosec // Gxxx: reason`.
+      # This mirrors the staticcheck `checks` list below — disable the noisy
+      # rule families wholesale, justify the specific accepts inline.
+      excludes:
+        # G104: unhandled errors. Redundant — the `errcheck` linter (enabled
+        # above) already covers this and reports it with better call-site context.
+        - G104
+        # G109/G115: integer overflow on type conversions. Every conversion the
+        # rule flags here is on a bounded slice length or small index (frame
+        # headers, agent indices, listener counts), never an attacker-influenced
+        # 64-bit value. The rule has a very high false-positive rate and no way
+        # to express "this value is bounded" short of an annotation per site.
+        - G109
+        - G115
+        # G304: file inclusion via variable. Every flagged read takes an
+        # operator-configured, trusted path (CA bundles, the credentials dir,
+        # the worker's JIT/payload files) — never an attacker-controlled one.
+        - G304
+        # G703/G704/G706: experimental taint-analysis rules (path traversal,
+        # SSRF, log injection). The egress proxy and listener dial caller- and
+        # GitHub-specified hosts and log operator-supplied addresses *by design*
+        # — that is the product. These are false positives for a forward proxy.
+        - G703
+        - G704
+        - G706
     staticcheck:
       # Disabled checks:
       # - QFxxxx: refactor "quick fix" suggestions (style, not bugs).

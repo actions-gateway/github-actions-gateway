@@ -337,7 +337,7 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 
 	// Wait for the TLS listener to be ready.
 	require.Eventually(t, func() bool {
-		c, err := tls.Dial("tcp", srv.Addr, &tls.Config{InsecureSkipVerify: true})
+		c, err := tls.Dial("tcp", srv.Addr, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec // G402: test client probing a self-signed local listener
 		if err != nil {
 			return false
 		}
@@ -348,7 +348,7 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 	// Client advertises h2 first, then http/1.1. A correctly configured server
 	// must select http/1.1.
 	tlsConn, err := tls.Dial("tcp", srv.Addr, &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // G402: test client probing a self-signed local listener
 		NextProtos:         []string{"h2", "http/1.1"},
 	})
 	require.NoError(t, err)

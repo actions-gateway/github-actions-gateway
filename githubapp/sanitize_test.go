@@ -26,7 +26,7 @@ func TestSanitizeBody_RedactsCredentials(t *testing.T) {
 			mustNotContain: []string{"eyJhYmMiOiJkZWYiLCJnaGkiOiJqa2wifQ=="},
 			mustContain:    []string{"encoded_jit_config", "[REDACTED]", "runner"},
 		},
-		{
+		{ //nolint:gosec // G101: synthetic token used as redaction-test input, not a real credential
 			name:           "ghs_ server-to-server token in free text",
 			in:             "error: token ghs_16C7e42F292c6912E7710c838347Ae178B4a authentication failed",
 			mustNotContain: []string{"ghs_16C7e42F292c6912E7710c838347Ae178B4a"},

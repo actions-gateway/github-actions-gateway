@@ -45,13 +45,13 @@ func main() {
 
 	go func() {
 		log.Printf("control API listening on %s", controlAddr)
-		if err := http.ListenAndServe(controlAddr, s.controlMux()); err != nil {
+		if err := http.ListenAndServe(controlAddr, s.controlMux()); err != nil { //nolint:gosec // G114: throwaway test fixture, not a production server
 			log.Fatalf("control server: %v", err)
 		}
 	}()
 
 	log.Printf("fakegithub listening on %s", addr)
-	if err := http.ListenAndServe(addr, s.mainMux()); err != nil {
+	if err := http.ListenAndServe(addr, s.mainMux()); err != nil { //nolint:gosec // G114: throwaway test fixture, not a production server
 		log.Fatalf("main server: %v", err)
 	}
 }

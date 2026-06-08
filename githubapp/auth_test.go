@@ -55,7 +55,7 @@ func TestToken_HappyPath(t *testing.T) {
 		assert.Contains(t, r.URL.Path, "/access_tokens")
 
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_testtoken123",
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
@@ -127,7 +127,7 @@ func TestToken_ClockSkewBuffer(t *testing.T) {
 		receivedIAT = claims.IssuedAt.Unix()
 
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_x",
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
@@ -154,7 +154,7 @@ func TestToken_ExpiresAtParsed(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_exptest",
 			"expires_at": wantExpiry.Format(time.RFC3339),
 		})
@@ -210,7 +210,7 @@ func TestToken_PKCS8Key(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_pkcs8",
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
@@ -257,7 +257,7 @@ func TestToken_Ed25519Key(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_ed25519",
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
@@ -282,7 +282,7 @@ func TestToken_JTIIsUniquePerCall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		bearerTokens = append(bearerTokens, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{ //nolint:gosec // G101: synthetic token in a test fixture response, not a real credential
 			"token":      "ghs_test",
 			"expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
 		})
