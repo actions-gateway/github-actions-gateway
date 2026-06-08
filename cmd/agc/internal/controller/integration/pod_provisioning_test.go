@@ -44,25 +44,6 @@ func waitForWorkerPod(t *testing.T, nsName, rgName string) corev1.Pod {
 	return pod
 }
 
-// enqueueOnNextSession waits for a new session (not in alreadySeen) and enqueues a job on it.
-// EnqueueJob is called inside the Eventually closure to avoid a TOCTOU race where the session
-// idle-shuts between detection and enqueue.
-func enqueueOnNextSession(t *testing.T, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
-	t.Helper()
-	var id string
-	require.Eventually(t, func() bool {
-		for _, s := range brokerStub.RegisteredSessions() {
-			if !alreadySeen[s] {
-				id = s
-				brokerStub.EnqueueJob(id, payload)
-				return true
-			}
-		}
-		return false
-	}, 15*time.Second, 1*time.Millisecond, "a new session should register")
-	return id
-}
-
 func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 	const nsName = "agc-pod-spec"
 	createNSForAGC(t, nsName)
@@ -94,13 +75,10 @@ func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 
 	startAGCReconcilerWithProvisioner(t, provisionerOptions{})
 
-	// Wait for a session, then enqueue a job.
-	var sessions []string
-	require.Eventually(t, func() bool {
-		sessions = brokerStub.RegisteredSessions()
-		return len(sessions) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	// Wait for this RunnerGroup's session, then enqueue a job. Scope to the owner
+	// so a session another test left active on the shared stub is never picked.
+	id := enqueueJobOnOwnerSession(15*time.Second, "pod-spec-rg", nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for pod-spec-rg should register")
 
 	pod := waitForWorkerPod(t, nsName, "pod-spec-rg")
 
@@ -176,9 +154,11 @@ func TestAGC_PodProvisioning_PriorityTiers(t *testing.T) {
 
 	seen := map[string]bool{}
 
-	// Enqueue 2 jobs — both pods should get "critical-test" PriorityClass.
+	// Enqueue 2 jobs — both pods should get "critical-test" PriorityClass. Scope to
+	// this RunnerGroup's owner so each job lands on a priority-rg session.
 	for i := 0; i < 2; i++ {
-		id := enqueueOnNextSession(t, seen, broker.RunnerJobRequestBody{})
+		id := enqueueJobOnOwnerSession(15*time.Second, "priority-rg", seen, broker.RunnerJobRequestBody{})
+		require.NotEmpty(t, id, "a new priority-rg session should register")
 		seen[id] = true
 	}
 
@@ -264,14 +244,11 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 
 	startAGCReconcilerWithProvisioner(t, provisionerOptions{})
 
-	// Wait for a session.
-	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-
-	sessions := brokerStub.RegisteredSessions()
 	acquiresBefore := brokerStub.AcquireJobCalls()
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	// Scope to this RunnerGroup's owner so we never enqueue onto a session another
+	// test left active on the shared stub.
+	id := enqueueJobOnOwnerSession(15*time.Second, "ceiling-rg", nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for ceiling-rg should register")
 
 	// The provisioner must acquire the job, then back off due to the ceiling
 	// without creating a worker pod. We assert on the monotonic acquire-job
@@ -321,9 +298,10 @@ func TestAGC_PodProvisioning_MaxWorkersCeiling(t *testing.T) {
 	require.NoError(t, k8sClient.Status().Update(ctx, &preexisting))
 
 	// Enqueue a second job now that active pod count dropped to 1 (< maxWorkers=2).
-	// The provisioner drops ceiling-blocked jobs, so we enqueue a fresh job.
-	currentSessions := brokerStub.RegisteredSessions()
-	brokerStub.EnqueueJob(currentSessions[len(currentSessions)-1], broker.RunnerJobRequestBody{})
+	// The provisioner drops ceiling-blocked jobs, so we enqueue a fresh job. Scope
+	// to this RunnerGroup's owner to avoid another test's lingering session.
+	id = enqueueJobOnOwnerSession(15*time.Second, "ceiling-rg", nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for ceiling-rg should still be active")
 
 	// A new runner pod should now be created since the ceiling is no longer saturated.
 	assert.Eventually(t, func() bool {
