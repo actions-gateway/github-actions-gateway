@@ -108,8 +108,8 @@ GOTEST_V := $(if $(or $(V),$(VERBOSE)),-v,)
 
 # --- Local resource auto-throttle (interactive GUI dev shell) --------------
 # scripts/local-throttle.sh detects an interactive, GUI-bearing dev shell and
-# emits a parallelism cap (physical cores − 2) plus a background-priority
-# command prefix (macOS: taskpolicy -b; Linux/WSL: nice -n 19 [+ ionice -c 3]).
+# emits a parallelism cap (physical cores − 2) plus a low-priority QoS command
+# prefix (macOS: taskpolicy -c utility; Linux/WSL: nice -n 19 [+ ionice -c 3]).
 # Without it a full `make check` saturates every core and makes the desktop
 # unresponsive — on macOS the WindowServer watchdog then restarts the
 # compositor and the GUI freezes. On CI (the CI env var is set), on headless or
