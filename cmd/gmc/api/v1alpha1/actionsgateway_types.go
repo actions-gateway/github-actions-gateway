@@ -51,6 +51,58 @@ type ProxyConfig struct {
 	ManagedNetworkPolicy *bool `json:"managedNetworkPolicy,omitempty"`
 }
 
+// TracingConfig configures opt-in OpenTelemetry distributed tracing for this
+// tenant's AGC. Tracing stays off unless Endpoint is set. The GMC translates
+// these fields into the standard OpenTelemetry OTEL_* environment variables on
+// the AGC Deployment — the AGC reads only those (there is no bespoke flag
+// surface). See docs/operations/observability.md.
+//
+// Authentication headers (OTEL_EXPORTER_OTLP_HEADERS) are intentionally not
+// exposed here: they can carry bearer tokens, and this project keeps secrets
+// out of environment variables (they leak into process listings and child
+// processes). Authenticate the collector at the network layer instead — an
+// in-cluster collector reached over the tenant's egress path, mutual TLS, or a
+// service mesh.
+type TracingConfig struct {
+	// Endpoint is the OTLP/gRPC collector address (e.g.
+	// "https://otel-collector.observability:4317"). Setting it enables tracing
+	// on the AGC; leaving it empty keeps tracing off. Maps to
+	// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+	//
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS
+	// required) — set it true only for a plaintext in-cluster collector. Maps to
+	// OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+	//
+	// +optional
+	Insecure *bool `json:"insecure,omitempty"`
+
+	// Sampler selects the trace sampler. When empty the SDK default applies
+	// (parentbased_always_on). Maps to OTEL_TRACES_SAMPLER. Ratio-based samplers
+	// take their ratio from SamplerArg.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=always_on;always_off;traceidratio;parentbased_always_on;parentbased_always_off;parentbased_traceidratio
+	Sampler string `json:"sampler,omitempty"`
+
+	// SamplerArg is the argument for the chosen Sampler — for the ratio-based
+	// samplers it is the sampling probability in [0,1] (e.g. "0.1" for 10%).
+	// Maps to OTEL_TRACES_SAMPLER_ARG.
+	//
+	// +optional
+	SamplerArg string `json:"samplerArg,omitempty"`
+
+	// ResourceAttributes are extra OpenTelemetry resource attributes merged onto
+	// every AGC span (e.g. {"deployment.environment": "prod"}). Maps to
+	// OTEL_RESOURCE_ATTRIBUTES. The AGC's own service.name/service.version
+	// defaults take precedence over a service.name supplied here.
+	//
+	// +optional
+	ResourceAttributes map[string]string `json:"resourceAttributes,omitempty"`
+}
+
 // AllowProfileDowngradeAnnotation is the annotation key that, when set to "true"
 // on an ActionsGateway, permits an update that lowers spec.securityProfile to a
 // less-restrictive level (e.g. restricted -> baseline). Without it, the GMC
@@ -88,6 +140,12 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:validation:Enum=baseline;restricted;privileged
 	// +kubebuilder:default=baseline
 	SecurityProfile string `json:"securityProfile,omitempty"`
+
+	// Tracing configures opt-in OpenTelemetry distributed tracing for this
+	// tenant's AGC. Tracing stays off unless tracing.endpoint is set.
+	//
+	// +optional
+	Tracing TracingConfig `json:"tracing,omitempty"`
 }
 
 // ActionsGatewayStatus is the observed state of an ActionsGateway.

@@ -167,6 +167,50 @@ type ActionsGatewaySpec struct {
     // +kubebuilder:default=baseline
     // +kubebuilder:validation:Enum=baseline;restricted;privileged
     SecurityProfile string `json:"securityProfile,omitempty"`
+
+    // Tracing configures opt-in OpenTelemetry distributed tracing for this
+    // tenant's AGC. The GMC translates these fields into the standard
+    // OpenTelemetry OTEL_* environment variables on the AGC Deployment — the
+    // AGC reads only those (cmd/agc/internal/tracing). Tracing stays off
+    // unless tracing.endpoint is set, so an ActionsGateway with no tracing
+    // block keeps the AGC's no-op tracer provider.
+    //
+    // There is deliberately no field for OTEL_EXPORTER_OTLP_HEADERS: those
+    // can carry bearer tokens, and the project keeps secrets out of
+    // environment variables. Authenticate the collector at the network layer
+    // (in-cluster collector, mutual TLS, or a service mesh) instead.
+    // +optional
+    Tracing TracingConfig `json:"tracing,omitempty"`
+}
+
+// TracingConfig maps to the AGC's OpenTelemetry OTEL_* environment variables.
+type TracingConfig struct {
+    // Endpoint is the OTLP/gRPC collector address (e.g.
+    // "https://otel-collector.observability:4317"). Setting it enables
+    // tracing; an empty Endpoint emits no OTEL_* env. Maps to
+    // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+    // +optional
+    Endpoint string `json:"endpoint,omitempty"`
+
+    // Insecure disables TLS for the OTLP/gRPC connection. Defaults to false
+    // (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+    // +optional
+    Insecure *bool `json:"insecure,omitempty"`
+
+    // Sampler selects the trace sampler. Maps to OTEL_TRACES_SAMPLER.
+    // +optional
+    // +kubebuilder:validation:Enum=always_on;always_off;traceidratio;parentbased_always_on;parentbased_always_off;parentbased_traceidratio
+    Sampler string `json:"sampler,omitempty"`
+
+    // SamplerArg is the argument for the sampler (e.g. "0.1" for the
+    // ratio-based samplers). Maps to OTEL_TRACES_SAMPLER_ARG.
+    // +optional
+    SamplerArg string `json:"samplerArg,omitempty"`
+
+    // ResourceAttributes are merged onto every AGC span, rendered as a
+    // sorted key=value list. Maps to OTEL_RESOURCE_ATTRIBUTES.
+    // +optional
+    ResourceAttributes map[string]string `json:"resourceAttributes,omitempty"`
 }
 
 // ActionsGatewayStatus uses standard Kubernetes Conditions for compatibility

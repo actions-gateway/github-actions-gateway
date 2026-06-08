@@ -113,6 +113,36 @@ func TestCRD_ProxyConfig_MinExceedsMax_Rejected(t *testing.T) {
 		"error message should reference the ordering constraint")
 }
 
+// TestCRD_Tracing_InvalidSampler_Rejected verifies that spec.tracing.sampler is
+// constrained to the OpenTelemetry built-in sampler enum by the CRD schema. The
+// enum is enforced by the real apiserver, so this can only be proven at the
+// envtest tier (a fake client does not validate OpenAPI bounds). A conforming
+// value is accepted in the same test to guard against an over-tight enum.
+func TestCRD_Tracing_InvalidSampler_Rejected(t *testing.T) {
+	const nsName = "team-tracing-sampler"
+	createNamespace(t, nsName)
+
+	bad := newActionsGateway("bad-sampler-ag", nsName, "github-app")
+	bad.Spec.Tracing = gmcv1alpha1.TracingConfig{
+		Endpoint: "https://otel-collector.observability:4317",
+		Sampler:  "ratio", // not a built-in OTEL sampler name
+	}
+	err := k8sClient.Create(ctx, bad)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), bad)) })
+	require.Error(t, err, "ActionsGateway with an unrecognized tracing.sampler must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+
+	good := newActionsGateway("good-sampler-ag", nsName, "github-app")
+	good.Spec.Tracing = gmcv1alpha1.TracingConfig{
+		Endpoint:   "https://otel-collector.observability:4317",
+		Sampler:    "parentbased_traceidratio",
+		SamplerArg: "0.1",
+	}
+	require.NoError(t, k8sClient.Create(ctx, good),
+		"ActionsGateway with a built-in tracing.sampler must be accepted")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), good) })
+}
+
 // TestCRD_RunnerGroup_RunnerLabels_Validation verifies the D6 rule: an empty
 // runnerLabels list (which would silently match every workflow) is rejected by
 // MinItems, and a label containing whitespace is rejected by the item Pattern.
