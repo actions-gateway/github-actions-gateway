@@ -15,7 +15,12 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -32,6 +37,12 @@ import (
 )
 
 const finalizerName = "actions-gateway.github.com/agentpool-cleanup"
+
+// tracer is the OpenTelemetry tracer for the reconciler. It resolves to the
+// global provider, which is the no-op provider unless main.go's tracing.Init
+// installed an exporter — so the reconcile span costs almost nothing when
+// tracing is off.
+var tracer = otel.Tracer(tracing.InstrumentationName)
 
 // conditionUpdate is sent from listener goroutines to the reconciler via a channel.
 type conditionUpdate struct {
@@ -194,7 +205,22 @@ func workerPodPredicate() predicate.Predicate {
 }
 
 // Reconcile is called by controller-runtime on RunnerGroup events.
-func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
+	// Root span for the reconcile. Each RunnerGroup event is its own trace (there
+	// is no inbound trace context); the provisioner's per-job spans form separate
+	// traces driven off the listener goroutines, not children of this one. The
+	// deferred closure stamps the span's error status from the named return.
+	ctx, span := tracer.Start(ctx, "RunnerGroup.Reconcile", trace.WithAttributes(
+		attribute.String("runnergroup.namespace", req.Namespace),
+		attribute.String("runnergroup.name", req.Name),
+	))
+	defer func() {
+		if retErr != nil {
+			span.SetStatus(codes.Error, retErr.Error())
+		}
+		span.End()
+	}()
+
 	r.reconcileCount.Add(1)
 	if r.Log == nil {
 		r.Log = slog.Default()
