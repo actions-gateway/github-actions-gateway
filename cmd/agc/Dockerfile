@@ -27,6 +27,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.title="agc" \
-      org.opencontainers.image.description="Actions Gateway Controller — multiplexes virtual runner sessions and provisions ephemeral worker pods"
+      org.opencontainers.image.description="Actions Gateway Controller — multiplexes virtual runner sessions and provisions ephemeral worker pods" \
+      org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=builder /bin/agc /agc
 ENTRYPOINT ["/agc"]
