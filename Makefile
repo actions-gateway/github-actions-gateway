@@ -3,6 +3,12 @@
 # Requires Go 1.21+ for the -C flag.
 # Run `make` (or `make help`) for the list of available targets.
 
+# Recipes use bash-only constructs (`set -o pipefail`, `[[ ]]`). GNU make spawns
+# /bin/sh for recipe lines, which is dash on the CI ubuntu runner and rejects
+# `set -o pipefail`; pin the recipe shell to bash so recipes behave the same on
+# CI and on dev machines (where /bin/sh already happens to be bash).
+SHELL := /bin/bash
+
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
@@ -37,7 +43,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-integration tools setup-envtest \
+.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-race test-integration tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status queue-unblock \
@@ -57,12 +63,15 @@ help: ## Display this help message
 all: generate build test ## Generate, build, and test all modules
 
 # The one-command pre-review gate. Run this before requesting review or opening a
-# PR: it runs exactly what the unit-test CI workflow runs (gofmt + golangci-lint,
-# STATUS.md format lint, unit tests), so a green `make check` means a green
-# unit-test workflow. The slower security gates (vulncheck, trivy-scan) and the
-# integration/e2e tiers stay separate so this loop stays fast.
+# PR: gofmt + golangci-lint, STATUS.md format lint, and the (plain) unit tests —
+# the fast local loop. The CI `unit-test` job runs the same unit tests but under
+# the race detector (`make test-race`); that heavier run stays out of `check` so
+# the dev gate doesn't become an unthrottled `-race` run. A green `make check`
+# covers the lint and unit-test logic; reproduce the race gate with `make
+# test-race` when a change touches concurrency. The slower security gates
+# (vulncheck, trivy-scan) and the integration/e2e tiers stay separate too.
 .PHONY: check
-check: lint lint-status test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + unit tests (mirrors the unit-test CI workflow)
+check: lint lint-status test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
@@ -130,6 +139,24 @@ test: ## Run unit tests for all modules (V=1 streams output live for debugging a
 	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
 		echo "==> go test $$dir"; \
 		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test -timeout 2m $(GOTEST_P) $(GOTEST_V) ./...) || exit 1; \
+	done
+
+# The race-detector unit gate, run by the `unit-test` CI job. -race instruments
+# the concurrency core (agentpool, listener/mux, broker, token) that plain
+# `go test` never exercises for data races, at a ~2-10× CPU/memory/I/O cost.
+# It is a SEPARATE target from `test`, not folded into it: `make test`/`make
+# check` stay the fast local loop, and this heavier run is opt-in locally (like
+# `make vulncheck`) so the default dev gate doesn't become an unthrottled `-race`
+# run — the same throttle prefix/parallelism cap as `test` applies here, so a
+# local invocation on a GUI dev machine stays desktop-safe, while on CI (where
+# the throttle is a no-op) it runs at full speed. -timeout is bumped to 5m to
+# absorb the instrumentation slowdown.
+.PHONY: test-race
+test-race: ## Run unit tests under the race detector (the CI unit gate; throttled locally, full speed on CI)
+	@set -euo pipefail; \
+	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
+		echo "==> go test -race $$dir"; \
+		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test -race -timeout 5m $(GOTEST_P) $(GOTEST_V) ./...) || exit 1; \
 	done
 
 .PHONY: test-integration

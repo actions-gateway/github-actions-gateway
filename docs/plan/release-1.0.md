@@ -174,13 +174,20 @@ low-value tests or churn.
   than all of `internal/*` (as `cmd/gmc/.golangci.yml` does) so dupl stays
   active on production code — including the builder.go `SecurityContext`
   copy-paste this check is here to catch. Production code is clean at 150.
-- [ ] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
-  `make test` and `unit-test.yml` add the race detector to the *unit* path,
-  not just integration. The multiplexing core (agentpool, listener/mux,
-  broker, token) is where data races hide and is currently never
-  race-checked in the gate — the class the [Q76](../STATUS.md) pool race
-  belongs to. No threshold: `-race` is pass/fail; the only call is
-  fast-job-vs-separate-job since it roughly doubles unit runtime.
+- [x] **Unit tests run under `-race`** ([Q79](../STATUS.md), *gating*):
+  the `unit-test.yml` job now runs the per-module unit tests under the race
+  detector, not just integration. The multiplexing core (agentpool,
+  listener/mux, broker, token) is where data races hide and was previously
+  never race-checked in the gate — the class the [Q76](../STATUS.md) pool
+  race belongs to. No threshold: `-race` is pass/fail. **Design decision on
+  the fast-job-vs-separate-job call** (it roughly doubles unit runtime): a
+  dedicated `make test-race` target carries the race flags and the same
+  local throttle/parallelism cap as `make test`, and CI invokes it; `make
+  test`/`make check` stay plain so the dev loop isn't silently turned into
+  an unthrottled `-race` run (which is the single command most likely to
+  trip the macOS WindowServer watchdog). The race gate is reproduced locally
+  with `make test-race`, documented alongside `make vulncheck` as a heavier
+  opt-in gate in [`docs/development/testing.md`](../development/testing.md).
 - [x] **`gosec` security linting** ([Q80](../STATUS.md), *gating*): enabled
   gosec in the root `.golangci.yml`, so it runs per-module the same way CI
   lints. Noisy/redundant rule families are excluded wholesale with a
