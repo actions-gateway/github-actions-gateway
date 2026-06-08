@@ -99,14 +99,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # -race roughly doubles unit runtime vs. plain `go test`, so allow more
+    # headroom than the lint job. The race detector needs cgo, which the
+    # ubuntu-latest image's gcc satisfies out of the box.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.work
-      - name: run unit tests
-        run: |
-          go work edit -json | jq -r '.Use[].DiskPath' | while read -r dir; do
-            (cd "$dir" && go test -timeout 2m ./...)
-          done
+      # Run the per-module unit tests under the race detector. `make test-race`
+      # is the single source of truth for the race flags/timeout; its throttle
+      # prefix is a no-op on CI (the CI env var is set), so this runs at full
+      # speed here while staying desktop-safe when invoked locally.
+      - name: run unit tests (-race)
+        run: make test-race
