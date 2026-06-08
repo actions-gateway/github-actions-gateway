@@ -205,14 +205,22 @@ low-value tests or churn.
   (~80 sites, mostly `resp.Body.Close()`/conn closes and test-helper
   `fmt.Fprint`/`io.Copy`) was fixed with real error checks or `_ =`
   ignores; no blanket suppression.
-- [ ] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over
-  `scripts/**` in `unit-test.yml`/`make check`. Today only inline workflow
-  `run:` blocks are checked (via `actionlint`); the standalone helper scripts
-  (`setup.sh`, `kind-with-registry.sh`, `start-registry.sh`, …) and CI install
-  paths ship unlinted — a quoting/`set -e` defect there breaks the install or
-  e2e flow this product gates on. Fix or justify the batch it surfaces; once
-  green, the shared image-pull-retry helper deferred from #150 can be extracted
-  with lint coverage intact.
+- [x] **Shell linting** ([Q84](../STATUS.md), *gating*): `shellcheck` over the
+  standalone helper scripts in a dedicated `shellcheck` job in `unit-test.yml`
+  and a `make shellcheck` target wired into `make check`, so the local gate
+  matches CI. The glob is the git pathspec `scripts/*.sh` resolved through
+  `git ls-files` — tracked-only and recursive (git's default `*` spans `/`, so a
+  future `scripts/<subdir>/*.sh` is covered automatically without re-touching the
+  gate). Previously only inline workflow `run:` blocks were checked (via
+  `actionlint`); the standalone scripts (`setup.sh`, `kind-with-registry.sh`,
+  `start-registry.sh`, …) shipped unlinted — a quoting/`set -e` defect there
+  breaks the install or e2e flow this product gates on. The initial run surfaced
+  3 findings, all in `probe-investigations-cd.sh`: the `gh`-CLI-dispatch
+  `A && B || C` (SC2015) was rewritten as a real `if/else`; the two intentional
+  dynamic-name `read`/`export` warnings (SC2229/SC2163) carry targeted
+  `# shellcheck disable` directives with a justifying comment. Now green, so the
+  shared image-pull-retry helper deferred from #150 can be extracted with lint
+  coverage intact.
 - [ ] **Install artifact validates** ([Q66](../STATUS.md), *gating*; folds
   [Q73](../STATUS.md) CRD drift): `yamllint` + `kubeconform` on the
   manifests, and once the Helm chart ([Q12](../STATUS.md)) exists,

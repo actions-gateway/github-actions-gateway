@@ -46,7 +46,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
 .PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-race test-integration tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status queue-unblock \
+        ginkgo golangci-lint lint lint-status shellcheck queue-unblock \
         vulncheck govulncheck trivy-scan polaris-scan
 
 ##@ General
@@ -63,15 +63,16 @@ help: ## Display this help message
 all: generate build test ## Generate, build, and test all modules
 
 # The one-command pre-review gate. Run this before requesting review or opening a
-# PR: gofmt + golangci-lint, STATUS.md format lint, and the (plain) unit tests —
-# the fast local loop. The CI `unit-test` job runs the same unit tests but under
-# the race detector (`make test-race`); that heavier run stays out of `check` so
-# the dev gate doesn't become an unthrottled `-race` run. A green `make check`
-# covers the lint and unit-test logic; reproduce the race gate with `make
-# test-race` when a change touches concurrency. The slower security gates
-# (vulncheck, trivy-scan) and the integration/e2e tiers stay separate too.
+# PR: gofmt + golangci-lint, STATUS.md format lint, shellcheck over scripts/, and
+# the (plain) unit tests — the fast local loop. The CI `unit-test` job runs the
+# same unit tests but under the race detector (`make test-race`); that heavier
+# run stays out of `check` so the dev gate doesn't become an unthrottled `-race`
+# run. A green `make check` covers the lint and unit-test logic; reproduce the
+# race gate with `make test-race` when a change touches concurrency. The slower
+# security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
+# separate too.
 .PHONY: check
-check: lint lint-status test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status shellcheck test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
@@ -183,6 +184,21 @@ lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modul
 .PHONY: lint-status
 lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 	scripts/lint-status.sh
+
+# Shellcheck every tracked shell script under scripts/. The git pathspec
+# 'scripts/*.sh' matches recursively (git's default '*' spans '/'), so it covers
+# all tracked .sh files — including any future scripts/<subdir>/*.sh — while
+# skipping untracked scratch scripts. Mirrored by the `shellcheck` job in
+# unit-test.yml so the local gate matches CI. Without this, standalone helper
+# scripts ship unlinted: actionlint only covers inline workflow `run:` blocks.
+.PHONY: shellcheck
+shellcheck: ## Shellcheck all tracked scripts/*.sh (recursive; matches the CI shellcheck gate)
+	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found on PATH — install: https://github.com/koalaman/shellcheck#installing" >&2; exit 1; }
+	@set -euo pipefail; \
+	files=$$(git ls-files 'scripts/*.sh'); \
+	if [[ -z "$$files" ]]; then echo "no scripts to shellcheck"; exit 0; fi; \
+	echo "==> shellcheck $$(echo "$$files" | wc -l | tr -d ' ') script(s) under scripts/"; \
+	shellcheck $$files
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)

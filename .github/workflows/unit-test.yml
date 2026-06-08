@@ -31,6 +31,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       status: ${{ steps.filter.outputs.status }}
+      scripts: ${{ steps.filter.outputs.scripts }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -52,6 +53,10 @@ jobs:
             status:
               - 'docs/STATUS.md'
               - 'scripts/lint-status.sh'
+              - '.github/workflows/unit-test.yml'
+            scripts:
+              - 'scripts/**'
+              - 'Makefile'
               - '.github/workflows/unit-test.yml'
 
   lint:
@@ -95,6 +100,21 @@ jobs:
           done
       - name: lint STATUS.md
         run: make lint-status
+  # Shellcheck the standalone helper scripts under scripts/. actionlint already
+  # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
+  # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
+  # not also trigger the full Go lint. `make shellcheck` is the single source of
+  # truth for the glob (tracked scripts/*.sh, recursive); ubuntu-latest ships
+  # shellcheck preinstalled, so no install step is needed.
+  shellcheck:
+    needs: [changes]
+    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: shellcheck scripts
+        run: make shellcheck
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
