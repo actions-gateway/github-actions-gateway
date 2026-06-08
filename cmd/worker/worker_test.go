@@ -14,7 +14,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
+
+// TestMain runs the package tests under goleak so a goroutine leaked by run()
+// — the payload-writer and output-drain goroutines it spawns must both be
+// joined before run() returns — fails the suite instead of leaking silently.
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 // withSystemCABundleCandidates temporarily overrides systemCABundleCandidates
 // so tests don't have to depend on whatever real bundle exists on the dev

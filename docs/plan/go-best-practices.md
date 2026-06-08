@@ -52,9 +52,9 @@ wait, ignore, or `select` against it).
 **Acceptance:** Signature updated; existing tests pass; new test asserts
 `done` closes after `stop()` returns.
 
-## 3. Extend `goleak` coverage
+## 3. Extend `goleak` coverage ✅ DONE
 
-**Queue row:** #41 · **Size:** S · **Label:** `tests`
+**Queue row:** #41 · **Size:** S · **Label:** `tests` · **Status:** shipped — `cmd/worker` now runs `goleak.VerifyTestMain(m)` (its `run()` spawns a payload-writer and an output-drain goroutine, both joined before return). `broker/` was already covered by the `TestMain` in `broker/client_test.go`, so no change was needed there; its only sub-package, `broker/brokertest/`, is a test helper with no test files. Both modules' tests are green under goleak and `make check` passes.
 
 `broker/` and `cmd/worker/` both spawn goroutines but their test suites
 don't apply `goleak.VerifyNone` in `TestMain`. The pattern is already
