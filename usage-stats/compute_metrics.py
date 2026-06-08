@@ -45,6 +45,10 @@ REPO = subprocess.run(
 DEFAULT_GLOB = os.path.join(os.path.expanduser("~/.claude/projects"), "*github-actions-gateway*")
 PROJECTS_GLOB = os.environ.get("CLAUDE_PROJECTS_GLOB", DEFAULT_GLOB)
 
+# Date the plan upgraded Pro -> Max. Used both as a chart annotation and to bound
+# the "Pro-era" window from which the archived-day backfill rate is derived.
+PRO_TO_MAX = "2026-05-23"
+
 # Token usage is deduped on (message.id, requestId): resumed/compacted sessions
 # replay earlier assistant records verbatim, and counting them twice would inflate
 # every total (cache_read especially). Message records are deduped on their uuid.
@@ -294,17 +298,28 @@ def write_csv(path, fieldnames, rows):
             w.writerow(r)
 
 
-def merge_max(path, key_cols, num_cols, new_rows):
-    """Merge new rows into an existing CSV, taking the per-column MAX.
+def is_estimated(row):
+    return str(row.get("estimated", "0")) in ("1", "true", "True")
 
-    Preserves rows that exist on disk but are absent from ``new_rows`` (i.e. dates
-    whose source sessions were archived), and only ever revises a value upward.
-    """
+
+def load_measured(path, key_cols, num_cols):
+    """Load existing rows, keeping only the *measured* ones (drops old estimates)."""
     merged = {}
     for k, r in load_csv(path, key_cols).items():
+        if is_estimated(r):
+            continue
         merged[k] = {c: int(float(r.get(c) or 0)) for c in num_cols}
         for kc, kv in zip(key_cols, k):
             merged[k][kc] = kv
+    return merged
+
+
+def merge_max_into(merged, new_rows, key_cols, num_cols):
+    """Fold ``new_rows`` into ``merged`` in place, taking the per-column MAX.
+
+    Preserves keys present in ``merged`` but absent from ``new_rows`` (dates whose
+    source sessions were archived), and only ever revises a value upward.
+    """
     for k, r in new_rows.items():
         kk = k if isinstance(k, tuple) else (k,)
         if kk in merged:
@@ -314,9 +329,18 @@ def merge_max(path, key_cols, num_cols, new_rows):
             merged[kk] = {c: int(r[c]) for c in num_cols}
             for kc, kv in zip(key_cols, kk):
                 merged[kk][kc] = kv
-    rows = [merged[k] for k in sorted(merged)]
-    write_csv(path, list(key_cols) + num_cols, rows)
-    return rows
+    return merged
+
+
+def commit_deltas(git_rows):
+    """Commits authored on each day, from the cumulative commit series."""
+    deltas = {}
+    prev = 0
+    for d in sorted(git_rows):
+        c = int(git_rows[d]["commits"])
+        deltas[d] = c - prev
+        prev = c
+    return deltas
 
 
 def main():
@@ -327,26 +351,72 @@ def main():
     model_csv = os.path.join(DATA, "model_daily.csv")
     git_csv = os.path.join(DATA, "git_metrics.csv")
 
-    tnum = ["input", "output", "cache_creation", "cache_read", "assistant_msgs", "user_msgs"]
-    merged_tokens = merge_max(token_csv, ["date"], tnum, token_rows)
-    merge_max(model_csv, ["date", "model"], ["headline", "output", "messages"], model_rows)
-
     git_rows = git_series()
     write_csv(git_csv, ["date", "commits", "tests", "go_code"],
               [git_rows[d] for d in sorted(git_rows)])
+    deltas = commit_deltas(git_rows)
 
-    # Totals are summed from the *merged* (archival-preserved) token CSV, not just
-    # this run's logs — so they survive even after source sessions are deleted.
-    tot = {c: sum(int(r[c]) for r in merged_tokens) for c in tnum}
+    # --- tokens: preserve measured days, then backfill archived days as estimated ---
+    tnum = ["input", "output", "cache_creation", "cache_read", "assistant_msgs", "user_msgs"]
+    measured = load_measured(token_csv, ["date"], tnum)
+    merge_max_into(measured, token_rows, ["date"], tnum)
+    measured = {k[0]: v for k, v in measured.items()}  # tuple key -> date string
+    measured_dates = sorted(measured)
+
+    # Per-commit rate from the Pro-era window (measured days before the Max upgrade)
+    # — the archived days were that same Pro/Sonnet era, so the rate transfers.
+    window = [d for d in measured_dates if d < PRO_TO_MAX] or measured_dates[:4]
+    win_commits = sum(deltas.get(d, 0) for d in window) or 1
+    rates = {c: sum(measured[d][c] for d in window) / win_commits for c in tnum}
+
+    # Archived = project days (from durable git history) before the first measured day.
+    first_measured = measured_dates[0] if measured_dates else None
+    archived = [d for d in sorted(git_rows) if first_measured and d < first_measured]
+    est_rows = []
+    for d in archived:
+        row = {"date": d, "estimated": 1}
+        for c in tnum:
+            row[c] = int(round(rates[c] * deltas.get(d, 0)))
+        est_rows.append(row)
+
+    out_rows = est_rows + [{**measured[d], "estimated": 0} for d in measured_dates]
+    out_rows.sort(key=lambda r: r["date"])
+    write_csv(token_csv, ["date"] + tnum + ["estimated"], out_rows)
+
+    # --- model_daily: preserve measured, backfill archived as Pro-era Sonnet 4.6 ---
+    mnum = ["headline", "output", "messages"]
+    m_measured = load_measured(model_csv, ["date", "model"], mnum)
+    merge_max_into(m_measured, model_rows, ["date", "model"], mnum)
+    head_rate = rates["input"] + rates["output"] + rates["cache_creation"]
+    est_model = [
+        {"date": d, "model": "Sonnet 4.6",
+         "headline": int(round(head_rate * deltas.get(d, 0))),
+         "output": int(round(rates["output"] * deltas.get(d, 0))),
+         "messages": int(round(rates["assistant_msgs"] * deltas.get(d, 0))),
+         "estimated": 1}
+        for d in archived
+    ]
+    m_out = est_model + [{**m_measured[k], "estimated": 0} for k in sorted(m_measured)]
+    m_out.sort(key=lambda r: (r["date"], r["model"]))
+    write_csv(model_csv, ["date", "model"] + mnum + ["estimated"], m_out)
+
+    # --- totals: measured vs estimated, summed from the persisted rows ---
+    def total(rows, cols):
+        return {c: sum(int(r[c]) for r in rows) for c in cols}
+
+    meas = total([r for r in out_rows if not r["estimated"]], tnum)
+    est = total([r for r in out_rows if r["estimated"]], tnum)
+    comb = {c: meas[c] + est[c] for c in tnum}
+
+    def headline(t):
+        return t["input"] + t["output"] + t["cache_creation"]
+
     model_tot = defaultdict(lambda: defaultdict(int))
-    for r in load_csv(model_csv, ["date", "model"]).values():
-        m = r["model"]
-        model_tot[m]["headline"] += int(r["headline"])
-        model_tot[m]["output"] += int(r["output"])
-        model_tot[m]["messages"] += int(r["messages"])
+    for r in m_out:
+        model_tot[r["model"]]["headline"] += int(r["headline"])
+        model_tot[r["model"]]["output"] += int(r["output"])
+        model_tot[r["model"]]["messages"] += int(r["messages"])
 
-    dates = sorted(r["date"] for r in merged_tokens)
-    headline = tot["input"] + tot["output"] + tot["cache_creation"]
     summary = {
         "provenance": {
             "snapshot_date": datetime.now().date().isoformat(),
@@ -356,22 +426,33 @@ def main():
             "git_date_basis": "author date (local), --date=short",
             "token_dedup": "(message.id, requestId)",
             "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
-            "first_token_date": dates[0] if dates else None,
-            "last_token_date": dates[-1] if dates else None,
-            "archived_gap_note": (
-                "Project's first commits predate the earliest surviving transcript; "
-                "those pre-transcript days have no token data and never will. "
-                "Git series covers the full history."
-            ),
+            "first_measured_date": first_measured,
+            "last_measured_date": measured_dates[-1] if measured_dates else None,
+            "first_project_date": min(git_rows) if git_rows else None,
             "chart_E_baseline": {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500,
                                  "note": "published day-7 tweet values; chart E plots growth vs these"},
-            "pro_to_max_date": "2026-05-23",
+            "pro_to_max_date": PRO_TO_MAX,
+        },
+        "estimation": {
+            "method": "per-commit Pro-era rate x commits authored that day",
+            "rate_window_dates": window,
+            "rate_window_commits": win_commits,
+            "headline_tokens_per_commit": round(head_rate),
+            "archived_dates": archived,
+            "archived_commits": sum(deltas.get(d, 0) for d in archived),
+            "note": ("Pre-transcript days (sessions archived before any were saved) are "
+                     "backfilled from the Pro-era per-commit rate and flagged estimated=1 "
+                     "in the CSVs. Measured days are never overwritten by estimates."),
         },
         "totals": {
-            **tot,
-            "headline_input_output_cachecreation": headline,
-            "grand_total_incl_cache_read": headline + tot["cache_read"],
-            "cache_reuse_ratio": round(tot["cache_read"] / tot["cache_creation"], 2) if tot["cache_creation"] else None,
+            "measured": {**meas, "headline_input_output_cachecreation": headline(meas)},
+            "estimated": {**est, "headline_input_output_cachecreation": headline(est)},
+            "combined": {
+                **comb,
+                "headline_input_output_cachecreation": headline(comb),
+                "grand_total_incl_cache_read": headline(comb) + comb["cache_read"],
+                "cache_reuse_ratio": round(comb["cache_read"] / comb["cache_creation"], 2) if comb["cache_creation"] else None,
+            },
         },
         "by_model": {m: dict(v) for m, v in model_tot.items()},
         "head_snapshot": head_snapshot(),
@@ -380,14 +461,14 @@ def main():
         json.dump(summary, fh, indent=2)
         fh.write("\n")
 
-    print(f"transcripts read : {n_files}")
-    print(f"token date span  : {summary['provenance']['first_token_date']} -> {summary['provenance']['last_token_date']}")
-    print(f"headline tokens  : {headline:,}")
-    print(f"  + cache_read   : {headline + tot['cache_read']:,}")
-    print(f"cache reuse      : {summary['totals']['cache_reuse_ratio']}x")
-    print(f"commits (HEAD)   : {summary['head_snapshot']['commits']}")
-    print(f"tests   (HEAD)   : {summary['head_snapshot']['tests']}")
-    print(f"go code (HEAD)   : {summary['head_snapshot']['go_code']:,}")
+    print(f"transcripts read   : {n_files}")
+    print(f"measured span      : {first_measured} -> {summary['provenance']['last_measured_date']}")
+    print(f"backfilled (est.)  : {archived} ({summary['estimation']['archived_commits']} commits)")
+    print(f"headline measured  : {headline(meas):,}")
+    print(f"headline estimated : +{headline(est):,}")
+    print(f"headline combined  : {headline(comb):,}")
+    print(f"  + cache_read     : {headline(comb) + comb['cache_read']:,}")
+    print(f"cache reuse        : {summary['totals']['combined']['cache_reuse_ratio']}x")
     print(f"wrote {token_csv}, {model_csv}, {git_csv}, summary.json")
 
 

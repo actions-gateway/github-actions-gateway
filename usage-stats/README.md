@@ -21,6 +21,19 @@ Git-derived series are **recomputed from scratch** each run — git history is
 durable, and counts like test totals or lines of Go can legitimately go down
 (code gets deleted), so taking a max would be wrong for them.
 
+### Backfilled (estimated) days
+
+The project's first commits (2026-05-16 to -18) predate the earliest surviving
+transcript (2026-05-19) — those sessions were archived before any were saved, so
+their token usage is **gone from the logs**. Rather than drop those days, the
+script **backfills** them: it derives a per-commit token rate from the Pro-era
+window (the measured days before the Pro→Max upgrade) and multiplies by the
+number of commits authored each archived day. Every backfilled row is flagged
+`estimated=1` in the CSVs, surfaced separately in `summary.json`
+(`totals.measured` vs `totals.estimated`), and drawn distinctly on the charts
+(hatched bars, dashed lines, shaded band). The backfill is recomputed
+deterministically each run; measured rows are never overwritten by estimates.
+
 ## Quick start
 
 ```bash
@@ -44,18 +57,23 @@ the [original tweet](https://twitter.com)'s published figures.
 
 | Metric | Day 7 | Day 22 | Source |
 |---|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | **53.6M** | transcripts |
-| └ incl. cache reads | — | **1.95B** | transcripts |
-| Cache reuse ratio (reads ÷ writes) | — | **~45×** | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | **56.2M** | transcripts + est. |
+| └ measured only | — | 53.7M | transcripts |
+| └ estimated backfill (May 16–18) | — | +2.5M | per-commit estimate |
+| └ incl. cache reads | — | **2.02B** | transcripts + est. |
+| Cache reuse ratio (reads ÷ writes) | — | **~44×** | transcripts |
 | Git commits | 232 | **617** | git |
 | Tests (`func Test*`) | 269 | **393** | git |
 | Lines of Go (code) | 15.5k | **20.9k** | git |
 | Lines of Go (comments) | 2.3k | **4.2k** | git |
-| Markdown (non-blank) | 14.3k | **13.9k** | git |
+| Markdown (non-blank) | 14.3k | **14.0k** | git |
 | YAML (hand-written) | 1.5k | **2.3k** | git |
 | Model mix | mostly Sonnet 4.6 | **Sonnet 43% / Opus 57%** | transcripts |
 
-Live totals are always in [`data/summary.json`](data/summary.json).
+The headline tokens figure **includes the ~2.5M estimated backfill** for the
+archived first three days; the measured-only floor is 53.7M. Live totals (with
+the measured / estimated split) are always in
+[`data/summary.json`](data/summary.json).
 
 ## Charts
 
@@ -93,28 +111,35 @@ All under [`data/`](data/).
 | `cache_creation` / `cache_read` | cache write and cache read tokens |
 | `assistant_msgs` | assistant API responses (deduped on `message.id`+`requestId`) |
 | `user_msgs` | user/tool-result records (deduped on record `uuid`) |
+| `estimated` | `1` for backfilled (archived) days, `0` for measured |
 
 ### `model_daily.csv` — merge-preserved
-Per-day, per-model `headline` (input+output+cache_creation), `output`, and
-`messages`. Drives chart A.
+Per-day, per-model `headline` (input+output+cache_creation), `output`,
+`messages`, and an `estimated` flag. Backfilled archived days are attributed to
+the Pro-era model (Sonnet 4.6). Drives chart A.
 
 ### `git_metrics.csv` — recomputed each run
 Per-day (last commit of each day) cumulative `commits`, `tests`, and `go_code`
 (non-blank minus line-comment Go lines, excluding `vendor/`).
 
 ### `summary.json`
-Headline totals (summed from the *merged* CSV, so archival-safe), per-model
-split, an accurate HEAD working-tree snapshot, and full provenance.
+Totals split into `measured` / `estimated` / `combined` (summed from the
+persisted rows, so archival-safe), an `estimation` block documenting the
+per-commit method, per-model split, an accurate HEAD working-tree snapshot, and
+full provenance.
 
 ## Methodology & caveats
 
 - **Dedup.** Resumed/compacted sessions replay earlier records verbatim. Token
   usage is deduped on `(message.id, requestId)`; without it cache-read totals
   roughly double. Message counts dedup on record `uuid`.
-- **Archived early days.** The project's first commits (2026-05-16 to -18)
-  predate the earliest surviving transcript (2026-05-19). Those days have **no
-  token data and never will** — the token series and chart E start 2026-05-19,
-  while the git series covers the full history from 2026-05-16.
+- **Archived early days are estimated, not measured.** The project's first
+  commits (2026-05-16 to -18) predate the earliest surviving transcript
+  (2026-05-19), so their token usage is gone from the logs. Those days are
+  **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
+  (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
+  figure, not a measurement — the defensible measured-only floor is 53.7M. The
+  git series is fully measured from 2026-05-16.
 - **Chart E baseline.** Normalized against the *published* day-7 tweet values
   (10M / 232 / 269 / 15.5k), not a recomputed day-7 — so endpoints stay
   consistent with what was tweeted. The constants live in `make_charts.py`.
