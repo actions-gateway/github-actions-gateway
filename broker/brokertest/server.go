@@ -24,6 +24,7 @@ type Server struct {
 	tokenCounter        atomic.Int64
 	sessionCounter      int
 	sessions            map[string]bool                         // sessionID → active
+	sessionOwners       map[string]string                       // sessionID → ownerName ("<group>-<index>")
 	deletedSessions     map[string]chan struct{}                // sessionID → closed on DELETE
 	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
 	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
@@ -39,6 +40,7 @@ type Server struct {
 func New() *Server {
 	s := &Server{
 		sessions:        make(map[string]bool),
+		sessionOwners:   make(map[string]string),
 		deletedSessions: make(map[string]chan struct{}),
 		firstPollNotify: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
@@ -70,6 +72,26 @@ func (s *Server) RegisteredSessions() []string {
 	out := make([]string, 0, len(s.sessions))
 	for id, active := range s.sessions {
 		if active {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// ActiveSessionsForOwner returns the IDs of currently-active sessions whose
+// ownerName belongs to the given RunnerGroup. CreateSession sends ownerName as
+// "<group>-<agentIndex>", so a session is matched when its owner has the prefix
+// "<group>-". Scoping by owner lets a test assert on only its own RunnerGroup's
+// sessions, immune to sessions other tests left active on this shared stub — the
+// global RegisteredSessions/ActiveSessionCount counters accumulate across the
+// whole package and cause cross-test flakes when used for exact-count assertions.
+func (s *Server) ActiveSessionsForOwner(group string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prefix := group + "-"
+	out := make([]string, 0, len(s.sessions))
+	for id, active := range s.sessions {
+		if active && strings.HasPrefix(s.sessionOwners[id], prefix) {
 			out = append(out, id)
 		}
 	}
@@ -199,10 +221,19 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 
+		// Parse ownerName ("<group>-<agentIndex>") so tests can scope session
+		// assertions to one RunnerGroup via ActiveSessionsForOwner. Best-effort:
+		// a missing or unparsable body simply leaves the owner empty.
+		var reqBody struct {
+			OwnerName string `json:"ownerName"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
 		s.mu.Lock()
 		s.sessionCounter++
 		sessionID := fmt.Sprintf("session-%d", s.sessionCounter)
 		s.sessions[sessionID] = true
+		s.sessionOwners[sessionID] = reqBody.OwnerName
 		if bearer != "" {
 			s.bearerSessions[bearer] = sessionID
 		}

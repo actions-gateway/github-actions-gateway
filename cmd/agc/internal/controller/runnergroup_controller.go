@@ -421,6 +421,10 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			JobHandler:    jobHandler,
 			IdleThreshold: brokerCfg.IdleThreshold,
 			RenewInterval: brokerCfg.RenewJobInterval,
+			// Return the claimed agent to the pool on goroutine exit so the pool is
+			// not exhausted after maxListeners total spawns (which would block the
+			// permanent baseline from restarting).
+			ReleaseAgent: func() { pool.ReleaseAgent(agent) },
 		}
 	}
 

@@ -129,6 +129,13 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 			m.log.Warn("listener goroutine exited with error", "error", runErr, "index", idx)
 		}
 
+		// Return the claimed agent to the pool before any restart claims a fresh
+		// one, so the permanent baseline can reclaim it. Released exactly once per
+		// spawn; nil when this goroutine never claimed an agent.
+		if cfg.ReleaseAgent != nil {
+			cfg.ReleaseAgent()
+		}
+
 		m.mu.Lock()
 		delete(m.active, idx)
 		m.activeCount.Add(-1)

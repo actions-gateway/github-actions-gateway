@@ -78,6 +78,14 @@ type Config struct {
 	// SpawnReplacement requests the Multiplexer to spawn an additional listener
 	// after this goroutine acquires a job.
 	SpawnReplacement func(ctx context.Context)
+	// ReleaseAgent returns this goroutine's claimed pool agent to the available
+	// pool when the goroutine exits. The Multiplexer invokes it exactly once after
+	// Run returns. Without it a pool agent is leaked on every goroutine exit (idle
+	// shutdown, error, or cancellation), so the pool is permanently exhausted after
+	// maxListeners total spawns — and the permanent baseline can no longer reclaim
+	// an agent to restart, draining the RunnerGroup to zero listeners. Nil for a
+	// goroutine that never claimed an agent (pool exhausted at spawn).
+	ReleaseAgent func()
 }
 
 // Run executes the listener goroutine. It blocks until the context is cancelled

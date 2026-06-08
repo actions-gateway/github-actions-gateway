@@ -282,6 +282,56 @@ func TestMultiplexer_NonRetriableNoRestart(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+func TestMultiplexer_ReleasesAgentOnExit(t *testing.T) {
+	// A non-permanent goroutine that idle-exits must hand its agent back to the
+	// pool. Without this the pool is exhausted after maxListeners total spawns and
+	// the permanent baseline can no longer restart, draining the RunnerGroup to
+	// zero listeners (the Q91 flake root cause).
+	var released atomic.Int32
+	oauthSrv := oauthStub()
+	brokerSrv := httptest.NewServer(&brokerMux{}) // always 202
+
+	factory := func(_ int) listener.Config {
+		agent := makeAgent(t, oauthSrv.URL)
+		return listener.Config{
+			Group:     "test-rg",
+			Namespace: "default",
+			Agent:     agent,
+			Broker: &broker.BrokerClient{
+				BrokerURL:  brokerSrv.URL,
+				UseV2Flow:  true,
+				HTTPClient: brokerSrv.Client(),
+			},
+			HTTPClient:    oauthSrv.Client(),
+			IdleThreshold: 5, // idle-exit quickly
+			ReleaseAgent:  func() { released.Add(1) },
+		}
+	}
+
+	m := listener.NewMultiplexer(factory, 3, nil)
+	m.RestartDelay = time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+	// Spawn one extra non-permanent goroutine; it idle-exits (not the last) and
+	// must release its agent.
+	m.SpawnReplacement(ctx)
+
+	assert.Eventually(t, func() bool { return released.Load() >= 1 }, 4*time.Second, 10*time.Millisecond,
+		"idle-exiting goroutine should release its agent back to the pool")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+
+	// The permanent baseline also releases on shutdown; every spawned goroutine
+	// releases exactly once, so releases must equal total spawns.
+	assert.GreaterOrEqual(t, released.Load(), int32(2),
+		"both the idle replacement and the baseline should release on exit")
+}
+
 // newMuxWithServersWithThreshold creates a Multiplexer with a custom idleThreshold.
 func newMuxWithServersWithThreshold(t *testing.T, maxListeners int32, mux *brokerMux, idleThreshold int) (*listener.Multiplexer, *httptest.Server, *httptest.Server) {
 	t.Helper()
