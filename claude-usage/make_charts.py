@@ -10,10 +10,10 @@ off as measured data. Run:
     python3 claude-usage/make_charts.py        # needs matplotlib + numpy
 
 Outputs PNGs (1x + @2x) to claude-usage/charts/:
-    A_model_inflection      daily token usage by model, with the Pro->Max marker
-    E_growth_timeseries     cumulative growth vs the day-7 post baseline (fan)
-    F_token_anatomy         daily input/output/cache tokens on a log scale
-    I_cumulative_cache      cumulative cache reads vs writes (stacked area)
+    tokens_by_model      daily token usage by model, with the Pro->Max marker
+    growth_vs_codebase     cumulative growth vs the day-7 post baseline (fan)
+    token_anatomy         daily input/output/cache tokens on a log scale
+    cumulative_cache      cumulative cache reads vs writes (stacked area)
 """
 
 import csv
@@ -32,7 +32,7 @@ DATA = os.path.join(HERE, "data")
 CHARTS = os.path.join(HERE, "charts")
 
 PRO_TO_MAX = date(2026, 5, 23)
-# Published day-7 Bluesky post values; chart E plots growth relative to these.
+# Published day-7 Bluesky post values; the growth chart plots growth relative to these.
 BASELINE = {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500}
 MODEL_COLORS = {
     "Sonnet 4.6": "#D4A24E", "Opus 4.7": "#7C5CBF",
@@ -71,7 +71,7 @@ def shade_estimated(ax, est_dates, dts):
     ax.axvspan(lo, first_measured, color="#999", alpha=0.10, lw=0, zorder=0)
 
 
-def chart_A():
+def chart_tokens_by_model():
     rows = load("model_daily.csv")
     days = sorted({r["date"] for r in rows})
     est_dates = {r["date"] for r in rows if is_est(r)}
@@ -117,7 +117,7 @@ def chart_A():
     ax.grid(axis="y", alpha=0.25)
     fig.text(0.012, 0.005, "hatched bars (May 16–18) estimated from archived sessions", fontsize=7.5, color="#999")
     fig.tight_layout()
-    save(fig, "A_model_inflection")
+    save(fig, "tokens_by_model")
 
 
 def _token_rows():
@@ -125,7 +125,7 @@ def _token_rows():
     return rows, sorted(rows)
 
 
-def chart_E():
+def chart_growth_vs_codebase():
     trows, tdays = _token_rows()
     cum = {}
     run = 0
@@ -186,10 +186,10 @@ def chart_E():
     fig.text(0.012, 0.01, "dashed token segment / shading (May 16–18) estimated from archived sessions",
              fontsize=7.5, color="#999")
     fig.tight_layout()
-    save(fig, "E_growth_timeseries")
+    save(fig, "growth_vs_codebase")
 
 
-def chart_F():
+def chart_token_anatomy():
     trows, tdays = _token_rows()
     days = [dparse(d) for d in tdays]
     est_dates = {d for d in tdays if is_est(trows[d])}
@@ -221,10 +221,10 @@ def chart_F():
     ax.grid(alpha=0.22, which="both")
     fig.text(0.012, 0.01, "shaded band (May 16–18) estimated from archived sessions", fontsize=7.5, color="#999")
     fig.tight_layout()
-    save(fig, "F_token_anatomy")
+    save(fig, "token_anatomy")
 
 
-def chart_I():
+def chart_cumulative_cache():
     trows, tdays = _token_rows()
     days = [dparse(d) for d in tdays]
     est_dates = {d for d in tdays if is_est(trows[d])}
@@ -253,14 +253,14 @@ def chart_I():
     ax.grid(axis="y", alpha=0.22)
     fig.text(0.012, 0.01, "shaded band (May 16–18) estimated from archived sessions", fontsize=7.5, color="#999")
     fig.tight_layout()
-    save(fig, "I_cumulative_cache")
+    save(fig, "cumulative_cache")
 
 
 def main():
-    chart_A()
-    chart_E()
-    chart_F()
-    chart_I()
+    chart_tokens_by_model()
+    chart_growth_vs_codebase()
+    chart_token_anatomy()
+    chart_cumulative_cache()
     print(f"wrote charts to {CHARTS}")
 
 

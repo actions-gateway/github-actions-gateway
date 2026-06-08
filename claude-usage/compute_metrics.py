@@ -429,8 +429,8 @@ def main():
             "first_measured_date": first_measured,
             "last_measured_date": measured_dates[-1] if measured_dates else None,
             "first_project_date": min(git_rows) if git_rows else None,
-            "chart_E_baseline": {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500,
-                                 "note": "published day-7 Bluesky post values; chart E plots growth vs these"},
+            "growth_chart_baseline": {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500,
+                                 "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"},
             "pro_to_max_date": PRO_TO_MAX,
         },
         "estimation": {

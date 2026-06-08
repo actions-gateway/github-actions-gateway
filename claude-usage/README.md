@@ -81,23 +81,23 @@ the measured / estimated split) are always in
 Rendered to [`charts/`](charts/) at 1× and `@2x` (for upload). Each is
 regenerable from the CSVs.
 
-### A — Daily token usage by model
-![A](charts/A_model_inflection.png)
+### Daily token usage by model
+![Daily token usage by model](charts/tokens_by_model.png)
 The Pro→Max upgrade (dashed line, 2026-05-23) is visible as the hand-off from
 Sonnet 4.6 (gold) to Opus 4.7 (purple), then Opus 4.8 (blue).
 
-### E — Tokens vs. the codebase: cumulative growth
-![E](charts/E_growth_timeseries.png)
+### Tokens vs. the codebase: cumulative growth
+![Cumulative growth vs the codebase](charts/growth_vs_codebase.png)
 Each series normalized to its **day-7 post value** (1×), so the lines cross
 near the post and fan apart. Token spend grew ~5× while the code grew ~1.4×.
 
-### F — Anatomy of token usage (log scale)
-![F](charts/F_token_anatomy.png)
+### Anatomy of token usage (log scale)
+![Token usage anatomy on a log scale](charts/token_anatomy.png)
 Daily input / output / cache-creation / cache-read, log Y. Cache reads sit an
 order of magnitude above everything else, every day.
 
-### I — Cumulative cache traffic
-![I](charts/I_cumulative_cache.png)
+### Cumulative cache traffic
+![Cumulative cache traffic](charts/cumulative_cache.png)
 Cumulative cache reads (1.9B) vs writes (42M). Write once, replay ~45×.
 
 ## Data files
@@ -117,7 +117,7 @@ All under [`data/`](data/).
 ### `model_daily.csv` — merge-preserved
 Per-day, per-model `headline` (input+output+cache_creation), `output`,
 `messages`, and an `estimated` flag. Backfilled archived days are attributed to
-the Pro-era model (Sonnet 4.6). Drives chart A.
+the Pro-era model (Sonnet 4.6). Drives the token-usage-by-model chart.
 
 ### `git_metrics.csv` — recomputed each run
 Per-day (last commit of each day) cumulative `commits`, `tests`, and `go_code`
@@ -141,7 +141,7 @@ full provenance.
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
   figure, not a measurement — the defensible measured-only floor is 53.7M. The
   git series is fully measured from 2026-05-16.
-- **Chart E baseline.** Normalized against the *published* day-7 post values
+- **Growth-chart baseline.** Normalized against the *published* day-7 post values
   (10M / 232 / 269 / 15.5k), not a recomputed day-7 — so endpoints stay
   consistent with what was posted. The constants live in `make_charts.py`.
 - **Date basis differs by source.** Token dates are UTC (from message

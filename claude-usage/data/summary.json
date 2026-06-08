@@ -10,12 +10,12 @@
     "first_measured_date": "2026-05-19",
     "last_measured_date": "2026-06-08",
     "first_project_date": "2026-05-16",
-    "chart_E_baseline": {
+    "growth_chart_baseline": {
       "tokens": 10000000,
       "commits": 232,
       "tests": 269,
       "go_code": 15500,
-      "note": "published day-7 Bluesky post values; chart E plots growth vs these"
+      "note": "published day-7 Bluesky post values; the growth chart plots growth vs these"
     },
     "pro_to_max_date": "2026-05-23"
   },
@@ -39,13 +39,13 @@
   },
   "totals": {
     "measured": {
-      "input": 739186,
-      "output": 10638216,
-      "cache_creation": 43081814,
-      "cache_read": 1912256080,
-      "assistant_msgs": 15802,
-      "user_msgs": 18136,
-      "headline_input_output_cachecreation": 54459216
+      "input": 743099,
+      "output": 10650018,
+      "cache_creation": 43102204,
+      "cache_read": 1916195229,
+      "assistant_msgs": 15817,
+      "user_msgs": 18151,
+      "headline_input_output_cachecreation": 54495321
     },
     "estimated": {
       "input": 6559,
@@ -57,15 +57,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 745745,
-      "output": 11117152,
-      "cache_creation": 45091239,
-      "cache_read": 1979774923,
-      "assistant_msgs": 16544,
-      "user_msgs": 18997,
-      "headline_input_output_cachecreation": 56954136,
-      "grand_total_incl_cache_read": 2036729059,
-      "cache_reuse_ratio": 43.91
+      "input": 749658,
+      "output": 11128954,
+      "cache_creation": 45111629,
+      "cache_read": 1983714072,
+      "assistant_msgs": 16559,
+      "user_msgs": 19012,
+      "headline_input_output_cachecreation": 56990241,
+      "grand_total_incl_cache_read": 2040704313,
+      "cache_reuse_ratio": 43.97
     }
   },
   "by_model": {
@@ -90,9 +90,9 @@
       "messages": 27
     },
     "Opus 4.8": {
-      "headline": 17853332,
-      "output": 3609673,
-      "messages": 4164
+      "headline": 17889437,
+      "output": 3621475,
+      "messages": 4179
     }
   },
   "head_snapshot": {
@@ -102,6 +102,6 @@
     "yaml_handwritten": 2322,
     "yaml_generated": 25531,
     "tests": 393,
-    "commits": 620
+    "commits": 622
   }
 }
