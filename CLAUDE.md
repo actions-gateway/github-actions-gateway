@@ -84,6 +84,17 @@ Use the per-module test commands in [`docs/development/testing.md`](docs/develop
 
 **Run `make check` before concluding work or requesting review.** It is the one-command fast gate: gofmt + golangci-lint + `docs/STATUS.md` lint + unit tests, mirroring `.github/workflows/unit-test.yml` exactly — a green `make check` means a green unit-test workflow. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers stay separate; run them when the change warrants it. A sub-second subset (gofmt on staged Go files + STATUS.md lint) also runs at commit time via the tracked pre-commit hook in `.githooks/` — installed by `make hooks` or `scripts/setup.sh`; bypass once with `git commit --no-verify`.
 
+**Throttle raw `go build`/`go test` run outside `make` — especially `-race`.** The Makefile auto-throttles its own recipes on an interactive GUI dev shell (background-QoS priority + I/O throttle + a parallelism cap), but a bare `go build`/`go test` you invoke directly gets **none** of that — full priority, uncapped, no I/O throttle. On a small Mac a heavy run (a `-race` build/test is a ~5–10× CPU/memory/I/O amplifier that `make test` does not even use), *especially alongside other concurrent sessions*, can saturate the machine and trip the WindowServer watchdog — the GUI freezes/restarts. So prefer a `make` target when one exists, and when you must call `go` directly on a dev machine, prefix it with the throttle wrapper:
+
+```bash
+# from the repo root:
+$(scripts/local-throttle.sh prefix) go test -race ./...
+# from a module subdir, resolve the script at the repo root first:
+TP="$(git rev-parse --show-toplevel)/scripts/local-throttle.sh"; (cd cmd/agc && $("$TP" prefix) go test -race ./...)
+```
+
+`scripts/local-throttle.sh prefix` prints the platform throttle (`taskpolicy …` on macOS, `nice`[` + ionice`] on Linux) or **nothing** on CI/headless/SSH shells, so the prefix is a safe no-op there and needs no `if`. This is the interim mitigation for the Makefile-only coverage gap tracked as Q92 (a `PreToolUse` hook will eventually automate it); the failure mode is real — an unthrottled `go test -race` in a parallel worktree session crashed WindowServer during the session that filed Q92.
+
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, test setup, or the code itself. Ensure the intent of each test matches the implementation.
 
 **Flake fixes go first.** If a CI test passes on rerun without a code change, file a Queue item for it and move that item to the top of the Queue before continuing other work — flake cost compounds across every future PR. See [`docs/development/maintaining-backlog.md`](docs/development/maintaining-backlog.md#flake-fixes-go-first).
