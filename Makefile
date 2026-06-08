@@ -3,6 +3,12 @@
 # Requires Go 1.21+ for the -C flag.
 # Run `make` (or `make help`) for the list of available targets.
 
+# Recipes use bash-only constructs (`set -o pipefail`, `[[ ]]`). GNU make spawns
+# /bin/sh for recipe lines, which is dash on the CI ubuntu runner and rejects
+# `set -o pipefail`; pin the recipe shell to bash so recipes behave the same on
+# CI and on dev machines (where /bin/sh already happens to be bash).
+SHELL := /bin/bash
+
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 KUBEBUILDER    := $(REPO_ROOT)/.build/kubebuilder
