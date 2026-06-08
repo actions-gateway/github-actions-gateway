@@ -65,6 +65,31 @@ make test-race        # per-module `go test -race` across the whole workspace
 
 It is deliberately a separate target from `make test`/`make check` so the fast local loop stays fast and never silently becomes a `-race` run; treat it like `make vulncheck` — a heavier gate you run when a change warrants it (anything touching the concurrency core) or before a final pre-PR pass.
 
+### Coverage measurement and the ratchet
+
+The CI `unit-test.yml` workflow has a `coverage` job that measures per-module unit-test coverage and gates it with a **no-regression ratchet**, not an absolute percentage target. [`scripts/coverage.sh`](../../scripts/coverage.sh) is the single source of truth; the Makefile exposes three targets, all of which measure coverage the same per-module way the workspace requires (a repo-root `go test ./...` does not work — see [go-workspaces.md](go-workspaces.md)):
+
+```bash
+make cover         # print the per-module coverage table (writes nothing)
+make cover-check   # the CI gate: fail if a module dropped below its floor
+make cover-update  # re-record the baseline floor in coverage-baseline.txt
+```
+
+**What is measured.** For each module the script runs `go test -coverprofile`, then computes the module's aggregate statement coverage with `go tool cover -func` over a profile from which **mechanically-generated code is filtered out** — `zz_generated*.go` (controller-gen DeepCopy) and `groupversion_info.go` (scheme boilerplate). Filtering these keeps the floor reflecting hand-written logic, so adding a CRD field (which grows `zz_generated`) can't trip the gate without a real test change. We deliberately **do not** exclude `main.go`: in this repo several binaries (`cmd/worker`, `cmd/proxy`) keep real, unit-tested logic in their `package main`, so a blanket entrypoint exclusion would hide tested logic and leave those modules ungated. The genuinely-thin entrypoints (`cmd/agc`, `cmd/gmc`) instead contribute a lower but still-defended floor — which costs the ratchet nothing, since a lower floor never causes a false failure.
+
+**How it gates.** [`coverage-baseline.txt`](../../coverage-baseline.txt) records each module's floor. `make cover-check` fails only if a module drops **more than 0.5 percentage points** below its floor. Coverage is deterministic (the gate runs without `-race`), so this small tolerance is not for flake — it absorbs benign denominator drift (adding a couple of uncovered boilerplate lines marginally dilutes the ratio) while still catching a real regression (deleting a tested function, gutting a test) on any module of meaningful size. When coverage rises well above a floor, the gate prints a note suggesting `make cover-update`.
+
+**Updating the floor.** When you intentionally add tests and coverage goes up, run `make cover-update` and commit the new `coverage-baseline.txt` — the ratchet then defends the higher number. Lowering a floor is allowed but lands as an explicit, reviewable diff in that file rather than silently. The current baseline (recorded for Q77):
+
+| Module | Floor | Module | Floor |
+|---|---|---|---|
+| `broker` | 48.3% | `cmd/proxy` | 72.0% |
+| `cmd/agc` | 77.4% | `cmd/worker` | 72.0% |
+| `cmd/gmc` | 48.2% | `githubapp` | 81.8% |
+| `cmd/probe` | 0.0% (no tests yet) | `test/fakegithub` | 0.0% (no tests yet) |
+
+Like `make test-race` and `make vulncheck`, `cover-check` is **not** part of `make check`: it re-runs the unit tests a second time (with `-cover` instead of `-race`), so folding it into the fast local loop would double its test time. Run it when a change adds or removes tests, or before a final pre-PR pass. Like the other heavy targets it applies the [local throttle](#resource-auto-throttle-on-gui-dev-machines), so a run on a GUI dev machine stays desktop-safe; on CI the prefix is a no-op.
+
 ### The shellcheck gate
 
 `make shellcheck` runs `shellcheck` over every tracked shell script under `scripts/` and is wired into `make check`, so the local pre-review gate matches CI. The dedicated `shellcheck` job in `.github/workflows/unit-test.yml` runs the same `make shellcheck` target, gated on a `scripts` paths-filter (`scripts/**`, the `Makefile`, and the workflow itself) so a scripts-only change doesn't also trigger the full Go lint.

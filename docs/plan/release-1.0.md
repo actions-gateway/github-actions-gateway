@@ -156,14 +156,27 @@ where a threshold applies, the deliverable is as much the **agreed bar** as
 the plumbing, and those gate by *not getting worse* to avoid manufacturing
 low-value tests or churn.
 
-- [ ] **Test coverage measured + gated** ([Q77](../STATUS.md), *gating*):
-  `unit-test.yml` reports per-module `go test` coverage. **Threshold
-  decision:** start report-only for one cycle to establish a baseline, then
-  enforce a *no-regression ratchet* — the build fails if a module's coverage
-  drops below its recorded floor. Prefer the ratchet over an arbitrary
-  absolute percentage. Generated code (`zz_generated*`,
-  `api/v1alpha1/groupversion_info.go`) and thin `main`/wiring packages are
-  excluded from the floor so the number reflects logic, not boilerplate.
+- [x] **Test coverage measured + gated** ([Q77](../STATUS.md), *gating*):
+  a `coverage` job in `unit-test.yml` measures per-module `go test` coverage
+  and gates it with a *no-regression ratchet* rather than an arbitrary absolute
+  percentage. [`scripts/coverage.sh`](../../scripts/coverage.sh) is the single
+  source of truth (`make cover`/`cover-check`/`cover-update`); per module it
+  takes `go test -coverprofile` and computes the aggregate with `go tool cover
+  -func` over a profile **filtered** of mechanically-generated code
+  (`zz_generated*`, `groupversion_info.go`), so a CRD-field add can't trip the
+  gate without a real test change. `main.go` is **not** excluded (departing
+  from the original "exclude thin main/wiring" sketch): cmd/worker and cmd/proxy
+  keep unit-tested logic in `package main`, so a blanket exclusion would hide
+  tested logic and leave them ungated; the thin agc/gmc entrypoints just yield a
+  lower-but-defended floor, which costs a ratchet nothing. Floors live in
+  [`coverage-baseline.txt`](../../coverage-baseline.txt); `cover-check` fails
+  only if a module drops **>0.5pp** below its floor (small tolerance absorbing
+  benign denominator drift — coverage is deterministic, so it's not for flake).
+  **Recorded baseline:** broker 48.3%, cmd/agc 77.4%, cmd/gmc 48.2%, cmd/proxy
+  72.0%, cmd/worker 72.0%, githubapp 81.8%; cmd/probe and test/fakegithub 0.0%
+  (no tests yet). Kept out of `make check` (like `test-race`/`vulncheck`) so the
+  fast loop doesn't double-run the suite. Documented in
+  [`docs/development/testing.md`](../development/testing.md).
 - [x] **Code-duplication check** ([Q78](../STATUS.md), *gating*): enabled
   `dupl` in the root `.golangci.yml` at the conventional 150-token threshold,
   so it runs per-module the same way CI lints. Triage of the initial run found

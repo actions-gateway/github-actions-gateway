@@ -49,6 +49,8 @@ jobs:
               - 'tools/**'
               - '.golangci.yml'
               - 'Makefile'
+              - 'scripts/coverage.sh'
+              - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             status:
               - 'docs/STATUS.md'
@@ -152,3 +154,24 @@ jobs:
       # speed here while staying desktop-safe when invoked locally.
       - name: run unit tests (-race)
         run: make test-race
+
+  # Coverage no-regression ratchet. Separate from unit-test (which runs -race):
+  # this re-runs the unit tests with -cover (no race) and fails only if a
+  # module's coverage drops below the floor recorded in coverage-baseline.txt
+  # minus a small tolerance. `make cover-check` is the single source of truth
+  # for the measurement and gate. See docs/plan/release-1.0.md §F and
+  # docs/development/testing.md. Runs in parallel with unit-test rather than
+  # chained after it so the race gate's latency isn't serialized behind a second
+  # (uninstrumented) test run.
+  coverage:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.work
+      - name: coverage ratchet (make cover-check)
+        run: make cover-check
