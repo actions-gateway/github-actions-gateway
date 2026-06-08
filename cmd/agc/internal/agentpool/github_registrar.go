@@ -93,7 +93,7 @@ func (r *GithubRegistrar) Register(ctx context.Context, token string, params Reg
 	if err != nil {
 		return nil, fmt.Errorf("generate jit config: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("generate jit config: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(respBody, 512))
@@ -132,7 +132,7 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 	if err != nil {
 		return fmt.Errorf("deregister runner: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("deregister runner: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 512))

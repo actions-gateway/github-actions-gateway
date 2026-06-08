@@ -383,7 +383,7 @@ func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Clien
 	if err != nil {
 		return fmt.Sprintf("request-error: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
 
 	logger.Info("AcknowledgeRunnerRequest response",

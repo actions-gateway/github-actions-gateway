@@ -211,7 +211,7 @@ func slogDefault() *slog.Logger { return slog.Default() }
 func TestHTTPFetcher_ParsesCIDRs(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"actions":["140.82.112.0/20","192.30.252.0/22"]}`)
+		_, _ = fmt.Fprint(w, `{"actions":["140.82.112.0/20","192.30.252.0/22"]}`)
 	}))
 	defer ts.Close()
 
@@ -235,7 +235,7 @@ func TestHTTPFetcher_Non200Response(t *testing.T) {
 
 func TestHTTPFetcher_InvalidJSON(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `not json`)
+		_, _ = fmt.Fprint(w, `not json`)
 	}))
 	defer ts.Close()
 
@@ -246,7 +246,7 @@ func TestHTTPFetcher_InvalidJSON(t *testing.T) {
 
 func TestHTTPFetcher_MalformedCIDRSkipped(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"actions":["140.82.112.0/20","not-a-cidr"]}`)
+		_, _ = fmt.Fprint(w, `{"actions":["140.82.112.0/20","not-a-cidr"]}`)
 	}))
 	defer ts.Close()
 
@@ -273,7 +273,7 @@ func TestHTTPFetcher_ContextCancelled(t *testing.T) {
 
 func TestHTTPFetcher_EmptyActions(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, `{"actions":[]}`)
+		_, _ = fmt.Fprint(w, `{"actions":[]}`)
 	}))
 	defer ts.Close()
 
@@ -300,7 +300,7 @@ func TestHTTPFetcher_MergesAllRanges(t *testing.T) {
 	)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{
+		_, _ = fmt.Fprintf(w, `{
 			"verifiable_password_authentication": false,
 			"ssh_key_fingerprints": {},
 			"api":      [%q],

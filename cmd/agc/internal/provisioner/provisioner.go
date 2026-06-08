@@ -255,7 +255,10 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 			}
 		}
 		if v, ok := ap.Variables["system.github.run_id"]; ok {
-			fmt.Sscanf(v.Value, "%d", &runID)
+			// A malformed run_id leaves runID at 0, falling back to ap.RunID below.
+			if _, err := fmt.Sscanf(v.Value, "%d", &runID); err != nil {
+				runID = 0
+			}
 		}
 	}
 	if runID == 0 {
@@ -523,7 +526,7 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 	if err != nil {
 		return fmt.Errorf("rerun API call: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 
 	// GitHub returns 201 Created on success.

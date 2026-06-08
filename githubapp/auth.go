@@ -143,7 +143,7 @@ func (p *installationTokenProvider) fetchToken(ctx context.Context) (*Installati
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: POST access_tokens: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("githubapp: POST access_tokens returned %d", resp.StatusCode)

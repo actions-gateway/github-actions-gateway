@@ -128,7 +128,7 @@ func startMetricsProxy(t *testing.T, ca *testCA) *Server {
 		if err != nil {
 			return false
 		}
-		c.Close()
+		_ = c.Close()
 		return true
 	}, 2*time.Second, 10*time.Millisecond)
 	return srv
@@ -158,7 +158,7 @@ func TestProxy_MetricsMTLS_AcceptsValidClientCert(t *testing.T) {
 	clientCert := ca.leaf(t, "scraper", false)
 	resp, err := httpsClient(ca, &clientCert).Get("https://" + srv.MetricsAddr + "/metrics")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(body), "actions_gateway_proxy_",
@@ -200,12 +200,12 @@ func TestProxy_MetricsMTLS_NotOnHealthPort(t *testing.T) {
 
 	resp, err := http.Get("http://" + srv.HealthAddr + "/metrics")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode,
 		"/metrics must not be served plaintext on the health port when mTLS is enabled")
 
 	healthResp, err := http.Get("http://" + srv.HealthAddr + "/healthz")
 	require.NoError(t, err)
-	defer healthResp.Body.Close()
+	defer func() { _ = healthResp.Body.Close() }()
 	assert.Equal(t, http.StatusOK, healthResp.StatusCode, "/healthz must still answer plaintext for kubelet probes")
 }

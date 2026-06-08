@@ -72,7 +72,7 @@ func TestMetricsClientCAVerifier_Handshake(t *testing.T) {
 	}}}
 	resp, err := withCert.Get(srv.URL)
 	require.NoError(t, err)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	noCert := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
