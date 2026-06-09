@@ -131,23 +131,12 @@ jobs:
           SBOM: sbom-${{ matrix.name }}.spdx.json
         run: |
           set -euo pipefail
-          # Retry a command up to 5 times with linear backoff. GHCR pushes
-          # occasionally return transient HTTP/2 stream errors (INTERNAL_ERROR);
-          # cosign sign/attest are idempotent, so retrying is safe.
-          retry() {
-            local n max=5
-            for n in 1 2 3 4 5; do
-              if "$@"; then return 0; fi
-              echo "attempt ${n}/${max} failed: $*; retrying" >&2
-              sleep $((n * 5))
-            done
-            echo "giving up after ${max} attempts: $*" >&2
-            return 1
-          }
           # Keyless: cosign reads the ambient GitHub OIDC token (id-token: write),
           # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
-          retry cosign sign --yes "${IMAGE}"
-          retry cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
+          # scripts/retry.sh absorbs transient GHCR push errors (HTTP/2
+          # INTERNAL_ERROR / 5xx) — sign and attest are idempotent.
+          scripts/retry.sh cosign sign --yes "${IMAGE}"
+          scripts/retry.sh cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
       - name: Record published digest in the run summary
         # Surface the immutable ref@digest in the workflow summary so the release
         # manager can copy it straight into the GitHub Release notes and the
@@ -230,20 +219,6 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          # Retry a command up to 5 times with linear backoff. GHCR pushes
-          # occasionally return transient HTTP/2 stream errors (INTERNAL_ERROR),
-          # which would otherwise fail the whole release; helm push and cosign
-          # sign are both idempotent, so retrying is safe.
-          retry() {
-            local n max=5
-            for n in 1 2 3 4 5; do
-              if "$@"; then return 0; fi
-              echo "attempt ${n}/${max} failed: $*; retrying" >&2
-              sleep $((n * 5))
-            done
-            echo "giving up after ${max} attempts: $*" >&2
-            return 1
-          }
           # Chart SemVer has no leading 'v'. Derive both chart version and
           # appVersion from the release tag so the published artifact's version
           # always matches the release — no manual Chart.yaml bump to forget.
@@ -254,10 +229,10 @@ jobs:
             --destination "${RUNNER_TEMP}"
           pkg="${RUNNER_TEMP}/actions-gateway-${version}.tgz"
           # helm push prints "Digest: sha256:…" on its own line; capture it so the
-          # signature binds to the exact pushed bytes, not the floating tag. A pipe
-          # can't be passed to retry(), so push to a log file then surface it.
-          push_chart() { helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push.log" 2>&1; }
-          retry push_chart
+          # signature binds to the exact pushed bytes, not the floating tag.
+          # scripts/retry.sh absorbs transient GHCR push errors; its stdout (the
+          # successful attempt's output) is logged and parsed for the digest.
+          scripts/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push.log" 2>&1
           cat "${RUNNER_TEMP}/push.log"
           digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push.log")"
           if [[ -z "${digest}" ]]; then
@@ -266,7 +241,7 @@ jobs:
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway@${digest}"
           # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
-          retry cosign sign --yes "${ref}"
+          scripts/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Record published chart in the run summary
         env:
