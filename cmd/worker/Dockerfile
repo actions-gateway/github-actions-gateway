@@ -54,5 +54,14 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.title="worker" \
       org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps Runner.Worker with a job-payload entrypoint" \
       org.opencontainers.image.licenses="Apache-2.0"
+# Bundle the license attribution this image redistributes for the wrapper binary
+# we add on top of the runner base: the project's own Apache-2.0 LICENSE +
+# NOTICE, and THIRD-PARTY-NOTICES (the aggregated license/notice texts of the
+# statically linked vendored deps). /licenses is the Red Hat/OpenShift
+# container-certification convention and pairs with the
+# org.opencontainers.image.licenses label above. The upstream actions-runner base
+# carries its own license files for its components; this covers only what we add.
+# Regenerate THIRD-PARTY-NOTICES with `make third-party-notices`.
+COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 COPY --from=builder /wrapper /usr/local/bin/wrapper
 ENTRYPOINT ["/usr/local/bin/wrapper"]

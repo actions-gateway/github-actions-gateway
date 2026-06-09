@@ -29,5 +29,12 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.title="agc" \
       org.opencontainers.image.description="Actions Gateway Controller — multiplexes virtual runner sessions and provisions ephemeral worker pods" \
       org.opencontainers.image.licenses="Apache-2.0"
+# Bundle the license attribution this image redistributes: the project's own
+# Apache-2.0 LICENSE + NOTICE, and THIRD-PARTY-NOTICES (the aggregated
+# license/notice texts of the statically linked vendored deps). /licenses is the
+# Red Hat/OpenShift container-certification convention and pairs with the
+# org.opencontainers.image.licenses label above. Regenerate THIRD-PARTY-NOTICES
+# with `make third-party-notices`. COPY needs no shell, so this works on distroless.
+COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 COPY --from=builder /bin/agc /agc
 ENTRYPOINT ["/agc"]

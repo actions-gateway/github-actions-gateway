@@ -34,6 +34,15 @@
 # re-exclude the !**/*.go rule above pulls its ~29 MB of source back in.
 tools/vendor/**
 
+# License attribution bundled into every production image at /licenses/
+# (Apache-2.0 §4(d), the MIT/BSD reproduce-the-notice clauses). THIRD-PARTY-NOTICES
+# is generated from vendor/ by `make third-party-notices`. Each production
+# Dockerfile COPYs these three files; without the re-include the default-deny
+# `**` above hides them from the build context and the COPY fails.
+!LICENSE
+!NOTICE
+!THIRD-PARTY-NOTICES
+
 # If a build ever needs a non-.go file (an embedded asset, a config
 # template, etc.) re-include the specific path here. Do not blanket-include
 # directories — the point of this file is to keep the context tight.

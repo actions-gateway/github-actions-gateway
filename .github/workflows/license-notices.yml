@@ -1,0 +1,64 @@
+name: license-notices
+
+# Drift gate for the committed THIRD-PARTY-NOTICES file. The four production
+# images COPY LICENSE + NOTICE + THIRD-PARTY-NOTICES into /licenses/ to satisfy
+# the reproduce-the-notice clauses of the statically linked vendored deps
+# (Apache-2.0 §4(d), MIT/BSD). THIRD-PARTY-NOTICES is generated from the
+# committed vendor/ tree and committed so reviewers see the content; this gate
+# regenerates it and fails if the committed copy is stale (a dep was added,
+# removed, or bumped without re-running `make third-party-notices`). Mirrors the
+# changes+validate shape of manifest-validate.yml.
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+# Cancel superseded runs of this workflow on the same PR; pushes to main are
+# never cancelled (each is a distinct post-merge gate). Mirrors unit-test.yml.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Fine-grained path gate. The coarse paths-ignore above still lets unrelated
+  # files trigger this workflow, so classify the diff and skip the check job when
+  # nothing it covers changed. On push to main the job always runs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      notices: ${{ steps.filter.outputs.notices }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            notices:
+              - 'vendor/**'
+              - 'THIRD-PARTY-NOTICES'
+              - 'scripts/gen-third-party-notices.sh'
+              - 'Makefile'
+              - '.github/workflows/license-notices.yml'
+
+  check:
+    needs: [changes]
+    if: needs.changes.outputs.notices == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      # `make third-party-notices-check` regenerates THIRD-PARTY-NOTICES from the
+      # committed vendor/ tree into a temp file and diffs it against the committed
+      # copy. No Go toolchain needed — the generator reads only vendor/ with
+      # awk/find/diff. The single source of truth for the gate is the make target.
+      - name: verify THIRD-PARTY-NOTICES is current
+        run: make third-party-notices-check
