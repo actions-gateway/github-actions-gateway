@@ -148,3 +148,94 @@ jobs:
           # table header, so a bullet renders cleanly where a header-less table row
           # would not.
           printf -- '- **%s** — `%s`\n' "${{ matrix.name }}" "${IMAGE}" >> "${GITHUB_STEP_SUMMARY}"
+
+  # Package, push, and keyless-sign the Helm chart as an OCI artifact to GHCR,
+  # alongside the images. OCI (not a gh-pages chart repo) is chosen so the chart
+  # reuses the SAME registry, GHCR login, and Fulcio/Rekor keyless-cosign flow as
+  # the images — closing the supply-chain story with no separate hosting surface
+  # or long-lived key. Artifact Hub (see Chart.yaml annotations) indexes the OCI
+  # ref for discoverability. Like the image sign/attest steps, this is first
+  # exercised on a v* tag publish, never on a PR. See docs/operations/release.md.
+  chart-publish:
+    # Runs only after every image leg succeeds, so a release never publishes a
+    # chart whose referenced images failed to push.
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout
+      packages: write # push the chart + its signature to GHCR
+      id-token: write # KEYLESS cosign — same Fulcio/Rekor flow as the images
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve publish tag
+        id: tag
+        # Same guard as the image job: refuse to publish from a non-tag ref with
+        # no explicit input so a manual run on a branch can't push a junk version.
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [[ -z "${tag}" ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ "${tag}" != v* ]]; then
+            echo "refusing to publish: resolved tag '${tag}' is not a v* version" >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+      - uses: azure/setup-helm@v4
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Log in to GHCR (helm OCI)
+        # helm keeps its OWN OCI credential store, so the docker login the image
+        # job uses does not authenticate helm — log helm in explicitly. Token on
+        # stdin keeps it out of the process args/listing.
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${GHCR_TOKEN}" | helm registry login "${REGISTRY}" \
+            --username "${ACTOR}" --password-stdin
+      - name: Package, push, and sign the chart (keyless)
+        id: chart
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # Chart SemVer has no leading 'v'. Derive both chart version and
+          # appVersion from the release tag so the published artifact's version
+          # always matches the release — no manual Chart.yaml bump to forget.
+          version="${TAG#v}"
+          repo="oci://${REGISTRY}/${OWNER}/charts"
+          helm package charts/actions-gateway \
+            --version "${version}" --app-version "${version}" \
+            --destination "${RUNNER_TEMP}"
+          pkg="${RUNNER_TEMP}/actions-gateway-${version}.tgz"
+          # helm push prints "Digest: sha256:…" on its own line; capture it so the
+          # signature binds to the exact pushed bytes, not the floating tag.
+          helm push "${pkg}" "${repo}" 2>&1 | tee "${RUNNER_TEMP}/push.log"
+          digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push.log")"
+          if [[ -z "${digest}" ]]; then
+            echo "could not parse pushed chart digest from helm push output" >&2
+            exit 1
+          fi
+          ref="${REGISTRY}/${OWNER}/charts/actions-gateway@${digest}"
+          # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
+          cosign sign --yes "${ref}"
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+      - name: Record published chart in the run summary
+        env:
+          REF: ${{ steps.chart.outputs.ref }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          {
+            printf -- '- **chart** — `%s`\n' "${REF}"
+            printf -- '  install: `helm install actions-gateway oci://%s/%s/charts/actions-gateway --version %s`\n' \
+              "${REGISTRY}" "${OWNER}" "${TAG#v}"
+          } >> "${GITHUB_STEP_SUMMARY}"

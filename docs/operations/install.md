@@ -47,6 +47,14 @@ renders, offline validation), see the
 
 ## Install
 
+> **Chart source.** A tagged release publishes the chart to the GHCR registry, so
+> install a released version straight from there — no source checkout:
+> `oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z` (the chart
+> version is the release tag without the leading `v`; verify its cosign signature
+> per [release.md § Verify the publish](release.md#3-verify-the-publish)). The
+> `charts/actions-gateway` local path used in the examples below installs the same
+> chart from a source checkout — use it for development or an unreleased build.
+
 ```sh
 helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \

@@ -1,7 +1,8 @@
 # Release and Publishing
 
-How a maintainer cuts a release: tag → publish (build, push, sign, attest) →
-verify → record digests → bump the chart. This is the **maintainer** runbook for
+How a maintainer cuts a release: tag → publish (build, push, sign, attest, and
+package + push + sign the chart) → verify → record digests. This is the
+**maintainer** runbook for
 *producing* a release. Operators *consuming* a release pin the published digests
 at install time — see [tenant-onboarding.md](tenant-onboarding.md) and the
 [chart README](../../charts/actions-gateway/README.md).
@@ -18,29 +19,38 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - A keyless **cosign signature** on every image (sigstore/Fulcio via GitHub
   Actions OIDC — no signing key, no stored secret) and an **SPDX-JSON SBOM**
   attached as a keyless cosign attestation.
-- A chart whose `appVersion` tracks the tag, ready for operators to install with
-  the published image **digests** pinned.
+- The **Helm chart**, packaged and pushed as an OCI artifact to
+  `oci://ghcr.io/actions-gateway/charts/actions-gateway`, with its `version` and
+  `appVersion` set to the release tag and a keyless **cosign signature** from the
+  same Fulcio/Rekor flow as the images. Operators install it straight from the
+  registry (`helm install … oci://…`) with the published image **digests** pinned
+  — no `git clone` of the chart. OCI (over a `gh-pages` chart repo) is chosen so
+  the chart reuses the images' registry, login, and keyless-signing path; Artifact
+  Hub (see [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) annotations)
+  indexes the OCI ref for discoverability.
 
-All of the image work is automated by the
+Both the image and chart work are automated by the
 [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on
-the `v*` tag push. The maintainer's job is to cut the tag, verify the result, and
-bump the chart.
+the `v*` tag push (the `chart-publish` job runs after every image leg succeeds).
+The maintainer's job is to cut the tag and verify the result.
 
-> **Image signing is exercised for the first time on the first real `v*` tag.**
-> Pull-request CI builds each image and generates its SBOM, but it does **not**
-> push, sign, or attest (those need a registry push and the publish workflow's
-> OIDC identity). The verification step below is therefore not optional on the
-> first release — it is the only thing that proves the signing path works.
+> **Signing and chart publish are exercised for the first time on the first real
+> `v*` tag.** Pull-request CI builds each image and generates its SBOM, but it
+> does **not** push, sign, attest, or publish the chart (those need a registry
+> push and the publish workflow's OIDC identity). The verification step below is
+> therefore not optional on the first release — it is the only thing that proves
+> the signing and chart-publish paths work.
 
 ## One-time setup (first release only)
 
 1. **GHCR package visibility.** The first publish *creates* the
-   `ghcr.io/actions-gateway/{gmc,agc,proxy,worker}` packages. They inherit the
-   repository's visibility and may start **private**. For third parties to run
-   `cosign verify` (and for an air-gapped operator to pull), set each package to
-   **public** in the org's GHCR package settings, or keep them private and
-   distribute pull credentials. Verification by *this project's* CI and by anyone
-   with pull access works either way.
+   `ghcr.io/actions-gateway/{gmc,agc,proxy,worker}` image packages **and the
+   `ghcr.io/actions-gateway/charts/actions-gateway` chart package**. They inherit
+   the repository's visibility and may start **private**. For third parties to run
+   `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each
+   package to **public** in the org's GHCR package settings, or keep them private
+   and distribute pull credentials. Verification by *this project's* CI and by
+   anyone with pull access works either way.
 2. **Workflow permissions** are already declared in `publish.yml`
    (`packages: write` to push, `id-token: write` for keyless cosign). No repo
    secret is required — that is the point of keyless signing.
@@ -87,6 +97,16 @@ for img in gmc agc proxy worker; do
 done
 ```
 
+Verify the **chart** signature the same way (it is signed by the same workflow
+identity, so only the artifact ref changes):
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "ghcr.io/actions-gateway/charts/actions-gateway:X.Y.Z"   # chart tag has no leading 'v'
+```
+
 A `cosign verify` failure is a **stop-ship**: do not announce the release until it
 passes. Spot-check one SBOM attestation too (`cosign verify-attestation
 --type spdxjson …`) so the attestation path is exercised.
@@ -109,14 +129,19 @@ Create the GitHub Release for the tag. In the notes, include the four
 `name@sha256:…` digests from step 4 and the `cosign verify` command from step 3,
 so a consumer can verify provenance and pin digests without reading this runbook.
 
-### 6. Bump the chart
+### 6. Chart version & metadata
 
-In a normal PR (not the tag):
+The `chart-publish` job sets the published chart's `version` and `appVersion` to
+the release tag (with the leading `v` stripped, since chart SemVer forbids it), so
+there is **no manual Chart.yaml version bump** to remember — the in-repo
+`version`/`appVersion` are dev placeholders the pipeline overrides at package time.
+Two things still need a maintainer's eye, in a normal PR (not on the tag):
 
-- Set `version` and `appVersion` in
-  [`charts/actions-gateway/Chart.yaml`](../../charts/actions-gateway/Chart.yaml)
-  to the release. `appVersion` is the image tag the chart's defaults track.
-- **Do not** commit real `sha256:…` digests into
+- **Prerelease annotation.** [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml)
+  carries `artifacthub.io/prerelease: "true"`. Keep it `true` while cutting `0.x`
+  / `-rc` tags; set it to `false` for the first stable `v1.0.0+` release so Artifact
+  Hub stops flagging the listing as a prerelease.
+- **Empty `values.yaml` digests.** **Do not** commit real `sha256:…` digests into
   [`values.yaml`](../../charts/actions-gateway/values.yaml). The empty `digest`
   fields are the *secure default*: an unconfigured install fails closed (the GMC
   rejects floating AGC/proxy tags at startup) until the operator pins a real
@@ -126,12 +151,13 @@ In a normal PR (not the tag):
 
 ### 7. Hand off to operators
 
-Operators install/upgrade with the digests pinned via `--set`, exactly as
+Operators install/upgrade straight from the **published OCI chart** with the
+digests pinned via `--set`, exactly as
 [install.md § Pin images by digest](install.md#pin-images-by-digest) and
-[upgrade.md](upgrade.md) document:
+[upgrade.md](upgrade.md) document (`X.Y.Z` is the release tag without the `v`):
 
 ```bash
-helm install gag charts/actions-gateway \
+helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
   --set proxy.image.digest=sha256:<proxy>
