@@ -115,6 +115,11 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
+        with:
+          # Pin the signer version (the action otherwise floats to latest). Keep
+          # in step with COSIGN_VERSION in the Makefile so a local
+          # `make verify-release` verifies with the same version that signed.
+          cosign-release: v2.5.2
       - name: Generate SBOM (SPDX-JSON) for the pushed image
         uses: anchore/sbom-action@v0
         with:
@@ -190,6 +195,11 @@ jobs:
       - uses: azure/setup-helm@v4
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
+        with:
+          # Pin the signer version (the action otherwise floats to latest). Keep
+          # in step with COSIGN_VERSION in the Makefile so a local
+          # `make verify-release` verifies with the same version that signed.
+          cosign-release: v2.5.2
       - name: Log in to GHCR (docker — for cosign)
         # cosign authenticates via the docker credential store
         # (~/.docker/config.json), NOT helm's separate OCI store, so it needs its

@@ -83,29 +83,21 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 
 ### 3. Verify the publish
 
-Confirm each image was signed by *this* workflow before announcing the release.
-The full command set (signature + SBOM attestation retrieval) lives in
+Confirm every image **and the chart** was signed by *this* workflow before
+announcing the release. The one-command check uses the pinned cosign
+(`make` downloads `COSIGN_VERSION` — the same version `publish.yml` signs with —
+into `.build/`):
+
+```bash
+make verify-release VERSION=vX.Y.Z
+```
+
+This verifies the four image signatures plus the chart (whose tag is `X.Y.Z`,
+without the leading `v`) against the publish workflow's keyless identity. It
+needs no credentials once the GHCR packages are public. The equivalent explicit
+commands (and SBOM attestation retrieval) live in
 [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification);
-the minimum check is:
-
-```bash
-for img in gmc agc proxy worker; do
-  cosign verify \
-    --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
-    --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-    "ghcr.io/actions-gateway/${img}:vX.Y.Z"
-done
-```
-
-Verify the **chart** signature the same way (it is signed by the same workflow
-identity, so only the artifact ref changes):
-
-```bash
-cosign verify \
-  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "ghcr.io/actions-gateway/charts/actions-gateway:X.Y.Z"   # chart tag has no leading 'v'
-```
+each is a `cosign verify --certificate-identity-regexp '…/publish\.yml@refs/tags/v.*$' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' <ref>`.
 
 A `cosign verify` failure is a **stop-ship**: do not announce the release until it
 passes. Spot-check one SBOM attestation too (`cosign verify-attestation
