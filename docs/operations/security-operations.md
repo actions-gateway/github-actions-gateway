@@ -349,7 +349,8 @@ before the first production tenant (per
 
 The four first-party images (`gmc`, `agc`, `proxy`, `worker`) are published to
 GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on every
-`v*` release tag. Each one is:
+`v*` release tag (the maintainer-facing cut-a-release procedure is in
+[release.md](release.md)). Each one is:
 
 - **Signed keyless with [cosign](https://docs.sigstore.dev/).** There is no
   signing key to distribute or rotate — the signature is bound to a short-lived

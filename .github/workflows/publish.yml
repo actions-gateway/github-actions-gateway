@@ -135,3 +135,16 @@ jobs:
           # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
           cosign sign --yes "${IMAGE}"
           cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
+      - name: Record published digest in the run summary
+        # Surface the immutable ref@digest in the workflow summary so the release
+        # manager can copy it straight into the GitHub Release notes and the
+        # `helm install --set <img>.image.digest=…` pins. See the release runbook
+        # (docs/operations/release.md).
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # One bullet per matrix leg — legs run in parallel and can't share a
+          # table header, so a bullet renders cleanly where a header-less table row
+          # would not.
+          printf -- '- **%s** — `%s`\n' "${{ matrix.name }}" "${IMAGE}" >> "${GITHUB_STEP_SUMMARY}"
