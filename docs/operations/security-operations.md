@@ -389,6 +389,80 @@ label every image already carries.
 
 ---
 
+## Image provenance: signature & SBOM verification
+
+The four first-party images (`gmc`, `agc`, `proxy`, `worker`) are published to
+GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on every
+`v*` release tag. Each one is:
+
+- **Signed keyless with [cosign](https://docs.sigstore.dev/).** There is no
+  signing key to distribute or rotate — the signature is bound to a short-lived
+  [Fulcio](https://docs.sigstore.dev/certificate_authority/overview/) certificate
+  issued against the GitHub Actions OIDC identity of the publish workflow and
+  recorded in the public [Rekor](https://docs.sigstore.dev/logging/overview/)
+  transparency log. You verify *who signed it* (the workflow identity), not a key
+  you have to trust out-of-band.
+- **Accompanied by an SPDX-JSON SBOM** (generated with
+  [syft](https://github.com/anchore/syft)) attached as a cosign attestation, so
+  you can enumerate exactly what shipped in the image.
+
+### Verify a signature
+
+Before deploying — or as a forensic step when investigating a suspected image
+swap (the "Verify the image" step in the
+[compromised-AGC](#suspected-compromised-agc-tenant-scoped) and
+[compromised-GMC](#suspected-compromised-gmc-cluster-scoped-tier-0) playbooks) —
+confirm the image was signed by *this project's* publish workflow:
+
+```bash
+# Pin the identity to the publish workflow on a release tag, and the issuer to
+# GitHub's OIDC provider. A signature from any other identity (or none) fails.
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/actions-gateway/gmc:<tag-or-digest>
+```
+
+- **A `cosign verify` failure is a stop-ship / incident signal.** It means the
+  image was not signed by the publish workflow — a locally built, tampered, or
+  third-party image. Do not deploy it; if it is already running, treat it as a
+  suspected supply-chain compromise (isolate per the playbooks above).
+- Always verify by **digest** (`@sha256:…`) for the running workload — a tag is
+  mutable; the digest is the bytes. `kubectl get pod <p> -o jsonpath='{.status.containerStatuses[*].imageID}'`
+  gives the digest actually pulled.
+- The same `--certificate-identity-regexp` / `--certificate-oidc-issuer` pair is
+  what a cluster-admission policy engine (Kyverno `verifyImages`, Sigstore policy
+  controller) should enforce so unsigned images can't run at all — that
+  cluster-wide enforcement is the operator's to configure (the gateway does not
+  ship it, mirroring the registry-allowlist split in
+  [§5.2 Supply-Chain](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
+
+### Retrieve and inspect the SBOM
+
+The SBOM rides with the image as a signed attestation, and is also uploaded as a
+build artifact on each publish run. To pull and inspect it from the registry:
+
+```bash
+# Download the SPDX-JSON SBOM attestation, verifying its keyless signature first.
+cosign verify-attestation --type spdxjson \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/actions-gateway/gmc:<tag-or-digest> \
+  | jq -r '.payload | @base64d | fromjson | .predicate' > gmc.spdx.json
+
+# Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:
+jq -r '.packages[].name' gmc.spdx.json | sort -u
+```
+
+PR CI ([`security-scan.yml`](../../.github/workflows/security-scan.yml)) builds
+each image and generates the same SBOM as a build artifact, so SBOM generation is
+exercised on every code PR — but **signing and attestation run only on
+publish** (they need a registry push and the publish workflow's OIDC identity).
+A green PR therefore proves the image builds and the SBOM generates; it does not
+exercise the cosign sign/attest path.
+
+---
+
 ## Reference Links
 
 - [Threat model (05-security.md)](../design/05-security.md) — the abuse heuristics this runbook operationalises

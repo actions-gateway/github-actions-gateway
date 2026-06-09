@@ -162,6 +162,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Building binaries | `docs/development/building.md` |
 | Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — also run `gh pr list` and skip any Queue item already covered by an open PR |
+| Clearing a batch of backlog items via parallel agent sessions (dispatcher + one session/PR per task) | `docs/development/parallel-dispatch.md` |
 | Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes have a **hard 250-char cap** (lint-enforced; a markdown link counts its full source length). Count before committing. |
 | Updating API/CRD docs after a field change | `docs/design/03-api-contracts.md` |
 | Updating architecture prose or metrics table | `docs/design/02-architecture.md` |

@@ -1,0 +1,137 @@
+name: publish
+
+# Build, push, sign, and SBOM-attest the four first-party images on a release.
+#
+# Signing is KEYLESS (sigstore/Fulcio via GitHub Actions OIDC, id-token: write):
+# cosign exchanges the short-lived OIDC token for an ephemeral Fulcio certificate
+# and records the signature in the public Rekor transparency log. There is NO
+# long-lived signing key and NO stored signing secret — the project forbids
+# secrets-as-config, and keyless is the secure-by-default approach. Each image is
+# signed, and an SPDX-JSON SBOM (generated with syft) is attached to it as a
+# cosign attestation, itself keyless-signed.
+#
+# This runs ONLY on a v* tag push (or manual dispatch) — i.e. on PUBLISH, not on
+# PRs. PR CI (security-scan.yml) builds each image and generates its SBOM so that
+# path can't silently break, but it does NOT push, sign, or attest: signing needs
+# a registry push and the ambient OIDC identity that only this workflow has. PR CI
+# therefore does not exercise the cosign sign/attest steps — they are first
+# exercised when a tag is published.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to publish (e.g. v1.0.0). Defaults to the git ref name.'
+        required: false
+
+# Workflow-default permissions are read-only; each job widens only what it needs.
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  # Buildkit image docker/setup-buildx-action boots its builder from; pre-pulled
+  # with retry below so the buildx boot never touches Docker Hub uncached.
+  BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout
+      packages: write # push images, signatures, and attestations to GHCR
+      id-token: write # KEYLESS cosign — mint the OIDC token Fulcio signs against
+    strategy:
+      fail-fast: false
+      # One leg per first-party Dockerfile. fakegithub is a test fixture, not a
+      # published artifact, so it is intentionally absent.
+      matrix:
+        include:
+          - name: gmc
+            dockerfile: cmd/gmc/Dockerfile
+          - name: agc
+            dockerfile: cmd/agc/Dockerfile
+          - name: proxy
+            dockerfile: cmd/proxy/Dockerfile
+          - name: worker
+            dockerfile: cmd/worker/Dockerfile
+    steps:
+      - uses: actions/checkout@v6
+      - name: Resolve publish tag
+        id: tag
+        # On a tag push GITHUB_REF_NAME is the tag; workflow_dispatch may override
+        # it via the `tag` input. Refuse to publish from a non-tag ref with no
+        # explicit input so a manual run on a branch can't push a junk image tag.
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-}"
+          if [[ -z "${tag}" ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ "${tag}" != v* ]]; then
+            echo "refusing to publish: resolved tag '${tag}' is not a v* version" >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+      - name: Pre-pull buildkit builder image
+        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
+      - uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          tags: |
+            type=raw,value=${{ steps.tag.outputs.tag }}
+            type=sha,format=long
+      - name: Build and push ${{ matrix.name }}
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Mirror docker-bake.hcl's provenance args so the OCI image.* labels are
+          # stamped from this build's commit and the release version.
+          build-args: |
+            REVISION=${{ github.sha }}
+            VERSION=${{ steps.tag.outputs.tag }}
+          # Reuse the e2e/scan gha build cache; no cache-to so a publish never
+          # evicts the PR build cache.
+          cache-from: type=gha,scope=${{ matrix.name }}
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Generate SBOM (SPDX-JSON) for the pushed image
+        uses: anchore/sbom-action@v0
+        with:
+          # Pin to the immutable digest the push produced, not the floating tag.
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+      - name: Sign image + attest SBOM (keyless)
+        env:
+          # Always reference the image by digest so the signature/attestation bind
+          # to the exact bytes we pushed, not to whatever the tag resolves to later.
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
+          SBOM: sbom-${{ matrix.name }}.spdx.json
+        run: |
+          set -euo pipefail
+          # Keyless: cosign reads the ambient GitHub OIDC token (id-token: write),
+          # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
+          cosign sign --yes "${IMAGE}"
+          cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
