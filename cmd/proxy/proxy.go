@@ -335,7 +335,18 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = conn.Close() }()
 
-	_, _ = io.WriteString(conn, "HTTP/1.1 200 Connection established\r\n\r\n")
+	if _, err := io.WriteString(conn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
+		// The client is already gone or the conn is broken: counting and
+		// tunneling a connection whose CONNECT-200 reply never landed would
+		// dirty the metrics and immediately die in io.Copy. Bail before either.
+		// The deferred conn.Close()/upstream.Close() handle cleanup.
+		log := s.Log
+		if log == nil {
+			log = slog.Default()
+		}
+		log.Debug("CONNECT response write failed", "host", r.Host, "error", err)
+		return
+	}
 
 	s.connectionsTotal.WithLabelValues().Inc()
 	s.connectionsActive.WithLabelValues().Inc()
