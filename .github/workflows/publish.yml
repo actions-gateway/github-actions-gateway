@@ -133,8 +133,10 @@ jobs:
           set -euo pipefail
           # Keyless: cosign reads the ambient GitHub OIDC token (id-token: write),
           # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
-          cosign sign --yes "${IMAGE}"
-          cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
+          # scripts/retry.sh absorbs transient GHCR push errors (HTTP/2
+          # INTERNAL_ERROR / 5xx) — sign and attest are idempotent.
+          scripts/retry.sh cosign sign --yes "${IMAGE}"
+          scripts/retry.sh cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
       - name: Record published digest in the run summary
         # Surface the immutable ref@digest in the workflow summary so the release
         # manager can copy it straight into the GitHub Release notes and the
@@ -188,10 +190,21 @@ jobs:
       - uses: azure/setup-helm@v4
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
+      - name: Log in to GHCR (docker — for cosign)
+        # cosign authenticates via the docker credential store
+        # (~/.docker/config.json), NOT helm's separate OCI store, so it needs its
+        # own login to read the manifest and push the signature. Without this,
+        # `cosign sign` fails with "UNAUTHORIZED: authentication required" even
+        # though `helm push` (which uses the helm login below) succeeds.
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Log in to GHCR (helm OCI)
-        # helm keeps its OWN OCI credential store, so the docker login the image
-        # job uses does not authenticate helm — log helm in explicitly. Token on
-        # stdin keeps it out of the process args/listing.
+        # helm keeps its OWN OCI credential store, so the docker login above does
+        # not authenticate helm — log helm in explicitly too. Token on stdin keeps
+        # it out of the process args/listing.
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ACTOR: ${{ github.actor }}
@@ -217,7 +230,10 @@ jobs:
           pkg="${RUNNER_TEMP}/actions-gateway-${version}.tgz"
           # helm push prints "Digest: sha256:…" on its own line; capture it so the
           # signature binds to the exact pushed bytes, not the floating tag.
-          helm push "${pkg}" "${repo}" 2>&1 | tee "${RUNNER_TEMP}/push.log"
+          # scripts/retry.sh absorbs transient GHCR push errors; its stdout (the
+          # successful attempt's output) is logged and parsed for the digest.
+          scripts/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push.log" 2>&1
+          cat "${RUNNER_TEMP}/push.log"
           digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push.log")"
           if [[ -z "${digest}" ]]; then
             echo "could not parse pushed chart digest from helm push output" >&2
@@ -225,7 +241,7 @@ jobs:
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway@${digest}"
           # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
-          cosign sign --yes "${ref}"
+          scripts/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Record published chart in the run summary
         env:
