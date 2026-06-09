@@ -2556,7 +2556,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.27.7)
+Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.29.0)
 License file: github.com/grpc-ecosystem/grpc-gateway/v2/LICENSE
 ================================================================================
 
@@ -5266,7 +5266,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel (v1.43.0)
+Module: go.opentelemetry.io/otel (v1.44.0)
 License file: go.opentelemetry.io/otel/LICENSE
 ================================================================================
 
@@ -5502,7 +5502,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace (v1.40.0)
+Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace (v1.44.0)
 License file: go.opentelemetry.io/otel/exporters/otlp/otlptrace/LICENSE
 ================================================================================
 
@@ -5738,7 +5738,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc (v1.40.0)
+Module: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc (v1.44.0)
 License file: go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc/LICENSE
 ================================================================================
 
@@ -5974,7 +5974,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/metric (v1.43.0)
+Module: go.opentelemetry.io/otel/metric (v1.44.0)
 License file: go.opentelemetry.io/otel/metric/LICENSE
 ================================================================================
 
@@ -6210,7 +6210,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/sdk (v1.43.0)
+Module: go.opentelemetry.io/otel/sdk (v1.44.0)
 License file: go.opentelemetry.io/otel/sdk/LICENSE
 ================================================================================
 
@@ -6446,7 +6446,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/otel/trace (v1.43.0)
+Module: go.opentelemetry.io/otel/trace (v1.44.0)
 License file: go.opentelemetry.io/otel/trace/LICENSE
 ================================================================================
 
@@ -6682,7 +6682,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/proto/otlp (v1.9.0)
+Module: go.opentelemetry.io/proto/otlp (v1.10.0)
 License file: go.opentelemetry.io/proto/otlp/LICENSE
 ================================================================================
 
@@ -7403,7 +7403,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/oauth2 (v0.34.0)
+Module: golang.org/x/oauth2 (v0.36.0)
 License file: golang.org/x/oauth2/LICENSE
 ================================================================================
 
@@ -7842,7 +7842,7 @@ License file: gomodules.xyz/jsonpatch/v2/LICENSE
 
 
 ================================================================================
-Module: google.golang.org/genproto/googleapis/api (v0.0.0-20260128011058-8636f8732409)
+Module: google.golang.org/genproto/googleapis/api (v0.0.0-20260526163538-3dc84a4a5aaa)
 License file: google.golang.org/genproto/googleapis/api/LICENSE
 ================================================================================
 
@@ -8050,7 +8050,7 @@ License file: google.golang.org/genproto/googleapis/api/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/genproto/googleapis/rpc (v0.0.0-20260128011058-8636f8732409)
+Module: google.golang.org/genproto/googleapis/rpc (v0.0.0-20260526163538-3dc84a4a5aaa)
 License file: google.golang.org/genproto/googleapis/rpc/LICENSE
 ================================================================================
 
@@ -8258,7 +8258,7 @@ License file: google.golang.org/genproto/googleapis/rpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.79.3)
+Module: google.golang.org/grpc (v1.81.1)
 License file: google.golang.org/grpc/LICENSE
 ================================================================================
 
@@ -8466,7 +8466,7 @@ License file: google.golang.org/grpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.79.3)
+Module: google.golang.org/grpc (v1.81.1)
 License file: google.golang.org/grpc/NOTICE.txt
 ================================================================================
 
