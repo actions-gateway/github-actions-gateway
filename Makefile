@@ -48,6 +48,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status shellcheck queue-unblock \
+        third-party-notices third-party-notices-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
 ##@ General
@@ -227,6 +228,21 @@ shellcheck: ## Shellcheck all tracked scripts/*.sh (recursive; matches the CI sh
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
 	@if [ -z "$(ID)" ]; then echo "Usage: make queue-unblock ID=<id>" >&2; exit 1; fi
 	@scripts/queue-unblock.sh $(ID)
+
+# Consolidated third-party license attribution. scripts/gen-third-party-notices.sh
+# concatenates every vendored module's LICENSE/NOTICE/COPYING text into the
+# committed THIRD-PARTY-NOTICES file, which each production Dockerfile COPYs into
+# /licenses/ to satisfy the reproduce-the-notice clauses of the bundled deps
+# (Apache-2.0 §4(d), MIT/BSD). It reads only the committed, version-pinned
+# vendor/ tree (offline, deterministic). Generate-and-commit so the content is
+# reviewable in the diff; `-check` is the CI drift gate (license-notices.yml).
+.PHONY: third-party-notices
+third-party-notices: ## Regenerate THIRD-PARTY-NOTICES from the committed vendor/ tree
+	scripts/gen-third-party-notices.sh
+
+.PHONY: third-party-notices-check
+third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (CI drift gate)
+	scripts/gen-third-party-notices.sh --check
 
 ##@ Security
 

@@ -13,3 +13,42 @@ make build-proxy  # build only the egress proxy
 `cmd/worker` is a workspace module but has no dedicated root-level build target — it is built into its container image only.
 
 Individual module Makefiles (e.g. `cmd/agc/Makefile`) also output to `.build/` via a relative path (`../../.build/`), so both `make` invocations land in the same place.
+
+## Container images
+
+The four production images (`cmd/{agc,gmc,proxy,worker}/Dockerfile`) are built
+together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`);
+the e2e/CI image pipeline is described in
+[docker-image-speed.md](../plan/docker-image-speed.md).
+
+### License attribution (`/licenses/`)
+
+Each production image `COPY`s three license files into `/licenses/` — the
+Red Hat/OpenShift container-certification convention, paired with the
+`org.opencontainers.image.licenses="Apache-2.0"` label every image carries:
+
+- `LICENSE` / `NOTICE` — the project's own Apache-2.0 license and notice.
+- `THIRD-PARTY-NOTICES` — the aggregated license/notice texts of the third-party
+  Go modules statically linked into the binary. This satisfies the
+  reproduce-the-notice clauses those licenses impose on a redistribution, and a
+  container image is a redistribution (Apache-2.0 §4(d), MIT/BSD).
+
+`THIRD-PARTY-NOTICES` is a **generated, committed** file at the repo root. It is
+assembled from the committed, version-pinned `vendor/` tree (offline — no network
+or module cache) by [`scripts/gen-third-party-notices.sh`](../../scripts/gen-third-party-notices.sh):
+
+```bash
+make third-party-notices         # regenerate THIRD-PARTY-NOTICES from vendor/
+make third-party-notices-check   # fail if it is stale (the CI drift gate)
+```
+
+**Regenerate it whenever the dependency set changes** (a module added, removed,
+or bumped — i.e. any `go mod vendor` that touches `vendor/`) and commit the
+result. The `license-notices` CI workflow runs `make third-party-notices-check`
+on every `vendor/**` change and fails the PR if the committed file is stale, so
+the image build always bundles current attribution. The operator-facing view of
+what ships at `/licenses/` is in
+[security-operations.md](../operations/security-operations.md#license-attribution-in-images).
+
+The test-only `test/fakegithub` image is not published as a product artifact and
+does not carry `/licenses/`.

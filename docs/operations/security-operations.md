@@ -345,6 +345,50 @@ before the first production tenant (per
 
 ---
 
+## License attribution in images
+
+The compiled binaries statically link third-party Go modules (MIT/BSD/Apache/ISC/…),
+whose licenses require reproducing their copyright/notice text wherever the
+binaries are redistributed — and a container image is a redistribution
+(Apache-2.0 §4(d), the MIT/BSD reproduce-the-notice clauses). Each of the four
+production images therefore ships its license attribution under **`/licenses/`**,
+the [Red Hat/OpenShift container-certification](https://github.com/redhat-openshift-ecosystem/openshift-preflight)
+convention, which pairs with the `org.opencontainers.image.licenses="Apache-2.0"`
+label every image already carries.
+
+- **What is bundled.** `/licenses/` in the `agc`, `gmc`, `proxy`, and `worker`
+  images contains three files:
+  - `LICENSE` — the project's own Apache-2.0 license.
+  - `NOTICE` — the project's Apache-style copyright/attribution notice.
+  - `THIRD-PARTY-NOTICES` — the aggregated license and notice texts of every
+    vendored module statically linked into the binary.
+
+  The `worker` image is built on the upstream `actions-runner` base, which
+  carries its own license files for its components; the `/licenses/` files we add
+  cover only the wrapper binary and its dependencies.
+
+- **Inspect it on a running pod.** The files are plain text owned root-readable,
+  so any container can read them:
+
+  ```bash
+  kubectl exec deploy/gmc -- cat /licenses/LICENSE
+  # distroless images (agc/gmc/proxy) have no shell; use the worker base's shell,
+  # or copy a file out of any of them:
+  kubectl cp <namespace>/<pod>:/licenses/THIRD-PARTY-NOTICES ./THIRD-PARTY-NOTICES
+  ```
+
+- **How it is kept current.** `THIRD-PARTY-NOTICES` lives at the repo root and is
+  **generated and committed** by `make third-party-notices`
+  ([`scripts/gen-third-party-notices.sh`](../../scripts/gen-third-party-notices.sh)),
+  which concatenates the `LICENSE`/`NOTICE`/`COPYING` files of every module under
+  the committed, version-pinned `vendor/` tree — offline, no network or module
+  cache. The CI `license-notices` workflow runs `make third-party-notices-check`
+  on every change to `vendor/**` (or the generator) and fails the PR if the
+  committed file is stale, so a dependency add/remove/bump cannot ship without
+  refreshed attribution.
+
+---
+
 ## Reference Links
 
 - [Threat model (05-security.md)](../design/05-security.md) — the abuse heuristics this runbook operationalises
