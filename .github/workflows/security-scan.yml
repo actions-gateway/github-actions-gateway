@@ -219,7 +219,7 @@ jobs:
       POLARIS_VERSION: 9.6.0
     steps:
       - uses: actions/checkout@v6
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: install polaris
         run: |
           curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
