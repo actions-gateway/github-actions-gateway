@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-08
+Last touched: 2026-06-09
 
 ---
 
@@ -72,6 +72,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q52"></a>Q52 | Markdown link + anchor check CI gate | `docs` `infra` `tests` | 🔲 | S | Add GitHub-slug-aware markdown link/anchor checker to `unit-test.yml`. The L2 validation script in [docs-six-layer-audit.md](plan/docs-six-layer-audit.md) is a working reference. |
 | <a id="Q68"></a>Q68 | Enforce single Go version across all workspace files | `infra` `tests` | 🔲 | S | CLAUDE.md's "all go modules use the same Go version" rule is unenforced; the 2 `go.work.gen` files drifted to 1.26/1.26.0, breaking `make manifests`. Add a CI check that the `go` directive matches across go.work, all go.mod, and go.work.gen. |
 | <a id="Q94"></a>Q94 | Normalize go.sum tidiness + gate drift in CI | `infra` `tests` | 🔲 | S | Committed go.sum drifts from `scripts/go-work-tidy.sh` output: the documented tidy+vendor flow re-adds `/go.mod` hashes to broker/probe/proxy/githubapp, so contributors revert spurious diffs. Normalize once, gate drift in CI. Sibling of [Q68](#Q68). |
+| <a id="Q111"></a>Q111 | Auto-sync workspace vendor + notices on Dependabot Go bumps | `infra` `tests` | 🔲 | S | Dependabot Go bumps can't run `go work vendor`, so vendor/modules.txt + THIRD-PARTY-NOTICES desync and every CI job fails (#198 needed a manual sync commit). Auto-run `go work vendor` + regen notices on Dependabot PRs. Sibling of [Q94](#Q94). |
 | <a id="Q73"></a>Q73 | Sync GMC's bundled RunnerGroup CRD with the AGC source | `infra` `bug` | 🔲 | S | GMC's bundled RunnerGroup CRD (`…runnergroups.yaml`) drifted from AGC source: missing fields + different PodTemplateSpec (k8s.io/api skew), risking silent field pruning on deploy. Add a sync target + drift CI check. Overlaps [Q68](#Q68). |
 | <a id="Q75"></a>Q75 | Exercise GMC validating webhook in envtest (not just e2e) | `tests` `infra` | 🔲 | M | GMC webhook checks (gitHubAppRef, privileged-container, profile downgrade) are tested only via direct calls + e2e. Wire envtest `WebhookInstallOptions` to catch admission-through-apiserver at integration tier (mind `failurePolicy=fail` readiness). |
 | <a id="Q51"></a>Q51 | Reconcile documented vs emitted Prometheus metrics | `infra` `docs` `bug` | 🔲 | M | 6 documented metrics never registered in code (headline `pod_creation_latency_seconds` + 5 others). Per-metric decision: implement, re-point, or mark `(planned)`. See [docs-six-layer-audit.md](plan/docs-six-layer-audit.md) Layer 3. |
