@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -220,6 +221,63 @@ func TestProxy_Metrics(t *testing.T) {
 		return gaugeValue(t, reg, "actions_gateway_proxy_connections_active") == 0
 	}, time.Second, 5*time.Millisecond)
 	assert.Equal(t, float64(1), gaugeValue(t, reg, "actions_gateway_proxy_connections_total"))
+}
+
+// writeFailConn wraps a net.Conn but fails every Write, simulating a client
+// that has gone away (or a broken conn) before the CONNECT-200 reply lands.
+// Read/Close and the deadline setters delegate to the embedded conn.
+type writeFailConn struct {
+	net.Conn
+}
+
+func (writeFailConn) Write([]byte) (int, error) {
+	return 0, errors.New("simulated CONNECT-200 write failure")
+}
+
+// hijackResponseWriter is an http.ResponseWriter that also satisfies
+// http.Hijacker, handing back a caller-supplied net.Conn. It lets a test drive
+// handleConnect with a hijacked conn it controls, without a real client socket.
+type hijackResponseWriter struct {
+	http.ResponseWriter
+	conn net.Conn
+}
+
+func (h *hijackResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return h.conn, nil, nil
+}
+
+// TestProxy_ConnectResponseWriteFailure verifies that when the
+// "HTTP/1.1 200 Connection established" reply fails to send — the client is
+// already gone or the conn is broken — the handler returns early without
+// counting the connection or starting the doomed io.Copy tunnel. Counting or
+// tunneling a connection whose CONNECT-200 reply never landed would dirty the
+// metrics and immediately die in io.Copy.
+func TestProxy_ConnectResponseWriteFailure(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	// A real upstream so the handler's DialTimeout succeeds and execution
+	// reaches the response write that we force to fail.
+	echoAddr := startEchoServer(t)
+	srv, reg := newTestServer(t)
+
+	// net.Pipe gives the hijacked conn a working Close() (deferred by the
+	// handler) without a real socket. The handler returns before any Read.
+	clientEnd, peerEnd := net.Pipe()
+	t.Cleanup(func() { _ = peerEnd.Close() })
+
+	w := &hijackResponseWriter{
+		ResponseWriter: httptest.NewRecorder(),
+		conn:           writeFailConn{Conn: clientEnd},
+	}
+	r := httptest.NewRequest(http.MethodConnect, "http://"+echoAddr, nil)
+	r.Host = echoAddr
+
+	srv.handleConnect(w, r)
+
+	// The write failed before any metric increment or tunnel setup, so neither
+	// the total counter nor the active gauge moved.
+	assert.Equal(t, float64(0), gaugeValue(t, reg, "actions_gateway_proxy_connections_total"))
+	assert.Equal(t, float64(0), gaugeValue(t, reg, "actions_gateway_proxy_connections_active"))
 }
 
 // metricsHandler returns a handler that serves gathered metrics from reg.
