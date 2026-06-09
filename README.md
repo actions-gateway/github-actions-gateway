@@ -165,4 +165,5 @@ vendor/          Workspace-vendored runtime dependencies (`go work vendor`)
 
 GitHub Actions Gateway is licensed under the [Apache License 2.0](LICENSE)
 (SPDX identifier `Apache-2.0`). Each published container image also carries this
-in its `org.opencontainers.image.licenses` label.
+in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
+[NOTICE](NOTICE) file.
