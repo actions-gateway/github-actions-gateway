@@ -82,8 +82,13 @@ jobs:
             (cd "$dir" && "$GITHUB_WORKSPACE/.build/govulncheck" ./...)
           done
 
-  # Build each image and scan it. One matrix leg per Dockerfile so a finding
-  # points straight at the offending image and the five builds run in parallel.
+  # Build each image, scan it, and generate its SBOM. One matrix leg per
+  # Dockerfile so a finding points straight at the offending image and the five
+  # builds run in parallel. The SBOM is generated from the same build — a PR-time
+  # check so SBOM generation can't silently break before a release. It is
+  # uploaded as a build artifact only; SIGNING and attaching the SBOM as a cosign
+  # attestation to a PUBLISHED image happen in publish.yml (needs a registry push
+  # + OIDC), never on PRs.
   #
   # exit-code per leg: the four images we build FROM a minimal/distroless base
   # block the PR (exit-code 1) — their only packages are ones we chose, so a
@@ -148,6 +153,18 @@ jobs:
           # Read-only reuse of the e2e bake's gha cache scopes (docker-bake.hcl);
           # no cache-to so these scan builds never evict the e2e build cache.
           cache-from: type=gha,scope=${{ matrix.name }}
+      # Generate an SPDX-JSON SBOM for the image we just built and upload it as a
+      # build artifact. Runs right after the build (before the trivy scan) so a
+      # CVE-induced scan failure never suppresses SBOM generation. This is the
+      # PR-time exercise of the SBOM path; publish.yml regenerates the SBOM for
+      # the pushed image and attaches it as a keyless cosign attestation.
+      - name: generate SBOM for ${{ matrix.name }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: local/${{ matrix.name }}:scan
+          format: spdx-json
+          output-file: sbom-${{ matrix.name }}.spdx.json
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
       # Cache trivy's data dir (vuln DB + scan cache) so each run avoids
       # re-pulling the ~50 MB DB from the registry — the DB pull is otherwise a
       # rate-limit flake source. The DB refreshes every few hours; the run_id
