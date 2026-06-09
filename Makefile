@@ -16,6 +16,12 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 GINKGO         := $(REPO_ROOT)/.build/ginkgo
 GOLANGCI_LINT  := $(REPO_ROOT)/.build/golangci-lint
 GOVULNCHECK    := $(REPO_ROOT)/.build/govulncheck
+COSIGN         := $(REPO_ROOT)/.build/cosign
+# COSIGN_VERSION pins the cosign release used to verify published signatures.
+# Keep in step with the `cosign-release` pinned in .github/workflows/publish.yml
+# so a local `make verify-release` uses the same verifier the publish run signed
+# with. Bump deliberately (see docs/operations/release.md).
+COSIGN_VERSION ?= v2.5.2
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
@@ -474,6 +480,26 @@ setup-envtest: $(SETUP_ENVTEST) ## Build setup-envtest into .build/
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Build ginkgo into .build/
 
+.PHONY: cosign
+cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
+
+.PHONY: verify-release
+verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
+	@test -n "$(VERSION)" || { echo "usage: make verify-release VERSION=vX.Y.Z" >&2; exit 2; }
+	@repo="ghcr.io/actions-gateway"; \
+	id_re='^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/(tags|heads)/.*$$'; \
+	issuer='https://token.actions.githubusercontent.com'; \
+	chart_ver='$(VERSION:v%=%)'; \
+	rc=0; \
+	for img in gmc agc proxy worker; do \
+	  printf '==> %-7s %s ... ' "$$img" "$(VERSION)"; \
+	  if $(COSIGN) verify --certificate-identity-regexp "$$id_re" --certificate-oidc-issuer "$$issuer" "$$repo/$$img:$(VERSION)" >/dev/null 2>&1; then echo OK; else echo FAIL; rc=1; fi; \
+	done; \
+	printf '==> %-7s %s ... ' "chart" "$$chart_ver"; \
+	if $(COSIGN) verify --certificate-identity-regexp "$$id_re" --certificate-oidc-issuer "$$issuer" "$$repo/charts/actions-gateway:$$chart_ver" >/dev/null 2>&1; then echo OK; else echo FAIL; rc=1; fi; \
+	if [[ $$rc -ne 0 ]]; then echo "signature verification FAILED (if local docker creds are misconfigured, retry with DOCKER_CONFIG=\$$(mktemp -d))" >&2; exit 1; fi; \
+	echo "all signatures verified for $(VERSION)"
+
 $(CONTROLLER_GEN):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -497,3 +523,15 @@ $(GOLANGCI_LINT):
 $(GOVULNCHECK):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ golang.org/x/vuln/cmd/govulncheck
+
+# cosign is a non-Go-vendored binary tool (its dependency tree is too large to
+# vendor like the kubebuilder-ecosystem tools above), so it is downloaded at a
+# pinned version — the same pattern as the shellcheck/kubeconform CI installs.
+$(COSIGN):
+	mkdir -p $(REPO_ROOT)/.build
+	@os=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+	arch=$$(uname -m); case "$$arch" in aarch64|arm64) arch=arm64;; x86_64|amd64) arch=amd64;; *) echo "unsupported arch $$arch" >&2; exit 1;; esac; \
+	url="https://github.com/sigstore/cosign/releases/download/$(COSIGN_VERSION)/cosign-$${os}-$${arch}"; \
+	echo "downloading cosign $(COSIGN_VERSION) ($${os}-$${arch})"; \
+	curl -fsSL --retry 3 --retry-delay 2 -o $@ "$$url"; \
+	chmod +x $@
