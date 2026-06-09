@@ -98,6 +98,8 @@ helm install gag charts/actions-gateway \
 
 See the [Installation guide](docs/operations/install.md) for prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall — and the [chart README](charts/actions-gateway/README.md) for the full values reference.
 
+For day-2 operations — `helm upgrade` / rollback, per-component upgrades, and runbooks — see the [operations docs](docs/operations/), in particular the [upgrade guide](docs/operations/upgrade.md).
+
 ## Quick Start
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
