@@ -83,14 +83,14 @@ jobs:
         with:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Image metadata (tags + OCI labels)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
           tags: |
@@ -192,7 +192,7 @@ jobs:
             exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
         with:
@@ -206,7 +206,7 @@ jobs:
         # own login to read the manifest and push the signature. Without this,
         # `cosign sign` fails with "UNAUTHORIZED: authentication required" even
         # though `helm push` (which uses the helm login below) succeeds.
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
