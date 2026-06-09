@@ -24,6 +24,48 @@ Do **not** use it for a single large feature, for exploratory design work, or
 for tightly coupled changes that all touch the same core files — those serialize
 anyway and the coordination overhead is not worth it.
 
+## How to start a run
+
+Kick off a run with **`/goal`** — the goal's Stop hook is what keeps the
+dispatcher attending to merges until the batch is done. Point the condition at
+this playbook (so the dispatcher follows it without restating it) and fill in the
+run-specific knobs. A ready-to-paste template:
+
+> **`/goal`** Act as the **dispatcher** for a parallel-dispatch run, following
+> `docs/development/parallel-dispatch.md`. Clear **[BATCH — e.g. "the remaining
+> `1.0-gate` Queue items in `docs/STATUS.md`"]**: one worker session (task chip)
+> and one PR per task, **max [3] concurrent**. Give every worker the self-healing
+> contract from task one (watch own CI, fix real failures, `git merge origin/main`
+> on conflict, never self-merge, escalate after 5 tries). **You own the
+> coordination files** — workers must not edit `docs/STATUS.md` or the release
+> checklist; you remove rows / tick boxes yourself in isolated commits. Stream
+> tasks by shared files and land foundational changes first. Verify each PR's
+> **scope**, then merge after CI is green. **No secret may be read, printed,
+> logged, or passed to a model** — exclude any task needing real credentials and
+> tell me. Minimize asks (only genuine decisions, e.g. a license choice).
+> Document decisions in `tmp/`. I can stop or amend the rules anytime.
+
+The knobs to set each run (everything else comes from this playbook):
+
+- **Batch / scope** — which items (a label filter, a Queue range, an explicit
+  list).
+- **Concurrency cap** — 3 is a good default.
+- **Exclusions** — anything needing real secrets or a live cluster; state it up
+  front rather than making the dispatcher discover it mid-run.
+- **Merge gating** — default is dispatcher-gated after a scope review; say so if
+  you want risk-tiered auto-merge (and note that needs branch protection +
+  required checks first, per [the merge model](#the-merge-model)).
+
+Two practical notes:
+
+- You will **click each task chip** to start its session — that is the intended,
+  secure mechanism. Do not ask for headless auto-start; the safety classifier
+  blocks it.
+- The condition above *references* this playbook, so the dispatcher must be able
+  to read it from its checkout. If you are running a dispatch before this file
+  has landed on the branch the dispatcher reads, paste the full rule set inline
+  instead of referencing it.
+
 ## Roles
 
 **Dispatcher** (one session — typically the one you are in):
