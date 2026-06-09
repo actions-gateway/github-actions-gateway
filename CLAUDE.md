@@ -170,3 +170,4 @@ When working on specific tasks, read the relevant doc before starting:
 | Adding a troubleshooting runbook for a new failure mode | `docs/operations/troubleshooting.md` |
 | Documenting operator-visible behaviour (new default/field/failure mode/annotation an operator sets or trips) | `docs/operations/{tenant-onboarding,runbook,upgrade,observability,security-operations}.md` — design-doc updates alone are not enough |
 | Security-relevant changes | `docs/design/05-security.md` |
+| Cutting a release, or editing the image publish/sign/SBOM pipeline (`publish.yml`) | `docs/operations/release.md` |
