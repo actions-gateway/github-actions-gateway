@@ -29,6 +29,8 @@ type PriorityTier struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 // +kubebuilder:validation:XValidation:rule="!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay) >= duration('1s')",message="evictionRetryDelay must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
+// +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
+// +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
 type RunnerGroupSpec struct {
 	// MaxListeners is the maximum number of concurrent listener goroutines.
 	// Each listener holds one open broker session; additional goroutines spawn
@@ -97,6 +99,26 @@ type RunnerGroupSpec struct {
 	// when omitted.
 	// +optional
 	QuotaRetryDelay *metav1.Duration `json:"quotaRetryDelay,omitempty"`
+
+	// CompletedPodTTL is how long a worker pod that has reached a terminal phase
+	// (Succeeded, Failed, or Unknown) is retained before the AGC deletes it.
+	// Retention gives operators a window to inspect the pod of a failed job
+	// (`kubectl logs`/`describe`) before it disappears; terminal pods consume no
+	// compute and no ResourceQuota. Set to "0s" to delete worker pods immediately
+	// on completion. Must not be negative. Defaults to "5m" when omitted.
+	// +optional
+	CompletedPodTTL *metav1.Duration `json:"completedPodTTL,omitempty"`
+
+	// PendingPodDeadline is the maximum time a worker pod may remain Pending
+	// (measured from its creation) before the AGC deletes it, releasing the
+	// concurrency-ceiling slot the stuck pod was holding. Pending pods get stuck
+	// on unpullable images or unschedulable constraints; deleting one resolves
+	// its session goroutine and frees the listener for the next job. Each reap
+	// emits a Warning Event (WorkerPodStuckPending) on the RunnerGroup. Raise
+	// this on clusters where legitimate scheduling can be slow (e.g. autoscaled
+	// GPU node pools). Must be at least 1s. Defaults to "10m" when omitted.
+	// +optional
+	PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
 }
 
 // RunnerGroupStatus defines the observed state of a RunnerGroup.

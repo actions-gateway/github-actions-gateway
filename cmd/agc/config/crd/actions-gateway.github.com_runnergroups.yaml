@@ -66,6 +66,15 @@ spec:
           spec:
             description: RunnerGroupSpec defines the desired state of a RunnerGroup.
             properties:
+              completedPodTTL:
+                description: |-
+                  CompletedPodTTL is how long a worker pod that has reached a terminal phase
+                  (Succeeded, Failed, or Unknown) is retained before the AGC deletes it.
+                  Retention gives operators a window to inspect the pod of a failed job
+                  (`kubectl logs`/`describe`) before it disappears; terminal pods consume no
+                  compute and no ResourceQuota. Set to "0s" to delete worker pods immediately
+                  on completion. Must not be negative. Defaults to "5m" when omitted.
+                type: string
               evictionRetryDelay:
                 description: |-
                   EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job.
@@ -109,6 +118,17 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              pendingPodDeadline:
+                description: |-
+                  PendingPodDeadline is the maximum time a worker pod may remain Pending
+                  (measured from its creation) before the AGC deletes it, releasing the
+                  concurrency-ceiling slot the stuck pod was holding. Pending pods get stuck
+                  on unpullable images or unschedulable constraints; deleting one resolves
+                  its session goroutine and frees the listener for the next job. Each reap
+                  emits a Warning Event (WorkerPodStuckPending) on the RunnerGroup. Raise
+                  this on clusters where legitimate scheduling can be slow (e.g. autoscaled
+                  GPU node pools). Must be at least 1s. Defaults to "10m" when omitted.
+                type: string
               podTemplate:
                 description: |-
                   PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
@@ -8654,6 +8674,12 @@ spec:
                 >= duration(''1s'')'
             - message: quotaRetryDelay must be at least 1s
               rule: '!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay)
+                >= duration(''1s'')'
+            - message: completedPodTTL must not be negative
+              rule: '!has(self.completedPodTTL) || duration(self.completedPodTTL)
+                >= duration(''0s'')'
+            - message: pendingPodDeadline must be at least 1s
+              rule: '!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline)
                 >= duration(''1s'')'
           status:
             description: RunnerGroupStatus defines the observed state of a RunnerGroup.

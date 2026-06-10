@@ -127,6 +127,39 @@ spec:
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with runner group", ns, name)
 }
 
+// ApplyActionsGatewayCRWithRunnerGroupLifecycle applies an ActionsGateway CR
+// whose RunnerGroup sets the Q95 worker-pod lifecycle knobs (completedPodTTL,
+// pendingPodDeadline) so e2e tests can prove reaping on a short clock.
+func ApplyActionsGatewayCRWithRunnerGroupLifecycle(ns, name, secretName, workerImage, completedPodTTL, pendingPodDeadline string) {
+	yaml := fmt.Sprintf(`apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  gitHubAppRef:
+    name: %s
+  proxy:
+    minReplicas: 1
+    maxReplicas: 3
+    noProxyCIDRs:
+    - svc.cluster.local
+  runnerGroups:
+  - runnerLabels: ["e2e"]
+    maxListeners: 2
+    workerImage: %s
+    completedPodTTL: %s
+    pendingPodDeadline: %s
+    podTemplate:
+      spec:
+        containers:
+        - name: runner
+          image: %s
+`, name, ns, secretName, workerImage, completedPodTTL, pendingPodDeadline, workerImage)
+
+	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with lifecycle runner group", ns, name)
+}
+
 // ApplyFakegithubEgressNetworkPolicy stamps an additive NetworkPolicy that lets
 // workload-labeled pods in `ns` reach the fakegithub Service in the e2e-infra
 // namespace on port 8080.

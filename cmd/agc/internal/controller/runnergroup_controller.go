@@ -80,6 +80,10 @@ type RunnerGroupReconciler struct {
 	// runnergroup`. May be nil in unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
 
+	// Now is the clock used by the worker-pod reaper. Nil means time.Now;
+	// tests inject a fixed clock to exercise TTL/deadline expiry.
+	Now func() time.Time
+
 	// in-process state; rebuilt from Secrets on restart.
 	multiplexersMu sync.Mutex
 	multiplexers   map[types.NamespacedName]*listener.Multiplexer
@@ -130,12 +134,13 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1alpha1.RunnerGroup{}).
 		// Watch the worker pods this RunnerGroup's provisioner creates so that
 		// pod lifecycle events — a job being acquired (pod created), a pod
-		// reaching a terminal phase, and eviction (phase → Failed, *not* a
-		// delete: completed worker pods linger until GC) — re-trigger a
-		// reconcile. Without this the controller only reconciles on RunnerGroup
-		// writes, so status.ActiveSessions and any listener-pushed conditions go
-		// stale between Generation bumps (k8s-best-practices §A A3 / Q63). The
-		// watch reuses the manager's shared Pod informer (the same one Q64's
+		// reaching a terminal phase, eviction (phase → Failed), and deletion —
+		// re-trigger a reconcile. Without this the controller only reconciles on
+		// RunnerGroup writes, so status.ActiveSessions and any listener-pushed
+		// conditions go stale between Generation bumps (k8s-best-practices §A
+		// A3 / Q63), and the worker-pod reaper (Q95) would never see the phase
+		// transitions that start its completedPodTTL clock. The watch reuses
+		// the manager's shared Pod informer (the same one Q64's
 		// InformerPodWaiter drives), so it adds no second cache.
 		//
 		// Deliberately Pods only: the A3 finding also names agent Secrets, but a
@@ -173,12 +178,14 @@ func (r *RunnerGroupReconciler) podToRunnerGroup(_ context.Context, obj client.O
 // to the events that carry new information for the RunnerGroup's status:
 //
 //   - Create — a job was acquired and a worker pod started.
-//   - Delete — a worker pod was removed (e.g. GC or manual kubectl delete).
+//   - Delete — a worker pod was removed (reaper, goroutine cleanup, ownerRef
+//     GC, or manual kubectl delete).
 //   - Update — only when the pod's phase changed (e.g. Running → Failed on
-//     eviction, Running → Succeeded on completion). Worker pods are not deleted
-//     on completion, so eviction surfaces as a phase update rather than a
-//     delete; skipping non-phase updates avoids reconcile churn from status
-//     heartbeats that do not change the group's observable state.
+//     eviction, Running → Succeeded on completion). A terminal pod is retained
+//     for the group's completedPodTTL before the reaper deletes it, so
+//     eviction surfaces as a phase update first, then a delete; skipping
+//     non-phase updates avoids reconcile churn from status heartbeats that do
+//     not change the group's observable state.
 //
 // Generic events are ignored.
 func workerPodPredicate() predicate.Predicate {
@@ -267,6 +274,15 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// 4b. Reap expired worker pods (terminal past completedPodTTL, Pending past
+	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
+	// during a GitHub outage. reapAfter is the time until the earliest retained
+	// pod becomes due; it is propagated as RequeueAfter below.
+	reapAfter, err := r.reapWorkerPods(ctx, log, &rg)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	// 5. Get installation token for agent management.
 	instToken, err := r.TokenManager.Token(ctx)
 	if err != nil {
@@ -311,7 +327,7 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: reapAfter}, nil
 }
 
 // reconcileDelete handles RunnerGroup deletion: stop goroutines, delete Secrets, remove finalizer.
