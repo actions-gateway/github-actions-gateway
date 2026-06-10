@@ -68,6 +68,56 @@ func TestSanitizeBody_RedactsCredentials(t *testing.T) {
 	}
 }
 
+// TestSanitizeBody_RedactsNewFormatInstallationToken pins redaction of the
+// 2026 GitHub App installation-token format ghs_<app-id>_<JWT> (~520 chars,
+// variable length, JWT = header.payload.signature base64url). No single
+// pattern matches the whole token: the gh[pousr]_ prefix pattern consumes
+// ghs_<app-id>_<JWT header> up to the first '.', and the long-blob pattern
+// catches the payload and signature segments. This test exists so an edit to
+// either pattern that breaks that interplay fails loudly instead of silently
+// leaking token fragments.
+func TestSanitizeBody_RedactsNewFormatInstallationToken(t *testing.T) {
+	// Synthetic ~520-char token shaped like the real format: base64url JWT
+	// segments (header, payload, signature) behind ghs_<app-id>_.
+	header := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9"
+	payload := "eyJpc3MiOiIzNzUyMzQ3In0" + strings.Repeat("aB3xYz01-_", 25)
+	signature := strings.Repeat("Qw9_zX8-Kp", 19) + "mN4tUv"
+	token := "ghs_3752347_" + header + "." + payload + "." + signature
+
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{
+			name: "bare token in free text",
+			in:   "error: token " + token + " authentication failed",
+		},
+		{
+			name: "token as JSON value",
+			in:   `{"token":"` + token + `","expires_at":"2026-06-09T12:00:00Z"}`,
+		},
+		{
+			name: "Authorization Bearer header",
+			in:   "request failed: Authorization: Bearer " + token + " rejected",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SanitizeBody([]byte(tc.in), 4096)
+			// No 20+ char run of the token may survive; checking every 20-char
+			// window of the token covers all longer runs too.
+			for i := 0; i+20 <= len(token); i++ {
+				if frag := token[i : i+20]; strings.Contains(got, frag) {
+					t.Fatalf("SanitizeBody leaked token fragment %q at offset %d\n got: %s", frag, i, got)
+				}
+			}
+			if !strings.Contains(got, "[REDACTED]") {
+				t.Errorf("expected redaction marker in output\n got: %s", got)
+			}
+		})
+	}
+}
+
 func TestSanitizeBody_CapsLength(t *testing.T) {
 	// "word " repeated has no 40+ contiguous token, so it exercises capping
 	// independently of redaction.

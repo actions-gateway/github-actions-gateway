@@ -16,6 +16,13 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)("(?:access_token|refresh_token|token|encoded_jit_config|client_secret|private_key|password|secret)"\s*:\s*)"[^"]*"`),
 	// GitHub token formats: PAT (ghp_), OAuth (gho_), user-to-server (ghu_),
 	// server-to-server (ghs_), refresh (ghr_), and fine-grained PAT prefixes.
+	// Also covers the head of the 2026 installation-token format
+	// ghs_<app-id>_<JWT> (~520 chars, variable length): this pattern consumes
+	// ghs_<app-id>_<JWT header> up to the JWT's first '.', and full redaction
+	// relies on the long-blob pattern below catching the remaining payload and
+	// signature segments. The JWT pattern never fires for these because the
+	// eyJ head is already consumed here. Pinned by
+	// TestSanitizeBody_RedactsNewFormatInstallationToken.
 	regexp.MustCompile(`(?i)(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}`),
 	// JWTs (header.payload.signature, base64url) — e.g. installation tokens.
 	regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`),
