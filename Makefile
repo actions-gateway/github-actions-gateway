@@ -266,10 +266,11 @@ TRIVY_REPORT_ONLY := worker
 # polaris posture-scan parameters, mirrored exactly by the CI `polaris` job.
 # POLARIS_RENDER_DIGEST is a placeholder sha256 digest used only to render the
 # chart for the scan: production installs pin gmc.image.digest, so auditing the
-# digest-pinned form reflects the SHIPPED posture. The un-pinned :latest default
-# still trips the gating `tagNotSpecified` danger check, so this does not mask a
-# real finding — it just lets the scan see the rest of the manifest. The value
-# must satisfy values.schema.json's sha256:[a-f0-9]{64} pattern.
+# digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED to
+# render at all — the chart fails closed when gmc.image.digest is empty (Q96),
+# and `manifest-validate` below asserts that rejection so a regression to
+# fail-open cannot merge silently. The value must satisfy values.schema.json's
+# sha256:[a-f0-9]{64} pattern.
 POLARIS_RENDER_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
 POLARIS_CHART         := $(REPO_ROOT)/charts/actions-gateway
 POLARIS_CONFIG        := $(POLARIS_CHART)/polaris.yaml
@@ -352,10 +353,22 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 	kustomize build "$(REPO_ROOT)/cmd/gmc/config/default" | kubeconform $(KUBECONFORM_FLAGS); \
 	echo "==> kubeconform: standalone manifests not in the default overlay"; \
 	(cd "$(REPO_ROOT)" && kubeconform $(KUBECONFORM_FLAGS) $(MANIFEST_STANDALONE)); \
-	echo "==> helm lint"; \
-	helm lint "$(POLARIS_CHART)"; \
-	echo "==> kubeconform: Helm chart render (default values)"; \
+	echo "==> helm lint (digest-pinned: default values must not render — checked next)"; \
+	helm lint "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)"; \
+	echo "==> helm template: default values must FAIL closed (gmc.image digest unpinned; Q96)"; \
+	if out=$$(helm template ag "$(POLARIS_CHART)" 2>&1); then \
+		echo "ERROR: chart rendered with default values — gmc.image digest pinning regressed to fail-open" >&2; \
+		exit 1; \
+	elif ! grep -q "gmc.image must be pinned by digest" <<<"$$out"; then \
+		echo "ERROR: default-values render failed, but not with the digest-pinning rejection:" >&2; \
+		echo "$$out" >&2; \
+		exit 1; \
+	fi; \
+	echo "==> kubeconform: Helm chart render (digest-pinned defaults)"; \
 	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \
+		| kubeconform $(KUBECONFORM_FLAGS); \
+	echo "==> kubeconform: Helm chart render (dev/test opt-out: allowFloatingImageTags=true)"; \
+	helm template ag "$(POLARIS_CHART)" --set allowFloatingImageTags=true \
 		| kubeconform $(KUBECONFORM_FLAGS); \
 	echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"; \
 	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \

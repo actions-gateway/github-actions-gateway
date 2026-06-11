@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: manager
-        image: {{ include "actions-gateway.image" .Values.gmc.image }}
+        image: {{ include "actions-gateway.gmcImage" . }}
         imagePullPolicy: {{ .Values.gmc.imagePullPolicy }}
         command:
         - /manager

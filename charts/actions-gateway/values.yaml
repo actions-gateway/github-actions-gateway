@@ -25,12 +25,14 @@ replicaCount: 2
 gmc:
   image:
     repository: ghcr.io/actions-gateway/gmc
-    # tag is used only when digest is empty. appVersion in Chart.yaml is the
-    # release this tag should track.
+    # tag is used only when digest is empty AND allowFloatingImageTags=true.
+    # appVersion in Chart.yaml is the release this tag should track.
     tag: ""
-    # digest (e.g. "sha256:abc123…") pins the image immutably. Leave the tag
-    # empty and set this in production. When both are empty the tag defaults
-    # to "latest" — acceptable only for local/dev installs.
+    # digest (e.g. "sha256:abc123…") pins the image immutably. REQUIRED:
+    # rendering fails when this is empty, so the GMC's own image can never
+    # silently fall back to a mutable :latest tag (secure by default). The
+    # only escape hatch is the explicit allowFloatingImageTags=true dev/test
+    # opt-out below, which falls back to tag (default "latest").
     digest: ""
   imagePullPolicy: IfNotPresent
 
@@ -52,9 +54,11 @@ proxy:
     tag: ""
     digest: ""
 
-# allowFloatingImageTags=true passes --allow-floating-image-tags to the GMC,
-# disabling the AGC_IMAGE/PROXY_IMAGE digest-pinning requirement. DEV/TEST
-# ONLY — do not enable in production. Leaving it false keeps the secure default.
+# allowFloatingImageTags=true passes --allow-floating-image-tags to the GMC
+# (disabling the AGC_IMAGE/PROXY_IMAGE digest-pinning requirement) AND lets
+# the chart render the GMC's own image from a floating tag when
+# gmc.image.digest is empty (otherwise rendering fails). DEV/TEST ONLY — do
+# not enable in production. Leaving it false keeps the secure default.
 allowFloatingImageTags: false
 
 # leaderElection gates the --leader-elect flag. Keep enabled when replicaCount

@@ -20,7 +20,7 @@ helm install gag charts/actions-gateway \
   --set proxy.image.digest=sha256:<proxy>
 ```
 
-The GMC requires the AGC and proxy images to be **pinned by digest** and crash-loops on floating tags — pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
+All three images must be **pinned by digest** — the chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on floating AGC/proxy tags — so pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
 
 > **Dev/CI alternative.** The `cmd/gmc/config/` kustomize bases drive a `make install` / `make deploy IMG=<registry>/gmc:tag` flow used for local iteration. The Helm chart is the supported distribution artifact; the kustomize bases remain the dev source of truth.
 

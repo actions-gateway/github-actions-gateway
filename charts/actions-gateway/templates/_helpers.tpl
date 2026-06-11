@@ -53,15 +53,40 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 
 {{/*
 Resolve a container image reference from a {repository, tag, digest} dict.
-Digest pinning is the secure default: when .digest is set the ref is
-`repository@sha256:…` and the tag is ignored. Pass the sub-map as `.image`:
-  {{ include "actions-gateway.image" .Values.gmc.image }}
+When .digest is set the ref is `repository@sha256:…` and the tag is ignored.
+Used for the AGC/proxy references the GMC injects — the GMC binary enforces
+digest pinning on those at startup (validateImageDigest in cmd/gmc/cmd/main.go),
+so an unpinned ref here fails closed at runtime. The GMC's OWN image has no
+such runtime guard; it must go through "actions-gateway.gmcImage" below, which
+enforces pinning at render time instead. Pass the sub-map:
+  {{ include "actions-gateway.image" .Values.agc.image }}
 */}}
 {{- define "actions-gateway.image" -}}
 {{- if .digest -}}
 {{- printf "%s@%s" .repository .digest -}}
 {{- else -}}
 {{- printf "%s:%s" .repository (.tag | default "latest") -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+GMC controller-manager image reference — digest pinning enforced at RENDER
+time. Nothing at runtime validates the image the GMC itself runs from (the GMC
+binary only checks the AGC_IMAGE/PROXY_IMAGE refs it injects), so the chart is
+the last line of defence: rendering fails when gmc.image.digest is empty
+rather than silently falling back to a mutable :latest tag (secure by
+default). The one escape hatch is the explicit allowFloatingImageTags=true
+dev/test opt-out — the same knob that relaxes the runtime AGC/proxy check.
+`make manifest-validate` asserts the default-values render fails closed.
+Takes the root context.
+*/}}
+{{- define "actions-gateway.gmcImage" -}}
+{{- if .Values.gmc.image.digest -}}
+{{- printf "%s@%s" .Values.gmc.image.repository .Values.gmc.image.digest -}}
+{{- else if .Values.allowFloatingImageTags -}}
+{{- printf "%s:%s" .Values.gmc.image.repository (.Values.gmc.image.tag | default "latest") -}}
+{{- else -}}
+{{- fail "gmc.image must be pinned by digest: set gmc.image.digest=sha256:<64 hex digits> (see docs/operations/install.md, \"Pin images by digest\"). DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag." -}}
 {{- end -}}
 {{- end -}}
 

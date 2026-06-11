@@ -7,8 +7,10 @@ name: manifest-validate
 #     generated manifests under cmd/*/config/** and the chart metadata.
 #   - kubeconform: schema-validates the rendered manifests (kustomize default
 #     overlay, the standalone opt-in manifests, and `helm template` output in
-#     both default and all-features form) against the Kubernetes API, plus
-#     `helm lint` on the chart itself.
+#     digest-pinned, dev/test opt-out, and all-features form) against the
+#     Kubernetes API, plus `helm lint` on the chart itself and a fail-closed
+#     check that a default-values render (no gmc.image.digest) is REJECTED, so
+#     GMC image digest pinning cannot regress to fail-open (Q96).
 on:
   pull_request:
     paths-ignore:

@@ -35,7 +35,7 @@ not chart resources.
   controls to take effect. `kindnet` does not enforce egress.
 - **cert-manager** *if* `certManager.enabled=true` (the default). Not required
   when you set `certManager.enabled=false`.
-- **Image digests** for the AGC and proxy images (see below).
+- **Image digests** for the GMC, AGC, and proxy images (see below).
 
 ## Install
 
@@ -47,10 +47,17 @@ helm install gag charts/actions-gateway \
   --set proxy.image.digest=sha256:<proxy>
 ```
 
-The GMC **rejects floating `AGC_IMAGE`/`PROXY_IMAGE` tags** and crash-loops
-until they are pinned by digest — this is the secure default. Pin
-`agc.image.digest` and `proxy.image.digest` (and `gmc.image.digest`) before
-installing, or pass `--set allowFloatingImageTags=true` for **dev/test only**.
+Digest pinning is enforced for all three images — this is the secure default:
+
+- **GMC (render time):** the chart **fails to render** with
+  `gmc.image must be pinned by digest …` when `gmc.image.digest` is empty, so
+  the controller image can never silently fall back to a mutable `:latest` tag.
+- **AGC/proxy (startup time):** the GMC **rejects floating
+  `AGC_IMAGE`/`PROXY_IMAGE` tags** and crash-loops until they are pinned.
+
+Pin `gmc.image.digest`, `agc.image.digest`, and `proxy.image.digest` before
+installing, or pass `--set allowFloatingImageTags=true` — the one explicit
+opt-out covering both layers — for **dev/test only**.
 
 ### Without cert-manager
 
@@ -86,12 +93,12 @@ the binding to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `namePrefix` | `gmc` | Prefix for all GMC resource names; also the SA identity the PSA-guard policy matches. Keep as `gmc` unless running two GMCs. |
 | `replicaCount` | `2` | GMC controller-manager replicas (HA). |
 | `gmc.image.repository` | `ghcr.io/actions-gateway/gmc` | GMC image repo. |
-| `gmc.image.tag` | `""` | GMC tag (used only when digest empty). |
-| `gmc.image.digest` | `""` | GMC image digest (`sha256:…`); takes precedence over tag. |
+| `gmc.image.tag` | `""` | GMC tag (used only when digest is empty **and** `allowFloatingImageTags=true`). |
+| `gmc.image.digest` | `""` | GMC image digest (`sha256:…`). **Required** — rendering fails when empty unless `allowFloatingImageTags=true`. |
 | `gmc.imagePullPolicy` | `IfNotPresent` | GMC image pull policy. |
 | `agc.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/agc`, `""`, `""` | Image the GMC **injects** into provisioned AGCs. Digest required by default. |
 | `proxy.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/proxy`, `""`, `""` | Image the GMC **injects** into provisioned proxy pools. Digest required by default. |
-| `allowFloatingImageTags` | `false` | Dev/test opt-out of AGC/proxy digest pinning. **Do not enable in production.** |
+| `allowFloatingImageTags` | `false` | Dev/test opt-out of digest pinning: lets the chart render `gmc.image` from a floating tag and disables the GMC's AGC/proxy pin check. **Do not enable in production.** |
 | `leaderElection.enabled` | `true` | Pass `--leader-elect`. Keep on when `replicaCount > 1`. |
 | `metrics.enabled` | `true` | Expose the HTTPS `:8443` metrics endpoint + Service. |
 | `metrics.serviceMonitor.enabled` | `false` | Emit a Prometheus-Operator ServiceMonitor (needs its CRD). |
@@ -114,9 +121,14 @@ format, security-profile enum, pull-policy enum, etc.).
 
 ## Offline validation
 
+Rendering requires `gmc.image.digest` (see above); any well-formed digest works
+for offline validation:
+
 ```sh
-helm lint charts/actions-gateway
-helm template gag charts/actions-gateway --namespace gmc-system | \
+DIGEST=sha256:1111111111111111111111111111111111111111111111111111111111111111
+helm lint charts/actions-gateway --set-string gmc.image.digest="$DIGEST"
+helm template gag charts/actions-gateway --namespace gmc-system \
+  --set-string gmc.image.digest="$DIGEST" | \
   kubeconform -strict -summary -kubernetes-version 1.30.0 \
     -skip CustomResourceDefinition,ActionsGateway,RunnerGroup,Certificate,Issuer,ServiceMonitor
 ```
