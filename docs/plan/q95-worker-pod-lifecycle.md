@@ -132,11 +132,11 @@ controller in envtest), hence the ownerRef assertion at Tier A.
 ## Progress
 
 - [x] Plan committed
-- [ ] API fields + CEL + deepcopy + CRD regen (agc + gmc) + chart CRD sync
-- [ ] Provisioner: ownerRefs, `0s`-TTL delete-on-completion
-- [ ] Reaper in RunnerGroup reconciler + metric + events
-- [ ] Unit tests (provisioner + reaper)
-- [ ] envtest integration tests
-- [ ] Tier-A e2e test
-- [ ] Doc updates
+- [x] API fields + CEL + deepcopy + CRD regen (agc + gmc) + chart CRD sync
+- [x] Provisioner: ownerRefs, `0s`-TTL delete-on-completion
+- [x] Reaper in RunnerGroup reconciler + metric + events
+- [x] Unit tests (provisioner + reaper)
+- [x] envtest integration tests (`make -C cmd/agc test-integration` green incl. new tests)
+- [x] Tier-A e2e test (`E2E_AGC_WorkerPodLifecycle`, Serial)
+- [x] Doc updates
 - [ ] `make check` green; STATUS row removed

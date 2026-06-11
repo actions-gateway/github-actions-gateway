@@ -80,7 +80,7 @@ For teams running GPU-accelerated workflows, runner pod lifecycle is a direct dr
 * **ARC scale-set mode with `minRunners > 0`**, commonly configured per scale set to mask runner-pod cold-start latency, holds N runner pods continuously per scale set even with no work queued. A tenant with 10 GPU scale sets at `minRunners: 1` holds 10 GPU pods around the clock. GAG eliminates this entirely — the goroutine listener never goes cold, so no minimum-pod tuning is needed.
 * **Legacy ARC (`RunnerDeployment` + HRA)** had a per-pod `Runner.Listener` and no clean scale-to-zero parity. Teams migrating from this configuration see the largest absolute idle-GPU reductions.
 
-In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. Worker pods are provisioned on-demand after a job is acquired and garbage-collected immediately on completion — across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.
+In all configurations, the AGC itself runs on a CPU-only node pool, so no GPU capacity is consumed by the controller. Worker pods are provisioned on-demand after a job is acquired and release their compute — including the GPU — the moment the job completes (the terminal pod object is deleted after a short configurable TTL and holds no resources in the meantime). Across a shared GPU node pool, GAG keeps GPU nodes available to other workloads up until the moment a job arrives, with no per-scale-set baseline tuning to maintain.
 
 ### For Teams Migrating from Host-Machine or VM Runners
 
@@ -110,7 +110,7 @@ This document outlines the design for a **four-tier system** that addresses thes
 
 * **Tier 3 — Egress Proxy Pool:** A horizontally autoscaled pool of stateless HTTPS CONNECT proxy pods, deployed per tenant by the GMC. All GitHub traffic from both the AGC and worker pods routes through this pool, giving each tenant a distinct set of egress IPs isolated from other tenants. This enables per-team IP allowlisting on the GitHub side, produces clean per-tenant audit trails, and contains GitHub-side incident impact: a rate limit, abuse flag, or IP ban triggered by one tenant's egress IPs does not propagate to other tenants on different IPs. (Note: this is a containment property at the *network attribution* layer; it is not a substitute for per-installation authorization, which already scopes what a compromised worker can do at GitHub.)
 
-* **Tier 4 — Ephemeral Worker Pod:** A short-lived, single-use pod that executes exactly one workflow job. Provisioned on-demand by the AGC after a job is acquired and garbage-collected immediately on completion. Because worker pods exist only while a job is running, there are zero idle compute resources between jobs — the cluster pays only for work actually being done.
+* **Tier 4 — Ephemeral Worker Pod:** A short-lived, single-use pod that executes exactly one workflow job. Provisioned on-demand by the AGC after a job is acquired; its compute is released the moment the job completes, and the terminal pod object is deleted after a short configurable TTL. Because worker pods consume resources only while a job is running, there are zero idle compute resources between jobs — the cluster pays only for work actually being done.
 
 ### Operational Model
 

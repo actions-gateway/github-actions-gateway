@@ -59,6 +59,29 @@ For a phased rollout where you cannot label every namespace up front, temporaril
 the binding's `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are
 logged but not enforced, label the namespaces, then restore `[Deny]`.
 
+### Worker pods are now cleaned up automatically (one-time sweep recommended)
+
+AGC versions with Q95 delete completed worker pods after `completedPodTTL`
+(default 5m) and stuck-Pending worker pods after `pendingPodDeadline` (default
+10m), and stamp every new worker pod and job Secret with an OwnerReference to
+its RunnerGroup. Two operator-visible consequences:
+
+- **Behaviour change:** completed worker pods no longer linger indefinitely.
+  If your debugging workflow relied on inspecting old pods, raise
+  `completedPodTTL` on the affected `runnerGroups[]` entries (see
+  [tenant-onboarding](tenant-onboarding.md#step-2-create-the-actionsgateway-resource)).
+- **One-time sweep:** pods created by *pre-upgrade* AGC versions whose
+  RunnerGroup still exists are reaped automatically after upgrade, but pods
+  whose RunnerGroup was already deleted have no OwnerReference and no
+  reconciler to reap them. Clean those up once per tenant namespace:
+
+```sh
+# Terminal worker pods left behind by pre-Q95 AGCs (label is stamped on all worker pods)
+kubectl delete pods -n <tenant-namespace> \
+  -l app.kubernetes.io/name=actions-runner \
+  --field-selector 'status.phase!=Running,status.phase!=Pending'
+```
+
 ### AGC Deployment renamed from `actions-gateway-agc` to `actions-gateway-controller`
 
 Deployments and resources created by the GMC are now named `actions-gateway-controller`

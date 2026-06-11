@@ -264,6 +264,41 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 - If a `PriorityClass` is missing: create it (cluster-admin action) or remove the tier reference.
 - If image pull is slow (first job on a cold node): this is expected. If it exceeds the p99 SLO (60s), consider pre-pulling the image via a DaemonSet or enabling image streaming.
 
+**Deadline.** A pod that stays Pending is not held forever: after `pendingPodDeadline` (default 10m, per-RunnerGroup) the AGC deletes it to free the concurrency-ceiling slot it was holding — see the next runbook section. Diagnose a stuck pod (`kubectl describe pod`) *before* the deadline reaps it, or raise `pendingPodDeadline` temporarily while debugging.
+
+---
+
+## Worker Pod Reaped While Pending (WorkerPodStuckPending)
+
+**Symptoms.** A `Warning` Event with reason `WorkerPodStuckPending` appears on the RunnerGroup (`kubectl describe runnergroup -n <namespace>`), `actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}` increments, and the job the pod was created for is cancelled by GitHub (it never started, so its lock lapsed). The worker pod itself is gone.
+
+**What happened.** The pod stayed `Pending` longer than the RunnerGroup's `pendingPodDeadline` (default 10m), so the AGC deleted it. A permanently Pending pod would otherwise hold one of the group's concurrency-ceiling slots forever — the ceiling counts Pending pods. The deadline is a capacity-protection mechanism, not a retry mechanism: the job is **not** re-queued automatically.
+
+**Likely causes.**
+- `workerImage` (or the `podTemplate` container image) does not exist or is not pullable from the cluster — `ErrImagePull` / `ImagePullBackOff`.
+- `podTemplate` scheduling constraints (nodeSelector, tolerations, GPU resources) that no node satisfies.
+- Node autoscaler provisioning slower than the deadline (common for GPU node pools).
+
+**Diagnostics.**
+
+```sh
+# The reap event names the deleted pod and the deadline that fired
+kubectl get events -n <namespace> --field-selector reason=WorkerPodStuckPending
+
+# Rate of reaps per group
+# PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="pending_deadline"}[1h])
+
+# Reproduce the pull/scheduling failure before the next reap:
+# trigger a job, then describe the new Pending pod within the deadline window
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<group> -w
+kubectl describe pod -n <namespace> <worker-pod-name>
+```
+
+**Resolution.**
+- Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
+- If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
+- Re-run the cancelled workflow from the GitHub UI once the cause is fixed.
+
 ---
 
 ## Proxy Pool Not Scaling
@@ -791,6 +826,29 @@ spec.tracing.sampler: Unsupported value: "ratio": supported values:
 - To *disable* tracing entirely, remove `spec.tracing.endpoint` (an empty endpoint emits no `OTEL_*` env and the AGC keeps its no-op tracer) — the sampler value is irrelevant when no endpoint is set.
 
 See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
+
+---
+
+## Worker-Pod Lifecycle Duration Rejected by Admission
+
+**Symptoms.** Applying a `RunnerGroup` (or an `ActionsGateway` whose `runnerGroups[]` entry sets the field) is rejected at admission with one of:
+
+```
+The RunnerGroup "..." is invalid: spec: Invalid value: ...:
+completedPodTTL must not be negative
+```
+
+```
+The RunnerGroup "..." is invalid: spec: Invalid value: ...:
+pendingPodDeadline must be at least 1s
+```
+
+**Likely cause.** CRD CEL validation on the two worker-pod lifecycle knobs: `completedPodTTL` accepts any non-negative duration (`"0s"` means delete worker pods immediately on completion), while `pendingPodDeadline` must be at least `1s` — a zero deadline would reap every worker pod the instant it was admitted, and there is deliberately no way to disable the deadline (an unbounded Pending pod permanently leaks a concurrency-ceiling slot).
+
+**Resolution.**
+- Use a non-negative Go duration string for `completedPodTTL` (`"0s"`, `"5m"`, `"1h"`).
+- Use a duration of `1s` or more for `pendingPodDeadline`; to effectively park the deadline while debugging a scheduling issue, set it large (e.g. `"24h"`) rather than zero.
+- Omit either field to get the defaults (`5m` retention, `10m` deadline).
 
 ---
 
