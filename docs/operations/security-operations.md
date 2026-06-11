@@ -290,9 +290,10 @@ every push to `main`.
   finding — fix the chart instead** (secure-by-default).
 - **Run it yourself.** `make polaris-scan` (needs `helm` and `polaris` on
   `PATH`) runs the exact CI gate locally. It renders with a placeholder image
-  digest so the audit reflects the production, digest-pinned posture; the
-  un-pinned `:latest` default still trips the gating `tagNotSpecified` check, so
-  this does not mask a real finding.
+  digest so the audit reflects the production, digest-pinned posture — a digest
+  is also required for the chart to render at all (an empty `gmc.image.digest`
+  fails the render; `make manifest-validate` asserts that rejection), so the
+  placeholder cannot mask a fail-open default.
 
 > The scan audits *workload posture in the generated manifests*. It does not
 > replace pinning real image digests (`gmc.image.digest`,

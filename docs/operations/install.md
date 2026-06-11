@@ -70,11 +70,22 @@ you are running two GMCs in one cluster — the operational docs and the
 
 ### Pin images by digest
 
-The GMC **rejects floating `AGC_IMAGE` / `PROXY_IMAGE` tags and crash-loops**
-until the AGC and proxy images are pinned by digest. This is the secure default:
-a digest is immutable, so a tenant gateway can never be provisioned from a tag
-that was silently re-pointed. Pin `gmc.image.digest`, `agc.image.digest`, and
-`proxy.image.digest` as shown above.
+Digest pinning is enforced for all three images, at two layers. This is the
+secure default: a digest is immutable, so neither the controller nor a tenant
+gateway can ever run from a tag that was silently re-pointed.
+
+- **GMC image — enforced at render time.** `helm install` / `helm upgrade` /
+  `helm template` **fail** with
+  `gmc.image must be pinned by digest: set gmc.image.digest=sha256:<64 hex digits> …`
+  when `gmc.image.digest` is empty. See the
+  [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest)
+  if you hit this.
+- **AGC/proxy images — enforced at GMC startup.** The GMC **rejects floating
+  `AGC_IMAGE` / `PROXY_IMAGE` tags and crash-loops** until the AGC and proxy
+  images are pinned by digest.
+
+Pin `gmc.image.digest`, `agc.image.digest`, and `proxy.image.digest` as shown
+above.
 
 For **dev/test only**, you can bypass the pin:
 
@@ -111,8 +122,8 @@ digests. The knobs an operator is most likely to override:
 
 | Key | Default | When you change it |
 |---|---|---|
-| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` | `""` | Always — pin all three by digest. |
-| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning. |
+| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` | `""` | Always — pin all three by digest. The chart refuses to render while `gmc.image.digest` is empty. |
+| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time GMC check and startup-time AGC/proxy check). |
 | `certManager.enabled` | `true` | Set `false` to use the self-signed webhook cert instead of cert-manager. |
 | `namePrefix` | `gmc` | Only when running a second GMC in the same cluster. |
 | `replicaCount` | `2` | Lower to `1` only in dev; production wants HA + leader election. |
