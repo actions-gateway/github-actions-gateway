@@ -50,6 +50,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q113"></a>Q113 | Flake: eviction integration tests time out in waitForWorkerPod | `tests` `bug` | 🔲 | S | EvictionTriggersRequeue + EvictionBudgetExhausted (failure_recovery_test.go:142) timed out (20s) on CI run 27383065643, passed on rerun w/o code change. Suspects: sessions[len-1] pick on shared brokerStub; 20s budget on 2-vCPU runner. |
 | <a id="Q97"></a>Q97 | Published images are amd64-only (no multi-arch/arm64) | `infra` `1.0-gate` | 🔲 | M | publish.yml has no platforms: key; worker Dockerfile hardcodes GOARCH=amd64; no TARGETARCH plumbing. All images (incl. injected agc/proxy) are amd64-only, unschedulable on arm64 nodes. Publish multi-arch or document the amd64-only limitation. |
 | <a id="Q98"></a>Q98 | Helm chart distribution/publishing pipeline | `infra` `1.0-gate` | 🔲 | M | Pipeline shipped: publish.yml chart-publish job packages, pushes (oci://ghcr/charts), and cosign-signs the chart. Remaining (first v* tag): live publish proof, flip prerelease annotation, oci:// in upgrade.md/README, Artifact Hub listing. |
 | <a id="Q112"></a>Q112 | GMC Events silently 403'd: recorder writes events.k8s.io, RBAC grants core only | `bug` `infra` | 🔲 | S | Same root cause as the AGC fix in PR 202 (Q95): GMC uses mgr.GetEventRecorder (writes events.k8s.io/v1) but its kubebuilder marker grants only core "" events, so every GMC Event is dropped. Fix marker + `make manifests`; assert one event in e2e. |
