@@ -115,9 +115,21 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
 	})
 
 	It("E2E_AGC_WorkerPodOwnerRef: worker pods carry a controller ownerRef to the RunnerGroup", func() {
+		// Resolve the bootstrapped RunnerGroup's actual name rather than
+		// predicting it: the GMC builds it as <ag>-<labelSafe(first label)>,
+		// and labelSafe appends a 7-char hash suffix.
+		cmd := exec.Command("kubectl", "get", "runnergroups",
+			"-n", stuckNS,
+			"-o", "jsonpath={.items[0].metadata.name}",
+		)
+		rgName, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		rgName = strings.TrimSpace(rgName)
+		Expect(rgName).NotTo(BeEmpty(), "expected a bootstrapped RunnerGroup in %s", stuckNS)
+
 		// Inspect the stuck tenant's pod: it stays Pending well past this
 		// assertion (deadline 45s), so there is no race with the reaper.
-		cmd := exec.Command("kubectl", "get", "pods",
+		cmd = exec.Command("kubectl", "get", "pods",
 			"-n", stuckNS,
 			"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
 			"-o", `jsonpath={range .items[*]}{.metadata.ownerReferences[0].kind}/{.metadata.ownerReferences[0].name}/{.metadata.ownerReferences[0].controller}{"\n"}{end}`,
@@ -127,8 +139,7 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, Serial, func() {
 		lines := utils.GetNonEmptyLines(out)
 		Expect(lines).NotTo(BeEmpty(), "expected at least one worker pod with ownerReferences")
 		for _, line := range lines {
-			// The GMC names the bootstrapped RunnerGroup <ag>-<first label>.
-			Expect(line).To(Equal("RunnerGroup/"+agName+"-e2e/true"),
+			Expect(line).To(Equal("RunnerGroup/"+rgName+"/true"),
 				"worker pod must carry a controller ownerRef to the tenant RunnerGroup")
 		}
 	})
