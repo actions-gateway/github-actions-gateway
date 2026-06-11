@@ -4,7 +4,12 @@
 // The Provisioner replaces the M2 stubJobHandler: it stages a short-lived
 // Kubernetes Secret containing the raw AcquireJob payload, creates an
 // Ephemeral Worker Pod that mounts the Secret, watches for pod completion,
-// and cleans up the Secret when the pod terminates.
+// and cleans up the Secret when the pod terminates. Both objects carry a
+// controller OwnerReference to the RunnerGroup so CR/namespace deletion
+// garbage-collects them; the pod itself is deleted on completion when the
+// group's completedPodTTL is zero, and otherwise by the RunnerGroup
+// reconciler's reaper once the TTL elapses (stuck-Pending pods are reaped
+// after pendingPodDeadline by the same reaper).
 //
 // It enforces the concurrency ceilings from the RunnerGroup spec:
 //   - priorityTiers: assign PriorityClass by cumulative pod count; hold if at last tier ceiling.
@@ -116,7 +121,37 @@ const (
 	proxyCAVolumeName = "proxy-ca"
 	proxyCAMountPath  = "/etc/actions-gateway/proxy-ca"
 	proxyCAFileName   = "tls.crt"
+
+	// DefaultCompletedPodTTL is the effective retention for worker pods in a
+	// terminal phase when RunnerGroup.Spec.CompletedPodTTL is omitted. Long
+	// enough for an operator to inspect a just-failed pod, short enough to keep
+	// accumulation bounded at (job rate × TTL).
+	DefaultCompletedPodTTL = 5 * time.Minute
+
+	// DefaultPendingPodDeadline is the effective stuck-Pending deadline when
+	// RunnerGroup.Spec.PendingPodDeadline is omitted. Generous for image pulls;
+	// raise the field on clusters where legitimate scheduling is slow (e.g.
+	// autoscaled GPU node pools).
+	DefaultPendingPodDeadline = 10 * time.Minute
 )
+
+// EffectiveCompletedPodTTL returns the group's terminal-pod retention,
+// applying DefaultCompletedPodTTL when the field is omitted.
+func EffectiveCompletedPodTTL(rg *v1alpha1.RunnerGroup) time.Duration {
+	if rg.Spec.CompletedPodTTL != nil {
+		return rg.Spec.CompletedPodTTL.Duration
+	}
+	return DefaultCompletedPodTTL
+}
+
+// EffectivePendingPodDeadline returns the group's stuck-Pending deadline,
+// applying DefaultPendingPodDeadline when the field is omitted.
+func EffectivePendingPodDeadline(rg *v1alpha1.RunnerGroup) time.Duration {
+	if rg.Spec.PendingPodDeadline != nil {
+		return rg.Spec.PendingPodDeadline.Duration
+	}
+	return DefaultPendingPodDeadline
+}
 
 // defaultWorkerCPU / defaultWorkerMemory are the resource requests *and*
 // limits stamped on a worker container when the tenant PodTemplate omits them.
@@ -227,8 +262,9 @@ func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFu
 	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
 		quotaDelay = rg.Spec.QuotaRetryDelay.Duration
 	}
+	completedTTL := EffectiveCompletedPodTTL(rg)
 	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
-		return p.provision(ctx, rg, planID, payload, jitConfig, maxEviction, evictionDelay, maxQuota, quotaDelay)
+		return p.provision(ctx, rg, planID, payload, jitConfig, maxEviction, evictionDelay, maxQuota, quotaDelay, completedTTL)
 	}
 }
 
@@ -267,7 +303,7 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration) (err error) {
+func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration, completedTTL time.Duration) (err error) {
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -377,7 +413,13 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 		p.handleEviction(ctx, rg, owner, repo, runID, log, maxEviction, evictionDelay)
 	}
 
-	// 7. Cleanup.
+	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
+	// immediately only when the group's completedPodTTL is zero; otherwise the
+	// RunnerGroup reconciler's reaper deletes it once the TTL elapses — the
+	// reaper is also the restart-safe backstop for pods no goroutine watches.
+	if completedTTL == 0 {
+		_ = p.deletePod(ctx, rg.Namespace, podName)
+	}
 	_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 	return nil
 }
@@ -573,6 +615,23 @@ func (p *Provisioner) ceilingCheck(rg *v1alpha1.RunnerGroup, activePods int32) (
 	return "", false
 }
 
+// ownerRefFor returns a controller OwnerReference to rg, stamped on every
+// worker pod and job Secret so that deleting the RunnerGroup — directly, via
+// ActionsGateway teardown, or via namespace deletion — cascade-deletes them,
+// including any orphaned by an AGC crash. BlockOwnerDeletion is left unset:
+// the RunnerGroup carries its own finalizer for ordered cleanup, and setting
+// it would require `update` on the owner's finalizers under the
+// OwnerReferencesPermissionEnforcement admission plugin.
+func ownerRefFor(rg *v1alpha1.RunnerGroup) metav1.OwnerReference {
+	return metav1.OwnerReference{
+		APIVersion: v1alpha1.GroupVersion.String(),
+		Kind:       "RunnerGroup",
+		Name:       rg.Name,
+		UID:        rg.UID,
+		Controller: ptr.To(true),
+	}
+}
+
 func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string, payload []byte, jitConfig string) *corev1.Secret {
 	data := map[string][]byte{
 		payloadKey: payload,
@@ -589,6 +648,7 @@ func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string,
 				labelManagedBy:   managerName,
 				LabelRunnerGroup: rg.Name,
 			},
+			OwnerReferences: []metav1.OwnerReference{ownerRefFor(rg)},
 		},
 		Data: data,
 	}
@@ -725,6 +785,7 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 				labelAppComponent: workerComponent,
 				labelAppPartOf:    partOf,
 			},
+			OwnerReferences: []metav1.OwnerReference{ownerRefFor(rg)},
 		},
 		Spec: template.Spec,
 	}
@@ -858,6 +919,17 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 			}
 		}
 	}
+}
+
+// deletePod deletes a worker pod, tolerating NotFound (the reaper or an
+// external actor may have removed it first).
+func (p *Provisioner) deletePod(ctx context.Context, namespace, name string) error {
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	if err := p.Client.Delete(ctx, pod); client.IgnoreNotFound(err) != nil {
+		p.logFor(nil).Warn("failed to delete worker pod", "pod", name, "error", err)
+		return err
+	}
+	return nil
 }
 
 func (p *Provisioner) deleteSecret(ctx context.Context, namespace, name string) error {

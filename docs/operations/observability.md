@@ -164,6 +164,7 @@ the chart lands:
 | `actions_gateway_renewjob_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. |
 | `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction. |
 | `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Eviction retries exhausted; job requires manual re-run. |
+| `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. |
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace` | `GetMessage` errors (excludes empty polls and session expiry — those are normal). |
 | `actions_gateway_reconcile_errors_total` | Counter | `controller`, `resource` | GMC/AGC reconcile errors. Non-zero values deserve investigation. |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
@@ -200,6 +201,7 @@ eviction-retry loops, credential-harvesting), see
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
+| Jobs cancelled without ever starting | `worker_pods_reaped_total{reason="pending_deadline"}` | Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) |
 | Proxy autoscaling not working | HPA TARGETS showing `<unknown>` | `requests.cpu` not set on proxy pods |
 | GMC/AGC reconcile broken | `reconcile_errors_total` | Non-zero sustained rate indicates operator issue |
 

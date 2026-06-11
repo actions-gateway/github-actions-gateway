@@ -34,10 +34,18 @@ rules:
   verbs: ["get"]
 # events: the RunnerGroup reconciler emits Kubernetes Events (via an
 # EventRecorder) on credential, agent-pool, listener, and deregistration
-# failures, plus Ready-condition transitions, so operators see them in
-# `kubectl describe runnergroup`. create+patch is the standard event-client
-# permission set (patch supports event series aggregation).
+# failures, plus Ready-condition transitions and worker-pod reaps, so
+# operators see them in `kubectl describe runnergroup`. create+patch is the
+# standard event-client permission set (patch supports event series
+# aggregation). Both API groups are required: the AGC uses controller-runtime's
+# new-style recorder (mgr.GetEventRecorder), which writes events.k8s.io/v1
+# Events — with only the core ("") grant those writes are silently 403'd and
+# no AGC event ever appears. The core grant stays for the legacy
+# corev1-recorder path and forward/backward compatibility.
 - apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["events.k8s.io"]
   resources: ["events"]
   verbs: ["create", "patch"]
 # list on secrets is required: the agent pool enumerates its own per-runner

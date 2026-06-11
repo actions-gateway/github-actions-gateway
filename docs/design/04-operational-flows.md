@@ -56,7 +56,7 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
       |               |                |               |─8. Logs (via proxy)─>|
       |               |                |               |<─9. Job Done──|
       |==10. RenewJob loop stops =====================================|
-      |               |                |<─11. Delete Pod + Secret ─────|
+      |               |                |<─11. Delete Secret (Pod after TTL)─|
 ```
 
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool. GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
@@ -69,7 +69,7 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
 8. **Stream:** The worker pod streams live execution logs to GitHub's Twirp Results Service via the proxy pool.
 9. **Complete:** The worker container exits with code `0` on success (non-zero on workflow failure). A single event handler on the AGC's shared Pod informer observes the terminal pod phase and wakes the waiting session goroutine — detection is event-driven, not polled, so completion is noticed near-immediately regardless of how many sessions are in flight.
 10. **Stop renewing:** The RenewJob goroutine detects pod completion and exits cleanly.
-11. **Reclaim:** The AGC deletes the associated job Secret and Kubernetes garbage-collects the completed pod.
+11. **Reclaim:** The AGC deletes the associated job Secret immediately. The completed pod is retained for `completedPodTTL` (default 5m) and then deleted by the RunnerGroup reconciler's worker-pod reaper; `completedPodTTL: 0s` deletes it immediately on completion. Both the pod and the Secret also carry a controller `OwnerReference` to the RunnerGroup, so RunnerGroup or tenant deletion cascade-deletes anything still present.
 
 ---
 
@@ -160,6 +160,34 @@ AGC Goroutine     K8s API Server    Worker Pod      GitHub Edge
 ```
 
 The AGC stops renewal immediately on detecting `Evicted` (rather than waiting for lock expiry) so that GitHub cancels the run quickly and the re-queued job enters the delivery queue as soon as possible. The `evictionRetryDelay` default of 5 seconds gives GitHub time to process the cancellation before the rerun API is called.
+
+---
+
+### Stuck-Pending Worker Pod
+
+```
+AGC Reconciler    K8s API Server    Worker Pod      GitHub Edge
+      |                |               |               |
+      |                |── Create ────>| Pending       |
+      |                |               | (ErrImagePull or unschedulable)
+      |                |               |               |
+      |  [session goroutine blocked waiting for completion;
+      |   pod holds one concurrency-ceiling slot]       |
+      |                |               |               |
+      |  [pendingPodDeadline elapses (default 10m)]     |
+      |                |               |               |
+      |── Delete pod ─>|               |               |
+      |   [Warning Event: WorkerPodStuckPending]        |
+      |   [worker_pods_reaped_total{reason=             |
+      |    "pending_deadline"} incremented]             |
+      |                |               |               |
+      |  [pod deletion wakes the session goroutine →    |
+      |   Secret deleted, listener + ceiling slot freed]|
+      |                |               |  (job lock lapses; GitHub
+      |                |               |   cancels the run)
+```
+
+A worker pod that never leaves `Pending` — unpullable `workerImage`, unschedulable `podTemplate` constraints, or an exhausted node pool — would otherwise hold a concurrency-ceiling slot forever: the ceiling counts Pending pods and the session goroutine blocks until the pod terminates or disappears. The RunnerGroup reconciler's worker-pod reaper deletes any worker pod that has been Pending longer than `pendingPodDeadline` (default 10m, per-RunnerGroup). Deletion is treated as completion by the Pod-informer handler, so the session goroutine wakes, deletes the job Secret, and releases its listener and slot. The job itself was never started, so its lock lapses and GitHub cancels the run — the deadline is a capacity-protection mechanism, not a retry mechanism. Operators on clusters with slow legitimate scheduling (e.g. autoscaled GPU node pools) should raise `pendingPodDeadline` above their worst-case node-provisioning time. See the [troubleshooting runbook](../operations/troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) for diagnosis.
 
 ---
 

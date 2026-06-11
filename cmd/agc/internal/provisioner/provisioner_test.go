@@ -1803,3 +1803,99 @@ func TestBuildPod_RecommendedLabels(t *testing.T) {
 
 // defaultCPU returns the default worker CPU request as a string for assertions.
 func defaultCPU() string { return "500m" }
+
+// TestProvisioner_SetsOwnerReferences verifies the worker pod and job Secret
+// carry a controller OwnerReference to the RunnerGroup, so deleting the
+// RunnerGroup (or its namespace) cascade-deletes both — including objects
+// orphaned by an AGC crash (Q95).
+func TestProvisioner_SetsOwnerReferences(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+	rg.UID = types.UID("rg-uid-123")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-ownerref", stubPayload(1), "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	secret := findSecret(ctx, t, fc, "team-a", "job-")
+	require.NotNil(t, secret)
+
+	for name, refs := range map[string][]metav1.OwnerReference{
+		"pod":    pod.OwnerReferences,
+		"secret": secret.OwnerReferences,
+	} {
+		require.Len(t, refs, 1, "%s must have exactly one ownerReference", name)
+		ref := refs[0]
+		assert.Equal(t, "actions-gateway.github.com/v1alpha1", ref.APIVersion, name)
+		assert.Equal(t, "RunnerGroup", ref.Kind, name)
+		assert.Equal(t, "mygroup", ref.Name, name)
+		assert.Equal(t, types.UID("rg-uid-123"), ref.UID, name)
+		require.NotNil(t, ref.Controller, name)
+		assert.True(t, *ref.Controller, "%s ownerReference must be a controller ref", name)
+		assert.Nil(t, ref.BlockOwnerDeletion,
+			"%s must not set blockOwnerDeletion (needs finalizer perms under OwnerReferencesPermissionEnforcement)", name)
+	}
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+// TestProvisioner_DeletesPodOnCompletionWhenTTLZero pins the completedPodTTL=0s
+// fast path: the provision goroutine deletes the worker pod itself in its
+// cleanup step, without waiting for the reconciler's reaper (Q95).
+func TestProvisioner_DeletesPodOnCompletionWhenTTLZero(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.CompletedPodTTL = &metav1.Duration{Duration: 0}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-ttl0", stubPayload(1), "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+
+	assert.Nil(t, findPod(ctx, t, fc, "team-a"),
+		"worker pod must be deleted on completion when completedPodTTL is 0s")
+	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"),
+		"job Secret must be deleted on completion")
+}
+
+// TestProvisioner_RetainsPodOnCompletionByDefault pins the default retention
+// contract: with completedPodTTL omitted the goroutine leaves the terminal pod
+// in place (the reconciler's reaper deletes it after DefaultCompletedPodTTL),
+// giving operators a window to inspect a failed pod (Q95).
+func TestProvisioner_RetainsPodOnCompletionByDefault(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-retain", stubPayload(1), "")
+	}()
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+
+	assert.NotNil(t, findPod(ctx, t, fc, "team-a"),
+		"terminal worker pod must be retained for the reaper when completedPodTTL is unset")
+	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"),
+		"job Secret must still be deleted on completion")
+}

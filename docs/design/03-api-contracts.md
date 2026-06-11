@@ -501,6 +501,34 @@ type RunnerGroupSpec struct {
     // +optional
     // +kubebuilder:default="30s"
     QuotaRetryDelay *metav1.Duration `json:"quotaRetryDelay,omitempty"`
+
+    // CompletedPodTTL is how long a worker pod that has reached a terminal
+    // phase (Succeeded, Failed, or Unknown) is retained before the AGC deletes
+    // it. Retention gives operators a window to inspect the pod of a failed
+    // job (`kubectl logs`/`describe`) before it disappears; terminal pods
+    // consume no compute and no ResourceQuota. Set to "0s" to delete worker
+    // pods immediately on completion.
+    //
+    // Accepts standard Go duration strings: "0s", "5m", "1h". Negative values
+    // are rejected at admission. Defaults to "5m" when omitted.
+    //
+    // +optional
+    CompletedPodTTL *metav1.Duration `json:"completedPodTTL,omitempty"`
+
+    // PendingPodDeadline is the maximum time a worker pod may remain Pending
+    // (measured from its creation) before the AGC deletes it, releasing the
+    // concurrency-ceiling slot the stuck pod was holding. Pending pods get
+    // stuck on unpullable images or unschedulable constraints; deleting one
+    // resolves its session goroutine and frees the listener for the next job.
+    // Each reap emits a WorkerPodStuckPending Warning Event on the
+    // RunnerGroup. Raise this on clusters where legitimate scheduling can be
+    // slow (e.g. autoscaled GPU node pools).
+    //
+    // Accepts standard Go duration strings: "10m", "1h". Values below "1s"
+    // are rejected at admission. Defaults to "10m" when omitted.
+    //
+    // +optional
+    PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
 }
 
 // WorkerPodTemplate is a corev1.PodTemplateSpec that defines the pod configuration

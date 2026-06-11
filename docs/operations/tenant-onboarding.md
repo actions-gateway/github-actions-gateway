@@ -104,6 +104,17 @@ spec:
 kubectl apply -f actionsgateway.yaml
 ```
 
+**Optional — worker-pod lifecycle.** Each `runnerGroups[]` entry accepts two cleanup knobs. `completedPodTTL` (default `5m`) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to `kubectl logs`/`describe` a failed pod; `"0s"` deletes pods immediately on completion. `pendingPodDeadline` (default `10m`, minimum `1s`) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:
+
+```yaml
+  runnerGroups:
+    - runnerLabels: ["self-hosted", "gpu"]
+      completedPodTTL: "30m"      # longer debugging window for failed jobs
+      pendingPodDeadline: "30m"   # GPU node provisioning can exceed the 10m default
+```
+
+A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
+
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block. Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml

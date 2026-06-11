@@ -21,6 +21,8 @@ type Metrics struct {
 	EvictionRetriesExhausted *prometheus.CounterVec
 	QuotaRetries             *prometheus.CounterVec
 	QuotaRetriesExhausted    *prometheus.CounterVec
+	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper)
+	WorkerPodsReaped *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -88,6 +90,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_quota_retries_exhausted_total",
 			Help: "Jobs abandoned after exhausting the quota retry budget.",
 		}, []string{"namespace", "runner_group"}),
+
+		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_worker_pods_reaped_total",
+			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline).",
+		}, []string{"namespace", "runner_group", "reason"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -103,6 +110,7 @@ func NewMetrics() *Metrics {
 		m.EvictionRetriesExhausted,
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,
+		m.WorkerPodsReaped,
 	)
 	return m
 }
