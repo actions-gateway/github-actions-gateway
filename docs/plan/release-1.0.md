@@ -34,22 +34,36 @@ not done at tag time moves to the post-1.0 Queue with its rationale.
 
 ### A. Functional completeness & live proof — *gating*
 
-The code is done; what's missing is proof against a real cluster and
-real GitHub. These close out [Milestone 4](milestone-4.md)'s unverified
-DoD rows.
+~~The code is done; what's missing is proof against a real cluster and
+real GitHub.~~ **All four items proven live on 2026-06-12** — full
+session record in
+[milestone-4.md §12](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112).
+The session surfaced four product bugs (Q114–Q117); Q114 (JIT agents
+are single-use, no AGC self-healing) and Q115 (default worker
+SecurityContext breaks the runner image) are new `1.0-gate` rows.
 
-- [ ] **Two `ActionsGateway` CRs → two isolated tenants**, validated
+- [x] **Two `ActionsGateway` CRs → two isolated tenants**, validated
   live on `kind` (not source-read): each tenant gets its own namespace,
   AGC, and proxy pool with ≥ `minReplicas` Ready pods. *(M4 DoD row 1)*
-- [ ] **Deleting one CR tears down only that tenant**; the other
+  — proven 2026-06-12, [evidence](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112).
+- [x] **Deleting one CR tears down only that tenant**; the other
   tenant's namespace and workloads are unaffected. *(M4 DoD row 2)*
-- [ ] **End-to-end job through the proxy**: a job dispatched from
+  — proven 2026-06-12 (the surviving tenant also ran a green job
+  afterwards).
+- [x] **End-to-end job through the proxy**: a job dispatched from
   GitHub routes via `HTTPS_PROXY`, runs in a worker pod, and completes
-  green. Lands as the planned Tier-A test
-  `E2E_GMC_TenantProvisioning_ProxyConnectWorks`. *(M4 DoD row 5)*
-- [ ] **Runner version contract confirmed** ([Q71](../STATUS.md)): run
-  `E2E_GMC_TenantProvisioning` with real GitHub App creds and confirm
-  GitHub accepts the pinned runner `2.334.0` at session creation.
+  green. The Tier-A `E2E_GMC_TenantProvisioning_ProxyConnectWorks` spec
+  already exists and runs in CI; the real-GitHub path was proven live
+  2026-06-12 (runs 27386891757 / 27395702908, both `success`).
+  **Caveat:** the green path needed a per-tenant `runAsUser: 1001`
+  podTemplate workaround — the *default-path* worker pod is broken
+  until [Q115](../STATUS.md) lands, so Q115 is itself a `1.0-gate`.
+- [x] **Runner version contract confirmed** ([Q71](../STATUS.md), now
+  closed): live session creation with real App creds succeeds. Nuance:
+  the GMC-provisioned AGC sends an **empty** `agent.version` (it never
+  sets `GITHUB_RUNNER_VERSION`), which GitHub accepts — the 2.334.x pin
+  lives only in the worker image. Follow-up tracked as
+  [Q118](../STATUS.md).
 
 ### B. Security & isolation proof — *gating + recommended*
 
@@ -78,7 +92,13 @@ caveat in bucket E covers the gap until Q7b runs.
 This is the keystone: nothing downstream (posture scan, signing, audit
 policy) can exist until there is an artifact to install and scan.
 
-- [ ] **Reproducible install artifact** ([Q12](../STATUS.md), *gating*):
+- [x] **Reproducible install artifact** ([Q12](../STATUS.md), now
+  closed — chart shipped + lint/template/kubeconform-validated offline,
+  and live-proven 2026-06-12 (digest-pinned `helm install` → working
+  tenant → green job; CRD `resource-policy: keep` observed on
+  uninstall). Evidence:
+  [q12-helm-chart.md](q12-helm-chart.md#live-validation-track-a--2026-06-12).
+  Publishing pipeline remains [Q98](../STATUS.md). Original gate text:
   a Helm chart under `charts/actions-gateway/` (Helm decided over
   Kustomize per [D-M5-1](milestone-5.md#11-install-vehicle--decided-helm-chart))
   that produces a working tenant from a single `helm install`. Contents
@@ -86,10 +106,10 @@ policy) can exist until there is an artifact to install and scan.
   Deployment + RBAC + webhook config, IP-range schedule, proxy image
   refs, an opt-in sample CR, **all images pinned by digest**. Two
   Helm-specific sub-gates from §1.1:
-    - [ ] **cert-manager is optional**: `certManager.enabled` value with
+    - [x] **cert-manager is optional**: `certManager.enabled` value with
       a self-signed-cert hook fallback, so the webhook installs without
       cert-manager present.
-    - [ ] **CRDs upgrade**: shipped in `templates/` with
+    - [x] **CRDs upgrade**: shipped in `templates/` with
       `helm.sh/resource-policy: keep`, not `crds/` (Helm never upgrades
       `crds/`), so day-2 `helm upgrade` carries CRD field changes.
 - [ ] **Posture scan clean** ([Q14](../STATUS.md), *gating*): `polaris`

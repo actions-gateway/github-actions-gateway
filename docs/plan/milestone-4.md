@@ -6,18 +6,20 @@
 
 ## Status at a glance
 
-Last refreshed 2026-05-25. The GMC, proxy binary, admission webhook,
-TLS pinning, IP-range refresh, leader election, and worker
-ServiceAccount are all in code. What remains is live `kind` validation
-across two tenants and an end-to-end job that proves proxy routing.
+Last refreshed 2026-06-12. **All success criteria are now live-validated.**
+The multi-tenant, delete-isolation, and end-to-end-proxy-job rows were
+proven on a real kind cluster with real GitHub App credentials on
+2026-06-11/12 — see [§12 Live multi-tenant validation evidence](#12-live-multi-tenant-validation-evidence-2026-06-1112)
+for the full session record, including the four product bugs it surfaced
+(tracked as Q114–Q117 in [STATUS.md](../STATUS.md)).
 
 | Success criterion | Status | Notes |
 |---|---|---|
-| Two `ActionsGateway` CRs → two independent tenants | ⚠️ Unverified | Reconciler emits all resources per tenant; multi-tenant `kind` validation pending |
-| Deleting one CR removes only that tenant's resources | ⚠️ Unverified | `reconcileDelete` scopes by namespace; live deletion test pending |
+| Two `ActionsGateway` CRs → two independent tenants | ✅ Done | 2026-06-12 live on kind via `helm install` (digest-pinned): `tenant-a`+`tenant-b` both `Ready=True` with 2/2 proxy pods in <1 min — see §12 |
+| Deleting one CR removes only that tenant's resources | ✅ Done | 2026-06-12 live: deleting `gateway-b` removed all GMC-managed resources in `tenant-b` only; `tenant-a` stayed Ready and ran a subsequent green job — see §12 |
 | `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` ([builder.go:385](../../cmd/gmc/internal/controller/builder.go)); `hpa_update_test.go` covers it |
 | Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | [actionsgateway_webhook.go:21-47](../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go) |
-| End-to-end job via proxy (green checkmark + `HTTPS_PROXY` in worker env) | ❌ Open | Blocked on Milestone 3 Investigation A (Named Pipe handoff) |
+| End-to-end job via proxy (green checkmark + `HTTPS_PROXY` in worker env) | ✅ Done | 2026-06-12 live: runs [27386891757](https://github.com/actions-gateway/gateway-test/actions/runs/27386891757) + [27395702908](https://github.com/actions-gateway/gateway-test/actions/runs/27395702908) concluded `success`; worker pod env carried `HTTPS_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080` — see §12 (needed the Q115 `runAsUser` workaround) |
 | RBAC: no `*` verbs on `secrets`/`pods`/`nodes` in GMC ClusterRole | ✅ Done | `rbac_test.go` has 2 wildcard-detection tests |
 | `go test -race ./...` passes across all four modules | ✅ Done | Per-module test commands pass |
 | Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` ([builder.go:77](../../cmd/gmc/internal/controller/builder.go)); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
@@ -28,11 +30,9 @@ across two tenants and an end-to-end job that proves proxy routing.
 
 ### Critical path
 
-The only milestone gate is end-to-end validation in `kind`. The code
-shipping milestone is complete; the validation milestone is blocked on
-Milestone 3's Named Pipe investigation. Once a worker pod actually runs
-a job, the multi-tenant isolation and proxy-routing checks become
-mechanical.
+~~The only milestone gate is end-to-end validation in `kind`.~~ Closed
+2026-06-12 by the live validation session in §12. The milestone is
+complete.
 
 ---
 
@@ -815,11 +815,11 @@ After integration tests pass, deploy the full stack to a `kind` cluster:
 
 ## 9. Success Criteria Checklist
 
-- [ ] Two `ActionsGateway` CRs in a `kind` cluster produce two independent, functional tenant setups.
-- [ ] Deleting one CR removes only that tenant's resources.
-- [ ] `spec.proxy.maxReplicas` change reflected in HPA within one reconcile cycle.
-- [ ] Admission webhook rejects CRs in `kube-system`, `kube-public`, and `gmc-system` (plus the GMC's install namespace via the `POD_NAMESPACE` downward-API env var when non-default).
-- [ ] End-to-end job completes with green checkmark via proxy (confirmed by `HTTPS_PROXY` in worker pod env).
+- [x] Two `ActionsGateway` CRs in a `kind` cluster produce two independent, functional tenant setups. *(2026-06-12 live — §12)*
+- [x] Deleting one CR removes only that tenant's resources. *(2026-06-12 live — §12)*
+- [ ] `spec.proxy.maxReplicas` change reflected in HPA within one reconcile cycle. *(covered by `hpa_update_test.go`; not exercised in the §12 live session)*
+- [ ] Admission webhook rejects CRs in `kube-system`, `kube-public`, and `gmc-system` (plus the GMC's install namespace via the `POD_NAMESPACE` downward-API env var when non-default). *(unit-tested; not exercised in the §12 live session)*
+- [x] End-to-end job completes with green checkmark via proxy (confirmed by `HTTPS_PROXY` in worker pod env). *(2026-06-12 live — §12)*
 - [ ] RBAC regression tests pass: no `*` verbs on `secrets`, `pods`, or `nodes` in the GMC ClusterRole.
 - [ ] `go test -race ./...` passes across all four modules (root, agc, gmc, proxy).
 - [ ] Worker ServiceAccount `actions-gateway-worker` created by GMC and used by provisioner.
@@ -852,3 +852,124 @@ After integration tests pass, deploy the full stack to a `kind` cluster:
 - **`gVisor`/Kata `RuntimeClass`** — optional worker isolation hardening is M5.
 - **CRD CEL admission rules for reserved worker pod fields** — the webhook in M4 only rejects reserved namespaces. Rejecting reserved PodTemplate fields (`hostPID`, `HTTP_PROXY` in env, etc.) via CEL rules is M5. In M4 the provisioner silently overwrites them.
 - **`kube-bench`/`polaris` scan** — cluster posture audit is M5.
+
+---
+
+## 12. Live multi-tenant validation evidence (2026-06-11/12)
+
+One session on a 3-node kind cluster (`make e2e-cluster`, kindnet CNI,
+cert-manager installed) with the real GitHub App `actions-gateway-test`
+(App ID 3752347, installation 135739122) against the repo
+`actions-gateway/gateway-test` (workflow `test-job.yml`, `runs-on: e2e`).
+This session also served as the [Q12 track-A live `helm install` proof](q12-helm-chart.md#live-validation-track-a--2026-06-12)
+and closed Q71.
+
+### Setup
+
+- Images built and pushed by `make e2e-images` at commit `042a4f5`; all
+  refs below are pinned by registry digest (no `--allow-floating-image-tags`).
+- GMC installed **via the Helm chart only** (no kustomize `make deploy`):
+
+  ```
+  helm install actions-gateway charts/actions-gateway -n gmc-system --create-namespace \
+    --set gmc.image.repository=localhost:5000/gmc   --set gmc.image.digest=sha256:190d138c… \
+    --set agc.image.repository=localhost:5000/agc   --set agc.image.digest=sha256:23d9fe5d… \
+    --set proxy.image.repository=localhost:5000/proxy --set proxy.image.digest=sha256:d497c4d0…
+  # deployment 2/2 Available in ~10 s; AGC_IMAGE/PROXY_IMAGE env digest-pinned
+  ```
+
+- **Deviation from pure production posture:** the AGC's org URL has no CR
+  field, so the GMC was patched with the testing-gated
+  `--allow-agc-extra-env=true` + `AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test`
+  (same mechanism the Tier-C suite uses). Tracked as Q116.
+
+### Multi-tenant (DoD row 1)
+
+Two namespaces (`tenant-a`, `tenant-b`, both labelled
+`actions-gateway.github.com/tenant=true`), each with a real-credential
+`github-app-creds` Secret and an `ActionsGateway` CR (proxy
+`minReplicas: 2`; runner labels `e2e` / `e2e-b` respectively). Within
+~60 s both CRs reported `Ready=True`, `PROXYREADY 2`; each namespace
+held its own AGC Deployment (1/1), proxy Deployment (2/2), Service,
+HPA, 3 NetworkPolicies, Role/RoleBinding, both ServiceAccounts, and a
+RunnerGroup with `ActiveSessions ≥ 1`. All four virtual runners
+appeared in the repo's runner list (`gh api …/actions/runners`), one
+listener per tenant `online`. The AGC's installation-token fetch
+demonstrably routed through the tenant proxy (first attempt while the
+proxy was still starting logged
+`proxyconnect tcp: dial tcp 10.96.129.62:8080: connect: connection refused`,
+then succeeded).
+
+### End-to-end job through the proxy (DoD row 5) + Q71
+
+`gh workflow run test-job.yml` → job acquired by `tenant-a`, worker pod
+`Running`, GitHub-side runs concluded **success** twice:
+[27386891757](https://github.com/actions-gateway/gateway-test/actions/runs/27386891757)
+(before the delete-isolation step) and
+[27395702908](https://github.com/actions-gateway/gateway-test/actions/runs/27395702908)
+(after it). Worker pod env (observed live):
+
+```
+HTTP_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080
+HTTPS_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080
+NO_PROXY=svc.cluster.local,svc.cluster.local,localhost,127.0.0.1,10.96.0.0/12
+PROXY_CA_CERT_PATH=/etc/actions-gateway/proxy-ca/tls.crt
+```
+
+Worker logs showed step/job log uploads to the results service at 3/3
+success rate (all via the proxy tunnel; the Q5h proxy-CA trust chain
+held).
+
+**Q71 (runner-version contract):** session creation against real GitHub
+succeeded — but the live truth is subtler than the Queue row assumed:
+the GMC-provisioned AGC never sets `GITHUB_RUNNER_VERSION`, so
+`CreateSession` sends an **empty** `agent.version` (and `GetMessage`
+omits `runnerVersion`), which GitHub accepts. The 2.334.0/2.335.x pin
+exists only in the worker image. Recorded as Q118 (set the env in the
+GMC + fix the Dockerfile-vs-`DefaultWorkerImage` drift Dependabot
+introduced in #197).
+
+### Delete isolation (DoD row 2)
+
+`kubectl delete actionsgateway gateway-b -n tenant-b` returned after the
+finalizer drained; afterwards `tenant-b` contained only the namespace
+itself, the `default` ServiceAccount, and the operator-created
+`github-app-creds` Secret (the namespace is never deleted by design).
+`tenant-a` was untouched (`Ready=True`, AGC + 2/2 proxy pods running,
+RunnerGroup intact) and subsequently ran run 27395702908 to green.
+Deleting `gateway-a` at the end, with a healthy session, also
+**deregistered its runners from GitHub** — the repo runner list went
+empty.
+
+### Product bugs surfaced (all filed in [STATUS.md](../STATUS.md))
+
+The live run worked **only after** working around these; none are
+caught by unit/Tier-A/Tier-B tiers:
+
+1. **Q115 — default worker SecurityContext breaks the runner image.**
+   Q31's `applySecurityDefaults` stamps pod-level `runAsNonRoot: true`;
+   the `actions-runner` image uses non-numeric `USER runner`, so kubelet
+   fails every default-path worker pod with
+   `CreateContainerConfigError: container has runAsNonRoot and image has
+   non-numeric user`. Worked around per-tenant with
+   `podTemplate.spec.securityContext.runAsUser: 1001`. Tier-B masks
+   this by using the **agc image** as its worker placeholder.
+2. **Q114 — JIT agents are single-use and the AGC cannot self-heal.**
+   GitHub removed each JIT runner after it completed (or had acquired a
+   then-cancelled) job; the never-used agent survived. The AGC kept
+   polling with the stale agent/session — `GetMessage` looped on
+   `200`-with-empty-body (`decode response: EOF`) and later
+   `401 unauthorized` for hours with no re-registration; recovery
+   required deleting the agentpool Secrets + restarting the AGC, and
+   re-registration of a *surviving* name then failed `409 Already
+   exists` (no deregister-then-retry). This breaks the
+   multiplex-many-jobs-per-agent assumption at its root.
+3. **Q117 — RunnerGroup `podTemplate` changes don't reach running
+   listeners.** After patching the CR (observedGeneration advanced),
+   newly provisioned worker pods still used the old template until the
+   AGC pod was restarted.
+4. **Q116 — no production path for the GitHub org URL** (see Setup
+   deviation above).
+
+Operator-facing runbook entry for (1):
+[troubleshooting.md](../operations/troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).
