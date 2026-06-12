@@ -29,7 +29,7 @@ unimplemented at the authorization layer.
 |---|---|---|
 | GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped | High | **New → [Q121](../STATUS.md#Q121)** (Q29 audit policy is the detective half) |
 | GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **New → [Q122](../STATUS.md#Q122)** |
-| Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **New → [Q120](../STATUS.md#Q120)** |
+| Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **New → [Q128](../STATUS.md#Q128)** |
 | No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **New → [Q123](../STATUS.md#Q123)** |
 | `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **New → [Q124](../STATUS.md#Q124)** |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **New → [Q125](../STATUS.md#Q125)** |
@@ -49,7 +49,7 @@ unimplemented at the authorization layer.
 
 ## Queued findings (detail)
 
-### Q120 — Worker pods lack ingress NetworkPolicy (High)
+### Q128 — Worker pods lack ingress NetworkPolicy (High)
 
 `buildWorkloadNetworkPolicy` (`cmd/gmc/internal/controller/builder.go:269`)
 sets `PolicyTypes: [Egress]` only; the AGC and proxy policies declare

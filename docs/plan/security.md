@@ -4,7 +4,7 @@ A code-level security review of the GitHub Actions Gateway as of 2026-05-23.
 
 > **Successor audit:** a second full audit (2026-06-12) lives in
 > [security-audit-2026-06.md](security-audit-2026-06.md); its new findings
-> are queued as Q120–Q127. This doc remains the record of the first
+> are queued as Q121–Q128. This doc remains the record of the first
 > audit's findings and workstreams.
 
 Scope: `broker/`, `githubapp/`, `cmd/agc/`, `cmd/gmc/`, `cmd/proxy/`, `cmd/worker/`,
