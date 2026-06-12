@@ -50,6 +50,10 @@ jobs:
               - '.golangci.yml'
               - 'Makefile'
               - 'scripts/coverage.sh'
+              - 'scripts/go-test.sh'
+              - 'scripts/go-lint.sh'
+              - 'scripts/local-throttle.sh'
+              - 'scripts/lib/**'
               - 'coverage-baseline.txt'
               - '.github/workflows/unit-test.yml'
             status:
@@ -72,16 +76,6 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.work
-      - name: gofmt
-        run: |
-          set -euo pipefail
-          unformatted=$(gofmt -l $(go work edit -json | jq -r '.Use[].DiskPath'))
-          if [ -n "$unformatted" ]; then
-            echo "::error::gofmt found unformatted files:"
-            echo "$unformatted"
-            echo "run: gofmt -s -w <file>"
-            exit 1
-          fi
       # setup-go caches $GOCACHE + modules but not the golangci-lint analyzer
       # cache, so every PR re-analyzes cold. Key invalidates on linter version
       # (tools/go.sum), config, or any module's deps changing.
@@ -92,21 +86,20 @@ jobs:
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml', '**/go.sum') }}
           restore-keys: |
             golangci-lint-${{ runner.os }}-
-      - name: golangci-lint
-        run: |
-          set -euo pipefail
-          make golangci-lint
-          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
-            echo "==> golangci-lint $dir"
-            (cd "$dir" && "$GITHUB_WORKSPACE/.build/golangci-lint" run --config "$GITHUB_WORKSPACE/.golangci.yml" ./...)
-          done
+      # `make lint` (scripts/go-lint.sh) is the single source of truth for the
+      # gofmt check and the per-module golangci-lint loop, so local and CI
+      # verdicts match. It builds .build/golangci-lint from the vendored tools/
+      # module first; its local throttle is a no-op here (CI env var is set).
+      - name: gofmt + golangci-lint (make lint)
+        run: make lint
       - name: lint STATUS.md
         run: make lint-status
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
   # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
-  # not also trigger the full Go lint. `make shellcheck` is the single source of
-  # truth for the glob (tracked scripts/*.sh, recursive).
+  # not also trigger the full Go lint. `make shellcheck` (scripts/
+  # shellcheck-scripts.sh) is the single source of truth for the glob (tracked
+  # scripts/*.sh, recursive).
   shellcheck:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'

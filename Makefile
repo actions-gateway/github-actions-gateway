@@ -3,10 +3,10 @@
 # Requires Go 1.21+ for the -C flag.
 # Run `make` (or `make help`) for the list of available targets.
 
-# Recipes use bash-only constructs (`set -o pipefail`, `[[ ]]`). GNU make spawns
-# /bin/sh for recipe lines, which is dash on the CI ubuntu runner and rejects
-# `set -o pipefail`; pin the recipe shell to bash so recipes behave the same on
-# CI and on dev machines (where /bin/sh already happens to be bash).
+# Pin the recipe shell to bash so any bash-only construct in a recipe behaves
+# the same on CI (where /bin/sh is dash) and on dev machines (where /bin/sh
+# already happens to be bash). Multi-step recipe logic lives in scripts/*.sh
+# (shellcheck-covered); recipes here stay thin target→script wiring.
 SHELL := /bin/bash
 
 REPO_ROOT := $(shell git rev-parse --show-toplevel)
@@ -122,40 +122,16 @@ build-probe: ## Build the probe binary
 build-proxy: ## Build the proxy binary
 	go build -C cmd/proxy -o ../../.build/proxy .
 
-# V=1 (or VERBOSE=1) streams test output live (-v). Off by default so the green
-# path stays compressed — go test already prints one `ok pkg` line per passing
-# package and the full output of any package that fails. Turn it on when
-# debugging a slow or hanging test: without -v, go test buffers each package's
-# output until the package completes, so a hung test shows nothing (not even its
-# t.Log lines) until it finishes or hits -timeout; with -v the output streams as
-# it is produced. Propagates through `make check` too (e.g. `make check V=1`).
-GOTEST_V := $(if $(or $(V),$(VERBOSE)),-v,)
-
-# --- Local resource auto-throttle (interactive GUI dev shell) --------------
-# scripts/local-throttle.sh detects an interactive, GUI-bearing dev shell and
-# emits a parallelism cap (physical cores − 2) plus a low-priority QoS command
-# prefix (macOS: taskpolicy -c utility; Linux/WSL: nice -n 19 [+ ionice -c 3]).
-# Without it a full `make check` saturates every core and makes the desktop
-# unresponsive — on macOS the WindowServer watchdog then restarts the
-# compositor and the GUI freezes. On CI (the CI env var is set), on headless or
-# SSH Linux shells (no DISPLAY/WAYLAND_DISPLAY), and on unsupported OSes the
-# script prints nothing, so all of these expand empty and the gate runs at full
-# speed. Detail and rationale live in the script header.
-THROTTLE_JOBS   := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" jobs)
-THROTTLE_PREFIX := $(shell "$(REPO_ROOT)/scripts/local-throttle.sh" prefix)
-# Per-process env + flags derived from the cap; empty (no-op) when not throttling.
-# go test reads GOMAXPROCS/-p; golangci-lint ignores both and needs -j.
-THROTTLE_ENV    := $(if $(THROTTLE_JOBS),GOMAXPROCS=$(THROTTLE_JOBS),)
-GOTEST_P        := $(if $(THROTTLE_JOBS),-p $(THROTTLE_JOBS),)
-GOLANGCI_J      := $(if $(THROTTLE_JOBS),-j $(THROTTLE_JOBS),)
-
+# The heavy per-module loops (test, lint) live in scripts/go-test.sh and
+# scripts/go-lint.sh, which apply the local auto-throttle themselves
+# (scripts/local-throttle.sh: parallelism cap + low-priority QoS prefix on an
+# interactive GUI dev shell; no-op on CI/headless — rationale in that script's
+# header). V=1 (or VERBOSE=1) streams `go test` output live (-v) for debugging
+# a slow or hanging test; make exports command-line variables to recipe
+# environments, so `make test V=1` (and `make check V=1`) reach the script.
 .PHONY: test
 test: ## Run unit tests for all modules (V=1 streams output live for debugging a hang)
-	@set -euo pipefail; \
-	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
-		echo "==> go test $$dir"; \
-		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test -timeout 2m $(GOTEST_P) $(GOTEST_V) ./...) || exit 1; \
-	done
+	scripts/go-test.sh
 
 # The race-detector unit gate, run by the `unit-test` CI job. -race instruments
 # the concurrency core (agentpool, listener/mux, broker, token) that plain
@@ -169,11 +145,7 @@ test: ## Run unit tests for all modules (V=1 streams output live for debugging a
 # absorb the instrumentation slowdown.
 .PHONY: test-race
 test-race: ## Run unit tests under the race detector (the CI unit gate; throttled locally, full speed on CI)
-	@set -euo pipefail; \
-	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
-		echo "==> go test -race $$dir"; \
-		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) go test -race -timeout 5m $(GOTEST_P) $(GOTEST_V) ./...) || exit 1; \
-	done
+	scripts/go-test.sh --race
 
 # --- Test-coverage measurement + no-regression ratchet ---------------------
 # scripts/coverage.sh measures per-module unit-test coverage (the same per-module
@@ -202,40 +174,18 @@ test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gm
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
-	@set -euo pipefail; \
-	unformatted=$$(gofmt -l $$(go work edit -json | jq -r '.Use[].DiskPath')); \
-	if [ -n "$$unformatted" ]; then \
-		echo "gofmt: the following files are not formatted:"; \
-		echo "$$unformatted"; \
-		echo "run: gofmt -w <file>"; \
-		exit 1; \
-	fi
-	@set -euo pipefail; \
-	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
-		echo "==> golangci-lint $$dir"; \
-		(cd "$$dir" && $(THROTTLE_ENV) $(THROTTLE_PREFIX) $(GOLANGCI_LINT) run $(GOLANGCI_J) --config $(REPO_ROOT)/.golangci.yml ./...) || exit 1; \
-	done
+	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh
 
 .PHONY: lint-status
 lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 	scripts/lint-status.sh
 
-# Shellcheck every tracked shell script under scripts/. The git pathspec
-# 'scripts/*.sh' matches recursively (git's default '*' spans '/'), so it covers
-# all tracked .sh files — including any future scripts/<subdir>/*.sh — while
-# skipping untracked scratch scripts. Mirrored by the `shellcheck` job in
-# unit-test.yml so the local gate matches CI — CI pins shellcheck v0.11.0; install
-# that version locally so verdicts match (shellcheck's heuristics drift between
-# releases). Without this, standalone helper scripts ship unlinted: actionlint
-# only covers inline workflow `run:` blocks.
+# Without this gate, standalone helper scripts ship unlinted: actionlint only
+# covers inline workflow `run:` blocks. Glob, version pin, and rationale live
+# in the script header.
 .PHONY: shellcheck
 shellcheck: ## Shellcheck all tracked scripts/*.sh (recursive; matches the CI shellcheck gate)
-	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found on PATH — install: https://github.com/koalaman/shellcheck#installing" >&2; exit 1; }
-	@set -euo pipefail; \
-	files=$$(git ls-files 'scripts/*.sh'); \
-	if [[ -z "$$files" ]]; then echo "no scripts to shellcheck"; exit 0; fi; \
-	echo "==> shellcheck $$(echo "$$files" | wc -l | tr -d ' ') script(s) under scripts/"; \
-	shellcheck $$files
+	scripts/shellcheck-scripts.sh
 
 .PHONY: queue-unblock
 queue-unblock: ## List Queue items blocked by ID=<id> (e.g. make queue-unblock ID=Q12; bare 12 also accepted)
@@ -259,129 +209,28 @@ third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (C
 
 ##@ Security
 
-# trivy image scan parameters, mirrored exactly by the CI `trivy` job so local
-# and CI verdicts match. ignore-unfixed drops CVEs with no released fix (nothing
-# actionable here); only fixable HIGH/CRITICAL findings fail the scan.
-TRIVY_SEVERITY ?= HIGH,CRITICAL
-# Each entry is "<name>=<dockerfile>" — the five images the CI trivy matrix scans.
-TRIVY_IMAGES   := gmc=cmd/gmc/Dockerfile agc=cmd/agc/Dockerfile proxy=cmd/proxy/Dockerfile worker=cmd/worker/Dockerfile fakegithub=test/fakegithub/Dockerfile
-# Images scanned report-only (findings printed, never fail the scan): the worker
-# image is built FROM the upstream actions-runner and carries upstream CVEs we
-# cannot fix. Matches the worker leg's exit-code 0 in security-scan.yml.
-TRIVY_REPORT_ONLY := worker
-
-# polaris posture-scan parameters, mirrored exactly by the CI `polaris` job.
-# POLARIS_RENDER_DIGEST is a placeholder sha256 digest used only to render the
-# chart for the scan: production installs pin gmc.image.digest, so auditing the
-# digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED to
-# render at all — the chart fails closed when gmc.image.digest is empty (Q96),
-# and `manifest-validate` below asserts that rejection so a regression to
-# fail-open cannot merge silently. The value must satisfy values.schema.json's
-# sha256:[a-f0-9]{64} pattern.
-POLARIS_RENDER_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
-POLARIS_CHART         := $(REPO_ROOT)/charts/actions-gateway
-POLARIS_CONFIG        := $(POLARIS_CHART)/polaris.yaml
-POLARIS_RENDER        := $(REPO_ROOT)/.build/polaris-render.yaml
-
-# Install-artifact validation parameters, mirrored exactly by the CI
-# `manifest-validate` job (Q66). yamllint catches malformed/ill-formatted YAML;
-# kubeconform schema-validates the rendered manifests against the cluster API.
-# MANIFEST_K8S_VERSION is the chart's kubeVersion floor (Chart.yaml: >=1.30.0):
-# validating against the oldest supported version catches a field that does not
-# exist there. -ignore-missing-schemas skips resources whose schema is not in
-# the upstream Kubernetes set — cert-manager (Certificate/Issuer), the
-# Prometheus Operator (ServiceMonitor) and our own CRs (ActionsGateway/
-# RunnerGroup). Those are third-party/custom kinds; the CRDs that define them
-# ARE validated (CustomResourceDefinition is a native apiextensions kind).
-MANIFEST_K8S_VERSION ?= 1.30.0
-# kubeconform fetches missing schemas over the network. Set KUBECONFORM_CACHE to
-# a directory to persist them between runs (CI points it at a cached path to
-# avoid re-downloading the schema set every run); empty by default for local use.
-KUBECONFORM_CACHE    ?=
-KUBECONFORM_FLAGS    := -strict -summary -kubernetes-version $(MANIFEST_K8S_VERSION) -ignore-missing-schemas \
-                        $(if $(KUBECONFORM_CACHE),-cache $(KUBECONFORM_CACHE),)
-YAMLLINT_PATHS       := charts/actions-gateway cmd/agc/config cmd/gmc/config
-# Standalone manifests not emitted by `kustomize build cmd/gmc/config/default`
-# (they are opt-in or separately-applied resources). kustomization.yaml files
-# and strategic-merge/JSON6902 patch fragments are deliberately NOT listed: they
-# are not standalone manifests (no kind/apiVersion, or a bare patch array) and
-# kubeconform cannot parse them — their validity is proven when `kustomize
-# build` succeeds and by yamllint.
-MANIFEST_STANDALONE  := cmd/agc/config/rbac/role.yaml \
-                        cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml \
-                        cmd/gmc/config/admission-policy/namespace-psa-guard.yaml \
-                        cmd/gmc/config/agc-tenant-role/agc_tenant_role.yaml \
-                        cmd/gmc/config/prometheus/monitor.yaml \
-                        cmd/gmc/config/samples/actions-gateway.github.com_v1alpha1_actionsgateway.yaml
+# The security gates are scripted (scripts/{go-vulncheck,trivy-scan,
+# polaris-scan,manifest-validate}.sh) and mirror their CI jobs exactly so local
+# and CI verdicts match. Parameters, defaults, and rationale live in each
+# script's header; all are env-overridable, and make exports command-line
+# variables, so e.g. `make trivy-scan TRIVY_SEVERITY=CRITICAL` or
+# `make manifest-validate MANIFEST_K8S_VERSION=1.31.0` reach the script.
 
 .PHONY: vulncheck
 vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
-	@set -euo pipefail; \
-	for dir in $$(go work edit -json | jq -r '.Use[].DiskPath'); do \
-		echo "==> govulncheck $$dir"; \
-		(cd "$$dir" && $(GOVULNCHECK) ./...) || exit 1; \
-	done
+	GOVULNCHECK=$(GOVULNCHECK) scripts/go-vulncheck.sh
 
 .PHONY: trivy-scan
 trivy-scan: ## Build each image locally and scan it with trivy (requires trivy + docker on PATH; matches the CI trivy gate)
-	@command -v trivy >/dev/null 2>&1 || { echo "trivy not found on PATH — install: https://trivy.dev/latest/getting-started/installation/" >&2; exit 1; }
-	@set -euo pipefail; \
-	for entry in $(TRIVY_IMAGES); do \
-		name="$${entry%%=*}"; dockerfile="$${entry#*=}"; \
-		code=1; for ro in $(TRIVY_REPORT_ONLY); do [[ "$$ro" == "$$name" ]] && code=0; done; \
-		echo "==> building local/$$name:trivy from $$dockerfile"; \
-		docker buildx build --load -t "local/$$name:trivy" -f "$$dockerfile" .; \
-		echo "==> trivy image local/$$name:trivy (exit-code $$code)"; \
-		trivy image --severity "$(TRIVY_SEVERITY)" --ignore-unfixed --exit-code "$$code" "local/$$name:trivy" || exit 1; \
-	done
+	scripts/trivy-scan.sh
 
 .PHONY: polaris-scan
 polaris-scan: ## Render the Helm chart and audit its Kubernetes posture with polaris (gates on danger findings; requires helm + polaris on PATH; matches the CI polaris gate)
-	@command -v helm >/dev/null 2>&1 || { echo "helm not found on PATH — install: https://helm.sh/docs/intro/install/" >&2; exit 1; }
-	@command -v polaris >/dev/null 2>&1 || { echo "polaris not found on PATH — install: https://polaris.docs.fairwinds.com/infrastructure-as-code/#cli" >&2; exit 1; }
-	@set -euo pipefail; \
-	mkdir -p "$(REPO_ROOT)/.build"; \
-	echo "==> helm template $(POLARIS_CHART) (digest-pinned posture)"; \
-	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" > "$(POLARIS_RENDER)"; \
-	echo "==> polaris audit (gate: danger findings fail; warnings reported)"; \
-	polaris audit --merge-config --config "$(POLARIS_CONFIG)" --audit-path "$(POLARIS_RENDER)" \
-		--format=pretty --only-show-failed-tests --set-exit-code-on-danger
+	scripts/polaris-scan.sh
 
 .PHONY: manifest-validate
 manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
-	@command -v yamllint     >/dev/null 2>&1 || { echo "yamllint not found on PATH — install: https://yamllint.readthedocs.io/en/stable/quickstart.html" >&2; exit 1; }
-	@command -v kubeconform  >/dev/null 2>&1 || { echo "kubeconform not found on PATH — install: https://github.com/yannh/kubeconform#installation" >&2; exit 1; }
-	@command -v kustomize    >/dev/null 2>&1 || { echo "kustomize not found on PATH — install: https://kubectl.docs.kubernetes.io/installation/kustomize/" >&2; exit 1; }
-	@command -v helm         >/dev/null 2>&1 || { echo "helm not found on PATH — install: https://helm.sh/docs/intro/install/" >&2; exit 1; }
-	@set -euo pipefail; \
-	echo "==> yamllint (static manifests + chart metadata)"; \
-	yamllint --strict -c "$(REPO_ROOT)/.yamllint.yaml" $(YAMLLINT_PATHS); \
-	echo "==> kubeconform: kustomize-rendered GMC default overlay (k8s $(MANIFEST_K8S_VERSION))"; \
-	kustomize build "$(REPO_ROOT)/cmd/gmc/config/default" | kubeconform $(KUBECONFORM_FLAGS); \
-	echo "==> kubeconform: standalone manifests not in the default overlay"; \
-	(cd "$(REPO_ROOT)" && kubeconform $(KUBECONFORM_FLAGS) $(MANIFEST_STANDALONE)); \
-	echo "==> helm lint (digest-pinned: default values must not render — checked next)"; \
-	helm lint "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)"; \
-	echo "==> helm template: default values must FAIL closed (gmc.image digest unpinned; Q96)"; \
-	if out=$$(helm template ag "$(POLARIS_CHART)" 2>&1); then \
-		echo "ERROR: chart rendered with default values — gmc.image digest pinning regressed to fail-open" >&2; \
-		exit 1; \
-	elif ! grep -q "gmc.image must be pinned by digest" <<<"$$out"; then \
-		echo "ERROR: default-values render failed, but not with the digest-pinning rejection:" >&2; \
-		echo "$$out" >&2; \
-		exit 1; \
-	fi; \
-	echo "==> kubeconform: Helm chart render (digest-pinned defaults)"; \
-	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \
-		| kubeconform $(KUBECONFORM_FLAGS); \
-	echo "==> kubeconform: Helm chart render (dev/test opt-out: allowFloatingImageTags=true)"; \
-	helm template ag "$(POLARIS_CHART)" --set allowFloatingImageTags=true \
-		| kubeconform $(KUBECONFORM_FLAGS); \
-	echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"; \
-	helm template ag "$(POLARIS_CHART)" --set-string "gmc.image.digest=$(POLARIS_RENDER_DIGEST)" \
-		--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
-		| kubeconform $(KUBECONFORM_FLAGS); \
-	echo "OK: install artifact validates"
+	scripts/manifest-validate.sh
 
 ##@ e2e
 
@@ -434,31 +283,29 @@ e2e-registry-delete: ## Stop and remove the local OCI registry container
 # e2e-images builds and pushes all four images in parallel via docker-bake.hcl.
 # Bake runs them concurrently bounded by the slowest target instead of summing
 # four sequential `docker build` calls. Pushing to the local registry IS the
-# load step — kind nodes pull from there on demand.
+# load step — kind nodes pull from there on demand. GIT_SHA and IMAGE_REGISTRY
+# parameterize the SHA-suffixed tags (see the registry block above).
+BAKE = GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) docker buildx bake --file docker-bake.hcl
+
 .PHONY: e2e-images
 e2e-images: ## Build and push all four e2e images in parallel via docker buildx bake
-	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
-		docker buildx bake --file docker-bake.hcl
+	$(BAKE)
 
 .PHONY: docker-build-gmc
 docker-build-gmc: ## Build and push only the GMC image (bake target `gmc`)
-	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
-		docker buildx bake --file docker-bake.hcl gmc
+	$(BAKE) gmc
 
 .PHONY: docker-build-agc
 docker-build-agc: ## Build and push only the AGC image (bake target `agc`)
-	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
-		docker buildx bake --file docker-bake.hcl agc
+	$(BAKE) agc
 
 .PHONY: docker-build-proxy
 docker-build-proxy: ## Build and push only the egress proxy image (bake target `proxy`)
-	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
-		docker buildx bake --file docker-bake.hcl proxy
+	$(BAKE) proxy
 
 .PHONY: docker-build-fakegithub
 docker-build-fakegithub: ## Build and push only the fakegithub image (bake target `fakegithub`)
-	GIT_SHA=$(GIT_SHA) IMAGE_REGISTRY=$(IMAGE_REGISTRY) \
-		docker buildx bake --file docker-bake.hcl fakegithub
+	$(BAKE) fakegithub
 
 # --procs 4: moderate parallelism tuned for the standard suite on a GitHub
 # Actions runner; --procs 8 caused burst scheduling failures.
@@ -506,53 +353,28 @@ cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 
 .PHONY: verify-release
 verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
-	@test -n "$(VERSION)" || { echo "usage: make verify-release VERSION=vX.Y.Z" >&2; exit 2; }
-	@repo="ghcr.io/actions-gateway"; \
-	id_re='^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/(tags|heads)/.*$$'; \
-	issuer='https://token.actions.githubusercontent.com'; \
-	chart_ver='$(VERSION:v%=%)'; \
-	rc=0; \
-	for img in gmc agc proxy worker; do \
-	  printf '==> %-7s %s ... ' "$$img" "$(VERSION)"; \
-	  if $(COSIGN) verify --certificate-identity-regexp "$$id_re" --certificate-oidc-issuer "$$issuer" "$$repo/$$img:$(VERSION)" >/dev/null 2>&1; then echo OK; else echo FAIL; rc=1; fi; \
-	done; \
-	printf '==> %-7s %s ... ' "chart" "$$chart_ver"; \
-	if $(COSIGN) verify --certificate-identity-regexp "$$id_re" --certificate-oidc-issuer "$$issuer" "$$repo/charts/actions-gateway:$$chart_ver" >/dev/null 2>&1; then echo OK; else echo FAIL; rc=1; fi; \
-	if [[ $$rc -ne 0 ]]; then echo "signature verification FAILED (if local docker creds are misconfigured, retry with DOCKER_CONFIG=\$$(mktemp -d))" >&2; exit 1; fi; \
-	echo "all signatures verified for $(VERSION)"
+	@COSIGN=$(COSIGN) scripts/verify-release.sh $(VERSION)
 
-$(CONTROLLER_GEN):
-	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/controller-tools/cmd/controller-gen
+# The kubebuilder-ecosystem tools all build the same way from the vendored
+# tools/ module; only the package path differs (the target-specific TOOL_PKG
+# below). ginkgo is the exception: it builds from cmd/gmc (workspace on) so it
+# matches the ginkgo version the e2e suite imports.
+$(CONTROLLER_GEN): TOOL_PKG := sigs.k8s.io/controller-tools/cmd/controller-gen
+$(KUBEBUILDER):    TOOL_PKG := sigs.k8s.io/kubebuilder/v4
+$(SETUP_ENVTEST):  TOOL_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
+$(GOLANGCI_LINT):  TOOL_PKG := github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+$(GOVULNCHECK):    TOOL_PKG := golang.org/x/vuln/cmd/govulncheck
 
-$(KUBEBUILDER):
+$(CONTROLLER_GEN) $(KUBEBUILDER) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOVULNCHECK):
 	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/kubebuilder/v4
-
-$(SETUP_ENVTEST):
-	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ sigs.k8s.io/controller-runtime/tools/setup-envtest
+	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ $(TOOL_PKG)
 
 $(GINKGO):
 	mkdir -p $(REPO_ROOT)/.build
 	cd $(REPO_ROOT)/cmd/gmc && go build -o $@ github.com/onsi/ginkgo/v2/ginkgo
 
-$(GOLANGCI_LINT):
-	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ github.com/golangci/golangci-lint/v2/cmd/golangci-lint
-
-$(GOVULNCHECK):
-	mkdir -p $(REPO_ROOT)/.build
-	cd $(REPO_ROOT)/tools && GOWORK=off go build -mod=vendor -o $@ golang.org/x/vuln/cmd/govulncheck
-
 # cosign is a non-Go-vendored binary tool (its dependency tree is too large to
 # vendor like the kubebuilder-ecosystem tools above), so it is downloaded at a
 # pinned version — the same pattern as the shellcheck/kubeconform CI installs.
 $(COSIGN):
-	mkdir -p $(REPO_ROOT)/.build
-	@os=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
-	arch=$$(uname -m); case "$$arch" in aarch64|arm64) arch=arm64;; x86_64|amd64) arch=amd64;; *) echo "unsupported arch $$arch" >&2; exit 1;; esac; \
-	url="https://github.com/sigstore/cosign/releases/download/$(COSIGN_VERSION)/cosign-$${os}-$${arch}"; \
-	echo "downloading cosign $(COSIGN_VERSION) ($${os}-$${arch})"; \
-	curl -fsSL --retry 3 --retry-delay 2 -o $@ "$$url"; \
-	chmod +x $@
+	scripts/download-cosign.sh $@ $(COSIGN_VERSION)

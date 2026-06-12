@@ -54,10 +54,14 @@ jobs:
               - 'tools/**'
               - 'docker-bake.hcl'
               - 'Makefile'
+              - 'scripts/go-vulncheck.sh'
+              - 'scripts/lib/**'
               - '.github/workflows/security-scan.yml'
             chart:
               - 'charts/**'
               - 'Makefile'
+              - 'scripts/polaris-scan.sh'
+              - 'scripts/lib/**'
               - '.github/workflows/security-scan.yml'
 
   # govulncheck is symbol-precise: it only fails on vulnerabilities actually
@@ -73,14 +77,11 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.work
-      - name: build govulncheck
-        run: make govulncheck
+      # `make vulncheck` (scripts/go-vulncheck.sh) is the single source of truth
+      # for the per-module loop, so local and CI verdicts match. It builds
+      # .build/govulncheck from the vendored tools/ module first.
       - name: run govulncheck across workspace modules
-        run: |
-          for dir in $(go work edit -json | jq -r '.Use[].DiskPath'); do
-            echo "==> govulncheck $dir"
-            (cd "$dir" && "$GITHUB_WORKSPACE/.build/govulncheck" ./...)
-          done
+        run: make vulncheck
 
   # Build each image, scan it, and generate its SBOM. One matrix leg per
   # Dockerfile so a finding points straight at the offending image and the five
