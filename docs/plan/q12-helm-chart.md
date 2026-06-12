@@ -113,6 +113,36 @@ out of scope here — this PR only consumes the authoritative copy.
    cert-manager / monitoring.coreos.com CRs whose schemas are not in the
    default store; `-skip` them with a note).
 
+## Live validation (track A) — 2026-06-12
+
+The chart's "working tenant from a single `helm install`" gate was
+proven live on a 3-node kind cluster with real GitHub App credentials,
+as part of the [Milestone 4 live validation session](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)
+(full evidence there). Chart-specific observations:
+
+- `helm install actions-gateway charts/actions-gateway -n gmc-system
+  --create-namespace` with `gmc.image.digest`, `agc.image.digest`, and
+  `proxy.image.digest` all set (local-registry digests) — i.e. the
+  **secure digest-pinned default path**, no `allowFloatingImageTags` —
+  rendered, installed, and rolled out 2/2 replicas in ~10 s. The GMC
+  accepted the digest-pinned `AGC_IMAGE`/`PROXY_IMAGE` without the
+  dev opt-out.
+- Two `ActionsGateway` CRs applied against the chart-installed GMC each
+  produced a fully Ready tenant in under a minute, and a real
+  `workflow_dispatch` job ran to a green checkmark through the tenant
+  proxy (runs 27386891757 / 27395702908).
+- `helm uninstall` kept both CRDs in place, printing
+  `These resources were kept due to the resource policy:` — live
+  confirmation of the `helm.sh/resource-policy: keep` CRD sub-gate.
+- cert-manager mode used: `certManager.enabled=true` (default). The
+  `certManager.enabled=false` fallback remains offline-validated only.
+- One install-flow caveat: pointing tenants at a real GitHub org/repo
+  required the testing-gated `--allow-agc-extra-env` patch on the GMC
+  (no CR/chart field exists for the org URL) — tracked as Q116.
+
+With this, Q12's last open piece is closed; chart publishing remains
+tracked separately as Q98.
+
 ## Out of scope (documented future slices)
 
 - CI drift check that re-renders the chart and diffs against the kustomize
@@ -123,5 +153,3 @@ out of scope here — this PR only consumes the authoritative copy.
   cosign signatures — **[Q28](../STATUS.md)**.
 - Reconciling the RunnerGroup CRD drift at the kustomize-base layer —
   **[Q73](../STATUS.md)**.
-</content>
-</invoke>
