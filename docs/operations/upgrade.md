@@ -6,6 +6,37 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 ---
 
+## Table of Contents
+
+- [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
+- [Migration Notes](#migration-notes)
+  - [Tenant namespaces now require the actions-gateway.github.com/tenant marker label](#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label)
+  - [Worker pods are now cleaned up automatically (one-time sweep recommended)](#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended)
+  - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
+  - [GMC manager NetworkPolicy is now enabled by default](#gmc-manager-networkpolicy-is-now-enabled-by-default)
+- [GMC Upgrade](#gmc-upgrade)
+  - [GMC install and upgrade via Helm (recommended)](#gmc-install-and-upgrade-via-helm-recommended)
+  - [Step 1: Upgrade the CRDs](#step-1-upgrade-the-crds)
+  - [Step 2: Roll the GMC Deployment](#step-2-roll-the-gmc-deployment)
+  - [Step 3: Post-Upgrade Validation](#step-3-post-upgrade-validation)
+  - [Rollback](#rollback)
+- [AGC Upgrade](#agc-upgrade)
+  - [Per-Tenant Upgrade Procedure](#per-tenant-upgrade-procedure)
+  - [Rollback](#rollback-1)
+- [Proxy Upgrade](#proxy-upgrade)
+  - [Step 1: Pre-Upgrade Checks](#step-1-pre-upgrade-checks)
+  - [Step 2: Update the Proxy Image](#step-2-update-the-proxy-image)
+  - [Step 3: Watch the Rollout](#step-3-watch-the-rollout)
+  - [Step 4: Post-Upgrade Validation](#step-4-post-upgrade-validation)
+  - [Rollback](#rollback-2)
+- [Worker Image Upgrade](#worker-image-upgrade)
+  - [Upgrade Procedure](#upgrade-procedure)
+  - [Canary Testing a New Worker Image](#canary-testing-a-new-worker-image)
+  - [Minimum Version Requirement](#minimum-version-requirement)
+  - [Rollback](#rollback-3)
+- [Post-Upgrade Validation](#post-upgrade-validation)
+- [Zero-Downtime Configuration](#zero-downtime-configuration)
+
 ## Pre-Upgrade Validation Checklist
 
 Before upgrading any component, confirm the system is healthy:

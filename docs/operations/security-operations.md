@@ -28,6 +28,24 @@ Two detection substrates are used:
 
 ---
 
+## Table of Contents
+
+- [Threat → signal map](#threat--signal-map)
+- [Prometheus abuse alerts](#prometheus-abuse-alerts)
+- [Audit-log abuse detections](#audit-log-abuse-detections)
+- [Response playbooks](#response-playbooks)
+  - [Suspected compromised AGC (tenant-scoped)](#suspected-compromised-agc-tenant-scoped)
+  - [Suspected compromised GMC (cluster-scoped, Tier-0)](#suspected-compromised-gmc-cluster-scoped-tier-0)
+  - [Proxy saturation / slowloris](#proxy-saturation--slowloris)
+- [Posture scanning (preventive)](#posture-scanning-preventive)
+  - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
+  - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
+- [License attribution in images](#license-attribution-in-images)
+- [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
+  - [Verify a signature](#verify-a-signature)
+  - [Retrieve and inspect the SBOM](#retrieve-and-inspect-the-sbom)
+- [Reference Links](#reference-links)
+
 ## Threat → signal map
 
 | Threat (from [05-security.md](../design/05-security.md)) | Abuse signal | Detection substrate | Severity |

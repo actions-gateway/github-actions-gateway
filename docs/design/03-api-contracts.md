@@ -4,6 +4,14 @@
 
 ---
 
+## Table of Contents
+
+- [3.1. Kubernetes CRD Schemas](#31-kubernetes-crd-schemas)
+- [3.2. GitHub App Credentials Secret Schema](#32-github-app-credentials-secret-schema)
+- [3.3. Re-implemented Broker API Endpoints](#33-re-implemented-broker-api-endpoints)
+- [3.4. Broker Payload Blueprints (Go Structs)](#34-broker-payload-blueprints-go-structs)
+- [3.5. GitHub API Rate Limit Budget](#35-github-api-rate-limit-budget)
+
 ## 3.1. Kubernetes CRD Schemas
 
 Two Custom Resource Definitions are introduced. `ActionsGateway` is namespace-scoped and owned by the GMC. `RunnerGroup` is namespace-scoped and owned by the AGC. Both live in the tenant's namespace. The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.

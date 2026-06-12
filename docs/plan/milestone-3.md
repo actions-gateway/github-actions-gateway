@@ -4,6 +4,22 @@
 
 ---
 
+## Table of Contents
+
+- [Status at a glance](#status-at-a-glance)
+- [Overview](#overview)
+- [1. Changes to Existing Packages](#1-changes-to-existing-packages)
+- [2. Worker Entrypoint Wrapper (cmd/worker/)](#2-worker-entrypoint-wrapper-cmdworker)
+- [3. Pod Provisioner (cmd/agc/internal/provisioner/)](#3-pod-provisioner-cmdagcinternalprovisioner)
+- [4. Job Lock Renewer Enhancements (cmd/agc/internal/listener/goroutine.go)](#4-job-lock-renewer-enhancements-cmdagcinternallistenergoroutinego)
+- [5. Investigation Tasks](#5-investigation-tasks)
+- [6. Reconciler Wiring](#6-reconciler-wiring)
+- [7. Test Plan](#7-test-plan)
+- [8. Success Criteria Checklist](#8-success-criteria-checklist)
+- [9. Risks and Mitigations](#9-risks-and-mitigations)
+- [10. Deferred to Later Milestones](#10-deferred-to-later-milestones)
+- [11. Investigation Findings](#11-investigation-findings)
+
 ## Status at a glance
 
 Last refreshed 2026-05-30. The provisioner, decryption, ceiling

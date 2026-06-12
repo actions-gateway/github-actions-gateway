@@ -25,6 +25,16 @@ controls are warranted.
 
 ---
 
+## Table of Contents
+
+- [Status at a glance](#status-at-a-glance)
+- [Critical](#critical)
+- [High](#high)
+- [Medium](#medium)
+- [Low](#low)
+- [Out-of-scope but worth noting](#out-of-scope-but-worth-noting)
+- [Implementation Plan](#implementation-plan)
+
 ## Status at a glance
 
 Last refreshed 2026-05-25. Authoritative state for each finding lives in

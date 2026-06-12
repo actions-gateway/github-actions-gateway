@@ -4,6 +4,26 @@ This document analyses where time is spent in the e2e suite and describes five c
 
 ---
 
+## Table of Contents
+
+- [Background — where time goes today](#background--where-time-goes-today)
+- [1. Parallel Ginkgo execution](#1-parallel-ginkgo-execution)
+- [2. Persistent port-forward for fakegithub control API ✓](#2-persistent-port-forward-for-fakegithub-control-api-)
+- [3. Reduce polling interval from 5 s to 2 s ✓](#3-reduce-polling-interval-from-5-s-to-2-s-)
+- [4. Single-worker kind cluster for CI ✓](#4-single-worker-kind-cluster-for-ci-)
+- [5. Docker layer caching in CI ✓](#5-docker-layer-caching-in-ci-)
+- [6. Fix --procs count: 8 suites, not 6](#6-fix---procs-count-8-suites-not-6)
+- [7. Reduce WaitForDeploymentReady polling from 5 s to 2 s](#7-reduce-waitfordeploymentready-polling-from-5-s-to-2-s)
+- [8. Parallel deployment waits in the isolation suite](#8-parallel-deployment-waits-in-the-isolation-suite)
+- [9. Merge sequential teardown checks into one Eventually](#9-merge-sequential-teardown-checks-into-one-eventually)
+- [10. Isolate GMC controller restart from parallel suites](#10-isolate-gmc-controller-restart-from-parallel-suites)
+- [11. GitHub Actions log grouping (--github-output)](#11-github-actions-log-grouping---github-output)
+- [12. Progress reporting for slow specs (--poll-progress-after)](#12-progress-reporting-for-slow-specs---poll-progress-after)
+- [13. JUnit report for PR test summary](#13-junit-report-for-pr-test-summary)
+- [14. Replace CPU-burn HPA scale-up test with deterministic minReplicas patch](#14-replace-cpu-burn-hpa-scale-up-test-with-deterministic-minreplicas-patch)
+- [Recommended implementation order](#recommended-implementation-order)
+- [Round 2 — CI pipeline (job-level) optimizations](#round-2--ci-pipeline-job-level-optimizations)
+
 ## Background — where time goes today
 
 A typical CI run of `make e2e` breaks down roughly as follows:

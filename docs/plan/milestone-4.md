@@ -4,6 +4,23 @@
 
 ---
 
+## Table of Contents
+
+- [Status at a glance](#status-at-a-glance)
+- [Overview](#overview)
+- [1. Repository Scaffolding](#1-repository-scaffolding)
+- [2. ActionsGateway CRD (cmd/gmc/api/v1alpha1/)](#2-actionsgateway-crd-cmdgmcapiv1alpha1)
+- [3. GMC Reconciler (cmd/gmc/internal/controller/)](#3-gmc-reconciler-cmdgmcinternalcontroller)
+- [4. Admission Webhook (cmd/gmc/internal/webhook/)](#4-admission-webhook-cmdgmcinternalwebhook)
+- [5. CONNECT Proxy (cmd/proxy/)](#5-connect-proxy-cmdproxy)
+- [6. Changes to the AGC (cmd/agc/)](#6-changes-to-the-agc-cmdagc)
+- [7. GMC main.go](#7-gmc-maingo)
+- [8. Test Plan](#8-test-plan)
+- [9. Success Criteria Checklist](#9-success-criteria-checklist)
+- [10. Risks and Mitigations](#10-risks-and-mitigations)
+- [11. Deferred to Milestone 5](#11-deferred-to-milestone-5)
+- [12. Live multi-tenant validation evidence (2026-06-11/12)](#12-live-multi-tenant-validation-evidence-2026-06-1112)
+
 ## Status at a glance
 
 Last refreshed 2026-06-12. **All success criteria are now live-validated.**

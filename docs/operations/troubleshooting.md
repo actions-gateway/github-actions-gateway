@@ -6,6 +6,39 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 
 ---
 
+## Table of Contents
+
+- [How to Validate a Fresh Deployment](#how-to-validate-a-fresh-deployment)
+- [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
+- [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
+- [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
+- [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
+- [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
+- [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
+- [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
+- [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
+- [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
+- [Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
+- [RateLimited Condition on ActionsGateway](#ratelimited-condition-on-actionsgateway)
+- [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration)
+- [Token Refresh Errors Spiking](#token-refresh-errors-spiking)
+- [RenewJob Failures Rising](#renewjob-failures-rising)
+- [Network Connectivity Failures](#network-connectivity-failures)
+- [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
+- [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
+- [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
+- [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
+- [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
+- [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
+- [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
+- [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
+- [Worker Pod Crashes With configuredSettings ArgumentNullException](#worker-pod-crashes-with-configuredsettings-argumentnullexception)
+- [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
+- [Worker HTTPS_PROXY Returns connection refused During Proxy Rollout](#worker-https_proxy-returns-connection-refused-during-proxy-rollout)
+- [Prometheus Not Scraping Proxy or AGC Metrics](#prometheus-not-scraping-proxy-or-agc-metrics)
+- [Proxy Replica Stuck Pending After Enabling HA Defaults](#proxy-replica-stuck-pending-after-enabling-ha-defaults)
+
 ## How to Validate a Fresh Deployment
 
 Run these checks immediately after deploying a new tenant gateway or upgrading existing components.

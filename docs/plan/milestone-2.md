@@ -4,6 +4,21 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [1. Repository Scaffolding](#1-repository-scaffolding)
+- [2. RunnerGroup CRD](#2-runnergroup-crd)
+- [3. Package Design](#3-package-design)
+- [4. Investigation Tasks](#4-investigation-tasks)
+- [5. Job Handler Stub (Milestone 2 Placeholder for Pod Provisioner)](#5-job-handler-stub-milestone-2-placeholder-for-pod-provisioner)
+- [6. Metrics](#6-metrics)
+- [7. Test Plan](#7-test-plan)
+- [8. Success Criteria Checklist](#8-success-criteria-checklist)
+- [9. Risks and Mitigations](#9-risks-and-mitigations)
+- [10. Deferred to Later Milestones](#10-deferred-to-later-milestones)
+- [11. Investigation Findings](#11-investigation-findings)
+
 ## Overview
 
 **Goal:** Produce a deployable Actions Gateway Controller (AGC) binary under `cmd/agc/` that reconciles `RunnerGroup` Custom Resources into adaptive listener goroutine pools. At rest the AGC maintains exactly one long-polling goroutine per RunnerGroup; additional goroutines spawn on demand as jobs arrive and wind down once the queue drains. No actual worker pods are created in this milestone — job acquisition is confirmed and handed off to a stub that records the acquisition, allowing the full goroutine lifecycle and token management machinery to be exercised without the Kubernetes pod-provisioning complexity of Milestone 3.
