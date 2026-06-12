@@ -206,6 +206,18 @@ kubectl describe runnergroup -n <namespace> <name>
 
 ---
 
+## RunnerGroup ActiveSessions Exceeds maxListeners
+
+**Symptoms.** `kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSessions}'` reports a value greater than the group's `spec.maxListeners`, typically climbing by one after each broker or network outage. GitHub shows more concurrent runner sessions for the group than the configured ceiling.
+
+**What happened.** On AGC versions without the Q100 fix, a recoverable crash of the permanent baseline listener left the active count at zero for the duration of the restart backoff; a reconcile firing inside that window started a second permanent baseline on top of the pending restart. Permanent listeners are restarted after every recoverable exit and are exempt from the `maxListeners` ceiling, so each repeat of the race ratchets the session count up by one, indefinitely. Fixed versions make the multiplexer start idempotent, so the race cannot stack baselines.
+
+**Resolution.**
+- Upgrade the AGC image to a version with the Q100 fix.
+- To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`). Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup.
+
+---
+
 ## Proxy NetworkPolicy Has an Empty GitHub Allowlist
 
 **Symptoms.** On a freshly provisioned tenant, all proxy egress to GitHub is silently dropped: `curl` through the proxy times out (no `502`), the AGC cannot acquire jobs, and token refresh fails. The proxy `NetworkPolicy` exists but its `ipBlock` egress peers are empty.

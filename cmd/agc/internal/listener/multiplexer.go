@@ -25,13 +25,24 @@ type ConfigFactory func(index int) Config
 // It ensures at least one goroutine is always running (the permanent baseline)
 // and spawns additional goroutines on demand up to maxListeners.
 type Multiplexer struct {
-	mu           sync.Mutex
-	active       map[int]*listenerState
-	activeCount  atomic.Int32 // maintained in sync with active; allows lock-free reads
+	mu          sync.Mutex
+	active      map[int]*listenerState
+	activeCount atomic.Int32 // maintained in sync with active; allows lock-free reads
+	// restarting holds permanent-baseline states waiting out RestartDelay after
+	// a recoverable crash. They are out of active (ActiveCount excludes them)
+	// but Stop must still cancel and wait for them.
+	restarting   map[int]*listenerState
 	nextIndex    int
 	maxListeners atomic.Int32
-	factory      ConfigFactory
-	log          *slog.Logger
+	// permAlive is true while a permanent baseline goroutine is running or
+	// restart-pending. It makes Start idempotent: a reconcile firing during the
+	// RestartDelay window (when ActiveCount is 0) must not stack a second
+	// permanent baseline on top of the pending restart.
+	permAlive bool
+	// stopped is set by Stop; it suppresses all further spawns and restarts.
+	stopped bool
+	factory ConfigFactory
+	log     *slog.Logger
 	// RestartDelay is the backoff before restarting a crashed permanent listener
 	// goroutine. Zero defaults to one second. Override to a smaller value in tests.
 	RestartDelay time.Duration
@@ -43,20 +54,27 @@ func NewMultiplexer(factory ConfigFactory, maxListeners int32, log *slog.Logger)
 		log = slog.Default()
 	}
 	m := &Multiplexer{
-		active:  make(map[int]*listenerState),
-		factory: factory,
-		log:     log,
+		active:     make(map[int]*listenerState),
+		restarting: make(map[int]*listenerState),
+		factory:    factory,
+		log:        log,
 	}
 	m.maxListeners.Store(maxListeners)
 	return m
 }
 
-// Start launches the permanent baseline listener. Must be called once when
-// the RunnerGroup is first reconciled. ctx must remain live for the duration
-// of the Multiplexer's operation.
+// Start launches the permanent baseline listener goroutine. It is idempotent:
+// while a baseline is running — or waiting out RestartDelay after a recoverable
+// crash — further calls are no-ops, so reconcile loops may call it freely.
+// After a non-retriable baseline exit Start spawns a fresh baseline; after Stop
+// it is a no-op (a stopped Multiplexer is retired — create a new one instead).
+// ctx must remain live for the duration of the Multiplexer's operation.
 func (m *Multiplexer) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.stopped || m.permAlive {
+		return nil
+	}
 	m.spawn(ctx, true)
 	return nil
 }
@@ -76,7 +94,7 @@ func (m *Multiplexer) SetMaxListeners(maxListeners int32) {
 func (m *Multiplexer) SpawnReplacement(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if int32(len(m.active)) >= m.maxListeners.Load() {
+	if m.stopped || int32(len(m.active)) >= m.maxListeners.Load() {
 		return
 	}
 	m.spawn(ctx, false)
@@ -88,11 +106,18 @@ func (m *Multiplexer) ActiveCount() int32 {
 	return m.activeCount.Load()
 }
 
-// Stop cancels all listener goroutines and waits for them to exit cleanly.
+// Stop cancels all listener goroutines — including any permanent baseline
+// waiting out its restart backoff — and waits for them to exit cleanly. The
+// Multiplexer is retired afterwards: Start and SpawnReplacement become no-ops.
 func (m *Multiplexer) Stop() {
 	m.mu.Lock()
-	states := make([]*listenerState, 0, len(m.active))
+	m.stopped = true
+	states := make([]*listenerState, 0, len(m.active)+len(m.restarting))
 	for _, s := range m.active {
+		s.cancel()
+		states = append(states, s)
+	}
+	for _, s := range m.restarting {
 		s.cancel()
 		states = append(states, s)
 	}
@@ -107,6 +132,9 @@ func (m *Multiplexer) Stop() {
 func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 	idx := m.nextIndex
 	m.nextIndex++
+	if isPerm {
+		m.permAlive = true
+	}
 
 	lCtx, cancel := context.WithCancel(ctx)
 	state := &listenerState{
@@ -123,6 +151,10 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 
 	go func() {
 		defer close(state.done)
+		// Release the child context registration on the long-lived parent ctx.
+		// Runs after the restart select below, which watches lCtx.Done() as the
+		// Stop signal, so it must not fire earlier.
+		defer cancel()
 
 		runErr := Run(lCtx, cfg)
 		if runErr != nil {
@@ -143,24 +175,48 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		// Only restart the permanent baseline for recoverable exits. A
 		// NonRetriableError (VersionTooOld, unauthorized) means the goroutine
 		// should not loop — the condition is already surfaced on the RunnerGroup.
-		shouldRestart := isPerm && lCtx.Err() == nil && !errors.As(runErr, &nre)
+		shouldRestart := isPerm && !m.stopped && lCtx.Err() == nil && !errors.As(runErr, &nre)
+		if isPerm {
+			if shouldRestart {
+				// Stay visible to Stop while waiting out RestartDelay, and keep
+				// permAlive set so a concurrent Start is a no-op for the whole
+				// window — otherwise it would stack a second baseline (Q100).
+				m.restarting[idx] = state
+			} else {
+				// The baseline is gone for good (non-retriable exit, cancellation,
+				// or Stop). A future Start may spawn a fresh one.
+				m.permAlive = false
+			}
+		}
 		m.mu.Unlock()
 
-		if shouldRestart {
-			// Permanent baseline goroutine exited for a recoverable reason.
-			// Restart it after a brief backoff.
-			delay := m.RestartDelay
-			if delay == 0 {
-				delay = time.Second
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(delay):
-			}
-			m.mu.Lock()
-			m.spawn(ctx, true)
-			m.mu.Unlock()
+		if !shouldRestart {
+			return
 		}
+
+		// Permanent baseline goroutine exited for a recoverable reason.
+		// Restart it after a brief backoff.
+		delay := m.RestartDelay
+		if delay == 0 {
+			delay = time.Second
+		}
+		aborted := false
+		select {
+		case <-ctx.Done():
+			aborted = true
+		case <-lCtx.Done():
+			// Stop cancels restart-pending baselines via state.cancel.
+			aborted = true
+		case <-time.After(delay):
+		}
+
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		delete(m.restarting, idx)
+		if aborted || m.stopped {
+			m.permAlive = false
+			return
+		}
+		m.spawn(ctx, true)
 	}()
 }

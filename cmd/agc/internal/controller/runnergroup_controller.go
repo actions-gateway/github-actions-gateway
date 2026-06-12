@@ -310,7 +310,10 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Restart the permanent baseline goroutine if all goroutines have exited
 	// and at least one listener was requested. This recovers from the race where
 	// the goroutine hit a pool-exhausted NonRetriableError at startup before
-	// EnsureAgents finished populating the pool.
+	// EnsureAgents finished populating the pool. Start is idempotent: when
+	// ActiveCount is 0 only because a crashed baseline is waiting out its
+	// restart backoff, this call is a no-op rather than stacking a second
+	// permanent baseline (Q100).
 	if mux.ActiveCount() == 0 && rg.Spec.MaxListeners > 0 {
 		if startErr := mux.Start(ctx); startErr != nil {
 			log.Warn("multiplexer restart failed", "error", startErr)

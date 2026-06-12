@@ -255,6 +255,109 @@ func TestMultiplexer_RestartOnCrash(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+func TestMultiplexer_StartIdempotentWhileRunning(t *testing.T) {
+	mux := &brokerMux{} // always 202
+	m, oauthSrv, brokerSrv := newMuxWithServers(t, 5, mux)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+	require.Eventually(t, func() bool { return m.ActiveCount() == 1 }, 2*time.Second, 10*time.Millisecond,
+		"expected the permanent baseline to be running")
+
+	// Repeated Start calls while the baseline is live must be no-ops.
+	require.NoError(t, m.Start(ctx))
+	require.NoError(t, m.Start(ctx))
+
+	assert.Never(t, func() bool { return m.ActiveCount() != 1 }, 200*time.Millisecond, 10*time.Millisecond,
+		"Start on a running multiplexer must not spawn additional baselines")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+func TestMultiplexer_StartIdempotentDuringRestartWindow(t *testing.T) {
+	// Q100 repro: a recoverable baseline crash leaves ActiveCount==0 for the
+	// whole RestartDelay window. A reconcile firing in that window re-calls
+	// Start; without the permAlive guard that stacks a second permanent
+	// baseline on top of the pending restart.
+	var createCount atomic.Int32
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		if createCount.Add(1) == 1 {
+			// First CreateSession fails — a recoverable crash.
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		defaultSession(w)
+	})
+
+	m, oauthSrv, brokerSrv := newMuxWithServers(t, 3, mux)
+	// Long enough that the test reliably lands inside the window.
+	m.RestartDelay = 300 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+
+	// Wait for the crash: ActiveCount drops to 0 while the restart is pending.
+	require.Eventually(t, func() bool { return m.ActiveCount() == 0 }, 2*time.Second, 5*time.Millisecond,
+		"baseline should have crashed, opening the restart window")
+
+	// Simulate reconciles firing during the window. These must be no-ops: the
+	// pending restart already owns the baseline lifecycle.
+	require.NoError(t, m.Start(ctx))
+	require.NoError(t, m.Start(ctx))
+
+	// Once the pending restart fires, exactly one permanent baseline must be
+	// running — and stay that way past any residual restart timers.
+	require.Eventually(t, func() bool { return m.ActiveCount() == 1 }, 2*time.Second, 10*time.Millisecond,
+		"the pending restart should bring the baseline back")
+	assert.Never(t, func() bool { return m.ActiveCount() != 1 }, 600*time.Millisecond, 10*time.Millisecond,
+		"Start during the restart window must not stack a second permanent baseline")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+func TestMultiplexer_StopDuringRestartWindow(t *testing.T) {
+	// Stop during the RestartDelay window must cancel the pending restart and
+	// wait for its goroutine — otherwise the restart fires after Stop and
+	// resurrects a baseline on a retired multiplexer.
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		// CreateSession always fails — every exit is recoverable, so the
+		// baseline is perpetually crashing into the restart window.
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	m, oauthSrv, brokerSrv := newMuxWithServers(t, 3, mux)
+	m.RestartDelay = 200 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+	require.Eventually(t, func() bool { return m.ActiveCount() == 0 }, 2*time.Second, 5*time.Millisecond,
+		"baseline should have crashed, opening the restart window")
+
+	// Stop while the restart is pending. Note ctx is still live: Stop alone
+	// must be enough to suppress the restart.
+	m.Stop()
+
+	assert.Never(t, func() bool { return m.ActiveCount() > 0 }, 500*time.Millisecond, 10*time.Millisecond,
+		"no baseline may spawn after Stop")
+
+	cancel()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 func TestMultiplexer_NonRetriableNoRestart(t *testing.T) {
 	// Broker always returns VersionTooOld on CreateSession.
 	mux := &brokerMux{}
