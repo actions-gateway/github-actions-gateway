@@ -23,6 +23,10 @@ renders, offline validation), see the
 
 - **Kubernetes >= 1.30** — the GMC's `namespace-psa-guard` policy needs the GA
   `ValidatingAdmissionPolicy` API.
+- **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are
+  multi-arch — one pinned digest (the OCI index digest) serves both, so mixed
+  amd64/arm64 (e.g. Graviton) node pools need no per-arch configuration. Other
+  architectures are not published.
 - **A CNI that enforces `NetworkPolicy`** (Calico, Cilium) for the egress/ingress
   isolation controls to take effect. `kindnet` does not enforce egress, so the
   tenant-isolation guarantees do not hold under it.

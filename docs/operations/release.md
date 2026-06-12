@@ -16,9 +16,15 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 
 - The four first-party images — `gmc`, `agc`, `proxy`, `worker` — pushed to GHCR
   (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
+  Each is **multi-arch** (`linux/amd64` + `linux/arm64`): the pushed artifact is
+  an OCI image **index**, and the digest recorded everywhere (run summary,
+  release notes, chart pins) is the index digest — the kubelet resolves the
+  per-arch manifest from it at pull time, so one pinned digest schedules on both
+  amd64 and arm64 (e.g. Graviton) nodes.
 - A keyless **cosign signature** on every image (sigstore/Fulcio via GitHub
-  Actions OIDC — no signing key, no stored secret) and an **SPDX-JSON SBOM**
-  attached as a keyless cosign attestation.
+  Actions OIDC — no signing key, no stored secret), signed **recursively** — the
+  index *and* each per-arch manifest — and an **SPDX-JSON SBOM per architecture**
+  attached as a keyless cosign attestation to that architecture's manifest.
 - The **Helm chart**, packaged and pushed as an OCI artifact to
   `oci://ghcr.io/actions-gateway/charts/actions-gateway`, with its `version` and
   `appVersion` set to the release tag and a keyless **cosign signature** from the
@@ -100,15 +106,31 @@ commands (and SBOM attestation retrieval) live in
 each is a `cosign verify --certificate-identity-regexp '…/publish\.yml@refs/tags/v.*$' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' <ref>`.
 
 A `cosign verify` failure is a **stop-ship**: do not announce the release until it
-passes. Spot-check one SBOM attestation too (`cosign verify-attestation
---type spdxjson …`) so the attestation path is exercised.
+passes. Spot-check one SBOM attestation too so the attestation path is exercised —
+SBOM attestations are bound to the **per-arch manifest digests**, not the index,
+so resolve one first (the full command set is in
+[security-operations.md § Retrieve and inspect the SBOM](security-operations.md#retrieve-and-inspect-the-sbom)):
+
+```bash
+digest="$(docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z --raw \
+  | jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')"
+cosign verify-attestation --type spdxjson \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  "ghcr.io/actions-gateway/gmc@${digest}" >/dev/null && echo OK
+```
+
+Also spot-check that the index actually carries both platforms
+(`docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z` should
+list `linux/amd64` and `linux/arm64` manifests).
 
 ### 4. Record the published digests
 
 `publish.yml` writes each image's immutable `ghcr.io/.../<name>@sha256:…` ref to
-the **run summary** (the "Record published digest" step). Copy those four refs —
-operators pin the workload to the digest, not the mutable `vX.Y.Z` tag. You can
-also resolve a digest directly:
+the **run summary** (the "Record published digest" step). These are the
+**multi-arch index digests** — the single ref that serves both amd64 and arm64
+nodes. Copy those four refs — operators pin the workload to the digest, not the
+mutable `vX.Y.Z` tag. You can also resolve a digest directly:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \

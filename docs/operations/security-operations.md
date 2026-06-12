@@ -397,16 +397,23 @@ GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on eve
 `v*` release tag (the maintainer-facing cut-a-release procedure is in
 [release.md](release.md)). Each one is:
 
+- **Multi-arch** (`linux/amd64` + `linux/arm64`): the published ref is an OCI
+  image **index**; the digest you pin at install time is the index digest, and
+  the kubelet resolves the node's per-arch manifest from it at pull time.
 - **Signed keyless with [cosign](https://docs.sigstore.dev/).** There is no
   signing key to distribute or rotate — the signature is bound to a short-lived
   [Fulcio](https://docs.sigstore.dev/certificate_authority/overview/) certificate
   issued against the GitHub Actions OIDC identity of the publish workflow and
   recorded in the public [Rekor](https://docs.sigstore.dev/logging/overview/)
   transparency log. You verify *who signed it* (the workflow identity), not a key
-  you have to trust out-of-band.
-- **Accompanied by an SPDX-JSON SBOM** (generated with
-  [syft](https://github.com/anchore/syft)) attached as a cosign attestation, so
-  you can enumerate exactly what shipped in the image.
+  you have to trust out-of-band. Signing is **recursive**: the index *and* each
+  per-arch manifest carry a signature, so verification succeeds against the
+  pinned index digest and also against a per-arch manifest digest (e.g. an image
+  mirrored or referenced by platform-specific manifest).
+- **Accompanied by an SPDX-JSON SBOM per architecture** (generated with
+  [syft](https://github.com/anchore/syft)) attached as a cosign attestation to
+  that architecture's manifest, so you can enumerate exactly what shipped in the
+  image your nodes actually run.
 
 ### Verify a signature
 
@@ -441,15 +448,22 @@ cosign verify \
 
 ### Retrieve and inspect the SBOM
 
-The SBOM rides with the image as a signed attestation, and is also uploaded as a
-build artifact on each publish run. To pull and inspect it from the registry:
+The SBOMs ride with the image as signed attestations — **one per architecture,
+attached to that architecture's manifest digest** (not to the index, so the
+SBOM you audit is exactly what your nodes run) — and are also uploaded as build
+artifacts on each publish run. To pull and inspect one from the registry,
+resolve the per-arch digest from the index first:
 
 ```bash
-# Download the SPDX-JSON SBOM attestation, verifying its keyless signature first.
+# Resolve the manifest digest for the architecture you are auditing.
+digest="$(docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:<tag-or-digest> --raw \
+  | jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')"
+
+# Download that arch's SPDX-JSON SBOM attestation, verifying its keyless signature first.
 cosign verify-attestation --type spdxjson \
   --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  ghcr.io/actions-gateway/gmc:<tag-or-digest> \
+  "ghcr.io/actions-gateway/gmc@${digest}" \
   | jq -r '.payload | @base64d | fromjson | .predicate' > gmc.spdx.json
 
 # Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:
