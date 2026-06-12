@@ -2,6 +2,11 @@
 
 A code-level security review of the GitHub Actions Gateway as of 2026-05-23.
 
+> **Successor audit:** a second full audit (2026-06-12) lives in
+> [security-audit-2026-06.md](security-audit-2026-06.md); its new findings
+> are queued as Q120–Q127. This doc remains the record of the first
+> audit's findings and workstreams.
+
 Scope: `broker/`, `githubapp/`, `cmd/agc/`, `cmd/gmc/`, `cmd/proxy/`, `cmd/worker/`,
 `cmd/probe/`. Each finding lists location, an OWASP-style category, severity,
 description, and mitigation.
@@ -375,11 +380,15 @@ by-design / accepted.
   3. `setCredentialUnavailable` also returns `RequeueAfter: 30s` as a
      fallback for cases where a watch event is missed (e.g. controller
      restart during Secret deletion window).
-- **Residual risk:** A compromised GMC can `list`/`watch` Secret
-  *metadata* cluster-wide (names, namespaces), which leaks tenant
-  `gitHubAppRef` names even without a matching `ActionsGateway` CR. This
-  is the same information already exposed by the CR spec itself, so it
-  adds no new attack surface. Accepted.
+- **Residual risk** *(corrected 2026-06-12 — the original wording
+  understated this)*: the metadata-only informer and cache bypass are
+  client-side hygiene, not authorization. The GMC ClusterRole grants
+  `get`/`list`/`create`/`update`/`watch` on Secrets cluster-wide with no
+  `resourceNames` scoping, so a *compromised* GMC can read full `.data`
+  of any Secret in the cluster and create/overwrite Secrets anywhere —
+  not just enumerate metadata. Tracked as Q121 (preventive confinement)
+  in [security-audit-2026-06.md](security-audit-2026-06.md); Q29's audit
+  policy is the detective complement.
 
 ---
 
