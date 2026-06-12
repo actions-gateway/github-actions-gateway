@@ -1,18 +1,25 @@
 # syntax=docker/dockerfile:1.7
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
 # Update with: docker buildx imagetools inspect golang:1.26
-FROM golang:1.26@sha256:68cb6d68bed024785b69195b89af7ac7a444f27791435f98647edff595aa0479 AS builder
+# --platform=$BUILDPLATFORM: the builder always runs on the build host's native
+# platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
+# toolchain on a multi-platform build.
+FROM --platform=$BUILDPLATFORM golang:1.26@sha256:68cb6d68bed024785b69195b89af7ac7a444f27791435f98647edff595aa0479 AS builder
 WORKDIR /src
 # Dependencies live in the workspace vendor/ at the repo root; `go build`
 # auto-selects -mod=vendor when go.work and vendor/ are both present.
 COPY . .
+# TARGETOS/TARGETARCH are populated by BuildKit from the requested target
+# platform (the host platform for a plain single-platform build).
+ARG TARGETOS TARGETARCH
 # Cache mount holds Go's compiled-package cache (`.a` files keyed by content
 # hash). Survives across layer-cache misses so incremental source edits only
 # recompile changed packages instead of the whole dep tree.
 # -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
 # build ID — together they make the binary bit-for-bit reproducible (SLSA-L3).
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -C cmd/agc -trimpath -ldflags=-buildid= -o /bin/agc .
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -C cmd/agc -trimpath -ldflags=-buildid= -o /bin/agc .
 
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot

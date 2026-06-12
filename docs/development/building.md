@@ -21,6 +21,38 @@ together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`);
 the e2e/CI image pipeline is described in
 [docker-image-speed.md](../plan/docker-image-speed.md).
 
+### Multi-arch (linux/amd64 + linux/arm64)
+
+Published images are **multi-arch** (Q97): the release pipeline
+([`publish.yml`](../../.github/workflows/publish.yml)) passes
+`platforms: linux/amd64,linux/arm64`, producing an OCI image index whose digest
+is what operators pin. All five Dockerfiles (the four production images plus
+`test/fakegithub`) plumb the target platform the same way:
+
+- The Go **builder stage** runs `FROM --platform=$BUILDPLATFORM` — always the
+  build host's native platform — and **cross-compiles** with
+  `GOOS=$TARGETOS GOARCH=$TARGETARCH`. BuildKit populates both args per target
+  platform, so no QEMU emulation is needed for the build.
+- The **runtime stages** contain no `RUN` (only `COPY`/`ENV`/`LABEL`), so
+  assembling the foreign-arch image needs no emulation either. All pinned base
+  digests (`golang`, `distroless/static`, `actions-runner`) are multi-arch
+  index digests covering both platforms.
+
+Local builds (`docker buildx bake`, plain `docker build`) stay
+**single-platform, targeting the host arch** — on an Apple Silicon machine the
+bake produces arm64 images that run natively in a local kind cluster. To
+cross-build one image explicitly:
+
+```bash
+docker buildx build --platform linux/arm64 -f cmd/agc/Dockerfile .
+```
+
+Cross-compilation does not affect reproducibility: `-trimpath
+-ldflags=-buildid=` keeps each architecture's binary bit-for-bit reproducible
+regardless of the build host. (The *index* digest depends on both child
+manifests plus BuildKit's provenance attestation — the reproducibility claim is
+about the binaries and layers, not registry manifest bytes.)
+
 ### License attribution (`/licenses/`)
 
 Each production image `COPY`s three license files into `/licenses/` — the

@@ -2,13 +2,20 @@ name: publish
 
 # Build, push, sign, and SBOM-attest the four first-party images on a release.
 #
+# Images are MULTI-ARCH (linux/amd64 + linux/arm64, Q97): each push produces an
+# OCI image index, and the digest recorded everywhere (signature, run summary,
+# chart pins) is the INDEX digest — the kubelet resolves the per-arch manifest
+# from it at pull time. The Dockerfiles cross-compile Go in a $BUILDPLATFORM
+# builder stage and the runtime stages are COPY-only, so no QEMU setup is needed.
+#
 # Signing is KEYLESS (sigstore/Fulcio via GitHub Actions OIDC, id-token: write):
 # cosign exchanges the short-lived OIDC token for an ephemeral Fulcio certificate
 # and records the signature in the public Rekor transparency log. There is NO
 # long-lived signing key and NO stored signing secret — the project forbids
 # secrets-as-config, and keyless is the secure-by-default approach. Each image is
-# signed, and an SPDX-JSON SBOM (generated with syft) is attached to it as a
-# cosign attestation, itself keyless-signed.
+# signed RECURSIVELY (the index and every per-arch manifest), and an SPDX-JSON
+# SBOM (generated with syft, one per architecture) is attached to each per-arch
+# manifest as a cosign attestation, itself keyless-signed.
 #
 # This runs ONLY on a v* tag push (or manual dispatch) — i.e. on PUBLISH, not on
 # PRs. PR CI (security-scan.yml) builds each image and generates its SBOM so that
@@ -103,6 +110,12 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          # Multi-arch (Q97): both platforms on every release. The result is an
+          # OCI image index; steps.build.outputs.digest below is the INDEX
+          # digest — the ref operators pin in chart values. No QEMU: the
+          # Dockerfiles cross-compile Go on $BUILDPLATFORM and the runtime
+          # stages are COPY-only.
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Mirror docker-bake.hcl's provenance args so the OCI image.* labels are
@@ -110,8 +123,9 @@ jobs:
           build-args: |
             REVISION=${{ github.sha }}
             VERSION=${{ steps.tag.outputs.tag }}
-          # Reuse the e2e/scan gha build cache; no cache-to so a publish never
-          # evicts the PR build cache.
+          # Reuse the e2e/scan gha build cache (amd64-only — the arm64 half
+          # misses and builds fresh); no cache-to so a publish never evicts the
+          # PR build cache.
           cache-from: type=gha,scope=${{ matrix.name }}
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
@@ -120,33 +134,74 @@ jobs:
           # in step with COSIGN_VERSION in the Makefile so a local
           # `make verify-release` verifies with the same version that signed.
           cosign-release: v2.5.2
-      - name: Generate SBOM (SPDX-JSON) for the pushed image
-        uses: anchore/sbom-action@v0
+      - name: Install syft
+        id: syft
+        # download-syft only (no scan): the wrapping sbom-action has no
+        # per-platform mode, and a single syft scan of a multi-arch index
+        # silently picks ONE platform — the other arch's attestation would
+        # carry the wrong package list. The step below loops the platforms.
+        uses: anchore/sbom-action/download-syft@v0
+      - name: Generate per-arch SBOMs (SPDX-JSON) for the pushed image
+        id: sbom
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
+        run: |
+          set -euo pipefail
+          # One SBOM per architecture, scanned from that arch's exact manifest
+          # digest (resolved from the index the push produced — never from the
+          # floating tag). The digests are exported as step outputs so the
+          # attest step below binds each SBOM to the same immutable manifest.
+          for arch in amd64 arm64; do
+            digest="$(docker buildx imagetools inspect --raw "${IMAGE}@${INDEX_DIGEST}" \
+              | jq -r --arg arch "${arch}" \
+                  '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest')"
+            if [[ -z "${digest}" ]]; then
+              echo "no linux/${arch} manifest found in index ${INDEX_DIGEST}" >&2
+              exit 1
+            fi
+            "${SYFT}" "registry:${IMAGE}@${digest}" \
+              -o "spdx-json=sbom-${{ matrix.name }}-${arch}.spdx.json"
+            echo "digest-${arch}=${digest}" >> "${GITHUB_OUTPUT}"
+          done
+      - name: Upload SBOMs as run artifacts
+        uses: actions/upload-artifact@v7
         with:
-          # Pin to the immutable digest the push produced, not the floating tag.
-          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
-          format: spdx-json
-          output-file: sbom-${{ matrix.name }}.spdx.json
-          artifact-name: sbom-${{ matrix.name }}.spdx.json
-      - name: Sign image + attest SBOM (keyless)
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}-*.spdx.json
+          if-no-files-found: error
+      - name: Sign image + attest SBOMs (keyless)
         env:
           # Always reference the image by digest so the signature/attestation bind
           # to the exact bytes we pushed, not to whatever the tag resolves to later.
-          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
-          SBOM: sbom-${{ matrix.name }}.spdx.json
+          IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          INDEX_DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST_AMD64: ${{ steps.sbom.outputs.digest-amd64 }}
+          DIGEST_ARM64: ${{ steps.sbom.outputs.digest-arm64 }}
         run: |
           set -euo pipefail
           # Keyless: cosign reads the ambient GitHub OIDC token (id-token: write),
           # obtains a short-lived Fulcio cert, and logs to Rekor. No key material.
           # scripts/retry.sh absorbs transient GHCR push errors (HTTP/2
           # INTERNAL_ERROR / 5xx) — sign and attest are idempotent.
-          scripts/retry.sh cosign sign --yes "${IMAGE}"
-          scripts/retry.sh cosign attest --yes --type spdxjson --predicate "${SBOM}" "${IMAGE}"
+          #
+          # --recursive signs the index AND each per-arch child manifest, so
+          # `cosign verify` succeeds against the index digest (what operators
+          # pin) and against the per-arch digest a kubelet reports as imageID.
+          scripts/retry.sh cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
+          # Each arch's SBOM is attested onto that arch's manifest digest — the
+          # precise binding. Note `cosign verify-attestation` therefore targets
+          # a per-arch digest, not the index (see security-operations.md).
+          scripts/retry.sh cosign attest --yes --type spdxjson \
+            --predicate "sbom-${{ matrix.name }}-amd64.spdx.json" "${IMAGE}@${DIGEST_AMD64}"
+          scripts/retry.sh cosign attest --yes --type spdxjson \
+            --predicate "sbom-${{ matrix.name }}-arm64.spdx.json" "${IMAGE}@${DIGEST_ARM64}"
       - name: Record published digest in the run summary
-        # Surface the immutable ref@digest in the workflow summary so the release
-        # manager can copy it straight into the GitHub Release notes and the
-        # `helm install --set <img>.image.digest=…` pins. See the release runbook
-        # (docs/operations/release.md).
+        # Surface the immutable ref@digest (the multi-arch INDEX digest) in the
+        # workflow summary so the release manager can copy it straight into the
+        # GitHub Release notes and the `helm install --set <img>.image.digest=…`
+        # pins. See the release runbook (docs/operations/release.md).
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}
         run: |
