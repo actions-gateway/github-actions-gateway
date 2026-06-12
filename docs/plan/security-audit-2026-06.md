@@ -77,7 +77,9 @@ and `create`/`update` Secrets anywhere. The first audit's §GMC-1 residual
 tenant-marked namespaces (the `namespace-psa-guard` pattern), per-namespace
 Roles at onboarding, or correct the docs so operators don't rely on a
 non-existent property. Q29's audit-policy sample is the detective
-complement either way.
+complement either way. *Interim (2026-06-12): the inaccurate claims in
+`05-security.md` are struck through with corrections in place; restoring
+clean prose there is part of resolving this item.*
 
 ### Q122 — GMC workload writes are cluster-wide; docs claim confinement (High)
 
@@ -88,7 +90,9 @@ to namespaces where an `ActionsGateway` CR exists"; nothing enforces that.
 A compromised GMC can create a Deployment or RoleBinding in `kube-system`.
 **Fix:** extend the `namespace-psa-guard` VAP approach — deny GMC-SA
 writes of these kinds in namespaces lacking the tenant marker label —
-and/or update the docs.
+and/or update the docs. *Interim (2026-06-12): the claims in
+`05-security.md` and `02-architecture.md` are struck through with
+corrections in place pending resolution.*
 
 ### Q123 — SHA-pin GitHub Actions; publish.yml first (High)
 
