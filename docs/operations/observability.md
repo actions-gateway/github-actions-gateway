@@ -6,6 +6,24 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
 
 ---
 
+## Table of Contents
+
+- [Logging](#logging)
+- [Distributed Tracing (AGC)](#distributed-tracing-agc)
+  - [Enabling tracing](#enabling-tracing)
+  - [Enabling tracing on GMC-managed AGCs](#enabling-tracing-on-gmc-managed-agcs)
+- [How to Access Metrics](#how-to-access-metrics)
+  - [Install-time scraping prerequisites (GMC manager)](#install-time-scraping-prerequisites-gmc-manager)
+- [Full Metrics Reference](#full-metrics-reference)
+  - [Proxy metrics](#proxy-metrics)
+- [Symptom → Metric Mapping](#symptom--metric-mapping)
+- [Recommended Alert Rules](#recommended-alert-rules)
+- [SLO Recording Rules](#slo-recording-rules)
+- [Grafana Dashboard](#grafana-dashboard)
+  - [Suggested Panel Layout](#suggested-panel-layout)
+  - [Dashboard Variables](#dashboard-variables)
+- [Label Cardinality Warning](#label-cardinality-warning)
+
 ## Logging
 
 All four components — the GMC, the per-tenant AGC, the egress proxy, and the worker wrapper — emit **structured JSON logs at info level by default**, one JSON shape per process stream, ready to ship to a log aggregator (Loki, Elasticsearch, CloudWatch, etc.) without reformatting. No flag needs to be set in production; the JSON default is what the GMC-provisioned Deployments run with.

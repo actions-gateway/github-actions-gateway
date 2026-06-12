@@ -119,6 +119,7 @@ After editing types under `cmd/agc/api/` or `cmd/gmc/api/`, regenerate manifests
 
 - Humans start at [`README.md`](README.md) and navigate the [`docs/`](docs/README.md) tree. Do **not** link to `CLAUDE.md`/`AGENTS.md` from any human-facing doc — that file is the entrypoint for AI agents only. Reference content humans need lives in `docs/` or this file.
 - Spell out acronyms on first use: full term, then the acronym in parentheses — e.g. "Actions Gateway Controller (AGC)".
+- Long docs (roughly 400+ lines) carry a `## Table of Contents` section after the intro, listing h2 headings (plus h3 for operator-facing docs). Anchors follow GitHub's slug rules — duplicate headings get `-1`/`-2` suffixes — so verify links against the rendered page.
 
 ## Commits
 

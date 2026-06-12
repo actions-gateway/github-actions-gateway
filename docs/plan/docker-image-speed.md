@@ -14,6 +14,22 @@ from this document — see commit history for the original plans.
 Items deliberately not pursued are noted with the rationale so the decision
 is not revisited inadvertently.
 
+## Table of Contents
+
+- [Status](#status)
+- [Background — where time goes today](#background--where-time-goes-today)
+- [1. Root .dockerignore](#1-root-dockerignore)
+- [2. Compile-cache mount on /root/.cache/go-build ✓](#2-compile-cache-mount-on-rootcachego-build-)
+- [4. Drop the go work sync no-op ✓](#4-drop-the-go-work-sync-no-op-)
+- [5. Build CI images in parallel ✓](#5-build-ci-images-in-parallel-)
+- [7. Switch builder base to golang:1.26-alpine — **Not doing**](#7-switch-builder-base-to-golang126-alpine--not-doing)
+- [8. Pin base images by digest ✓](#8-pin-base-images-by-digest-)
+- [9. Skip image rebuilds when nothing relevant changed ✓](#9-skip-image-rebuilds-when-nothing-relevant-changed-)
+- [Background — why kind load docker-image was slow](#background--why-kind-load-docker-image-was-slow)
+- [12. Single-node CI cluster — **Not doing**](#12-single-node-ci-cluster--not-doing)
+- [13. Replace kind load docker-image with an in-cluster registry ✓](#13-replace-kind-load-docker-image-with-an-in-cluster-registry-)
+- [Final status](#final-status)
+
 ## Status
 
 | # | Change | Status |

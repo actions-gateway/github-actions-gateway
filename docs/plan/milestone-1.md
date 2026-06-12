@@ -4,6 +4,18 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [1. Repository Scaffolding](#1-repository-scaffolding)
+- [2. Package Design](#2-package-design)
+- [3. Investigation Tasks](#3-investigation-tasks)
+- [4. Test Plan](#4-test-plan)
+- [5. Success Criteria Checklist](#5-success-criteria-checklist)
+- [6. Risks and Mitigations](#6-risks-and-mitigations)
+- [7. Deferred to Later Milestones](#7-deferred-to-later-milestones)
+- [8. Investigation Findings](#8-investigation-findings)
+
 ## Overview
 
 **Goal:** Produce a standalone Go binary under `cmd/probe/` that exercises the complete pre-execution protocol sequence: authenticate via GitHub App credentials → `POST /sessions` → long-poll `GET /message` → `POST /acquirejob` on the `run_service_url` extracted from the message body → start a `renewjob` loop every 60 seconds. The probe prints the decrypted job payload to stdout and renews until cancelled.
