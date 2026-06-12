@@ -31,6 +31,13 @@ KIND_CONFIG   ?= test/kind-config-2worker.yaml
 # Left empty here so local runs use the installed kind's default; CI sets it to a
 # digest-pinned kindest/node so the image can be cached and reused across runs.
 KIND_NODE_IMAGE ?=
+# KIND_CNI selects the cluster CNI: kindnet (kind's default) or calico.
+# `make e2e-cluster KIND_CNI=calico` builds the egress-enforcing profile used to
+# observe the NetworkPolicy runtime negatives (Q7b) — kindnet's
+# kube-network-policies does not drop egress traffic, so the negative e2e specs
+# skip themselves on a kindnet cluster. CALICO_VERSION pins the Calico release.
+KIND_CNI       ?= kindnet
+CALICO_VERSION ?= v3.31.5
 GIT_SHA       := $(shell git rev-parse --short HEAD)
 
 # Local OCI registry that kind nodes pull from. scripts/kind-with-registry.sh
@@ -391,6 +398,7 @@ e2e-cluster: ## Create the local kind cluster + registry (no-op if both exist)
 	KIND_CLUSTER=$(KIND_CLUSTER) KIND_CONFIG=$(KIND_CONFIG) \
 		REGISTRY_NAME=$(REGISTRY_NAME) REGISTRY_PORT=$(REGISTRY_PORT) \
 		KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) \
+		KIND_CNI=$(KIND_CNI) CALICO_VERSION=$(CALICO_VERSION) \
 		scripts/kind-with-registry.sh
 
 .PHONY: apply-cert-manager

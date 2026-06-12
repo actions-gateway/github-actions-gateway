@@ -13,6 +13,18 @@ make e2e-images           # builds and pushes gmc/agc/proxy/worker/fakegithub
 
 The Makefile pipeline pushes to `localhost:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `localhost:5000/*` against the host registry.
 
+### CNI selection: kindnet (default) vs Calico
+
+`make e2e-cluster` builds a kindnet cluster by default. kindnet's bundled `kube-network-policies` enforcer does **not** drop egress traffic for the NetworkPolicy negative cases (two CI iterations observed successful HTTP exchanges the workload NP does not authorise — see [`docs/plan/worker-egress-proxy.md`](../plan/worker-egress-proxy.md)). To observe egress NetworkPolicy *enforcement* at runtime, build the Calico profile instead:
+
+```bash
+make e2e-cluster KIND_CNI=calico   # disableDefaultCNI + pinned Calico manifest
+```
+
+The script creates the cluster with `disableDefaultCNI: true` and `podSubnet: 192.168.0.0/16` (Calico's default pool), applies the Calico manifest pinned by `CALICO_VERSION` in the root Makefile, and waits for `calico-node` rollout + node readiness. A CNI cannot be swapped in place — if the cluster already exists with kindnet, the script errors and tells you to `make e2e-cluster-delete` first.
+
+The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) detect the CNI at runtime and skip themselves on kindnet, so the standard CI flow is unaffected; they only assert enforcement on a Calico/Cilium cluster.
+
 ## Inner-loop gotchas
 
 ### Image tag caching

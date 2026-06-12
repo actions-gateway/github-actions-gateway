@@ -9,6 +9,14 @@
 #   REGISTRY_PORT    — host port the registry binds to (default: 5000)
 #   KIND_NODE_IMAGE  — pin the node image, e.g. kindest/node:vX.Y.Z@sha256:...
 #                      (optional; when unset kind picks its release default)
+#   KIND_CNI         — "kindnet" (default: kind's bundled CNI) or "calico".
+#                      calico creates the cluster with disableDefaultCNI and
+#                      podSubnet 192.168.0.0/16, applies the pinned Calico
+#                      manifest, and waits for it to be ready. Use this profile
+#                      to observe NetworkPolicy egress negatives enforce at
+#                      runtime — kindnet's kube-network-policies does not drop
+#                      egress traffic (see docs/plan/worker-egress-proxy.md, Q7b).
+#   CALICO_VERSION   — Calico release tag for KIND_CNI=calico (default: v3.31.5)
 #
 # After this script runs:
 #   * Images pushed to localhost:${REGISTRY_PORT}/... from the host are
@@ -25,6 +33,36 @@ set -euo pipefail
 : "${KIND_CONFIG:?KIND_CONFIG is required}"
 REGISTRY_NAME=${REGISTRY_NAME:-kind-registry}
 REGISTRY_PORT=${REGISTRY_PORT:-5000}
+KIND_CNI=${KIND_CNI:-kindnet}
+CALICO_VERSION=${CALICO_VERSION:-v3.31.5}
+
+case "${KIND_CNI}" in
+  kindnet|calico) ;;
+  *)
+    echo "error: KIND_CNI must be 'kindnet' or 'calico' (got '${KIND_CNI}')" >&2
+    exit 1
+    ;;
+esac
+
+# install_calico applies the pinned Calico manifest and waits for the CNI to be
+# ready. Idempotent: re-applying the same manifest is a no-op. Refuses to run
+# against a cluster that was created with kindnet — the two CNIs cannot be
+# swapped in place; delete and recreate instead.
+install_calico() {
+  local ctx="kind-${KIND_CLUSTER}"
+  if kubectl --context "${ctx}" get daemonset -n kube-system kindnet >/dev/null 2>&1; then
+    echo "error: cluster ${KIND_CLUSTER} is running kindnet; a CNI cannot be swapped in place." >&2
+    echo "       Delete the cluster (make e2e-cluster-delete) and re-run with KIND_CNI=calico." >&2
+    exit 1
+  fi
+  echo "==> installing Calico ${CALICO_VERSION}"
+  kubectl --context "${ctx}" apply -f \
+    "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
+  echo "==> waiting for calico-node DaemonSet rollout"
+  kubectl --context "${ctx}" rollout status daemonset/calico-node -n kube-system --timeout=300s
+  echo "==> waiting for all nodes to be Ready"
+  kubectl --context "${ctx}" wait --for=condition=Ready nodes --all --timeout=300s
+}
 
 # 1. Bring up the registry (idempotent). Extracted into start-registry.sh so CI
 #    can start it early and build images against it while this script goes on to
@@ -46,14 +84,29 @@ else
     echo "==> using pinned node image ${KIND_NODE_IMAGE}"
     create_args+=(--image "${KIND_NODE_IMAGE}")
   fi
-  # Concatenate the user's config file with the containerd patch and feed the
-  # result to kind via stdin.
+  # Concatenate the user's config file with the containerd patch (and, for
+  # KIND_CNI=calico, a networking block) and feed the result to kind via stdin.
+  # Note: this appends top-level keys, so KIND_CONFIG must not already define
+  # `networking:` or `containerdConfigPatches:` (the checked-in configs don't).
+  cni_config=""
+  if [[ "${KIND_CNI}" == "calico" ]]; then
+    # Calico's manifest creates its default IPv4 pool at 192.168.0.0/16; align
+    # the cluster podSubnet with it (the Tigera kind quickstart does the same).
+    cni_config=$'networking:\n  disableDefaultCNI: true\n  podSubnet: "192.168.0.0/16"'
+  fi
   cat "${KIND_CONFIG}" - <<EOF | kind create cluster "${create_args[@]}"
+${cni_config}
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry]
     config_path = "/etc/containerd/certs.d"
 EOF
+fi
+
+# With disableDefaultCNI the nodes stay NotReady until a CNI is installed, so
+# this must run before anything that waits on node readiness.
+if [[ "${KIND_CNI}" == "calico" ]]; then
+  install_calico
 fi
 
 # 3. Wire each node's containerd to resolve localhost:${REGISTRY_PORT} via the
