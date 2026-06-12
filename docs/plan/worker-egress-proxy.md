@@ -157,7 +157,7 @@ or debug pods in the namespace can no longer reach the proxy or AGC.
 
 The e2e procedure in
 [docs/design/network-architecture.md "How to Validate Network Isolation"](../design/network-architecture.md)
-runs as three Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go):
+runs as four Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go):
 
 - `E2E_GMC_TenantProvisioning_ProxyConnectWorks` — positive: a
   workload-labelled curl pod CONNECTs through the per-tenant HTTPS proxy
@@ -165,6 +165,18 @@ runs as three Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cm
   Exercises kindnet workload-NP egress to the proxy pods, the proxy's
   HTTPS+CONNECT path, the proxy egress NP's IP-range allowlist, and the
   proxy TLS cert+SAN chain end-to-end.
+- `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` —
+  runtime negative: a workload-labelled curl pod attempting to reach the
+  fakegithub pod in another namespace (a real, reachable destination the
+  workload NP does not authorise) is observed dropped — no HTTP exchange,
+  curl connect timeout/refused — while an unlabelled control pod in the
+  same namespace reaches it, attributing the drop to NP enforcement.
+  Requires an egress-enforcing CNI; self-skips on kindnet.
+- `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI` — runtime
+  negative: a workload-labelled curl pod cannot complete a connection to
+  `kubernetes.default.svc` (worker pods are not selected by the AGC NP,
+  so they get no 443/6443 egress), with the same control-pod pattern.
+  Requires an egress-enforcing CNI; self-skips on kindnet.
 - `E2E_GMC_TenantProvisioning_WorkloadNPSpec` — authoring guard: asserts
   the *shape* of the workload and AGC NetworkPolicies the GMC reconciles
   into the tenant namespace. Locks the workload NP at exactly two
@@ -174,26 +186,38 @@ runs as three Tier-A specs in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cm
   port-axis trap documented in
   [`networkpolicy-port-matching.md`](../development/networkpolicy-port-matching.md)).
 
-### Known limitation: runtime negative-case enforcement under kindnet
+### Runtime negative-case enforcement: validated on Calico (Q7b, 2026-06-11)
 
-Two CI iterations attempted runtime negative-case validations of the
-acceptance criteria — first `curl --noproxy '*' https://api.github.com`
-from a workload-labelled pod, then an in-cluster equivalent targeting
-`fakegithub:8080` in another namespace. Both observed successful HTTP
-exchanges despite the workload NP not authorising the destination:
-kindnet's bundled `kube-network-policies` enforcer did not drop the
-traffic in either case. The fall-back `WorkloadNPSpec` spec asserts
-the authoring is correct; runtime enforcement on a CNI with full
-egress support (Calico, Cilium) is tracked separately.
+kindnet's bundled `kube-network-policies` enforcer does **not** drop
+egress for the negative cases: two CI iterations observed successful
+HTTP exchanges from a workload-labelled pod to destinations the
+workload NP does not authorise (`curl --noproxy '*'
+https://api.github.com`, then the in-cluster `fakegithub:8080`
+equivalent). That is why CI's kindnet green was positive-case-only and
+the egress claim carried a docs caveat.
 
-The two runtime negative specs intended for the acceptance criteria
-(`WorkloadEgressBlockedToNonProxyPod` and `WorkerCannotReachK8sAPI`)
-will run once the test plan covers a CNI-swap Tier-A profile; see Queue
-item Q7b. The AGC-pod negative case (`curl --noproxy '*'
+The gap closed on 2026-06-11: on a kind cluster built with
+`make e2e-cluster KIND_CNI=calico` (Calico v3.31.5,
+`disableDefaultCNI`), the two runtime negative specs
+`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` and
+`E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI` were observed
+**enforcing** — the workload-labelled probe pods completed no HTTP
+exchange (`HTTP_CODE=000`, curl connect timeout) against both the
+cross-namespace pod and the kubernetes API, while unlabelled control
+pods in the same namespace reached both destinations — alongside a
+green `ProxyConnectWorks` positive on the same cluster (full
+provisioning container: 14/14 passed). The specs detect the CNI at
+runtime and skip themselves on kindnet, so the standard CI lane is
+unaffected; re-run the validation any time with the `KIND_CNI=calico`
+profile (see
+[kind-iteration.md](../development/kind-iteration.md#cni-selection-kindnet-default-vs-calico)).
+A dedicated CI leg for the Calico profile is tracked as Q119.
+
+The AGC-pod negative case (`curl --noproxy '*'
 https://api.github.com` from an AGC-labelled pod) remains deliberately
-unasserted regardless: the AGC NetworkPolicy permits port 443/6443 to
-*any* destination because the kubernetes Service's apiserver port is
-not fixed across clusters. An AGC-labelled pod can therefore reach
+unasserted: the AGC NetworkPolicy permits port 443/6443 to *any*
+destination because the kubernetes Service's apiserver port is not
+fixed across clusters. An AGC-labelled pod can therefore reach
 `api.github.com:443` directly, by design. The per-tenant egress-IP
 guarantee for AGC traffic relies on the AGC binary honouring the
 configured proxy URL, not on the NetworkPolicy.
@@ -211,17 +235,18 @@ The implementation change is complete when:
    - The workload and AGC NetworkPolicies the GMC reconciles match the
      documented shape (rule count, port lists, podSelectors). ✅ —
      `E2E_GMC_TenantProvisioning_WorkloadNPSpec`.
-   - Runtime direct-egress and worker→K8s API negative cases. ⚠️
-     Deferred to Q7b — kindnet's `kube-network-policies` enforcer does
-     not drop the traffic in CI; see "Known limitation" above.
+   - Runtime direct-egress and worker→K8s API negative cases. ✅ —
+     `WorkloadEgressBlockedToNonProxyPod` + `WorkerCannotReachK8sAPI`,
+     observed enforcing on the Calico profile 2026-06-11 (Q7b); they
+     self-skip on kindnet, whose enforcer does not drop the traffic.
 2. The `IPRangeReconciler` background loop preserves the worker→proxy
    egress rule across iterations (no observable NetworkPolicy churn that
    removes the proxy ClusterIP rule). ✅ — `patchNetworkPolicy` only
    mutates `npProxyName`; covered by builder unit tests.
 3. The validation snippets in
    [docs/design/network-architecture.md §"How to Validate Network Isolation"](../design/network-architecture.md)
-   pass against a freshly provisioned tenant. ✅ — covered by the three
-   specs above.
+   pass against a freshly provisioned tenant. ✅ — covered by the four
+   specs above (negatives on the egress-enforcing Calico profile).
 4. No regression in proxy pool sizing under the existing e2e workload
    (proxy CPU utilization stays below the HPA target with default
    `maxReplicas`). ✅ — HPA + PDB validated by `hpa_pdb_test.go`.

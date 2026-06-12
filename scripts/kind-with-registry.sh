@@ -59,7 +59,9 @@ install_calico() {
   kubectl --context "${ctx}" apply -f \
     "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
   echo "==> waiting for calico-node DaemonSet rollout"
-  kubectl --context "${ctx}" rollout status daemonset/calico-node -n kube-system --timeout=300s
+  # 600s: a cold quay.io pull of the calico/cni + calico/node images on every
+  # node takes well over the kubectl default; 300s was observed too tight.
+  kubectl --context "${ctx}" rollout status daemonset/calico-node -n kube-system --timeout=600s
   echo "==> waiting for all nodes to be Ready"
   kubectl --context "${ctx}" wait --for=condition=Ready nodes --all --timeout=300s
 }

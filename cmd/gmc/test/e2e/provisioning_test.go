@@ -389,6 +389,15 @@ spec:
 		fakegithubURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s/",
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 
+		// Don't rely on the earlier specs in this Ordered container having
+		// run (a focused run starts at BeforeAll): without the workload NP
+		// reconciled, the labelled pod's traffic would be allowed and the
+		// negative would fail spuriously.
+		By("waiting for the workload NetworkPolicy to exist")
+		Eventually(func() bool {
+			return utils.ResourceExists("networkpolicy", tenantNS, workloadName)
+		}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "workload NetworkPolicy not reconciled")
+
 		By("control: an unlabelled pod in the tenant namespace can reach fakegithub")
 		logs := runEgressProbe(tenantNS, "egress-control-fakegithub", false, fakegithubURL)
 		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
@@ -418,6 +427,12 @@ spec:
 		// --insecure: the probe asserts TCP/TLS reachability, not identity;
 		// anonymous requests complete the handshake and get an HTTP status.
 		apiURL := "--insecure https://kubernetes.default.svc.cluster.local:443/version"
+
+		// See the equivalent wait in WorkloadEgressBlockedToNonProxyPod.
+		By("waiting for the workload NetworkPolicy to exist")
+		Eventually(func() bool {
+			return utils.ResourceExists("networkpolicy", tenantNS, workloadName)
+		}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "workload NetworkPolicy not reconciled")
 
 		By("control: an unlabelled pod in the tenant namespace can reach the kubernetes API")
 		logs := runEgressProbe(tenantNS, "egress-control-k8sapi", false, apiURL)
