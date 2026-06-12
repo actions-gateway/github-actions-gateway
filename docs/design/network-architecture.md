@@ -193,6 +193,8 @@ External DNS resolution (for GitHub hostnames) is performed by the proxy pods th
 
 The AGC and proxy container images are distroless (no shell, no curl), so `kubectl exec` against the running pods can only inspect process state, not run probes. Instead, schedule a short-lived `curlimages/curl` pod and apply the same labels as the workload you want to simulate — Kubernetes selects NetworkPolicies by label, so a curl pod with `actions-gateway/component: workload` is governed by the same rules as the AGC and worker pods.
 
+> **The negative checks below only hold on a CNI that enforces egress NetworkPolicy** (Calico, Cilium, …). NetworkPolicy objects are inert without a CNI enforcer, and kind's default kindnet demonstrably does *not* drop egress for these cases — a "blocked" expectation will spuriously succeed there. Production clusters must run an egress-enforcing CNI for the workload isolation described in this document to exist at runtime. The workload-pod negatives below are automated as the Tier-A specs `E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod` and `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`, observed enforcing on a Calico kind cluster (`make e2e-cluster KIND_CNI=calico`) on 2026-06-11 — see [the worker-egress-proxy plan](../plan/worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
+
 ### Confirm a workload pod can reach GitHub via the proxy
 
 ```sh

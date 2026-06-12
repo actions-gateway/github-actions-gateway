@@ -297,8 +297,9 @@ spec:
 	// not reliably drop egress traffic in either the external-IP path or the
 	// cross-namespace pod path under the policy shape the GMC emits. The
 	// in-cluster runtime negatives — `WorkloadEgressBlockedToNonProxyPod` and
-	// `WorkerCannotReachK8sAPI` — are tracked as a follow-up Tier-A run on a
-	// Calico/Cilium-equipped kind cluster (see Queue Q7b).
+	// `WorkerCannotReachK8sAPI` below — therefore skip themselves unless the
+	// cluster runs an egress-enforcing CNI (`make e2e-cluster KIND_CNI=calico`,
+	// see Q7b).
 	//
 	// This spec instead asserts the NP YAML the GMC reconciles into the
 	// tenant namespace matches the documented [network-architecture.md]
@@ -365,4 +366,161 @@ spec:
 		Expect(agcYAML).To(ContainSubstring("port: 6443"),
 			"AGC NP missing apiserver port 6443 (kind apiserver Service port-translates to 6443; a 443-only rule drops k8s API):\n%s", agcYAML)
 	})
+
+	// E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod is the
+	// runtime negative for the workload NP's egress allowlist: a
+	// workload-labelled pod must NOT be able to open a connection to an
+	// in-cluster destination other than the proxy pods. The probe target is
+	// the fakegithub Service in e2e-infra — a real, reachable pod that the
+	// workload NP does not authorise (its only non-DNS egress rule is
+	// port 8080 *to pods labelled app=actions-gateway-proxy in the tenant
+	// namespace*). An unlabelled control pod proves the destination is up, so
+	// a connect failure from the labelled pod is attributable to NP
+	// enforcement, not a dead backend.
+	//
+	// Requires an egress-enforcing CNI (Calico/Cilium); self-skips on kindnet,
+	// whose kube-network-policies enforcer demonstrably does not drop this
+	// traffic (see the WorkloadNPSpec comment above and Q7b).
+	It("E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod: workload pod cannot reach a non-proxy pod", func() {
+		if !egressEnforcingCNI() {
+			Skip("cluster CNI does not enforce NetworkPolicy egress (kindnet); recreate with `make e2e-cluster KIND_CNI=calico` (Q7b)")
+		}
+
+		fakegithubURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s/",
+			fakegithubServiceName, infraNamespace, fakegithubServicePort)
+
+		// Don't rely on the earlier specs in this Ordered container having
+		// run (a focused run starts at BeforeAll): without the workload NP
+		// reconciled, the labelled pod's traffic would be allowed and the
+		// negative would fail spuriously.
+		By("waiting for the workload NetworkPolicy to exist")
+		Eventually(func() bool {
+			return utils.ResourceExists("networkpolicy", tenantNS, workloadName)
+		}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "workload NetworkPolicy not reconciled")
+
+		By("control: an unlabelled pod in the tenant namespace can reach fakegithub")
+		logs := runEgressProbe(tenantNS, "egress-control-fakegithub", false, fakegithubURL)
+		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
+			"control pod could not reach fakegithub — destination down or probe broken, negative below would be meaningless; logs:\n%s", logs)
+
+		By("negative: a workload-labelled pod cannot reach fakegithub")
+		logs = runEgressProbe(tenantNS, "egress-blocked-fakegithub", true, fakegithubURL)
+		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)(\s|$)`),
+			"workload-labelled pod was NOT blocked from a non-proxy destination (expected connect refused/timeout); logs:\n%s", logs)
+		Expect(logs).To(ContainSubstring("HTTP_CODE=000"),
+			"workload-labelled pod completed an HTTP exchange with a non-proxy destination; logs:\n%s", logs)
+	})
+
+	// E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI is the runtime
+	// negative for worker→apiserver isolation: only AGC-labelled pods get the
+	// additive AGC NP's 443/6443 egress, so a workload-labelled pod (the
+	// label worker pods carry) must not be able to reach the kubernetes
+	// Service. Note kube-proxy DNATs kubernetes.default:443 to the kind
+	// node's 6443 before the CNI evaluates the packet — both ports are
+	// outside the workload NP's allowlist, so the connection must drop
+	// either way. Control pod as above.
+	It("E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI: workload pod cannot reach the kubernetes API", func() {
+		if !egressEnforcingCNI() {
+			Skip("cluster CNI does not enforce NetworkPolicy egress (kindnet); recreate with `make e2e-cluster KIND_CNI=calico` (Q7b)")
+		}
+
+		// --insecure: the probe asserts TCP/TLS reachability, not identity;
+		// anonymous requests complete the handshake and get an HTTP status.
+		apiURL := "--insecure https://kubernetes.default.svc.cluster.local:443/version"
+
+		// See the equivalent wait in WorkloadEgressBlockedToNonProxyPod.
+		By("waiting for the workload NetworkPolicy to exist")
+		Eventually(func() bool {
+			return utils.ResourceExists("networkpolicy", tenantNS, workloadName)
+		}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "workload NetworkPolicy not reconciled")
+
+		By("control: an unlabelled pod in the tenant namespace can reach the kubernetes API")
+		logs := runEgressProbe(tenantNS, "egress-control-k8sapi", false, apiURL)
+		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
+			"control pod could not reach the kubernetes API — probe broken, negative below would be meaningless; logs:\n%s", logs)
+
+		By("negative: a workload-labelled pod cannot reach the kubernetes API")
+		logs = runEgressProbe(tenantNS, "egress-blocked-k8sapi", true, apiURL)
+		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)(\s|$)`),
+			"workload-labelled pod was NOT blocked from the kubernetes API (expected connect refused/timeout); logs:\n%s", logs)
+		Expect(logs).To(ContainSubstring("HTTP_CODE=000"),
+			"workload-labelled pod completed an HTTP exchange with the kubernetes API; logs:\n%s", logs)
+	})
 })
+
+// egressEnforcingCNI reports whether the cluster runs a CNI known to enforce
+// NetworkPolicy egress rules at runtime. kindnet (kind's default) bundles
+// kube-network-policies, which two CI iterations showed does NOT drop egress
+// for the negative cases (see docs/plan/worker-egress-proxy.md); the runtime
+// negative specs skip themselves unless Calico or Cilium is detected.
+func egressEnforcingCNI() bool {
+	return utils.ResourceExists("daemonset", "kube-system", "calico-node") || // manifest install
+		utils.ResourceExists("daemonset", "calico-system", "calico-node") || // operator install
+		utils.ResourceExists("daemonset", "kube-system", "cilium")
+}
+
+// runEgressProbe runs a one-shot curl pod in ns against curlArgs (the final
+// curl arguments, typically just a URL) and returns its logs. The pod script
+// always exits 0 and reports the outcome as CURL_RC=<n> and HTTP_CODE=<code>
+// lines — callers assert on those, so a non-Succeeded phase means an
+// infrastructure problem (image pull, scheduling), not a blocked connection.
+// workloadLabeled selects whether the pod carries the
+// actions-gateway/component=workload label that the tenant NetworkPolicies
+// match on.
+func runEgressProbe(ns, name string, workloadLabeled bool, curlArgs string) string {
+	labels := "e2e-probe: control"
+	if workloadLabeled {
+		labels = "actions-gateway/component: workload"
+	}
+	manifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    %s
+spec:
+  restartPolicy: Never
+  containers:
+  - name: curl
+    image: %s
+    imagePullPolicy: IfNotPresent
+    command: ["sh", "-c"]
+    args:
+    - |
+      set -u
+      rc=0
+      curl --silent --show-error --output /dev/null \
+           --connect-timeout 10 --max-time 20 \
+           --write-out 'HTTP_CODE=%%{http_code}\n' \
+           %s || rc=$?
+      echo "CURL_RC=${rc}"
+`, name, ns, labels, curlImage, curlArgs)
+
+	ExpectWithOffset(1, utils.ApplyManifest(manifest)).To(Succeed(), "apply egress probe pod %s/%s", ns, name)
+	DeferCleanup(func() {
+		cmd := exec.Command("kubectl", "delete", "pod", name,
+			"-n", ns, "--ignore-not-found", "--wait=false")
+		_, _ = utils.Run(cmd)
+	})
+
+	By("waiting for probe pod " + name + " to terminate")
+	var finalPhase string
+	EventuallyWithOffset(1, func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "pod", name,
+			"-n", ns,
+			"-o", "jsonpath={.status.phase}",
+		)
+		out, err := utils.Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+			"probe pod still in phase %q", out)
+		finalPhase = out
+	}, 2*time.Minute, 3*time.Second).Should(Succeed())
+
+	logs, logsErr := utils.Run(exec.Command("kubectl", "logs", name, "-n", ns))
+	ExpectWithOffset(1, logsErr).NotTo(HaveOccurred(), "fetch probe pod logs")
+	ExpectWithOffset(1, finalPhase).To(Equal("Succeeded"),
+		"probe pod %s ended in phase %s (infrastructure problem — the script always exits 0); logs:\n%s", name, finalPhase, logs)
+	return logs
+}

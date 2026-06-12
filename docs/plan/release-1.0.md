@@ -70,8 +70,9 @@ SecurityContext breaks the runner image) are new `1.0-gate` rows.
 The security *control* (the egress NetworkPolicy) must ship
 enforced-by-default; *observing* the negative path actually drop traffic
 is recommended, not gating, because it needs a special-CNI cluster — the
-same expense class as the deferred gVisor/load-test work. The honesty
-caveat in bucket E covers the gap until Q7b runs.
+same expense class as the deferred gVisor/load-test work. Q7b ran
+2026-06-11, so the bucket-E egress caveat is lifted (replaced by the
+production CNI requirement statement).
 
 - [ ] **No secure-by-default regression in shipped manifests**
   (the security half of [Q34](../STATUS.md), *gating*): the install
@@ -80,12 +81,14 @@ caveat in bucket E covers the gap until Q7b runs.
   documented, explicit opt-*out*, never a silent default
   (secure-by-default principle; see
   [security design](../design/05-security.md)).
-- [ ] **Worker egress negatives observed enforcing** ([Q7b](../STATUS.md),
-  *recommended*): re-run `WorkloadEgressBlockedToNonProxyPod` +
-  `WorkerCannotReachK8sAPI` on a `kind` cluster with Calico or Cilium
-  (kindnet does not enforce egress, so today's green is positive-case
-  only). Deferred from gating per its special-cluster cost; the egress
-  claim is caveated in the docs (bucket E) until it runs.
+- [x] **Worker egress negatives observed enforcing** (Q7b,
+  *recommended*, ran 2026-06-11): `WorkloadEgressBlockedToNonProxyPod` +
+  `WorkerCannotReachK8sAPI` observed dropping traffic on a Calico
+  v3.31.5 kind cluster (`make e2e-cluster KIND_CNI=calico`), alongside
+  the green positive `ProxyConnectWorks` on the same cluster (14/14
+  provisioning specs). Evidence and reproduction:
+  [worker-egress-proxy.md](worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11).
+  A CI leg for the Calico profile is tracked as Q119.
 
 ### C. Packaging & supply chain — *gating + recommended*
 
@@ -152,13 +155,16 @@ are validated.
   target, not yet validated at scale** (1.0 ships without the
   [Q13](../STATUS.md) load run). Remove or qualify any phrasing that
   reads as a measured result.
-- [ ] **Egress enforcement scope stated honestly**: docs state that
-  worker egress isolation is validated positive-case (job traffic flows
-  through the proxy) but the negative path (non-proxy egress blocked) is
-  enforced by the cluster CNI and is **unverified under the default
-  kindnet test setup** — production operators must run a CNI that
-  enforces egress NetworkPolicy (Calico/Cilium). Lifts when
-  [Q7b](../STATUS.md) runs.
+- [x] **Egress enforcement scope stated honestly** (lifted 2026-06-11
+  by Q7b): the negative path (non-proxy egress blocked) is now verified
+  on the Calico kind profile, so the "unverified" caveat is gone. What
+  the docs must still state — and now do
+  ([tenant-onboarding](../operations/tenant-onboarding.md),
+  [security-operations](../operations/security-operations.md),
+  [network-architecture](../design/network-architecture.md)) — is that
+  enforcement is the cluster CNI's job: production operators must run a
+  CNI that enforces egress NetworkPolicy (Calico/Cilium); kindnet does
+  not.
 - [ ] **Sandboxed runtime stated as untested opt-in**: gVisor/Kata
   docs ([Appendix B](../design/appendix-b-worker-isolation.md)) say the
   path is *documented and supported in spec but not exercised on a real
@@ -299,7 +305,7 @@ Two independent tracks land in parallel; packaging is the long pole.
 ```
 Track 1 (live validation — needs real GitHub App creds + kind):
   A (M4 multi-tenant + e2e job + Q71 runner version)
-        └─ B-egress (Q7b — RECOMMENDED, needs Calico/Cilium kind cluster)
+        └─ B-egress (Q7b — DONE 2026-06-11 on the Calico kind profile)
 
 Track 2 (packaging — the keystone):
   C-Q12 (install artifact)
@@ -319,10 +325,10 @@ Suggested sequence:
 1. **Q12 install artifact** — unblocks the entire C track; start first.
 2. **A: M4 live validation + Q71** — one focused session with real
    creds against `kind`; flips four ⚠️/❌ DoD rows at once.
-3. **B: Q7b egress negatives** (*recommended, not gating*) — needs a
-   Calico/Cilium cluster; piggyback on the same live session if the CNI
-   is swapped in. If it doesn't run before tag, the bucket-E egress
-   caveat ships in its place.
+3. **B: Q7b egress negatives** (*recommended, not gating*) — ran
+   2026-06-11 on the `make e2e-cluster KIND_CNI=calico` profile; the
+   bucket-E egress caveat is lifted (the production CNI requirement
+   statement remains in the operator docs).
 4. **C: Q14 posture scan** (then optionally Q28/Q29) once Q12 lands.
 5. **D: Q35/Q34 operability fixes** and **F: Q77/Q78 CI quality gates** —
    parallelizable, no cluster needed.
@@ -336,7 +342,7 @@ Suggested sequence:
 | Bucket | Gating items | Recommended items |
 |---|---|---|
 | A. Functional + live proof | M4 multi-tenant, delete-isolation, e2e proxy job, Q71 | — |
-| B. Security/isolation | Q34 secure-by-default | Q7b egress negatives |
+| B. Security/isolation | Q34 secure-by-default | Q7b egress negatives (✅ ran 2026-06-11) |
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
 | E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
