@@ -122,10 +122,6 @@ gateway per tenant from each `ActionsGateway` resource.
     <span class="gag-flow__title">Ephemeral worker pods</span>
     <span class="gag-flow__sub">one per job · GC'd on completion</span>
   </div>
-  <ul class="gag-flow__notes">
-    <li><strong>Isolated egress:</strong> all GitHub traffic from the AGC and workers exits through the per-tenant proxy pool (Tier 3).</li>
-    <li><strong>Scale to zero:</strong> worker pods exist only while a job runs, and are deleted on completion.</li>
-  </ul>
 </div>
 
 Read the [architecture overview](design/02-architecture.md) for the full
