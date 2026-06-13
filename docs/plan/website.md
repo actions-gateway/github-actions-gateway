@@ -16,7 +16,7 @@ assembled from docs that already exist.
 | Work item | Status |
 |---|---|
 | Tooling decision (MkDocs Material) | ✅ Decided (this doc) |
-| Domain decision | ⚠️ Recommended below; one open question (custom domain yes/no) |
+| Domain decision | ✅ Decided — project page now, vanity domain punted (see below) |
 | MkDocs scaffold + Pages deploy workflow | ❌ Open |
 | Diagram conversion (ASCII → mermaid) | ❌ Open |
 | Custom landing page | ❌ Open |
@@ -93,9 +93,10 @@ Options, in order of preference:
    from the code repo and reinvites docs drift. Not worth it for a single
    project — reconsider only if the org grows to host multiple projects.
 
-**Decision:** ship as the project page (option 1); keep custom domain as a
-trivial future CNAME-only upgrade (option 2). The org move removed the
-personal-handle problem, so a custom domain is now a nice-to-have, not a need.
+**Decision:** ship as the project page (option 1). A vanity domain is **punted**
+— the org move removed the personal-handle problem, so a custom domain is a
+nice-to-have, not a need, and remains a trivial CNAME-only upgrade (option 2) if
+we ever want one.
 
 ## Site map
 
@@ -151,9 +152,6 @@ OG/Twitter card to the existing social preview so shared links look intentional.
 
 ## Open decisions
 
-- **Custom domain yes/no.** Default per above: no — ship the project page, treat
-  a custom domain as a later CNAME-only upgrade. Flip only if a vanity domain is
-  wanted up front.
 - **Developer docs on the site or GitHub-only.** `docs/development/*` is
   contributor-facing; it can render on the site or stay on github.com to keep
   the public site evaluator-focused. Lean: include them under a clearly-separate
