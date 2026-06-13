@@ -108,10 +108,10 @@
 }
 
 .gag-flow__row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.6rem;
-  width: 100%;
 }
 
 .gag-flow__caption {
