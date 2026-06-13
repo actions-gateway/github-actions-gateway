@@ -22,6 +22,23 @@
   margin: 0.2rem 0.3rem;
 }
 
+/* Four pillar cards on one row at content width; degrade gracefully when narrow. */
+.gag-pillars .grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 50rem) {
+  .gag-pillars .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 30rem) {
+  .gag-pillars .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Hero stat: the listener-overhead delta, side by side. */
 .gag-stat {
   display: flex;

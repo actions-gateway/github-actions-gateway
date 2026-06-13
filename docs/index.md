@@ -26,6 +26,7 @@ helm install gag charts/actions-gateway \
 
 ## What GAG gives you
 
+<div class="gag-pillars" markdown>
 <div class="grid cards" markdown>
 
 -   :material-layers-triple:{ .lg .middle } __Priority-tiered scheduling__
@@ -60,6 +61,7 @@ helm install gag charts/actions-gateway \
     receives a fully isolated gateway: RBAC, NetworkPolicies, `ResourceQuota`,
     egress proxy, controller, and every runner group they declared.
 
+</div>
 </div>
 
 ## Less always-on overhead
