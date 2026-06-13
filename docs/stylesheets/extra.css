@@ -1,0 +1,50 @@
+/* Landing-page polish. Colors use Material theme variables so both palettes work. */
+
+.gag-hero {
+  text-align: center;
+  padding: 2.5rem 0 1.5rem;
+}
+
+.gag-hero h1 {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  margin: 0 0 0.6rem;
+}
+
+.gag-hero .gag-tagline {
+  font-size: 1.05rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 40rem;
+  margin: 0 auto 1.4rem;
+}
+
+.gag-hero .md-button {
+  margin: 0.2rem 0.3rem;
+}
+
+/* Hero stat: the listener-overhead delta, side by side. */
+.gag-stat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.gag-stat__card {
+  flex: 1 1 14rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 1rem 1.2rem;
+}
+
+.gag-stat__num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.gag-stat__label {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.78rem;
+}

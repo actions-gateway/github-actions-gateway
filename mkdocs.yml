@@ -1,0 +1,119 @@
+site_name: GitHub Actions Gateway
+site_description: >-
+  An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions
+  runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover
+  evicted jobs automatically, and isolate every tenant's GitHub egress.
+site_url: https://actions-gateway.github.io/github-actions-gateway/
+repo_url: https://github.com/actions-gateway/github-actions-gateway
+repo_name: actions-gateway/github-actions-gateway
+edit_uri: edit/main/docs/
+copyright: Licensed under the Apache License 2.0.
+
+# The docs/ tree doubles as the in-repo documentation browsed on github.com and
+# the source for this site. These paths are repo-internal (planning, contributor
+# guides) and stay GitHub-only — see docs/plan/website.md for the rationale.
+# Anchored patterns (leading /) keep the per-section README.md indexes.
+exclude_docs: |
+  /README.md
+  /STATUS.md
+  /plan/
+  /development/
+  /assets/README.md
+
+theme:
+  name: material
+  custom_dir: overrides
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/actions-gateway/github-actions-gateway
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      # Match GitHub's heading-slug algorithm so the in-repo docs' GitHub-style
+      # anchor links (e.g. #21-tier-1--gmc) resolve on the site too.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.inlinehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Home: index.md
+  - Why GAG: why-gag.md
+  - Get started: getting-started.md
+  - Design:
+      - Overview: design/README.md
+      - Executive summary: design/01-executive-summary.md
+      - Architecture: design/02-architecture.md
+      - Network architecture: design/network-architecture.md
+      - API & data contracts: design/03-api-contracts.md
+      - Operational flows: design/04-operational-flows.md
+      - Security: design/05-security.md
+      - Implementation phases: design/06-implementation-phases.md
+      - Test plan: design/07-test-plan.md
+      - Glossary: design/08-glossary.md
+      - "Appendix A — Capacity & SLOs": design/appendix-a-capacity-slos.md
+      - "Appendix B — Worker isolation": design/appendix-b-worker-isolation.md
+      - "Appendix C — AI-assisted implementation": design/appendix-c-ai-implementation.md
+      - "Appendix D — Alternatives considered": design/appendix-d-alternatives-considered.md
+      - "Appendix E — Capacity planning": design/appendix-e-capacity-planning.md
+      - "Appendix F — Cost model": design/appendix-f-cost-model.md
+      - "Appendix G — Future enhancements": design/appendix-g-future-enhancements.md
+  - Operations:
+      - Overview: operations/README.md
+      - Install: operations/install.md
+      - Upgrade: operations/upgrade.md
+      - Tenant onboarding: operations/tenant-onboarding.md
+      - Observability: operations/observability.md
+      - Runbook: operations/runbook.md
+      - Troubleshooting: operations/troubleshooting.md
+      - Security operations: operations/security-operations.md
+      - Release: operations/release.md
