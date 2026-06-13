@@ -99,11 +99,12 @@ permissions" flag. The safety classifier blocks it, and it is the less-secure
 path regardless. The small cost of chips — one click to start each — is the
 correct trade.
 
-> One decision to settle **before** spawning: the dispatcher cannot `send_message`
-> to a worker session in unsupervised mode, so it cannot nudge a stopped worker
-> to fix its own PR (see [Coordination channels](#coordination-channels)). Design
-> for the worker to finish the job itself (next section) rather than relying on
-> re-engagement.
+> One decision to settle **before** spawning: do not design the run around
+> `send_message`-ing a worker mid-run to nudge it (see
+> [Coordination channels](#coordination-channels)). Treat cross-session messaging
+> as best-effort, not a control channel — a worker running unattended may not act
+> on a message until re-engaged. Design for the worker to finish the job itself
+> (next section) rather than relying on re-engagement.
 
 ## The worker contract (self-healing)
 
@@ -223,10 +224,13 @@ contract. The channels, by need:
   self-contained record per line so concurrent writes do not corrupt each other.
 - **`send_message`** — a live push to another running session. The sender chooses
   what to share, so it never exposes the sender's transcript. Use it for
-  supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** it is
-  unavailable to a session running unsupervised, so the autonomous worker loop
-  must not depend on it — design workers to finish the job themselves (see [the
-  worker contract](#the-worker-contract-self-healing)).
+  supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** treat
+  it as best-effort, not a control channel — cross-session messaging is a limited
+  capability (the documented `SendMessage` tool is gated behind the experimental
+  agent-teams feature), and a worker running unattended may not act on a message
+  until re-engaged. The autonomous worker loop must not depend on it; design
+  workers to finish the job themselves (see [the worker
+  contract](#the-worker-contract-self-healing)).
 - **A SQLite claim table** — when workers *pull* tasks instead of being assigned
   one each, use a single SQLite file with an atomic claim
   (`UPDATE tasks SET claimed_by=? WHERE id=? AND claimed_by IS NULL`) so two
