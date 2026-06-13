@@ -4,6 +4,7 @@ package agentpool
 import (
 	"context"
 	"crypto"
+	stderrors "errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -54,10 +55,34 @@ type AgentCredentials struct {
 	EncodedJITConfig string
 }
 
+// NameConflictError is returned by Registrar.Register when the server refuses
+// the registration because a runner record with the same name already exists
+// (HTTP 409). The surviving record's ID is unknown to the caller — resolve it
+// with Registrar.ResolveAgentID, deregister it, and retry.
+type NameConflictError struct {
+	Name string
+}
+
+func (e *NameConflictError) Error() string {
+	return fmt.Sprintf("agentpool: runner name %q already registered", e.Name)
+}
+
 // Registrar abstracts the runner agent registration API.
 type Registrar interface {
+	// Register registers a new runner agent. Returns *NameConflictError when a
+	// record with the same name already exists server-side.
 	Register(ctx context.Context, token string, params RegisterParams) (*AgentCredentials, error)
 	Deregister(ctx context.Context, token string, agentID int64) error
+	// ResolveAgentID looks up the ID of a registered runner agent by name.
+	// Returns 0 with a nil error when no agent has that name.
+	ResolveAgentID(ctx context.Context, token, name string) (int64, error)
+}
+
+// RecycleMetrics records agent recycle outcomes. Implemented by
+// listener.Metrics; nil disables recording.
+type RecycleMetrics interface {
+	IncAgentRecycle(namespace, group, trigger string)
+	IncAgentRecycleError(namespace, group string)
 }
 
 // Agent holds the credentials for one pre-registered runner agent.
@@ -86,6 +111,10 @@ type Pool struct {
 	registrar     Registrar
 	keyType       KeyType
 
+	// Metrics records recycle outcomes for the reconcile repair pass. Optional;
+	// nil disables recording. Set once before first use (not guarded by mu).
+	Metrics RecycleMetrics
+
 	mu        sync.Mutex
 	agents    []*Agent       // sorted by index; populated by LoadAgents or EnsureAgents
 	byIndex   map[int]*Agent // index → pooled agent, mirrors agents
@@ -97,6 +126,14 @@ type Pool struct {
 	// set, re-add in-use agents to available (double-claim) and let scale-down
 	// delete a Secret out from under a running session (Q76).
 	claimed map[int]bool
+	// consumed holds the indexes of agents whose single-use JIT runner record
+	// has been spent by a job acquisition (Q114). Like claimed it is keyed by
+	// the stable index and survives reload(). A consumed agent must never
+	// re-enter available un-recycled: ReleaseAgent parks it instead, and
+	// EnsureAgents re-registers parked agents on the next reconcile. Cleared by
+	// a successful Recycle. In-memory only — after an AGC restart a stale agent
+	// is instead detected by the listener's unauthorized-at-startup heal path.
+	consumed map[int]bool
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
@@ -192,6 +229,24 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 		}
 	}
 
+	// Repair consumed (parked) agents: a listener goroutine that exited after
+	// its single-use JIT runner record was spent leaves the agent parked out of
+	// available (Q114). Re-register them now that we hold an installation
+	// token; failures are retried on the next reconcile.
+	for _, a := range p.parkedAgents(count) {
+		if _, err := p.Recycle(ctx, a, token); err != nil {
+			slog.Warn("agentpool: recycle of parked consumed agent failed; will retry next reconcile",
+				"index", a.Index, "error", err)
+			if p.Metrics != nil {
+				p.Metrics.IncAgentRecycleError(p.namespace, p.groupName)
+			}
+			continue
+		}
+		if p.Metrics != nil {
+			p.Metrics.IncAgentRecycle(p.namespace, p.groupName, "reconcile_repair")
+		}
+	}
+
 	// Reload agents into memory. p.client is configured with
 	// Cache.DisableFor[*corev1.Secret] in production (cmd/agc/main.go, W4 /
 	// H-2) and matched in the envtest suite, so the metadata list and per-name
@@ -201,30 +256,9 @@ func (p *Pool) EnsureAgents(ctx context.Context, count int32, token string) erro
 }
 
 func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
-	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
-	params := RegisterParams{
-		Name:      agentName,
-		Version:   p.runnerVersion,
-		Labels:    p.runnerLabels,
-		GroupName: p.groupName,
-		GroupID:   1,
-	}
-	creds, err := p.registrar.Register(ctx, token, params)
+	creds, privKeyPEM, err := p.registerAgent(ctx, token, index)
 	if err != nil {
-		return fmt.Errorf("register agent: %w", err)
-	}
-
-	privKeyPEM := creds.PrivateKeyPEM
-	if len(privKeyPEM) == 0 {
-		// Fallback for stub/test registrars that don't generate a key pair server-side.
-		privateKey, err := generateKey(p.keyType)
-		if err != nil {
-			return fmt.Errorf("generate agent key: %w", err)
-		}
-		privKeyPEM, err = marshalPrivateKey(privateKey)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	sec := &corev1.Secret{
@@ -237,18 +271,71 @@ func (p *Pool) createAgent(ctx context.Context, index int, token string) error {
 				labelAgentIndex:  strconv.Itoa(index),
 			},
 		},
-		Data: map[string][]byte{
-			"agentId":          []byte(strconv.FormatInt(creds.AgentID, 10)),
-			"clientId":         []byte(creds.ClientID),
-			"authorizationUrl": []byte(creds.AuthorizationURL),
-			"privateKeyPEM":    privKeyPEM,
-			"agentIndex":       []byte(strconv.Itoa(index)),
-			"runnerVersion":    []byte(p.runnerVersion),
-			"brokerURL":        []byte(creds.BrokerURL),
-			"encodedJITConfig": []byte(creds.EncodedJITConfig),
-		},
+		Data: p.secretDataFor(index, creds, privKeyPEM),
 	}
 	return p.client.Create(ctx, sec)
+}
+
+// registerAgent registers the agent for index with the registrar and returns
+// its credentials plus the private key PEM to persist. A 409 name conflict —
+// a record under this name survives with an ID we no longer know (e.g. a
+// previous Register succeeded but the Secret write crashed, or the Secret was
+// deleted out-of-band) — is resolved by looking up the surviving record's ID,
+// deregistering it, and retrying once.
+func (p *Pool) registerAgent(ctx context.Context, token string, index int) (*AgentCredentials, []byte, error) {
+	agentName := fmt.Sprintf("%s-%d", p.groupName, index)
+	params := RegisterParams{
+		Name:      agentName,
+		Version:   p.runnerVersion,
+		Labels:    p.runnerLabels,
+		GroupName: p.groupName,
+		GroupID:   1,
+	}
+	creds, err := p.registrar.Register(ctx, token, params)
+	var conflict *NameConflictError
+	if stderrors.As(err, &conflict) {
+		id, rerr := p.registrar.ResolveAgentID(ctx, token, agentName)
+		if rerr != nil {
+			return nil, nil, fmt.Errorf("resolve conflicting runner record %q: %w", agentName, rerr)
+		}
+		if id > 0 {
+			if derr := p.registrar.Deregister(ctx, token, id); derr != nil {
+				return nil, nil, fmt.Errorf("deregister conflicting runner record %q (id %d): %w", agentName, id, derr)
+			}
+		}
+		creds, err = p.registrar.Register(ctx, token, params)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("register agent: %w", err)
+	}
+
+	privKeyPEM := creds.PrivateKeyPEM
+	if len(privKeyPEM) == 0 {
+		// Fallback for stub/test registrars that don't generate a key pair server-side.
+		privateKey, kerr := generateKey(p.keyType)
+		if kerr != nil {
+			return nil, nil, fmt.Errorf("generate agent key: %w", kerr)
+		}
+		privKeyPEM, kerr = marshalPrivateKey(privateKey)
+		if kerr != nil {
+			return nil, nil, kerr
+		}
+	}
+	return creds, privKeyPEM, nil
+}
+
+// secretDataFor builds the Secret data map for an agent's credentials.
+func (p *Pool) secretDataFor(index int, creds *AgentCredentials, privKeyPEM []byte) map[string][]byte {
+	return map[string][]byte{
+		"agentId":          []byte(strconv.FormatInt(creds.AgentID, 10)),
+		"clientId":         []byte(creds.ClientID),
+		"authorizationUrl": []byte(creds.AuthorizationURL),
+		"privateKeyPEM":    privKeyPEM,
+		"agentIndex":       []byte(strconv.Itoa(index)),
+		"runnerVersion":    []byte(p.runnerVersion),
+		"brokerURL":        []byte(creds.BrokerURL),
+		"encodedJITConfig": []byte(creds.EncodedJITConfig),
+	}
 }
 
 // LoadAgents reads all existing agent Secrets and returns them in index order.
@@ -300,21 +387,49 @@ func (p *Pool) reload(ctx context.Context) error {
 	for _, a := range agents {
 		p.byIndex[a.Index] = a
 	}
-	// Rebuild available as every present, unclaimed agent — agents is the single
-	// source of truth. The claimed set is preserved across the reload (keyed by
-	// stable index, not pointer) so a currently-held agent never reappears in
-	// available; claims whose Secret has since been deleted are pruned out.
+	// Rebuild available as every present, unclaimed, unconsumed agent — agents
+	// is the single source of truth. The claimed and consumed sets are
+	// preserved across the reload (keyed by stable index, not pointer) so a
+	// currently-held agent never reappears in available (Q76) and a spent
+	// single-use agent stays parked until recycled (Q114); entries whose Secret
+	// has since been deleted are pruned out.
 	newClaimed := make(map[int]bool, len(p.claimed))
+	newConsumed := make(map[int]bool, len(p.consumed))
 	p.available = make([]*Agent, 0, len(agents))
 	for _, a := range agents {
+		if p.consumed[a.Index] {
+			newConsumed[a.Index] = true
+		}
 		if p.claimed[a.Index] {
 			newClaimed[a.Index] = true
 			continue
 		}
+		if newConsumed[a.Index] {
+			continue // parked: repaired by EnsureAgents, not claimable
+		}
 		p.available = append(p.available, a)
 	}
 	p.claimed = newClaimed
+	p.consumed = newConsumed
 	return nil
+}
+
+// parkedAgents returns the agents whose JIT runner record is consumed and that
+// no listener goroutine currently holds, limited to indexes below count (an
+// excess parked agent is deleted by scale-down instead of recycled).
+func (p *Pool) parkedAgents(count int32) []*Agent {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var parked []*Agent
+	for idx := range p.consumed {
+		if p.claimed[idx] || int32(idx) >= count {
+			continue
+		}
+		if a, ok := p.byIndex[idx]; ok {
+			parked = append(parked, a)
+		}
+	}
+	return parked
 }
 
 // dropExcessFromAvailable removes agents with index >= count from the available
@@ -354,14 +469,115 @@ func (p *Pool) ClaimAgent() *Agent {
 // pooled agent for the index (not the caller's possibly-stale snapshot), and
 // only if that index still exists in the pool — a concurrent scale-down or
 // DeleteAll may have removed it while it was claimed, in which case the release
-// is a no-op beyond clearing the claim.
+// is a no-op beyond clearing the claim. A consumed agent (single-use JIT
+// runner record spent, not yet recycled) is parked instead of re-added: its
+// credentials are dead, so handing it to another listener would burn that
+// listener too (Q114). EnsureAgents recycles parked agents on the next
+// reconcile.
 func (p *Pool) ReleaseAgent(a *Agent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.claimed, a.Index)
+	if p.consumed[a.Index] {
+		return
+	}
 	if cur, ok := p.byIndex[a.Index]; ok {
 		p.available = append(p.available, cur)
 	}
+}
+
+// MarkConsumed records that the agent's single-use JIT runner record has been
+// spent by a job acquisition. GitHub deletes the record server-side, so the
+// stored credentials are dead until the agent is recycled. Called by the
+// listener goroutine immediately after AcquireJob succeeds.
+func (p *Pool) MarkConsumed(a *Agent) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.consumed == nil {
+		p.consumed = make(map[int]bool)
+	}
+	p.consumed[a.Index] = true
+}
+
+// Recycle re-registers the agent at a's index under its stable name after its
+// single-use JIT runner record was consumed (Q114): it deregisters the old
+// record (best-effort — GitHub has usually deleted it already), registers a
+// fresh one (resolving a 409 name conflict via registerAgent), rewrites the
+// agent Secret in place, and swaps the in-memory entry. The caller's claim, if
+// any, is preserved; the consumed mark is cleared. The authoritative old agent
+// ID is read from the pool's current entry, not from a — the caller's pointer
+// may predate an earlier recycle.
+func (p *Pool) Recycle(ctx context.Context, a *Agent, token string) (*Agent, error) {
+	idx := a.Index
+	p.mu.Lock()
+	old := p.byIndex[idx]
+	p.mu.Unlock()
+	if old == nil {
+		old = a
+	}
+
+	if old.AgentID > 0 {
+		if err := p.registrar.Deregister(ctx, token, old.AgentID); err != nil {
+			slog.Debug("agentpool: deregister of consumed agent record failed (usually already deleted server-side)",
+				"index", idx, "agentID", old.AgentID, "error", err)
+		}
+	}
+
+	creds, privKeyPEM, err := p.registerAgent(ctx, token, idx)
+	if err != nil {
+		return nil, fmt.Errorf("agentpool: recycle agent %d: %w", idx, err)
+	}
+
+	sec, err := p.getSecret(ctx, p.secretName(idx))
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return nil, fmt.Errorf("agentpool: recycle agent %d: get secret: %w", idx, err)
+		}
+		// Secret deleted out-of-band (scale-down raced us): recreate it so the
+		// fresh registration is not orphaned.
+		sec = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      p.secretName(idx),
+				Namespace: p.namespace,
+				Labels: map[string]string{
+					labelManagedBy:   managedByValue,
+					labelRunnerGroup: p.groupName,
+					labelAgentIndex:  strconv.Itoa(idx),
+				},
+			},
+			Data: p.secretDataFor(idx, creds, privKeyPEM),
+		}
+		if cerr := p.client.Create(ctx, sec); cerr != nil {
+			return nil, fmt.Errorf("agentpool: recycle agent %d: recreate secret: %w", idx, cerr)
+		}
+	} else {
+		sec.Data = p.secretDataFor(idx, creds, privKeyPEM)
+		if uerr := p.client.Update(ctx, sec); uerr != nil {
+			return nil, fmt.Errorf("agentpool: recycle agent %d: update secret: %w", idx, uerr)
+		}
+	}
+
+	fresh, err := secretToAgent(*sec)
+	if err != nil {
+		return nil, fmt.Errorf("agentpool: recycle agent %d: %w", idx, err)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.consumed, idx)
+	if _, ok := p.byIndex[idx]; ok {
+		p.byIndex[idx] = fresh
+		for i, cur := range p.agents {
+			if cur.Index == idx {
+				p.agents[i] = fresh
+				break
+			}
+		}
+		// Deliberately not appended to available: a claimed agent stays with its
+		// holder, and a parked one is surfaced by the reload() EnsureAgents runs
+		// after its repair pass.
+	}
+	return fresh, nil
 }
 
 // DeleteAll deregisters all agents from GitHub and deletes all Secrets.
@@ -394,6 +610,7 @@ func (p *Pool) DeleteAll(ctx context.Context, token string) error {
 	p.byIndex = nil
 	p.available = nil
 	p.claimed = nil
+	p.consumed = nil
 	p.mu.Unlock()
 	return lastErr
 }

@@ -31,6 +31,10 @@ func (r *countingRegistrar) Deregister(ctx context.Context, token string, id int
 	return r.delegate.Deregister(ctx, token, id)
 }
 
+func (r *countingRegistrar) ResolveAgentID(ctx context.Context, token, name string) (int64, error) {
+	return r.delegate.ResolveAgentID(ctx, token, name)
+}
+
 // TestAGC_AgentSecretPersistence verifies that restarting the AGC controller
 // reconstructs the agent pool from existing Secrets without re-registering agents
 // with GitHub. This exercises the LoadAgents path in EnsureAgents.

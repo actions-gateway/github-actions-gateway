@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -86,7 +87,30 @@ type Config struct {
 	// an agent to restart, draining the RunnerGroup to zero listeners. Nil for a
 	// goroutine that never claimed an agent (pool exhausted at spawn).
 	ReleaseAgent func()
+	// MarkAgentConsumed records on the agent pool that this goroutine's
+	// single-use JIT runner record has been spent by a job acquisition (Q114).
+	// Called immediately after AcquireJob succeeds, before the job handler
+	// blocks, so the pool parks the agent rather than re-issuing its dead
+	// credentials if this goroutine exits without recycling. Nil disables the
+	// bookkeeping (stub-only tests).
+	MarkAgentConsumed func()
+	// RecycleAgent re-registers this goroutine's agent under its stable name
+	// after its single-use JIT runner record was consumed, and returns the
+	// fresh agent (Q114). The goroutine swaps it into its Config and opens a
+	// new session, so the listener slot is never released. Nil disables
+	// self-healing: after a job the goroutine keeps polling its old session
+	// (pre-Q114 behavior, appropriate for stub registrars whose agents are not
+	// single-use).
+	RecycleAgent func(ctx context.Context) (*agentpool.Agent, error)
 }
+
+// staleEOFThreshold is the number of consecutive GetMessage 200-with-empty-body
+// responses (JSON decode EOF) after which the session is treated as stale and
+// healed. GitHub serves this signature when the session's single-use JIT
+// runner record has been deleted (Q114); a lower count could be a transient
+// network blip, which the generic backoff absorbs without re-registration
+// traffic.
+const staleEOFThreshold = 3
 
 // Run executes the listener goroutine. It blocks until the context is cancelled
 // or an unrecoverable error occurs (VersionTooOldError, unauthorized).
@@ -108,13 +132,11 @@ func Run(ctx context.Context, cfg Config) error {
 	log := cfg.Log.With("group", cfg.Group, "namespace", cfg.Namespace,
 		"agentIndex", cfg.Agent.Index)
 
-	// 1. Fetch broker OAuth token for this agent.
-	if err := refreshBrokerToken(ctx, cfg); err != nil {
-		return err
-	}
-
-	// 2. Create a session.
-	sess, err := createSession(ctx, cfg, log)
+	// 1+2. Fetch a broker OAuth token and create a session. healSession with no
+	// prior session is exactly that, plus one agent-recycle retry if the stored
+	// credentials are rejected — the signature of a single-use JIT agent that
+	// was consumed before a restart (Q114).
+	sess, err := healSession(ctx, &cfg, log, "")
 	if err != nil {
 		return err
 	}
@@ -141,6 +163,7 @@ func Run(ctx context.Context, cfg Config) error {
 	// 3. Poll loop.
 	consecutiveEmpty := 0
 	pollErrors := 0
+	staleEOFs := 0
 	var firstRateLimitAt time.Time
 
 	for {
@@ -178,22 +201,38 @@ func Run(ctx context.Context, cfg Config) error {
 				continue
 			}
 
-			// Check for session-expired error — recreate session instead of exiting.
-			if isSessionExpired(pollErr) {
-				log.Info("session expired; recreating", "sessionId", sessionID)
-				_ = cfg.Broker.DeleteSession(ctx, sessionID) // best-effort
-				// Refresh token before recreating session.
-				if err := refreshBrokerToken(ctx, cfg); err != nil {
-					return err
+			// Classify session-level failures that need a heal rather than plain
+			// backoff: 404/410 (session expired), 401/403 (expired broker token
+			// or a dead single-use agent — healSession sorts out which), and a
+			// run of 200-with-empty-body responses (GitHub's deleted-JIT-runner
+			// signature, Q114). healSession recreates the session and escalates
+			// to an agent recycle only when fresh credentials are still rejected.
+			healReason := ""
+			switch {
+			case isSessionExpired(pollErr):
+				healReason = "session expired"
+			case isUnauthorized(pollErr):
+				healReason = "unauthorized"
+			case isDecodeEOF(pollErr):
+				staleEOFs++
+				if staleEOFs >= staleEOFThreshold {
+					healReason = "repeated empty 200 responses"
 				}
-				newSess, err := createSession(ctx, cfg, log)
-				if err != nil {
-					return err
+			}
+			if healReason != "" {
+				log.Info("healing stale session", "reason", healReason, "error", pollErr, "sessionId", sessionID)
+				newSess, healErr := healSession(ctx, &cfg, log, sessionID)
+				if healErr != nil {
+					if ctx.Err() != nil {
+						return nil
+					}
+					return fmt.Errorf("heal stale session: %w", healErr)
 				}
 				sessionID = newSess.sessionID
 				aesKey = newSess.aesKey
 				consecutiveEmpty = 0
 				pollErrors = 0
+				staleEOFs = 0
 				firstRateLimitAt = time.Time{}
 				continue
 			}
@@ -212,8 +251,9 @@ func Run(ctx context.Context, cfg Config) error {
 			continue
 		}
 
-		// Successful poll — reset rate-limit tracking and error counter.
+		// Successful poll — reset rate-limit tracking and error counters.
 		pollErrors = 0
+		staleEOFs = 0
 		firstRateLimitAt = time.Time{}
 
 		if msg == nil {
@@ -238,9 +278,29 @@ func Run(ctx context.Context, cfg Config) error {
 
 		log.Info("job message received", "messageId", msg.MessageID)
 
-		if err := handleJob(ctx, cfg, log, aesKey, msg); err != nil {
-			log.Error("job handling error", "error", err)
-			// Recoverable: continue polling on the same session.
+		acquired, jobErr := handleJob(ctx, cfg, log, aesKey, msg)
+		if jobErr != nil {
+			log.Error("job handling error", "error", jobErr)
+			// Recoverable: continue polling.
+		}
+
+		if acquired && cfg.RecycleAgent != nil {
+			// JIT runners are single-use: the acquisition consumed this agent's
+			// runner record server-side and the session dies with it — polling on
+			// would degrade into empty-200/401 loops forever (Q114). Re-register
+			// the agent and open a fresh session; the goroutine keeps its
+			// listener slot throughout, so maxListeners capacity is preserved.
+			log.Info("job finished; recycling single-use JIT agent", "sessionId", sessionID)
+			newSess, healErr := recycleAndRestart(ctx, &cfg, log, sessionID, "post_job")
+			if healErr != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return fmt.Errorf("post-job agent recycle: %w", healErr)
+			}
+			sessionID = newSess.sessionID
+			aesKey = newSess.aesKey
+			staleEOFs = 0
 		}
 	}
 }
@@ -318,10 +378,13 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 }
 
 // handleJob acquires a job, notifies the multiplexer, starts the renew loop,
-// calls the job handler, and returns. The session is NOT closed after the job.
-// aesKey is the AES-256-CBC key derived from the session's encryptionKey; nil
-// means no encryption and the body is parsed as plaintext JSON.
-func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte, msg *broker.TaskAgentMessage) error {
+// calls the job handler, and returns. acquired reports whether AcquireJob
+// succeeded — the point at which GitHub considers the single-use JIT runner
+// record spent (Q114); the caller recycles the agent afterwards. The session
+// itself is NOT closed here. aesKey is the AES-256-CBC key derived from the
+// session's encryptionKey; nil means no encryption and the body is parsed as
+// plaintext JSON.
+func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte, msg *broker.TaskAgentMessage) (acquired bool, err error) {
 	// Decrypt message body with the session key, then parse as RunnerJobRequestBody.
 	bodyBytes := []byte(msg.Body)
 	if aesKey != nil {
@@ -346,17 +409,24 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 
 	// Call AcquireJob if we have a runServiceURL.
 	if runServiceURL != "" {
-		resp, rawBytes, err := cfg.Broker.AcquireJob(ctx, runServiceURL, broker.JobAcquisitionRequest{
+		resp, rawBytes, acqErr := cfg.Broker.AcquireJob(ctx, runServiceURL, broker.JobAcquisitionRequest{
 			JobMessageID:   jobBody.RunnerRequestID,
 			RunnerOS:       cfg.RunnerOS,
 			BillingOwnerID: jobBody.BillingOwnerID,
 		})
-		if err != nil {
+		if acqErr != nil {
 			if cfg.Metrics != nil {
 				cfg.Metrics.JobAcquisitionErrors.WithLabelValues(cfg.Namespace, "acquirejob_failed").Inc()
 			}
-			log.Error("AcquireJob failed", "error", err)
-			return err
+			log.Error("AcquireJob failed", "error", acqErr)
+			return false, acqErr
+		}
+		acquired = true
+		// The acquisition just consumed this agent's single-use JIT runner
+		// record. Record it on the pool now, before the long job wait, so the
+		// agent is parked (not re-issued) if this goroutine dies mid-job (Q114).
+		if cfg.MarkAgentConsumed != nil {
+			cfg.MarkAgentConsumed()
 		}
 		planID = resp.Plan.PlanID
 		payload = rawBytes
@@ -386,9 +456,77 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
-		return cfg.JobHandler(ctx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		return acquired, cfg.JobHandler(ctx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
 	}
-	return nil
+	return acquired, nil
+}
+
+// healSession replaces the goroutine's broker session: best-effort delete of
+// the old session, token refresh, and session creation. If the broker rejects
+// the agent's stored credentials — at the OAuth exchange or at CreateSession —
+// the single-use JIT runner record behind them has been deleted (Q114), so the
+// agent is recycled once and the sequence retried with fresh credentials.
+// With oldSessionID empty it doubles as session startup. On success cfg.Agent
+// may point at a fresh agent.
+func healSession(ctx context.Context, cfg *Config, log *slog.Logger, oldSessionID string) (sessionState, error) {
+	if oldSessionID != "" {
+		_ = cfg.Broker.DeleteSession(ctx, oldSessionID) // best-effort; usually already dead
+	}
+	err := refreshBrokerToken(ctx, *cfg)
+	if err == nil {
+		sess, serr := createSession(ctx, *cfg, log)
+		if serr == nil {
+			return sess, nil
+		}
+		if !isUnauthorized(serr) || cfg.RecycleAgent == nil {
+			return sessionState{}, serr
+		}
+		log.Info("session creation unauthorized with stored credentials; recycling single-use agent")
+	} else if isTokenRejected(err) && cfg.RecycleAgent != nil {
+		log.Info("broker token exchange rejected stored credentials; recycling single-use agent", "error", err)
+	} else {
+		return sessionState{}, err
+	}
+
+	trigger := "stale_session"
+	if oldSessionID == "" {
+		trigger = "startup"
+	}
+	return recycleAndRestart(ctx, cfg, log, "", trigger)
+}
+
+// recycleAndRestart re-registers the goroutine's consumed agent via
+// cfg.RecycleAgent, swaps the fresh agent into cfg, and opens a new session
+// with the new credentials. oldSessionID, when non-empty, is deleted
+// best-effort first. trigger labels the recycle metric (post_job, startup,
+// stale_session). Callers must ensure cfg.RecycleAgent is non-nil.
+func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSessionID, trigger string) (sessionState, error) {
+	if oldSessionID != "" {
+		_ = cfg.Broker.DeleteSession(ctx, oldSessionID) // best-effort; usually already dead
+	}
+	fresh, err := cfg.RecycleAgent(ctx)
+	if err != nil {
+		if cfg.Metrics != nil {
+			cfg.Metrics.AgentRecycleErrorsTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+		}
+		return sessionState{}, fmt.Errorf("recycle agent: %w", err)
+	}
+	if cfg.Metrics != nil {
+		cfg.Metrics.AgentRecyclesTotal.WithLabelValues(cfg.Namespace, cfg.Group, trigger).Inc()
+	}
+	cfg.Agent = fresh
+	if err := refreshBrokerToken(ctx, *cfg); err != nil {
+		return sessionState{}, err
+	}
+	sess, err := createSession(ctx, *cfg, log)
+	if err == nil && trigger != "post_job" {
+		// The heal recovered from a credential rejection that may have set
+		// Degraded=True (createSession does so on unauthorized). Clear it so the
+		// RunnerGroup does not carry a stale alarm after self-healing.
+		setCondition(*cfg, "Degraded", metav1.ConditionFalse,
+			"AgentRecycled", "Re-registered single-use JIT agent after credential rejection")
+	}
+	return sess, err
 }
 
 // StartRenewLoop starts a per-job renewal goroutine that ticks on the given interval.
@@ -457,6 +595,33 @@ func isUnauthorized(err error) bool {
 func isSessionExpired(err error) bool {
 	var typed *broker.SessionExpiredError
 	return errors.As(err, &typed)
+}
+
+// isDecodeEOF reports whether a GetMessage error is a 200 response whose body
+// could not be decoded because it was empty or truncated — observed live as
+// GitHub's response signature once a session's single-use JIT runner record
+// has been deleted (Q114, M4 §12: "decode response: EOF").
+func isDecodeEOF(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+// isTokenRejected reports whether a broker OAuth token fetch failed because
+// the token service rejected the client credentials (as opposed to a
+// transport or server failure). For a single-use JIT agent this happens once
+// GitHub deletes the runner record behind the credential (Q114).
+func isTokenRejected(err error) bool {
+	var typed *githubapp.TokenExchangeError
+	if !errors.As(err, &typed) {
+		return false
+	}
+	switch typed.StatusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		// 400 covers OAuth's invalid_client convention (RFC 6749 §5.2), which
+		// some token services use instead of 401 for unknown clients.
+		return true
+	default:
+		return false
+	}
 }
 
 // BackoffDelay returns a jittered delay matching the two-tier policy from

@@ -274,3 +274,49 @@ func TestGithubRegistrar_Deregister_Repo(t *testing.T) {
 	assert.Contains(t, gotPath, "/repos/myorg/myrepo/", "repo-level URL must use repos path")
 	assert.Contains(t, gotPath, "/77", "path must include the agent ID")
 }
+
+// ── Q114: name conflict + ResolveAgentID ─────────────────────────────────────
+
+func TestGithubRegistrar_Register_NameConflict(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"message":"Already exists"}`))
+	}))
+	defer srv.Close()
+
+	r := &agentpool.GithubRegistrar{OrgURL: srv.URL + "/myorg", GroupID: 1, HTTPClient: srv.Client()}
+	_, err := r.Register(context.Background(), "tok", agentpool.RegisterParams{Name: "rg-0"})
+	var conflict *agentpool.NameConflictError
+	require.ErrorAs(t, err, &conflict, "409 must surface as NameConflictError")
+	assert.Equal(t, "rg-0", conflict.Name)
+}
+
+func TestGithubRegistrar_ResolveAgentID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		assert.True(t, strings.HasSuffix(r.URL.Path, "/actions/runners"))
+		assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), "Bearer "),
+			"list runners call must carry Bearer auth")
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("name") {
+		case "rg-0":
+			// The name param is a filter; include a near-miss to prove the
+			// client compares names exactly.
+			_, _ = w.Write([]byte(`{"total_count":2,"runners":[{"id":7,"name":"rg-0-old"},{"id":9,"name":"rg-0"}]}`))
+		default:
+			_, _ = w.Write([]byte(`{"total_count":0,"runners":[]}`))
+		}
+	}))
+	defer srv.Close()
+
+	r := &agentpool.GithubRegistrar{OrgURL: srv.URL + "/myorg", GroupID: 1, HTTPClient: srv.Client()}
+
+	id, err := r.ResolveAgentID(context.Background(), "tok", "rg-0")
+	require.NoError(t, err)
+	assert.Equal(t, int64(9), id)
+
+	id, err = r.ResolveAgentID(context.Background(), "tok", "rg-9")
+	require.NoError(t, err)
+	assert.Zero(t, id, "unknown name resolves to 0 without error")
+}

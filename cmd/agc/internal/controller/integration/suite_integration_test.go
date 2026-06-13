@@ -103,6 +103,10 @@ func (r *brokerRegistrar) Register(_ context.Context, _ string, _ agentpool.Regi
 
 func (r *brokerRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
 
+func (r *brokerRegistrar) ResolveAgentID(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
 // provisionerOptions configures the optional Provisioner attached to the reconciler.
 type provisionerOptions struct {
 	enabled            bool

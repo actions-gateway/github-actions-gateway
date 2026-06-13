@@ -170,16 +170,24 @@ GitHub:
 - **Sessions bind to agents**: `POST /session` parses `agent.id`. Unknown IDs
   are implicitly registered, so existing StubRegistrar-based Tier B/C flows
   keep working unchanged.
-- **Single-use enforcement (default ON)**: `/acquirejob` is linked back to the
-  delivering session via the message's `runnerRequestId`; on acquisition the
-  session's agent is consumed — the runner record is deleted, the old
+- **Single-use enforcement (opt-in)**: `/acquirejob` is linked back to the
+  delivering session via the message's `runnerRequestId` (injected into the
+  enqueued body by `/control/enqueue` when the test omits it); on acquisition
+  the session's agent is consumed — the runner record is deleted, the old
   session's next `GET /message` returns **200 with an empty body** (the EOF
   signature) and **401** from then on, and `POST /session` for the dead agent
-  ID returns 401. Control toggle `POST /control/singleuse` to disable.
+  ID returns 401. Enabled via `SINGLE_USE_RUNNERS=true` or
+  `POST /control/singleuse`.
 
-With enforcement default-ON, the existing Tier B job-lifecycle e2e tests
-become regression coverage: any multi-job run now requires the self-heal to
-pass.
+Enforcement is **default OFF**: fakegithub's job queues are per-session,
+while real GitHub re-queues an unacquired job pool-wide — existing Tier B
+tests that enqueue two jobs onto one session (`job_lifecycle_test.go`) would
+lose the second message when the first acquisition kills the session. A
+dedicated Tier B test toggles enforcement on, runs a job to completion, and
+asserts a fresh session replaces the consumed one and a second job still
+completes — proving the self-heal loop on a real cluster. fakegithub also
+gets its own module-level HTTP test covering register → consume → EOF/401 →
+409-on-re-register.
 
 ## Tests
 
@@ -206,8 +214,9 @@ Unit (agentpool):
    `reload()` preserves the consumed set.
 10. `GithubRegistrar`: 409 → typed error; `ResolveAgentID` request/parse.
 
-Tier B (kind, existing suite): existing multi-job lifecycle tests now run
-against single-use-enforcing fakegithub — green requires the fix.
+Tier B (kind): a dedicated e2e test toggles `/control/singleuse` on, runs a
+job to completion, and asserts the consumed session is replaced by a fresh
+one and a second job completes (the pre-fix AGC would stall forever).
 
 ## Docs
 
@@ -229,11 +238,11 @@ against single-use-enforcing fakegithub — green requires the fix.
 ## Progress
 
 - [x] Plan written
-- [ ] agentpool: Recycle + consumed set + registrar additions
-- [ ] listener: post-job recycle + heal ladder + startup heal
-- [ ] controller factory wiring
-- [ ] githubapp: typed token-exchange error
-- [ ] fakegithub single-use simulation
-- [ ] unit tests (race-clean)
-- [ ] docs
-- [ ] make check green, PR
+- [x] agentpool: Recycle + consumed set + registrar additions
+- [x] listener: post-job recycle + heal ladder + startup heal
+- [x] controller factory wiring
+- [x] githubapp: typed token-exchange error
+- [x] fakegithub single-use simulation (+ owner-scoped toggle, session owner filter)
+- [x] unit tests (race-clean) + Tier B spec `E2E_AGC_SingleUseSelfHeal`
+- [x] docs
+- [ ] make check green, Tier B run, PR

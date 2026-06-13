@@ -57,6 +57,9 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
       |               |                |               |<─9. Job Done──|
       |==10. RenewJob loop stops =====================================|
       |               |                |<─11. Delete Secret (Pod after TTL)─|
+      |               |                |               |               |
+      |--12. DeleteSession (dead) + re-register agent ────────────────>|
+      |<─13. fresh credentials; new session opens ────────────────────|
 ```
 
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool. GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
@@ -70,12 +73,14 @@ AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
 9. **Complete:** The worker container exits with code `0` on success (non-zero on workflow failure). A single event handler on the AGC's shared Pod informer observes the terminal pod phase and wakes the waiting session goroutine — detection is event-driven, not polled, so completion is noticed near-immediately regardless of how many sessions are in flight.
 10. **Stop renewing:** The RenewJob goroutine detects pod completion and exits cleanly.
 11. **Reclaim:** The AGC deletes the associated job Secret immediately. The completed pod is retained for `completedPodTTL` (default 5m) and then deleted by the RunnerGroup reconciler's worker-pod reaper; `completedPodTTL: 0s` deletes it immediately on completion. Both the pod and the Secret also carry a controller `OwnerReference` to the RunnerGroup, so RunnerGroup or tenant deletion cascade-deletes anything still present.
+12. **Recycle (Q114):** The acquisition in step 3 consumed the agent's single-use JIT runner record, so the session is dead. The goroutine deletes it (best-effort) and re-registers the agent under its stable `<group>-<index>` name — deregister-then-recreate, resolving a `409` from a surviving record by ID lookup.
+13. **Resume:** The agent Secret is rewritten with the fresh credentials and a new session opens; the same goroutine resumes polling at step 1, so listener capacity never dips.
 
 ---
 
 ## 4.3. Failure Paths
 
-The happy-path flows above are sufficient for most operations. The following diagrams cover the four most operationally significant failure modes.
+The happy-path flows above are sufficient for most operations. The following diagrams cover the most operationally significant failure modes.
 
 ### Provisioning Failure (GMC Cannot Create Resources)
 
@@ -129,6 +134,33 @@ AGC Goroutine     Proxy Pool    GitHub Edge
 - `422 Unprocessable Entity` — job payload is malformed or the runner version is incompatible.
 
 In all cases the goroutine increments `actions_gateway_job_acquisition_errors_total{reason="..."}` and continues polling on the next `GetMessage` loop iteration. A replacement listener goroutine is not spawned (no job was acquired to spawn it for), so the listener count stays the same.
+
+---
+
+### Stale Session (Consumed Single-Use Agent) Self-Heal
+
+```
+AGC Goroutine                 GitHub Edge
+      |                            |
+      |--1. GetMessage ───────────>|
+      |<─2. 401 / empty 200 (xN) ──|   [JIT runner record gone: post-job
+      |                            |    state missed, or AGC restarted]
+      |--3. refresh OAuth token ──>|
+      |--4. CreateSession ────────>|
+      |<─5. 401 (agent is dead) ───|
+      |                            |
+      |--6. Deregister old record ─>|  (best-effort; usually already gone)
+      |--7. generate-jitconfig ────>|  (same name; 409 → resolve ID, delete, retry)
+      |<─8. fresh credentials ─────|
+      |                            |
+      |  [rewrite agent Secret]    |
+      |--9. CreateSession ────────>|
+      |<─10. new session; polling resumes ─|
+```
+
+GitHub deletes a JIT runner record once it acquires a job, so a session can go stale outside the normal post-job recycle — most commonly when the AGC restarts between a job's acquisition and its recycle. The poll loop classifies the two live-observed stale signatures ([M4 §12](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)): a `401/403` triggers a heal immediately (steps 3–4 also fix plain broker-token expiry, in which case the flow stops at step 4 with no recycle); three consecutive `200`-with-empty-body responses trigger the same ladder. Only when *fresh* credentials are still rejected (step 5) is the agent re-registered (steps 6–8, `actions_gateway_agent_recycles_total{trigger="stale_session"}`). If the heal itself fails — e.g. GitHub is down — the goroutine exits with a retriable error and the multiplexer's restart backoff paces further attempts; an agent marked consumed is parked in the pool and repaired by the next reconcile rather than being handed to another listener.
+
+**What the tenant observes (pre-fix versions):** runner list emptying after each job, `ActiveSessions` decaying, jobs queueing forever once ~`maxListeners` jobs have run. See [Troubleshooting — Sessions stuck in 401/EOF GetMessage loops](../operations/troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero).
 
 ---
 
