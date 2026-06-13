@@ -76,6 +76,10 @@ markdown_extensions:
         kwds:
           case: lower
   - pymdownx.details
+  # Enables :material-*:/:fontawesome-*: icon shortcodes (used in the landing-page grid cards).
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.inlinehilite
   - pymdownx.highlight:
       anchor_linenums: true
