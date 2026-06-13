@@ -123,7 +123,6 @@ gateway per tenant from each `ActionsGateway` resource.
     <span class="gag-flow__sub">one per job · GC'd on completion</span>
   </div>
   <ul class="gag-flow__notes">
-    <li><strong>Input, not a tier:</strong> the <code>ActionsGateway</code> resource is the tenant's request; the GMC turns it into a full gateway.</li>
     <li><strong>Isolated egress:</strong> all GitHub traffic from the AGC and workers exits through the per-tenant proxy pool (Tier 3).</li>
     <li><strong>Scale to zero:</strong> worker pods exist only while a job runs, and are deleted on completion.</li>
   </ul>
