@@ -53,6 +53,20 @@ func stripBOM(data []byte) []byte {
 	return bytes.TrimPrefix(data, utf8BOM)
 }
 
+// TokenExchangeError is returned by FetchRunnerOAuthToken when the OAuth
+// token endpoint responds with a non-200 status. StatusCode lets callers
+// distinguish a rejected credential — e.g. the single-use JIT runner record
+// behind the client credential was deleted by GitHub after a job — from
+// transport-level failures.
+type TokenExchangeError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *TokenExchangeError) Error() string {
+	return fmt.Sprintf("runner token endpoint returned %d: %s", e.StatusCode, e.Body)
+}
+
 // RunnerCredentials holds the OAuth2 client credentials from the runner's
 // .credentials file. These are written by config.sh during runner registration.
 type RunnerCredentials struct {
@@ -245,7 +259,7 @@ func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privat
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("runner token endpoint returned %d: %s", resp.StatusCode, SanitizeBody(body, 512))
+		return "", &TokenExchangeError{StatusCode: resp.StatusCode, Body: SanitizeBody(body, 512)}
 	}
 
 	var tokenResp struct {

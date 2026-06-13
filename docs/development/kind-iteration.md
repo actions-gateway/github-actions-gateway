@@ -169,6 +169,12 @@ kubectl logs -n <tenant-ns> -l app.kubernetes.io/managed-by=actions-gateway-cont
 # Fakegithub control API (sessions, enqueued jobs, rerun calls)
 kubectl port-forward -n e2e-infra svc/fakegithub 9090:9090 &
 curl -s http://localhost:9090/control/sessions
+# Optional ?owner=<prefix> filters to one RunnerGroup's sessions (ownerName is "<group>-<index>")
+curl -s 'http://localhost:9090/control/sessions?owner=my-ag-'
+# Single-use JIT runner simulation (Q114): a job acquisition consumes the
+# delivering session's runner record; scope with owner= to avoid affecting
+# other suites on the shared instance
+curl -s -X POST 'http://localhost:9090/control/singleuse?enabled=true&owner=my-ag-'
 ```
 
 For the runner side, `gh run list --repo <org>/<repo>` and `gh run view <id> --json status,conclusion` give the GitHub-side view that `kubectl` can't.

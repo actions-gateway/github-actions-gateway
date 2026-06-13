@@ -84,7 +84,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	It("E2E_AGC_SessionRegistered: AGC creates broker sessions after startup", func() {
 		By("waiting for at least one active session to appear in fakegithub")
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessions(g)
+			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
 			g.Expect(sessions).NotTo(BeEmpty(), "no sessions registered yet")
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
@@ -93,7 +93,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		By("getting the first active session ID")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessions(g)
+			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
 			g.Expect(sessions).NotTo(BeEmpty())
 			sessionID = sessions[0]
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
@@ -123,46 +123,74 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
-	It("E2E_AGC_MultipleJobsQueued: multiple jobs result in multiple worker pods", func() {
-		By("getting active sessions")
-		var sessions []string
-		Eventually(func(g Gomega) {
-			sessions = fakegithubActiveSessions(g)
-			g.Expect(len(sessions)).To(BeNumerically(">=", 1))
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-
+	It("E2E_AGC_MultipleJobsQueued: each queued job gets its own worker pod", func() {
 		// run_service_url causes /acquirejob to be called, yielding a unique planId
-		// per job so each gets a distinct pod name even when queued to the same session.
+		// per job so each job gets a distinct pod name.
 		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 
-		By("enqueuing two jobs")
-		fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2a", "run_service_url": fakegithubSvcURL})
-		if len(sessions) > 1 {
-			fakegithubEnqueueJob(sessions[1], map[string]interface{}{"jobId": "e2e-job-2b", "run_service_url": fakegithubSvcURL})
-		} else {
-			fakegithubEnqueueJob(sessions[0], map[string]interface{}{"jobId": "e2e-job-2b", "run_service_url": fakegithubSvcURL})
-		}
-
-		By("waiting for at least 2 worker pods")
+		// Under the Q114 single-use JIT lifecycle a session serves exactly one
+		// job: acquiring it consumes the agent's runner record and the listener
+		// re-registers into a fresh session. fakegithub redelivers a job whose
+		// session recycled away to the next live session (modelling GitHub's
+		// pool-wide delivery), so jobs are not lost — but to assert precisely
+		// that *each* job yields its own pod, deliver each onto a freshly
+		// queried live session and count the distinct worker pods that appear
+		// beyond the ones an earlier spec in this Ordered container created.
+		baseline := map[string]bool{}
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "pods",
-				"-n", tenantNS,
-				"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
-				"--no-headers",
-			)
-			out, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred())
-			lines := utils.GetNonEmptyLines(out)
-			g.Expect(len(lines)).To(BeNumerically(">=", 2),
-				"expected ≥2 worker pods, got %d: %s", len(lines), out)
-		}, 4*time.Minute, 2*time.Second).Should(Succeed())
+			for _, name := range workerPodNames(g, tenantNS) {
+				baseline[name] = true
+			}
+		}, 30*time.Second, 2*time.Second).Should(Succeed())
+
+		fresh := map[string]bool{}
+		for i := 1; i <= 2; i++ {
+			var session string
+			By(fmt.Sprintf("job %d: picking a live session", i))
+			Eventually(func(g Gomega) {
+				sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
+				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+				session = sessions[0]
+			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+
+			By(fmt.Sprintf("job %d: enqueuing onto %s", i, session))
+			fakegithubEnqueueJob(session, map[string]interface{}{
+				"jobId":           fmt.Sprintf("e2e-job-2-%d", i),
+				"run_service_url": fakegithubSvcURL,
+			})
+
+			By(fmt.Sprintf("job %d: waiting for a new worker pod (%d total)", i, i))
+			Eventually(func(g Gomega) {
+				for _, name := range workerPodNames(g, tenantNS) {
+					if !baseline[name] {
+						fresh[name] = true
+					}
+				}
+				g.Expect(len(fresh)).To(BeNumerically(">=", i),
+					"expected >= %d new worker pods, have %d", i, len(fresh))
+			}, 4*time.Minute, 2*time.Second).Should(Succeed())
+		}
 	})
 })
 
 // fakegithubActiveSessions queries the fakegithub control API for active sessions.
 func fakegithubActiveSessions(g Gomega) []string {
-	out := fakegithubControlRequest(g, "GET", "/control/sessions", nil)
+	return fakegithubActiveSessionsForOwner(g, "")
+}
+
+// fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
+// the given prefix. Session ownerName is "<runnerGroup>-<agentIndex>" and the
+// RunnerGroup name is "<agName>-<first runner label>", so passing "<agName>-"
+// scopes the result to one spec's ActionsGateway. fakegithub is shared across
+// parallel specs and tenants — an unfiltered sessions[0] can belong to another
+// spec's RunnerGroup, sending its enqueued job to the wrong tenant.
+func fakegithubActiveSessionsForOwner(g Gomega, ownerPrefix string) []string {
+	path := "/control/sessions"
+	if ownerPrefix != "" {
+		path += "?owner=" + ownerPrefix
+	}
+	out := fakegithubControlRequest(g, "GET", path, nil)
 	var sessions []string
 	err := json.Unmarshal([]byte(out), &sessions)
 	g.Expect(err).NotTo(HaveOccurred(), "parse sessions response: %s", out)

@@ -23,6 +23,10 @@ type Metrics struct {
 	QuotaRetriesExhausted    *prometheus.CounterVec
 	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper)
 	WorkerPodsReaped *prometheus.CounterVec
+	// Q114: single-use JIT agent recycling (emitted by listener goroutines and
+	// the agent pool's reconcile repair pass)
+	AgentRecyclesTotal      *prometheus.CounterVec
+	AgentRecycleErrorsTotal *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -95,6 +99,16 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_worker_pods_reaped_total",
 			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline).",
 		}, []string{"namespace", "runner_group", "reason"}),
+
+		AgentRecyclesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_agent_recycles_total",
+			Help: "Single-use JIT agents re-registered, by trigger (post_job, stale_session, startup, reconcile_repair).",
+		}, []string{"namespace", "runner_group", "trigger"}),
+
+		AgentRecycleErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_agent_recycle_errors_total",
+			Help: "Failed attempts to re-register a single-use JIT agent.",
+		}, []string{"namespace", "runner_group"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -111,8 +125,20 @@ func NewMetrics() *Metrics {
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,
 		m.WorkerPodsReaped,
+		m.AgentRecyclesTotal,
+		m.AgentRecycleErrorsTotal,
 	)
 	return m
+}
+
+// IncAgentRecycle implements agentpool.RecycleMetrics.
+func (m *Metrics) IncAgentRecycle(namespace, group, trigger string) {
+	m.AgentRecyclesTotal.WithLabelValues(namespace, group, trigger).Inc()
+}
+
+// IncAgentRecycleError implements agentpool.RecycleMetrics.
+func (m *Metrics) IncAgentRecycleError(namespace, group string) {
+	m.AgentRecycleErrorsTotal.WithLabelValues(namespace, group).Inc()
 }
 
 // IncTokenRefreshes implements token.MetricsRecorder.

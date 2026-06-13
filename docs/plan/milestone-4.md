@@ -981,6 +981,11 @@ caught by unit/Tier-A/Tier-B tiers:
    re-registration of a *surviving* name then failed `409 Already
    exists` (no deregister-then-retry). This breaks the
    multiplex-many-jobs-per-agent assumption at its root.
+   **Fixed (Q114):** the listener now re-registers its agent after every
+   job (and heals 401/EOF-stale sessions found after a restart,
+   resolving the surviving-name 409 by ID lookup); fakegithub can
+   simulate the single-use behaviour for Tier B regression coverage —
+   see [q114-jit-agent-selfheal.md](q114-jit-agent-selfheal.md).
 3. **Q117 — RunnerGroup `podTemplate` changes don't reach running
    listeners.** After patching the CR (observedGeneration advanced),
    newly provisioned worker pods still used the old template until the

@@ -24,6 +24,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration)
 - [Token Refresh Errors Spiking](#token-refresh-errors-spiking)
 - [RenewJob Failures Rising](#renewjob-failures-rising)
+- [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
 - [Network Connectivity Failures](#network-connectivity-failures)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
@@ -594,6 +595,44 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy
 - If the AGC restarted mid-job: jobs whose lock expired will have been cancelled by GitHub. These require manual re-run. Check `actions_gateway_eviction_retries_exhausted_total` for any jobs that were also evicted.
 
 Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single transient error on a long-running job is rarely fatal.
+
+---
+
+## Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)
+
+**Symptoms.** On gateway versions without the Q114 self-heal (≤ the M4 validation build):
+- AGC logs fill with repeating `GetMessage error ... decode response: EOF` and later `broker: unauthorized (HTTP 401)` lines for the same session, backing off forever.
+- The repo/org runner list (`gh api .../actions/runners`) loses one runner after each completed job, and the registrations never come back.
+- `RunnerGroup` `status.activeSessions` decays over time; after roughly `maxListeners` completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.
+
+**Cause.** GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners). Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot ([M4 §12, bug 2](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)).
+
+**Diagnostics.**
+
+```sh
+# Repeating EOF/401 poll errors
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -E "decode response: EOF|unauthorized"
+
+# Listener slots remaining
+kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSessions}'
+
+# On fixed versions, recycles should be happening instead:
+# Metric: rate(actions_gateway_agent_recycles_total[15m])  — roughly tracks job completions
+# Metric: actions_gateway_agent_recycle_errors_total       — should stay flat
+```
+
+**Resolution.**
+- **Upgrade** to a gateway version with the Q114 self-heal. Fixed versions re-register each agent after every job (`actions_gateway_agent_recycles_total{trigger="post_job"}`) and heal stale sessions discovered after a restart (`trigger="stale_session"` / `"startup"`); no per-job operator action is needed.
+- **Interim manual recovery on pre-fix versions:** delete the RunnerGroup's agent Secrets and restart the AGC so it registers a fresh pool:
+
+  ```sh
+  kubectl delete secret -n <namespace> -l actions-gateway/runner-group=<group>
+  kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
+  ```
+
+  Expect `409 Already exists` registration errors for any agent that never ran a job — its record survives server-side under an ID the AGC no longer knows. Delete the survivor from GitHub first: find its ID with `gh api '.../actions/runners?name=<group>-<index>'`, then `gh api -X DELETE .../actions/runners/<id>`. Fixed versions resolve this 409 automatically.
+
+**On fixed versions,** a sustained rise of `actions_gateway_agent_recycle_errors_total` means the AGC cannot re-register agents (registration API unreachable, installation token failures, or revoked GitHub App runner-administration permission) — listener capacity shrinks until recycles succeed. Check AGC logs for `recycle` errors and verify the App's runner permissions.
 
 ---
 

@@ -36,6 +36,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -95,6 +96,11 @@ func (r *GithubRegistrar) Register(ctx context.Context, token string, params Reg
 	}
 	defer func() { _ = resp.Body.Close() }()
 	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusConflict {
+		// "Already exists" — a runner record with this name survives server-side
+		// (e.g. an agent that never ran a job, whose ID was lost with its Secret).
+		return nil, &NameConflictError{Name: params.Name}
+	}
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("generate jit config: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(respBody, 512))
 	}
@@ -138,6 +144,51 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 		return fmt.Errorf("deregister runner: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 512))
 	}
 	return nil
+}
+
+// ResolveAgentID looks up a registered runner's ID by name using the
+// list-runners endpoint's name filter:
+//
+//	GET {prefix}/actions/runners?name={name}
+//	→ {"total_count": N, "runners": [{"id": 123, "name": "{name}", ...}]}
+//
+// Returns 0 with a nil error when no runner has that name. Used to resolve a
+// 409 name conflict from Register when the surviving record's ID is unknown.
+func (r *GithubRegistrar) ResolveAgentID(ctx context.Context, token, name string) (int64, error) {
+	listURL := r.runnerAPIPrefix() + "/actions/runners?name=" + url.QueryEscape(name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
+	if err != nil {
+		return 0, fmt.Errorf("build list runners request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := r.httpClient().Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("list runners: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("list runners: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(respBody, 512))
+	}
+
+	var result struct {
+		Runners []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"runners"`
+	}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return 0, fmt.Errorf("decode list runners response: %w", err)
+	}
+	for _, runner := range result.Runners {
+		// The name param is a filter, not an exact match guarantee; compare.
+		if runner.Name == name {
+			return runner.ID, nil
+		}
+	}
+	return 0, nil
 }
 
 // parseJITCredentials decodes the base64 JIT config blob returned by

@@ -405,6 +405,9 @@ func (r *RunnerGroupReconciler) getOrCreatePool(key types.NamespacedName, namesp
 		return p
 	}
 	p := agentpool.NewPool(r.Client, namespace, groupName, r.BrokerConfig.RunnerVersion, runnerLabels, r.Registrar, r.AgentKeyType)
+	if r.Metrics != nil {
+		p.Metrics = r.Metrics
+	}
 	r.pools[key] = p
 	return p
 }
@@ -470,6 +473,19 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			// not exhausted after maxListeners total spawns (which would block the
 			// permanent baseline from restarting).
 			ReleaseAgent: func() { pool.ReleaseAgent(agent) },
+			// Single-use JIT agent lifecycle (Q114): mark the agent's runner
+			// record spent at job acquisition, and re-register it under the same
+			// name when the goroutine self-heals. Both key on the stable agent
+			// index, so the captured pointer staying behind a later recycle is
+			// fine.
+			MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
+			RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
+				tok, err := r.TokenManager.Token(ctx)
+				if err != nil {
+					return nil, fmt.Errorf("installation token for agent recycle: %w", err)
+				}
+				return pool.Recycle(ctx, agent, tok)
+			},
 		}
 	}
 

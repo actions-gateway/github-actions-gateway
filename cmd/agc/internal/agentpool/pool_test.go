@@ -32,6 +32,10 @@ func (r *deregErrRegistrar) Deregister(_ context.Context, _ string, _ int64) err
 	return r.err
 }
 
+func (r *deregErrRegistrar) ResolveAgentID(ctx context.Context, tok, name string) (int64, error) {
+	return r.stub.ResolveAgentID(ctx, tok, name)
+}
+
 func scheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
