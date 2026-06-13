@@ -106,9 +106,12 @@ we ever want one.
 /getting-started/     <- docs/getting-started.md (the 10-minute path)
 /docs/design/         <- docs/design/* (architecture, API, flows, security, glossary)
 /docs/operations/     <- install, upgrade, runbook, troubleshooting, observability
-/docs/development/    <- contributor guides (or keep these GitHub-only)
 /capacity/            <- appendix-a SLOs + appendix-f cost model, made visual
 ```
+
+**Publication scope.** Publish `docs/design/` and `docs/operations/` (plus the
+landing + comparison pages). Exclude `docs/plan/` and `docs/STATUS.md` (internal
+planning) and `docs/development/` (contributor docs) — see the decision below.
 
 ## Page-by-page content
 
@@ -150,12 +153,26 @@ OG/Twitter card to the existing social preview so shared links look intentional.
 4. Add the "vs ARC" comparison page and the annotated CR example.
 5. Add the OG card + favicon from the existing social asset.
 
+## Decided
+
+- **No contributor docs / "Contributing" section on the site (for now).**
+  `docs/development/*` stays GitHub-only. Publishing contributor docs implies
+  inviting contributions, which needs a secure intake flow first — AI review and
+  implementation, with possible human gating — and that is a separate, non-trivial
+  design we have not done. Revisit when (and if) that contribution flow is
+  designed; until then the public site stays evaluator-focused.
+
 ## Open decisions
 
-- **Developer docs on the site or GitHub-only.** `docs/development/*` is
-  contributor-facing; it can render on the site or stay on github.com to keep
-  the public site evaluator-focused. Lean: include them under a clearly-separate
-  "Contributing" nav section.
+- **Launch sequencing vs [Q99](../STATUS.md) (docs-honesty pass, 1.0-gate).** A
+  public landing page amplifies the "thousands of sessions" and egress-blocked
+  claims Q99 flags as uncaveated. *Lean:* land Q99's README/exec-summary fixes
+  before the public launch, building the site from corrected source. Does not
+  block writing the scaffold/tooling — only the launch.
+- **Pre-1.0 maturity banner.** *Lean:* yes — a subtle "alpha / pre-1.0" header
+  notice until 1.0 is cut; dovetails with Q99.
+- **Analytics.** *Lean:* none for v1 (avoids a privacy/consent surface); add
+  later if traffic matters.
 
 ## Out of scope (defer)
 
