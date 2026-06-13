@@ -92,31 +92,36 @@ A four-tier system: one cluster-scoped manager provisions a fully isolated
 gateway per tenant from each `ActionsGateway` resource.
 
 <div class="gag-flow">
-  <div class="gag-flow__node gag-flow__node--lead">
+  <div class="gag-flow__node gag-flow__node--input">
+    <span class="gag-flow__tier gag-flow__tier--input">Tenant input</span>
     <span class="gag-flow__title">ActionsGateway resource</span>
     <span class="gag-flow__sub">one per tenant · namespace-scoped</span>
   </div>
   <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; watched by</div>
   <div class="gag-flow__node gag-flow__node--lead">
+    <span class="gag-flow__tier">Tier 1</span>
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
   <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions a full gateway per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
+      <span class="gag-flow__tier">Tier 2</span>
       <span class="gag-flow__title">Actions Gateway Controller</span>
       <span class="gag-flow__sub">goroutine multiplexer</span>
     </div>
     <div class="gag-flow__node">
+      <span class="gag-flow__tier">Tier 3</span>
       <span class="gag-flow__title">Egress proxy pool</span>
       <span class="gag-flow__sub">per-tenant egress IPs</span>
     </div>
     <div class="gag-flow__node">
+      <span class="gag-flow__tier">Tier 4</span>
       <span class="gag-flow__title">Ephemeral worker pods</span>
       <span class="gag-flow__sub">one per job · GC'd on completion</span>
     </div>
   </div>
-  <p class="gag-flow__caption">The controller spawns one worker pod per job and deletes it on completion; all GitHub traffic from the controller and workers egresses through the per-tenant proxy pool.</p>
+  <p class="gag-flow__caption">Tiers 1–4 are the four-tier system; the <code>ActionsGateway</code> resource is the tenant's request that drives it. The controller (Tier 2) spawns one worker pod per job and deletes it on completion; all GitHub traffic from the controller and workers egresses through the per-tenant proxy pool (Tier 3).</p>
 </div>
 
 Read the [architecture overview](design/02-architecture.md) for the full

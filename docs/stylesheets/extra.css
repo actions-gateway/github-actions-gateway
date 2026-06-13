@@ -70,6 +70,24 @@
   border-color: var(--md-accent-fg-color);
 }
 
+.gag-flow__node--input {
+  border-style: dashed;
+}
+
+.gag-flow__tier {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  margin-bottom: 0.15rem;
+}
+
+.gag-flow__tier--input {
+  color: var(--md-default-fg-color--light);
+}
+
 .gag-flow__title {
   display: block;
   font-weight: 700;
