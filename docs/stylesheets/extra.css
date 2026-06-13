@@ -11,6 +11,11 @@
   margin: 0 0 0.6rem;
 }
 
+/* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
+.gag-hero .headerlink {
+  display: none;
+}
+
 .gag-hero .gag-tagline {
   font-size: 1.05rem;
   color: var(--md-default-fg-color--light);
