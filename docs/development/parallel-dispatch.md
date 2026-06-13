@@ -99,10 +99,11 @@ permissions" flag. The safety classifier blocks it, and it is the less-secure
 path regardless. The small cost of chips — one click to start each — is the
 correct trade.
 
-> One decision to settle **before** spawning: the dispatcher cannot send messages
+> One decision to settle **before** spawning: the dispatcher cannot `send_message`
 > to a worker session in unsupervised mode, so it cannot nudge a stopped worker
-> to fix its own PR. Design for the worker to finish the job itself (next
-> section) rather than relying on re-engagement.
+> to fix its own PR (see [Coordination channels](#coordination-channels)). Design
+> for the worker to finish the job itself (next section) rather than relying on
+> re-engagement.
 
 ## The worker contract (self-healing)
 
@@ -209,6 +210,38 @@ still update *task-specific* docs (the design/operations pages their change
 affects) — just not the shared coordination files. This removes the dominant
 conflict class outright.
 
+## Coordination channels
+
+Sessions coordinate by exchanging **deliberately published** state — shared
+files, messages, or a small database — and never by reading one another's
+transcripts. A session's log is private working memory; what it publishes is the
+contract. The channels, by need:
+
+- **Shared scratch files** (the `tmp/` tracker above) — the default for the
+  dispatcher's task → chip → PR → state record and for streaming task inputs to
+  workers. If more than one session writes, make it append-only with one
+  self-contained record per line so concurrent writes do not corrupt each other.
+- **`send_message`** — a live push to another running session. The sender chooses
+  what to share, so it never exposes the sender's transcript. Use it for
+  supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** it is
+  unavailable to a session running unsupervised, so the autonomous worker loop
+  must not depend on it — design workers to finish the job themselves (see [the
+  worker contract](#the-worker-contract-self-healing)).
+- **A SQLite claim table** — when workers *pull* tasks instead of being assigned
+  one each, use a single SQLite file with an atomic claim
+  (`UPDATE tasks SET claimed_by=? WHERE id=? AND claimed_by IS NULL`) so two
+  sessions never grab the same task. This is the reason to reach past plain files:
+  append-only files have no claim semantics. In the default dispatcher-assigns
+  model you do not need it — the dispatcher hands each worker exactly one task.
+
+Whichever you use, shared state must live at a path **common to every session**.
+For worktree sessions that means *outside* the current worktree: put it at the
+main repo root (`dirname` of `git rev-parse --git-common-dir`) or a fixed `tmp/`
+there — never a worktree-local `tmp/` (private to that worktree) and never
+committed (would not cross branches until merge). Read and write it through the
+Read/Write/Glob/Grep tools, which bypass workspace-guard; a Bash command touching
+an out-of-worktree path prompts.
+
 ## Conflict policy
 
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small
@@ -248,6 +281,9 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Concurrency cap chosen.
 - [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
 - [ ] Dispatcher owns the coordination files; workers told not to touch them.
+- [ ] Coordination channel chosen (shared `tmp/` files by default; SQLite claim
+      table if workers pull tasks); shared state lives at the common repo root and
+      is accessed via the file tools.
 - [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
