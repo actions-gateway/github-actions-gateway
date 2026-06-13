@@ -31,9 +31,15 @@
 // signature) and 401 from then on — the runner record disappears (a
 // name-colliding re-register without an intervening DELETE returns 409), and
 // new sessions or token exchanges for the consumed agent's credentials return
-// 401. Default off: the per-session job queues here are not requeued
-// pool-wide the way real GitHub requeues unacquired jobs, so tests must
-// opt in deliberately.
+// 401. Default off, opt in via SINGLE_USE_RUNNERS or /control/singleuse.
+//
+// # Opportunistic job redelivery
+//
+// A job whose target session is recycled away before it is acquired is not
+// lost: it is carried to the owner's pending pool and delivered to the next
+// live session of that owner, mirroring GitHub's pool-wide delivery (M1
+// Investigation C/D). This keeps the post-job re-registration of single-use
+// agents (Q114) from stranding jobs that race a session's recycle window.
 package main
 
 import (
@@ -89,14 +95,24 @@ type runnerRecord struct {
 }
 
 type server struct {
-	mu              sync.Mutex
-	tokenCounter    atomic.Int64
-	msgCounter      atomic.Int64
-	sessionCounter  int
-	sessions        map[string]bool
-	jobQueues       map[string]chan message
-	bearerSessions  map[string]string // bearer → sessionID
-	acquireResponse any               // nil = default
+	mu             sync.Mutex
+	tokenCounter   atomic.Int64
+	msgCounter     atomic.Int64
+	sessionCounter int
+	sessions       map[string]bool
+	jobQueues      map[string][]message // sessionID → jobs enqueued directly to it
+	// ownerPending holds jobs awaiting opportunistic delivery to any live
+	// session of an owner — GitHub redelivers a job whose session went away
+	// before acquiring it to any other polling session (M1 Investigation C/D).
+	// A job is moved here when its session is deleted/consumed with the job
+	// still queued, or enqueued here directly when its target session is
+	// already dead. handleMessage drains a session's own queue first, then the
+	// owner pool. Without it, a job stranded on a recycled session's queue
+	// would be lost — fakegithub's per-session queue would otherwise be a
+	// fidelity gap relative to GitHub's pool-wide delivery (Q114).
+	ownerPending    map[string][]message // owner ("<group>-…" prefix-keyed) → jobs
+	bearerSessions  map[string]string    // bearer → sessionID
+	acquireResponse any                  // nil = default
 	acquireCount    atomic.Int64
 
 	// single-use JIT runner simulation (Q114)
@@ -126,7 +142,8 @@ type message struct {
 func newServer() *server {
 	return &server{
 		sessions:        make(map[string]bool),
-		jobQueues:       make(map[string]chan message),
+		jobQueues:       make(map[string][]message),
+		ownerPending:    make(map[string][]message),
 		bearerSessions:  make(map[string]string),
 		runners:         make(map[int64]*runnerRecord),
 		runnerNames:     make(map[string]int64),
@@ -467,6 +484,9 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		if id != "" {
 			s.mu.Lock()
 			s.sessions[id] = false
+			// A listener recycling its agent deletes the old session; carry any
+			// jobs still queued on it to the owner pool for redelivery.
+			s.requeueLocked(id)
 			s.mu.Unlock()
 		}
 		w.WriteHeader(http.StatusOK)
@@ -498,17 +518,27 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
-	ch := s.jobQueues[id]
-	s.mu.Unlock()
-	if ch != nil {
-		select {
-		case msg := <-ch:
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(msg)
-			return
-		default:
+	// Deliver from the session's own queue first, then fall back to the owner's
+	// pending pool (a job whose original session was recycled away). Returning
+	// the message under the lock keeps the dequeue atomic.
+	var msg *message
+	if q := s.jobQueues[id]; len(q) > 0 {
+		m := q[0]
+		s.jobQueues[id] = q[1:]
+		msg = &m
+	} else if owner := s.sessionOwners[id]; owner != "" {
+		if p := s.ownerPending[owner]; len(p) > 0 {
+			m := p[0]
+			s.ownerPending[owner] = p[1:]
+			msg = &m
 		}
+	}
+	s.mu.Unlock()
+	if msg != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(*msg)
+		return
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
@@ -568,6 +598,21 @@ func (s *server) consumeSessionLocked(sessionID string) {
 	}
 	s.sessions[sessionID] = false
 	s.deadPolls[sessionID] = 0
+	s.requeueLocked(sessionID)
+}
+
+// requeueLocked moves any jobs still queued on a now-dead session to its
+// owner's pending pool so a live session can pick them up. Caller must hold
+// s.mu. The acquired job that triggered consumption is already dequeued, so
+// this only carries genuinely undelivered jobs.
+func (s *server) requeueLocked(sessionID string) {
+	q := s.jobQueues[sessionID]
+	if len(q) == 0 {
+		return
+	}
+	owner := s.sessionOwners[sessionID]
+	s.ownerPending[owner] = append(s.ownerPending[owner], q...)
+	delete(s.jobQueues, sessionID)
 }
 
 // handleEnqueue is the control API: POST /control/enqueue?sessionId=<id>
@@ -609,19 +654,19 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.requestSessions[reqID] = id
-	ch, ok := s.jobQueues[id]
-	if !ok {
-		ch = make(chan message, 16)
-		s.jobQueues[id] = ch
+	owner := s.sessionOwners[id]
+	if s.sessions[id] {
+		// Target session is live: queue it there so a specific session can be
+		// addressed (the single-use spec relies on this to consume one session).
+		s.jobQueues[id] = append(s.jobQueues[id], msg)
+	} else {
+		// Target session is already gone (recycled between the test's session
+		// query and this enqueue): hand the job to the owner pool so the next
+		// live session picks it up, mirroring GitHub's pool-wide redelivery.
+		s.ownerPending[owner] = append(s.ownerPending[owner], msg)
 	}
 	s.mu.Unlock()
-
-	select {
-	case ch <- msg:
-		w.WriteHeader(http.StatusOK)
-	default:
-		http.Error(w, "queue full", http.StatusTooManyRequests)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleListSessions is the control API: GET /control/sessions[?owner=<prefix>]

@@ -131,11 +131,12 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 		// Under the Q114 single-use JIT lifecycle a session serves exactly one
 		// job: acquiring it consumes the agent's runner record and the listener
-		// re-registers into a fresh session. Capturing a session and enqueuing
-		// two jobs onto it would lose the second (the session is gone by then),
-		// so deliver each job onto a freshly-queried live session and count the
-		// distinct worker pods that appear beyond the ones an earlier spec in
-		// this Ordered container already created.
+		// re-registers into a fresh session. fakegithub redelivers a job whose
+		// session recycled away to the next live session (modelling GitHub's
+		// pool-wide delivery), so jobs are not lost — but to assert precisely
+		// that *each* job yields its own pod, deliver each onto a freshly
+		// queried live session and count the distinct worker pods that appear
+		// beyond the ones an earlier spec in this Ordered container created.
 		baseline := map[string]bool{}
 		Eventually(func(g Gomega) {
 			for _, name := range workerPodNames(g, tenantNS) {

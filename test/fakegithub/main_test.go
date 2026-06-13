@@ -266,3 +266,82 @@ func TestSingleUseDisabledKeepsSessionsAlive(t *testing.T) {
 		t.Fatalf("post-acquire poll with single-use off: want 202, got %d", status)
 	}
 }
+
+// enqueueJob posts a job onto a session via the control API and returns the
+// HTTP status.
+func enqueueJob(t *testing.T, controlURL, sessionID, jobID string) int {
+	t.Helper()
+	resp, err := http.Post(controlURL+"/control/enqueue?sessionId="+sessionID,
+		"application/json", strings.NewReader(`{"jobId":"`+jobID+`"}`))
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode
+}
+
+// deleteSessionByBearer issues the v2 DELETE /session (bearer-keyed, no
+// sessionId param), the shape the broker client uses when a listener recycles.
+func deleteSessionByBearer(t *testing.T, baseURL, bearer string) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodDelete, baseURL+"/session", nil)
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("delete session: %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+// TestOpportunisticRedelivery verifies that a job whose session is recycled
+// away before it polls is redelivered to another live session of the same
+// owner, rather than being stranded — fakegithub modelling GitHub's pool-wide
+// delivery so the Q114 post-job recycle does not lose jobs that race the
+// recycle window.
+func TestOpportunisticRedelivery(t *testing.T) {
+	s := newServer() // single-use off; redelivery is independent of it
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	// Two sessions for the same owner (same agent id → same ownerName).
+	sessA, st := createSession(t, main.URL, 7, "bearer-a")
+	if st != http.StatusOK {
+		t.Fatalf("create session A: %d", st)
+	}
+	sessB, st := createSession(t, main.URL, 7, "bearer-b")
+	if st != http.StatusOK {
+		t.Fatalf("create session B: %d", st)
+	}
+
+	t.Run("queued job survives its session being recycled", func(t *testing.T) {
+		if st := enqueueJob(t, control.URL, sessA, "job-A"); st != http.StatusOK {
+			t.Fatalf("enqueue onto A: %d", st)
+		}
+		// A recycles before ever polling: the job must not be lost.
+		deleteSessionByBearer(t, main.URL, "bearer-a")
+		if status, body := getMessage(t, main.URL, sessB); status != http.StatusOK || len(body) == 0 {
+			t.Fatalf("redelivery to B: want 200+body, got %d %q", status, body)
+		}
+	})
+
+	t.Run("job enqueued onto an already-dead session redelivers", func(t *testing.T) {
+		// sessA is already dead from the previous subtest.
+		if st := enqueueJob(t, control.URL, sessA, "job-A2"); st != http.StatusOK {
+			t.Fatalf("enqueue onto dead A: %d", st)
+		}
+		if status, body := getMessage(t, main.URL, sessB); status != http.StatusOK || len(body) == 0 {
+			t.Fatalf("redelivery of dead-session enqueue to B: want 200+body, got %d %q", status, body)
+		}
+	})
+
+	t.Run("a job for a live session is delivered directly, not pooled", func(t *testing.T) {
+		if st := enqueueJob(t, control.URL, sessB, "job-B"); st != http.StatusOK {
+			t.Fatalf("enqueue onto B: %d", st)
+		}
+		if status, _ := getMessage(t, main.URL, sessB); status != http.StatusOK {
+			t.Fatalf("direct delivery to B: want 200, got %d", status)
+		}
+	})
+}
