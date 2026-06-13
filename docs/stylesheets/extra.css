@@ -114,13 +114,32 @@
   gap: 0.6rem;
 }
 
-.gag-flow__caption {
+.gag-flow__notes {
+  list-style: none;
+  margin: 0.8rem auto 0;
+  padding: 0;
+  max-width: 40rem;
   font-size: 0.82rem;
   color: var(--md-default-fg-color--light);
-  text-align: center;
   text-wrap: pretty;
-  max-width: 44rem;
-  margin: 0.6rem auto 0;
+}
+
+.gag-flow__notes li {
+  position: relative;
+  margin: 0.3rem 0;
+  padding-left: 1.2rem;
+}
+
+.gag-flow__notes li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--md-accent-fg-color);
+}
+
+.gag-flow__notes strong {
+  color: var(--md-default-fg-color);
+  font-weight: 700;
 }
 
 /* Hero stat: the listener-overhead delta, side by side. */
