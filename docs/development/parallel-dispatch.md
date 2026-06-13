@@ -242,9 +242,21 @@ Whichever you use, shared state must live at a path **common to every session**.
 For worktree sessions that means *outside* the current worktree: put it at the
 main repo root (`dirname` of `git rev-parse --git-common-dir`) or a fixed `tmp/`
 there — never a worktree-local `tmp/` (private to that worktree) and never
-committed (would not cross branches until merge). Read and write it through the
-Read/Write/Glob/Grep tools, which bypass workspace-guard; a Bash command touching
-an out-of-worktree path prompts.
+committed (would not cross branches until merge).
+
+Mind how the out-of-worktree path is gated:
+
+- **Reading** is friction-free — Read/Glob/Grep need no permission at any path,
+  so polling the mailbox never prompts.
+- **Writing** is the catch — Write/Edit require permission, and an out-of-worktree
+  path prompts in `default` mode and in `acceptEdits` (the worktree boundary is
+  what `acceptEdits` auto-approves within). A Bash file command touching the path
+  additionally trips workspace-guard.
+- To make writes silent, **allowlist the shared dir once** with a
+  `permissions.allow` rule — `Edit(//abs/path/**)` (note the leading `//` for an
+  absolute path; a single `/` is project-relative). It applies in every mode.
+  Adding the dir via `--add-dir`/`additionalDirectories` only silences writes in
+  `acceptEdits`.
 
 ## Conflict policy
 
@@ -286,8 +298,9 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
 - [ ] Dispatcher owns the coordination files; workers told not to touch them.
 - [ ] Coordination channel chosen (shared `tmp/` files by default; SQLite claim
-      table if workers pull tasks); shared state lives at the common repo root and
-      is accessed via the file tools.
+      table if workers pull tasks); shared state lives at the common repo root,
+      with a `permissions.allow` `Edit(//…/**)` rule so out-of-worktree writes do
+      not prompt.
 - [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
