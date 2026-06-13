@@ -144,11 +144,16 @@ func Run(ctx context.Context, cfg Config) error {
 	aesKey := sess.aesKey
 
 	defer func() {
-		// Best-effort session cleanup on exit.
-		dCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if delErr := cfg.Broker.DeleteSession(dCtx, sessionID); delErr != nil {
-			log.Warn("DeleteSession failed on goroutine exit", "error", delErr)
+		// Best-effort session cleanup on exit. sessionID is empty while a heal
+		// owns the session handoff (it has already deleted the old session);
+		// re-deleting would double-DELETE — and in the v2 flow, where DELETE is
+		// keyed by bearer token, could tear down another goroutine's session.
+		if sessionID != "" {
+			dCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if delErr := cfg.Broker.DeleteSession(dCtx, sessionID); delErr != nil {
+				log.Warn("DeleteSession failed on goroutine exit", "error", delErr)
+			}
 		}
 		if cfg.Metrics != nil {
 			cfg.Metrics.ActiveSessions.WithLabelValues(cfg.Namespace, cfg.Group).Dec()
@@ -221,7 +226,12 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 			if healReason != "" {
 				log.Info("healing stale session", "reason", healReason, "error", pollErr, "sessionId", sessionID)
-				newSess, healErr := healSession(ctx, &cfg, log, sessionID)
+				// Hand session ownership to the heal: it deletes the old session
+				// up front, so the exit defer must not re-delete it if the heal
+				// fails partway.
+				oldSession := sessionID
+				sessionID = ""
+				newSess, healErr := healSession(ctx, &cfg, log, oldSession)
 				if healErr != nil {
 					if ctx.Err() != nil {
 						return nil
@@ -291,7 +301,11 @@ func Run(ctx context.Context, cfg Config) error {
 			// the agent and open a fresh session; the goroutine keeps its
 			// listener slot throughout, so maxListeners capacity is preserved.
 			log.Info("job finished; recycling single-use JIT agent", "sessionId", sessionID)
-			newSess, healErr := recycleAndRestart(ctx, &cfg, log, sessionID, "post_job")
+			// As in the poll-loop heal: the recycle deletes the old session up
+			// front, so the exit defer must not re-delete it on failure.
+			oldSession := sessionID
+			sessionID = ""
+			newSess, healErr := recycleAndRestart(ctx, &cfg, log, oldSession, "post_job")
 			if healErr != nil {
 				if ctx.Err() != nil {
 					return nil
