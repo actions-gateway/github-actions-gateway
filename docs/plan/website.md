@@ -17,12 +17,14 @@ assembled from docs that already exist.
 |---|---|
 | Tooling decision (MkDocs Material) | ✅ Decided (this doc) |
 | Domain decision | ✅ Decided — project page now, vanity domain punted (see below) |
-| MkDocs scaffold + Pages deploy workflow | ❌ Open |
-| Diagram conversion (ASCII → mermaid) | ❌ Open |
-| Custom landing page | ❌ Open |
-| "vs ARC" comparison page | ❌ Open |
-| Annotated `ActionsGateway` CR example | ❌ Open |
-| Social card + favicon from existing asset | ❌ Open |
+| MkDocs scaffold + Pages deploy workflow | ✅ Shipped — `mkdocs.yml`, `overrides/`, `requirements-docs.txt`, `.github/workflows/pages.yml` |
+| Architecture diagram (mermaid) | ✅ Shipped on the landing page (existing ASCII diagrams render as-is) |
+| Custom landing page | ✅ Shipped — `docs/index.md` (hero, pillars, listener-overhead stat) |
+| "vs ARC" comparison page | ✅ Shipped — `docs/why-gag.md` |
+| Annotated `ActionsGateway` CR example | ✅ Shipped — in `why-gag.md`, fields verified against `getting-started.md` |
+| Social card from existing asset | ✅ Shipped — OG/Twitter card via `overrides/main.html`; favicon left at Material default |
+| Public launch | ❌ Gated on Q99 + enabling Pages (manual `workflow_dispatch`) |
+| Cross-tree link reconcile (build `--strict`) | ❌ Follow-up, folded into [Q52](../STATUS.md) — see below |
 
 ## Audience and the one job
 
@@ -141,6 +143,28 @@ design language — palette and mark — so the social/OG card, favicon, and hea
 logo stay consistent. Infra-tool convention: clean, monospace accents for
 commands, a single accent color, generous whitespace, dark mode. Set the
 OG/Twitter card to the existing social preview so shared links look intentional.
+
+## Implementation notes (shipped)
+
+The scaffold builds locally and in CI with `mkdocs build` on pinned
+`mkdocs==1.6.1` + `mkdocs-material==9.7.6` (Material 9.x caps `mkdocs < 2`; the
+new MkDocs 2.0 is incompatible — pin exact until that settles). Specifics:
+
+- **Heading slugs.** `toc.slugify` is set to the GitHub-compatible
+  `pymdownx.slugs.slugify(case=lower)` so the in-repo docs' GitHub-style anchor
+  links resolve on the site too. This cleared the bulk of the anchor mismatches.
+- **Known broken links on the site (build warnings, not errors).** Two classes
+  remain and are deliberately deferred: (1) ~19 stale intra-doc anchors that are
+  also wrong on github.com (pre-existing doc bugs); (2) links from docs into
+  repo files outside `docs/` (`../charts/…`, `../../.github/…`, `cmd/…`) that
+  resolve on github.com but 404 on the standalone site. The build is **not**
+  `--strict`, so these warn without failing. Reconciling them — and then flipping
+  the CI build to `--strict` as a link gate — folds into [Q52](../STATUS.md)
+  (markdown link + anchor CI gate). Do this as part of the pre-launch pass.
+- **Launch procedure (gated on Q99).** The `pages.yml` deploy job only runs on
+  `workflow_dispatch`; `pull_request`/`push` merely validate the build. To
+  launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable
+  Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.
 
 ## Build phases
 
