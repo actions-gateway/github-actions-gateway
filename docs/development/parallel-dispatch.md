@@ -99,10 +99,12 @@ permissions" flag. The safety classifier blocks it, and it is the less-secure
 path regardless. The small cost of chips — one click to start each — is the
 correct trade.
 
-> One decision to settle **before** spawning: the dispatcher cannot send messages
-> to a worker session in unsupervised mode, so it cannot nudge a stopped worker
-> to fix its own PR. Design for the worker to finish the job itself (next
-> section) rather than relying on re-engagement.
+> One decision to settle **before** spawning: do not design the run around
+> `send_message`-ing a worker mid-run to nudge it (see
+> [Coordination channels](#coordination-channels)). Treat cross-session messaging
+> as best-effort, not a control channel — a worker running unattended may not act
+> on a message until re-engaged. Design for the worker to finish the job itself
+> (next section) rather than relying on re-engagement.
 
 ## The worker contract (self-healing)
 
@@ -209,6 +211,70 @@ still update *task-specific* docs (the design/operations pages their change
 affects) — just not the shared coordination files. This removes the dominant
 conflict class outright.
 
+## Coordination channels
+
+Sessions coordinate by exchanging **deliberately published** state — shared
+files, messages, or a small database — and never by reading one another's
+transcripts. A session's log is private working memory; what it publishes is the
+contract. The channels, by need:
+
+- **Shared scratch files** (the `tmp/` tracker above) — the default for the
+  dispatcher's task → chip → PR → state record and for streaming task inputs to
+  workers. When a **single** session owns the file (the dispatcher's tracker), one
+  file is fine. When **multiple sessions write, give each message its own
+  uniquely-named file** in a shared dir (readers Glob the dir) — do **not** have
+  several sessions write one shared file through the Write tool: it overwrites the
+  whole file (read-modify-write), so concurrent writers silently lose each other's
+  updates. One-file-per-message has no such contention; append-safety would
+  require `O_APPEND` (Bash `>>`), which we avoid out-of-worktree anyway. Name each
+  file with the **writer's own ID** (`<sender>-<seq>.json`) so concurrent senders
+  never collide without coordination. With more than a couple of peers, give each
+  **recipient** an inbox subdir (`mailbox/<recipient>/`) so a reader Globs and
+  prunes only its own mail — partition by recipient, never by sender (that forces
+  every reader to scan everyone's dir). The subdir is organization, not access
+  control: any session can read any dir, so privacy stays a convention (read only
+  your inbox, publish only what you mean to share), as with transcripts.
+- **`send_message`** — a live push to another running session. The sender chooses
+  what to share, so it never exposes the sender's transcript. Use it for
+  supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** treat
+  it as best-effort, not a control channel — cross-session messaging is a limited
+  capability (the documented `SendMessage` tool is gated behind the experimental
+  agent-teams feature), and a worker running unattended may not act on a message
+  until re-engaged. The autonomous worker loop must not depend on it; design
+  workers to finish the job themselves (see [the worker
+  contract](#the-worker-contract-self-healing)).
+- **A SQLite claim table** — when workers *pull* tasks instead of being assigned
+  one each, use a single SQLite file with an atomic claim
+  (`UPDATE tasks SET claimed_by=? WHERE id=? AND claimed_by IS NULL`) so two
+  sessions never grab the same task. This is the one reason to reach past plain
+  files: a message dir has no compare-and-set, so two readers can both pick the
+  same unclaimed item. It is not free, though — you shell out to `sqlite3` (a Bash
+  command, so an out-of-worktree DB trips workspace-guard), it is opaque to
+  `grep`/`diff` unlike the text channels, and concurrent writers need WAL mode + a
+  busy timeout to avoid `database is locked`. Use it for the claim semantics, not
+  as a default. In the dispatcher-assigns model you do not need it — the
+  dispatcher hands each worker exactly one task.
+
+Whichever you use, shared state must live at a path **common to every session**.
+For worktree sessions that means *outside* the current worktree: put it at the
+main repo root (`dirname` of `git rev-parse --git-common-dir`) or a fixed `tmp/`
+there — never a worktree-local `tmp/` (private to that worktree) and never
+committed (would not cross branches until merge).
+
+Mind how the out-of-worktree path is gated:
+
+- **Reading** is friction-free — Read/Glob/Grep need no permission at any path,
+  so polling the mailbox never prompts.
+- **Writing** is the catch — Write/Edit require permission, and an out-of-worktree
+  path prompts in `default` mode and in `acceptEdits` (the worktree boundary is
+  what `acceptEdits` auto-approves within). A Bash file command touching the path
+  additionally trips workspace-guard.
+- To make writes silent, **allowlist the shared dir once** with a
+  `permissions.allow` rule — `Edit(//abs/path/**)` (note the leading `//` for an
+  absolute path; a single `/` is project-relative). It applies in every mode.
+  Adding the dir via `--add-dir`/`additionalDirectories` only silences writes in
+  `acceptEdits`.
+
 ## Conflict policy
 
 - **Doc-only / trivial conflicts** the dispatcher can resolve directly (a small
@@ -248,6 +314,10 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Concurrency cap chosen.
 - [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
 - [ ] Dispatcher owns the coordination files; workers told not to touch them.
+- [ ] Coordination channel chosen (shared `tmp/` files by default; SQLite claim
+      table if workers pull tasks); shared state lives at the common repo root,
+      with a `permissions.allow` `Edit(//…/**)` rule so out-of-worktree writes do
+      not prompt.
 - [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
