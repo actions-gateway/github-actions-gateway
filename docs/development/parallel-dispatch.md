@@ -226,7 +226,14 @@ contract. The channels, by need:
   several sessions write one shared file through the Write tool: it overwrites the
   whole file (read-modify-write), so concurrent writers silently lose each other's
   updates. One-file-per-message has no such contention; append-safety would
-  require `O_APPEND` (Bash `>>`), which we avoid out-of-worktree anyway.
+  require `O_APPEND` (Bash `>>`), which we avoid out-of-worktree anyway. Name each
+  file with the **writer's own ID** (`<sender>-<seq>.json`) so concurrent senders
+  never collide without coordination. With more than a couple of peers, give each
+  **recipient** an inbox subdir (`mailbox/<recipient>/`) so a reader Globs and
+  prunes only its own mail — partition by recipient, never by sender (that forces
+  every reader to scan everyone's dir). The subdir is organization, not access
+  control: any session can read any dir, so privacy stays a convention (read only
+  your inbox, publish only what you mean to share), as with transcripts.
 - **`send_message`** — a live push to another running session. The sender chooses
   what to share, so it never exposes the sender's transcript. Use it for
   supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** treat
