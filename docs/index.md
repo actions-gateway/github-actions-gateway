@@ -92,7 +92,7 @@ A four-tier system: one cluster-scoped manager provisions a fully isolated
 gateway per tenant from each `ActionsGateway` resource.
 
 ```mermaid
-flowchart TD
+flowchart LR
   CR["ActionsGateway resource<br/>(namespace-scoped)"] -->|watch| GMC["Gateway Manager Controller<br/>(cluster-scoped, installed once)"]
   GMC -->|provisions| AGC["Actions Gateway Controller<br/>goroutine multiplexer, per tenant"]
   GMC -->|provisions| PROXY["Egress proxy pool<br/>per-tenant egress IPs"]
