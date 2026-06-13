@@ -1681,6 +1681,10 @@ func TestBuildPod_BaselineSecurityDefaults(t *testing.T) {
 	require.NotNil(t, pod.Spec.SecurityContext)
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
+	// Q115: a numeric runAsUser must accompany runAsNonRoot so kubelet can
+	// verify non-root against the runner image's non-numeric `USER runner`.
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsUser, "baseline must gap-fill a numeric runAsUser")
+	assert.Equal(t, int64(1001), *pod.Spec.SecurityContext.RunAsUser)
 	require.NotNil(t, pod.Spec.SecurityContext.SeccompProfile)
 	assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, pod.Spec.SecurityContext.SeccompProfile.Type)
 
@@ -1707,6 +1711,10 @@ func TestBuildPod_RestrictedSecurityDefaults(t *testing.T) {
 	require.NotNil(t, pod.Spec.SecurityContext)
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
+	// Q115: the numeric runAsUser is stamped at pod level on restricted too, so
+	// every container inherits a kubelet-verifiable non-root UID.
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsUser, "restricted must gap-fill a numeric runAsUser")
+	assert.Equal(t, int64(1001), *pod.Spec.SecurityContext.RunAsUser)
 
 	sc := pod.Spec.Containers[0].SecurityContext
 	require.NotNil(t, sc)
@@ -1776,11 +1784,36 @@ func TestBuildPod_TenantOverridesPreserved(t *testing.T) {
 
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.False(t, *pod.Spec.SecurityContext.RunAsNonRoot, "tenant runAsNonRoot:false must be preserved")
+	// Q115: with non-root opted out (a root-based image), we must NOT force the
+	// runner UID — doing so would contradict the tenant's choice.
+	assert.Nil(t, pod.Spec.SecurityContext.RunAsUser, "runAsUser must not be gap-filled when the tenant disabled runAsNonRoot")
 	// Seccomp still gap-filled because the tenant left it unset.
 	require.NotNil(t, pod.Spec.SecurityContext.SeccompProfile)
 	// Tenant resources preserved; no default stamped over them.
 	assert.Equal(t, "250m", pod.Spec.Containers[0].Resources.Requests.Cpu().String())
 	assert.True(t, pod.Spec.Containers[0].Resources.Limits.Cpu().IsZero(), "tenant-set resources must not be overwritten with defaults")
+}
+
+// TestBuildPod_TenantRunAsUserPreserved verifies the Q115 runAsUser gap-fill is
+// gap-fill only: a tenant that pins its own UID (e.g. a custom image whose user
+// is not 1001) keeps it, and runAsNonRoot is still enforced.
+func TestBuildPod_TenantRunAsUserPreserved(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+	uid := int64(2000)
+	rg.Spec.PodTemplate.Spec.SecurityContext = &corev1.PodSecurityContext{RunAsUser: &uid}
+
+	pod := runAndGetPod(ctx, t, p, fc, rg, "plan-uid", "team-a")
+
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsUser)
+	assert.Equal(t, int64(2000), *pod.Spec.SecurityContext.RunAsUser, "tenant runAsUser must be preserved")
+	// runAsNonRoot is still gap-filled to true alongside the tenant's UID.
+	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
+	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
 }
 
 // TestBuildPod_RecommendedLabels verifies worker pods carry the recommended

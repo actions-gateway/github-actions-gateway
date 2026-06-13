@@ -97,6 +97,19 @@ const (
 	// see the runner-version bump procedure in that file's header comment.
 	DefaultWorkerImage = "ghcr.io/actions/actions-runner:2.334.0"
 
+	// defaultWorkerRunAsUser is the numeric UID applySecurityDefaults stamps
+	// alongside runAsNonRoot:true on the baseline/restricted profiles. The
+	// actions-runner image (DefaultWorkerImage, and the cmd/worker image built
+	// from it) declares a NON-NUMERIC user (`USER runner`). kubelet's
+	// runAsNonRoot enforcement can only PROVE a container is non-root against a
+	// numeric UID — with only a username it rejects the pod at admission with
+	// `CreateContainerConfigError: container has runAsNonRoot and image has
+	// non-numeric user`. Pinning the runner's own UID (1001 — see the
+	// `USER runner (UID 1001)` line in cmd/worker/Dockerfile and the upstream
+	// actions/runner-images base) lets kubelet verify non-root without changing
+	// which user the runner actually runs as. (Q115)
+	defaultWorkerRunAsUser int64 = 1001
+
 	payloadMountPath = "/run/secrets/job-payload"
 	payloadKey       = "payload"
 	planIDKey        = "plan-id"
@@ -803,10 +816,14 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 //
 //   - privileged: no-op. This profile exists precisely so DinD and
 //     host-capability workloads can opt out; stamping defaults would defeat it.
-//   - baseline (and the empty default): pod-level runAsNonRoot + seccomp
-//     RuntimeDefault. Both are compatible with the standard non-root runner
-//     image and, crucially, do not block in-job privilege escalation (sudo),
-//     which baseline PSA permits and many CI jobs rely on.
+//   - baseline (and the empty default): pod-level runAsNonRoot + runAsUser +
+//     seccomp RuntimeDefault. runAsUser is gap-filled to the runner image's
+//     numeric UID (defaultWorkerRunAsUser) whenever non-root is being enforced,
+//     because kubelet cannot verify runAsNonRoot against the image's
+//     non-numeric `USER runner` and would otherwise reject the pod at admission
+//     (Q115). All three are compatible with the standard non-root runner image
+//     and, crucially, do not block in-job privilege escalation (sudo), which
+//     baseline PSA permits and many CI jobs rely on.
 //   - restricted: additionally stamps the per-container PSA-restricted floor
 //     (allowPrivilegeEscalation=false + drop ALL capabilities). Without it the
 //     namespace's PodSecurity admission rejects the pod. Blocking sudo/caps is
@@ -822,6 +839,16 @@ func (p *Provisioner) applySecurityDefaults(spec *corev1.PodSpec) {
 	}
 	if spec.SecurityContext.RunAsNonRoot == nil {
 		spec.SecurityContext.RunAsNonRoot = ptr.To(true)
+	}
+	// Gap-fill a numeric runAsUser only while non-root is actually enforced and
+	// the tenant didn't pick a UID. kubelet can only verify runAsNonRoot against
+	// a numeric UID; the runner image's non-numeric `USER runner` otherwise
+	// trips CreateContainerConfigError at admission (Q115). Skipped when a tenant
+	// opted out with runAsNonRoot:false (a root-based image) so we don't force a
+	// UID that contradicts their choice, and gap-fill so an explicit per-pod or
+	// per-container runAsUser still wins.
+	if r := spec.SecurityContext.RunAsNonRoot; r != nil && *r && spec.SecurityContext.RunAsUser == nil {
+		spec.SecurityContext.RunAsUser = ptr.To(defaultWorkerRunAsUser)
 	}
 	if spec.SecurityContext.SeccompProfile == nil {
 		spec.SecurityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
