@@ -221,9 +221,23 @@ via the `SECURITY_PROFILE` env var the GMC sets on the AGC Deployment):
 
 | Profile | SecurityContext defaults stamped |
 |---|---|
-| `baseline` *(default)* | Pod-level `runAsNonRoot: true` + `seccompProfile: RuntimeDefault`. Deliberately **not** `allowPrivilegeEscalation: false` or capability drop — `baseline` PSA permits in-job privilege escalation (`sudo`) and many CI jobs rely on it. |
+| `baseline` *(default)* | Pod-level `runAsNonRoot: true` + `runAsUser: 1001` + `seccompProfile: RuntimeDefault`. Deliberately **not** `allowPrivilegeEscalation: false` or capability drop — `baseline` PSA permits in-job privilege escalation (`sudo`) and many CI jobs rely on it. |
 | `restricted` | The above, plus the per-container PSA-restricted floor: `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`. Without these the namespace's PodSecurity admission would reject the pod, so the AGC stamps them to make the profile usable rather than self-blocking. |
 | `privileged` | None — this profile exists precisely so DinD / host-capability workloads can opt in via their own `PodTemplate`. |
+
+**Why `runAsUser: 1001` accompanies `runAsNonRoot: true`.** kubelet's
+`runAsNonRoot` enforcement can only *prove* a container is non-root against a
+**numeric** UID. The default worker image
+(`ghcr.io/actions/actions-runner`, and the `cmd/worker` image built from it)
+declares its user **by name** — `USER runner` — which kubelet cannot resolve to
+a UID at admission. With `runAsNonRoot: true` but no numeric UID, kubelet
+rejects the pod outright (`CreateContainerConfigError: container has
+runAsNonRoot and image has non-numeric user`), so an unmodified RunnerGroup
+would fail *every* job. The AGC therefore gap-fills the runner image's own UID
+(1001) whenever non-root is being enforced, letting kubelet verify non-root
+without changing which user the runner actually runs as. The gap-fill is skipped
+when a tenant sets `runAsNonRoot: false` (a root-based image), so it never
+contradicts an explicit opt-out, and an explicit `runAsUser` always wins. (Q115)
 
 `readOnlyRootFilesystem` is **not** defaulted on any profile: the GitHub
 Actions runner writes to its work, diagnostics, and home directories at

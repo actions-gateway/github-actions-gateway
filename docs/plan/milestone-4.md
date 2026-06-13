@@ -969,8 +969,16 @@ caught by unit/Tier-A/Tier-B tiers:
    fails every default-path worker pod with
    `CreateContainerConfigError: container has runAsNonRoot and image has
    non-numeric user`. Worked around per-tenant with
-   `podTemplate.spec.securityContext.runAsUser: 1001`. Tier-B masks
+   `podTemplate.spec.securityContext.runAsUser: 1001`. Tier-B masked
    this by using the **agc image** as its worker placeholder.
+   **Fixed (Q115):** `applySecurityDefaults` now gap-fills
+   `runAsUser: 1001` (the runner image's UID) alongside
+   `runAsNonRoot: true` whenever non-root is enforced, so the default
+   path is kubelet-admissible; the gap-fill is skipped when a tenant sets
+   `runAsNonRoot: false` and an explicit `runAsUser` still wins. A new
+   Tier-B spec (`E2E_AGC_WorkerSecurityContext`) provisions a worker pod
+   from the **real** worker image and asserts kubelet admits it, so a
+   regression of the default is caught in CI rather than only live.
 2. **Q114 — JIT agents are single-use and the AGC cannot self-heal.**
    GitHub removed each JIT runner after it completed (or had acquired a
    then-cancelled) job; the never-used agent survived. The AGC kept

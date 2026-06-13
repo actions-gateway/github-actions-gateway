@@ -826,12 +826,12 @@ kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceed
 ## Worker Pod Fails to Start After Secure-by-Default SecurityContext
 
 **Symptoms.** A worker pod that previously ran now stays in `CreateContainerConfigError` or `Pending`, or is rejected at admission. `kubectl describe pod` shows one of:
-- `Error: container has runAsNonRoot and image has non-numeric user (runner), cannot verify user is non-root` — the AGC stamped `runAsNonRoot: true` (every profile except `privileged`) and the image declares its user **by name**, which kubelet cannot verify. **This includes the default `ghcr.io/actions/actions-runner` image** (`USER runner`), so an unmodified RunnerGroup hits this on every job until [Q115](../STATUS.md) lands; observed live 2026-06-12.
+- `Error: container has runAsNonRoot and image has non-numeric user (<name>), cannot verify user is non-root` — the AGC stamped `runAsNonRoot: true` (every profile except `privileged`) and the image declares its user **by name**, which kubelet cannot verify against a numeric UID. The **default** `ghcr.io/actions/actions-runner` image (`USER runner`) is handled automatically — the AGC gap-fills `runAsUser: 1001` so kubelet can verify it (Q115). You hit this only with a **custom/third-party** runner image whose named user is **not** UID 1001, so the auto-stamped 1001 doesn't match what its `USER` resolves to, or whose image has no numeric UID at all.
 - `Error: container has runAsNonRoot and image will run as root` — same stamp, but the worker image's default user is `root` (UID 0).
 - A PodSecurity admission denial naming `allowPrivilegeEscalation != false` or `unrestricted capabilities` — the namespace is on `securityProfile: restricted` and a tenant container needs `sudo` or extra capabilities.
 
 **Likely causes.**
-- The worker image declares a **named** (non-numeric) user — `USER runner` in the upstream `actions-runner` image. kubelet's `runAsNonRoot` check needs a numeric UID, from either the image config or the pod spec.
+- A **custom** worker image declares a **named** (non-numeric) user other than the default runner's UID 1001. The AGC's secure-by-default gap-fill stamps `runAsUser: 1001` to match the upstream `actions-runner` image; an image whose user is a different UID still needs its own numeric UID declared. (The default `actions-runner` image needs no action.)
 - The worker image runs as root by default (common for custom or third-party runner images). The AGC's secure-by-default `runAsNonRoot: true` then blocks it.
 - A job under `restricted` calls `sudo` or installs packages requiring capabilities the PSA-restricted floor drops.
 
@@ -849,14 +849,15 @@ kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath=
 ```
 
 **Resolution.**
-- Named-user image (including the default `actions-runner` image): declare the numeric UID in the RunnerGroup `podTemplate` so kubelet can verify non-root — for the upstream runner image that is UID 1001:
+- Default `actions-runner` image: **no action needed** — the AGC gap-fills `runAsUser: 1001` automatically (Q115).
+- Custom named-user image whose user is **not** UID 1001: declare its actual numeric UID in the RunnerGroup `podTemplate` so kubelet can verify non-root (an explicit `runAsUser` overrides the gap-filled 1001):
 
   ```yaml
   podTemplate:
     spec:
       securityContext:
-        runAsUser: 1001
-        runAsGroup: 1001
+        runAsUser: <image-uid>
+        runAsGroup: <image-gid>
   ```
 
   Note: a `podTemplate` change does not reach already-running listeners

@@ -116,6 +116,8 @@ kubectl apply -f actionsgateway.yaml
 
 A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
 
+**Optional — custom worker image.** The default `ghcr.io/actions/actions-runner` image works out of the box: on every profile except `privileged` the AGC stamps `runAsNonRoot: true` and gap-fills `runAsUser: 1001` (the runner image's UID) so kubelet can verify non-root. If you point `workerImage` at a **custom** image whose user is **not** UID 1001 — a different named user, or one that runs as root — set `securityContext.runAsUser` (or `runAsNonRoot: false` for a root-based image) on the runner container in the `podTemplate`; otherwise kubelet rejects the pod with `CreateContainerConfigError`. See [troubleshooting: worker pod fails to start after secure-by-default SecurityContext](troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).
+
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block. Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml
