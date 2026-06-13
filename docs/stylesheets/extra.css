@@ -1,0 +1,142 @@
+/* Landing-page polish. Colors use Material theme variables so both palettes work. */
+
+.gag-hero {
+  text-align: center;
+  padding: 2.5rem 0 1.5rem;
+}
+
+.gag-hero h1 {
+  font-size: 2.4rem;
+  line-height: 1.2;
+  margin: 0 0 0.6rem;
+  /* Even out the headline so the last word doesn't dangle on its own line. */
+  text-wrap: balance;
+}
+
+/* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
+.gag-hero .headerlink {
+  display: none;
+}
+
+.gag-hero .gag-tagline {
+  font-size: 1.05rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 40rem;
+  margin: 0 auto 1.4rem;
+  text-wrap: pretty;
+}
+
+.gag-hero .md-button {
+  margin: 0.2rem 0.3rem;
+}
+
+/* Benefit cards: 3 across (two balanced rows of three), degrading when narrow. */
+.gag-pillars .grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 50rem) {
+  .gag-pillars .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 30rem) {
+  .gag-pillars .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Four-tier flow: real DOM boxes so text stays legible and the layout reflows
+   (branching row on wide screens, stacked on narrow) instead of scaling an SVG. */
+.gag-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem auto;
+  /* Bound the diagram so the two-up Tier 2/3 row doesn't stretch to fill a wide
+     column — keeps the boxes a consistent size and the whole flow centered. */
+  max-width: 38rem;
+}
+
+.gag-flow__node {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  background: var(--md-default-bg-color);
+  min-width: 12rem;
+}
+
+.gag-flow__node--lead {
+  border-color: var(--md-accent-fg-color);
+}
+
+.gag-flow__node--input {
+  border-style: dashed;
+}
+
+.gag-flow__tier {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  margin-bottom: 0.15rem;
+}
+
+.gag-flow__tier--input {
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-flow__title {
+  display: block;
+  font-weight: 700;
+}
+
+.gag-flow__sub {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-flow__arrow {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.8rem;
+}
+
+.gag-flow__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+/* Hero stat: the listener-overhead delta, side by side. */
+.gag-stat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1.5rem 0;
+}
+
+.gag-stat__card {
+  flex: 1 1 14rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 1rem 1.2rem;
+}
+
+.gag-stat__num {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.gag-stat__label {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.78rem;
+}
