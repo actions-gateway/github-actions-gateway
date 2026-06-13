@@ -54,7 +54,10 @@
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  margin: 1.5rem 0;
+  margin: 1.5rem auto;
+  /* Bound the diagram so the two-up Tier 2/3 row doesn't stretch to fill a wide
+     column — keeps the boxes a consistent size and the whole flow centered. */
+  max-width: 38rem;
 }
 
 .gag-flow__node {
