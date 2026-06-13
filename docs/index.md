@@ -91,15 +91,33 @@ shared controller pod.
 A four-tier system: one cluster-scoped manager provisions a fully isolated
 gateway per tenant from each `ActionsGateway` resource.
 
-```mermaid
-flowchart TD
-  CR["ActionsGateway resource<br/>(namespace-scoped)"] -->|watch| GMC["Gateway Manager Controller<br/>(cluster-scoped)"]
-  GMC -->|provisions| AGC["Actions Gateway Controller<br/>(goroutine multiplexer)"]
-  GMC -->|provisions| PROXY["Egress proxy pool<br/>(per-tenant IPs)"]
-  AGC -->|one pod per job| WORKER["Ephemeral worker pod"]
-  AGC --> PROXY
-  WORKER --> PROXY
-```
+<div class="gag-flow">
+  <div class="gag-flow__node gag-flow__node--lead">
+    <span class="gag-flow__title">ActionsGateway resource</span>
+    <span class="gag-flow__sub">one per tenant · namespace-scoped</span>
+  </div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; watched by</div>
+  <div class="gag-flow__node gag-flow__node--lead">
+    <span class="gag-flow__title">Gateway Manager Controller</span>
+    <span class="gag-flow__sub">cluster-scoped · installed once</span>
+  </div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions a full gateway per tenant</div>
+  <div class="gag-flow__row">
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Actions Gateway Controller</span>
+      <span class="gag-flow__sub">goroutine multiplexer</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Egress proxy pool</span>
+      <span class="gag-flow__sub">per-tenant egress IPs</span>
+    </div>
+    <div class="gag-flow__node">
+      <span class="gag-flow__title">Ephemeral worker pods</span>
+      <span class="gag-flow__sub">one per job · GC'd on completion</span>
+    </div>
+  </div>
+  <p class="gag-flow__caption">The controller spawns one worker pod per job and deletes it on completion; all GitHub traffic from the controller and workers egresses through the per-tenant proxy pool.</p>
+</div>
 
 Read the [architecture overview](design/02-architecture.md) for the full
 breakdown, or jump to [why GAG over ARC](why-gag.md).

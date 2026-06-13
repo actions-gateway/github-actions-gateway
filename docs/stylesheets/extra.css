@@ -47,6 +47,67 @@
   }
 }
 
+/* Four-tier flow: real DOM boxes so text stays legible and the layout reflows
+   (branching row on wide screens, stacked on narrow) instead of scaling an SVG. */
+.gag-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+.gag-flow__node {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  background: var(--md-default-bg-color);
+  min-width: 12rem;
+}
+
+.gag-flow__node--lead {
+  border-color: var(--md-accent-fg-color);
+}
+
+.gag-flow__title {
+  display: block;
+  font-weight: 700;
+}
+
+.gag-flow__sub {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-flow__arrow {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.8rem;
+}
+
+.gag-flow__row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.gag-flow__caption {
+  font-size: 0.82rem;
+  color: var(--md-default-fg-color--light);
+  text-align: center;
+  text-wrap: pretty;
+  max-width: 44rem;
+  margin: 0.6rem auto 0;
+}
+
+@media screen and (max-width: 45rem) {
+  .gag-flow__row {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Hero stat: the listener-overhead delta, side by side. */
 .gag-stat {
   display: flex;
