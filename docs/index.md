@@ -103,7 +103,7 @@ gateway per tenant from each `ActionsGateway` resource.
     <span class="gag-flow__title">Gateway Manager Controller</span>
     <span class="gag-flow__sub">cluster-scoped · installed once</span>
   </div>
-  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions a full gateway per tenant</div>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; provisions the AGC + proxy per tenant</div>
   <div class="gag-flow__row">
     <div class="gag-flow__node">
       <span class="gag-flow__tier">Tier 2</span>
@@ -115,13 +115,14 @@ gateway per tenant from each `ActionsGateway` resource.
       <span class="gag-flow__title">Egress proxy pool</span>
       <span class="gag-flow__sub">per-tenant egress IPs</span>
     </div>
-    <div class="gag-flow__node">
-      <span class="gag-flow__tier">Tier 4</span>
-      <span class="gag-flow__title">Ephemeral worker pods</span>
-      <span class="gag-flow__sub">one per job · GC'd on completion</span>
-    </div>
   </div>
-  <p class="gag-flow__caption">Tiers 1–4 are the four-tier system; the <code>ActionsGateway</code> resource is the tenant's request that drives it. The controller (Tier 2) spawns one worker pod per job and deletes it on completion; all GitHub traffic from the controller and workers egresses through the per-tenant proxy pool (Tier 3).</p>
+  <div class="gag-flow__arrow" aria-hidden="true">↓&nbsp; AGC spawns one pod per job</div>
+  <div class="gag-flow__node">
+    <span class="gag-flow__tier">Tier 4</span>
+    <span class="gag-flow__title">Ephemeral worker pods</span>
+    <span class="gag-flow__sub">one per job · GC'd on completion</span>
+  </div>
+  <p class="gag-flow__caption">Tiers 1–4 are the four-tier system; the <code>ActionsGateway</code> resource is the tenant's request that drives it. The GMC (Tier 1) provisions the AGC and proxy pool; the AGC (Tier 2) creates one worker pod per job and deletes it on completion. All GitHub traffic from the AGC and workers egresses through the per-tenant proxy pool (Tier 3).</p>
 </div>
 
 Read the [architecture overview](design/02-architecture.md) for the full

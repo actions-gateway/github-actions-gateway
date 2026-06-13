@@ -106,7 +106,7 @@
 
 .gag-flow__row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
   gap: 0.6rem;
   width: 100%;
 }
@@ -118,12 +118,6 @@
   text-wrap: pretty;
   max-width: 44rem;
   margin: 0.6rem auto 0;
-}
-
-@media screen and (max-width: 45rem) {
-  .gag-flow__row {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Hero stat: the listener-overhead delta, side by side. */
