@@ -37,9 +37,11 @@ rules:
 # list on secrets: the agent pool enumerates its own per-runner Secrets to
 # reconcile pool state (metadata-only PartialObjectMetadataList — names/labels,
 # never credential bodies). watch is deliberately omitted (no Secret informer).
+# update: the single-use JIT agent recycle (Q114) rewrites an agent's Secret
+# in place after re-registering it post-job.
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["get", "list", "create", "delete"]
+  verbs: ["get", "list", "create", "update", "delete"]
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups"]
   verbs: ["get", "list", "watch", "update", "patch"]

@@ -84,7 +84,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	It("E2E_AGC_SessionRegistered: AGC creates broker sessions after startup", func() {
 		By("waiting for at least one active session to appear in fakegithub")
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessions(g)
+			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
 			g.Expect(sessions).NotTo(BeEmpty(), "no sessions registered yet")
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
@@ -93,7 +93,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		By("getting the first active session ID")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessions(g)
+			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
 			g.Expect(sessions).NotTo(BeEmpty())
 			sessionID = sessions[0]
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
@@ -127,7 +127,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		By("getting active sessions")
 		var sessions []string
 		Eventually(func(g Gomega) {
-			sessions = fakegithubActiveSessions(g)
+			sessions = fakegithubActiveSessionsForOwner(g, agName+"-")
 			g.Expect(len(sessions)).To(BeNumerically(">=", 1))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
@@ -162,7 +162,21 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 // fakegithubActiveSessions queries the fakegithub control API for active sessions.
 func fakegithubActiveSessions(g Gomega) []string {
-	out := fakegithubControlRequest(g, "GET", "/control/sessions", nil)
+	return fakegithubActiveSessionsForOwner(g, "")
+}
+
+// fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
+// the given prefix. Session ownerName is "<runnerGroup>-<agentIndex>" and the
+// RunnerGroup name is "<agName>-<first runner label>", so passing "<agName>-"
+// scopes the result to one spec's ActionsGateway. fakegithub is shared across
+// parallel specs and tenants — an unfiltered sessions[0] can belong to another
+// spec's RunnerGroup, sending its enqueued job to the wrong tenant.
+func fakegithubActiveSessionsForOwner(g Gomega, ownerPrefix string) []string {
+	path := "/control/sessions"
+	if ownerPrefix != "" {
+		path += "?owner=" + ownerPrefix
+	}
+	out := fakegithubControlRequest(g, "GET", path, nil)
 	var sessions []string
 	err := json.Unmarshal([]byte(out), &sessions)
 	g.Expect(err).NotTo(HaveOccurred(), "parse sessions response: %s", out)

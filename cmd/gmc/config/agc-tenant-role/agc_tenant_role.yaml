@@ -60,9 +60,13 @@ rules:
 # per-name gets go direct to the API server rather than being held in the
 # controller-runtime cache. `watch` is deliberately omitted: no Secret informer
 # is registered, so granting watch would be dead privilege (Q26).
+# update is required by the single-use JIT agent recycle (Q114): after each
+# job the agent is re-registered and its Secret rewritten in place with the
+# fresh credentials. It grants nothing create+delete did not already allow in
+# effect (replace-by-recreate), and matches the AGC's own kubebuilder marker.
 - apiGroups: [""]
   resources: ["secrets"]
-  verbs: ["get", "list", "create", "delete"]
+  verbs: ["get", "list", "create", "update", "delete"]
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups"]
   verbs: ["get", "list", "watch", "update", "patch"]
