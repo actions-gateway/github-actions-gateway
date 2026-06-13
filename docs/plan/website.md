@@ -162,13 +162,19 @@ OG/Twitter card to the existing social preview so shared links look intentional.
   design we have not done. Revisit when (and if) that contribution flow is
   designed; until then the public site stays evaluator-focused.
 
+## Decided (sequencing)
+
+- **Build in parallel with [Q99](../STATUS.md); gate only the public launch.**
+  The site work (scaffold, tooling, nav, diagram conversion, page structure) has
+  no dependency on Q99 and proceeds now. The rendered docs pages render `docs/`
+  source directly, so they inherit Q99's claim fixes automatically with no
+  site-side change. The only surface that *duplicates* the claims Q99 flags
+  ("thousands of sessions", egress-blocked) is the hand-authored landing + "vs
+  ARC" copy — reconcile that against the corrected source as a final pass before
+  flipping Pages public / announcing. So Q99 gates the launch, not the work.
+
 ## Open decisions
 
-- **Launch sequencing vs [Q99](../STATUS.md) (docs-honesty pass, 1.0-gate).** A
-  public landing page amplifies the "thousands of sessions" and egress-blocked
-  claims Q99 flags as uncaveated. *Lean:* land Q99's README/exec-summary fixes
-  before the public launch, building the site from corrected source. Does not
-  block writing the scaffold/tooling — only the launch.
 - **Pre-1.0 maturity banner.** *Lean:* yes — a subtle "alpha / pre-1.0" header
   notice until 1.0 is cut; dovetails with Q99.
 - **Analytics.** *Lean:* none for v1 (avoids a privacy/consent surface); add
