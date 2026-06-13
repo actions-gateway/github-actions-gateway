@@ -9,6 +9,8 @@
   font-size: 2.4rem;
   line-height: 1.2;
   margin: 0 0 0.6rem;
+  /* Even out the headline so the last word doesn't dangle on its own line. */
+  text-wrap: balance;
 }
 
 /* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
@@ -21,6 +23,7 @@
   color: var(--md-default-fg-color--light);
   max-width: 40rem;
   margin: 0 auto 1.4rem;
+  text-wrap: pretty;
 }
 
 .gag-hero .md-button {
