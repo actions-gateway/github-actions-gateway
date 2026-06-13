@@ -42,6 +42,22 @@ goroutine knows definitively its agent is spent. It self-heals inline:
 3. Fetch a new broker OAuth token with the fresh credentials, `createSession`,
    reset poll counters, continue polling.
 
+**Implementation note (revised during validation).** The controller factory
+wires `RecycleAgent`/`MarkAgentConsumed` **unconditionally**, for every
+registrar — not nil-for-stubs as an earlier draft of this plan implied. It has
+to: the Tier B self-heal e2e exercises the recycle path through the
+`StubRegistrar` (e2e never has real GitHub credentials), so gating it on
+registrar type would leave the e2e unable to heal. It is also production-correct
+— a JIT session always serves exactly one job, so re-registering after every
+job is never wrong. The consequence is that **a session serves one job in all
+configurations**: the pre-existing `E2E_AGC_MultipleJobsQueued` test, which
+captured one session and enqueued two jobs onto it, was updated to deliver each
+job onto a freshly-queried session (the captured session is recycled away after
+the first). The `Config.RecycleAgent` field stays documented as nil-able (the
+listener falls back to plain session reuse when it is nil — the path the
+`TestListener_AcquireJobThenReuse` unit test still covers), it is just always
+provided in the live wiring.
+
 Why here and not the multiplexer or provisioner:
 
 - The goroutine never exits, so **maxListeners accounting is untouched** — the
