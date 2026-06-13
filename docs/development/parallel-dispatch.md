@@ -220,8 +220,13 @@ contract. The channels, by need:
 
 - **Shared scratch files** (the `tmp/` tracker above) — the default for the
   dispatcher's task → chip → PR → state record and for streaming task inputs to
-  workers. If more than one session writes, make it append-only with one
-  self-contained record per line so concurrent writes do not corrupt each other.
+  workers. When a **single** session owns the file (the dispatcher's tracker), one
+  file is fine. When **multiple sessions write, give each message its own
+  uniquely-named file** in a shared dir (readers Glob the dir) — do **not** have
+  several sessions write one shared file through the Write tool: it overwrites the
+  whole file (read-modify-write), so concurrent writers silently lose each other's
+  updates. One-file-per-message has no such contention; append-safety would
+  require `O_APPEND` (Bash `>>`), which we avoid out-of-worktree anyway.
 - **`send_message`** — a live push to another running session. The sender chooses
   what to share, so it never exposes the sender's transcript. Use it for
   supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** treat
@@ -234,9 +239,14 @@ contract. The channels, by need:
 - **A SQLite claim table** — when workers *pull* tasks instead of being assigned
   one each, use a single SQLite file with an atomic claim
   (`UPDATE tasks SET claimed_by=? WHERE id=? AND claimed_by IS NULL`) so two
-  sessions never grab the same task. This is the reason to reach past plain files:
-  append-only files have no claim semantics. In the default dispatcher-assigns
-  model you do not need it — the dispatcher hands each worker exactly one task.
+  sessions never grab the same task. This is the one reason to reach past plain
+  files: a message dir has no compare-and-set, so two readers can both pick the
+  same unclaimed item. It is not free, though — you shell out to `sqlite3` (a Bash
+  command, so an out-of-worktree DB trips workspace-guard), it is opaque to
+  `grep`/`diff` unlike the text channels, and concurrent writers need WAL mode + a
+  busy timeout to avoid `database is locked`. Use it for the claim semantics, not
+  as a default. In the dispatcher-assigns model you do not need it — the
+  dispatcher hands each worker exactly one task.
 
 Whichever you use, shared state must live at a path **common to every session**.
 For worktree sessions that means *outside* the current worktree: put it at the
