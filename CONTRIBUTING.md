@@ -114,9 +114,11 @@ After editing types under `cmd/agc/api/` or `cmd/gmc/api/`, regenerate manifests
 - Tests must verify behavior, not just that the code runs.
 - Async functions return a `<-chan struct{}` done channel — callers decide whether to block, select with timeout, or ignore.
 - All modules in the repo must use the same Go version.
+- Shell scripts follow the repo bash conventions — see [`docs/development/bash-style.md`](docs/development/bash-style.md).
 
 ## Documentation
 
+- After a behaviour change, update every doc the change touches — the change-type → docs mapping is in [`docs/development/doc-update-matrix.md`](docs/development/doc-update-matrix.md). Design-doc updates alone are not enough when a change alters what an operator does, configures, or observes.
 - Humans start at [`README.md`](README.md) and navigate the [`docs/`](docs/README.md) tree. Do **not** link to `CLAUDE.md`/`AGENTS.md` from any human-facing doc — that file is the entrypoint for AI agents only. Reference content humans need lives in `docs/` or this file.
 - Spell out acronyms on first use: full term, then the acronym in parentheses — e.g. "Actions Gateway Controller (AGC)".
 - Long docs (roughly 400+ lines) carry a `## Table of Contents` section after the intro, listing h2 headings (plus h3 for operator-facing docs). Anchors follow GitHub's slug rules — duplicate headings get `-1`/`-2` suffixes — so verify links against the rendered page.

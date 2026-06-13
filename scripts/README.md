@@ -1,6 +1,6 @@
 # scripts/
 
-Developer and CI helper scripts. All scripts follow the repo bash conventions: `set -euo pipefail`, `local` for function variables, `[[ ]]` conditionals, quoted expansions (unless word-splitting is explicitly intended and annotated), and `trap` cleanup for background processes. Shared helpers (`require_cmd`, `workspace_modules`, the throttle setup) live in [lib/common.sh](lib/common.sh). Every tracked script here is linted by `make shellcheck` ([shellcheck-scripts.sh](shellcheck-scripts.sh)).
+Developer and CI helper scripts. All scripts follow the [repo bash conventions](../docs/development/bash-style.md): `set -euo pipefail`, `local` for function variables, `[[ ]]` conditionals, quoted expansions, `trap` cleanup for background processes — see the doc for the full list. Shared helpers (`require_cmd`, `workspace_modules`, the throttle setup) live in [lib/common.sh](lib/common.sh). Every tracked script here is linted by `make shellcheck` ([shellcheck-scripts.sh](shellcheck-scripts.sh)).
 
 Make-target backends — the root `Makefile` keeps recipes as thin target→script wiring so the logic is shellcheck-covered; parameters are env-overridable and documented in each script's header:
 
