@@ -30,9 +30,9 @@
   margin: 0.2rem 0.3rem;
 }
 
-/* Four pillar cards on one row at content width; degrade gracefully when narrow. */
+/* Benefit cards: 3 across (two balanced rows of three), degrading when narrow. */
 .gag-pillars .grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 @media screen and (max-width: 50rem) {

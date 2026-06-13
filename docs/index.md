@@ -61,6 +61,22 @@ helm install gag charts/actions-gateway \
     receives a fully isolated gateway: RBAC, NetworkPolicies, `ResourceQuota`,
     egress proxy, controller, and every runner group they declared.
 
+-   :material-arrow-collapse-down:{ .lg .middle } __Scale to zero between jobs__
+
+    ---
+
+    Worker pods are created when a job is acquired and deleted on completion, so
+    GPU nodes return to the scheduler the moment a job finishes — without pinning
+    idle runners to mask cold starts.
+
+-   :material-chart-line:{ .lg .middle } __Per-tenant utilization metrics__
+
+    ---
+
+    Both controllers expose Prometheus metrics scoped per tenant and runner
+    group, so teams can see their own GPU utilization and make the case for quota
+    changes without cluster-wide visibility.
+
 </div>
 </div>
 
