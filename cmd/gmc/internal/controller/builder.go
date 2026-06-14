@@ -631,6 +631,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		// applies the CRD default, but be explicit so a hand-applied CR without
 		// the field still gets the hardened defaults rather than none).
 		{Name: "SECURITY_PROFILE", Value: securityProfileOrDefault(ag.Spec.SecurityProfile)},
+		// GITHUB_RUNNER_VERSION is the pinned actions/runner version (single
+		// source of truth: agcnames.RunnerVersion, which also drives the AGC's
+		// default worker image). The AGC forwards it as agent.version on
+		// CreateSession; GitHub validates the runner version at session
+		// creation, so leaving it empty risks rejection (Q71/Q118).
+		{Name: "GITHUB_RUNNER_VERSION", Value: agcnames.RunnerVersion},
 	}
 	// Tracing config (spec.tracing) maps to the standard OTEL_* env the AGC
 	// reads. Appended before extraEnv so the testing-gated AGC_EXTRA_OTEL_*

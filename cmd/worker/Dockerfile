@@ -30,11 +30,13 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ## exec.LookPath("Runner.Worker").
 ##
 ## Pinned to the multi-arch manifest-index digest for supply-chain integrity
-## (M-19 in docs/plan/security.md). The version must match the runner version
-## used during agent registration (DefaultWorkerImage in
-## cmd/agc/internal/provisioner/provisioner.go and the runnerVersion stored in
-## agent Secrets by cmd/agc/internal/agentpool) so GitHub does not reject
-## POST /sessions with a version-too-old error.
+## (M-19 in docs/plan/security.md). The version MUST match the pinned runner
+## version in cmd/agc/names (RunnerVersion / WorkerImageDigest) — the single
+## source of truth that drives both the AGC's DefaultWorkerImage and the
+## GITHUB_RUNNER_VERSION the GMC injects (the agent.version GitHub validates at
+## session creation). The lockstep test cmd/agc/names/runner_version_test.go
+## fails CI if this FROM line and those constants disagree, so a Dependabot bump
+## here that forgets the constants cannot drift silently.
 ##
 ## Runner-version bump procedure:
 ##   1. Pick the new ghcr.io/actions/actions-runner tag (X.Y.Z).
@@ -42,10 +44,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ##        docker buildx imagetools inspect ghcr.io/actions/actions-runner:X.Y.Z
 ##      Use the top-level "Digest:" line (the OCI image index), not a
 ##      per-platform manifest.
-##   3. Update this FROM line AND DefaultWorkerImage in
-##      cmd/agc/internal/provisioner/provisioner.go to the same X.Y.Z@sha256:….
-##   4. Update the prior runner-version string in cmd/agc/internal/agentpool
-##      tests so the registered runnerVersion matches what GitHub expects.
+##   3. Update this FROM line AND RunnerVersion + WorkerImageDigest in
+##      cmd/agc/names/names.go to the same X.Y.Z@sha256:… (provisioner's
+##      DefaultWorkerImage and the GMC's GITHUB_RUNNER_VERSION follow
+##      automatically).
+##   4. Update any hardcoded prior runner-version string in
+##      cmd/agc/internal/agentpool tests so the registered runnerVersion matches.
 FROM ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
 ENV PATH=/home/runner/bin:$PATH
 # OpenContainers image labels carry provenance for SBOM scanners. REVISION and

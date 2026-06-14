@@ -53,6 +53,25 @@ regardless of the build host. (The *index* digest depends on both child
 manifests plus BuildKit's provenance attestation — the reproducibility claim is
 about the binaries and layers, not registry manifest bytes.)
 
+### Runner-version pin (lockstep)
+
+The actions/runner version is pinned in **one** place — `RunnerVersion` (plus
+`WorkerImageDigest`) in [`cmd/agc/names/names.go`](../../cmd/agc/names/names.go).
+That single constant drives, and must stay in lockstep with, three consumers:
+
+- the AGC's `DefaultWorkerImage` (the worker pod's runner binary),
+- the `GITHUB_RUNNER_VERSION` the GMC injects into the AGC Deployment — forwarded
+  as `agent.version` on `CreateSession`, which **GitHub validates** at session
+  creation (an empty or wrong value risks rejection), and
+- the `FROM` tag in [`cmd/worker/Dockerfile`](../../cmd/worker/Dockerfile).
+
+Dependabot bumps only the Dockerfile, so the lockstep test
+[`cmd/agc/names/runner_version_test.go`](../../cmd/agc/names/runner_version_test.go)
+fails CI (in the unit tier) when the `FROM` tag/digest and the constants
+disagree. To bump the version, follow the procedure in the Dockerfile header:
+update the `FROM` line **and** `RunnerVersion` + `WorkerImageDigest` together;
+`DefaultWorkerImage` and `GITHUB_RUNNER_VERSION` then follow automatically.
+
 ### License attribution (`/licenses/`)
 
 Each production image `COPY`s three license files into `/licenses/` — the

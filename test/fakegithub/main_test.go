@@ -345,3 +345,53 @@ func TestOpportunisticRedelivery(t *testing.T) {
 		}
 	})
 }
+
+// TestSessionVersionCapture verifies fakegithub records the agent.version
+// (runnerVersion) from POST /session and exposes it via the control API, so a
+// spec can assert the AGC sent a non-empty, correct version (the Q71/Q118
+// runner-version contract). A real GitHub validates this field at session
+// creation.
+func TestSessionVersionCapture(t *testing.T) {
+	s := newServer()
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	const wantVersion = "2.335.1"
+	body, _ := json.Marshal(map[string]any{
+		"ownerName": "agent-9",
+		"agent":     map[string]any{"id": 9, "name": "agent-9", "version": wantVersion},
+	})
+	req, _ := http.NewRequest(http.MethodPost, main.URL+"/session", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer bearer-v")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var sess struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&sess); err != nil {
+		t.Fatalf("decode session response: %v", err)
+	}
+
+	vresp, err := http.Get(control.URL + "/control/session-versions")
+	if err != nil {
+		t.Fatalf("get session-versions: %v", err)
+	}
+	defer func() { _ = vresp.Body.Close() }()
+	var versions map[string]string
+	if err := json.NewDecoder(vresp.Body).Decode(&versions); err != nil {
+		t.Fatalf("decode session-versions: %v", err)
+	}
+
+	got := versions[sess.SessionID]
+	if got == "" {
+		t.Fatalf("agent.version was not captured for %s (empty); versions=%v", sess.SessionID, versions)
+	}
+	if got != wantVersion {
+		t.Fatalf("agent.version = %q, want %q", got, wantVersion)
+	}
+}

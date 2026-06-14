@@ -72,13 +72,16 @@ SecurityContext breaks the runner image) are new `1.0-gate` rows.
 Two follow-on gates were identified after the live run (same pattern as
 the Q114/Q115 discoveries above) and must close before tag:
 
-- [ ] **Runner-version contract not regressed** ([Q118](../STATUS.md),
-  *gating*): `DefaultWorkerImage` (`provisioner.go:98`) still pins
-  2.334.0 while the worker Dockerfile ships 2.335.1, and the GMC never
-  sets `GITHUB_RUNNER_VERSION`, so `CreateSession` sends an **empty**
-  `agent.version`. This regresses the GitHub session-creation contract
-  that bucket-A row 4 ([Q71](../STATUS.md)) gated on — fix the pin
-  lockstep and set the version explicitly before tag.
+- [x] **Runner-version contract not regressed** ([Q118](../STATUS.md),
+  closed): the runner version is now a single source of truth
+  (`RunnerVersion` in `cmd/agc/names`) that drives `DefaultWorkerImage`
+  (now digest-pinned to 2.335.1, matching the worker Dockerfile) and the
+  `GITHUB_RUNNER_VERSION` the GMC injects into the AGC — so `CreateSession`
+  sends a non-empty `agent.version` equal to the pinned version. A lockstep
+  unit test (`cmd/agc/names/runner_version_test.go`) fails CI if the
+  Dockerfile `FROM` tag/digest and the constant drift, so a future
+  Dependabot bump can't silently regress the contract bucket-A row 4
+  ([Q71](../STATUS.md)) gated on.
 - [ ] **Teardown does not fail open** ([Q125](../STATUS.md), *gating*):
   `deleteIfExists` (`actionsgateway_controller.go:274`) swallows
   non-NotFound delete errors and `reconcileDelete` removes the finalizer

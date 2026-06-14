@@ -18,7 +18,7 @@ import (
 func newPoolWithRegistrar(fb *fake.ClientBuilder, ns, group string) (*agentpool.Pool, *agentpool.StubRegistrar, client.Client) {
 	registrar := agentpool.NewStubRegistrar()
 	c := fb.Build()
-	return agentpool.NewPool(c, ns, group, "2.334.0", []string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519), registrar, c
+	return agentpool.NewPool(c, ns, group, "2.335.1", []string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519), registrar, c
 }
 
 func agentSecretField(t *testing.T, c client.Client, ns, group string, index int, key string) string {

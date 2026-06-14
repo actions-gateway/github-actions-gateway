@@ -178,7 +178,7 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 		Registrar:    reg,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     brokerStub.URL,
-			RunnerVersion: "2.334.0",
+			RunnerVersion: "2.335.1",
 			RunnerOS:      "linux",
 			UseV2Flow:     true,
 			HTTPClient:    brokerStub.HTTPClient(),

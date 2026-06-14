@@ -944,7 +944,12 @@ the GMC-provisioned AGC never sets `GITHUB_RUNNER_VERSION`, so
 omits `runnerVersion`), which GitHub accepts. The 2.334.0/2.335.x pin
 exists only in the worker image. Recorded as Q118 (set the env in the
 GMC + fix the Dockerfile-vs-`DefaultWorkerImage` drift Dependabot
-introduced in #197).
+introduced in #197). **Resolved (Q118):** the runner version now lives in
+one place — `RunnerVersion` in `cmd/agc/names` — which drives
+`DefaultWorkerImage` (digest-pinned to 2.335.1) and the
+`GITHUB_RUNNER_VERSION` the GMC injects, so `agent.version` is non-empty
+and matches the worker binary; a lockstep unit test guards against future
+Dockerfile/constant drift.
 
 ### Delete isolation (DoD row 2)
 
