@@ -380,11 +380,24 @@ func run() error {
 	prov.Waiter = podWaiter
 
 	// Choose registrar:
+	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
-	//   STUB_AUTH_URL / STUB_BROKER_URL set  → StubRegistrar with those URLs (testing)
-	//   neither                              → error: GITHUB_ORG_URL is required
+	//   neither                             → error: GITHUB_ORG_URL is required
+	//
+	// The stub path is checked FIRST so an explicitly-configured fakegithub stub
+	// wins even though a GMC-provisioned AGC now always carries GITHUB_ORG_URL
+	// (threaded from the required spec.gitHubURL field). STUB_AUTH_URL /
+	// STUB_BROKER_URL only reach a GMC-provisioned AGC via AGC_EXTRA_* with the
+	// testing-only --allow-agc-extra-env flag, so production AGCs never have them
+	// set and always fall through to the GithubRegistrar. To switch a stub-backed
+	// AGC to real GitHub, unset the stub env (the e2e suite does exactly this).
 	var registrar agentpool.Registrar
-	if orgURL := os.Getenv("GITHUB_ORG_URL"); orgURL != "" {
+	stubAuthURL := os.Getenv("STUB_AUTH_URL")
+	stubBrokerURL := os.Getenv("STUB_BROKER_URL")
+	switch {
+	case stubAuthURL != "" && stubBrokerURL != "":
+		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
+	case os.Getenv("GITHUB_ORG_URL") != "":
 		groupID := 1
 		if raw := os.Getenv("GITHUB_RUNNER_GROUP_ID"); raw != "" {
 			if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
@@ -392,16 +405,11 @@ func run() error {
 			}
 		}
 		registrar = &agentpool.GithubRegistrar{
-			OrgURL:  orgURL,
+			OrgURL:  os.Getenv("GITHUB_ORG_URL"),
 			GroupID: groupID,
 		}
-	} else {
-		stubAuthURL := os.Getenv("STUB_AUTH_URL")
-		stubBrokerURL := os.Getenv("STUB_BROKER_URL")
-		if stubAuthURL == "" || stubBrokerURL == "" {
-			return fmt.Errorf("GITHUB_ORG_URL is required (for testing set both STUB_AUTH_URL and STUB_BROKER_URL)")
-		}
-		registrar = agentpool.NewStubRegistrarWithURLs(stubAuthURL, stubBrokerURL)
+	default:
+		return fmt.Errorf("GITHUB_ORG_URL is required (for testing set both STUB_AUTH_URL and STUB_BROKER_URL)")
 	}
 
 	r := &controller.RunnerGroupReconciler{

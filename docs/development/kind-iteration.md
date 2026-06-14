@@ -136,6 +136,8 @@ kubectl set env -n gmc-system deployment/gmc-controller-manager \
   AGC_EXTRA_GITHUB_ORG_URL=https://github.com/<org>/<repo>
 ```
 
+Since the `gitHubURL` field became required, a GMC-provisioned AGC always carries `GITHUB_ORG_URL` (threaded from `spec.gitHubURL`). The AGC therefore selects its registrar **stub-first**: when both `STUB_AUTH_URL` and `STUB_BROKER_URL` are set it uses the stub registrar regardless of `GITHUB_ORG_URL`, so the fakegithub overrides above win; unsetting the stub pair (as the real-GitHub swap does) falls through to the GitHub registrar.
+
 The GMC rolls itself after env changes; tenant AGC pods pick up the new env on their next reconcile (force with `kubectl annotate actionsgateway <name> -n <ns> poke=$(date +%s) --overwrite`).
 
 ## Tightening the inner loop
