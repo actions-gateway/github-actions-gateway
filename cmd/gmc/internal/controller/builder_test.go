@@ -24,6 +24,7 @@ func newTestAG(name, ns string) *gmcv1alpha1.ActionsGateway {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "github-app"},
+			GitHubURL:    "https://github.com/example-org",
 		},
 	}
 }
@@ -228,6 +229,36 @@ func TestBuildAGCDeployment_RunnerVersionEnv(t *testing.T) {
 	assert.NotEmpty(t, v.Value, "GITHUB_RUNNER_VERSION must not be empty")
 	assert.Equal(t, agcnames.RunnerVersion, v.Value,
 		"GITHUB_RUNNER_VERSION must equal the pinned agcnames.RunnerVersion")
+}
+
+// TestBuildAGCDeployment_GitHubURL verifies that spec.gitHubURL is threaded to
+// the AGC Deployment as the GITHUB_ORG_URL env var — the first-class production
+// path that replaces the testing-only AGC_EXTRA_GITHUB_ORG_URL passthrough.
+func TestBuildAGCDeployment_GitHubURL(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.GitHubURL = "https://github.com/acme-org"
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+	assert.Equal(t, "https://github.com/acme-org", env["GITHUB_ORG_URL"].Value)
+}
+
+// TestBuildAGCDeployment_GitHubURLExtraEnvWins documents that the testing-gated
+// AGC_EXTRA_GITHUB_ORG_URL passthrough still overrides the spec-derived value:
+// it is appended after the base env, and Kubernetes honors the last duplicate.
+func TestBuildAGCDeployment_GitHubURLExtraEnvWins(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	ag.Spec.GitHubURL = "https://github.com/spec-org"
+	extra := []corev1.EnvVar{{Name: "GITHUB_ORG_URL", Value: "https://github.com/extra-org"}}
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", extra)
+
+	var vals []string
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "GITHUB_ORG_URL" {
+			vals = append(vals, e.Value)
+		}
+	}
+	require.NotEmpty(t, vals)
+	assert.Equal(t, "https://github.com/extra-org", vals[len(vals)-1], "AGC_EXTRA_ override must be last")
 }
 
 func TestBuildProxyDeployment_DefaultResources(t *testing.T) {

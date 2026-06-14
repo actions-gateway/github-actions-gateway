@@ -5,6 +5,7 @@ metadata:
 spec:
   gitHubAppRef:
     name: github-app-secret
+  gitHubURL: https://github.com/example-org
   proxy:
     minReplicas: 1
     maxReplicas: 3

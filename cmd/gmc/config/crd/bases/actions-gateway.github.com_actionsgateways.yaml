@@ -91,6 +91,27 @@ spec:
                 required:
                 - name
                 type: object
+              gitHubURL:
+                description: |-
+                  GitHubURL is the GitHub organization, enterprise, or repository URL this
+                  gateway's runners register against — e.g. "https://github.com/my-org",
+                  "https://github.com/my-org/my-repo", or, for GitHub Enterprise Server,
+                  "https://ghes.example.com/my-org". The AGC derives the runner-registration
+                  REST endpoints from it (org-scoped vs repo-scoped) and pairs it with the
+                  App credentials in gitHubAppRef, which must be installed on the same
+                  org/enterprise. Required: a gateway with no URL has nothing to register
+                  against. The GMC threads it to the AGC Deployment as the GITHUB_ORG_URL
+                  environment variable — this is the production-supported replacement for the
+                  testing-only --allow-agc-extra-env=AGC_EXTRA_GITHUB_ORG_URL injection path.
+
+                  Structural validation (https scheme, host present, an org/owner path
+                  segment) is performed by the GMC validating webhook rather than a CRD CEL
+                  rule so the error message can name the offending component; the Pattern
+                  here is a cheap scheme guard that also applies if the webhook is bypassed.
+                maxLength: 2048
+                minLength: 1
+                pattern: ^https://
+                type: string
               namespaceQuota:
                 additionalProperties:
                   anyOf:
@@ -8964,6 +8985,7 @@ spec:
                 type: object
             required:
             - gitHubAppRef
+            - gitHubURL
             type: object
           status:
             description: ActionsGatewayStatus is the observed state of an ActionsGateway.

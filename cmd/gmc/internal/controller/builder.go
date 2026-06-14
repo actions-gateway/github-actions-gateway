@@ -614,6 +614,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env := []corev1.EnvVar{
 		{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
 		{Name: "WORKER_SERVICE_ACCOUNT", Value: workerSAName},
+		// GITHUB_ORG_URL is the GitHub org/enterprise/repo URL the AGC registers
+		// runners against, threaded from spec.gitHubURL. This is the first-class
+		// production path; it replaces the testing-only AGC_EXTRA_GITHUB_ORG_URL
+		// passthrough. Placed before extraEnv so a testing override (when
+		// --allow-agc-extra-env is set) still wins on conflict, mirroring tracing.
+		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
 		{Name: "HTTP_PROXY", Value: proxyServiceAddr},
 		{Name: "HTTPS_PROXY", Value: proxyServiceAddr},
 		{Name: "NO_PROXY", Value: buildNoProxy(ag.Spec.Proxy.NoProxyCIDRs)},

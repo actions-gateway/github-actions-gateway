@@ -33,6 +33,39 @@ func TestCRD_ValidActionsGateway_Accepted(t *testing.T) {
 	assert.Equal(t, "github-app", fetched.Spec.GitHubAppRef.Name)
 }
 
+// TestCRD_ActionsGateway_MissingGitHubURL_Rejected verifies the apiserver rejects
+// an ActionsGateway with no gitHubURL — the field is required (MinLength=1), so a
+// gateway with nothing to register against cannot be created. This is enforced by
+// the CRD OpenAPI schema, observable only at the envtest tier (a fake client does
+// not validate required fields).
+func TestCRD_ActionsGateway_MissingGitHubURL_Rejected(t *testing.T) {
+	const nsName = "team-crd-nourl"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("nourl-ag", nsName, "github-app")
+	ag.Spec.GitHubURL = ""
+	err := k8sClient.Create(ctx, ag)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+	require.Error(t, err, "ActionsGateway without gitHubURL must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+}
+
+// TestCRD_ActionsGateway_NonHTTPSGitHubURL_Rejected verifies the CRD Pattern guard
+// (^https://) rejects a non-https URL at the apiserver even before the webhook runs.
+func TestCRD_ActionsGateway_NonHTTPSGitHubURL_Rejected(t *testing.T) {
+	const nsName = "team-crd-httpurl"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("httpurl-ag", nsName, "github-app")
+	ag.Spec.GitHubURL = "http://github.com/example-org"
+	err := k8sClient.Create(ctx, ag)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+	require.Error(t, err, "ActionsGateway with a non-https gitHubURL must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+}
+
 // TestCRD_ActionsGateway_WebhookRejectsKubeSystem calls the webhook validator directly.
 // In envtest the webhook server is not wired up with TLS, so we call the validator
 // function directly — this tests the validation logic without the HTTP transport.
