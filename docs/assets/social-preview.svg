@@ -78,23 +78,23 @@
   <text x="80" y="410" fill="#2DD4BF" font-size="27" font-weight="600">higher utilization, lower cost.</text>
   <text x="80" y="448" fill="#8B949E" font-size="22" font-weight="400">An Actions Runner Controller (ARC) alternative.</text>
 
-  <!-- Feature pills (ARC differentiators) — row spans the 80px content margins (x=80 → x=1200) -->
+  <!-- Feature pills mirroring the homepage benefit tiles -->
   <g font-size="19" font-weight="600">
     <g>
-      <rect x="80"  y="472" width="304" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="232" y="504" fill="#9FE7DC" text-anchor="middle">Floor + opportunistic burst</text>
+      <rect x="80" y="472" width="311" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="236" y="504" fill="#9FE7DC" text-anchor="middle">Safe under ResourceQuota</text>
     </g>
     <g>
-      <rect x="398" y="472" width="224" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="510" y="504" fill="#9FB8F0" text-anchor="middle">Auto eviction retry</text>
+      <rect x="404" y="472" width="311" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="559" y="504" fill="#9FB8F0" text-anchor="middle">No blocked critical jobs</text>
     </g>
     <g>
-      <rect x="636" y="472" width="274" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="773" y="504" fill="#9FE7DC" text-anchor="middle">Per-team IP allowlisting</text>
+      <rect x="727" y="472" width="182" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="818" y="504" fill="#9FE7DC" text-anchor="middle">No idle GPUs</text>
     </g>
     <g>
-      <rect x="924" y="472" width="276" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
-      <text x="1062" y="504" fill="#9FB8F0" text-anchor="middle">4,000&#215; lighter listeners</text>
+      <rect x="921" y="472" width="279" height="50" rx="25" fill="#11202E" stroke="#234055" stroke-width="1.5"/>
+      <text x="1061" y="504" fill="#9FB8F0" text-anchor="middle">Per-tenant egress IPs</text>
     </g>
   </g>
 
