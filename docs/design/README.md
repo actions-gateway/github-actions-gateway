@@ -64,13 +64,13 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 
 ## Reading Paths by Role
 
-**Architect or engineer** reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md). Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
+**Architect** — reviewing the overall design: start with [01-executive-summary.md](01-executive-summary.md), then [02-architecture.md](02-architecture.md), then [03-api-contracts.md](03-api-contracts.md). Read [04-operational-flows.md](04-operational-flows.md) and [05-security.md](05-security.md) for depth.
 
-**Platform engineer** deploying or operating the system: read [Getting Started](../getting-started.md) first, then [02-architecture.md §2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) (GMC), [Appendix A](appendix-a-capacity-slos.md) (SLOs), [Observability](../operations/observability.md), [Runbook](../operations/runbook.md), and [Upgrade & Rollback](../operations/upgrade.md).
+**Platform engineer** — deploying or operating the system: read [Getting Started](../getting-started.md) first, then [02-architecture.md §2.1](02-architecture.md#21-tier-1--gateway-manager-controller-gmc) (GMC), [Appendix A](appendix-a-capacity-slos.md) (SLOs), [Observability](../operations/observability.md), [Runbook](../operations/runbook.md), and [Upgrade & Rollback](../operations/upgrade.md).
 
-**Security engineer** reviewing trust boundaries and threats: read [05-security.md](05-security.md), [02-architecture.md §2.4](02-architecture.md#24-tier-4--ephemeral-worker-pod) (worker isolation), [03-api-contracts.md §3.2](03-api-contracts.md#32-github-app-credentials-secret-schema) (credentials), and [Appendix B](appendix-b-worker-isolation.md) (runtime hardening).
+**Security engineer** — reviewing trust boundaries and threats: read [05-security.md](05-security.md), [02-architecture.md §2.4](02-architecture.md#24-tier-4--ephemeral-worker-pod) (worker isolation), [03-api-contracts.md §3.2](03-api-contracts.md#32-github-app-credentials-secret-schema) (credentials), and [Appendix B](appendix-b-worker-isolation.md) (runtime hardening).
 
-**Tenant team** authoring RunnerGroup configs: read [Getting Started](../getting-started.md), [03-api-contracts.md §3.1](03-api-contracts.md#31-kubernetes-crd-schemas) (CRD schemas), and [Appendix E](appendix-e-capacity-planning.md) (sizing guidance).
+**Tenant team** — authoring RunnerGroup configs: read [Getting Started](../getting-started.md), [03-api-contracts.md §3.1](03-api-contracts.md#31-kubernetes-crd-schemas) (CRD schemas), and [Appendix E](appendix-e-capacity-planning.md) (sizing guidance).
 
 ---
 
