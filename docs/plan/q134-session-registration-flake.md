@@ -62,6 +62,23 @@ design).
   responds to `CreateSession` makes `Run` return a *retriable* error well before
   the outer deadline, instead of hanging.
 
+## CI validation and the AcquireJob extension
+
+The first push (createSession + OAuth bound) got the suite **past session
+registration** in CI: the next e2e run logged `job 1: picking a live session →
+enqueuing onto session-4`, then still timed out at `job_lifecycle_test.go:179`
+with `expected >= 1 new worker pods, have 0`. A job was enqueued onto a *live*
+session but no worker pod spawned for 240s — the **same unbounded-control-plane
+class at the next call site**: `AcquireJob` (the request between job delivery and
+pod provisioning) also ran on the manager ctx with `http.DefaultClient`. It is
+now bound by the same `ControlPlaneTimeout`; a stalled `AcquireJob` fails fast
+and the poll loop re-acquires (its error is already handled as recoverable).
+
+The e2e suite is **multi-flaky**, not single-cause. The same run also failed
+`E2E_GMC_TenantProvisioning_ProxyConnectWorks` (`provisioning_test.go:282`, a
+curl-through-proxy egress test) — a fast failure unrelated to AGC sessions or
+this change. That is a separate flake outside this PR's scope.
+
 ## Follow-ups (filed separately)
 
 - **Q136** — `runnergroup_controller.go` returns `RequeueAfter=reapAfter`, which
