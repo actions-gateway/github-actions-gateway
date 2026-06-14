@@ -1,6 +1,8 @@
 # Security Operations: Abuse Detection & Response
 
-Audience: on-call SRE and platform security. This runbook turns the abuse
+> **Audience:** SRE, Security
+
+This runbook turns the abuse
 heuristics in the [threat model](../design/05-security.md) into concrete,
 operator-actionable detections. It complements — does not replace — the
 availability/SLO alerting in [observability.md](observability.md) and the

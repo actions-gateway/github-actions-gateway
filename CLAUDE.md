@@ -121,3 +121,4 @@ When working on specific tasks, read the relevant doc before starting:
 | Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes have a **hard 250-char cap** (lint-enforced; a markdown link counts its full source length). Count before committing. |
 | Security-relevant changes | `docs/design/05-security.md` + the operator half per `docs/development/doc-update-matrix.md` |
 | Cutting a release, or editing the image publish/sign/SBOM pipeline (`publish.yml`) | `docs/operations/release.md` |
+| Editing the docs/marketing website — MkDocs config, brand assets, or the progressive-enhancement JS | `docs/development/website.md` |

@@ -6,13 +6,13 @@
 
 The system is delivered across five milestones over roughly five weeks. Each milestone produces a deliverable and a verifiable success criterion; later milestones build on the artifacts of earlier ones (the probe binary becomes the AGC's polling implementation, the decrypted payload becomes the test fixture for the worker pod, and so on). Operators who prefer to leverage AI-assisted implementation can consult [Appendix C](appendix-c-ai-implementation.md) for prompting guidance and a discussion of the trade-offs — that material is optional and orthogonal to the milestone structure itself.
 
-```
-Phase 1: API Probe    Phase 2: AGC Core      Phase 3: Worker     Phase 4: GMC + Proxy  Phase 5: Harden & Ship
-[Days 1-4]            [Days 5-10]            [Days 11-16]        [Days 17-22]          [Days 23-26]
-- Wire protocol       - RunnerGroup CRD      - Pipe wrapper      - ActionsGateway CRD  - Security policies
-- Auth + decrypt      - Goroutine loop       - Dockerfile        - GMC reconciler      - Multi-tenant load
-- Broker fixtures     - AGC CRUD safe        - E2E smoke test    - Proxy + HPA deploy  - 1000-session burst
-```
+| Phase | Days | Focus |
+|---|---|---|
+| 1 — API Probe | 1–4 | Wire protocol · Auth + decrypt · Broker fixtures |
+| 2 — AGC Core | 5–10 | RunnerGroup CRD · Goroutine loop · AGC CRUD safe |
+| 3 — Worker | 11–16 | Pipe wrapper · Dockerfile · E2E smoke test |
+| 4 — GMC + Proxy | 17–22 | ActionsGateway CRD · GMC reconciler · Proxy + HPA deploy |
+| 5 — Harden & Ship | 23–26 | Security policies · Multi-tenant load · 1000-session burst |
 
 ---
 

@@ -1,0 +1,347 @@
+/* Landing-page polish. Colors use Material theme variables so both palettes work. */
+
+:root {
+  --gag-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --gag-elev-2: 0 8px 20px rgba(0, 0, 0, 0.12);
+  --gag-accent-soft: color-mix(in srgb, var(--md-accent-fg-color) 9%, transparent);
+  --gag-accent-line: color-mix(in srgb, var(--md-accent-fg-color) 35%, transparent);
+}
+
+/* Brand palette: Kubernetes blue -> teal, matching the logomark + social card.
+   Set under the scheme selectors so these win over Material's named accent. */
+body[data-md-color-scheme="default"] {
+  --md-accent-fg-color: #326ce5;
+  --md-accent-fg-color--transparent: rgba(50, 108, 229, 0.1);
+  --md-typeset-a-color: #2456c9; /* darker blue for link-text contrast on white */
+}
+
+body[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #5b8def;
+  --md-accent-fg-color--transparent: rgba(91, 141, 239, 0.1);
+  --md-typeset-a-color: #6fa0f5;
+  --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --gag-elev-2: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.gag-hero {
+  position: relative;
+  isolation: isolate;
+  text-align: center;
+  padding: 3rem 0 1.75rem;
+}
+
+/* Subtle dot-grid behind the hero, faded out toward the edges. */
+.gag-hero::before {
+  content: "";
+  position: absolute;
+  inset: -1.5rem -2rem 0;
+  z-index: -1;
+  background-image: radial-gradient(var(--md-default-fg-color--lightest) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 28%, #000, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 28%, #000, transparent 75%);
+  opacity: 0.6;
+}
+
+.gag-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  margin: 0 0 0.75rem;
+}
+
+.gag-hero h1 {
+  font-size: clamp(2rem, 1.3rem + 3.1vw, 3.1rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.7rem;
+  /* Even out the headline so the last word doesn't dangle on its own line. */
+  text-wrap: balance;
+}
+
+/* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
+.gag-hero .headerlink {
+  display: none;
+}
+
+.gag-hero .gag-tagline {
+  font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
+  color: var(--md-default-fg-color--light);
+  max-width: 40rem;
+  margin: 0 auto 1.5rem;
+  text-wrap: pretty;
+}
+
+.gag-hero .md-button {
+  margin: 0.25rem 0.3rem;
+  border-radius: 0.45rem;
+  transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
+    background-color 0.2s var(--gag-ease), color 0.2s var(--gag-ease);
+}
+
+.gag-hero .md-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--gag-elev-2);
+}
+
+.gag-hero .md-button--primary {
+  box-shadow: var(--gag-elev-1);
+}
+
+.gag-reassure {
+  font-size: 0.82rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 38rem;
+  margin: 1.1rem auto 0;
+  text-wrap: pretty;
+}
+
+.gag-reassure .twemoji {
+  color: var(--md-accent-fg-color);
+}
+
+/* Benefit cards: 3 across (two balanced rows of three), degrading when narrow. */
+.gag-pillars .grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 50rem) {
+  .gag-pillars .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 30rem) {
+  .gag-pillars .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Four-tier flow: real DOM boxes so text stays legible and the layout reflows
+   (branching row on wide screens, stacked on narrow) instead of scaling an SVG. */
+.gag-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1.5rem auto;
+  /* Bound the diagram so the two-up Tier 2/3 row doesn't stretch to fill a wide
+     column — keeps the boxes a consistent size and the whole flow centered. */
+  max-width: 38rem;
+}
+
+.gag-flow__node {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  background: var(--md-default-bg-color);
+  min-width: 12rem;
+}
+
+.gag-flow__node--lead {
+  border-color: var(--md-accent-fg-color);
+}
+
+.gag-flow__node--input {
+  border-style: dashed;
+}
+
+.gag-flow__tier {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-accent-fg-color);
+  margin-bottom: 0.15rem;
+}
+
+.gag-flow__tier--input {
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-flow__title {
+  display: block;
+  font-weight: 700;
+}
+
+.gag-flow__sub {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-flow__arrow {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.8rem;
+}
+
+.gag-flow__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+/* Wider content column (less side gutter) so wide tables have room to breathe. */
+.md-grid {
+  max-width: 72rem;
+}
+
+/* Benefit cards: depth + hover lift, with the icon in an accent chip. */
+.gag-pillars .grid.cards > ul > li {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.6rem;
+  box-shadow: var(--gag-elev-1);
+  transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
+    border-color 0.2s var(--gag-ease);
+}
+
+.gag-pillars .grid.cards > ul > li:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--gag-elev-2);
+  border-color: var(--gag-accent-line);
+}
+
+.gag-pillars .grid.cards .twemoji.lg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  margin-bottom: 0.35rem;
+  border-radius: 0.5rem;
+  background: var(--gag-accent-soft);
+  color: var(--md-accent-fg-color);
+}
+
+.gag-pillars .grid.cards .twemoji.lg svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Comparison table: bigger text, rounded frame, emphasized header + GAG column. */
+.md-typeset table:not([class]) {
+  font-size: 0.8rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.md-typeset table:not([class]) th {
+  font-weight: 700;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.md-typeset table:not([class]) td:first-child {
+  font-weight: 500;
+}
+
+/* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". */
+.md-typeset table:not([class]) th:last-child {
+  color: var(--md-accent-fg-color);
+}
+
+.md-typeset table:not([class]) th:last-child,
+.md-typeset table:not([class]) td:last-child {
+  background: var(--gag-accent-soft);
+}
+
+.md-typeset table:not([class]) tbody tr:hover td:not(:last-child) {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
+}
+
+/* Scroll reveals — only when JS adds .gag-reveal-ready. No-JS and reduced-motion
+   users never get the hidden initial state, so they see everything immediately. */
+html.gag-reveal-ready .gag-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.5s var(--gag-ease), transform 0.5s var(--gag-ease);
+}
+
+html.gag-reveal-ready .gag-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.gag-reveal-ready .gag-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none;
+  }
+}
+
+/* Clear keyboard focus ring. */
+.md-typeset a:focus-visible,
+.md-button:focus-visible,
+.persona-chip:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Persona filter on the operations index (progressively enhanced from a table). */
+.persona-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.persona-chip {
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 0.42rem 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+  transition: background-color 0.15s var(--gag-ease), color 0.15s var(--gag-ease),
+    border-color 0.15s var(--gag-ease);
+}
+
+.persona-chip:hover {
+  border-color: var(--gag-accent-line);
+}
+
+.persona-chip[aria-pressed="true"] {
+  background: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: #fff;
+}
+
+.persona-pill {
+  display: inline-block;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding: 0.05rem 0.5rem;
+  border-radius: 0.8rem;
+  background: var(--gag-accent-soft);
+  color: var(--md-accent-fg-color);
+  white-space: nowrap;
+}
+
+/* Per-doc audience pills, just under the page title. */
+.persona-pills-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: -0.2rem 0 1.2rem;
+}
+
+/* Audience pills are links to the filtered ops index — keep the pill look. */
+.md-typeset a.persona-pill {
+  text-decoration: none;
+  color: var(--md-accent-fg-color);
+  transition: background-color 0.15s var(--gag-ease);
+}
+
+.md-typeset a.persona-pill:hover {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
+}
