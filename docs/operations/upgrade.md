@@ -126,13 +126,16 @@ already own namespaces and quotas.
 
 ### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
 
-The GMC's cluster-wide `namespaces:patch` grant is now gated by the
-`namespace-psa-guard` ValidatingAdmissionPolicy (shipped in
-`cmd/gmc/config/admission-policy/namespace-psa-guard.yaml`, applied by `make deploy`).
-It denies the GMC any namespace patch unless the namespace already carries
-`actions-gateway.github.com/tenant: "true"`. **Existing tenant namespaces created
-before this change do not have the label**, so after upgrade the GMC cannot stamp
-their Pod Security Admission labels and each affected `ActionsGateway` will emit a
+The GMC's cluster-wide write grants are now gated by two ValidatingAdmissionPolicies
+(both shipped in `cmd/gmc/config/admission-policy/`, applied by `make deploy`):
+`namespace-psa-guard` gates `namespaces:patch`, and `gmc-tenant-resource-guard`
+gates create/update/delete of all tenant provisioning resources (Deployments,
+Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, PDBs,
+RunnerGroups, and Secret create/update). Both deny the GMC unless the target
+namespace already carries `actions-gateway.github.com/tenant: "true"`. **Existing
+tenant namespaces created before this change do not have the label**, so after
+upgrade the GMC cannot stamp their Pod Security Admission labels *or provision any
+resources in them*, and each affected `ActionsGateway` will emit a
 `NamespaceMarkerMissing` warning event.
 
 Before (or immediately after) upgrading, label every existing tenant namespace:
@@ -145,8 +148,8 @@ kubectl get actionsgateway -A -o jsonpath='{range .items[*]}{.metadata.namespace
 ```
 
 For a phased rollout where you cannot label every namespace up front, temporarily set
-the binding's `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are
-logged but not enforced, label the namespaces, then restore `[Deny]`.
+**both** bindings' `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are
+logged but not enforced, label the namespaces, then restore `[Deny]` on each.
 
 ### Worker pods are now cleaned up automatically (one-time sweep recommended)
 
@@ -251,7 +254,7 @@ Four upgrade-time behaviors are specific to this chart:
 - **`gmc.image.digest` is required at render time.** Both `helm install` and `helm upgrade` fail with `gmc.image must be pinned by digest …` when the release values carry no digest — e.g. a values file that omits it, or `--reset-values`. `--reuse-values` (as in the example above) carries the previously pinned digest forward; pass `--set gmc.image.digest=sha256:<new-gmc>` to move to the new release's image. See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest). Dev/test only: `allowFloatingImageTags=true` opts out.
 - **CRDs upgrade with the release.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, **not** the chart-root `crds/` directory — Helm never upgrades resources in `crds/`. So a `helm upgrade` applies additive CRD field changes automatically, and `helm uninstall` preserves the CRDs (and every tenant's `ActionsGateway`/`RunnerGroup` object) rather than cascade-deleting them. You do not run a separate CRD apply step. The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
-- **The `namespace-psa-guard` binding denies by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches will be denied. To stage the rollout you can temporarily set the binding to `Audit` by editing `validationActions` on the `ValidatingAdmissionPolicyBinding`, then flip it back to `Deny` once the labels are in place.
+- **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied. To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
 
 The remaining steps describe the manual (kustomize/`make`) path used in dev/CI.
 

@@ -187,8 +187,10 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag)); err != nil {
 		return fmt.Errorf("AGC NetworkPolicy: %w", err)
 	}
-	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous versions.
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
+	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous
+	// versions. Best-effort during steady-state reconcile: a failure here is logged by
+	// deleteIfExists and retried on the next reconcile, so it must not fail provisioning.
+	_ = r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
 
 	// 9. PDB.
 	if err := r.applyPDB(ctx, buildPDB(ag)); err != nil {
@@ -236,36 +238,60 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	}
 
 	ns := ag.Namespace
-	name := ag.Name
+
+	// Fail closed (Q125): collect every delete error and DO NOT remove the
+	// finalizer while any teardown delete is unconfirmed. A NotFound is success
+	// (the resource is already gone); any other error retains the finalizer and
+	// requeues, so a transient API failure cannot orphan a live, credentialed
+	// AGC Deployment + RoleBinding after offboarding. Each pass is idempotent:
+	// already-deleted resources return NotFound and converge to clean.
+	var errs []error
+	del := func(obj client.Object, name string) {
+		if err := r.deleteIfExists(ctx, obj, ns, name); err != nil {
+			errs = append(errs, err)
+		}
+	}
 
 	// 2. AGC Deployment.
-	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, agcAppName)
+	del(&appsv1.Deployment{}, agcAppName)
 	// 3. HPA, PDB, proxy Service, proxy Deployment.
 	// The proxy TLS cert Secret has an owner reference on the ActionsGateway CR; GC
 	// handles its cleanup automatically when the CR is deleted, so no explicit delete
 	// is needed here (and GMC does not have delete permission on secrets).
-	r.deleteIfExists(ctx, &autoscalingv2.HorizontalPodAutoscaler{}, ns, proxyServiceName)
-	r.deleteIfExists(ctx, &policyv1.PodDisruptionBudget{}, ns, proxyServiceName)
-	r.deleteIfExists(ctx, &corev1.Service{}, ns, proxyServiceName)
-	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, proxyServiceName)
+	del(&autoscalingv2.HorizontalPodAutoscaler{}, proxyServiceName)
+	del(&policyv1.PodDisruptionBudget{}, proxyServiceName)
+	del(&corev1.Service{}, proxyServiceName)
+	del(&appsv1.Deployment{}, proxyServiceName)
 	// 4. NetworkPolicies. The namespace ResourceQuota is platform-owned (Q130) —
 	// the GMC neither creates nor deletes it. A ResourceQuota left over from a
 	// pre-Q130 install (ownerRef → this ActionsGateway) is garbage-collected by
 	// Kubernetes when the CR is deleted; the GMC holds no quota delete verb.
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npAGCName)
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npWorkloadName)
-	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, "actions-gateway") // legacy
+	del(&networkingv1.NetworkPolicy{}, npProxyName)
+	del(&networkingv1.NetworkPolicy{}, npAGCName)
+	del(&networkingv1.NetworkPolicy{}, npWorkloadName)
+	del(&networkingv1.NetworkPolicy{}, "actions-gateway") // legacy
 	// 5. RoleBinding, Role.
-	r.deleteIfExists(ctx, &rbacv1.RoleBinding{}, ns, agcSAName)
-	r.deleteIfExists(ctx, &rbacv1.Role{}, ns, agcSAName)
+	del(&rbacv1.RoleBinding{}, agcSAName)
+	del(&rbacv1.Role{}, agcSAName)
 	// 6. ServiceAccounts.
-	r.deleteIfExists(ctx, &corev1.ServiceAccount{}, ns, agcSAName)
-	r.deleteIfExists(ctx, &corev1.ServiceAccount{}, ns, workerSAName)
+	del(&corev1.ServiceAccount{}, agcSAName)
+	del(&corev1.ServiceAccount{}, workerSAName)
 
-	_ = name // used for label selector above
+	if len(errs) > 0 {
+		err := errors.Join(errs...)
+		if r.Recorder != nil {
+			r.Recorder.Eventf(ag, nil, corev1.EventTypeWarning, "TeardownIncomplete", "ReconcileDelete",
+				"Tenant teardown could not confirm deletion of all owned resources in namespace %q; retaining the cleanup finalizer and requeuing until teardown is clean: %v",
+				ns, err)
+		}
+		// Returning the error requeues with backoff. The finalizer stays in place,
+		// so the partially-torn-down tenant (including any live AGC Deployment) is
+		// not abandoned.
+		return ctrl.Result{}, err
+	}
 
-	// Remove finalizer.
+	// All owned resources are confirmed gone — remove the finalizer so the CR can
+	// be garbage-collected.
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, ag); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -273,12 +299,20 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	return ctrl.Result{}, r.Update(ctx, ag)
 }
 
-func (r *ActionsGatewayReconciler) deleteIfExists(ctx context.Context, obj client.Object, ns, name string) {
+// deleteIfExists issues a best-effort delete of a single namespaced resource.
+// A NotFound result is success (the resource is already gone — the desired
+// teardown end state); any other error is logged and returned so the caller
+// can decide whether to retain the finalizer and requeue (see reconcileDelete,
+// Q125). Callers that treat the delete as fire-and-forget may ignore the
+// return value.
+func (r *ActionsGatewayReconciler) deleteIfExists(ctx context.Context, obj client.Object, ns, name string) error {
 	obj.SetNamespace(ns)
 	obj.SetName(name)
 	if err := r.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
-		logf.FromContext(ctx).Error(err, "failed to delete resource", "namespace", ns, "name", name)
+		logf.FromContext(ctx).Error(err, "failed to delete resource during teardown", "namespace", ns, "name", name)
+		return err
 	}
+	return nil
 }
 
 func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) (ctrl.Result, error) {

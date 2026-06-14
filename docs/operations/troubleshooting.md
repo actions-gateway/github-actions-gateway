@@ -12,6 +12,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
+- [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
@@ -160,7 +161,11 @@ cluster whose tenant namespaces predate the policy (see
 that is not labelled `actions-gateway.github.com/tenant: "true"`. The label confines
 the grant to managed tenants so a compromised GMC cannot relabel `kube-system` PSA
 (see [Security §5.1/§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
-The GMC never sets this label itself — a trusted administrator must apply it.
+The GMC never sets this label itself — a trusted administrator must apply it. The
+same marker also gates the `gmc-tenant-resource-guard` policy, which confines every
+tenant-resource write (Deployments, Secrets, RoleBindings, …) to marked namespaces;
+provisioning fails at the PSA-stamping step first, so `NamespaceMarkerMissing` is the
+signal you will see, but applying the label clears both gates.
 
 **Diagnostics.**
 
@@ -172,9 +177,9 @@ kubectl describe actionsgateway -n <namespace> <name> | grep -A2 NamespaceMarker
 kubectl get namespace <namespace> \
   -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'   # want: true
 
-# Confirm the policy and its binding are installed
-kubectl get validatingadmissionpolicy gmc-namespace-psa-guard
-kubectl get validatingadmissionpolicybinding gmc-namespace-psa-guard-binding
+# Confirm both policies and their bindings are installed
+kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resource-guard
+kubectl get validatingadmissionpolicybinding gmc-namespace-psa-guard-binding gmc-tenant-resource-guard-binding
 ```
 
 **Resolution.** Apply the marker label as an administrator, then the GMC reconciler
@@ -187,6 +192,44 @@ kubectl label namespace <namespace> actions-gateway.github.com/tenant=true
 If the GMC's ServiceAccount is installed under a non-default namespace or name, also
 confirm the policy's `matchConditions` username
 (`system:serviceaccount:gmc-system:gmc-controller-manager`) matches your install.
+
+---
+
+## ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)
+
+**Symptoms.** You deleted an `ActionsGateway`, but the CR does not disappear:
+`kubectl get actionsgateway -n <namespace>` still lists it with a non-empty
+`metadata.deletionTimestamp`, and `kubectl describe` shows a repeating `Warning`
+event with reason `TeardownIncomplete`. Some tenant resources (e.g. the AGC
+Deployment, RoleBinding, or a ServiceAccount) are still present in the namespace.
+
+**Cause.** Teardown is **fail-closed by design** (Q125): the GMC keeps the
+`actions-gateway.github.com/gmc-cleanup` finalizer on the CR and requeues until it
+can confirm *every* owned resource is deleted (or already gone). If a delete keeps
+failing — most often an API-server error, or a `Forbidden` from an admission policy
+or revoked RBAC — the finalizer is retained on purpose so a live, credentialed AGC
+Deployment is never orphaned by a half-finished teardown. A NotFound is treated as
+success, so an already-deleted resource never blocks convergence.
+
+**Diagnostics.**
+
+```sh
+# Confirm the CR is mid-deletion and which resources remain
+kubectl get actionsgateway -n <namespace> <name> -o jsonpath='{.metadata.deletionTimestamp}{"\n"}{.metadata.finalizers}{"\n"}'
+kubectl describe actionsgateway -n <namespace> <name> | grep -A3 TeardownIncomplete
+
+# The event message names the namespace and the underlying error; also check the GMC log
+kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=50 | grep -i "delete resource during teardown"
+```
+
+**Resolution.** Fix the underlying delete failure — restore API-server health, or
+re-grant the GMC the delete verb / re-apply the `gmc-tenant-resource-guard` marker if
+the namespace lost its `actions-gateway.github.com/tenant=true` label (the policy gates
+DELETE too, so an unmarked namespace blocks teardown). The reconciler retries on its
+own backoff and removes the finalizer automatically once every delete is confirmed.
+**Do not** manually strip the finalizer to force the CR away — that re-introduces the
+orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real
+delete error instead.
 
 ---
 

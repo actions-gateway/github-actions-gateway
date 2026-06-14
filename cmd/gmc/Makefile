@@ -104,16 +104,18 @@ uninstall: ## Remove GMC CRDs from the current kube-context
 	kustomize build config/crd | kubectl delete --ignore-not-found=true -f -
 
 # Deploy the controller to the cluster.
-# The agc-tenant-role ClusterRole and the namespace-psa-guard ValidatingAdmissionPolicy
-# are applied separately from the prefixed kustomize tree so their cluster-scoped names
-# stay stable (the agc-tenant-role matching the GMC's `clusterroles:bind` resourceNames;
-# the VAP binding's policyName reference). See config/agc-tenant-role/ and
+# The agc-tenant-role ClusterRole and the ValidatingAdmissionPolicies under
+# config/admission-policy/ (namespace-psa-guard, tenant-resource-guard) are applied
+# separately from the prefixed kustomize tree so their cluster-scoped names stay stable
+# (the agc-tenant-role matching the GMC's `clusterroles:bind` resourceNames; each VAP
+# binding's policyName reference). See config/agc-tenant-role/ and
 # config/admission-policy/ for why.
 # After kustomize apply, override the image and inject AGC/proxy image env vars.
 .PHONY: deploy
 deploy: ## Deploy the GMC controller into the current kube-context
 	kubectl apply --server-side -f config/agc-tenant-role/agc_tenant_role.yaml
 	kubectl apply --server-side -f config/admission-policy/namespace-psa-guard.yaml
+	kubectl apply --server-side -f config/admission-policy/tenant-resource-guard.yaml
 	kustomize build config/default | kubectl apply --server-side --force-conflicts -f -
 	kubectl set image deployment/gmc-controller-manager manager=$(GMC_IMG) -n gmc-system
 	kubectl set env deployment/gmc-controller-manager -c manager \
@@ -123,6 +125,7 @@ deploy: ## Deploy the GMC controller into the current kube-context
 .PHONY: undeploy
 undeploy: ## Remove the GMC controller from the current kube-context
 	kustomize build config/default | kubectl delete --ignore-not-found=true -f -
+	kubectl delete --ignore-not-found=true -f config/admission-policy/tenant-resource-guard.yaml
 	kubectl delete --ignore-not-found=true -f config/admission-policy/namespace-psa-guard.yaml
 	kubectl delete --ignore-not-found=true -f config/agc-tenant-role/agc_tenant_role.yaml
 

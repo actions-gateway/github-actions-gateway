@@ -60,7 +60,7 @@ Two detection substrates are used:
 | **Cross-Tenant GitHub App Credential Leakage / key compromise** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `token_refresh_errors_total` spike (key revoked out-of-band, or a forged token rejected) | Metric | Page |
 | **Mass tenant provisioning** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC deploying workloads | `managed_gateways` jumps unexpectedly | Metric | Page |
 | **AGC overpermissioned Secret access** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), H-2 residual) — compromised AGC binary issuing a full-body Secret `list` | AGC ServiceAccount `list secrets` in audit log (legit code path is metadata-only — see [security.md H-2](../plan/security.md)) | Audit log | Page |
-| **GMC privilege escalation** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC reading Secrets / patching namespaces | GMC ServiceAccount `get secrets` beyond reconcile cadence; `namespaces patch` denied by `namespace-psa-guard` | Audit log | Page |
+| **GMC privilege escalation** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) — compromised GMC reading Secrets / writing out-of-tenant resources | GMC ServiceAccount `get secrets` beyond reconcile cadence; `namespaces patch` denied by `namespace-psa-guard`; any write denied by `gmc-tenant-resource-guard` | Audit log | Page |
 
 ---
 
@@ -217,13 +217,19 @@ policy is in place.
 | **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway/runner-group=*` or the AGC's `gitHubAppRef` | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
 | **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `gitHubAppRef` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
 | **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
-| **GMC workload creation outside reconcile** | `verb=create resource=deployments|roles|rolebindings` by the GMC SA in a namespace with no corresponding `ActionsGateway` CR change | The GMC only provisions in response to CR reconciles. Creation without a triggering CR edit is lateral movement. | Isolate the GMC; diff provisioned resources against live `ActionsGateway` CRs. |
+| **GMC out-of-tenant resource write** | `gmc-tenant-resource-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked `actions-gateway.github.com/tenant=true` (e.g. a Deployment or Secret into `kube-system`). A denial means the GMC tried (Q121/Q122). | A denial is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
+| **GMC workload creation outside reconcile** | `verb=create resource=deployments|roles|rolebindings` by the GMC SA in a *marked tenant* namespace with no corresponding `ActionsGateway` CR change | The `gmc-tenant-resource-guard` VAP already blocks writes into *unmarked* namespaces; this catches the residual — provisioning inside a legitimate tenant namespace without a triggering CR edit, which is lateral movement within the GMC's confined scope. | Isolate the GMC; diff provisioned resources against live `ActionsGateway` CRs. |
 
 Until the audit policy lands, these threats are mitigated structurally
-(RBAC scope, cache-bypass, the `namespace-psa-guard` VAP, no Secret
-informer) but are **not observable** — there is no alert that fires if a
-compromised binary exercises its standing permissions. Closing that gap is
-the value of the audit policy.
+(RBAC scope, cache-bypass, the `namespace-psa-guard` and
+`gmc-tenant-resource-guard` VAPs, no Secret informer) but write-confinement
+denials aside are **not observable** — there is no alert that fires if a
+compromised binary exercises its standing *read* permissions. Closing that
+gap is the value of the audit policy. Note the two VAPs confine GMC *writes*
+(create/update/delete) only; Secret *reads* (`get`/`list`/`watch`) cannot be
+gated at admission and remain cluster-wide at the RBAC layer — the audit
+policy is the only detective control for them (see
+[§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)).
 
 ---
 

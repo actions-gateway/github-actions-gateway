@@ -10,8 +10,8 @@ GitHub App Secret and the first `ActionsGateway` CR, see
 [Getting Started](../getting-started.md).
 
 The Helm chart installs the GMC and its cluster prerequisites **only** — CRDs,
-RBAC, the validating webhook, the `namespace-psa-guard` admission policy, and
-NetworkPolicies. Per-tenant Actions Gateway Controller (AGC) instances and
+RBAC, the validating webhook, the `namespace-psa-guard` and
+`gmc-tenant-resource-guard` admission policies, and NetworkPolicies. Per-tenant Actions Gateway Controller (AGC) instances and
 egress proxy pools are **not** chart resources; the GMC provisions them at
 runtime from each tenant's `ActionsGateway` CR. The chart is the supported
 distribution artifact; the `cmd/gmc/config/` kustomize bases remain the dev/CI
@@ -23,8 +23,8 @@ renders, offline validation), see the
 
 ## Prerequisites
 
-- **Kubernetes >= 1.30** — the GMC's `namespace-psa-guard` policy needs the GA
-  `ValidatingAdmissionPolicy` API.
+- **Kubernetes >= 1.30** — the GMC's `namespace-psa-guard` and
+  `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API.
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are
   multi-arch — one pinned digest (the OCI index digest) serves both, so mixed
   amd64/arm64 (e.g. Graviton) node pools need no per-arch configuration. Other
@@ -72,7 +72,8 @@ helm install gag charts/actions-gateway \
 `gag` is the Helm release name and `gmc-system` is the install namespace; both
 are conventions you can change. Keep `namePrefix` at its default `gmc` unless
 you are running two GMCs in one cluster — the operational docs and the
-`namespace-psa-guard` policy match resources by that prefix.
+`namespace-psa-guard` / `gmc-tenant-resource-guard` policies match resources by
+that prefix.
 
 ### Pin images by digest
 
@@ -165,9 +166,10 @@ kubectl wait --for=condition=Established \
   crd/actionsgateways.actions-gateway.github.com \
   crd/runnergroups.actions-gateway.github.com
 
-# 4. The validating webhook and admission policy are present.
+# 4. The validating webhook and both admission policies are present.
+# (Resource names carry the chart namePrefix, default "gmc-".)
 kubectl get validatingwebhookconfiguration | grep actions-gateway
-kubectl get validatingadmissionpolicy namespace-psa-guard
+kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resource-guard
 
 # 5. No errors in the GMC manager logs.
 kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=30

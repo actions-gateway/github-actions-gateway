@@ -1,0 +1,77 @@
+{{- if .Values.admissionPolicy.enabled }}
+# ValidatingAdmissionPolicy that confines the GMC ServiceAccount's cluster-wide
+# write grants for tenant provisioning resources (Deployments, Services,
+# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, PodDisruptionBudgets,
+# RunnerGroups, and Secret create/update) to namespaces marked
+# actions-gateway.github.com/tenant=true — the gate RBAC cannot express (Q121/Q122).
+# Secret reads are not gated: admission never runs on get/list/watch (see
+# docs/design/05-security.md §5.1). Requires Kubernetes >= 1.30.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-tenant-resource-guard
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["secrets", "serviceaccounts", "services"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["deployments"]
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["networkpolicies"]
+      - apiGroups: ["autoscaling"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["horizontalpodautoscalers"]
+      - apiGroups: ["policy"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["poddisruptionbudgets"]
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["rolebindings", "roles"]
+      - apiGroups: ["actions-gateway.github.com"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["runnergroups"]
+  matchConditions:
+    # Only the GMC ServiceAccount is subject to this policy; every other
+    # principal is admitted unchanged.
+    - name: only-gmc-service-account
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace (include "actions-gateway.serviceAccountName" .) | quote }}
+  variables:
+    - name: markerKey
+      expression: "'actions-gateway.github.com/tenant'"
+    # namespaceObject reflects the live labels of the target namespace, which a
+    # compromised GMC cannot forge (it holds no create on namespaces and the marker
+    # is immutable to it under the namespace-psa-guard policy).
+    - name: nsLabels
+      expression: "(has(namespaceObject.metadata) && has(namespaceObject.metadata.labels)) ? namespaceObject.metadata.labels : {}"
+  validations:
+    - expression: "variables.markerKey in variables.nsLabels && variables.nsLabels[variables.markerKey] == 'true'"
+      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled ' + variables.markerKey + '=true; namespace ' + request.namespace + ' is not a managed tenant namespace'"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-tenant-resource-guard-binding
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "actions-gateway.namePrefix" . }}-tenant-resource-guard
+  # Deny is the secure default. For an in-place upgrade of a cluster whose
+  # existing tenant namespaces are not yet labeled, temporarily set this to
+  # [Audit] (or label the namespaces first) — see docs/operations/upgrade.md.
+  validationActions: [Deny]
+{{- end }}
