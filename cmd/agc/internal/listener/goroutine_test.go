@@ -10,6 +10,7 @@ import (
 	"crypto/sha1" //nolint:gosec // SHA-1 required by RSA-OAEP to match server side
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -353,6 +354,64 @@ func TestListener_CreateSessionUnauthorized(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// TestListener_CreateSessionStallDoesNotWedge proves that a broker which
+// accepts the connection but never responds to CreateSession cannot wedge the
+// goroutine: the per-call ControlPlaneTimeout fires, Run returns a *retriable*
+// error well before the outer context deadline, and the Multiplexer is free to
+// restart the baseline and retry. This is the Q134 regression guard — before
+// the control-plane timeout the goroutine inherited only the long-lived manager
+// context and blocked inside a single CreateSession indefinitely, so the
+// RunnerGroup never registered a session within the e2e budget.
+func TestListener_CreateSessionStallDoesNotWedge(t *testing.T) {
+	oauthSrv := oauthStub()
+
+	// The Create handler simulates an overloaded broker that accepts the
+	// connection but is slow to respond: it blocks until the test releases it
+	// (stop), with a hard-cap fallback so it can never wedge the run. Note we do
+	// NOT rely on r.Context() cancellation here — server-side observation of a
+	// client's context-deadline disconnect is not prompt or reliable, so the
+	// test drives the handler's lifetime directly via stop.
+	stop := make(chan struct{})
+	var once sync.Once
+	handlerReturned := make(chan struct{})
+	mux := &brokerMux{}
+	mux.SetCreate(func(_ http.ResponseWriter, _ *http.Request) {
+		select {
+		case <-stop:
+		case <-time.After(30 * time.Second): // safety cap; close(stop) fires first
+		}
+		once.Do(func() { close(handlerReturned) })
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.ControlPlaneTimeout = 200 * time.Millisecond
+
+	// Generous outer deadline: the assertion is that Run returns far sooner,
+	// proving the per-call timeout fired rather than the outer context.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	err := listener.Run(ctx, cfg)
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "Run must surface the stalled CreateSession, not hang")
+	assert.Less(t, elapsed, 3*time.Second,
+		"Run should fail fast on a stalled CreateSession (got %s)", elapsed)
+	// The failure must be retriable so the Multiplexer restarts the baseline; a
+	// NonRetriableError would permanently park it.
+	var nre *listener.NonRetriableError
+	assert.False(t, errors.As(err, &nre),
+		"a control-plane timeout must be retriable, got %v", err)
+
+	close(stop)       // release the blocked handler
+	<-handlerReturned // ...and wait for it to return before the leak check
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 func TestListener_GetMessage202Loop(t *testing.T) {
 	oauthSrv := oauthStub()
 	var polls atomic.Int32
@@ -521,6 +580,64 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 	cancel()
 	<-done
 
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_AcquireJobStallDoesNotWedge proves the control-plane timeout also
+// guards the job-pickup path: a broker that accepts the connection but never
+// responds to AcquireJob must not wedge the goroutine inside handleJob (which
+// would block job pickup so the worker pod never spawns — the Q134 class at the
+// AcquireJob call site). The bounded AcquireJob fails fast, handleJob returns a
+// recoverable error, and the poll loop re-enters GetMessage.
+func TestListener_AcquireJobStallDoesNotWedge(t *testing.T) {
+	oauthSrv := oauthStub()
+	var delivered atomic.Bool
+	var pollsAfter atomic.Int32
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		pollsAfter.Add(1)
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	// AcquireJob accepts the connection but is slow to respond. Without the
+	// per-call timeout the listener would wedge in handleJob here and never poll
+	// again; with it, AcquireJob fails fast and the poll loop continues.
+	stop := make(chan struct{})
+	var once sync.Once
+	handlerReturned := make(chan struct{})
+	mux.SetAcquire(func(_ http.ResponseWriter, _ *http.Request) {
+		select {
+		case <-stop:
+		case <-time.After(30 * time.Second): // safety cap; close(stop) fires first
+		}
+		once.Do(func() { close(handlerReturned) })
+	})
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.IsLastListener = func() bool { return true }
+	cfg.ControlPlaneTimeout = 200 * time.Millisecond
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+	assert.Eventually(t, func() bool { return pollsAfter.Load() > 0 }, 3*time.Second, 10*time.Millisecond,
+		"listener should re-poll after a stalled AcquireJob times out, not wedge in handleJob")
+	cancel()
+	<-done
+
+	close(stop)
+	<-handlerReturned
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)

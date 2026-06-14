@@ -66,9 +66,22 @@ type Config struct {
 	IdleThreshold int // consecutive 202s before idle shutdown; 0 means 50
 	// RenewInterval is the cadence of the per-job RenewJob loop. 0 means 60s.
 	RenewInterval time.Duration
-	JobHandler    JobHandlerFunc
-	Clock         Clock
-	Log           *slog.Logger
+	// ControlPlaneTimeout bounds each non-long-poll broker call on the
+	// session-establishment path — the OAuth token exchange and CreateSession —
+	// so a slow or unresponsive broker cannot wedge the goroutine indefinitely.
+	// Without it those calls inherit only the long-lived manager context (the
+	// broker uses http.DefaultClient, which has no read timeout), so a broker
+	// that accepts the connection but is slow to respond — e.g. an overloaded
+	// shared fakegithub under parallel CI load — blocks the goroutine inside a
+	// single attempt and the RunnerGroup never registers a session (Q134). With
+	// a deadline the call fails fast and retriably, so the Multiplexer restarts
+	// the baseline and retries. Zero selects defaultControlPlaneTimeout. The
+	// GetMessage long-poll is deliberately excluded — it holds the connection
+	// open for the broker's poll interval by design.
+	ControlPlaneTimeout time.Duration
+	JobHandler          JobHandlerFunc
+	Clock               Clock
+	Log                 *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -111,6 +124,22 @@ type Config struct {
 // network blip, which the generic backoff absorbs without re-registration
 // traffic.
 const staleEOFThreshold = 3
+
+// defaultControlPlaneTimeout is the per-call deadline applied to the listener's
+// non-long-poll broker operations (OAuth token exchange, CreateSession) when
+// Config.ControlPlaneTimeout is unset. 30s is generous for a healthy round-trip
+// to GitHub yet tight enough that several retries fit inside the e2e
+// session-registration budget when the broker stalls (Q134).
+const defaultControlPlaneTimeout = 30 * time.Second
+
+// controlPlaneTimeout returns the per-call deadline for the goroutine's
+// non-long-poll broker operations, defaulting when unset.
+func (cfg Config) controlPlaneTimeout() time.Duration {
+	if cfg.ControlPlaneTimeout > 0 {
+		return cfg.ControlPlaneTimeout
+	}
+	return defaultControlPlaneTimeout
+}
 
 // Run executes the listener goroutine. It blocks until the context is cancelled
 // or an unrecoverable error occurs (VersionTooOldError, unauthorized).
@@ -321,7 +350,9 @@ func Run(ctx context.Context, cfg Config) error {
 
 // refreshBrokerToken fetches a fresh OAuth token and sets it on cfg.Broker.
 func refreshBrokerToken(ctx context.Context, cfg Config) error {
-	token, err := githubapp.FetchRunnerOAuthToken(ctx, cfg.Agent.Creds, cfg.Agent.PrivateKey, cfg.HTTPClient)
+	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+	defer cancel()
+	token, err := githubapp.FetchRunnerOAuthToken(cctx, cfg.Agent.Creds, cfg.Agent.PrivateKey, cfg.HTTPClient)
 	if err != nil {
 		return fmt.Errorf("refresh broker token: %w", err)
 	}
@@ -350,7 +381,9 @@ type sessionState struct {
 // the AES-256-CBC message key from the server's RSA-encrypted session key.
 func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionState, error) {
 	agentName := fmt.Sprintf("%s-%d", cfg.Group, cfg.Agent.Index)
-	sess, err := cfg.Broker.CreateSession(ctx, cfg.Agent.AgentID, agentName, cfg.Agent.RunnerVersion)
+	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+	defer cancel()
+	sess, err := cfg.Broker.CreateSession(cctx, cfg.Agent.AgentID, agentName, cfg.Agent.RunnerVersion)
 	if err != nil {
 		var vtooOld *broker.VersionTooOldError
 		if errors.As(err, &vtooOld) {
@@ -421,13 +454,20 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		runServiceURL = jobBody.RunServiceURL
 	)
 
-	// Call AcquireJob if we have a runServiceURL.
+	// Call AcquireJob if we have a runServiceURL. Bounded by the control-plane
+	// timeout for the same reason as createSession: it is a short request/response
+	// call (not the long-poll), so an unresponsive broker here must not wedge the
+	// goroutine — that would block job pickup and the worker pod would never spawn
+	// (Q134 class). A timeout surfaces as a recoverable AcquireJob error; the poll
+	// loop logs it and continues, re-acquiring on the next delivery.
 	if runServiceURL != "" {
-		resp, rawBytes, acqErr := cfg.Broker.AcquireJob(ctx, runServiceURL, broker.JobAcquisitionRequest{
+		acqCtx, cancelAcq := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+		resp, rawBytes, acqErr := cfg.Broker.AcquireJob(acqCtx, runServiceURL, broker.JobAcquisitionRequest{
 			JobMessageID:   jobBody.RunnerRequestID,
 			RunnerOS:       cfg.RunnerOS,
 			BillingOwnerID: jobBody.BillingOwnerID,
 		})
+		cancelAcq()
 		if acqErr != nil {
 			if cfg.Metrics != nil {
 				cfg.Metrics.JobAcquisitionErrors.WithLabelValues(cfg.Namespace, "acquirejob_failed").Inc()
