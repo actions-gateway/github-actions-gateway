@@ -379,6 +379,16 @@ Triage the report against this operator's needs:
   relabel the DNS pods or set `spec.proxy.managedNetworkPolicy: false` and supply
   your own DNS egress rule. Symptom: tenant workloads time out on every lookup
   while non-DNS connectivity is unaffected.
+- **Known limitation — NodeLocal DNSCache (`node-local-dns`) is not yet
+  supported out of the box.** With node-local-dns, pods send queries to a
+  link-local IP (default `169.254.20.10`) served by a `hostNetwork`
+  `node-local-dns` pod, not to a `k8s-app: kube-dns` CoreDNS pod — so on an
+  enforcing CNI the kube-dns-only rule drops those queries, breaking resolution
+  for workers **and** the proxy. Until first-class support lands
+  ([Q136](../STATUS.md#Q136)), grant it with an additive NetworkPolicy allowing
+  port-53 egress to `169.254.0.0/16` (link-local is non-routable off-node, so
+  this preserves the no-arbitrary-resolver property) for the workload and proxy
+  pods — see [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening).
 - **Findings that don't apply** (managed control plane hides the file, a check
   for a component you don't run) — record the justification alongside the
   cluster's onboarding ticket.
