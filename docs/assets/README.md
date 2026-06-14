@@ -68,16 +68,15 @@ uploaded manually via **Settings → General → Social preview**. Re-upload
 
 ### Re-rendering the PNG
 
-Keep the PNG in sync with the SVG. Render at exactly 1280×640 (the size the SVG
-declares) with any SVG renderer. With headless Chrome:
+Rendered with [resvg](https://github.com/linebender/resvg) (`brew install resvg`)
+— the same renderer as the icons above. The SVG declares its 1280×640 size, so no
+`-w/-h` is needed. It uses CSS system-font stacks (`-apple-system`, …) which are
+**not** real font names, so pass concrete installed families or the metrics shift.
+Run from `docs/assets/`:
 
 ```sh
-cd docs/assets
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --headless --disable-gpu --force-device-scale-factor=1 \
-  --window-size=1280,640 --hide-scrollbars --default-background-color=00000000 \
-  --screenshot=social-preview.png "file://$PWD/social-preview.svg"
+resvg --sans-serif-family "Helvetica Neue" --monospace-family "Menlo" \
+  social-preview.svg social-preview.png
 ```
 
-Equivalent alternatives: `rsvg-convert -w 1280 -h 640 social-preview.svg -o social-preview.png`,
-Inkscape, or macOS Quick Look (`qlmanage -t -s 1280 -o . social-preview.svg`).
+Verify the result has no clipped text and a crisp logomark.
