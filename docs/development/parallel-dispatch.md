@@ -55,6 +55,10 @@ The knobs to set each run (everything else comes from this playbook):
 - **Merge gating** — default is dispatcher-gated after a scope review; say so if
   you want risk-tiered auto-merge (and note that needs branch protection +
   required checks first, per [the merge model](#the-merge-model)).
+- **Model per task** — match the model to the work, not the batch (see
+  [Model selection](#model-selection)). The dispatcher sets each worker's model
+  in its spawn prompt; an autonomous worker cannot run `model-advisor`
+  interactively.
 
 Two practical notes:
 
@@ -142,8 +146,33 @@ the dispatcher conversation) and include:
   PR; never read, print, log, or pass any secret/credential anywhere.
 - **The task:** what to change, which files, the acceptance check, and the bare
   backlog ID to put in the PR title and body.
+- **Model:** the model the worker should run on, chosen by the dispatcher per
+  [Model selection](#model-selection) — a fresh worker session cannot stop to
+  run `model-advisor` interactively, so the choice is made for it at spawn.
 - **Do not merge** — the dispatcher merges.
 - **The self-healing loop** above.
+
+## Model selection
+
+The dispatcher picks each worker's model and bakes it into the spawn prompt. A
+worker is a fresh, unattended session: it cannot pause to run the `model-advisor`
+skill (which prompts the user interactively), so the per-task choice is the
+dispatcher's to make up front.
+
+Match the model to the *task*, not the batch — a dispatch run usually mixes
+sizes:
+
+- **Mechanical / well-understood work** (lint gates, CI wiring, packaging,
+  docs-only edits, contained fixes) runs fine on a faster, cheaper model. Most
+  parallel-dispatch batches are dominated by these.
+- **Tasks with real judgment** (a fix touching the concurrency core, an
+  admission/security change, anything where scope is easy to get wrong) warrant
+  the strongest model — the dispatcher's scope review is the only gate, so the
+  worker should not be under-powered.
+
+When unsure, size up: a worker that picks the wrong approach costs more
+dispatcher toil than the model delta. Record the per-task model choice in the
+`tmp/` tracker alongside task → chip → PR → state so the run stays auditable.
 
 ## The dispatcher loop
 
@@ -304,6 +333,8 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Tasks grouped into streams by shared files; foundational items ordered
       first.
 - [ ] Concurrency cap chosen.
+- [ ] Model chosen per task (mechanical → faster/cheaper; judgment-heavy →
+      strongest), set in each spawn prompt.
 - [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
 - [ ] Dispatcher owns assignment + merge ordering + scope; each worker removes
       its own Queue row in an isolated commit (not the dispatcher).
