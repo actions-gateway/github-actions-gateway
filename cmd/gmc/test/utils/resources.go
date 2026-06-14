@@ -35,11 +35,12 @@ func ApplyManifest(yaml string) error {
 //
 // Every namespace created here is a GMC-managed tenant namespace, so it is
 // stamped with the actions-gateway.github.com/tenant=true marker label that the
-// namespace-psa-guard ValidatingAdmissionPolicy requires before the GMC may
-// patch Pod Security Admission labels on it (see
-// cmd/gmc/config/admission-policy/namespace-psa-guard.yaml). Without it the GMC
-// reconcile is denied at the PSA-stamping step and never provisions tenant
-// resources. A caller may override the marker by passing it in labels.
+// GMC admission policies require: namespace-psa-guard before the GMC may patch
+// Pod Security Admission labels on it, and tenant-resource-guard before the GMC
+// may create any tenant resource (Deployments, Secrets, RoleBindings, …) in it
+// (see cmd/gmc/config/admission-policy/). Without the marker the GMC reconcile is
+// denied at the PSA-stamping step and never provisions tenant resources. A caller
+// may override the marker by passing it in labels.
 func CreateNamespace(name string, labels map[string]string) {
 	cmd := exec.Command("kubectl", "create", "namespace", name, "--dry-run=client", "-o", "yaml")
 	yaml, err := Run(cmd)

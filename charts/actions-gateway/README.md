@@ -23,8 +23,10 @@ not chart resources.
   cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole.
 - The validating webhook (`ValidatingWebhookConfiguration` + Service) and its
   serving cert (cert-manager or self-signed — see below).
-- The `namespace-psa-guard` ValidatingAdmissionPolicy (constrains the GMC's
-  namespace-patch grant to PSA labels on marked tenants).
+- Two ValidatingAdmissionPolicies that confine the GMC's cluster-wide write
+  grants to marked tenant namespaces: `namespace-psa-guard` (the namespace
+  PSA-label patch) and `tenant-resource-guard` (create/update/delete of
+  Deployments, Secrets, RoleBindings, NetworkPolicies, etc.).
 - NetworkPolicies (default-deny ingress + metrics/webhook allows) and the
   metrics Service / optional ServiceMonitor.
 
@@ -81,10 +83,10 @@ helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values
 ```
 
 CRDs ship as templates, so field changes are applied on upgrade. The
-`namespace-psa-guard` binding denies by default; if you are upgrading a cluster
-whose tenant namespaces are not yet labeled
+`namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if
+you are upgrading a cluster whose tenant namespaces are not yet labeled
 `actions-gateway.github.com/tenant=true`, label them first (or temporarily set
-the binding to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
+both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 
 ## Values
 
@@ -104,7 +106,7 @@ the binding to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `metrics.serviceMonitor.enabled` | `false` | Emit a Prometheus-Operator ServiceMonitor (needs its CRD). |
 | `networkPolicy.enabled` | `true` | Ship the GMC ingress NetworkPolicies (needs an enforcing CNI). |
 | `podDisruptionBudget.enabled` | `true` | Ship the `minAvailable: 1` PDB. |
-| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard` VAP + binding (needs k8s ≥ 1.30). |
+| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard` and `tenant-resource-guard` VAPs + bindings (needs k8s ≥ 1.30). |
 | `certManager.enabled` | `true` | Issue the webhook cert via cert-manager; `false` uses the self-signed fallback. |
 | `certManager.selfSignedCertDurationDays` | `3650` | Validity of the self-signed cert when cert-manager is disabled. |
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |

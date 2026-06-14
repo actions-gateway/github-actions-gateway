@@ -27,12 +27,12 @@ unimplemented at the authorization layer.
 
 | Finding | Severity | Disposition |
 |---|---|---|
-| GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped | High | **New → [Q121](../STATUS.md#Q121)** (Q29 audit policy is the detective half) |
-| GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **New → [Q122](../STATUS.md#Q122)** |
+| GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped | High | **Resolved (Q121):** Secret *writes* confined to tenant-marked namespaces by the new `gmc-tenant-resource-guard` VAP; Secret *reads* cannot be VAP/RBAC-confined (admission does not run on read verbs) so `05-security.md` now states the read scope honestly with its compensating controls. Claim == reality. (Q29 audit policy is the detective half for reads.) |
+| GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **Resolved (Q122):** all workload `create`/`update`/`delete` confined to tenant-marked namespaces by the `gmc-tenant-resource-guard` VAP; `05-security.md` / `02-architecture.md` updated to match. |
 | Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **Resolved (Q128)** — workload NP now declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set (default-deny) |
 | No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **Resolved (Q123)** — every `uses:` SHA-pinned, syft version-pinned, Dependabot `github-actions` ecosystem bumps the pins |
 | `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/verify-release-test.sh` |
-| GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **New → [Q125](../STATUS.md#Q125)** |
+| GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **Resolved (Q125):** `deleteIfExists` returns its error (NotFound = success); `reconcileDelete` collects delete errors, emits a `TeardownIncomplete` event, and requeues without removing the finalizer until every delete is confirmed gone. Fail-closed and idempotent. |
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → [Q126](../STATUS.md#Q126)** |
 | 8 smaller hardening items (see below) | Low | **New → [Q127](../STATUS.md#Q127)** (batch) |
 | DNS egress allows port 53 to any destination | Medium | Known — [Q105](../STATUS.md#Q105) |
@@ -74,7 +74,23 @@ assertion; the [network-architecture.md validation
 section](../design/network-architecture.md#how-to-validate-network-isolation)
 adds a manual runtime probe for policy-enforcing CNIs.
 
-### Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High)
+### Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High) — RESOLVED
+
+**Resolution.** Secret *writes* (`create`/`update`) are now confined to namespaces
+carrying `actions-gateway.github.com/tenant=true` by the new
+`gmc-tenant-resource-guard` ValidatingAdmissionPolicy
+(`cmd/gmc/config/admission-policy/tenant-resource-guard.yaml`, shipped by the chart,
+applied by `make deploy`). Secret *reads* (`get`/`list`/`watch`) cannot be confined at
+the authorization layer — admission never runs on read verbs, `resourceNames` cannot
+scope `list`/`watch`, and tenant Secret names are dynamic so `get` cannot be
+name-scoped either — so `05-security.md` §5.1 now states the read scope honestly
+(cluster-wide) alongside its compensating controls (metadata-only informer,
+cache-bypassed reads of only the named credential Secret, the write-confinement VAP,
+and the Q29 detective audit policy). Claim now equals reality in both directions.
+Guarded by `TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces` (envtest).
+
+Original finding:
+
 
 `cmd/gmc/config/rbac/role.yaml:38-47` grants `secrets:
 create,get,list,update,watch` with no `resourceNames`, bound by a
@@ -93,7 +109,21 @@ complement either way. *Interim (2026-06-12): the inaccurate claims in
 `05-security.md` are struck through with corrections in place; restoring
 clean prose there is part of resolving this item.*
 
-### Q122 — GMC workload writes are cluster-wide; docs claim confinement (High)
+### Q122 — GMC workload writes are cluster-wide; docs claim confinement (High) — RESOLVED
+
+**Resolution.** All workload `create`/`update`/`delete` (deployments, services,
+serviceaccounts, networkpolicies, rolebindings, roles, HPAs, PDBs, runnergroups) are
+now confined to tenant-marked namespaces by the `gmc-tenant-resource-guard`
+ValidatingAdmissionPolicy (the same policy that handles the Q121 Secret-write path,
+keyed on the existing `actions-gateway.github.com/tenant=true` marker via
+`namespaceObject`). A compromised GMC can no longer create a Deployment or RoleBinding
+in `kube-system`. `05-security.md` and `02-architecture.md` updated so the
+confinement claims are true. Guarded by
+`TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces` (envtest, covers both
+Secret and Deployment kinds). (`resourcequotas` write was already dropped by Q130.)
+
+Original finding:
+
 
 `role.yaml:84-158`: deployments, rolebindings, networkpolicies, services,
 serviceaccounts, resourcequotas, HPAs, PDBs — all verbs, all namespaces.
@@ -151,7 +181,22 @@ even reach the sign step. `scripts/verify-release-test.sh` (run by `make
 check` and the CI shellcheck job) asserts the regexp accepts
 `refs/tags/vX.Y.Z` and rejects `refs/heads/…`.
 
-### Q125 — GMC teardown fail-open (Medium)
+### Q125 — GMC teardown fail-open (Medium) — RESOLVED
+
+**Resolution.** `deleteIfExists` now returns its error (a NotFound is success — the
+desired teardown end state). `reconcileDelete` collects the errors across every
+teardown delete; if any are non-nil it emits a `TeardownIncomplete` Warning event and
+returns the joined error to requeue **without removing the finalizer**, so a transient
+API (or admission/RBAC) failure can no longer orphan a live, credentialed AGC
+Deployment + RoleBinding. The finalizer is removed only once every delete is confirmed
+gone. The path is idempotent: repeated passes re-list RunnerGroups (gone → skip) and
+re-issue deletes (NotFound → success), converging to clean. Operator-facing symptom
+documented in `troubleshooting.md`. Guarded by
+`TestReconcileDelete_FailClosedOnDeleteError` and
+`TestReconcileDelete_CleanTeardownRemovesFinalizer` (unit, fake client + interceptor).
+
+Original finding:
+
 
 `reconcileDelete` (`actionsgateway_controller.go:222-272`) error-checks
 RunnerGroup deletion, but the AGC Deployment, proxy resources,

@@ -1,0 +1,92 @@
+# ValidatingAdmissionPolicy that confines the GMC ServiceAccount's cluster-wide
+# write grants for tenant provisioning resources to namespaces an administrator
+# has marked as managed tenants (Queue Q121 / Q122).
+#
+# The GMC ClusterRole grants create/update/delete on Deployments, Services,
+# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, PodDisruptionBudgets,
+# RunnerGroups, and create/update on Secrets — all CLUSTER-WIDE, because RBAC cannot
+# express "only namespaces that carry label X". A compromised GMC could otherwise
+# create a Deployment or RoleBinding in kube-system, or write a Secret into any
+# namespace. This policy is the gate RBAC cannot be: it denies the GMC SA any
+# create/update/delete of these kinds unless the *target namespace* already carries
+# actions-gateway.github.com/tenant=true — the same marker the namespace-psa-guard
+# policy keys on, applied by a trusted admin at onboarding and never by the GMC.
+#
+# Scope limits this policy deliberately does NOT cover:
+#   - Secret READS (get/list/watch). Admission only runs on create/update/delete, so
+#     no ValidatingAdmissionPolicy can confine a read. Secret read confinement is not
+#     achievable via VAP/RBAC alone (tenant Secret names are dynamic, and the metadata
+#     informer needs cluster-wide list/watch); the read scope is documented honestly
+#     in docs/design/05-security.md §5.1 with its compensating controls (Q121).
+#
+# Kept OUT of the prefixed config/default kustomize tree (applied separately by
+# `make deploy`, like namespace-psa-guard.yaml) so its cluster-scoped names stay
+# stable and the binding->policy reference is not rewritten by namePrefix.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: gmc-tenant-resource-guard
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["secrets", "serviceaccounts", "services"]
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["deployments"]
+      - apiGroups: ["networking.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["networkpolicies"]
+      - apiGroups: ["autoscaling"]
+        apiVersions: ["v2"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["horizontalpodautoscalers"]
+      - apiGroups: ["policy"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["poddisruptionbudgets"]
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["rolebindings", "roles"]
+      - apiGroups: ["actions-gateway.github.com"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["runnergroups"]
+  matchConditions:
+    # Only the GMC ServiceAccount is subject to this policy; every other principal
+    # is admitted unchanged. This is the default install identity — if the GMC is
+    # installed under a different namespace or name, update this single string
+    # (shared limitation with namespace-psa-guard; parameterization is Q127).
+    - name: only-gmc-service-account
+      expression: "request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'"
+  variables:
+    - name: markerKey
+      expression: "'actions-gateway.github.com/tenant'"
+    # namespaceObject is the Namespace the request's resource lives in. It is always
+    # populated for these namespaced kinds (null only for cluster-scoped resources),
+    # and reflects the live namespace labels — which a compromised GMC cannot forge,
+    # since the GMC holds no create on namespaces and the marker key is immutable to
+    # it under namespace-psa-guard.
+    - name: nsLabels
+      expression: "(has(namespaceObject.metadata) && has(namespaceObject.metadata.labels)) ? namespaceObject.metadata.labels : {}"
+  validations:
+    - expression: "variables.markerKey in variables.nsLabels && variables.nsLabels[variables.markerKey] == 'true'"
+      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled ' + variables.markerKey + '=true; namespace ' + request.namespace + ' is not a managed tenant namespace'"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: gmc-tenant-resource-guard-binding
+spec:
+  policyName: gmc-tenant-resource-guard
+  # Deny is the secure default. For an in-place upgrade of a cluster whose existing
+  # tenant namespaces are not yet labeled, temporarily set this to [Audit] (or label
+  # the namespaces first) — see docs/operations/upgrade.md.
+  validationActions: [Deny]

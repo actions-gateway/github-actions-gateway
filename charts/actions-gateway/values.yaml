@@ -105,10 +105,11 @@ certManager:
   # Validity (days) of the self-signed cert when certManager.enabled=false.
   selfSignedCertDurationDays: 3650
 
-# admissionPolicy ships the namespace-psa-guard ValidatingAdmissionPolicy that
-# constrains the GMC's cluster-wide namespace patch grant to PSA labels on
-# marked tenant namespaces only. ON by default (secure-by-default). Requires
-# Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
+# admissionPolicy ships two ValidatingAdmissionPolicies that confine the GMC's
+# cluster-wide write grants to marked tenant namespaces: namespace-psa-guard
+# (the namespace PSA-label patch) and tenant-resource-guard (create/update/delete
+# of Deployments, Secrets, RoleBindings, NetworkPolicies, etc.). ON by default
+# (secure-by-default). Requires Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
 admissionPolicy:
   enabled: true
 
