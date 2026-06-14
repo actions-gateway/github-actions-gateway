@@ -503,6 +503,22 @@ func TestBuildWorkloadNetworkPolicy_NoGitHubEgress(t *testing.T) {
 	}
 }
 
+// TestBuildWorkloadNetworkPolicy_DefaultDenyIngress locks in Q128: worker pods run
+// untrusted GitHub Actions job code and must accept no inbound connections. The
+// authoring guard asserts the generated spec declares PolicyTypeIngress with an empty
+// ingress rule set (= default-deny). This is the reliable CI gate because kindnet does
+// not enforce ingress NetworkPolicy (see Q7b in docs/plan/worker-egress-proxy.md); a
+// runtime negative needs a policy-enforcing CNI such as Calico.
+func TestBuildWorkloadNetworkPolicy_DefaultDenyIngress(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	np := buildWorkloadNetworkPolicy(ag)
+
+	assert.Contains(t, np.Spec.PolicyTypes, networkingv1.PolicyTypeIngress,
+		"workload NP must declare PolicyTypeIngress so ingress to worker pods defaults to deny")
+	assert.Empty(t, np.Spec.Ingress,
+		"workload NP must carry no ingress rules — default-deny all inbound to untrusted worker pods")
+}
+
 func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 	for _, managed := range []bool{true, false} {
 		ag := newTestAG("gateway", "team-a")

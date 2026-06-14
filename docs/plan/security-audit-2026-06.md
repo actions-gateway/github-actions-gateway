@@ -29,7 +29,7 @@ unimplemented at the authorization layer.
 |---|---|---|
 | GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped | High | **New → [Q121](../STATUS.md#Q121)** (Q29 audit policy is the detective half) |
 | GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **New → [Q122](../STATUS.md#Q122)** |
-| Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **New → [Q128](../STATUS.md#Q128)** |
+| Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **Resolved (Q128)** — workload NP now declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set (default-deny) |
 | No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **New → [Q123](../STATUS.md#Q123)** |
 | `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **New → [Q124](../STATUS.md#Q124)** |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **New → [Q125](../STATUS.md#Q125)** |
@@ -49,18 +49,30 @@ unimplemented at the authorization layer.
 
 ## Queued findings (detail)
 
-### Q128 — Worker pods lack ingress NetworkPolicy (High)
+### Q128 — Worker pods lack ingress NetworkPolicy (High) — RESOLVED
 
-`buildWorkloadNetworkPolicy` (`cmd/gmc/internal/controller/builder.go:269`)
-sets `PolicyTypes: [Egress]` only; the AGC and proxy policies declare
-ingress but nothing selects worker pods (`actions-gateway/component:
-workload`) for ingress, so they are default-allow. Any pod in the cluster
-can connect to a worker running untrusted job code; combined with the
+`buildWorkloadNetworkPolicy` (`cmd/gmc/internal/controller/builder.go`)
+set `PolicyTypes: [Egress]` only; the AGC and proxy policies declared
+ingress but nothing selected worker pods (`actions-gateway/component:
+workload`) for ingress, so they were default-allow. Any pod in the cluster
+could connect to a worker running untrusted job code; combined with the
 unrestricted port-53 egress (Q105), two malicious workflows in different
-tenants can form a cross-tenant channel. Contradicts the "fully isolated
+tenants could form a cross-tenant channel. Contradicted the "fully isolated
 within the tenant's namespace" claim (`02-architecture.md:7`).
-**Fix:** add `Ingress` to `PolicyTypes` with no ingress rules
-(default-deny — workers accept no inbound by design).
+
+**Resolution:** the workload NP now declares
+`policyTypes: [Ingress, Egress]` with an empty ingress rule set
+(default-deny — workers accept no inbound by design; they are outbound-only,
+dialing the proxy and AGC). The AGC pod is also selected by the workload NP
+but its own `buildAGCNetworkPolicy` additively re-admits the monitoring
+metrics scrape, so default-deny costs it nothing. kubelet liveness/readiness
+probes originate from the node and are not subject to NetworkPolicy, so
+health checks are unaffected. Guarded by the spec-level authoring test
+`TestBuildWorkloadNetworkPolicy_DefaultDenyIngress` (the reliable CI gate —
+kindnet does not enforce ingress policy) and the e2e `WorkloadNPSpec`
+assertion; the [network-architecture.md validation
+section](../design/network-architecture.md#how-to-validate-network-isolation)
+adds a manual runtime probe for policy-enforcing CNIs.
 
 ### Q121 — GMC Secret RBAC is cluster-wide; docs claim name-scoped (High)
 

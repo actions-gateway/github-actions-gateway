@@ -247,6 +247,19 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 // kube-proxy DNATs ClusterIP → PodIP before NetworkPolicy enforcement, so an
 // `ipBlock: <ClusterIP>/32` rule never matches actual packets and silently drops all
 // proxy-bound traffic. Selecting the proxy pods directly matches post-DNAT destinations.
+//
+// Ingress: the policy declares PolicyTypeIngress with no ingress rules — default-deny
+// all inbound to workload pods (Q128). Worker pods run untrusted GitHub Actions job
+// code and are outbound-only by design (they long-poll/dial out to GitHub via the proxy
+// and to the AGC); nothing in the cluster legitimately initiates a connection *to* a
+// worker. Without this, worker pods were default-allow ingress, so any pod in the
+// cluster could open connections to untrusted job code — a lateral-movement /
+// cross-tenant channel that contradicts the per-tenant isolation model. kubelet
+// liveness/readiness probes originate from the node and are not subject to
+// NetworkPolicy, so default-deny does not break health checks. The AGC pod is also
+// selected here (it carries the workload label), but its own buildAGCNetworkPolicy
+// additively re-admits the monitoring metrics scrape, so default-deny here costs it
+// nothing.
 func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
@@ -270,8 +283,9 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 		ObjectMeta: metav1.ObjectMeta{Name: npWorkloadName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{labelComponent: componentWorkload}},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
 			Egress:      egress,
+			// No Ingress rules: PolicyTypeIngress with an empty rule set is default-deny.
 		},
 	}
 }
