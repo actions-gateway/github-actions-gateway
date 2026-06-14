@@ -2,31 +2,39 @@
 
 ## Logomark & icons
 
-The brand mark is the **four-tier motif** (Gateway Manager → Controller → Egress
-Proxy → Worker Pod) as a tapering stack, in the Kubernetes-blue → teal gradient
-(`#326CE5 → #2DD4BF`) — the same identity as the social card.
+The brand mark is a **faceted "gateway ring"** — a crystalline torus (a portal
+you pass through) in the Kubernetes-blue → teal gradient (`#326CE5 → #2DD4BF`),
+lit from the top-left for depth. Same identity as the social card.
 
-Edit the **SVG masters**; never hand-edit a generated raster.
+The three SVG masters are **generated** from `generate-logomark.py` (the ring is
+parametric — point count, spike depth, contrast, and light angle are all tunable
+constants at the top of the script). Run it from `docs/assets/`, then re-render
+the rasters with resvg:
 
-| Master (edit this) | Generated output(s) | Used for |
+```sh
+python3 generate-logomark.py   # writes logo.svg, icon-tile.svg, favicon.svg
+```
+
+| Master (generated) | Raster output(s) | Used for |
 | --- | --- | --- |
 | `logo.svg` | — (SVG used directly) | header logomark, via `theme.logo` |
-| `favicon.svg` | `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon.ico` | browser-tab favicon (the SVG itself is wired via `theme.favicon`; the `.ico` is the raster fallback) |
-| `icon-tile.svg` | `apple-touch-icon.png` (180), `icon-512.png` | iOS / PWA icons (opaque navy tile) |
+| `favicon.svg` | `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon.ico` | browser-tab favicon — a **simplified** smooth ring that stays legible at 16 px (the SVG is wired via `theme.favicon`; the `.ico` is the raster fallback) |
+| `icon-tile.svg` | `apple-touch-icon.png` (180), `icon-512.png` | iOS / PWA icons (full faceted ring on an opaque navy tile, maskable-safe padding) |
 
-`favicon.svg` is the rounded tile; `icon-tile.svg` is the full-bleed tile with
-maskable-safe padding. The Apple/PWA rasters and the `.ico` are linked from
-`overrides/main.html`.
+The Apple/PWA rasters and the `.ico` are linked from `overrides/main.html`. The
+social card (`social-preview.svg`, below) has the ring baked in inline with its
+kicker — re-run `generate-logomark.py`'s `social_ring_group()` and re-paste if
+the ring geometry changes.
 
 ### Re-rendering the rasters
 
 Generated with [resvg](https://github.com/linebender/resvg) — a single static
 binary, no browser. Install with `brew install resvg`. Render natively at each
-target size (do **not** render large and downscale — the thin bars soften under a
+target size (do **not** render large and downscale — facets soften under a
 resample). Run from `docs/assets/`:
 
 ```sh
-# Transparent-tile favicons + packed .ico
+# Simplified-ring favicons + packed .ico
 for s in 16 32 48; do resvg -w $s -h $s favicon.svg favicon-$s.png; done
 
 # Opaque tile icons (iOS / PWA), rendered natively at the target size

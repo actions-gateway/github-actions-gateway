@@ -1,15 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GitHub Actions Gateway">
   <defs>
-    <linearGradient id="gagGrad" gradientUnits="userSpaceOnUse" x1="16" y1="6.5" x2="16" y2="25.5">
-      <stop offset="0" stop-color="#326CE5"/>
+    <linearGradient id="g" x1="16" y1="4" x2="16" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b8bff"/>
       <stop offset="1" stop-color="#2DD4BF"/>
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="7" fill="#0B1220"/>
-  <g fill="url(#gagGrad)">
-    <rect x="6.5" y="7" width="19" height="2.7" rx="1.35"/>
-    <rect x="8.35" y="12" width="15.3" height="2.7" rx="1.35"/>
-    <rect x="10.2" y="17" width="11.6" height="2.7" rx="1.35"/>
-    <rect x="12" y="22" width="8" height="2.7" rx="1.35"/>
-  </g>
+  <circle cx="16" cy="16" r="10.5" fill="url(#g)"/>
+  <circle cx="16" cy="16" r="5" fill="#0B1220"/>
 </svg>
