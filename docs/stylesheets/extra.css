@@ -278,8 +278,51 @@ html.gag-reveal-ready .gag-reveal.is-visible {
 
 /* Clear keyboard focus ring. */
 .md-typeset a:focus-visible,
-.md-button:focus-visible {
+.md-button:focus-visible,
+.persona-chip:focus-visible {
   outline: 2px solid var(--md-accent-fg-color);
   outline-offset: 2px;
   border-radius: 3px;
+}
+
+/* Persona filter on the operations index (progressively enhanced from a table). */
+.persona-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.persona-chip {
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 0.42rem 0.85rem;
+  border-radius: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+  transition: background-color 0.15s var(--gag-ease), color 0.15s var(--gag-ease),
+    border-color 0.15s var(--gag-ease);
+}
+
+.persona-chip:hover {
+  border-color: var(--gag-accent-line);
+}
+
+.persona-chip[aria-pressed="true"] {
+  background: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+  color: #fff;
+}
+
+.persona-pill {
+  display: inline-block;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  padding: 0.05rem 0.5rem;
+  border-radius: 0.8rem;
+  background: var(--gag-accent-soft);
+  color: var(--md-accent-fg-color);
+  white-space: nowrap;
 }
