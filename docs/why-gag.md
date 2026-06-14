@@ -57,7 +57,7 @@ network policies, and quota to match — no cluster-admin involvement after the
 initial GMC install.
 
 ```yaml
-apiVersion: actions.gateway/v1alpha1
+apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
   name: team-a-gateway
