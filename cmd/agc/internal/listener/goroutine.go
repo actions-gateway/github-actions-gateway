@@ -454,13 +454,20 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		runServiceURL = jobBody.RunServiceURL
 	)
 
-	// Call AcquireJob if we have a runServiceURL.
+	// Call AcquireJob if we have a runServiceURL. Bounded by the control-plane
+	// timeout for the same reason as createSession: it is a short request/response
+	// call (not the long-poll), so an unresponsive broker here must not wedge the
+	// goroutine — that would block job pickup and the worker pod would never spawn
+	// (Q134 class). A timeout surfaces as a recoverable AcquireJob error; the poll
+	// loop logs it and continues, re-acquiring on the next delivery.
 	if runServiceURL != "" {
-		resp, rawBytes, acqErr := cfg.Broker.AcquireJob(ctx, runServiceURL, broker.JobAcquisitionRequest{
+		acqCtx, cancelAcq := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+		resp, rawBytes, acqErr := cfg.Broker.AcquireJob(acqCtx, runServiceURL, broker.JobAcquisitionRequest{
 			JobMessageID:   jobBody.RunnerRequestID,
 			RunnerOS:       cfg.RunnerOS,
 			BillingOwnerID: jobBody.BillingOwnerID,
 		})
+		cancelAcq()
 		if acqErr != nil {
 			if cfg.Metrics != nil {
 				cfg.Metrics.JobAcquisitionErrors.WithLabelValues(cfg.Namespace, "acquirejob_failed").Inc()

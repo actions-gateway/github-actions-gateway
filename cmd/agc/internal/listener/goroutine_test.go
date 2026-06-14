@@ -585,6 +585,64 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// TestListener_AcquireJobStallDoesNotWedge proves the control-plane timeout also
+// guards the job-pickup path: a broker that accepts the connection but never
+// responds to AcquireJob must not wedge the goroutine inside handleJob (which
+// would block job pickup so the worker pod never spawns — the Q134 class at the
+// AcquireJob call site). The bounded AcquireJob fails fast, handleJob returns a
+// recoverable error, and the poll loop re-enters GetMessage.
+func TestListener_AcquireJobStallDoesNotWedge(t *testing.T) {
+	oauthSrv := oauthStub()
+	var delivered atomic.Bool
+	var pollsAfter atomic.Int32
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		pollsAfter.Add(1)
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	// AcquireJob accepts the connection but is slow to respond. Without the
+	// per-call timeout the listener would wedge in handleJob here and never poll
+	// again; with it, AcquireJob fails fast and the poll loop continues.
+	stop := make(chan struct{})
+	var once sync.Once
+	handlerReturned := make(chan struct{})
+	mux.SetAcquire(func(_ http.ResponseWriter, _ *http.Request) {
+		select {
+		case <-stop:
+		case <-time.After(30 * time.Second): // safety cap; close(stop) fires first
+		}
+		once.Do(func() { close(handlerReturned) })
+	})
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.IsLastListener = func() bool { return true }
+	cfg.ControlPlaneTimeout = 200 * time.Millisecond
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+	assert.Eventually(t, func() bool { return pollsAfter.Load() > 0 }, 3*time.Second, 10*time.Millisecond,
+		"listener should re-poll after a stalled AcquireJob times out, not wedge in handleJob")
+	cancel()
+	<-done
+
+	close(stop)
+	<-handlerReturned
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	oauthSrv := oauthStub()
 	var spawnCalls atomic.Int32
