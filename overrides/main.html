@@ -13,4 +13,8 @@
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="{{ config.site_url }}assets/social-preview.png">
+  {# Icon set — the SVG favicon is wired via theme.favicon; these add the Apple + PWA raster sizes. #}
+  <link rel="apple-touch-icon" href="{{ config.site_url }}assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ config.site_url }}assets/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ config.site_url }}assets/icon-512.png">
 {% endblock %}

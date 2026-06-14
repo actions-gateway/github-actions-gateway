@@ -8,7 +8,18 @@
   --gag-accent-line: color-mix(in srgb, var(--md-accent-fg-color) 35%, transparent);
 }
 
-[data-md-color-scheme="slate"] {
+/* Brand palette: Kubernetes blue -> teal, matching the logomark + social card.
+   Set under the scheme selectors so these win over Material's named accent. */
+body[data-md-color-scheme="default"] {
+  --md-accent-fg-color: #326ce5;
+  --md-accent-fg-color--transparent: rgba(50, 108, 229, 0.1);
+  --md-typeset-a-color: #2456c9; /* darker blue for link-text contrast on white */
+}
+
+body[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #5b8def;
+  --md-accent-fg-color--transparent: rgba(91, 141, 239, 0.1);
+  --md-typeset-a-color: #6fa0f5;
   --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
   --gag-elev-2: 0 10px 24px rgba(0, 0, 0, 0.5);
 }
