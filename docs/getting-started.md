@@ -66,6 +66,9 @@ metadata:
 spec:
   gitHubAppRef:
     name: my-github-app
+  # gitHubURL is the org/enterprise/repo URL the runners register against
+  # (required). The App above must be installed on this same org/enterprise.
+  gitHubURL: https://github.com/my-org
   # securityProfile selects the Pod Security Admission level the GMC stamps
   # on the tenant namespace. Defaults to "baseline" — blocks privileged
   # containers, host namespaces, hostPath, and dangerous capabilities, with

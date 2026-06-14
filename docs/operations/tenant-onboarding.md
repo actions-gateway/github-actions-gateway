@@ -21,6 +21,7 @@ Before beginning, confirm all of the following:
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
+- [ ] **GitHub URL is known.** The org/enterprise/repo URL the runners register against — `https://github.com/<org>`, `https://github.com/<org>/<repo>`, or a GitHub Enterprise Server URL `https://ghes.example.com/<org>`. It goes in `spec.gitHubURL` (Step 2) and must match where the App is installed. It is a required field — there is no default.
 - [ ] **Quota is approved.** The tenant's resource requirements have been reviewed and a `namespaceQuota` has been agreed: CPU, memory, and pod count.
 - [ ] **PriorityClass objects exist** (GPU tenants only). Any `priorityClassName` values referenced in `priorityTiers` are pre-created at the cluster level: `kubectl get priorityclass`.
 - [ ] **Cluster service CIDR is known.** Needed if the tenant's `noProxyCIDRs` must be customized: `kubectl cluster-info dump | grep -m1 service-cluster-ip-range`.
@@ -67,7 +68,7 @@ kubectl get secret github-app-v1 -n <tenant-namespace> \
 Apply the `ActionsGateway` CR in the tenant's namespace. Adjust `namespaceQuota`, `proxy`, and `runnerGroups` for the tenant's workload.
 
 ```yaml
-apiVersion: actions.gateway/v1alpha1
+apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
   name: <tenant>-gateway
@@ -75,6 +76,12 @@ metadata:
 spec:
   gitHubAppRef:
     name: github-app-v1
+  # GitHub org/enterprise/repo URL the runners register against (required). Use an
+  # org URL (https://github.com/my-org) for org-wide runners, a repo URL
+  # (https://github.com/my-org/my-repo) to scope to one repo, or your GitHub
+  # Enterprise Server URL (https://ghes.example.com/my-org). The App referenced by
+  # gitHubAppRef must be installed on this same org/enterprise.
+  gitHubURL: https://github.com/my-org
   # Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.
   # Set to "restricted" for stricter isolation, or "privileged" only if the workload
   # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).

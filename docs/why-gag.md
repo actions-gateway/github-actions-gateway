@@ -65,6 +65,7 @@ metadata:
 spec:
   gitHubAppRef:
     name: my-github-app          # (1)!
+  gitHubURL: https://github.com/team-a-org
   securityProfile: baseline      # (2)!
   proxy:
     minReplicas: 2               # (3)!

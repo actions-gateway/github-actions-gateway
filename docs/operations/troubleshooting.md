@@ -33,6 +33,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
 - [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
+- [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Worker Pod Crashes With configuredSettings ArgumentNullException](#worker-pod-crashes-with-configuredsettings-argumentnullexception)
 - [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
@@ -926,6 +927,36 @@ spec.tracing.sampler: Unsupported value: "ratio": supported values:
 - To *disable* tracing entirely, remove `spec.tracing.endpoint` (an empty endpoint emits no `OTEL_*` env and the AGC keeps its no-op tracer) — the sampler value is irrelevant when no endpoint is set.
 
 See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
+
+---
+
+## ActionsGateway Rejected: Missing or Malformed `gitHubURL`
+
+**Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync of an `ActionsGateway` is rejected at admission with either a CRD-schema error:
+
+```
+ActionsGateway.actions-gateway.github.com "<name>" is invalid:
+spec.gitHubURL: Required value
+```
+
+```
+ActionsGateway.actions-gateway.github.com "<name>" is invalid:
+spec.gitHubURL in body should match '^https://'
+```
+
+or a validating-webhook error:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+gitHubURL must include an organization, enterprise, or owner/repo path segment (got "https://github.com")
+```
+
+**Likely cause.** `spec.gitHubURL` is a **required** field — the GitHub org, enterprise, or repository URL the gateway's runners register against. There is no default: a gateway with no URL has nothing to register against. The CRD enforces a non-empty `https://` value; the GMC validating webhook additionally requires a parseable URL with the https scheme, a host, and at least one path segment (the org/enterprise/owner). Common misses: the field omitted entirely, an `http://` (non-TLS) URL, or a bare host (`https://github.com`) with no org.
+
+**Resolution.**
+- Set `spec.gitHubURL` to an org URL (`https://github.com/my-org`), a single-repo URL (`https://github.com/my-org/my-repo`), or your GitHub Enterprise Server URL (`https://ghes.example.com/my-org`).
+- It must use `https://` and name the org/enterprise/owner — and must match where the App in `spec.gitHubAppRef` is installed.
+- Setting it through the Helm chart's sample CR? Use the `sampleGateway.gitHubURL` value. See [tenant-onboarding — Step 2](tenant-onboarding.md#step-2-create-the-actionsgateway-resource).
 
 ---
 

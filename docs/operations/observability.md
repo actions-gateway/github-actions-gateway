@@ -73,6 +73,7 @@ metadata:
 spec:
   gitHubAppRef:
     name: team-a-github-app
+  gitHubURL: https://github.com/team-a-org
   tracing:
     endpoint: https://otel-collector.observability:4317  # enables tracing
     sampler: parentbased_traceidratio                    # optional

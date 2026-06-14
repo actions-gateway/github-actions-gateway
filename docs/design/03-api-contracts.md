@@ -93,6 +93,27 @@ type ActionsGatewaySpec struct {
     // CR and manage credential rotation themselves.
     GitHubAppRef SecretReference `json:"gitHubAppRef"`
 
+    // GitHubURL is the GitHub organization, enterprise, or repository URL this
+    // gateway's runners register against — e.g. "https://github.com/my-org",
+    // "https://github.com/my-org/my-repo", or, for GitHub Enterprise Server,
+    // "https://ghes.example.com/my-org". It is REQUIRED: a gateway with no URL
+    // has nothing to register against. The GMC threads it to the AGC Deployment
+    // as the GITHUB_ORG_URL environment variable, which the AGC's GithubRegistrar
+    // reads to derive its org-scoped vs repo-scoped REST endpoints. It pairs with
+    // gitHubAppRef — the App installation must cover the same org/enterprise.
+    //
+    // This field is the production-supported replacement for the testing-only
+    // --allow-agc-extra-env=AGC_EXTRA_GITHUB_ORG_URL injection path (that flag
+    // remains, gated, for genuinely-extra env only). Structural validation (https
+    // scheme, host present, an org/owner path segment) is performed by the GMC
+    // validating webhook so the error can name the offending component; the CRD
+    // carries a Pattern (^https://) as a cheap scheme guard.
+    //
+    // +kubebuilder:validation:MinLength=1
+    // +kubebuilder:validation:MaxLength=2048
+    // +kubebuilder:validation:Pattern=`^https://`
+    GitHubURL string `json:"gitHubURL"`
+
     // Proxy configures the egress proxy pool deployed in front of the AGC
     // and worker pods. All GitHub traffic routes through this pool.
     // +optional
