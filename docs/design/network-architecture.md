@@ -61,7 +61,7 @@ The GMC creates three `NetworkPolicy` objects per tenant in the tenant namespace
 
 ### Policy 1: `actions-gateway-workload` — AGC and worker pods → proxy + DNS
 
-Selects all "workload" pods (AGC and worker) by the `actions-gateway/component: workload` label. Allows egress to the proxy ClusterIP (port 8080) and DNS only. Denies all ingress.
+Selects all "workload" pods (AGC and worker) by the `actions-gateway/component: workload` label. Allows egress to the proxy pods (port 8080) and DNS only. Denies all ingress.
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -84,11 +84,16 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Proxy ClusterIP — selected by stable IP (not pod label) so the rule survives
-    # proxy pod churn from rolling updates and HPA scaling.
+    # Proxy pods — selected by PodSelector, NOT the Service ClusterIP. kube-proxy
+    # DNATs ClusterIP → PodIP before NetworkPolicy enforcement, so an
+    # `ipBlock: <ClusterIP>/32` rule never matches actual packets and silently
+    # drops all proxy-bound traffic (the PR #59 trap). Selecting the proxy pods
+    # directly matches post-DNAT destinations and survives proxy pod churn from
+    # rolling updates and HPA scaling.
     - to:
-        - ipBlock:
-            cidr: <proxy-cluster-ip>/32
+        - podSelector:
+            matchLabels:
+              app: actions-gateway-proxy
       ports:
         - port: 8080
           protocol: TCP
