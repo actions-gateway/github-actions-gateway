@@ -78,8 +78,17 @@ spec:
     - Egress
   ingress: []  # no ingress permitted
   egress:
-    # DNS — needed for resolving the proxy Service name
-    - ports:
+    # DNS — needed for resolving the proxy Service name. Confined to the cluster
+    # DNS service (kube-dns / CoreDNS in kube-system), not "any resolver": an
+    # open port-53 rule is an unattributed exfiltration side-channel (Q105).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
@@ -118,8 +127,15 @@ spec:
   policyTypes:
     - Egress
   egress:
-    # DNS
-    - ports:
+    # DNS — confined to cluster DNS (kube-dns / CoreDNS in kube-system); see Q105.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
@@ -162,8 +178,18 @@ spec:
         - port: 8080
           protocol: TCP
   egress:
-    # DNS — proxy resolves GitHub hostnames on behalf of clients
-    - ports:
+    # DNS — proxy resolves GitHub hostnames on behalf of clients. Confined to the
+    # cluster DNS service (kube-dns / CoreDNS in kube-system); kube-dns recurses
+    # upstream so external names still resolve, but the proxy cannot reach an
+    # arbitrary resolver — closing the open-DNS exfiltration side-channel (Q105).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
@@ -190,7 +216,9 @@ If `spec.proxy.managedNetworkPolicy: false` is set, the GMC omits the GitHub-CID
 
 All in-cluster service discovery uses Kubernetes DNS (`kube-dns` / `CoreDNS`). The proxy pool is reachable from the AGC and worker pods via the `ClusterIP` Service name: `actions-gateway-proxy.<namespace>.svc.cluster.local`. The `NO_PROXY` env var includes `kubernetes.default.svc.cluster.local` and the cluster service CIDR so that Kubernetes API calls are never routed through the egress proxy.
 
-External DNS resolution (for GitHub hostnames) is performed by the proxy pods themselves, not by the AGC or worker pods — the AGC and workers connect to the proxy using `CONNECT <hostname>:<port>` and the proxy resolves the hostname on their behalf. This means the proxy pods must have egress access to the cluster's DNS resolver in addition to GitHub's IP ranges. In practice, DNS egress is typically covered by the cluster's default network policy or a separate allow-all DNS rule.
+External DNS resolution (for GitHub hostnames) is performed by the proxy pods themselves, not by the AGC or worker pods — the AGC and workers connect to the proxy using `CONNECT <hostname>:<port>` and the proxy resolves the hostname on their behalf. This means the proxy pods must have egress access to the cluster's DNS resolver in addition to GitHub's IP ranges.
+
+DNS egress on all three policies is **confined to the cluster DNS service** (`kube-dns` / `CoreDNS` in `kube-system`, matched by `namespaceSelector` on the well-known `kubernetes.io/metadata.name: kube-system` label plus a `podSelector` on the conventional `k8s-app: kube-dns` label) rather than left open to any resolver (Q105). An unrestricted port-53 rule (`to: []`) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces. Confining DNS to the in-cluster resolver keeps resolution on the attributable path: `kube-dns` recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly. Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under `spec.proxy.managedNetworkPolicy: false`).
 
 ---
 

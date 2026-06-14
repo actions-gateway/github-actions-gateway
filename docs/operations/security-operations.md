@@ -366,6 +366,18 @@ Triage the report against this operator's needs:
   [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) —
   the "blocked" probes must actually time out (validated under Calico on a
   kind cluster, Q7b 2026-06-11).
+- **Cluster DNS must be labelled `k8s-app=kube-dns` in `kube-system`.** Tenant
+  NetworkPolicies confine port-53 egress to the cluster DNS service rather than
+  leaving DNS open to any resolver (Q105 — an open DNS path is an unattributed
+  exfiltration side-channel). The selector matches the conventional CoreDNS
+  deployment: pods labelled `k8s-app: kube-dns` in the `kube-system` namespace
+  (matched via the immutable `kubernetes.io/metadata.name` namespace label). This
+  is the default on every mainstream distribution and managed control plane. If
+  your cluster runs DNS under a different label or namespace **and** uses an
+  enforcing CNI, tenant pods will fail to resolve any name until you either
+  relabel the DNS pods or set `spec.proxy.managedNetworkPolicy: false` and supply
+  your own DNS egress rule. Symptom: tenant workloads time out on every lookup
+  while non-DNS connectivity is unaffected.
 - **Findings that don't apply** (managed control plane hides the file, a check
   for a component you don't run) — record the justification alongside the
   cluster's onboarding ticket.

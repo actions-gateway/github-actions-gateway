@@ -596,6 +596,47 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 	}
 }
 
+// TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS locks in Q105: the port-53
+// egress rule on every GMC-managed NetworkPolicy must target the cluster DNS
+// service (kube-dns / CoreDNS in kube-system) and must NOT be open (To: nil ≡ any
+// resolver). An open DNS path is an unattributed exfiltration side-channel that
+// bypasses the per-tenant egress-IP attribution every other egress path enforces.
+// This is an authoring/spec-level guard because kindnet does not enforce egress
+// NetworkPolicy (see Q7b) — mirroring the egress-negative guard pattern.
+func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	for _, np := range []*networkingv1.NetworkPolicy{
+		buildProxyNetworkPolicy(ag, nil),
+		buildWorkloadNetworkPolicy(ag),
+		buildAGCNetworkPolicy(ag),
+	} {
+		var dnsRules []networkingv1.NetworkPolicyEgressRule
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port != nil && port.Port.IntVal == 53 {
+					dnsRules = append(dnsRules, rule)
+					break
+				}
+			}
+		}
+		require.Len(t, dnsRules, 1, "%s must carry exactly one port-53 egress rule", np.Name)
+
+		rule := dnsRules[0]
+		require.NotEmpty(t, rule.To,
+			"%s port-53 rule must have a To peer — an empty To opens DNS to any resolver (Q105)", np.Name)
+		require.Len(t, rule.To, 1, "%s DNS rule should select kube-dns via a single peer", np.Name)
+
+		peer := rule.To[0]
+		assert.Nil(t, peer.IPBlock, "%s DNS peer must not be an ipBlock", np.Name)
+		require.NotNil(t, peer.NamespaceSelector, "%s DNS peer must select the kube-dns namespace", np.Name)
+		require.NotNil(t, peer.PodSelector, "%s DNS peer must select the kube-dns pods", np.Name)
+		assert.Equal(t, dnsNamespaceValue, peer.NamespaceSelector.MatchLabels[dnsNamespaceLabel],
+			"%s DNS peer namespace selector must match kube-system", np.Name)
+		assert.Equal(t, dnsPodValue, peer.PodSelector.MatchLabels[dnsPodLabel],
+			"%s DNS peer pod selector must match k8s-app=kube-dns", np.Name)
+	}
+}
+
 func TestBuildAGCNetworkPolicy_PodSelectorIsAGCOnly(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	np := buildAGCNetworkPolicy(ag)

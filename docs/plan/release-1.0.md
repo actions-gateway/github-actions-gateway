@@ -330,11 +330,14 @@ release-integrity claim false if shipped silently — the exact failure the
 1.0 bar exists to prevent — so "resolved" means a real fix *or* an honest
 docs caveat, not omission.
 
-- **Unrestricted port-53 egress** ([Q105](../STATUS.md)): `builder.go`
+- ~~**Unrestricted port-53 egress** ([Q105](../STATUS.md)): `builder.go`
   emits a port-53 egress rule with no `To` peer, so workers/proxy can
   resolve via any DNS server — a DNS-exfil channel that undercuts the
-  per-tenant egress-IP isolation claim. Restrict to kube-dns, or document
-  the gap in `05-security.md`.
+  per-tenant egress-IP isolation claim.~~ **Resolved:** all three per-tenant
+  NetworkPolicies (workload, AGC, proxy) now confine port-53 egress to the
+  cluster DNS service (`k8s-app: kube-dns` in `kube-system`); guarded by the
+  authoring test `TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS`. See
+  [05-security.md](../design/05-security.md) § DNS Exfiltration Side-Channel.
 - **Release-integrity siblings of [Q123](../STATUS.md)/[Q124](../STATUS.md)** —
   vendored deps are never hash-verified against `go.sum`
   ([Q126](../STATUS.md)), and the cosign binary in the signing pipeline is
