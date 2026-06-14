@@ -166,6 +166,25 @@ new MkDocs 2.0 is incompatible — pin exact until that settles). Specifics:
   launch: land Q99's claim fixes, reconcile the landing/comparison copy, enable
   Pages (Settings → Pages → Source: GitHub Actions), then run the workflow.
 
+## Maintaining the site
+
+Things that span more than one file and can quietly drift:
+
+- **Persona / audience tags live in two places, by design.** The operations
+  index (`docs/operations/README.md`, the `Personas` table column that drives the
+  filter chips) and each operations doc's own `> **Audience:** …` blockquote
+  under its title. When you retag a doc's audience, **update both** — they should
+  agree. (No CI check enforces this; it's two lines, kept in sync by hand.)
+- **The logomark and icons are generated, not hand-edited.** Edit
+  `docs/assets/generate-logomark.py` and re-render with resvg — see
+  [`docs/assets/README.md`](../assets/README.md).
+- **The interactive bits are progressive enhancement** in
+  `docs/javascripts/extra.js` (persona/role filter chips, per-doc audience pills,
+  scroll reveals). They read plain markdown the docs already render on github.com,
+  so that markdown must stay readable without them: keep the `Personas` table
+  column, the `**Audience:**` blockquotes, and the bold role leads in the design
+  reading paths intact.
+
 ## Build phases
 
 1. Add `mkdocs.yml` + the Material dependency; point `docs_dir` at the existing
