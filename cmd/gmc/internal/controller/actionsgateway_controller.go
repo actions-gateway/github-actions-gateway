@@ -4,7 +4,10 @@
 // +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch;create;update;patch;delete
+// The namespace ResourceQuota (and any LimitRange) is platform-owned: the
+// platform admin manages it on the tenant namespace and GAG operates within it.
+// The GMC deliberately holds no resourcequotas/limitranges write verbs — dropping
+// that grant is least privilege (Q122/Q130). See docs/design/05-security.md.
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -149,12 +152,9 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
 
-	// 6. ResourceQuota (only if spec.namespaceQuota is set).
-	if len(ag.Spec.NamespaceQuota) > 0 {
-		if err := r.applyResourceQuota(ctx, buildResourceQuota(ag)); err != nil {
-			return fmt.Errorf("ResourceQuota: %w", err)
-		}
-	}
+	// The namespace ResourceQuota is platform-owned (Q130): the platform admin
+	// provisions it on the tenant namespace and GAG operates within it. The GMC
+	// no longer creates or mutates a ResourceQuota.
 
 	// 7a. Proxy TLS cert Secret — must exist before the proxy Deployment references it.
 	if err := r.ensureProxyCert(ctx, ag); err != nil {
@@ -248,8 +248,10 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	r.deleteIfExists(ctx, &policyv1.PodDisruptionBudget{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &corev1.Service{}, ns, proxyServiceName)
 	r.deleteIfExists(ctx, &appsv1.Deployment{}, ns, proxyServiceName)
-	// 4. ResourceQuota, NetworkPolicies.
-	r.deleteIfExists(ctx, &corev1.ResourceQuota{}, ns, "actions-gateway")
+	// 4. NetworkPolicies. The namespace ResourceQuota is platform-owned (Q130) —
+	// the GMC neither creates nor deletes it. A ResourceQuota left over from a
+	// pre-Q130 install (ownerRef → this ActionsGateway) is garbage-collected by
+	// Kubernetes when the CR is deleted; the GMC holds no quota delete verb.
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npProxyName)
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npAGCName)
 	r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ns, npWorkloadName)
@@ -473,16 +475,6 @@ func (r *ActionsGatewayReconciler) applyRoleBinding(ctx context.Context, desired
 
 func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, desired *networkingv1.NetworkPolicy) error {
 	obj := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
-	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.Labels = desired.Labels
-		obj.Spec = desired.Spec
-		return nil
-	})
-	return err
-}
-
-func (r *ActionsGatewayReconciler) applyResourceQuota(ctx context.Context, desired *corev1.ResourceQuota) error {
-	obj := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
 	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
 		obj.Labels = desired.Labels
 		obj.Spec = desired.Spec

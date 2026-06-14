@@ -20,10 +20,9 @@ spec:
   proxy:
     minReplicas: 2
     maxReplicas: 10
-  namespaceQuota:
-    requests.cpu: "20"
-    requests.memory: "40Gi"
-    pods: "50"
+  # The namespace ResourceQuota is platform-owned: the platform admin creates it
+  # on the tenant namespace (see docs/operations/tenant-onboarding.md). It is not
+  # set on the ActionsGateway CR.
   runnerGroups:
     - name: default
       runnerLabels: ["self-hosted", "linux"]

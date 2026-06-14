@@ -30,7 +30,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - resourcequotas
   - serviceaccounts
   - services
   verbs:

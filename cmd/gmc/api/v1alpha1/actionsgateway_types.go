@@ -151,8 +151,13 @@ type ActionsGatewaySpec struct {
 	// RunnerGroups lists RunnerGroup specs bootstrapped in the tenant namespace.
 	// +optional
 	RunnerGroups []agcv1alpha1.RunnerGroupSpec `json:"runnerGroups,omitempty"`
-	// +optional
-	NamespaceQuota corev1.ResourceList `json:"namespaceQuota,omitempty"`
+	// The namespace ResourceQuota is platform-owned: the platform admin creates
+	// and manages it (and any LimitRange) on the tenant namespace, and GAG
+	// operates within it without ever creating or mutating it. There is
+	// deliberately no tenant-authored quota field — a tenant-set quota is no real
+	// cap (the tenant could raise it) and fights GitOps/platform ownership. See
+	// docs/design/05-security.md and docs/operations/tenant-onboarding.md.
+
 	// SecurityProfile controls the Pod Security Admission enforcement level
 	// applied to the tenant namespace. Allowed values: baseline (default),
 	// restricted, privileged. Use privileged only for workloads that run

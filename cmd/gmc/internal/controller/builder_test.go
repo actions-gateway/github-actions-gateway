@@ -696,15 +696,6 @@ func TestBuildRunnerGroup_SetsSpecAndLabels(t *testing.T) {
 	assert.NotEmpty(t, rg.Labels[labelManagedBy])
 }
 
-func TestBuildResourceQuota_PassesThrough(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	ag.Spec.NamespaceQuota = corev1.ResourceList{
-		corev1.ResourcePods: resource.MustParse("50"),
-	}
-	quota := buildResourceQuota(ag)
-	assert.Equal(t, ag.Spec.NamespaceQuota, quota.Spec.Hard)
-}
-
 func TestBuildPDB_MinAvailableAndSelector(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	pdb := buildPDB(ag)
