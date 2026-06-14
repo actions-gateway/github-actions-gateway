@@ -194,9 +194,11 @@ consumers rely on).
 feeds the job payload into `Runner.Worker`). Note that the AGC's
 `DefaultWorkerImage`
 ([provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)) currently
-defaults to the **upstream** `ghcr.io/actions/actions-runner` image, not this
-signed first-party worker — so a default install does not run the signed worker
-unless a tenant sets `RunnerGroup.Spec.WorkerImage` to it. Signing it is still
+defaults to the **upstream** `ghcr.io/actions/actions-runner` image
+(digest-pinned, with its runner version locked to the `agent.version` the AGC
+registers — see [building.md](../development/building.md#runner-version-pin-lockstep)),
+not this signed first-party worker — so a default install does not run the signed
+worker unless a tenant sets `RunnerGroup.Spec.WorkerImage` to it. Signing it is still
 correct supply-chain hygiene; whether the default should point at the signed
 first-party worker is a separate decision tracked on the backlog.
 

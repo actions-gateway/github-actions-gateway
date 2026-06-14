@@ -132,7 +132,7 @@ func TestGithubRegistrar_Register(t *testing.T) {
 	}
 	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
 		Name:    "test-runner",
-		Version: "2.334.0",
+		Version: "2.335.1",
 		Labels:  []string{"self-hosted"},
 	})
 	require.NoError(t, err)
@@ -248,7 +248,7 @@ func TestGithubRegistrar_Register_Repo(t *testing.T) {
 	}
 	creds, err := r.Register(context.Background(), "install-token", agentpool.RegisterParams{
 		Name:    "repo-runner",
-		Version: "2.334.0",
+		Version: "2.335.1",
 		Labels:  []string{"self-hosted"},
 	})
 	require.NoError(t, err)

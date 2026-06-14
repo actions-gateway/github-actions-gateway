@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
@@ -211,6 +212,22 @@ func TestBuildAGCDeployment_WorkerSA(t *testing.T) {
 	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
 	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
 	assert.Equal(t, workerSAName, env["WORKER_SERVICE_ACCOUNT"].Value)
+}
+
+// TestBuildAGCDeployment_RunnerVersionEnv asserts the GMC injects the pinned
+// runner version so the AGC's CreateSession sends a non-empty agent.version that
+// GitHub validates (Q71/Q118). Before this, the env was unset and agent.version
+// went out empty.
+func TestBuildAGCDeployment_RunnerVersionEnv(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	dep := buildAGCDeployment(ag, "agc:latest", "http://proxy:8080", nil)
+	env := envMap(dep.Spec.Template.Spec.Containers[0].Env)
+
+	v, ok := env["GITHUB_RUNNER_VERSION"]
+	require.True(t, ok, "GITHUB_RUNNER_VERSION must be set on the AGC Deployment")
+	assert.NotEmpty(t, v.Value, "GITHUB_RUNNER_VERSION must not be empty")
+	assert.Equal(t, agcnames.RunnerVersion, v.Value,
+		"GITHUB_RUNNER_VERSION must equal the pinned agcnames.RunnerVersion")
 }
 
 func TestBuildProxyDeployment_DefaultResources(t *testing.T) {

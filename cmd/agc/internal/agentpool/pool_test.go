@@ -44,7 +44,7 @@ func scheme() *runtime.Scheme {
 
 func newPool(c *fake.ClientBuilder, ns, group string) *agentpool.Pool {
 	registrar := agentpool.NewStubRegistrar()
-	return agentpool.NewPool(c.Build(), ns, group, "2.334.0", []string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519)
+	return agentpool.NewPool(c.Build(), ns, group, "2.335.1", []string{"self-hosted"}, registrar, agentpool.KeyTypeEd25519)
 }
 
 func TestPool_EnsureAgents_Creates(t *testing.T) {
@@ -63,7 +63,7 @@ func TestPool_EnsureAgents_Creates(t *testing.T) {
 		assert.NotZero(t, a.AgentID)
 		assert.NotNil(t, a.PrivateKey)
 		assert.NotEmpty(t, a.Creds.ClientID)
-		assert.Equal(t, "2.334.0", a.RunnerVersion, "runnerVersion should be stored in Secret")
+		assert.Equal(t, "2.335.1", a.RunnerVersion, "runnerVersion should be stored in Secret")
 		assert.Equal(t, "https://stub.example.com/broker", a.BrokerURL, "brokerURL should be stored in Secret")
 	}
 }
@@ -165,7 +165,7 @@ func TestPool_ClaimSurvivesReload(t *testing.T) {
 func TestPool_ScaleDown_SkipsClaimedSecret(t *testing.T) {
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 
 	require.NoError(t, pool.EnsureAgents(ctx, 5, "token"))
 
@@ -205,7 +205,7 @@ func TestPool_ScaleDown_SkipsClaimedSecret(t *testing.T) {
 func TestPool_ReleaseAfterDeleteAll_NoResurrect(t *testing.T) {
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 	require.NoError(t, pool.EnsureAgents(ctx, 1, "token"))
 
 	a := pool.ClaimAgent()
@@ -261,7 +261,7 @@ func TestPool_EnsureAgents_DeregisterErrorContinues(t *testing.T) {
 		err:  fmt.Errorf("deregistration failed: temporary error"),
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0", []string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1", []string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
 
 	// Create 3 agents.
 	require.NoError(t, pool.EnsureAgents(ctx, 3, "token"))
@@ -282,7 +282,7 @@ func TestPool_EnsureAgents_DeregisterErrorContinues(t *testing.T) {
 func TestPool_LoadAgents_SkipsCorruptSecret(t *testing.T) {
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 
 	// Create 2 valid agents via EnsureAgents.
 	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
@@ -343,7 +343,7 @@ func TestPool_CreateSecretFailure(t *testing.T) {
 	}
 
 	fb := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingSecret)
-	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", "2.334.0", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
+	pool := agentpool.NewPool(fb.Build(), "default", "my-rg", "2.335.1", []string{"self-hosted"}, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 
 	// EnsureAgents(1) — index 0 already exists, should be idempotent.
 	err := pool.EnsureAgents(ctx, 1, "token")
@@ -361,7 +361,7 @@ func TestPool_EnsureAgents_StoresEncodedJITConfig(t *testing.T) {
 	reg := agentpool.NewStubRegistrar()
 	reg.SetEncodedJITConfig("aGVsbG8tand0LWNvbmZpZw==") // arbitrary opaque blob
 
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0",
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1",
 		[]string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
 
 	require.NoError(t, pool.EnsureAgents(ctx, 2, "token"))
@@ -415,7 +415,7 @@ func TestPool_EnumeratesSecretsAsMetadataOnly(t *testing.T) {
 		}).Build()
 
 	reg := agentpool.NewStubRegistrar()
-	pool := agentpool.NewPool(c, "default", "my-rg", "2.334.0",
+	pool := agentpool.NewPool(c, "default", "my-rg", "2.335.1",
 		[]string{"self-hosted"}, reg, agentpool.KeyTypeEd25519)
 
 	// Exercise every code path that enumerates Secrets: create, reload via

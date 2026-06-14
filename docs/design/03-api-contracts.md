@@ -444,9 +444,12 @@ type RunnerGroupSpec struct {
     // Omitting this field causes the AGC to use its operator-configured default.
     // The compile-time constant DefaultWorkerImage in
     // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
-    // (currently "ghcr.io/actions/actions-runner:2.334.0", aligned with the
-    // ARC gha-runner-scale-set chart default). Operators override it at AGC
-    // startup via the --worker-image flag; tenants can then override further
+    // (currently the digest-pinned "ghcr.io/actions/actions-runner:2.335.1@sha256:…",
+    // aligned with the ARC gha-runner-scale-set chart default). Its runner
+    // version is the single source of truth in cmd/agc/names (RunnerVersion),
+    // which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC's
+    // agent.version matches the running runner binary. Operators override it at
+    // AGC startup via the --worker-image flag; tenants can then override further
     // per-RunnerGroup with this field without affecting other groups.
     // +optional
     WorkerImage string `json:"workerImage,omitempty"`

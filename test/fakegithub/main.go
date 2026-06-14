@@ -129,6 +129,7 @@ type server struct {
 	consumedAgents       map[int64]bool          // runner IDs whose record was consumed
 	sessionAgents        map[string]int64        // sessionID → agent ID
 	sessionOwners        map[string]string       // sessionID → ownerName
+	sessionVersions      map[string]string       // sessionID → agent.version (runnerVersion)
 	deadPolls            map[string]int          // dead sessionID → GET /message count since death
 	requestSessions      map[string]string       // runnerRequestId → delivering sessionID
 }
@@ -151,6 +152,7 @@ func newServer() *server {
 		consumedAgents:  make(map[int64]bool),
 		sessionAgents:   make(map[string]int64),
 		sessionOwners:   make(map[string]string),
+		sessionVersions: make(map[string]string),
 		deadPolls:       make(map[string]int),
 		requestSessions: make(map[string]string),
 	}
@@ -175,6 +177,7 @@ func (s *server) controlMux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/control/enqueue", s.handleEnqueue)
 	mux.HandleFunc("/control/sessions", s.handleListSessions)
+	mux.HandleFunc("/control/session-versions", s.handleSessionVersions)
 	mux.HandleFunc("/control/acquirejob", s.handleSetAcquireJob)
 	mux.HandleFunc("/control/singleuse", s.handleSetSingleUse)
 	return mux
@@ -430,8 +433,9 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		var reqBody struct {
 			OwnerName string `json:"ownerName"`
 			Agent     struct {
-				ID   int64  `json:"id"`
-				Name string `json:"name"`
+				ID      int64  `json:"id"`
+				Name    string `json:"name"`
+				Version string `json:"version"`
 			} `json:"agent"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&reqBody)
@@ -463,6 +467,10 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		s.sessions[id] = true
 		s.sessionAgents[id] = reqBody.Agent.ID
 		s.sessionOwners[id] = reqBody.OwnerName
+		// Record agent.version (the runnerVersion the AGC pins). GitHub validates
+		// it at session creation; capturing it lets specs assert it is non-empty
+		// and correct (Q71/Q118 runner-version contract).
+		s.sessionVersions[id] = reqBody.Agent.Version
 		if bearer != "" {
 			s.bearerSessions[bearer] = id
 		}
@@ -689,6 +697,30 @@ func (s *server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(active)
+}
+
+// handleSessionVersions is the control API: GET /control/session-versions[?owner=<prefix>]
+// It returns a JSON object mapping each active session ID to the agent.version
+// (runnerVersion) the AGC sent on CreateSession, so a spec can assert the
+// version is non-empty and matches the pinned runner version (Q71/Q118). The
+// optional owner prefix scopes the result to one RunnerGroup on a shared
+// instance, mirroring handleListSessions.
+func (s *server) handleSessionVersions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ownerPrefix := r.URL.Query().Get("owner")
+	s.mu.Lock()
+	versions := make(map[string]string)
+	for id, ok := range s.sessions {
+		if ok && (ownerPrefix == "" || strings.HasPrefix(s.sessionOwners[id], ownerPrefix)) {
+			versions[id] = s.sessionVersions[id]
+		}
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(versions)
 }
 
 // handleSetAcquireJob is the control API: POST /control/acquirejob

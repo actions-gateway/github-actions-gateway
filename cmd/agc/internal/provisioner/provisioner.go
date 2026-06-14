@@ -85,7 +85,7 @@ const (
 	managerName               = names.ControllerName
 
 	// DefaultWorkerImage is the fallback worker image when RunnerGroup.Spec.WorkerImage
-	// is empty. Combine with an immutable digest for production deployments.
+	// is empty. It is digest-pinned (secure-by-default; a bare tag is mutable).
 	//
 	// Aligned with the Actions Runner Controller (ARC) gha-runner-scale-set chart,
 	// which defaults to ghcr.io/actions/actions-runner. Tenants copy-pasting from
@@ -93,9 +93,11 @@ const (
 	// --worker-image (env: WORKER_IMAGE); the per-RunnerGroup workerImage field
 	// overrides further.
 	//
-	// The version (2.334.0) MUST match the FROM line in cmd/worker/Dockerfile —
-	// see the runner-version bump procedure in that file's header comment.
-	DefaultWorkerImage = "ghcr.io/actions/actions-runner:2.334.0"
+	// Sourced from names.DefaultWorkerImage (built from names.RunnerVersion) so the
+	// runner version stays locked to the agent.version the AGC registers and to the
+	// FROM line in cmd/worker/Dockerfile — see the bump procedure in that file's
+	// header comment and the lockstep test in cmd/agc/names/runner_version_test.go.
+	DefaultWorkerImage = names.DefaultWorkerImage
 
 	// defaultWorkerRunAsUser is the numeric UID applySecurityDefaults stamps
 	// alongside runAsNonRoot:true on the baseline/restricted profiles. The
