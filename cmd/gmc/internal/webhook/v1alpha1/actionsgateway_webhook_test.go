@@ -19,6 +19,7 @@ func newAG(namespace string) *gmcv1alpha1.ActionsGateway {
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: namespace},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "github-app"},
+			GitHubURL:    "https://github.com/example-org",
 		},
 	}
 }
@@ -144,6 +145,58 @@ func TestWebhook_UpdateRejectsCrossNamespaceSecretRef(t *testing.T) {
 	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gitHubAppRef.namespace is not supported")
+}
+
+func TestWebhook_RejectsMissingGitHubURL(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.GitHubURL = ""
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gitHubURL is required")
+}
+
+func TestWebhook_RejectsNonHTTPSGitHubURL(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.GitHubURL = "http://github.com/example-org"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "https")
+}
+
+func TestWebhook_RejectsGitHubURLWithoutOrgPath(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	// Host only, no organization/owner segment — nothing to register against.
+	ag.Spec.GitHubURL = "https://github.com"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "organization")
+}
+
+func TestWebhook_AllowsRepoScopedGitHubURL(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.GitHubURL = "https://github.com/example-org/example-repo"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_AllowsGHESGitHubURL(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	ag := newAG("team-a")
+	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateRejectsInvalidGitHubURL(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("")
+	updated := newAG("team-a")
+	updated.Spec.GitHubURL = "not-a-url"
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
+	require.Error(t, err)
 }
 
 func TestWebhook_RejectsPrivilegedContainer(t *testing.T) {

@@ -83,6 +83,7 @@ func TestGMC_HPABoundsUpdate_MinReplicasClamped(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "hpa-clamped-gateway", Namespace: nsName},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "github-app"},
+			GitHubURL:    "https://github.com/example-org",
 			Proxy: gmcv1alpha1.ProxyConfig{
 				MinReplicas: ptr32(5),
 				MaxReplicas: ptr32(5),

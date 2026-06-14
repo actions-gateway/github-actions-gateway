@@ -115,6 +115,7 @@ the binding to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `sampleGateway.create` | `false` | Render an example `ActionsGateway` (dev only). |
 | `sampleGateway.securityProfile` | `baseline` | Profile for the sample CR (`baseline`/`restricted`/`privileged`). |
 | `sampleGateway.gitHubAppSecretName` | `github-app-v1` | GitHub App Secret name referenced by the sample CR. |
+| `sampleGateway.gitHubURL` | `https://github.com/my-org` | GitHub org/enterprise/repo URL the sample CR's runners register against. |
 
 A `values.schema.json` validates these at install/lint time (image digest
 format, security-profile enum, pull-policy enum, etc.).

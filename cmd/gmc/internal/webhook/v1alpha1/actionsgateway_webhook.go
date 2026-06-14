@@ -3,7 +3,9 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -81,6 +83,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 	if err := validateGitHubAppRef(obj); err != nil {
 		return nil, err
 	}
+	if err := validateGitHubURL(obj); err != nil {
+		return nil, err
+	}
 	if err := validateRunnerGroups(obj); err != nil {
 		return nil, err
 	}
@@ -91,6 +96,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 // privileged containers, or a silent securityProfile downgrade.
 func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if err := validateGitHubAppRef(newObj); err != nil {
+		return nil, err
+	}
+	if err := validateGitHubURL(newObj); err != nil {
 		return nil, err
 	}
 	if err := validateRunnerGroups(newObj); err != nil {
@@ -115,6 +123,37 @@ func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *gmc
 func validateGitHubAppRef(ag *gmcv1alpha1.ActionsGateway) error {
 	if ag.Spec.GitHubAppRef.Namespace != "" {
 		return fmt.Errorf("gitHubAppRef.namespace is not supported; the Secret must reside in the ActionsGateway's own namespace (got %q)", ag.Spec.GitHubAppRef.Namespace)
+	}
+	return nil
+}
+
+// validateGitHubURL rejects a spec.gitHubURL that is not a well-formed GitHub
+// org/enterprise/repo URL: it must parse, use the https scheme, name a host, and
+// carry at least one path segment (the organization, enterprise, or owner). The
+// AGC's GithubRegistrar derives its REST endpoints by string-splitting this URL
+// (see cmd/agc/internal/agentpool/github_registrar.go), so a malformed value
+// would silently produce broken registration calls rather than a clear failure.
+// The check lives in the webhook (not a CRD CEL rule) so the error can name the
+// offending component; the CRD Pattern is only a cheap https scheme guard.
+func validateGitHubURL(ag *gmcv1alpha1.ActionsGateway) error {
+	raw := ag.Spec.GitHubURL
+	if raw == "" {
+		// The CRD marks gitHubURL required (MinLength=1); a hand-built object that
+		// reaches the validator directly without it is still rejected here.
+		return fmt.Errorf("gitHubURL is required: set the GitHub organization, enterprise, or repository URL the runners register against")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("gitHubURL %q is not a valid URL: %w", raw, err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("gitHubURL must use the https scheme (got %q)", raw)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("gitHubURL must include a host (got %q)", raw)
+	}
+	if strings.Trim(u.Path, "/") == "" {
+		return fmt.Errorf("gitHubURL must include an organization, enterprise, or owner/repo path segment (got %q)", raw)
 	}
 	return nil
 }

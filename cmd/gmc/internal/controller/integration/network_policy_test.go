@@ -269,6 +269,7 @@ func TestGMC_NetworkPolicy_ManagedFalse_NoGitHubCIDRs(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "managed-false-gateway", Namespace: nsName},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "github-app"},
+			GitHubURL:    "https://github.com/example-org",
 			Proxy: gmcv1alpha1.ProxyConfig{
 				ManagedNetworkPolicy: &managedFalse,
 			},

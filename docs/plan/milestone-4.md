@@ -895,10 +895,13 @@ and closed Q71.
   # deployment 2/2 Available in ~10 s; AGC_IMAGE/PROXY_IMAGE env digest-pinned
   ```
 
-- **Deviation from pure production posture:** the AGC's org URL has no CR
-  field, so the GMC was patched with the testing-gated
+- **Deviation from pure production posture (at the time of this run):** the
+  AGC's org URL had no CR field, so the GMC was patched with the testing-gated
   `--allow-agc-extra-env=true` + `AGC_EXTRA_GITHUB_ORG_URL=https://github.com/actions-gateway/gateway-test`
-  (same mechanism the Tier-C suite uses). Tracked as Q116.
+  (same mechanism the Tier-C suite uses). **Resolved by Q116:** the org URL is
+  now a first-class required `spec.gitHubURL` field threaded to the AGC as
+  `GITHUB_ORG_URL`, so this workaround is no longer needed — set
+  `spec.gitHubURL` (or chart value `sampleGateway.gitHubURL`) on the CR instead.
 
 ### Multi-tenant (DoD row 1)
 
@@ -1004,7 +1007,11 @@ caught by unit/Tier-A/Tier-B tiers:
    newly provisioned worker pods still used the old template until the
    AGC pod was restarted.
 4. **Q116 — no production path for the GitHub org URL** (see Setup
-   deviation above).
+   deviation above). **Fixed (Q116):** added the required first-class
+   `ActionsGateway.spec.gitHubURL` field, threaded to the AGC Deployment as
+   `GITHUB_ORG_URL` and validated (https scheme + org/owner path) by the GMC
+   webhook; the testing-only `--allow-agc-extra-env` flag is retained for
+   genuinely-extra env but is no longer required for the org URL.
 
 Operator-facing runbook entry for (1):
 [troubleshooting.md](../operations/troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).

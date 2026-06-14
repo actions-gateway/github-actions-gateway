@@ -15,6 +15,7 @@ metadata:
 spec:
   gitHubAppRef:
     name: {{ .Values.sampleGateway.gitHubAppSecretName | quote }}
+  gitHubURL: {{ .Values.sampleGateway.gitHubURL | quote }}
   securityProfile: {{ .Values.sampleGateway.securityProfile | quote }}
   proxy:
     minReplicas: 2

@@ -88,6 +88,11 @@ metadata:
 spec:
   gitHubAppRef:
     name: %s
+  # Required field; the value is a placeholder. The e2e AGC talks to fakegithub
+  # via the stub registrar (STUB_AUTH_URL/STUB_BROKER_URL win over GITHUB_ORG_URL),
+  # so this URL is not used for registration in the default stub flow. The
+  # real-GitHub suite overrides it with AGC_EXTRA_GITHUB_ORG_URL.
+  gitHubURL: https://github.com/e2e-org
   proxy:
     minReplicas: 1
     maxReplicas: 3
@@ -108,6 +113,11 @@ metadata:
 spec:
   gitHubAppRef:
     name: %s
+  # Required field; the value is a placeholder. The e2e AGC talks to fakegithub
+  # via the stub registrar (STUB_AUTH_URL/STUB_BROKER_URL win over GITHUB_ORG_URL),
+  # so this URL is not used for registration in the default stub flow. The
+  # real-GitHub suite overrides it with AGC_EXTRA_GITHUB_ORG_URL.
+  gitHubURL: https://github.com/e2e-org
   proxy:
     minReplicas: 1
     maxReplicas: 3
@@ -139,6 +149,11 @@ metadata:
 spec:
   gitHubAppRef:
     name: %s
+  # Required field; the value is a placeholder. The e2e AGC talks to fakegithub
+  # via the stub registrar (STUB_AUTH_URL/STUB_BROKER_URL win over GITHUB_ORG_URL),
+  # so this URL is not used for registration in the default stub flow. The
+  # real-GitHub suite overrides it with AGC_EXTRA_GITHUB_ORG_URL.
+  gitHubURL: https://github.com/e2e-org
   proxy:
     minReplicas: 1
     maxReplicas: 3

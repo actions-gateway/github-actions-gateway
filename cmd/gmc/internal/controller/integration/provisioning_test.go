@@ -31,6 +31,7 @@ func newActionsGateway(name, ns, secretName string) *gmcv1alpha1.ActionsGateway 
 		},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
 			GitHubAppRef: gmcv1alpha1.SecretReference{Name: secretName},
+			GitHubURL:    "https://github.com/example-org",
 		},
 	}
 }
@@ -131,12 +132,19 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &agcDep))
 	require.NotEmpty(t, agcDep.Spec.Template.Spec.Containers)
 	envNames := make(map[string]bool)
+	envValues := make(map[string]string)
 	for _, e := range agcDep.Spec.Template.Spec.Containers[0].Env {
 		envNames[e.Name] = true
+		envValues[e.Name] = e.Value
 	}
 	require.True(t, envNames["HTTP_PROXY"], "HTTP_PROXY env var must be set on AGC Deployment")
 	require.True(t, envNames["HTTPS_PROXY"], "HTTPS_PROXY env var must be set on AGC Deployment")
 	require.True(t, envNames["NO_PROXY"], "NO_PROXY env var must be set on AGC Deployment")
+	// spec.gitHubURL is threaded to the AGC as GITHUB_ORG_URL — the first-class
+	// production path that replaces the testing-only --allow-agc-extra-env workaround.
+	require.True(t, envNames["GITHUB_ORG_URL"], "GITHUB_ORG_URL env var must be set on AGC Deployment")
+	require.Equal(t, "https://github.com/example-org", envValues["GITHUB_ORG_URL"],
+		"GITHUB_ORG_URL must carry the spec.gitHubURL value")
 
 	// Service: actions-gateway-proxy
 	g.Eventually(func() error {

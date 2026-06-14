@@ -156,3 +156,8 @@ sampleGateway:
   # (only with justification) "privileged".
   securityProfile: baseline
   gitHubAppSecretName: github-app-v1
+  # gitHubURL is the GitHub organization, enterprise, or repository URL the
+  # sample gateway's runners register against. Required — point it at your own
+  # org (e.g. https://github.com/my-org) or a single repo
+  # (https://github.com/my-org/my-repo) before enabling the sample.
+  gitHubURL: https://github.com/my-org
