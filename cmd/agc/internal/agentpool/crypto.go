@@ -14,21 +14,28 @@ import (
 type KeyType string
 
 const (
-	// KeyTypeEd25519 generates an Ed25519 key (default).
+	// KeyTypeEd25519 generates an Ed25519 key (explicit opt-in). Ed25519 agents
+	// cannot decrypt RSA-OAEP session keys, so selecting it loses a layer of
+	// session-key encryption — see docs/design/05-security.md.
 	KeyTypeEd25519 KeyType = "ed25519"
-	// KeyTypeRSA generates an RSA-3072 key.
+	// KeyTypeRSA generates an RSA-3072 key (secure default).
 	KeyTypeRSA KeyType = "rsa"
 )
 
 // generateKey returns a new private key of the requested type.
-// An empty KeyType defaults to KeyTypeEd25519.
+//
+// An empty KeyType defaults to KeyTypeRSA (RSA-3072), the secure default that
+// preserves RSA-OAEP session-key encryption. Ed25519 must be requested
+// explicitly via KeyTypeEd25519: defaulting empty→Ed25519 would be a
+// secure-by-default regression (any caller that omits the key type would
+// silently lose a layer of encryption).
 func generateKey(kt KeyType) (crypto.Signer, error) {
 	switch kt {
-	case KeyTypeRSA:
-		return rsa.GenerateKey(rand.Reader, 3072)
-	default:
+	case KeyTypeEd25519:
 		_, priv, err := ed25519.GenerateKey(rand.Reader)
 		return priv, err
+	default:
+		return rsa.GenerateKey(rand.Reader, 3072)
 	}
 }
 

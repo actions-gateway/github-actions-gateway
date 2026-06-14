@@ -138,7 +138,7 @@ type Pool struct {
 
 // NewPool creates a Pool for the given RunnerGroup.
 // runnerLabels is the label set passed to GitHub during runner registration.
-// keyType selects the algorithm for newly-generated agent keys; empty defaults to KeyTypeEd25519.
+// keyType selects the algorithm for newly-generated agent keys; empty defaults to KeyTypeRSA (the secure default).
 func NewPool(c client.Client, namespace, groupName, runnerVersion string, runnerLabels []string, registrar Registrar, keyType KeyType) *Pool {
 	return &Pool{
 		client:        c,

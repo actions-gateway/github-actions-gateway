@@ -342,11 +342,13 @@ docs caveat, not omission.
   Both admit an unverified artifact into a signed release. Fix
   (re-vendor + `git diff --exit-code` CI gate; checksum-pin cosign as the
   `KIND_BINARY_SHA256` pattern does) or caveat.
-- **Library `generateKey` empty-keyType default is Ed25519**
+- ~~**Library `generateKey` empty-keyType default is Ed25519**
   ([Q109](../STATUS.md)): an empty `keyType` yields Ed25519 — the
   secure-by-default regression `CLAUDE.md` explicitly forbids (Ed25519
   agents can't decrypt RSA-OAEP session keys). Only the CLI default holds
-  RSA; the **library** default must be RSA too.
+  RSA; the **library** default must be RSA too.~~ **Resolved (Q109):**
+  `generateKey` now defaults an empty/unrecognised `keyType` to RSA-3072,
+  matching the CLI; Ed25519 requires the explicit `KeyTypeEd25519` opt-in.
 
 ---
 
@@ -415,7 +417,7 @@ Suggested sequence:
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
 | E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow, Q103 SLSA-L3 claim | — |
 | F. Engineering quality | Q77 coverage, Q78 dup-check, Q79 `-race` unit, Q80 gosec, Q81 errcheck, Q84 shellcheck, Q66 install-artifact validation | — |
-| G. Must-resolve (fix **or** caveat → Q99) | Q105 port-53 egress, Q126 + Q127-cosign release integrity, Q109 Ed25519 library default | — |
+| G. Must-resolve (fix **or** caveat → Q99) | Q105 port-53 egress, Q126 + Q127-cosign release integrity, ~~Q109 Ed25519 library default~~ (fixed) | — |
 
 **1.0 = all gating boxes ticked**, and every bucket-G item either fixed or
 honestly caveated. Recommended items that slip become ordinary post-1.0

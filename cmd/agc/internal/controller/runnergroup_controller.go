@@ -73,7 +73,7 @@ type RunnerGroupReconciler struct {
 	Metrics      *listener.Metrics
 	Log          *slog.Logger
 	Provisioner  *provisioner.Provisioner
-	AgentKeyType agentpool.KeyType // defaults to KeyTypeEd25519 when empty
+	AgentKeyType agentpool.KeyType // defaults to KeyTypeRSA (the secure default) when empty
 
 	// Recorder emits Kubernetes Events on the reconciled RunnerGroup so that
 	// credential, agent-pool, and listener failures surface in `kubectl describe
