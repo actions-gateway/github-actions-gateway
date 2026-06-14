@@ -176,6 +176,11 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 		Client:       mgr.GetClient(),
 		TokenManager: tm,
 		Registrar:    reg,
+		// Use Ed25519 agent keys: these suites exercise the session/reconcile
+		// lifecycle, not crypto, and Ed25519 generation is near-instant. The
+		// production default is RSA-3072 (Q109), whose per-agent generation cost
+		// is high enough to blow these tests' Eventually timeouts on CI.
+		AgentKeyType: agentpool.KeyTypeEd25519,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:     brokerStub.URL,
 			RunnerVersion: "2.335.1",
