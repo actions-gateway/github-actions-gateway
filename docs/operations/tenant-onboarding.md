@@ -22,7 +22,7 @@ Before beginning, confirm all of the following:
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
 - [ ] **GitHub URL is known.** The org/enterprise/repo URL the runners register against — `https://github.com/<org>`, `https://github.com/<org>/<repo>`, or a GitHub Enterprise Server URL `https://ghes.example.com/<org>`. It goes in `spec.gitHubURL` (Step 2) and must match where the App is installed. It is a required field — there is no default.
-- [ ] **Quota is approved.** The tenant's resource requirements have been reviewed and a `namespaceQuota` has been agreed: CPU, memory, and pod count.
+- [ ] **Quota is provisioned (platform-owned).** The tenant's resource requirements have been reviewed and the platform has created a `ResourceQuota` (and any `LimitRange`) on the tenant namespace — CPU, memory, and pod count. This is the real, tenant-uncontrollable cap; the gateway operates within it but never creates or mutates it. See [Step 1b](#step-1b-set-the-platform-owned-resourcequota). (If you provision namespaces and quotas via a GitOps or tenant-operator stack — Capsule, HNC, vCluster, kiosk — the quota comes from there instead.)
 - [ ] **PriorityClass objects exist** (GPU tenants only). Any `priorityClassName` values referenced in `priorityTiers` are pre-created at the cluster level: `kubectl get priorityclass`.
 - [ ] **Cluster service CIDR is known.** Needed if the tenant's `noProxyCIDRs` must be customized: `kubectl cluster-info dump | grep -m1 service-cluster-ip-range`.
 - [ ] **Security profile decided.** Default `baseline` is correct for normal CI workloads (builds, tests). Confirm with the tenant whether they need `restricted` (compliance / high-isolation) or `privileged` (docker-in-docker, kernel-module workflows). Tenants with both needs deploy two `ActionsGateway` CRs in two namespaces. You can *harden* a profile later in place (`baseline → restricted`) freely, but *relaxing* it (a downgrade) is rejected by admission unless you set the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation — see [troubleshooting: securityProfile downgrade rejected](troubleshooting.md#securityprofile-downgrade-rejected-by-admission-webhook). See [§5.3 — Security Profiles](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
@@ -63,9 +63,42 @@ kubectl get secret github-app-v1 -n <tenant-namespace> \
 
 ---
 
+## Step 1b: Set the Platform-Owned ResourceQuota
+
+The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned** — it is
+not a field on the `ActionsGateway` CR. The platform admin creates and manages it
+on the tenant namespace, and the gateway operates within it but never creates or
+mutates it. This is deliberate: a tenant-authored quota would be no real cap (the
+tenant could raise it in their own CR), and owning quotas would force broad,
+cluster-wide write RBAC on the GMC. Apply it with a trusted (administrator)
+identity:
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: <tenant>-quota
+  namespace: <tenant-namespace>
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    pods: "50"
+```
+
+```sh
+kubectl apply -f resourcequota.yaml
+```
+
+If you already provision namespaces and quotas through a GitOps pipeline or a
+tenant operator (Capsule, HNC, vCluster, kiosk), set the quota there instead — the
+gateway will not fight it.
+
+---
+
 ## Step 2: Create the ActionsGateway Resource
 
-Apply the `ActionsGateway` CR in the tenant's namespace. Adjust `namespaceQuota`, `proxy`, and `runnerGroups` for the tenant's workload.
+Apply the `ActionsGateway` CR in the tenant's namespace. Adjust `proxy` and `runnerGroups` for the tenant's workload. The namespace quota is set separately on the namespace (Step 1b), not on this CR.
 
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
@@ -89,10 +122,8 @@ spec:
   proxy:
     minReplicas: 2
     maxReplicas: 10
-  namespaceQuota:
-    requests.cpu: "20"
-    requests.memory: "40Gi"
-    pods: "50"
+  # The namespace ResourceQuota is platform-owned and set on the namespace in
+  # Step 1b — it is not a field on this CR.
   runnerGroups:
     - name: default
       runnerLabels: ["self-hosted", "linux"]

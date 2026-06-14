@@ -44,11 +44,11 @@
 
 **Stop being the bottleneck for every tenant runner change and the first responder for every tenant runner failure.** Deploy one operator at the cluster level; tenants own their own configuration, debugging, and capacity planning beneath it. Onboarding a new team is approving a namespace, not standing up a deployment.
 
-- **One operator, many tenants.** The Gateway Manager Controller watches `ActionsGateway` resources cluster-wide and provisions everything a tenant needs — RBAC, NetworkPolicies, `ResourceQuota`, egress proxy, the AGC, and every runner group declared in the CR. No per-tenant Helm releases or bespoke YAML to maintain.
+- **One operator, many tenants.** The Gateway Manager Controller watches `ActionsGateway` resources cluster-wide and provisions everything a tenant needs — RBAC, NetworkPolicies, egress proxy, the AGC, and every runner group declared in the CR — operating within the platform-owned namespace `ResourceQuota`. No per-tenant Helm releases or bespoke YAML to maintain.
 
 - **First-line debugging shifts to the tenant.** Tenants who own their own configuration can answer their own "why isn't my runner scaling?" and "why did my job fail?" questions. The escalation path back to platform shrinks to the controller itself.
 
-- **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, NetworkPolicies, and `ResourceQuota` are part of what the controller provisions. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
+- **Tenant security policies enforced by construction, not convention.** Per-tenant egress IP pools, namespace-scoped RBAC, and NetworkPolicies are part of what the controller provisions, all operating within the platform-owned namespace `ResourceQuota`. Adding a tenant does not require manual security review of per-tenant network rules — the controller emits the policy, and security review focuses on the controller once.
 
 - **Worker eviction is no longer a paging event.** Preempted, OOM-killed, and node-lost jobs are recovered automatically. The recurring "tenant X's CI is failing intermittently, please look at the runner pod" ticket pattern largely goes away.
 

@@ -306,7 +306,7 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 ```
 
 **Resolution.**
-- If quota is exhausted: increase `namespaceQuota` in the `ActionsGateway` spec or reduce `maxWorkers` / last-tier threshold.
+- If quota is exhausted: raise the platform-owned `ResourceQuota` on the namespace (`kubectl edit resourcequota -n <namespace> <quota-name>`) or reduce `maxWorkers` / last-tier threshold.
 - If no GPU nodes are available: check node autoscaler status or provision additional nodes.
 - If a `PriorityClass` is missing: create it (cluster-admin action) or remove the tier reference.
 - If image pull is slow (first job on a cold node): this is expected. If it exceeds the p99 SLO (60s), consider pre-pulling the image via a DaemonSet or enabling image streaming.

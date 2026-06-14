@@ -70,10 +70,7 @@ spec:
   proxy:
     minReplicas: 2               # (3)!
     maxReplicas: 10
-  namespaceQuota:                # (4)!
-    requests.cpu: "20"
-    requests.memory: "40Gi"
-    pods: "50"
+  # No namespaceQuota field: the ResourceQuota is platform-owned (4)!
   runnerGroups:
     - name: gpu-runners
       runnerLabels: ["self-hosted", "gpu"]
@@ -110,8 +107,10 @@ spec:
     [Security](design/05-security.md).
 3.  The per-tenant egress proxy pool is HPA-managed between these bounds; all
     GitHub traffic exits through it on dedicated IPs.
-4.  The single `ResourceQuota` every runner group shares. Priority tiers decide
-    who wins when it is contended.
+4.  The single `ResourceQuota` every runner group shares is **platform-owned** —
+    the platform admin sets it on the namespace, not on this CR, so it is a real
+    cap the tenant cannot raise. Priority tiers decide who wins when it is
+    contended.
 5.  The first 5 GPU pods get a preempting `PriorityClass` and will displace
     lower-priority CPU pods; the next tier bursts opportunistically without
     evicting running jobs; the final threshold caps total concurrency.

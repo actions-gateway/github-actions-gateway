@@ -37,7 +37,7 @@ unimplemented at the authorization layer.
 | 8 smaller hardening items (see below) | Low | **New → [Q127](../STATUS.md#Q127)** (batch) |
 | DNS egress allows port 53 to any destination | Medium | Known — [Q105](../STATUS.md#Q105) |
 | Proxy has no app-layer destination allowlist / connection cap | Medium | Accepted by design — security.md M-2, Appendix G §G.1, [Q19](../STATUS.md#Q19). This audit adds the metadata-service/SSRF framing as a revisit argument |
-| ResourceQuota is optional and tenant-controlled | Medium | Partially known — D-6/M-15 accepted quota as the hard cap; that the *tenant* chooses whether it exists weakens the acceptance. Fold into [Q82](../STATUS.md#Q82) |
+| ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. Remaining per-cluster proxy HPA-max guard work stays in [Q82](../STATUS.md#Q82). |
 | No SLSA provenance attestation | Info | Known — [Q103](../STATUS.md#Q103) |
 | Worker trivy leg report-only | Info | Known — [Q70](../STATUS.md#Q70) |
 | ServiceMonitor `insecureSkipVerify` | Low | Known — [Q104](../STATUS.md#Q104) |
@@ -104,7 +104,13 @@ A compromised GMC can create a Deployment or RoleBinding in `kube-system`.
 writes of these kinds in namespaces lacking the tenant marker label —
 and/or update the docs. *Interim (2026-06-12): the claims in
 `05-security.md` and `02-architecture.md` are struck through with
-corrections in place pending resolution.*
+corrections in place pending resolution.* **Partially resolved (Q130,
+2026-06-14): the `resourcequotas` write verb has been dropped entirely —
+the namespace `ResourceQuota` is now platform-owned and the GMC no longer
+creates or mutates it, shrinking the cluster-wide-write surface by one
+kind. The remaining kinds (deployments, rolebindings, networkpolicies,
+services, serviceaccounts, HPAs, PDBs) are still unconfined — Q122 stays
+open for the VAP-confinement work.**
 
 ### Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED
 

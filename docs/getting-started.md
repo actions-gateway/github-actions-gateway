@@ -24,7 +24,7 @@ All three images must be **pinned by digest** — the chart refuses to render wh
 
 > **Dev/CI alternative.** The `cmd/gmc/config/` kustomize bases drive a `make install` / `make deploy IMG=<registry>/gmc:tag` flow used for local iteration. The Helm chart is the supported distribution artifact; the kustomize bases remain the dev source of truth.
 
-## 2. Create and mark the tenant namespace
+## 2. Create and mark the tenant namespace, and set its quota
 
 Create the tenant namespace and mark it as managed by the GMC. The marker label
 authorizes the GMC to stamp Pod Security Admission labels on it; the
@@ -34,6 +34,29 @@ authorizes the GMC to stamp Pod Security Admission labels on it; the
 kubectl create namespace team-a
 kubectl label namespace team-a actions-gateway.github.com/tenant=true
 ```
+
+The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the
+platform admin creates and manages it on the tenant namespace, and the gateway
+operates *within* it but never creates or mutates it. This is the real,
+tenant-uncontrollable cap on how much compute a tenant can consume — apply it
+here (or via your GitOps / tenant-operator stack: Capsule, HNC, vCluster, kiosk):
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-a-quota
+  namespace: team-a
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: "40Gi"
+    pods: "50"
+```
+
+The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and
+reruns quota-blocked jobs — see [why-gag](why-gag.md)), but the quota itself is
+yours to size and own.
 
 ## 3. Create a GitHub App credential Secret
 
@@ -80,10 +103,8 @@ spec:
   proxy:
     minReplicas: 2
     maxReplicas: 10
-  namespaceQuota:
-    requests.cpu: "20"
-    requests.memory: "40Gi"
-    pods: "50"
+  # The namespace ResourceQuota is platform-owned and set on the namespace in
+  # step 2 — it is not a field on this CR.
   runnerGroups:
     - name: gpu-runners
       runnerLabels: ["self-hosted", "gpu"]

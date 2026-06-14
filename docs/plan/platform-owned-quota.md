@@ -7,8 +7,8 @@ drop the GMC's `resourcequotas`/`limitranges` write RBAC. A breaking CRD change,
 done **pre-1.0 while it is free** (post-1.0 it would need a conversion webhook —
 see deferred [Q74](../STATUS.md)).
 
-Tracked as STATUS Queue Q130. Not started — this doc captures the design; the
-CRD/RBAC/controller/docs edits land in their own PR(s).
+Tracked as STATUS Queue Q130. **Implemented (2026-06-14):** the
+CRD/RBAC/controller/docs edits landed; see the Status section below.
 
 ## Why
 
@@ -88,4 +88,28 @@ after the quota change lands.
 
 ## Status
 
-Not started — design captured here; implementation deferred to its own PR(s).
+**Implemented (2026-06-14, Q130).** Delivered:
+
+- **API/CRD:** removed `NamespaceQuota` from `ActionsGatewaySpec`
+  ([actionsgateway_types.go](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go));
+  regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
+  Structural-schema pruning silently drops the now-unknown field from existing CRs
+  (no apply rejection) pre-1.0.
+- **Controller/builder:** removed `buildResourceQuota`, the reconcile apply path,
+  the teardown delete, and the `applyResourceQuota` helper. `maxQuotaRetries` /
+  `quotaRetryDelay` (AGC reacting to a *full* quota) are kept — those are operating
+  *within* a quota, not owning it.
+- **RBAC:** dropped the `resourcequotas` verbs from
+  [role.yaml](../../cmd/gmc/config/rbac/role.yaml) and the chart
+  [rbac.yaml](../../charts/actions-gateway/templates/rbac.yaml). No `limitranges`
+  grant existed. Partially subsumes [Q122](security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high).
+- **Tests:** `TestGMC_TenantProvisioning_NoResourceQuotaCreated` (envtest) asserts the
+  GMC creates no quota and leaves a pre-existing platform quota untouched; the
+  `TestBuildResourceQuota_PassesThrough` unit test was removed.
+- **Docs:** getting-started, tenant-onboarding, runbook, troubleshooting,
+  security-operations, 01/02/03/04/05/07 design docs, appendix-a/e, why-gag, README,
+  and the breaking-change migration note in
+  [upgrade.md](../operations/upgrade.md).
+
+The open question below (Role/RoleBinding ownership) is unaddressed and may split
+into its own item.
