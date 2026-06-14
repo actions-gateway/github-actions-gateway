@@ -43,6 +43,7 @@ Two detection substrates are used:
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
+  - [Managing egress at scale](#managing-egress-at-scale)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
@@ -472,6 +473,38 @@ to express GitHub egress as FQDN rules under Cilium/Calico), set
 `spec.proxy.managedNetworkPolicy: false` on the `ActionsGateway` — the GMC then
 stops managing the proxy GitHub-CIDR rule and you own keeping it current. That is
 the supported, explicit hand-off; the managed path remains the default.
+
+### Managing egress at scale
+
+This project deliberately does **not** ship tooling to manage the *widening*
+policies — that is a cluster/platform concern with a mature ecosystem, and owning
+it here would re-create the coupling the managed-floor split avoids. What the
+project commits to instead is a stable **integration surface**: every worker pod
+carries two labels you can target from any policy engine, and these are a
+supported contract (they will not be renamed without a migration note):
+
+- `actions-gateway/component: workload` — all worker (and AGC) pods in the tenant
+- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+
+For anything beyond a handful of static CIDRs, prefer the ecosystem over
+hand-written `NetworkPolicy`:
+
+- **Your CNI's richer egress** — `CiliumNetworkPolicy` `toFQDNs` (DNS-aware,
+  hostname allowlists), Calico `NetworkSet` (reusable CIDR groups) / DNS policy,
+  and policy tiers. This is the right tool for "let `gpu-builders` reach
+  `*.internal.corp` and a database." It pairs with the
+  `spec.proxy.managedNetworkPolicy: false` hand-off above.
+- **`AdminNetworkPolicy`** ([sig-network `network-policy-api`](https://network-policy-api.sigs.k8s.io/))
+  — cluster-admin-level, cross-namespace egress baselines (`AdminNetworkPolicy` /
+  `BaselineAdminNetworkPolicy`), implemented by Cilium/Calico/OVN-Kubernetes. The
+  most direct fit for "platform admin governs egress across all tenant
+  namespaces" — maturing (alpha→beta), so confirm your CNI's support level.
+- **Kyverno / OPA Gatekeeper** — policy-as-code to *generate* per-namespace NPs
+  (e.g. a templated default-deny or egress allowance keyed off a namespace label)
+  and to *validate* that any admin-added egress conforms to your guardrails.
+
+The labels above are what make all of these targetable; the secure floor stays
+GMC-managed regardless.
 
 ---
 
