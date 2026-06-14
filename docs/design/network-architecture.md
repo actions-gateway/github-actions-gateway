@@ -230,6 +230,29 @@ kubectl run nettest-worker -n <namespace> --rm -it --restart=Never \
 # Expected: connection timeout
 ```
 
+### Confirm nothing can open a connection *to* a worker pod (ingress default-deny)
+
+Worker pods run untrusted job code and accept no inbound by design — the workload NP declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set, so all ingress is denied (Q128). Start a workload-labelled listener, then probe it from an unrelated pod: the connection must fail.
+
+```sh
+# Listener: a workload-labelled pod serving on 8000 (simulates a worker pod).
+kubectl run nettest-listener -n <namespace> --restart=Never \
+  --image=python:3-alpine \
+  --labels='actions-gateway/component=workload' \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- python3 -m http.server 8000
+kubectl wait -n <namespace> --for=condition=Ready pod/nettest-listener
+
+# Probe from an unlabelled pod in the same namespace.
+LISTENER_IP=$(kubectl get pod nettest-listener -n <namespace> -o jsonpath='{.status.podIP}')
+kubectl run nettest-prober -n <namespace> --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  --overrides='{"spec":{"automountServiceAccountToken":false}}' \
+  -- curl --noproxy '*' -sI --connect-timeout 5 "http://${LISTENER_IP}:8000"
+# Expected: connection timeout (workload NP denies all ingress to worker pods)
+kubectl delete pod nettest-listener -n <namespace>
+```
+
 ### Confirm a proxy-labelled pod can reach GitHub
 
 ```sh

@@ -325,6 +325,15 @@ spec:
 		Expect(workloadYAML).To(ContainSubstring("- Egress"),
 			"workload NP missing Egress in policyTypes:\n%s", workloadYAML)
 
+		// policyTypes must include Ingress with no ingress rules — default-deny
+		// all inbound to worker pods (Q128). Worker pods run untrusted job code
+		// and accept no inbound by design; without Ingress in policyTypes they
+		// are default-allow, letting any pod connect to untrusted code.
+		Expect(workloadYAML).To(ContainSubstring("- Ingress"),
+			"workload NP missing Ingress in policyTypes (Q128: default-deny ingress to untrusted worker pods):\n%s", workloadYAML)
+		Expect(workloadYAML).NotTo(MatchRegexp(`(?m)^\s*ingress:`),
+			"workload NP must carry no ingress rules — an ingress: block means inbound was allowed to worker pods (Q128):\n%s", workloadYAML)
+
 		// DNS egress rule: port 53 on both UDP and TCP, no `to:` peers
 		// (allows DNS to any destination).
 		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*UDP`),
