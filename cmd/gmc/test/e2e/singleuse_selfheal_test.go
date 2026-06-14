@@ -42,6 +42,13 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
+		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
+		// Deployment-ready only means the health server is up; it is decoupled
+		// from token acquisition. Gate on a reconciled RunnerGroup so the session
+		// waits start from an operational AGC rather than absorbing the AGC's
+		// whole startup budget (Q134).
+		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
+
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19390+GinkgoParallelProcess())
 		selfhealPFCmd = exec.Command("kubectl", "port-forward",

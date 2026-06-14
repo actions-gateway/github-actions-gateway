@@ -237,6 +237,45 @@ func WaitForDeploymentReady(ns, name string, timeout time.Duration) {
 	}, timeout, 2*time.Second).Should(Succeed(), "deployment %s/%s not ready", ns, name)
 }
 
+// WaitForRunnerGroupReconciled waits until at least one RunnerGroup in ns has a
+// populated .status.observedGeneration. The AGC sets observedGeneration only at
+// the end of a full reconcile — after the installation-token fetch, agent-pool
+// registration (EnsureAgents), and listener-multiplexer start have all
+// succeeded — so this is the signal that the AGC is operationally past startup
+// and a broker session is imminent.
+//
+// Deployment readiness (readyReplicas>=1, WaitForDeploymentReady) is a far
+// weaker signal and must not be mistaken for it: the AGC's health server binds
+// within a few seconds of pod start and is deliberately decoupled from token
+// acquisition (see cmd/agc/main.go — readiness is bound early so rollout success
+// does not hinge on GitHub reachability). The initial token fetch alone has a
+// budget of up to ~2 minutes there. Gating a session-registration wait on
+// Deployment readiness therefore folds the AGC's entire startup (token +
+// registration + first session, all round-trips to the shared single-replica
+// fakegithub) into the session budget; under parallel CI load those round-trips
+// slow and the budget is exhausted before any session appears, surfacing as a
+// misleading "no session registered" timeout (Q134). Waiting for this stronger
+// signal first separates "AGC still starting up" from "session failed to
+// register" and keeps each phase within its own budget.
+func WaitForRunnerGroupReconciled(ns string, timeout time.Duration) {
+	EventuallyWithOffset(1, func(g Gomega) {
+		cmd := exec.Command("kubectl", "get", "runnergroup",
+			"-n", ns,
+			"-o", `jsonpath={range .items[*]}{.status.observedGeneration}{"\n"}{end}`,
+		)
+		out, err := Run(cmd)
+		g.Expect(err).NotTo(HaveOccurred())
+		reconciled := false
+		for _, line := range GetNonEmptyLines(out) {
+			if strings.TrimSpace(line) != "0" {
+				reconciled = true
+				break
+			}
+		}
+		g.Expect(reconciled).To(BeTrue(), "no RunnerGroup in %s has a reconciled status yet", ns)
+	}, timeout, 2*time.Second).Should(Succeed(), "no RunnerGroup in %s reached a reconciled status", ns)
+}
+
 // WaitForCondition waits until the given jsonpath expression on a resource equals expectedValue.
 func WaitForCondition(resource, ns, name, jsonpath, expectedValue string, timeout time.Duration) {
 	EventuallyWithOffset(1, func(g Gomega) {

@@ -55,6 +55,13 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
+		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
+		// Deployment-ready only means the health server is up; it is decoupled
+		// from token acquisition. Gate on a reconciled RunnerGroup so the session
+		// wait below starts from an operational AGC rather than absorbing the
+		// AGC's whole startup budget (Q134).
+		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
+
 		By("starting port-forward to fakegithub control API")
 		// Distinct port base from job_lifecycle (19090) and worker_lifecycle
 		// (19300); fakegithubLocalPort is reread by the control helpers.
