@@ -98,20 +98,30 @@ def write_icon_tile():
 
 
 def write_favicon():
-    # Simplified: a smooth blue->teal donut on a navy tile, legible at 16 px.
+    # Simplified spiky ring: the star silhouette (no internal facet seams, which
+    # turn to mush at 16 px) filled with the brand gradient on a navy tile. Keeps
+    # the mark's spiky character while staying legible small.
+    cx = cy = 16.0
+    rot, rob, rib, rit = 13.0, 10.0, 8.0, 4.7   # outer tip/base, inner base/tip
+    def star(outer):
+        pts = []
+        for k in range(2 * M):
+            a = -math.pi / 2 + k * math.pi / M
+            r = (rot if k % 2 == 0 else rob) if outer else (rit if k % 2 == 1 else rib)
+            pts.append("%.2f %.2f" % (cx + r * math.cos(a), cy + r * math.sin(a)))
+        return "M" + " L".join(pts) + " Z"
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" '
         'role="img" aria-label="GitHub Actions Gateway">\n'
         '  <defs>\n'
-        '    <linearGradient id="g" x1="16" y1="4" x2="16" y2="28" gradientUnits="userSpaceOnUse">\n'
+        '    <linearGradient id="g" x1="16" y1="3" x2="16" y2="29" gradientUnits="userSpaceOnUse">\n'
         '      <stop offset="0" stop-color="#3b8bff"/>\n'
         '      <stop offset="1" stop-color="#2DD4BF"/>\n'
         '    </linearGradient>\n'
         '  </defs>\n'
         '  <rect width="32" height="32" rx="7" fill="#0B1220"/>\n'
-        '  <circle cx="16" cy="16" r="10.5" fill="url(#g)"/>\n'
-        '  <circle cx="16" cy="16" r="5" fill="#0B1220"/>\n'
-        '</svg>\n')
+        '  <path d="%s %s" fill="url(#g)" fill-rule="evenodd"/>\n'
+        '</svg>\n' % (star(True), star(False)))
     open("favicon.svg", "w").write(svg)
 
 

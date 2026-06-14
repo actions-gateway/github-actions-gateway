@@ -18,7 +18,7 @@ python3 generate-logomark.py   # writes logo.svg, icon-tile.svg, favicon.svg
 | Master (generated) | Raster output(s) | Used for |
 | --- | --- | --- |
 | `logo.svg` | — (SVG used directly) | header logomark, via `theme.logo` |
-| `favicon.svg` | `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon.ico` | browser-tab favicon — a **simplified** smooth ring that stays legible at 16 px (the SVG is wired via `theme.favicon`; the `.ico` is the raster fallback) |
+| `favicon.svg` | `favicon-16.png`, `favicon-32.png`, `favicon-48.png`, `favicon.ico` | browser-tab favicon — a **simplified** spiky ring (the star silhouette, no internal facet seams) that stays legible at 16 px (the SVG is wired via `theme.favicon`; the `.ico` is the raster fallback) |
 | `icon-tile.svg` | `apple-touch-icon.png` (180), `icon-512.png` | iOS / PWA icons (full faceted ring on an opaque navy tile, maskable-safe padding) |
 
 The Apple/PWA rasters and the `.ico` are linked from `overrides/main.html`. The
