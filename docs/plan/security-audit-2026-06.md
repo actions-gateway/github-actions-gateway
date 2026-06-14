@@ -30,8 +30,8 @@ unimplemented at the authorization layer.
 | GMC ClusterRole grants cluster-wide Secret read/write; docs claim name-scoped | High | **New → [Q121](../STATUS.md#Q121)** (Q29 audit policy is the detective half) |
 | GMC workload writes cluster-wide; docs claim CR-namespace confinement | High | **New → [Q122](../STATUS.md#Q122)** |
 | Worker pods have no ingress NetworkPolicy (default-allow ingress) | High | **Resolved (Q128)** — workload NP now declares `policyTypes: [Ingress, Egress]` with an empty ingress rule set (default-deny) |
-| No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **New → [Q123](../STATUS.md#Q123)** |
-| `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **New → [Q124](../STATUS.md#Q124)** |
+| No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **Resolved (Q123)** — every `uses:` SHA-pinned, syft version-pinned, Dependabot `github-actions` ecosystem bumps the pins |
+| `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/verify-release-test.sh` |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **New → [Q125](../STATUS.md#Q125)** |
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → [Q126](../STATUS.md#Q126)** |
 | 8 smaller hardening items (see below) | Low | **New → [Q127](../STATUS.md#Q127)** (batch) |
@@ -106,27 +106,44 @@ and/or update the docs. *Interim (2026-06-12): the claims in
 `05-security.md` and `02-architecture.md` are struck through with
 corrections in place pending resolution.*
 
-### Q123 — SHA-pin GitHub Actions; publish.yml first (High)
+### Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED
 
-Every `uses:` in `.github/workflows/` is tag-pinned;
-`anchore/sbom-action/download-syft@v0` floats a whole major. The publish
+Every `uses:` in `.github/workflows/` was tag-pinned;
+`anchore/sbom-action/download-syft@v0` floated a whole major. The publish
 job holds `packages: write` + `id-token: write`: a hijacked action tag
 executes inside the job whose ambient OIDC identity *is* the release trust
 root — it could push and **keyless-sign malicious images as the legitimate
 publish identity**, which `make verify-release` would accept.
-**Fix:** pin all `uses:` to full commit SHAs (tag comment alongside),
-enable Dependabot/Renovate bumps; pin syft's version explicitly.
 
-### Q124 — `make verify-release` accepts branch identities (Medium)
+**Resolution:** every `uses:` across all ten workflow files is pinned to a
+full 40-char commit SHA with a trailing `# vX.Y.Z` comment (publish.yml
+first). Runtime tool downloads in the publish path are version-pinned too:
+`cosign` already via `cosign-installer` `cosign-release`, and `syft` now via
+an explicit `syft-version` input on `download-syft` (the action is
+SHA-pinned, but syft is a runtime download). Dependabot already declared the
+`github-actions` ecosystem (`.github/dependabot.yml`); Dependabot natively
+bumps SHA pins and their `# vX.Y.Z` comments, so the pins don't rot. Policy
++ bump procedure documented in
+[release.md § Supply-chain integrity of the pipeline](../operations/release.md#supply-chain-integrity-of-the-pipeline-itself);
+`actionlint` (CI `lint`) keeps SHA-pinned `uses:` lint-clean.
 
-`Makefile:511` matches `publish\.yml@refs/(tags|heads)/.*$`; the
-documented identity (`security-operations.md:452,486`,
-`release.md`) is tags-only. `publish.yml` is `workflow_dispatch`-able from
-any ref with an arbitrary `tag` input and runs the workflow file *from
-that ref*: repo-write can dispatch from a scratch branch, overwrite a
-released GHCR version tag, and still pass verification.
-**Fix:** tighten the regexp to `@refs/tags/v.*$` (separate clearly-labeled
-override for rc/dry-run verification if needed).
+### Q124 — `make verify-release` accepts branch identities (Medium) — RESOLVED
+
+`scripts/verify-release.sh` (post-#209 home of the recipe; was `Makefile:511`)
+matched `publish\.yml@refs/(tags|heads)/.*$`; the documented identity
+(`security-operations.md`, `release.md`) is tags-only. `publish.yml` is
+`workflow_dispatch`-able from any ref with an arbitrary `tag` input and runs
+the workflow file *from that ref*: repo-write could dispatch from a scratch
+branch, overwrite a released GHCR version tag, and still pass verification.
+
+**Resolution:** the identity regexp is anchored tags-only —
+`@refs/tags/v.*$` — and factored into `release_identity_regexp` in
+`scripts/lib/common.sh` so it has a single source of truth. Defense in
+depth: both `publish.yml` jobs' "Resolve publish tag" step now refuse any
+`GITHUB_REF` that isn't `refs/tags/…`, so a branch `workflow_dispatch` can't
+even reach the sign step. `scripts/verify-release-test.sh` (run by `make
+check` and the CI shellcheck job) asserts the regexp accepts
+`refs/tags/vX.Y.Z` and rejects `refs/heads/…`.
 
 ### Q125 — GMC teardown fail-open (Medium)
 

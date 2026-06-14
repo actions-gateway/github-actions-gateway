@@ -41,8 +41,8 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outputs.manifests }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
@@ -74,8 +74,8 @@ jobs:
       # does not re-fetch the schema set from GitHub (a rate-limit flake source).
       KUBECONFORM_CACHE: ${{ github.workspace }}/.kubeconform-cache
     steps:
-      - uses: actions/checkout@v6
-      - uses: azure/setup-helm@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       - name: install yamllint
         run: python3 -m pip install --user "yamllint==${YAMLLINT_VERSION}"
       - name: install kubeconform
@@ -99,7 +99,7 @@ jobs:
       # fully offline; the key changes only when MANIFEST_K8S_VERSION (pinned in
       # scripts/manifest-validate.sh) does.
       - name: cache kubeconform schemas
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.KUBECONFORM_CACHE }}
           key: kubeconform-schemas-1.30.0

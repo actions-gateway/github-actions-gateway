@@ -210,3 +210,59 @@ first-party worker is a separate decision tracked on the backlog.
 PR CI proves the image builds and the SBOM generates so those paths can't silently
 break; signing and attestation are first exercised on a real `v*` tag, which is
 why step 3 verification matters on every release.
+
+## Supply-chain integrity of the pipeline itself
+
+The publish job holds `packages: write` + `id-token: write`: its ambient OIDC
+identity *is* the release trust root. A hijacked upstream action tag executing in
+that job could push and keyless-sign malicious images as the legitimate publish
+identity. Two controls keep the pipeline itself trustworthy.
+
+### Actions are pinned to full commit SHAs
+
+Every `uses:` across `.github/workflows/` is pinned to a full 40-char commit SHA
+with a trailing `# vX.Y.Z` comment for readability — never a floating tag (`@v4`)
+or branch. A tag is mutable: whoever controls the upstream repo can repoint it at
+new code, which would then run inside the privileged publish job. A SHA is
+immutable. The runtime tool downloads in the publish path are pinned the same way:
+`cosign` via `sigstore/cosign-installer` with an explicit `cosign-release`
+(kept in step with `COSIGN_VERSION` in the Makefile so a local `make
+verify-release` uses the same version that signed), and `syft` via the
+`syft-version` input on `anchore/sbom-action/download-syft` (the action is
+SHA-pinned, but syft itself is a runtime download).
+
+**Bumping a pinned action.** Dependabot's `github-actions` ecosystem
+([`.github/dependabot.yml`](../../.github/dependabot.yml)) opens weekly PRs that
+bump both the SHA *and* the `# vX.Y.Z` comment, so the pins don't rot — review and
+merge those like any dependency PR. To pin or bump by hand, resolve the tag to its
+commit SHA and keep the comment in sync:
+
+```bash
+gh api repos/<owner>/<action>/commits/<tag> --jq '.sha'
+# -> uses: <owner>/<action>@<sha> # <tag>
+```
+
+`syft-version` is **not** Dependabot-managed (it's a tool download, not an action
+ref) — bump it by hand in `publish.yml` when you bump the `anchore/sbom-action`
+SHA. `actionlint` (CI `lint` job) keeps SHA-pinned `uses:` lint-clean.
+
+### Signing identity is tags-only
+
+Releases are cut by pushing a `v*` tag, so a legitimate keyless signature's Fulcio
+certificate records `publish.yml` running from `refs/tags/vX.Y.Z`. Two layers
+enforce that a signature can only ever be a tag signature:
+
+- **publish.yml refuses to run from a non-tag ref.** Both publish jobs' "Resolve
+  publish tag" step rejects any `GITHUB_REF` that isn't `refs/tags/…`, so a
+  `workflow_dispatch` run from a branch can't even reach the sign step.
+- **`make verify-release` only accepts a tags identity.** The
+  `--certificate-identity-regexp` is anchored to `…/publish\.yml@refs/tags/v.*$`
+  (sourced from `release_identity_regexp` in
+  [`scripts/lib/common.sh`](../../scripts/lib/common.sh)), so a signature minted
+  from `refs/heads/…` is rejected even if one were somehow produced. The
+  `scripts/verify-release-test.sh` assertions (run by `make check` and CI) guard
+  that the regexp stays tags-only.
+
+Together these close the hole where repo-write could dispatch `publish.yml` from a
+scratch branch, overwrite a released GHCR version tag, and still pass
+verification.

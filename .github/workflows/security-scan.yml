@@ -38,8 +38,8 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       chart: ${{ steps.filter.outputs.chart }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
@@ -73,8 +73,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.work
       # `make vulncheck` (scripts/go-vulncheck.sh) is the single source of truth
@@ -132,20 +132,20 @@ jobs:
             # report-only — see the per-leg exit-code note on the job above.
             exit-code: '0'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Pre-pull buildkit builder image
         # docker/setup-buildx-action boots its docker-container builder from
         # ${BUILDKIT_IMAGE}, pulled from Docker Hub with no retry of its own — a
         # timeout/rate-limit flake source. Pre-pull with retries so the buildx
         # boot below finds it in the local image cache and never touches Hub.
         run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
         with:
           # Pin the builder to the buildkit image pre-pulled above so the boot
           # uses the local cache instead of pulling from Docker Hub.
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
       - name: build ${{ matrix.name }} image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -160,7 +160,7 @@ jobs:
       # PR-time exercise of the SBOM path; publish.yml regenerates the SBOM for
       # the pushed image and attaches it as a keyless cosign attestation.
       - name: generate SBOM for ${{ matrix.name }}
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           image: local/${{ matrix.name }}:scan
           format: spdx-json
@@ -172,14 +172,14 @@ jobs:
       # key always misses and writes a fresh entry, while restore-keys load the
       # most recent prior DB so a refresh is incremental, not a cold pull.
       - name: cache trivy data
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ github.workspace }}/.trivy-cache
           key: trivy-data-${{ github.run_id }}
           restore-keys: |
             trivy-data-
       - name: trivy scan ${{ matrix.name }}
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_CACHE_DIR: ${{ github.workspace }}/.trivy-cache
         with:
@@ -219,8 +219,8 @@ jobs:
       # the verdict); keep in step with the version `make polaris-scan` expects.
       POLARIS_VERSION: 9.6.0
     steps:
-      - uses: actions/checkout@v6
-      - uses: azure/setup-helm@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       - name: install polaris
         run: |
           curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
