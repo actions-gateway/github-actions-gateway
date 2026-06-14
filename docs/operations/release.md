@@ -1,5 +1,7 @@
 # Release and Publishing
 
+> **Audience:** Maintainer
+
 How a maintainer cuts a release: tag → publish (build, push, sign, attest, and
 package + push + sign the chart) → verify → record digests. This is the
 **maintainer** runbook for

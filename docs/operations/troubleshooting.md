@@ -1,5 +1,7 @@
 # Troubleshooting Guide
 
+> **Audience:** SRE, Platform engineer
+
 Audience: on-call site reliability engineer (SRE), platform engineer.
 
 Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.

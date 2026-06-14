@@ -1,5 +1,7 @@
 # Tenant Onboarding Checklist
 
+> **Audience:** Platform engineer
+
 Audience: platform engineer onboarding a new tenant team.
 
 This checklist walks from pre-conditions through first successful job. For the full setup reference, see [Getting Started](../getting-started.md). For day-2 operations after onboarding, see the [Runbook](runbook.md).

@@ -1,5 +1,7 @@
 # Observability
 
+> **Audience:** SRE, Platform engineer
+
 Both the GMC and AGC expose Prometheus metrics at `:8080/metrics` (no authentication required by default). The standard `controller-runtime` metrics server is used; additional built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics below.
 
 For SLO targets associated with these metrics, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).

@@ -126,3 +126,20 @@
     }
   }
 })();
+
+// Per-doc audience: upgrade a leading "> **Audience:** ..." blockquote into pills.
+// On github.com (and without JS) it stays a readable blockquote.
+(function () {
+  document.querySelectorAll(".md-content blockquote").forEach(function (bq) {
+    var m = bq.textContent.trim().match(/^Audience:\s*(.+)$/i);
+    if (!m) return;
+    var tags = m[1].split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    var div = document.createElement("div");
+    div.className = "persona-pills-top";
+    div.setAttribute("aria-label", "Audience");
+    div.innerHTML = tags.map(function (t) {
+      return '<span class="persona-pill">' + t + "</span>";
+    }).join(" ");
+    bq.parentNode.replaceChild(div, bq);
+  });
+})();

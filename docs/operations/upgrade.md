@@ -1,5 +1,7 @@
 # Upgrade and Rollback Procedures
 
+> **Audience:** Platform engineer
+
 Audience: platform engineer. For upgrade strategy intent, see [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). For **initial installation** of the GMC, see [install.md](install.md) — this document covers day-2 upgrade and rollback.
 
 The three independently versioned components — GMC, AGC, and worker image — each upgrade on their own cadence with separate procedures below.
