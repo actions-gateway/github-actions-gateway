@@ -58,7 +58,7 @@ stringData:
 ## 4. Create an ActionsGateway resource
 
 ```yaml
-apiVersion: actions.gateway/v1alpha1
+apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
   name: team-a-gateway
