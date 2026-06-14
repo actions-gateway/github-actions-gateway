@@ -2,7 +2,7 @@
 
 > **Audience:** Platform engineer
 
-Audience: platform engineer. This is the operator reference for installing the
+This is the operator reference for installing the
 Gateway Manager Controller (GMC) with the shipped **`actions-gateway` Helm
 chart**. For day-2 operations after install, see [upgrade.md](upgrade.md). For
 the full end-to-end walkthrough that continues past the GMC install into the
