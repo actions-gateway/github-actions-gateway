@@ -30,7 +30,11 @@ plainly.**
 
 1.0 ships when every **gating** item below is ✅. **Recommended** items
 strengthen the release but do not block the tag; any recommended item
-not done at tag time moves to the post-1.0 Queue with its rationale.
+not done at tag time moves to the post-1.0 Queue with its rationale. A
+third class — bucket [G, **must-resolve**](#g-must-resolve-before-tag--fix-or-fold-into-the-q99-honesty-pass) —
+also blocks the tag, but is satisfied by *either* a fix *or* an honest
+docs caveat (folded into the [Q99](../STATUS.md) honesty pass), not only
+by a ✅.
 
 ### A. Functional completeness & live proof — *gating*
 
@@ -63,7 +67,25 @@ SecurityContext breaks the runner image) are new `1.0-gate` rows.
   the GMC-provisioned AGC sends an **empty** `agent.version` (it never
   sets `GITHUB_RUNNER_VERSION`), which GitHub accepts — the 2.334.x pin
   lives only in the worker image. Follow-up tracked as
-  [Q118](../STATUS.md).
+  [Q118](../STATUS.md) — now itself a `1.0-gate` (see below).
+
+Two follow-on gates were identified after the live run (same pattern as
+the Q114/Q115 discoveries above) and must close before tag:
+
+- [ ] **Runner-version contract not regressed** ([Q118](../STATUS.md),
+  *gating*): `DefaultWorkerImage` (`provisioner.go:98`) still pins
+  2.334.0 while the worker Dockerfile ships 2.335.1, and the GMC never
+  sets `GITHUB_RUNNER_VERSION`, so `CreateSession` sends an **empty**
+  `agent.version`. This regresses the GitHub session-creation contract
+  that bucket-A row 4 ([Q71](../STATUS.md)) gated on — fix the pin
+  lockstep and set the version explicitly before tag.
+- [ ] **Teardown does not fail open** ([Q125](../STATUS.md), *gating*):
+  `deleteIfExists` (`actionsgateway_controller.go:274`) swallows
+  non-NotFound delete errors and `reconcileDelete` removes the finalizer
+  anyway, so a transient API failure orphans a live **credentialed** AGC
+  Deployment with no retry. This breaks the error path of the
+  delete-one-tenant isolation behavior gated by row 2 — collect errors
+  and requeue until every delete succeeds or is NotFound.
 
 ### B. Security & isolation proof — *gating + recommended*
 
@@ -81,6 +103,16 @@ production CNI requirement statement).
   documented, explicit opt-*out*, never a silent default
   (secure-by-default principle; see
   [security design](../design/05-security.md)).
+- [ ] **Documented RBAC scope matches the install artifact**
+  ([Q121](../STATUS.md) + [Q122](../STATUS.md), *gating*):
+  `05-security.md` / `02-architecture.md` claim GMC Secret access is
+  name-scoped (metadata-only list) and that workload writes are confined
+  to namespaces holding an `ActionsGateway` CR — but the shipped
+  ClusterRole grants cluster-wide Secret read/write and all-namespace
+  workload writes (deployments/rolebindings/NPs/SAs/quotas). Two
+  documented security controls that are **false in the install
+  artifact**. Resolve each = the confining ValidatingAdmissionPolicy(s)
+  **or** correct the docs — it gates either way.
 - [x] **Worker egress negatives observed enforcing** (Q7b,
   *recommended*, ran 2026-06-11): `WorkloadEgressBlockedToNonProxyPod` +
   `WorkerCannotReachK8sAPI` observed dropping traffic on a Calico
@@ -169,6 +201,12 @@ are validated.
   docs ([Appendix B](../design/appendix-b-worker-isolation.md)) say the
   path is *documented and supported in spec but not exercised on a real
   cluster as of 1.0*.
+- [ ] **SLSA-L3 claim made true or dropped** ([Q103](../STATUS.md)): the
+  Dockerfiles advertise SLSA-L3 reproducibility, but `publish.yml` emits
+  no provenance attestation. The honesty pass must either land the
+  provenance predicate (Q103) or strike the SLSA-L3 claim from the
+  Dockerfiles — an unbacked supply-chain claim is exactly the kind of
+  documented-but-false control this bucket exists to prevent.
 - [ ] **`docs/operations/` reflects the install artifact**:
   onboarding/runbook/upgrade docs describe the real `helm install` /
   `helm upgrade` flow (including the cert-manager toggle and the CRD
@@ -280,6 +318,33 @@ low-value tests or churn.
   stays tracked separately as [Q73](../STATUS.md), since kubeconform does not
   compare the two copies for field skew.)
 
+### G. Must-resolve before tag — fix or fold into the Q99 honesty pass
+
+These are **not** separate `1.0-gate` rows, but 1.0 may not tag until each
+is **either fixed or explicitly caveated** in the docs-honesty pass
+([Q99](../STATUS.md)). Each leaves a documented security or
+release-integrity claim false if shipped silently — the exact failure the
+1.0 bar exists to prevent — so "resolved" means a real fix *or* an honest
+docs caveat, not omission.
+
+- **Unrestricted port-53 egress** ([Q105](../STATUS.md)): `builder.go`
+  emits a port-53 egress rule with no `To` peer, so workers/proxy can
+  resolve via any DNS server — a DNS-exfil channel that undercuts the
+  per-tenant egress-IP isolation claim. Restrict to kube-dns, or document
+  the gap in `05-security.md`.
+- **Release-integrity siblings of [Q123](../STATUS.md)/[Q124](../STATUS.md)** —
+  vendored deps are never hash-verified against `go.sum`
+  ([Q126](../STATUS.md)), and the cosign binary in the signing pipeline is
+  downloaded without a checksum (the cosign item in [Q127](../STATUS.md)).
+  Both admit an unverified artifact into a signed release. Fix
+  (re-vendor + `git diff --exit-code` CI gate; checksum-pin cosign as the
+  `KIND_BINARY_SHA256` pattern does) or caveat.
+- **Library `generateKey` empty-keyType default is Ed25519**
+  ([Q109](../STATUS.md)): an empty `keyType` yields Ed25519 — the
+  secure-by-default regression `CLAUDE.md` explicitly forbids (Ed25519
+  agents can't decrypt RSA-OAEP session keys). Only the CLI default holds
+  RSA; the **library** default must be RSA too.
+
 ---
 
 ## Explicitly out of scope (post-1.0)
@@ -341,12 +406,14 @@ Suggested sequence:
 
 | Bucket | Gating items | Recommended items |
 |---|---|---|
-| A. Functional + live proof | M4 multi-tenant, delete-isolation, e2e proxy job, Q71 | — |
-| B. Security/isolation | Q34 secure-by-default | Q7b egress negatives (✅ ran 2026-06-11) |
+| A. Functional + live proof | M4 multi-tenant, delete-isolation, e2e proxy job, Q71, Q118 (runner-version contract), Q125 (teardown not fail-open) | — |
+| B. Security/isolation | Q34 secure-by-default, Q121 + Q122 (documented RBAC scope vs. install artifact) | Q7b egress negatives (✅ ran 2026-06-11) |
 | C. Packaging/supply chain | Q12, Q14 | Q28, Q29 |
 | D. Operability | Q35 (logging+probes) | Q34 HA, Q51, Q72, Q35 logger unify |
-| E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow | — |
+| E. Docs honesty | capacity reframe, egress + sandbox caveats, ops install flow, Q103 SLSA-L3 claim | — |
 | F. Engineering quality | Q77 coverage, Q78 dup-check, Q79 `-race` unit, Q80 gosec, Q81 errcheck, Q84 shellcheck, Q66 install-artifact validation | — |
+| G. Must-resolve (fix **or** caveat → Q99) | Q105 port-53 egress, Q126 + Q127-cosign release integrity, Q109 Ed25519 library default | — |
 
-**1.0 = all gating boxes ticked.** Recommended items that slip become
-ordinary post-1.0 Queue entries.
+**1.0 = all gating boxes ticked**, and every bucket-G item either fixed or
+honestly caveated. Recommended items that slip become ordinary post-1.0
+Queue entries.
