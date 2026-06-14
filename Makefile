@@ -87,7 +87,14 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status shellcheck test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status shellcheck scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+
+# Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
+# express — currently the tags-only release signing-identity regexp (Q124).
+# Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
+.PHONY: scripts-test
+scripts-test: ## Run scripts/ behavioural assertions (e.g. release identity regexp)
+	scripts/verify-release-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in

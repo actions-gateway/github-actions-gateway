@@ -15,6 +15,8 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
 
 VERSION="${1:-}"
 if [[ -z "$VERSION" ]]; then
@@ -29,7 +31,10 @@ if [[ ! -x "$COSIGN" ]]; then
 fi
 
 repo="ghcr.io/actions-gateway"
-id_re='^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/(tags|heads)/.*$'
+# Tags-only signing identity (Q124). The pattern lives in common.sh so
+# verify-release-test.sh can assert the tags-only property holds; publish.yml
+# refuses to run from a non-tag ref as the first defense, this is the second.
+id_re="$(release_identity_regexp)"
 issuer='https://token.actions.githubusercontent.com'
 chart_ver="${VERSION#v}"
 

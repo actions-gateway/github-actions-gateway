@@ -42,6 +42,20 @@ init_throttle() {
 	THROTTLE_PREFIX="$("$REPO_ROOT/scripts/local-throttle.sh" prefix)"
 }
 
+# release_identity_regexp — print the cosign --certificate-identity-regexp that
+# a legitimate release signature must match. Releases are cut by pushing a v*
+# tag, so the keyless Fulcio cert records publish.yml running from
+# `refs/tags/vX.Y.Z`. The pattern is anchored and TAGS-ONLY: it deliberately
+# rejects a signature minted from a branch ref (`refs/heads/...`) — e.g. a
+# workflow_dispatch run from a scratch branch that overwrote a released GHCR tag
+# (Q124). Shared by verify-release.sh (the verifier) and verify-release-test.sh
+# (the assertion that the tags-only property holds). Single arg: the
+# `owner/repo` slug, default actions-gateway/github-actions-gateway.
+release_identity_regexp() {
+	local slug="${1:-actions-gateway/github-actions-gateway}"
+	printf '^https://github.com/%s/\\.github/workflows/publish\\.yml@refs/tags/v.*$' "$slug"
+}
+
 # Placeholder sha256 digest used only to render the Helm chart for scanning
 # and validation: production installs pin gmc.image.digest, so auditing the
 # digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED

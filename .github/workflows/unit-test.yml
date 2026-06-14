@@ -33,8 +33,8 @@ jobs:
       status: ${{ steps.filter.outputs.status }}
       scripts: ${{ steps.filter.outputs.scripts }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
           filters: |
@@ -72,15 +72,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.work
       # setup-go caches $GOCACHE + modules but not the golangci-lint analyzer
       # cache, so every PR re-analyzes cold. Key invalidates on linter version
       # (tools/go.sum), config, or any module's deps changing.
       - name: cache golangci-lint analyzer
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.cache/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('tools/go.sum', '.golangci.yml', '**/go.sum') }}
@@ -113,7 +113,7 @@ jobs:
     env:
       SHELLCHECK_VERSION: v0.11.0
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: install pinned shellcheck
         run: |
           set -euo pipefail
@@ -128,6 +128,11 @@ jobs:
           shellcheck --version
       - name: shellcheck scripts
         run: make shellcheck
+      - name: scripts behavioural tests (make scripts-test)
+        # Pure-bash assertions shellcheck can't express — currently the tags-only
+        # release signing-identity regexp (Q124). Same job as shellcheck since
+        # both gate the scripts/ tree on a scripts-only change.
+        run: make scripts-test
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
@@ -137,8 +142,8 @@ jobs:
     # ubuntu-latest image's gcc satisfies out of the box.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.work
       # Run the per-module unit tests under the race detector. `make test-race`
@@ -162,8 +167,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.work
       - name: coverage ratchet (make cover-check)
