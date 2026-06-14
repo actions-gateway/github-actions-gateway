@@ -63,6 +63,7 @@ markers per item.
 | [go-best-practices.md](go-best-practices.md) | Small Go-idiom cleanups: unify module versions, fix async-channel violation, extend goleak coverage, misc | ⚠️ Findings logged; fixes open as STATUS Queue Q38–Q41 |
 | [logging-audit.md](logging-audit.md) | Cross-module log-call-site audit: format fragmentation (slog/zap), credential-leak surface, hot-path spam, correlation, per-tenant log level | ⚠️ Theme A (F1, JSON unify) + Theme B (body redaction) ✅ done; Themes D–G open as STATUS Queue Q87–Q89 |
 | [acquire-admission-control.md](acquire-admission-control.md) | Gate worker-pod capacity *before* `acquirejob` so jobs aren't claimed-then-dropped under pressure; durable internal queue considered and rejected | ⓘ Design sketch — open as STATUS Queue Q59 |
+| [competitive-analysis.md](competitive-analysis.md) | Unverified working notes on GAG vs ARC per-benefit advantages + open questions to verify; feeds the comparison content | ⓘ Notes for STATUS Queue Q60 — verify and fold into [appendix-d](../design/appendix-d-alternatives-considered.md) |
 
 ## Archive
 
