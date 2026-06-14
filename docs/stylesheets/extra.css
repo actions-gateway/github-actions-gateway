@@ -334,3 +334,14 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   gap: 0.4rem;
   margin: -0.2rem 0 1.2rem;
 }
+
+/* Audience pills are links to the filtered ops index — keep the pill look. */
+.md-typeset a.persona-pill {
+  text-decoration: none;
+  color: var(--md-accent-fg-color);
+  transition: background-color 0.15s var(--gag-ease);
+}
+
+.md-typeset a.persona-pill:hover {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
+}

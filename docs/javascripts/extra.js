@@ -100,6 +100,14 @@
     });
     var anchor = table.closest(".md-typeset__scrollwrap") || table;
     anchor.parentNode.insertBefore(bar, anchor);
+
+    // Honor ?persona=... (e.g. arriving from a doc's audience pill).
+    var want = new URLSearchParams(location.search).get("persona");
+    if (want) {
+      bar.querySelectorAll(".persona-chip").forEach(function (c) {
+        if (c.dataset.persona === want) c.click();
+      });
+    }
   });
 
   // Design index: "Reading Paths by Role" -> chips that show one role's path.
@@ -137,8 +145,10 @@
     var div = document.createElement("div");
     div.className = "persona-pills-top";
     div.setAttribute("aria-label", "Audience");
+    // Link back to the operations index, pre-filtered to this persona.
     div.innerHTML = tags.map(function (t) {
-      return '<span class="persona-pill">' + t + "</span>";
+      return '<a class="persona-pill" href="../?persona=' + encodeURIComponent(t) +
+        '" title="See all ' + t + ' docs">' + t + "</a>";
     }).join(" ");
     bq.parentNode.replaceChild(div, bq);
   });

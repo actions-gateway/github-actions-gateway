@@ -60,3 +60,8 @@ A doc's audience is recorded twice, by design:
 
 When you retag a doc, **update both**; they should agree. There is no CI check —
 it's two lines kept in sync by hand (deliberately not worth automating).
+
+The per-doc pills also **deep-link** to `operations/?persona=<persona>`, and the
+index reads that query param on load to pre-apply the matching chip. The link is
+generated from the blockquote, so keeping (1) and (2) in agreement is enough —
+just don't rename a persona in only one place.
