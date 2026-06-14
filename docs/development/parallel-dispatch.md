@@ -36,10 +36,10 @@ run-specific knobs. A ready-to-paste template:
 > `1.0-gate` Queue items in `docs/STATUS.md`"]**: one worker session (task chip)
 > and one PR per task, **max [3] concurrent**. Give every worker the self-healing
 > contract from task one (watch own CI, fix real failures, `git merge origin/main`
-> on conflict, never self-merge, escalate after 5 tries). **You own the
-> coordination files** — workers must not edit `docs/STATUS.md` or the release
-> checklist; you remove rows / tick boxes yourself in isolated commits. Stream
-> tasks by shared files and land foundational changes first. Verify each PR's
+> on conflict, never self-merge, escalate after 5 tries). **You own assignment,
+> merge ordering, and scope** — hand each worker exactly one item so none collide;
+> each worker removes its own `docs/STATUS.md` Queue row in its PR (isolated
+> commit). Stream tasks by shared files and land foundational changes first. Verify each PR's
 > **scope**, then merge after CI is green. **No secret may be read, printed,
 > logged, or passed to a model** — exclude any task needing real credentials and
 > tell me. Minimize asks (only genuine decisions, e.g. a license choice).
@@ -73,8 +73,8 @@ Two practical notes:
 - Spawns one worker session per task.
 - Watches each PR, verifies its **scope** (checks-green is necessary, not
   sufficient), merges it, and advances the next task.
-- Owns the high-contention coordination files (see
-  [Dispatcher owns coordination files](#dispatcher-owns-coordination-files)).
+- Owns **assignment**, merge ordering, and scope review (see
+  [the dispatcher owns assignment](#the-dispatcher-owns-assignment-not-coordination-files)).
 - Is the single place to **stop or amend** the run.
 
 **Worker** (one session per task, each in its own worktree):
@@ -197,83 +197,75 @@ This is the key design decision; get it right up front.
   problem in parallel. Warn workers about known shared-file pitfalls in their
   prompts.
 
-### Dispatcher owns coordination files
+### The dispatcher owns assignment, not coordination files
 
-The biggest source of conflicts the first time was every PR editing the same two
-**coordination files** — the backlog status file (each removing its row) and the
-release checklist (each ticking its box). Every merge then invalidated every
-other open PR.
+Keep two things separate. The real need is preventing two workers from
+implementing the **same** Queue item — an *assignment* problem — not keeping
+`docs/STATUS.md` out of worker hands.
 
-Fix: **the dispatcher owns those files.** Workers do not edit the backlog status
-file or the release checklist. The dispatcher removes completed rows and ticks
-boxes itself, in its own isolated commits (or a single follow-up PR). Workers
-still update *task-specific* docs (the design/operations pages their change
-affects) — just not the shared coordination files. This removes the dominant
-conflict class outright.
+- **The dispatcher owns assignment.** It hands each worker exactly one Queue
+  item, so no two pick the same one; the spawn decision *is* the claim (no lock
+  mechanism needed in this assigns model).
+- **Each worker owns its own Queue-row removal.** A worker removes its completed
+  item from `docs/STATUS.md` in its own PR, in an **isolated commit** (per the
+  repo rule that STATUS.md changes get their own commit). PRs stay self-contained
+  and the Queue stays current as they merge.
+- **Self-healing absorbs the churn.** When a sibling merges, the trivial
+  STATUS.md conflict is resolved by the worker's `git merge origin/main` step.
+
+The earlier rule was "the dispatcher owns the coordination files." That was a
+workaround from before self-healing was robust — every PR editing STATUS.md made
+each merge invalidate every sibling. With self-healing plus the isolated-commit
+rule, workers owning their own row is cheaper and keeps PRs whole. The dispatcher
+still owns **merge ordering** and **scope review**.
 
 ## Coordination channels
 
-Sessions coordinate by exchanging **deliberately published** state — shared
-files, messages, or a small database — and never by reading one another's
-transcripts. A session's log is private working memory; what it publishes is the
-contract. The channels, by need:
+One principle holds throughout: sessions coordinate by exchanging **deliberately
+published** state, never by reading one another's transcripts. A session's log is
+private working memory.
 
-- **Shared scratch files** (the `tmp/` tracker above) — the default for the
-  dispatcher's task → chip → PR → state record and for streaming task inputs to
-  workers. When a **single** session owns the file (the dispatcher's tracker), one
-  file is fine. When **multiple sessions write, give each message its own
-  uniquely-named file** in a shared dir (readers Glob the dir) — do **not** have
-  several sessions write one shared file through the Write tool: it overwrites the
-  whole file (read-modify-write), so concurrent writers silently lose each other's
-  updates. One-file-per-message has no such contention; append-safety would
-  require `O_APPEND` (Bash `>>`), which we avoid out-of-worktree anyway. Name each
-  file with the **writer's own ID** (`<sender>-<seq>.json`) so concurrent senders
-  never collide without coordination. With more than a couple of peers, give each
-  **recipient** an inbox subdir (`mailbox/<recipient>/`) so a reader Globs and
-  prunes only its own mail — partition by recipient, never by sender (that forces
-  every reader to scan everyone's dir). The subdir is organization, not access
-  control: any session can read any dir, so privacy stays a convention (read only
-  your inbox, publish only what you mean to share), as with transcripts.
-- **`send_message`** — a live push to another running session. The sender chooses
-  what to share, so it never exposes the sender's transcript. Use it for
-  supervised nudges (e.g. asking a worker to re-look at its PR). **Caveat:** treat
-  it as best-effort, not a control channel — cross-session messaging is a limited
-  capability (the documented `SendMessage` tool is gated behind the experimental
-  agent-teams feature), and a worker running unattended may not act on a message
-  until re-engaged. The autonomous worker loop must not depend on it; design
-  workers to finish the job themselves (see [the worker
+In practice the coordination is carried by built-in mechanisms — no shared
+mailbox, database, or comms daemon (see [What we deliberately don't
+build](#what-we-deliberately-dont-build-and-why)):
+
+- **Spawn prompt = dispatcher → worker handoff.** The task, scope, boundaries,
+  and self-healing contract all go in the chip's prompt at spawn. A worker
+  normally needs no further instruction.
+- **`list_sessions` = worker-state visibility.** The dispatcher polls it for
+  running/stalled status, PR state, and last-activity to decide what to merge and
+  what to spawn next. Read-only and not permission-gated.
+- **PR + PR comments = worker → dispatcher results and escalation.** A
+  green+mergeable PR is the "done" signal; the safety-valve PR comment is the
+  "stuck" signal.
+- **Self-healing is the spine.** Workers watch their own CI, fix real failures,
+  and `git merge origin/main` on conflict, so the dispatcher rarely needs to
+  touch a running worker.
+- **`send_message` = rare, reactive nudge only.** Best-effort and
+  unattended-gated, so never the control path. In practice it has been used only
+  to relay a specific CI-failure fix to a worker that failed to self-heal. The
+  autonomous loop must not depend on it (see [the worker
   contract](#the-worker-contract-self-healing)).
-- **A SQLite claim table** — when workers *pull* tasks instead of being assigned
-  one each, use a single SQLite file with an atomic claim
-  (`UPDATE tasks SET claimed_by=? WHERE id=? AND claimed_by IS NULL`) so two
-  sessions never grab the same task. This is the one reason to reach past plain
-  files: a message dir has no compare-and-set, so two readers can both pick the
-  same unclaimed item. It is not free, though — you shell out to `sqlite3` (a Bash
-  command, so an out-of-worktree DB trips workspace-guard), it is opaque to
-  `grep`/`diff` unlike the text channels, and concurrent writers need WAL mode + a
-  busy timeout to avoid `database is locked`. Use it for the claim semantics, not
-  as a default. In the dispatcher-assigns model you do not need it — the
-  dispatcher hands each worker exactly one task.
 
-Whichever you use, shared state must live at a path **common to every session**.
-For worktree sessions that means *outside* the current worktree: put it at the
-main repo root (`dirname` of `git rev-parse --git-common-dir`) or a fixed `tmp/`
-there — never a worktree-local `tmp/` (private to that worktree) and never
-committed (would not cross branches until merge).
+### What we deliberately don't build (and why)
 
-Mind how the out-of-worktree path is gated:
+This was investigated end to end; recording the conclusions so they are not
+relitigated:
 
-- **Reading** is friction-free — Read/Glob/Grep need no permission at any path,
-  so polling the mailbox never prompts.
-- **Writing** is the catch — Write/Edit require permission, and an out-of-worktree
-  path prompts in `default` mode and in `acceptEdits` (the worktree boundary is
-  what `acceptEdits` auto-approves within). A Bash file command touching the path
-  additionally trips workspace-guard.
-- To make writes silent, **allowlist the shared dir once** with a
-  `permissions.allow` rule — `Edit(//abs/path/**)` (note the leading `//` for an
-  absolute path; a single `/` is project-relative). It applies in every mode.
-  Adding the dir via `--add-dir`/`additionalDirectories` only silences writes in
-  `acceptEdits`.
+- **No file-based mailbox.** A shared maildir adds worktree + workspace-guard
+  friction (out-of-worktree writes prompt unless allowlisted) and duplicates what
+  `list_sessions` + `send_message` already do.
+- **No SQLite claim table.** Atomic claim only matters if workers *pull* tasks. In
+  the dispatcher-assigns model the spawn decision is the claim, so none is needed.
+- **No comms daemon (e.g. Agent Mail).** Evaluated; it adds a durable inbox, file
+  reservations, and a TUI, but the coordination pattern that actually occurs
+  (state polling + spawn + self-healing + rare nudge) is already covered by
+  built-ins, and a daemon does not address the one real gap below.
+- **The residual gap, accepted as rare:** knowing *why* a worker is slow or stuck
+  needs reading its private output, which is gated/awkward (`list_sessions` shows
+  *that* it stalled, not *why*; `search_session_transcripts` requires approval).
+  This is infrequent enough to handle with a manual look when it happens rather
+  than standing up infrastructure for it.
 
 ## Conflict policy
 
@@ -313,11 +305,11 @@ production credentials) — exclude them explicitly and hand them to a human.
       first.
 - [ ] Concurrency cap chosen.
 - [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
-- [ ] Dispatcher owns the coordination files; workers told not to touch them.
-- [ ] Coordination channel chosen (shared `tmp/` files by default; SQLite claim
-      table if workers pull tasks); shared state lives at the common repo root,
-      with a `permissions.allow` `Edit(//…/**)` rule so out-of-worktree writes do
-      not prompt.
+- [ ] Dispatcher owns assignment + merge ordering + scope; each worker removes
+      its own Queue row in an isolated commit (not the dispatcher).
+- [ ] Coordination via built-ins (spawn prompt, `list_sessions`, PR/comments,
+      self-healing); `send_message` only as a rare reactive nudge — no mailbox or
+      comms daemon.
 - [ ] Merge model decided (gated vs. risk-tiered; branch protection if using
       native auto-merge).
 - [ ] PR-watcher gates on checks **and** mergeability and handles zero-check PRs.
@@ -328,8 +320,11 @@ production credentials) — exclude them explicitly and hand them to a human.
 
 - **Adding self-healing late.** The first several PRs were hand-rebased and
   needed dedicated fix/resolve chips. Make self-healing the default from task #1.
-- **Letting every PR edit the shared coordination files.** This made every merge
-  invalidate every sibling. Give those files to the dispatcher.
+- **Bundling the STATUS.md Queue-row edit into a code commit.** Mixed into a code
+  commit it makes every sibling merge conflict painfully; keep it an isolated
+  commit so self-healing absorbs the trivial conflict. (Workers owning their own
+  row is fine — the old "dispatcher owns the file" rule was a pre-self-healing
+  workaround.)
 - **Running same-file tasks in parallel without sequencing.** Causes avoidable
   rebase churn; stream them instead.
 - **A watcher that trusts CI buckets alone.** It reported "mergeable" for
