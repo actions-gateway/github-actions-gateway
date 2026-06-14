@@ -168,22 +168,10 @@ new MkDocs 2.0 is incompatible — pin exact until that settles). Specifics:
 
 ## Maintaining the site
 
-Things that span more than one file and can quietly drift:
-
-- **Persona / audience tags live in two places, by design.** The operations
-  index (`docs/operations/README.md`, the `Personas` table column that drives the
-  filter chips) and each operations doc's own `> **Audience:** …` blockquote
-  under its title. When you retag a doc's audience, **update both** — they should
-  agree. (No CI check enforces this; it's two lines, kept in sync by hand.)
-- **The logomark and icons are generated, not hand-edited.** Edit
-  `docs/assets/generate-logomark.py` and re-render with resvg — see
-  [`docs/assets/README.md`](../assets/README.md).
-- **The interactive bits are progressive enhancement** in
-  `docs/javascripts/extra.js` (persona/role filter chips, per-doc audience pills,
-  scroll reveals). They read plain markdown the docs already render on github.com,
-  so that markdown must stay readable without them: keep the `Personas` table
-  column, the `**Audience:**` blockquotes, and the bold role leads in the design
-  reading paths intact.
+Durable maintenance conventions — the brand-asset generator, the
+progressive-enhancement JS, and the persona/audience two-places sync rule — live
+in [`docs/development/website.md`](../development/website.md), deliberately kept
+out of this plan doc so they survive its eventual archival.
 
 ## Build phases
 
