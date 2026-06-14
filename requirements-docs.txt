@@ -1,0 +1,6 @@
+# Documentation site toolchain (MkDocs Material). Used by .github/workflows/pages.yml
+# and for local previews: pip install -r requirements-docs.txt && mkdocs serve
+# Exact pins for reproducible builds — the ecosystem is mid-churn (MkDocs 2.0 is
+# incompatible with Material; Material 9.x caps mkdocs < 2). Add hashes when Q123 lands.
+mkdocs==1.6.1
+mkdocs-material==9.7.6

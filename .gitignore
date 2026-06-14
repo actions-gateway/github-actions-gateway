@@ -18,6 +18,9 @@ CLAUDE.local.md
 !/tmp/.gitkeep
 # binary build output
 /.build/
+# MkDocs site build output (CI builds to _site; local `mkdocs build` defaults to site/)
+/site/
+/_site/
 # Local-build of the fakegithub helper (`make` at repo root drops it here);
 # root-anchored so it doesn't shadow the test/fakegithub/ source directory.
 /fakegithub

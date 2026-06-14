@@ -65,6 +65,7 @@ markers per item.
 | [acquire-admission-control.md](acquire-admission-control.md) | Gate worker-pod capacity *before* `acquirejob` so jobs aren't claimed-then-dropped under pressure; durable internal queue considered and rejected | ⓘ Design sketch — open as STATUS Queue Q59 |
 | [competitive-analysis.md](competitive-analysis.md) | Unverified working notes on GAG vs ARC per-benefit advantages + open questions to verify; feeds the comparison content | ⓘ Notes for STATUS Queue Q60 — verify and fold into [appendix-d](../design/appendix-d-alternatives-considered.md) |
 | [platform-owned-quota.md](platform-owned-quota.md) | Remove tenant-authored `spec.namespaceQuota`; platform owns Namespace + `ResourceQuota` + `LimitRange`; GMC drops quota write RBAC | ❌ Open — design captured, breaking CRD change pre-1.0; STATUS Queue Q130 |
+| [website.md](website.md) | Public GitHub Pages site: MkDocs Material rendering of `docs/` + a custom landing page and "vs ARC" comparison; domain decision folded in (org move) | ⚠️ Scaffold + landing + comparison shipped; public launch gated on Q99, link reconcile folds into Q52 — open as STATUS Queue Q129 |
 
 ## Archive
 
