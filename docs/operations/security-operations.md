@@ -42,6 +42,7 @@ Two detection substrates are used:
 - [Posture scanning (preventive)](#posture-scanning-preventive)
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
+- [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
@@ -385,6 +386,82 @@ Triage the report against this operator's needs:
 The goal is **zero critical (`[FAIL]`) findings that this stack depends on**
 before the first production tenant (per
 [milestone-5.md](../plan/milestone-5.md) §3).
+
+## Tenant egress posture & deliberate widening
+
+**The secure default is controller-managed and not opt-in.** For every tenant,
+the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to
+exactly what the design requires: DNS to the cluster DNS service only, and all
+GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are
+attributable). Worker pods cannot reach arbitrary destinations directly — that is
+the per-tenant egress-IP isolation property, and it is present automatically the
+moment a tenant is provisioned. Do **not** hand-edit the GMC-managed policies
+(`actions-gateway-workload`, `actions-gateway-controller`, `actions-gateway-proxy`):
+the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is
+refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted
+or go stale. See [network-architecture.md](../design/network-architecture.md#networkpolicy-rules)
+for the full policy set.
+
+Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy
+tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH,
+a raw TCP/UDP service), an internal artifact store or package mirror, or a
+specific custom DNS resolver is unreachable by default. **Grant that egress with
+an *additional*, additive NetworkPolicy in the tenant namespace — not by relaxing
+the managed defaults.** NetworkPolicies are additive (a union of allows), so an
+extra policy widens egress for the pods it selects without touching the floor.
+
+Worker pods carry two selectable labels, so you can target all workers or a single
+runner type:
+
+- `actions-gateway/component: workload` — every worker (and the AGC) in the tenant
+- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+
+```yaml
+# Applied by a platform admin (requires NetworkPolicy write in the tenant
+# namespace) — grants ONE runner type extra egress. CIDR + port + protocol.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gpu-builders-extra-egress
+  namespace: team-a
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+      actions-gateway/runner-group: gpu-builders   # omit this line for tenant-wide
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 10.50.0.0/24}            # internal registry / artifact store
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}              # e.g. Postgres
+    - to:
+        - ipBlock: {cidr: 10.50.0.53/32}           # custom DNS resolver
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+```
+
+**This is a deliberate, documented trade-off, not a routine knob.** Egress to the
+listed destinations leaves with the worker's own pod IP and therefore **bypasses
+the per-tenant proxy egress-IP attribution** for those flows. Untrusted job code
+(e.g. fork-PR workflows) can use any hole you open, so:
+
+- Keep the allowlist as narrow as the use case requires — specific CIDRs and
+  ports, never a `0.0.0.0/0` catch-all.
+- Authoring it requires namespace NetworkPolicy-write, so it is inherently a
+  platform/admin decision — which is the correct authority for relaxing
+  attribution. Track each grant in the tenant's onboarding ticket.
+- **For a custom DNS resolver specifically, prefer a cluster-level CoreDNS
+  `forward` zone** over reopening worker DNS: that keeps resolution on the
+  attributable in-cluster path while still resolving the names you need.
+
+If instead you want to take over the **proxy's** own egress policy (for example
+to express GitHub egress as FQDN rules under Cilium/Calico), set
+`spec.proxy.managedNetworkPolicy: false` on the `ActionsGateway` — the GMC then
+stops managing the proxy GitHub-CIDR rule and you own keeping it current. That is
+the supported, explicit hand-off; the managed path remains the default.
 
 ---
 
