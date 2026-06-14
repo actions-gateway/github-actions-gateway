@@ -10,19 +10,20 @@ There are two distinct lifecycle flows: tenant provisioning (GMC) and job execut
 
 This flow runs once when a tenant creates an `ActionsGateway` resource in their namespace, and re-runs on any spec update.
 
-```
-Tenant                 GMC                    K8s API Server         Tenant Namespace
-      |                  |                           |                       |
-      |-- 1. Apply CR --> |                           |                       |
-      |                  |-- 2. Create ServiceAccount, Role, RoleBinding --> |
-      |                  |-- 3. Apply NetworkPolicy + ResourceQuota -------> |
-      |                  |-- 4. Create Proxy Deployment + Service + HPA ---> |
-      |                  |-- 5. Create AGC Deployment + inject App creds --> |
-      |                  |-- 6. Bootstrap RunnerGroup CRs -----------------> |
-      |                  |                           |                       |
-      |                  |<-- 7. Proxy + AGC Deployments Ready ------------- |
-      |                  |                           |                       |
-      |<- 8. Status: Ready |                          |                       |
+```mermaid
+sequenceDiagram
+    participant T as Tenant
+    participant G as GMC
+    participant K as K8s API server
+    T->>G: 1. Apply ActionsGateway CR
+    Note over G,K: all resources created in the tenant namespace
+    G->>K: 2. ServiceAccount, Role, RoleBinding
+    G->>K: 3. NetworkPolicy + ResourceQuota
+    G->>K: 4. Proxy Deployment + Service + HPA
+    G->>K: 5. AGC Deployment (+ App credentials)
+    G->>K: 6. Bootstrap RunnerGroup CRs
+    K-->>G: 7. Proxy + AGC Deployments ready
+    G-->>T: 8. Status: Ready
 ```
 
 1. **Declare:** A tenant creates an `ActionsGateway` CR in their own namespace, providing a `gitHubAppRef`, optional `proxy` scaling config, and optional initial `runnerGroups`. No cluster-admin involvement is required.
@@ -40,26 +41,26 @@ Tenant                 GMC                    K8s API Server         Tenant Name
 
 This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 
-```
-AGC Goroutine     Proxy Pool    K8s API Server    Worker Pod      GitHub Edge
-      |               |                |               |               |
-      |--1. GetMessage─>──────────────────────────────────────────────>|
-      |<─2. RunnerJobRequest (run_service_url + runner_request_id)────|
-      |               |                |               |               |
-      |--3. AcquireJob >──────────────────────────────────────────────>|
-      |<─4. planId + job instructions ────────────────────────────────|
-      |               |                |               |               |
-      |==5. RenewJob loop starts (every 60s via proxy) ===============>|
-      |               |                |               |               |
-      |--6. Create Secret + Pod ──────>|               |               |
-      |               |                |─7. Start ────>|               |
-      |               |                |               |─8. Logs (via proxy)─>|
-      |               |                |               |<─9. Job Done──|
-      |==10. RenewJob loop stops =====================================|
-      |               |                |<─11. Delete Secret (Pod after TTL)─|
-      |               |                |               |               |
-      |--12. DeleteSession (dead) + re-register agent ────────────────>|
-      |<─13. fresh credentials; new session opens ────────────────────|
+```mermaid
+sequenceDiagram
+    participant A as AGC goroutine
+    participant K as K8s API server
+    participant W as Worker Pod
+    participant GH as GitHub
+    Note over A,GH: all GitHub traffic routes through the per-tenant proxy pool
+    A->>GH: 1. GetMessage (long-poll)
+    GH-->>A: 2. RunnerJobRequest (run_service_url, runner_request_id)
+    A->>GH: 3. AcquireJob (claim within the delivery window)
+    GH-->>A: 4. planId + job instructions
+    A->>GH: 5. RenewJob loop starts (every 60s, holds the lock)
+    A->>K: 6. Create Secret + Worker Pod
+    K->>W: 7. Start (payload via Named Pipes, Runner.Worker takes over)
+    W->>GH: 8. Stream logs (Results Service)
+    W-->>A: 9. Pod terminal phase (observed via informer)
+    Note over A: 10. RenewJob loop stops
+    A->>K: 11. Delete Secret (pod reaped after TTL)
+    A->>GH: 12. Recycle agent — deregister + re-register (Q114)
+    A->>GH: 13. New session opens, resume polling at step 1
 ```
 
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool. GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
@@ -84,22 +85,17 @@ The happy-path flows above are sufficient for most operations. The following dia
 
 ### Provisioning Failure (GMC Cannot Create Resources)
 
-```
-Tenant                 GMC                    K8s API Server
-      |                  |                           |
-      |-- 1. Apply CR --> |                           |
-      |                  |-- 2. Create ServiceAccount --> |
-      |                  |<-- 3. Error: "forbidden" --|
-      |                  |                           |
-      |                  | [GMC sets Condition:       |
-      |                  |  Ready=False               |
-      |                  |  Reason: ProvisionFailed]  |
-      |                  |                           |
-      |<- 4. Condition: Ready=False (ProvisionFailed) |
-      |                  |                           |
-      |                  | [Retry with exponential    |
-      |                  |  backoff via controller-   |
-      |                  |  runtime requeue]          |
+```mermaid
+sequenceDiagram
+    participant T as Tenant
+    participant G as GMC
+    participant K as K8s API server
+    T->>G: 1. Apply CR
+    G->>K: 2. Create ServiceAccount
+    K-->>G: 3. Error: forbidden
+    Note over G: sets Condition Ready=False (Reason: ProvisionFailed)
+    G-->>T: 4. Condition: Ready=False (ProvisionFailed)
+    Note over G: retry with exponential backoff (controller-runtime requeue)
 ```
 
 The GMC reconciler is a standard `controller-runtime` reconciler. Errors are returned from `Reconcile()` and trigger automatic requeue with exponential back-off. The GMC sets a `Ready=False` condition with reason `ProvisionFailed` and a message containing the specific error on each failed attempt.
@@ -112,20 +108,17 @@ The GMC reconciler is a standard `controller-runtime` reconciler. Errors are ret
 
 ### Job Acquisition Failure (Broker Returns Error)
 
-```
-AGC Goroutine     Proxy Pool    GitHub Edge
-      |               |               |
-      |--1. GetMessage─>──────────────>|
-      |<─2. RunnerJobRequest          |
-      |               |               |
-      |--3. AcquireJob >──────────────>|
-      |<─4. 409 Conflict (already claimed by another session) |
-      |               |               |
-      | [Goroutine increments          |
-      |  job_acquisition_errors_total  |
-      |  {reason="already_claimed"}]  |
-      |               |               |
-      |--5. GetMessage─>──────────────>| (loop continues)
+```mermaid
+sequenceDiagram
+    participant A as AGC goroutine
+    participant GH as GitHub
+    Note over A,GH: via the per-tenant proxy pool
+    A->>GH: 1. GetMessage
+    GH-->>A: 2. RunnerJobRequest
+    A->>GH: 3. AcquireJob
+    GH-->>A: 4. 409 Conflict (already claimed by another session)
+    Note over A: increment job_acquisition_errors_total (reason=already_claimed)
+    A->>GH: 5. GetMessage (loop continues)
 ```
 
 `AcquireJob` can fail with:
@@ -139,23 +132,21 @@ In all cases the goroutine increments `actions_gateway_job_acquisition_errors_to
 
 ### Stale Session (Consumed Single-Use Agent) Self-Heal
 
-```
-AGC Goroutine                 GitHub Edge
-      |                            |
-      |--1. GetMessage ───────────>|
-      |<─2. 401 / empty 200 (xN) ──|   [JIT runner record gone: post-job
-      |                            |    state missed, or AGC restarted]
-      |--3. refresh OAuth token ──>|
-      |--4. CreateSession ────────>|
-      |<─5. 401 (agent is dead) ───|
-      |                            |
-      |--6. Deregister old record ─>|  (best-effort; usually already gone)
-      |--7. generate-jitconfig ────>|  (same name; 409 → resolve ID, delete, retry)
-      |<─8. fresh credentials ─────|
-      |                            |
-      |  [rewrite agent Secret]    |
-      |--9. CreateSession ────────>|
-      |<─10. new session; polling resumes ─|
+```mermaid
+sequenceDiagram
+    participant A as AGC goroutine
+    participant GH as GitHub
+    A->>GH: 1. GetMessage
+    GH-->>A: 2. 401 / empty 200 (xN) — JIT record gone (state missed or AGC restarted)
+    A->>GH: 3. Refresh OAuth token
+    A->>GH: 4. CreateSession
+    GH-->>A: 5. 401 (agent is dead)
+    A->>GH: 6. Deregister old record (best-effort)
+    A->>GH: 7. generate-jitconfig (same name, 409, resolve ID, delete, retry)
+    GH-->>A: 8. Fresh credentials
+    Note over A: rewrite agent Secret
+    A->>GH: 9. CreateSession
+    GH-->>A: 10. New session, polling resumes
 ```
 
 GitHub deletes a JIT runner record once it acquires a job, so a session can go stale outside the normal post-job recycle — most commonly when the AGC restarts between a job's acquisition and its recycle. The poll loop classifies the two live-observed stale signatures ([M4 §12](../plan/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)): a `401/403` triggers a heal immediately (steps 3–4 also fix plain broker-token expiry, in which case the flow stops at step 4 with no recycle); three consecutive `200`-with-empty-body responses trigger the same ladder. Only when *fresh* credentials are still rejected (step 5) is the agent re-registered (steps 6–8, `actions_gateway_agent_recycles_total{trigger="stale_session"}`). If the heal itself fails — e.g. GitHub is down — the goroutine exits with a retriable error and the multiplexer's restart backoff paces further attempts; an agent marked consumed is parked in the pool and repaired by the next reconcile rather than being handed to another listener.
@@ -166,29 +157,20 @@ GitHub deletes a JIT runner record once it acquires a job, so a session can go s
 
 ### Worker Pod Eviction and Auto-Retry
 
-```
-AGC Goroutine     K8s API Server    Worker Pod      GitHub Edge
-      |                |               |               |
-      |==RenewJob loop running ========================>|
-      |                |               |               |
-      |                |<─ Evicted (node pressure) ────|
-      |                |  pod.status.reason="Evicted"  |
-      |                |               |               |
-      | [Pod watch observes Evicted state]              |
-      |                |               |               |
-      | [RenewJob loop STOPS immediately]               |
-      |   (GitHub cancels the run as lock lapses)       |
-      |                |               |               |
-      | [Wait evictionRetryDelay (default 5s)]          |
-      |                |               |               |
-      | [Check retry budget: retries < maxEvictionRetries?] |
-      |                |               |               |
-      |──── Yes ──>  POST /repos/.../actions/runs/{run_id}/rerun-failed-jobs ─>|
-      |                |               |               |
-      |                |               |               |
-      |──── No ──> log warning, increment              |
-      |            eviction_retries_exhausted_total     |
-      |            (manual re-run required)             |
+```mermaid
+sequenceDiagram
+    participant A as AGC goroutine
+    participant W as Worker Pod
+    participant GH as GitHub
+    Note over A,GH: RenewJob loop running
+    W-->>A: Pod Evicted (node pressure), seen via pod watch
+    Note over A: RenewJob stops immediately — GitHub cancels the run as the lock lapses
+    Note over A: wait evictionRetryDelay (5s), then check retry budget
+    alt retries < maxEvictionRetries
+        A->>GH: POST .../runs/{run_id}/rerun-failed-jobs
+    else budget exhausted
+        Note over A: log warning, eviction_retries_exhausted_total++ (manual re-run)
+    end
 ```
 
 The AGC stops renewal immediately on detecting `Evicted` (rather than waiting for lock expiry) so that GitHub cancels the run quickly and the re-queued job enters the delivery queue as soon as possible. The `evictionRetryDelay` default of 5 seconds gives GitHub time to process the cancellation before the rerun API is called.
@@ -197,26 +179,21 @@ The AGC stops renewal immediately on detecting `Evicted` (rather than waiting fo
 
 ### Stuck-Pending Worker Pod
 
-```
-AGC Reconciler    K8s API Server    Worker Pod      GitHub Edge
-      |                |               |               |
-      |                |── Create ────>| Pending       |
-      |                |               | (ErrImagePull or unschedulable)
-      |                |               |               |
-      |  [session goroutine blocked waiting for completion;
-      |   pod holds one concurrency-ceiling slot]       |
-      |                |               |               |
-      |  [pendingPodDeadline elapses (default 10m)]     |
-      |                |               |               |
-      |── Delete pod ─>|               |               |
-      |   [Warning Event: WorkerPodStuckPending]        |
-      |   [worker_pods_reaped_total{reason=             |
-      |    "pending_deadline"} incremented]             |
-      |                |               |               |
-      |  [pod deletion wakes the session goroutine →    |
-      |   Secret deleted, listener + ceiling slot freed]|
-      |                |               |  (job lock lapses; GitHub
-      |                |               |   cancels the run)
+```mermaid
+sequenceDiagram
+    participant A as AGC reconciler
+    participant K as K8s API server
+    participant W as Worker Pod
+    participant GH as GitHub
+    A->>K: Create pod
+    K->>W: schedule
+    Note over W: Pod stuck Pending (ErrImagePull or unschedulable)
+    Note over A: goroutine blocked, pod holds one concurrency-ceiling slot
+    Note over A: pendingPodDeadline elapses (default 10m)
+    A->>K: Delete pod
+    Note over A: Warning event WorkerPodStuckPending, worker_pods_reaped_total (reason=pending_deadline)++
+    Note over A: deletion wakes the goroutine — Secret deleted, listener + slot freed
+    Note over GH: job lock lapses, GitHub cancels the run
 ```
 
 A worker pod that never leaves `Pending` — unpullable `workerImage`, unschedulable `podTemplate` constraints, or an exhausted node pool — would otherwise hold a concurrency-ceiling slot forever: the ceiling counts Pending pods and the session goroutine blocks until the pod terminates or disappears. The RunnerGroup reconciler's worker-pod reaper deletes any worker pod that has been Pending longer than `pendingPodDeadline` (default 10m, per-RunnerGroup). Deletion is treated as completion by the Pod-informer handler, so the session goroutine wakes, deletes the job Secret, and releases its listener and slot. The job itself was never started, so its lock lapses and GitHub cancels the run — the deadline is a capacity-protection mechanism, not a retry mechanism. Operators on clusters with slow legitimate scheduling (e.g. autoscaled GPU node pools) should raise `pendingPodDeadline` above their worst-case node-provisioning time. See the [troubleshooting runbook](../operations/troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) for diagnosis.
@@ -225,24 +202,16 @@ A worker pod that never leaves `Pending` — unpullable `workerImage`, unschedul
 
 ### AGC Crash Mid-Job
 
-```
-AGC               K8s               GitHub
-  |                |                   |
-  |==RenewJob loop running ===========>|
-  |                |                   |
-  | [AGC OOMKilled / SIGKILL]          |
-  |                |                   |
-  | [All in-memory state lost:         |
-  |  sessions, renew loops, run IDs]   |
-  |                |                   |
-  |                |<─ Pod restarted   |
-  |                |                   |
-  | [AGC re-registers sessions ──────>]|
-  | [new sessions polling]             |
-  |                |                   |
-  |                |       (unacquired jobs redelivered within ~2 min)
-  |                |                   |
-  |  (in-flight jobs whose lock lapsed: GitHub cancels them)
+```mermaid
+sequenceDiagram
+    participant A as AGC
+    participant K as K8s
+    participant GH as GitHub
+    Note over A,GH: RenewJob loop running
+    Note over A: AGC OOMKilled / SIGKILL — in-memory state lost (sessions, renew loops, run IDs)
+    K-->>A: Pod restarted
+    A->>GH: Re-register sessions, new sessions polling
+    Note over GH: unacquired jobs redelivered within ~2 min, lapsed-lock jobs cancelled
 ```
 
 **What GitHub observes:** Sessions are dropped (no `DELETE /sessions` sent — the process was killed). GitHub waits for session TTL before redelivering unacquired jobs. For jobs whose `renewjob` lock window expires before the AGC restarts, GitHub cancels the run. These require manual re-run.
