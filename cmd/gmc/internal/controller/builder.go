@@ -73,6 +73,19 @@ const (
 	metricsScrapeNamespaceLabel = "metrics"
 	metricsScrapeNamespaceValue = "enabled"
 
+	// dnsNamespaceLabel / dnsNamespaceValue and dnsPodLabel / dnsPodValue select
+	// the cluster DNS service (CoreDNS / kube-dns) as the sole permitted DNS
+	// egress peer. The namespace is matched via the well-known immutable
+	// `kubernetes.io/metadata.name` label that every Kubernetes ≥1.21 stamps on
+	// each namespace (so no manual labelling of kube-system is required); the
+	// pods via the conventional `k8s-app: kube-dns` label CoreDNS carries by
+	// default in every distribution this controller targets. See dnsEgressRule
+	// for why egress is confined to this peer (Q105).
+	dnsNamespaceLabel = "kubernetes.io/metadata.name"
+	dnsNamespaceValue = "kube-system"
+	dnsPodLabel       = "k8s-app"
+	dnsPodValue       = "kube-dns"
+
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = gmcnames.ProxyName
 	// npAGCName is the NetworkPolicy that gives AGC pods Kubernetes API server access (port 443).
@@ -187,19 +200,53 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 	}
 }
 
-// buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
-// Proxy pods may reach GitHub CIDRs on 443 (for CONNECT tunneling) and DNS.
-// Only workload pods (AGC and workers) may initiate connections to the proxy.
-func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
+// dnsEgressRule returns a NetworkPolicy egress rule permitting DNS (UDP/TCP 53)
+// to the cluster DNS service ONLY — CoreDNS / kube-dns in kube-system — not to
+// any destination. It is shared by the proxy, workload, and AGC policies so the
+// DNS posture cannot drift between them.
+//
+// An unrestricted port-53 rule (To: nil ≡ any server) is an unattributed
+// data-exfiltration side-channel: DNS queries can smuggle data to an
+// attacker-controlled resolver, bypassing the per-tenant egress-IP attribution
+// that is a headline isolation property of this system (Q105). Every other
+// egress path forces traffic through the tenant proxy, whose source IPs are
+// attributable; confining DNS to the in-cluster resolver keeps it on that
+// attributable path — kube-dns recurses upstream on the pod's behalf, so the
+// proxy can still resolve GitHub hostnames to do its job. Only the open "any
+// resolver" breadth is removed, not legitimate resolution.
+//
+// kindnet does not enforce egress NetworkPolicy (see Q7b in
+// docs/plan/worker-egress-proxy.md), so this restriction is guarded at the
+// spec/authoring level by TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS
+// rather than by a live e2e deny test; a runtime negative needs a
+// policy-enforcing CNI such as Calico.
+func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
-
-	egress := []networkingv1.NetworkPolicyEgressRule{{
+	return networkingv1.NetworkPolicyEgressRule{
+		// A single peer with both selectors set is an AND: kube-dns pods *within*
+		// kube-system. Splitting them into two peers would be an OR and would also
+		// admit any pod labelled k8s-app=kube-dns in any namespace.
+		To: []networkingv1.NetworkPolicyPeer{{
+			NamespaceSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
+			},
+			PodSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{dnsPodLabel: dnsPodValue},
+			},
+		}},
 		Ports: []networkingv1.NetworkPolicyPort{
 			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
 			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
 		},
-	}}
+	}
+}
+
+// buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
+// Proxy pods may reach GitHub CIDRs on 443 (for CONNECT tunneling) and DNS.
+// Only workload pods (AGC and workers) may initiate connections to the proxy.
+func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
+	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ag.Spec.Proxy.ManagedNetworkPolicy == nil || *ag.Spec.Proxy.ManagedNetworkPolicy
 	if managed && len(githubCIDRs) > 0 {
 		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
@@ -261,16 +308,8 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 // additively re-admits the monitoring metrics scrape, so default-deny here costs it
 // nothing.
 func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
-	proto53UDP := corev1.ProtocolUDP
-	proto53TCP := corev1.ProtocolTCP
-
 	egress := []networkingv1.NetworkPolicyEgressRule{
-		{
-			Ports: []networkingv1.NetworkPolicyPort{
-				{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
-				{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
-			},
-		},
+		dnsEgressRule(),
 		{
 			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
 			To: []networkingv1.NetworkPolicyPeer{{
@@ -322,9 +361,6 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // this, the AGC NP carried no ingress policy type and any pod in the namespace
 // could scrape per-tenant metrics off the controller-runtime metrics server.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
-	proto53UDP := corev1.ProtocolUDP
-	proto53TCP := corev1.ProtocolTCP
-
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
@@ -332,12 +368,7 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
 			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
-						{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},
-					},
-				},
+				dnsEgressRule(),
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Port: ptr(intstr.FromInt32(443))},

@@ -42,6 +42,8 @@ Two detection substrates are used:
 - [Posture scanning (preventive)](#posture-scanning-preventive)
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
+- [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
+  - [Managing egress at scale](#managing-egress-at-scale)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
@@ -366,6 +368,28 @@ Triage the report against this operator's needs:
   [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) —
   the "blocked" probes must actually time out (validated under Calico on a
   kind cluster, Q7b 2026-06-11).
+- **Cluster DNS must be labelled `k8s-app=kube-dns` in `kube-system`.** Tenant
+  NetworkPolicies confine port-53 egress to the cluster DNS service rather than
+  leaving DNS open to any resolver (Q105 — an open DNS path is an unattributed
+  exfiltration side-channel). The selector matches the conventional CoreDNS
+  deployment: pods labelled `k8s-app: kube-dns` in the `kube-system` namespace
+  (matched via the immutable `kubernetes.io/metadata.name` namespace label). This
+  is the default on every mainstream distribution and managed control plane. If
+  your cluster runs DNS under a different label or namespace **and** uses an
+  enforcing CNI, tenant pods will fail to resolve any name until you either
+  relabel the DNS pods or set `spec.proxy.managedNetworkPolicy: false` and supply
+  your own DNS egress rule. Symptom: tenant workloads time out on every lookup
+  while non-DNS connectivity is unaffected.
+- **Known limitation — NodeLocal DNSCache (`node-local-dns`) is not yet
+  supported out of the box.** With node-local-dns, pods send queries to a
+  link-local IP (default `169.254.20.10`) served by a `hostNetwork`
+  `node-local-dns` pod, not to a `k8s-app: kube-dns` CoreDNS pod — so on an
+  enforcing CNI the kube-dns-only rule drops those queries, breaking resolution
+  for workers **and** the proxy. Until first-class support lands
+  ([Q136](../STATUS.md#Q136)), grant it with an additive NetworkPolicy allowing
+  port-53 egress to `169.254.0.0/16` (link-local is non-routable off-node, so
+  this preserves the no-arbitrary-resolver property) for the workload and proxy
+  pods — see [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening).
 - **Findings that don't apply** (managed control plane hides the file, a check
   for a component you don't run) — record the justification alongside the
   cluster's onboarding ticket.
@@ -373,6 +397,114 @@ Triage the report against this operator's needs:
 The goal is **zero critical (`[FAIL]`) findings that this stack depends on**
 before the first production tenant (per
 [milestone-5.md](../plan/milestone-5.md) §3).
+
+## Tenant egress posture & deliberate widening
+
+**The secure default is controller-managed and not opt-in.** For every tenant,
+the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to
+exactly what the design requires: DNS to the cluster DNS service only, and all
+GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are
+attributable). Worker pods cannot reach arbitrary destinations directly — that is
+the per-tenant egress-IP isolation property, and it is present automatically the
+moment a tenant is provisioned. Do **not** hand-edit the GMC-managed policies
+(`actions-gateway-workload`, `actions-gateway-controller`, `actions-gateway-proxy`):
+the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is
+refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted
+or go stale. See [network-architecture.md](../design/network-architecture.md#networkpolicy-rules)
+for the full policy set.
+
+Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy
+tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH,
+a raw TCP/UDP service), an internal artifact store or package mirror, or a
+specific custom DNS resolver is unreachable by default. **Grant that egress with
+an *additional*, additive NetworkPolicy in the tenant namespace — not by relaxing
+the managed defaults.** NetworkPolicies are additive (a union of allows), so an
+extra policy widens egress for the pods it selects without touching the floor.
+
+Worker pods carry two selectable labels, so you can target all workers or a single
+runner type:
+
+- `actions-gateway/component: workload` — every worker (and the AGC) in the tenant
+- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+
+```yaml
+# Applied by a platform admin (requires NetworkPolicy write in the tenant
+# namespace) — grants ONE runner type extra egress. CIDR + port + protocol.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gpu-builders-extra-egress
+  namespace: team-a
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+      actions-gateway/runner-group: gpu-builders   # omit this line for tenant-wide
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 10.50.0.0/24}            # internal registry / artifact store
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 5432}              # e.g. Postgres
+    - to:
+        - ipBlock: {cidr: 10.50.0.53/32}           # custom DNS resolver
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+```
+
+**This is a deliberate, documented trade-off, not a routine knob.** Egress to the
+listed destinations leaves with the worker's own pod IP and therefore **bypasses
+the per-tenant proxy egress-IP attribution** for those flows. Untrusted job code
+(e.g. fork-PR workflows) can use any hole you open, so:
+
+- Keep the allowlist as narrow as the use case requires — specific CIDRs and
+  ports, never a `0.0.0.0/0` catch-all.
+- Authoring it requires namespace NetworkPolicy-write, so it is inherently a
+  platform/admin decision — which is the correct authority for relaxing
+  attribution. Track each grant in the tenant's onboarding ticket.
+- **For a custom DNS resolver specifically, prefer a cluster-level CoreDNS
+  `forward` zone** over reopening worker DNS: that keeps resolution on the
+  attributable in-cluster path while still resolving the names you need.
+
+If instead you want to take over the **proxy's** own egress policy (for example
+to express GitHub egress as FQDN rules under Cilium/Calico), set
+`spec.proxy.managedNetworkPolicy: false` on the `ActionsGateway` — the GMC then
+stops managing the proxy GitHub-CIDR rule and you own keeping it current. That is
+the supported, explicit hand-off; the managed path remains the default.
+
+### Managing egress at scale
+
+This project deliberately does **not** ship tooling to manage the *widening*
+policies — that is a cluster/platform concern with a mature ecosystem, and owning
+it here would re-create the coupling the managed-floor split avoids. What the
+project commits to instead is a stable **integration surface**: every worker pod
+carries two labels you can target from any policy engine, and these are a
+supported contract (they will not be renamed without a migration note):
+
+- `actions-gateway/component: workload` — all worker (and AGC) pods in the tenant
+- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+
+For anything beyond a handful of static CIDRs, prefer the ecosystem over
+hand-written `NetworkPolicy`:
+
+- **Your CNI's richer egress** — `CiliumNetworkPolicy` `toFQDNs` (DNS-aware,
+  hostname allowlists), Calico `NetworkSet` (reusable CIDR groups) / DNS policy,
+  and policy tiers. This is the right tool for "let `gpu-builders` reach
+  `*.internal.corp` and a database." It pairs with the
+  `spec.proxy.managedNetworkPolicy: false` hand-off above.
+- **`AdminNetworkPolicy`** ([sig-network `network-policy-api`](https://network-policy-api.sigs.k8s.io/))
+  — cluster-admin-level, cross-namespace egress baselines (`AdminNetworkPolicy` /
+  `BaselineAdminNetworkPolicy`), implemented by Cilium/Calico/OVN-Kubernetes. The
+  most direct fit for "platform admin governs egress across all tenant
+  namespaces" — maturing (alpha→beta), so confirm your CNI's support level.
+- **Kyverno / OPA Gatekeeper** — policy-as-code to *generate* per-namespace NPs
+  (e.g. a templated default-deny or egress allowance keyed off a namespace label)
+  and to *validate* that any admin-added egress conforms to your guardrails.
+
+The labels above are what make all of these targetable; the secure floor stays
+GMC-managed regardless.
 
 ---
 
