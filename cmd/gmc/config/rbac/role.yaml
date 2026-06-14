@@ -24,7 +24,16 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - resourcequotas
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   - services
   verbs:
@@ -33,16 +42,6 @@ rules:
   - get
   - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - get
-  - list
   - update
   - watch
 - apiGroups:

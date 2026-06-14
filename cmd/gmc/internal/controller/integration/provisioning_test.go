@@ -18,6 +18,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -190,6 +192,56 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey, "ca.crt"} {
 		assert.NotEmpty(t, metricsClientSec.Data[k], "metrics client Secret must carry %s", k)
 	}
+}
+
+// TestGMC_TenantProvisioning_NoResourceQuotaCreated asserts the platform-owned
+// quota model (Q130): the GMC provisions the tenant's resources but never creates
+// a ResourceQuota — that is owned by the platform admin on the namespace. We wait
+// for a reconcile to complete (proxy Deployment present), then confirm no
+// ResourceQuota exists in the tenant namespace, and that the GMC tolerates a
+// pre-existing platform-managed quota without touching it.
+func TestGMC_TenantProvisioning_NoResourceQuotaCreated(t *testing.T) {
+	const nsName = "team-noquota"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	// A platform-owned ResourceQuota that predates the gateway. The GMC must leave
+	// it untouched (it holds no quota write verbs).
+	platformQuota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "platform-quota", Namespace: nsName},
+		Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{
+			corev1.ResourcePods: resource.MustParse("50"),
+		}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, platformQuota))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), platformQuota) })
+
+	ag := newActionsGateway("noquota-gateway", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Wait for reconcile to complete (proxy Deployment created).
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName},
+			&appsv1.Deployment{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	// The GMC must not have created its own "actions-gateway" ResourceQuota.
+	var gmcQuota corev1.ResourceQuota
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "actions-gateway"}, &gmcQuota)
+	require.True(t, apierrors.IsNotFound(err),
+		"GMC must not author a ResourceQuota (platform-owned, Q130); got err=%v", err)
+
+	// Only the platform-owned quota exists, unmodified.
+	var quotas corev1.ResourceQuotaList
+	require.NoError(t, k8sClient.List(ctx, &quotas, client.InNamespace(nsName)))
+	require.Len(t, quotas.Items, 1, "only the platform-owned quota should exist")
+	assert.Equal(t, "platform-quota", quotas.Items[0].Name)
+	assert.Empty(t, quotas.Items[0].OwnerReferences, "platform quota must not be owned/adopted by the GMC")
 }
 
 func TestGMC_TenantProvisioning_NoProxyMergesDefaults(t *testing.T) {

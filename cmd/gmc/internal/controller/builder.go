@@ -349,13 +349,6 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 	}
 }
 
-func buildResourceQuota(ag *gmcv1alpha1.ActionsGateway) *corev1.ResourceQuota {
-	return &corev1.ResourceQuota{
-		ObjectMeta: metav1.ObjectMeta{Name: "actions-gateway", Namespace: ag.Namespace, Labels: managedLabels(ag)},
-		Spec:       corev1.ResourceQuotaSpec{Hard: ag.Spec.NamespaceQuota},
-	}
-}
-
 func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *appsv1.Deployment {
 	replicas := int32(2)
 	if ag.Spec.Proxy.MinReplicas != nil {

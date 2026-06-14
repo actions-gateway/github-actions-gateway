@@ -52,8 +52,8 @@ The following targets are conservative defaults derived from the architectural c
 
 | Resource | Target | Note |
 | --- | --- | --- |
-| Active jobs (worker pods) | ≤ 250 | Conservative default governed by `namespaceQuota`, `maxWorkers`, or the last `priorityTiers` threshold — whichever is most restrictive. Not rate-limit-bounded under the adaptive listener model; increase this ceiling by adjusting namespace ResourceQuota and per-`RunnerGroup` concurrency controls. |
-| Aggregate NamespaceQuota | 20 CPU / 40Gi memory / 50 pods | Conservative starting allocation. Adjust against observed job CPU/memory profiles. |
+| Active jobs (worker pods) | ≤ 250 | Conservative default governed by the platform-owned namespace `ResourceQuota`, `maxWorkers`, or the last `priorityTiers` threshold — whichever is most restrictive. Not rate-limit-bounded under the adaptive listener model; increase this ceiling by adjusting the namespace ResourceQuota and per-`RunnerGroup` concurrency controls. |
+| Aggregate namespace ResourceQuota | 20 CPU / 40Gi memory / 50 pods | Conservative starting allocation. Platform-owned (set on the namespace, not the CR). Adjust against observed job CPU/memory profiles. |
 
 ---
 

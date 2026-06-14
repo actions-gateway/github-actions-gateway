@@ -123,18 +123,13 @@ type ActionsGatewaySpec struct {
     // bootstraps inside the tenant namespace on creation.
     RunnerGroups []RunnerGroupSpec `json:"runnerGroups,omitempty"`
 
-    // NamespaceQuota caps aggregate resource consumption across all worker
-    // pods in the tenant namespace by configuring a Kubernetes ResourceQuota.
-    // Keys follow ResourceQuota conventions, not Pod resource conventions:
-    //   - "requests.cpu", "requests.memory"   — sum of pod requests
-    //   - "limits.cpu",   "limits.memory"     — sum of pod limits
-    //   - "pods"                              — count of running pods
-    //   - "count/secrets"                     — limits job-payload Secret churn
-    // A typical default for a mid-size tenant might be:
-    //   requests.cpu: "20",  requests.memory: "40Gi",  pods: "50".
-    // This field replaces the earlier ResourceLimits field; the rename
-    // clarifies that the scope is the namespace quota, not a per-pod limit.
-    NamespaceQuota corev1.ResourceList `json:"namespaceQuota,omitempty"`
+    // There is deliberately no namespace-quota field. The namespace
+    // ResourceQuota (and any LimitRange) is platform-owned: the platform admin
+    // creates and manages it on the tenant namespace, and the gateway operates
+    // within it without ever creating or mutating it. A tenant-authored quota
+    // was removed pre-1.0 (Q130) because a tenant-set quota is no real cap — the
+    // tenant could raise it — and it fought GitOps/platform ownership. See
+    // §5 (Security) and operations/tenant-onboarding.md.
 
     // SecurityProfile selects the Pod Security Admission level the GMC
     // stamps on the tenant namespace at provisioning time. The chosen

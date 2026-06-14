@@ -6,8 +6,7 @@ package v1alpha1
 
 import (
 	apiv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -82,13 +81,6 @@ func (in *ActionsGatewaySpec) DeepCopyInto(out *ActionsGatewaySpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.NamespaceQuota != nil {
-		in, out := &in.NamespaceQuota, &out.NamespaceQuota
-		*out = make(v1.ResourceList, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
-		}
-	}
 	in.Tracing.DeepCopyInto(&out.Tracing)
 }
 
@@ -107,7 +99,7 @@ func (in *ActionsGatewayStatus) DeepCopyInto(out *ActionsGatewayStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]metav1.Condition, len(*in))
+		*out = make([]v1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

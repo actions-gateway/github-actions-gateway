@@ -24,7 +24,7 @@ Every capacity decision is governed by three independent ceilings. Hitting any o
 | --- | --- | --- | --- |
 | GitHub App rate limit | 1 session per RunnerGroup (~72 req/hr each) | Up to `maxListeners` sessions per RunnerGroup | [§3.5](03-api-contracts.md#35-github-api-rate-limit-budget): each active session polls `GET /message` ~72 times/hour against a 15,000/hour budget |
 | AGC pod memory | ~60 KiB per active listener goroutine | Negligible at realistic listener counts | [Appendix A](appendix-a-capacity-slos.md): goroutine stack + HTTP buffer |
-| Namespace ResourceQuota | — | Caps concurrent running worker pods | `ActionsGateway.spec.namespaceQuota` |
+| Namespace ResourceQuota | — | Caps concurrent running worker pods | Platform-owned `ResourceQuota` on the tenant namespace (not a CR field — see [tenant-onboarding](../operations/tenant-onboarding.md)) |
 
 With the adaptive listener model, **the GitHub App rate limit is no longer a steady-state concern for most tenants.** One session per RunnerGroup means 10 RunnerGroups consume ~720 req/hour against a 15,000/hour budget — 5% utilization at rest. The rate limit becomes relevant only at sustained peak burst when many RunnerGroups are simultaneously at their `maxListeners` ceiling.
 
@@ -35,7 +35,7 @@ Steady-state sessions   = number of RunnerGroups in the ActionsGateway
 Peak sessions (worst case) = sum of maxListeners across all RunnerGroups
 ```
 
-The `namespaceQuota` remains the binding constraint on how many jobs run concurrently — it is independent of listener count.
+The platform-owned namespace `ResourceQuota` remains the binding constraint on how many jobs run concurrently — it is independent of listener count. It is set on the namespace by the platform admin (or your GitOps / tenant-operator stack), not on the `ActionsGateway` CR.
 
 ---
 
@@ -203,12 +203,25 @@ The following concrete scenarios show how to apply the formulas and decision gui
 
 **Configuration.**
 
+The namespace quota is platform-owned — the platform admin applies it on the namespace, sized to the maximum simultaneous pod count:
+
 ```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ml-team-quota
+  namespace: ml-team
 spec:
-  namespaceQuota:
+  hard:
     requests.cpu: "80"
     requests.memory: "320Gi"
     pods: "85"           # 10 + 20 + 50 + 5 headroom
+```
+
+The tenant's `ActionsGateway` then declares only the runner groups (no quota field):
+
+```yaml
+spec:
   runnerGroups:
     - name: train-gpu8x
       runnerLabels: ["self-hosted", "gpu-8x"]
@@ -258,14 +271,23 @@ spec:
 
 **Context.** A backend team runs integration tests. Jobs arrive in bursts at the start of PRs — up to 10 jobs may land simultaneously — but total daily volume is modest.
 
-**Configuration.** Minimal; no GPU, no priority tiers.
+**Configuration.** Minimal; no GPU, no priority tiers. The platform admin owns the namespace quota:
 
 ```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: backend-team-quota
+  namespace: backend-team
 spec:
-  namespaceQuota:
+  hard:
     requests.cpu: "20"
     requests.memory: "40Gi"
     pods: "15"           # 10 workers + 3 proxy + 1 AGC + 1 headroom
+```
+
+```yaml
+spec:
   runnerGroups:
     - name: integration-tests
       runnerLabels: ["self-hosted", "linux"]

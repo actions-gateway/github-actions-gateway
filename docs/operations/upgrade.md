@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
 - [Migration Notes](#migration-notes)
+  - [BREAKING: spec.namespaceQuota removed — the ResourceQuota is now platform-owned](#breaking-specnamespacequota-removed--the-resourcequota-is-now-platform-owned)
   - [Tenant namespaces now require the actions-gateway.github.com/tenant marker label](#tenant-namespaces-now-require-the-actions-gatewaygithubcomtenant-marker-label)
   - [Worker pods are now cleaned up automatically (one-time sweep recommended)](#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended)
   - [AGC Deployment renamed from actions-gateway-agc to actions-gateway-controller](#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller)
@@ -67,6 +68,61 @@ Also check the release notes for the new version before upgrading, particularly:
 ---
 
 ## Migration Notes
+
+### BREAKING: `spec.namespaceQuota` removed — the ResourceQuota is now platform-owned
+
+**This is a breaking CRD change, made pre-1.0 while the API can still break.** The
+`spec.namespaceQuota` field has been removed from the `ActionsGateway` CRD. The
+namespace `ResourceQuota` (and any `LimitRange`) is now **platform-owned**: the
+platform admin creates and manages it on the tenant namespace, and the gateway
+operates within it but never creates or mutates it. The GMC's `resourcequotas`
+write RBAC has been dropped (least privilege — Q122/Q130). The rationale: a
+tenant-set quota is no real cap (the tenant could raise it in their own CR) and it
+fought GitOps and tenant-operator stacks (Capsule, HNC, vCluster, kiosk) that
+already own namespaces and quotas.
+
+**What you must do before (or as part of) the upgrade:**
+
+1. **Provision a platform-managed `ResourceQuota` in each tenant namespace** *before*
+   the new GMC takes over — the gateway no longer creates one, so a namespace with
+   no quota becomes uncapped. For each tenant that relied on `spec.namespaceQuota`,
+   read the current values and create a standalone `ResourceQuota`:
+
+   ```sh
+   # Inspect the GAG-managed quota the old GMC created (named "actions-gateway")
+   kubectl get resourcequota actions-gateway -n <tenant-namespace> -o yaml
+   ```
+
+   ```yaml
+   apiVersion: v1
+   kind: ResourceQuota
+   metadata:
+     name: <tenant>-quota
+     namespace: <tenant-namespace>
+   spec:
+     hard:
+       requests.cpu: "20"
+       requests.memory: "40Gi"
+       pods: "50"
+   ```
+
+2. **Adopt or replace the orphaned GAG-created quota.** A `ResourceQuota` the old
+   GMC created carries an `ownerReference` to the `ActionsGateway` CR, so it would be
+   garbage-collected if the CR were ever deleted. Either adopt it by stripping that
+   ownerReference (so it survives independently), or delete it and recreate a
+   platform-managed one as in step 1:
+
+   ```sh
+   # Adopt: drop the ownerReference so the quota is no longer GC-tied to the CR
+   kubectl patch resourcequota actions-gateway -n <tenant-namespace> \
+     --type=json -p='[{"op":"remove","path":"/metadata/ownerReferences"}]'
+   ```
+
+3. **Drop `namespaceQuota` from your `ActionsGateway` manifests / GitOps.** On upgrade
+   the CRD's structural-schema pruning silently drops the now-unknown field from
+   stored and re-applied CRs — applying a manifest that still sets `namespaceQuota`
+   is **not rejected**, the field is just ignored. Remove it from source so intent
+   stays clear.
 
 ### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
 

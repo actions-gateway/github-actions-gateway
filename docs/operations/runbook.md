@@ -26,14 +26,14 @@ No cluster-admin involvement is required after initial GMC deployment.
 
 ### Adjusting Tenant Quota
 
-Edit the `ActionsGateway` spec's `namespaceQuota` field:
+The namespace `ResourceQuota` is **platform-owned** — it is not a field on the `ActionsGateway` CR. Edit the `ResourceQuota` object on the tenant namespace directly (or through your GitOps / tenant-operator stack, if that is what manages it):
 
 ```sh
-kubectl edit actionsgateway -n <namespace> <name>
-# Update spec.namespaceQuota values, save and exit
+kubectl edit resourcequota -n <namespace> <quota-name>
+# Update spec.hard values, save and exit
 ```
 
-The GMC reconciles the change and patches the `ResourceQuota` object within seconds. Running jobs are not interrupted; the new quota takes effect on the next pod creation attempt.
+The change takes effect immediately. Running jobs are not interrupted; the new quota applies on the next pod creation attempt. The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and reruns quota-blocked jobs) but never writes the quota itself.
 
 ---
 
@@ -102,7 +102,7 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 1. Check for quota exhaustion: `kubectl describe resourcequota -n <namespace>`.
 2. Check for pending pods: `kubectl get pods -n <namespace> | grep Pending`.
 3. Describe a pending pod for scheduling events: `kubectl describe pod -n <namespace> <pod>`.
-4. If quota is exhausted: increase `namespaceQuota` or wait for running pods to complete.
+4. If quota is exhausted: raise the platform-owned `ResourceQuota` on the namespace (`kubectl edit resourcequota -n <namespace> <quota-name>`) or wait for running pods to complete.
 5. If no schedulable nodes: check node autoscaler or provision capacity.
 6. If PriorityClass is missing: create it. See [Troubleshooting — Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
 

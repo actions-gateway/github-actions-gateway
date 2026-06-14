@@ -170,7 +170,7 @@ groups:
           severity: warning
         annotations:
           summary: "Tenant ResourceQuota saturated in {{ $labels.namespace }}"
-          description: "Quota at 100% for 30m. Distinguish legitimate demand (raise namespaceQuota) from a job-flood (inspect workflow sources)."
+          description: "Quota at 100% for 30m. Distinguish legitimate demand (raise the platform-owned ResourceQuota on the namespace) from a job-flood (inspect workflow sources)."
 
       # Ticket: admission webhook rejecting CRs — a tenant repeatedly
       # probing reserved namespaces or invalid specs.
