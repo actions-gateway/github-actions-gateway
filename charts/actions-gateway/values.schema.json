@@ -83,7 +83,8 @@
           "type": "string",
           "enum": ["baseline", "restricted", "privileged"]
         },
-        "gitHubAppSecretName": { "type": "string", "minLength": 1 }
+        "gitHubAppSecretName": { "type": "string", "minLength": 1 },
+        "gitHubURL": { "type": "string", "pattern": "^https://" }
       }
     }
   },
