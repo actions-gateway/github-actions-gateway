@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"log/slog"
 	"net/http"
@@ -240,7 +241,19 @@ type Provisioner struct {
 
 	// evictionCounts tracks per run_id eviction retry counts.
 	evictionCounts sync.Map // key: run_id (string) → value: int
+
+	// evictionLocks serializes the per-run check-and-increment of
+	// evictionCounts so the budget is never exceeded under concurrency (Q106).
+	// It is a fixed-size sharded lock keyed by a hash of run_id: bounded by
+	// construction (no per-key map to grow or reap), while still letting
+	// distinct runs evict concurrently. The zero value is ready to use.
+	evictionLocks [evictionLockShards]sync.Mutex
 }
+
+// evictionLockShards is the number of mutexes in the sharded eviction lock.
+// Eviction is a rare, node-pressure-driven event, so a small fixed pool keeps
+// contention between distinct run_ids negligible without unbounded growth.
+const evictionLockShards = 64
 
 // NewProvisioner creates a Provisioner with sensible defaults.
 func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Provisioner {
@@ -505,20 +518,22 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 		return
 	}
 
-	actual, _ := p.evictionCounts.LoadOrStore(runID, 0)
-	count := actual.(int)
-	if count >= maxRetries {
+	// Reserve a retry slot atomically. This guards against the read-modify-write
+	// race where two concurrent evictions of the same run both read the same
+	// count, both pass the budget check, and both fire a rerun — exceeding
+	// maxRetries (Q106). At most maxRetries evictions ever pass the gate, so the
+	// rerun API is called at most maxRetries times per run.
+	attempt, ok := p.reserveEvictionRetry(runID, maxRetries)
+	if !ok {
 		log.Warn("eviction retry budget exhausted; manual rerun required",
 			"runID", runID, "maxRetries", maxRetries)
 		if p.Metrics != nil {
 			p.Metrics.EvictionRetriesExhausted.WithLabelValues(rg.Namespace, rg.Name).Inc()
 		}
-		p.evictionCounts.Delete(runID)
 		return
 	}
 
-	p.evictionCounts.Store(runID, count+1)
-	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", count+1)
+	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", attempt)
 	if p.Metrics != nil {
 		p.Metrics.EvictionRetries.WithLabelValues(rg.Namespace, rg.Name).Inc()
 	}
@@ -534,8 +549,41 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 		log.Error("eviction auto-retry failed; manual rerun may be required",
 			"runID", runID, "error", err)
 	} else {
-		log.Info("eviction auto-retry triggered", "runID", runID, "attempt", count+1)
+		log.Info("eviction auto-retry triggered", "runID", runID, "attempt", attempt)
 	}
+}
+
+// reserveEvictionRetry atomically checks the per-run eviction-retry budget and,
+// if a slot remains, increments the count and returns the 1-based attempt
+// number. It returns ok=false once the budget is exhausted. Serializing the
+// check-and-increment per run_id — under the sharded evictionLocks — is what
+// guarantees N concurrent evictions of the same run trigger at most maxRetries
+// reruns (Q106). The lock is held only across the counter update, never across
+// the retry delay or the GitHub API call.
+func (p *Provisioner) reserveEvictionRetry(runID string, maxRetries int) (attempt int, ok bool) {
+	mu := &p.evictionLocks[evictionShard(runID)]
+	mu.Lock()
+	defer mu.Unlock()
+
+	actual, _ := p.evictionCounts.LoadOrStore(runID, 0)
+	count := actual.(int)
+	if count >= maxRetries {
+		// Budget is a hard lifetime cap: leave the count pinned so every later
+		// eviction of this run is a no-op. We deliberately do NOT delete the
+		// entry here — deleting reset the count to zero and let the budget refill
+		// on the next eviction, which both defeats the cap and (combined with the
+		// concurrent read-modify-write) is the Q106 over-budget bug.
+		return 0, false
+	}
+	p.evictionCounts.Store(runID, count+1)
+	return count + 1, true
+}
+
+// evictionShard maps a run_id to one of evictionLockShards mutex indices.
+func evictionShard(runID string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(runID))
+	return h.Sum32() % evictionLockShards
 }
 
 // rerunFailedJobs calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs.
