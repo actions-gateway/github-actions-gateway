@@ -86,6 +86,17 @@ const (
 	dnsPodLabel       = "k8s-app"
 	dnsPodValue       = "kube-dns"
 
+	// dnsNodeLocalCIDR is the IPv4 link-local block (RFC 3927). On clusters
+	// running NodeLocal DNSCache (node-local-dns), pods send DNS to a link-local
+	// address — 169.254.20.10 by the kube-standard `__PILLAR__LOCAL__DNS__`
+	// convention — served by a hostNetwork DNSCache pod on each node, which the
+	// kube-dns podSelector cannot match. Allowing the whole 169.254.0.0/16 block
+	// is the simplest correct rule and stays within Q105's attribution property:
+	// link-local is non-routable and node-scoped, so it cannot reach an arbitrary
+	// external resolver — the DNS-exfiltration channel Q105 closed stays closed
+	// (Q136). See dnsEgressRule.
+	dnsNodeLocalCIDR = "169.254.0.0/16"
+
 	// npProxyName is the NetworkPolicy that restricts proxy pod egress to GitHub CIDRs.
 	npProxyName = gmcnames.ProxyName
 	// npAGCName is the NetworkPolicy that gives AGC pods Kubernetes API server access (port 443).
@@ -201,9 +212,16 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 }
 
 // dnsEgressRule returns a NetworkPolicy egress rule permitting DNS (UDP/TCP 53)
-// to the cluster DNS service ONLY — CoreDNS / kube-dns in kube-system — not to
-// any destination. It is shared by the proxy, workload, and AGC policies so the
-// DNS posture cannot drift between them.
+// to the cluster DNS service ONLY — never to any destination. It is shared by
+// the proxy, workload, and AGC policies so the DNS posture cannot drift between
+// them. Two `To` peers (OR'd) cover the two ways a pod reaches cluster DNS:
+//
+//  1. The kube-dns / CoreDNS Service in kube-system, matched by an AND of
+//     namespace + pod selector (the direct path on a cluster without NodeLocal
+//     DNSCache).
+//  2. The IPv4 link-local block 169.254.0.0/16, matched by an ipBlock (the path
+//     on a cluster running NodeLocal DNSCache, where pods send DNS to a
+//     link-local address served by a per-node hostNetwork cache — Q136).
 //
 // An unrestricted port-53 rule (To: nil ≡ any server) is an unattributed
 // data-exfiltration side-channel: DNS queries can smuggle data to an
@@ -212,8 +230,10 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 // egress path forces traffic through the tenant proxy, whose source IPs are
 // attributable; confining DNS to the in-cluster resolver keeps it on that
 // attributable path — kube-dns recurses upstream on the pod's behalf, so the
-// proxy can still resolve GitHub hostnames to do its job. Only the open "any
-// resolver" breadth is removed, not legitimate resolution.
+// proxy can still resolve GitHub hostnames to do its job. Both peers preserve
+// that property: link-local 169.254.0.0/16 is non-routable and node-scoped, so
+// it cannot reach an external resolver. Only the open "any resolver" breadth is
+// removed, not legitimate resolution.
 //
 // kindnet does not enforce egress NetworkPolicy (see Q7b in
 // docs/plan/worker-egress-proxy.md), so this restriction is guarded at the
@@ -224,17 +244,26 @@ func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 	proto53UDP := corev1.ProtocolUDP
 	proto53TCP := corev1.ProtocolTCP
 	return networkingv1.NetworkPolicyEgressRule{
-		// A single peer with both selectors set is an AND: kube-dns pods *within*
-		// kube-system. Splitting them into two peers would be an OR and would also
-		// admit any pod labelled k8s-app=kube-dns in any namespace.
-		To: []networkingv1.NetworkPolicyPeer{{
-			NamespaceSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
+		To: []networkingv1.NetworkPolicyPeer{
+			// A single peer with both selectors set is an AND: kube-dns pods *within*
+			// kube-system. Splitting them into two peers would be an OR and would also
+			// admit any pod labelled k8s-app=kube-dns in any namespace.
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
+				},
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{dnsPodLabel: dnsPodValue},
+				},
 			},
-			PodSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{dnsPodLabel: dnsPodValue},
+			// NodeLocal DNSCache path: pods reach the per-node hostNetwork cache at a
+			// link-local address (169.254.20.10 by convention). hostNetwork pods are
+			// not matched by any pod/namespace selector, so this peer is an ipBlock.
+			// The block is non-routable, so it does not widen the exfil surface.
+			{
+				IPBlock: &networkingv1.IPBlock{CIDR: dnsNodeLocalCIDR},
 			},
-		}},
+		},
 		Ports: []networkingv1.NetworkPolicyPort{
 			{Protocol: &proto53UDP, Port: ptr(intstr.FromInt32(53))},
 			{Protocol: &proto53TCP, Port: ptr(intstr.FromInt32(53))},

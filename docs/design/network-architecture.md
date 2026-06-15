@@ -78,9 +78,13 @@ spec:
     - Egress
   ingress: []  # no ingress permitted
   egress:
-    # DNS — needed for resolving the proxy Service name. Confined to the cluster
-    # DNS service (kube-dns / CoreDNS in kube-system), not "any resolver": an
-    # open port-53 rule is an unattributed exfiltration side-channel (Q105).
+    # DNS — needed for resolving the proxy Service name. Confined to cluster DNS,
+    # not "any resolver": an open port-53 rule is an unattributed exfiltration
+    # side-channel (Q105). Two OR'd peers cover both delivery paths: the kube-dns
+    # / CoreDNS pods in kube-system (direct path), and the link-local block
+    # 169.254.0.0/16 for NodeLocal DNSCache clusters where pods send DNS to a
+    # per-node hostNetwork cache (Q136). Link-local is non-routable, so it does
+    # not widen the exfil surface.
     - to:
         - namespaceSelector:
             matchLabels:
@@ -88,6 +92,8 @@ spec:
           podSelector:
             matchLabels:
               k8s-app: kube-dns
+        - ipBlock:
+            cidr: 169.254.0.0/16
       ports:
         - protocol: UDP
           port: 53
@@ -127,7 +133,8 @@ spec:
   policyTypes:
     - Egress
   egress:
-    # DNS — confined to cluster DNS (kube-dns / CoreDNS in kube-system); see Q105.
+    # DNS — confined to cluster DNS (kube-dns / CoreDNS in kube-system) plus the
+    # link-local block for NodeLocal DNSCache; see Q105/Q136.
     - to:
         - namespaceSelector:
             matchLabels:
@@ -135,6 +142,8 @@ spec:
           podSelector:
             matchLabels:
               k8s-app: kube-dns
+        - ipBlock:
+            cidr: 169.254.0.0/16
       ports:
         - protocol: UDP
           port: 53
@@ -178,10 +187,11 @@ spec:
         - port: 8080
           protocol: TCP
   egress:
-    # DNS — proxy resolves GitHub hostnames on behalf of clients. Confined to the
-    # cluster DNS service (kube-dns / CoreDNS in kube-system); kube-dns recurses
-    # upstream so external names still resolve, but the proxy cannot reach an
-    # arbitrary resolver — closing the open-DNS exfiltration side-channel (Q105).
+    # DNS — proxy resolves GitHub hostnames on behalf of clients. Confined to
+    # cluster DNS (kube-dns / CoreDNS in kube-system) plus the link-local block
+    # for NodeLocal DNSCache; kube-dns recurses upstream so external names still
+    # resolve, but the proxy cannot reach an arbitrary resolver — closing the
+    # open-DNS exfiltration side-channel (Q105/Q136).
     - to:
         - namespaceSelector:
             matchLabels:
@@ -189,6 +199,8 @@ spec:
           podSelector:
             matchLabels:
               k8s-app: kube-dns
+        - ipBlock:
+            cidr: 169.254.0.0/16
       ports:
         - protocol: UDP
           port: 53
@@ -218,7 +230,14 @@ All in-cluster service discovery uses Kubernetes DNS (`kube-dns` / `CoreDNS`). T
 
 External DNS resolution (for GitHub hostnames) is performed by the proxy pods themselves, not by the AGC or worker pods — the AGC and workers connect to the proxy using `CONNECT <hostname>:<port>` and the proxy resolves the hostname on their behalf. This means the proxy pods must have egress access to the cluster's DNS resolver in addition to GitHub's IP ranges.
 
-DNS egress on all three policies is **confined to the cluster DNS service** (`kube-dns` / `CoreDNS` in `kube-system`, matched by `namespaceSelector` on the well-known `kubernetes.io/metadata.name: kube-system` label plus a `podSelector` on the conventional `k8s-app: kube-dns` label) rather than left open to any resolver (Q105). An unrestricted port-53 rule (`to: []`) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces. Confining DNS to the in-cluster resolver keeps resolution on the attributable path: `kube-dns` recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly. Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under `spec.proxy.managedNetworkPolicy: false`).
+DNS egress on all three policies is **confined to cluster DNS** rather than left open to any resolver (Q105). An unrestricted port-53 rule (`to: []`) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces. Confining DNS to the in-cluster resolver keeps resolution on the attributable path: `kube-dns` recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.
+
+Each DNS rule allows two OR'd peers, covering the two ways a pod reaches cluster DNS:
+
+- **Direct path** — the `kube-dns` / `CoreDNS` Service in `kube-system`, matched by `namespaceSelector` on the well-known `kubernetes.io/metadata.name: kube-system` label plus a `podSelector` on the conventional `k8s-app: kube-dns` label.
+- **NodeLocal DNSCache path** — the IPv4 link-local block `169.254.0.0/16`, matched by an `ipBlock` (Q136). On clusters running [NodeLocal DNSCache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/) (`node-local-dns`), pods send DNS to a link-local address (`169.254.20.10` by the kube-standard `__PILLAR__LOCAL__DNS__` convention) served by a per-node `hostNetwork` DNSCache pod, which no pod/namespace selector can match. Allowing the whole link-local block is the simplest correct rule and **preserves Q105's attribution property**: `169.254.0.0/16` is non-routable and node-scoped, so it cannot reach an external resolver — the DNS-exfiltration channel Q105 closed stays closed.
+
+Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under `spec.proxy.managedNetworkPolicy: false`).
 
 ---
 
