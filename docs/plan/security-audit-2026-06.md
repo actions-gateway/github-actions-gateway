@@ -208,7 +208,21 @@ tenant offboarding, with no retry and only a log line.
 **Fix:** collect `deleteIfExists` errors and requeue without removing the
 finalizer until every delete succeeds or is NotFound.
 
-### Q126 — CI gate: vendor contents vs go.sum (Medium)
+### Q126 — CI gate: vendor contents vs go.sum (Medium) — RESOLVED
+
+**Resolution.** New `vendor-check` job in `unit-test.yml` (single source of
+truth `make vendor-check` → `scripts/vendor-check.sh`) re-runs the
+workspace-vendor flow — `go work vendor` plus `cd tools && GOWORK=off go mod
+vendor`, both of which re-fetch every module verified against `go.sum` — and
+fails on `git diff --exit-code vendor/ tools/vendor/`. Gated on a dedicated
+`vendor` paths-filter (go.mod/go.sum/go.work/vendor trees), narrower than
+`code` so a pure-`.go` edit doesn't trigger the network re-vendor. A Dependabot
+`go.mod` bump fails the gate until a follow-up vendor sync lands — the intended
+signal (the gate asserts the committed tree is self-consistent), documented in
+`scripts/vendor-check.sh` and `docs/development/go-workspaces.md`. Sibling of
+the license-notices drift gate and of Q94/Q111.
+
+Original finding:
 
 With `-mod=vendor`, the Go toolchain checks only `vendor/modules.txt`
 consistency — never the hashes in `go.sum`. No CI step re-vendors and
@@ -244,6 +258,15 @@ Small items, one Queue row; fix opportunistically or as one PR:
    GitHub release assets are replaceable for an existing tag; cosign is
    the sharpest case (it's the release verifier). Mirror the
    `KIND_BINARY_SHA256` pattern.
+   - **cosign — RESOLVED.** `scripts/download-cosign.sh` now pins the expected
+     SHA256 per (version, platform) in-repo and refuses to install a binary
+     whose bytes don't match, failing closed on an unpinned version (bumping
+     `COSIGN_VERSION` must add the new digests). The publish pipeline already
+     fetches cosign via the SHA-pinned `sigstore/cosign-installer`; this covers
+     the local `make verify-release` path. Documented in `release.md §
+     Supply-chain integrity`. The remaining tools (kubeconform/kustomize,
+     shellcheck, polaris) are still raw downloads — that part of item 5 stays
+     open in this Q127 row.
 6. **Release images assemble from GHA BuildKit cache**
    (`publish.yml:129` `cache-from`). Layers of signed releases may come
    from cache, not the tagged source. Drop `cache-from` (or `no-cache:

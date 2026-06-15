@@ -53,6 +53,12 @@ If the change **added, removed, or re-pointed an inter-module `replace` edge** (
 
 Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
 
+### Vendor integrity is gated in CI
+
+`go build -mod=vendor` checks only `vendor/modules.txt` consistency — it never verifies that the vendored *source* matches the hashes in `go.sum`, so a tampered `vendor/` (or `tools/vendor/`) edit would compile into the signed release images undetected (Q126). The `vendor-check` CI job (`make vendor-check` → `scripts/vendor-check.sh`) re-runs the vendor flow above — which re-fetches every module verified against `go.sum` — and fails on any diff against the committed trees. Run `make vendor-check` locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally **not** part of the fast `make check` gate.
+
+A **Dependabot** `go.mod`/`go.sum` bump lands a desynced vendor tree (the bot can't run `go work vendor`), so it fails this gate by design — the fix is the follow-up vendor sync from [Changing dependencies](#changing-dependencies) above, not an exemption.
+
 ## Worktrees
 
 Worktrees (`.claude/worktrees/<name>/`) each have their own `go.work` that may differ from the root one.

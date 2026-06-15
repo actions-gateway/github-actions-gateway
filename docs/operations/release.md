@@ -218,7 +218,7 @@ why step 3 verification matters on every release.
 The publish job holds `packages: write` + `id-token: write`: its ambient OIDC
 identity *is* the release trust root. A hijacked upstream action tag executing in
 that job could push and keyless-sign malicious images as the legitimate publish
-identity. Two controls keep the pipeline itself trustworthy.
+identity. Three controls keep the pipeline itself trustworthy.
 
 ### Actions are pinned to full commit SHAs
 
@@ -268,3 +268,31 @@ enforce that a signature can only ever be a tag signature:
 Together these close the hole where repo-write could dispatch `publish.yml` from a
 scratch branch, overwrite a released GHCR version tag, and still pass
 verification.
+
+### Build inputs and the signer binary are integrity-checked
+
+The first two controls protect *who* runs the pipeline and *how* signatures are
+trusted; this one protects *what goes into* the signed artifacts and *the tool
+that verifies them*.
+
+- **Vendored dependencies are gated against `go.sum`.** Images build with `go
+  build -mod=vendor`, but `-mod=vendor` only checks `vendor/modules.txt`
+  consistency — it never verifies that the vendored *source* matches the hashes
+  in `go.sum`. A malicious or accidental edit under `vendor/` (or `tools/vendor/`)
+  would otherwise compile straight into the signed release images. The
+  `vendor-check` job (in `unit-test.yml`, single source of truth `make
+  vendor-check` → `scripts/vendor-check.sh`) re-runs the workspace-vendor flow —
+  which re-fetches every module verified against `go.sum` — and fails on any diff
+  against the committed trees. A Dependabot `go.mod` bump legitimately fails this
+  gate until a follow-up vendor sync lands; that is the intended signal (see
+  [go-workspaces.md § Changing dependencies](../development/go-workspaces.md#changing-dependencies)).
+- **The cosign verify binary is checksummed.** GitHub release assets are mutable
+  for an existing tag, so a raw download of the release verifier can't be trusted
+  on its own. The publish pipeline obtains cosign via the SHA-pinned
+  `sigstore/cosign-installer` action (which performs its own signature
+  verification); the *local* verify path (`make verify-release` →
+  `scripts/download-cosign.sh`) pins the expected SHA256 per platform in-repo and
+  refuses to install a binary whose bytes don't match. Bumping `COSIGN_VERSION`
+  must add the new digests to that script (it fails closed on an unpinned
+  version) — the same deliberate-pin discipline as `KIND_BINARY_SHA256` in
+  `e2e-test.yml`.
