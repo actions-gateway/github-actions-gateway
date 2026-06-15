@@ -183,17 +183,16 @@ func TestReconcile_Delete(t *testing.T) {
 	reconcile(t, r, key) // add finalizer
 	reconcile(t, r, key) // provision
 
-	// Trigger deletion.
+	// Trigger deletion. The fake client stamps deletionTimestamp on Delete
+	// because the finalizer is present; no manual re-stamp is needed (see the
+	// Q140 note in TestReconcile_DeleteWithBrokenTokenManager).
 	require.NoError(t, fb.Delete(context.Background(), rg))
 
-	// Re-fetch (deletion timestamp set).
+	// Re-fetch; deletion timestamp is set by Delete.
 	var updated v1alpha1.RunnerGroup
 	require.NoError(t, fb.Get(context.Background(), key, &updated))
-
-	// Set deletion timestamp manually since fake client doesn't auto-set it.
-	now := metav1.Now()
-	updated.DeletionTimestamp = &now
-	require.NoError(t, fb.Update(context.Background(), &updated))
+	require.False(t, updated.DeletionTimestamp.IsZero(),
+		"Delete should stamp deletionTimestamp while the finalizer is set")
 
 	reconcile(t, r, key)
 
@@ -485,14 +484,18 @@ func TestReconcile_DeleteWithBrokenTokenManager(t *testing.T) {
 	// Replace the token manager with an always-failing one.
 	r.TokenManager = token.NewManagerWithExpiredToken()
 
-	// Trigger deletion: delete the object and manually stamp the deletion timestamp
-	// because the fake client does not auto-set it.
+	// Trigger deletion. The fake client stamps deletionTimestamp on Delete
+	// because the finalizer is present, so the object is marked for deletion
+	// rather than removed. Do NOT re-stamp it with a fresh metav1.Now(): the
+	// fake client rejects an Update whose deletionTimestamp drifts >=1s from the
+	// stored value ("deletionTimestamp field is immutable"), and under -race the
+	// gap between Delete and a manual Now() occasionally crossed that boundary,
+	// flaking the test (Q140).
 	require.NoError(t, fb.Delete(context.Background(), rg))
 	var updated v1alpha1.RunnerGroup
 	require.NoError(t, fb.Get(context.Background(), key, &updated))
-	now := metav1.Now()
-	updated.DeletionTimestamp = &now
-	require.NoError(t, fb.Update(context.Background(), &updated))
+	require.False(t, updated.DeletionTimestamp.IsZero(),
+		"Delete should stamp deletionTimestamp while the finalizer is set")
 
 	// Reconcile: token fails but deletion proceeds gracefully with an empty token.
 	reconcile(t, r, key)
