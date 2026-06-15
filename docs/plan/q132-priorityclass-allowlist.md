@@ -143,4 +143,23 @@ the allowlist lacks. Rejected for the cost above.
 
 ## Status
 
-**In progress (2026-06-14).** Implementing per scope above.
+**Implemented (2026-06-14, Q132).** Delivered per scope above:
+
+- **API/CRD:** removed `PreemptionPolicy` from `PriorityTier`; regenerated
+  deepcopy and all five CRD copies (AGC authoritative, GMC bundled runnergroups +
+  actionsgateways, both chart CRD templates), verified in sync.
+- **GMC:** `--allowed-priority-classes` flag → `NewActionsGatewayCustomValidator`
+  → `validatePriorityClasses` (rejects off-allowlist classes, names class + allowed
+  set; empty allowlist rejects all).
+- **Chart:** `allowedPriorityClasses` value wired to the deployment arg
+  (`helm template`/`helm lint` verified — flag present when set, absent on the
+  secure default).
+- **Tests:** webhook unit tests + envtest `TestCRD_ActionsGateway_PriorityClassAllowlist`
+  (reject/accept/empty/update); `make check` green; gmc run under `-race`.
+- **Docs:** design 01/03/05/appendix-e/f/g, tenant-onboarding, security-operations
+  (new Priority classes section), upgrade breaking-change note, getting-started,
+  why-gag. Threat marked Closed in 05-security.md.
+
+Direct-RunnerGroup-write bypass (a tenant with direct `runnergroups` RBAC) is
+out of scope here and captured as future-enhancement G.7 (a `runnergroups` VAP).
+Shipped in PR #234.
