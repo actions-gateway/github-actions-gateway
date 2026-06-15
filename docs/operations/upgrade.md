@@ -124,6 +124,39 @@ already own namespaces and quotas.
    is **not rejected**, the field is just ignored. Remove it from source so intent
    stays clear.
 
+### BREAKING: `priorityTiers` PriorityClasses now require a platform allowlist; per-tier `preemptionPolicy` removed
+
+**Two breaking CRD/admission changes, made pre-1.0 (Q132).** Both concern
+`spec.runnerGroups[].priorityTiers`:
+
+1. **The GMC validating webhook now rejects any `priorityClassName` not on the
+   platform allowlist.** The allowlist is the new GMC `--allowed-priority-classes`
+   flag (comma-separated class names) and is **empty by default**, so after upgrade
+   *every* `ActionsGateway` that sets `priorityTiers` will be rejected on its next
+   apply until you configure the flag. The rationale: a tenant-chosen, cluster-scoped
+   `PriorityClass` with the default `PreemptLowerPriority` policy could evict other
+   tenants' running worker pods — a cross-tenant isolation break.
+
+2. **The per-tier `preemptionPolicy` field has been removed** from the
+   `PriorityTier` schema. It was never wired to worker pods (a no-op) and was a
+   tenant-controlled preemption lever; preemption is now governed solely by the
+   platform-created `PriorityClass` object. Structural-schema pruning silently drops
+   the now-unknown field from stored/re-applied CRs (no apply rejection); remove it
+   from source so intent stays clear.
+
+Migration steps:
+
+1. **Before rolling the GMC**, decide which `PriorityClass` names tenants may use,
+   ensure those classes exist (create them with `preemptionPolicy: Never` unless a
+   tier is genuinely meant to preempt cross-tenant — see
+   [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist)),
+   and set `--allowed-priority-classes` on the GMC Deployment (or the chart values).
+2. **Audit existing CRs** for the classes they reference:
+   `kubectl get actionsgateway -A -o jsonpath='{range .items[*]}{range .spec.runnerGroups[*]}{range .spec.priorityTiers[*]}{.priorityClassName}{"\n"}{end}{end}{end}' | sort -u`.
+   Every name in that list must be on the allowlist or the next apply/reconcile of
+   that CR is rejected.
+3. **Drop `preemptionPolicy` from your `priorityTiers` manifests / GitOps.**
+
 ### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
 
 The GMC's cluster-wide write grants are now gated by two ValidatingAdmissionPolicies

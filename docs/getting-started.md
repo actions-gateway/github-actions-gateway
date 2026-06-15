@@ -109,13 +109,13 @@ spec:
     - name: gpu-runners
       runnerLabels: ["self-hosted", "gpu"]
       maxListeners: 10
+      # priorityClassName values must be on the GMC --allowed-priority-classes
+      # allowlist (platform-owned); preemption is set on the PriorityClass object.
       priorityTiers:
         - priorityClassName: runner-critical
           threshold: 5
-          preemptionPolicy: PreemptLowerPriority
         - priorityClassName: runner-standard
           threshold: 20
-          preemptionPolicy: Never
       podTemplate:
         spec:
           containers:

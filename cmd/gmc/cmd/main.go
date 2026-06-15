@@ -105,6 +105,13 @@ func main() {
 	flag.BoolVar(&allowFloatingImageTags, "allow-floating-image-tags", false,
 		"Permit non-digest-pinned AGC_IMAGE/PROXY_IMAGE references (floating tags). "+
 			"Intended for dev/test only; production requires the name@sha256:<digest> form.")
+	var allowedPriorityClasses string
+	flag.StringVar(&allowedPriorityClasses, "allowed-priority-classes", "",
+		"Comma-separated allowlist of cluster-scoped PriorityClass names that tenant "+
+			"RunnerGroups may reference in priorityTiers. The platform admin pre-creates "+
+			"these classes and lists them here; the admission webhook rejects any other "+
+			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
+			"forbids all priorityTiers PriorityClass references.")
 	// Default to production logging: structured JSON at info level, which log
 	// aggregators can parse out of the box. Developers pass --zap-devel for
 	// human-readable console logs at debug level when running locally. Keeping
@@ -323,7 +330,7 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr); err != nil {
+		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, parseAllowedPriorityClasses(allowedPriorityClasses)); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
 			os.Exit(1)
 		}
@@ -355,6 +362,20 @@ func main() {
 		setupLog.Error(err, "Failed to run manager")
 		os.Exit(1)
 	}
+}
+
+// parseAllowedPriorityClasses splits the --allowed-priority-classes flag value
+// (comma-separated PriorityClass names) into a slice, trimming whitespace and
+// dropping empty entries. An empty or whitespace-only value yields a nil slice,
+// which the validator treats as "no class permitted" (secure default).
+func parseAllowedPriorityClasses(raw string) []string {
+	var names []string
+	for _, part := range strings.Split(raw, ",") {
+		if name := strings.TrimSpace(part); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func mustEnv(name string) (string, error) {

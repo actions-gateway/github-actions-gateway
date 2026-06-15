@@ -78,10 +78,8 @@ spec:
       priorityTiers:             # (5)!
         - priorityClassName: runner-critical
           threshold: 5
-          preemptionPolicy: PreemptLowerPriority
         - priorityClassName: runner-standard
           threshold: 20
-          preemptionPolicy: Never
       podTemplate:
         spec:
           containers:
@@ -111,8 +109,11 @@ spec:
     the platform admin sets it on the namespace, not on this CR, so it is a real
     cap the tenant cannot raise. Priority tiers decide who wins when it is
     contended.
-5.  The first 5 GPU pods get a preempting `PriorityClass` and will displace
-    lower-priority CPU pods; the next tier bursts opportunistically without
-    evicting running jobs; the final threshold caps total concurrency.
+5.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
+    bursts opportunistically; the final threshold caps total concurrency. The
+    `priorityClassName` values must be on the platform's allowlist (the GMC
+    `--allowed-priority-classes` flag), and whether a tier preempts is set on the
+    platform-owned `PriorityClass` object — a tenant cannot name a class that
+    evicts other tenants' pods.
 
 Ready to try it? Follow the [getting-started guide](getting-started.md).

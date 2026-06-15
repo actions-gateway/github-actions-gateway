@@ -241,10 +241,8 @@ spec:
       priorityTiers:
         - priorityClassName: runner-critical
           threshold: 5
-          preemptionPolicy: PreemptLowerPriority
         - priorityClassName: runner-standard
           threshold: 20
-          preemptionPolicy: Never
       podTemplate:
         spec:
           containers:

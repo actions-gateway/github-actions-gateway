@@ -8612,18 +8612,15 @@ spec:
                     PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count threshold.
                     Thresholds must be in strictly ascending order.
                   properties:
-                    preemptionPolicy:
-                      default: Never
-                      description: PreemptionPolicy controls whether pods in this
-                        tier may evict lower-priority pods.
-                      enum:
-                      - PreemptLowerPriority
-                      - Never
-                      maxLength: 30
-                      type: string
                     priorityClassName:
-                      description: PriorityClassName is the name of an existing cluster-scoped
-                        PriorityClass.
+                      description: |-
+                        PriorityClassName is the name of an existing cluster-scoped PriorityClass.
+                        The platform owns which classes a tenant may reference: the GMC validating
+                        webhook rejects any name not on the platform allowlist
+                        (--allowed-priority-classes), so a tenant cannot name a high-priority,
+                        preempting class and evict other tenants' worker pods. The named class —
+                        including its preemptionPolicy — is platform-created; see
+                        docs/operations/security-operations.md.
                       maxLength: 253
                       type: string
                     threshold:

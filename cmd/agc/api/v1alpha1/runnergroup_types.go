@@ -9,19 +9,18 @@ import (
 // Thresholds must be in strictly ascending order.
 type PriorityTier struct {
 	// PriorityClassName is the name of an existing cluster-scoped PriorityClass.
+	// The platform owns which classes a tenant may reference: the GMC validating
+	// webhook rejects any name not on the platform allowlist
+	// (--allowed-priority-classes), so a tenant cannot name a high-priority,
+	// preempting class and evict other tenants' worker pods. The named class —
+	// including its preemptionPolicy — is platform-created; see
+	// docs/operations/security-operations.md.
 	// +kubebuilder:validation:MaxLength=253
 	PriorityClassName string `json:"priorityClassName"`
 
 	// Threshold is the cumulative active-pod count at which this tier is exhausted.
 	// +kubebuilder:validation:Minimum=1
 	Threshold int32 `json:"threshold"`
-
-	// PreemptionPolicy controls whether pods in this tier may evict lower-priority pods.
-	// +kubebuilder:validation:Enum=PreemptLowerPriority;Never
-	// +kubebuilder:validation:MaxLength=30
-	// +kubebuilder:default=Never
-	// +optional
-	PreemptionPolicy string `json:"preemptionPolicy,omitempty"`
 }
 
 // RunnerGroupSpec defines the desired state of a RunnerGroup.

@@ -41,6 +41,11 @@ spec:
         # DEV/TEST ONLY: disables AGC_IMAGE/PROXY_IMAGE digest-pin enforcement.
         - --allow-floating-image-tags
         {{- end }}
+        {{- with .Values.allowedPriorityClasses }}
+        # Platform allowlist of cluster-scoped PriorityClass names tenant
+        # priorityTiers may reference. Empty/unset rejects all (secure default).
+        - --allowed-priority-classes={{ join "," . }}
+        {{- end }}
         env:
         # POD_NAMESPACE is read by the admission webhook to forbid ActionsGateway
         # CRs in the GMC's own install namespace. Downward API so custom installs

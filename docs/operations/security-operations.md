@@ -44,6 +44,7 @@ Two detection substrates are used:
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
+- [Priority classes: the `--allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
@@ -505,6 +506,59 @@ hand-written `NetworkPolicy`:
 
 The labels above are what make all of these targetable; the secure floor stays
 GMC-managed regardless.
+
+---
+
+## Priority classes: the `--allowed-priority-classes` allowlist
+
+A tenant `RunnerGroup` can request scheduling priority for its worker pods via
+`priorityTiers[].priorityClassName`, which the AGC stamps onto the pods as
+`spec.priorityClassName`. `PriorityClass` is a **cluster-scoped** object carrying
+a priority *value* and a `preemptionPolicy` (Kubernetes default
+`PreemptLowerPriority`). Left unvalidated, a tenant could name a high-priority,
+preempting class and have the scheduler **evict other tenants' running worker
+pods** to schedule its own — a cross-tenant isolation break (Q132).
+
+The platform owns which classes a tenant may use:
+
+1. **The platform pre-creates the `PriorityClass` objects.** The GMC never
+   creates cluster-scoped objects (same platform-ownership model as the
+   `ResourceQuota`, Q130). Create allowlisted classes with
+   **`preemptionPolicy: Never`** unless cross-tenant preemption is genuinely
+   intended for that tier — `PriorityClass` is global, so a `PreemptLowerPriority`
+   class lets *any* tenant that uses it evict *any* lower-priority pod cluster-wide,
+   across tenant boundaries.
+
+   ```yaml
+   apiVersion: scheduling.k8s.io/v1
+   kind: PriorityClass
+   metadata:
+     name: runner-standard
+   value: 100000
+   preemptionPolicy: Never   # orders ahead in scheduling without evicting others
+   description: "Standard self-hosted runner worker pods."
+   ```
+
+2. **The platform allowlists the names on the GMC.** Set the
+   `--allowed-priority-classes` flag (comma-separated) on the GMC controller. The
+   validating webhook rejects any `ActionsGateway` whose
+   `runnerGroups[].priorityTiers[].priorityClassName` is not on the list, naming
+   both the offending class and the permitted set.
+
+   ```yaml
+   # GMC Deployment / Helm values — args on the controller-manager container
+   args:
+     - --allowed-priority-classes=runner-standard,runner-opportunistic
+   ```
+
+   **An empty/unset allowlist forbids every `priorityTiers` PriorityClass
+   reference** (secure default): out of the box no tenant can set a
+   `PriorityClass`. Tenants that only need a soft concurrency ceiling can use
+   `maxWorkers` instead, which requires no `PriorityClass`.
+
+There is deliberately no tenant-settable per-tier `preemptionPolicy` field;
+preemption is governed entirely by the platform-created `PriorityClass` object.
+See [§5.2 — Cross-Tenant Pod Preemption via PriorityClass](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 
 ---
 

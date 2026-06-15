@@ -278,18 +278,29 @@ type ActionsGatewayStatus struct {
 //
 // PriorityClass objects are cluster-scoped and must be pre-created by the
 // platform team before the RunnerGroup is applied — the GMC does not create
-// them, as doing so would require a cluster-level write privilege expansion.
+// them, as doing so would require a cluster-level write privilege expansion
+// (the same platform-ownership model as the namespace ResourceQuota, Q130).
 //
-// Recommended practice: set PreemptionPolicy to PreemptLowerPriority only on
-// the first (highest-priority) tier. All subsequent tiers should use
-// PreemptionPolicy: Never so that burst and best-effort pods gain scheduling
-// preference over truly lower-priority workloads without evicting running jobs.
-// This confines eviction risk to the minimum guaranteed floor pods only.
-// +kubebuilder:validation:XValidation:rule="self == self.sorted(x, y, x.threshold < y.threshold)",message="priorityTiers must be in strictly ascending threshold order"
+// The platform owns *which* PriorityClasses a tenant may reference (Q132). A
+// PriorityClass carries a priority value and a preemptionPolicy (Kubernetes
+// default PreemptLowerPriority); an unvalidated tenant-chosen class would let a
+// tenant name a high-priority, preempting class and have the scheduler EVICT
+// other tenants' running worker pods — breaking cross-tenant isolation. The GMC
+// validating webhook therefore rejects any priorityClassName not on the platform
+// allowlist (the --allowed-priority-classes flag; an empty allowlist forbids all
+// references — secure default). Preemption behaviour is governed entirely by the
+// platform-created PriorityClass object: the platform should set its
+// preemptionPolicy to Never unless cross-tenant preemption is genuinely intended
+// for that tier (PriorityClasses are global, so a PreemptLowerPriority class
+// preempts across tenant boundaries). There is deliberately no tenant-settable
+// per-tier preemptionPolicy field — it would be a tenant-controlled preemption
+// lever the platform must own.
 type PriorityTier struct {
     // PriorityClassName is the name of an existing cluster-scoped PriorityClass
-    // to assign to worker pods when the active pod count is below Threshold.
-    // Must reference a PriorityClass that already exists in the cluster.
+    // to assign to worker pods when the active pod count is below Threshold. Must
+    // reference a PriorityClass that already exists in the cluster AND appears on
+    // the platform allowlist (--allowed-priority-classes); the GMC webhook
+    // rejects any other name.
     PriorityClassName string `json:"priorityClassName"`
 
     // Threshold is the cumulative active-pod count at which this tier is
@@ -297,31 +308,6 @@ type PriorityTier struct {
     // strictly greater than the previous tier's Threshold.
     // +kubebuilder:validation:Minimum=1
     Threshold int32 `json:"threshold"`
-
-    // PreemptionPolicy controls whether pods in this tier may evict
-    // lower-priority running pods to claim resources. Mirrors the
-    // preemptionPolicy field on the referenced PriorityClass, but
-    // expressed here per-tier so operators can reason about eviction
-    // behaviour directly from the RunnerGroup spec without cross-referencing
-    // cluster-scoped PriorityClass objects.
-    //
-    // PreemptLowerPriority (default): pods in this tier will evict lower-
-    //   priority running pods when the namespace has insufficient free capacity.
-    //   Use only for the first (floor-guarantee) tier.
-    //
-    // Never: pods in this tier will not evict running pods. They gain
-    //   scheduling priority over lower-priority pending pods but wait for
-    //   capacity to free up naturally. Recommended for all tiers above the
-    //   first to avoid disrupting long-running jobs.
-    //
-    // The value here is informational and used by the AGC for documentation
-    // and alerting purposes; the actual preemption behaviour is determined by
-    // the PriorityClass object in the cluster. Operators must ensure the two
-    // are consistent.
-    // +kubebuilder:validation:Enum=PreemptLowerPriority;Never
-    // +kubebuilder:default=Never
-    // +optional
-    PreemptionPolicy string `json:"preemptionPolicy,omitempty"`
 }
 
 // RunnerGroup is a namespace-scoped CRD managed by the AGC.
@@ -402,19 +388,20 @@ type RunnerGroupSpec struct {
     // opportunistic, capped at 30 best-effort:
     //
     //   priorityTiers:
-    //   - priorityClassName: runner-critical        # floor: can preempt
+    //   - priorityClassName: runner-critical        # floor
     //     threshold: 5
-    //     preemptionPolicy: PreemptLowerPriority
-    //   - priorityClassName: runner-standard        # burst: no eviction
+    //   - priorityClassName: runner-standard        # burst
     //     threshold: 20
-    //     preemptionPolicy: Never
-    //   - priorityClassName: runner-opportunistic   # best-effort: no eviction
+    //   - priorityClassName: runner-opportunistic   # best-effort
     //     threshold: 30
-    //     preemptionPolicy: Never
     //
-    // PriorityClass objects must be pre-created by the platform team. Tiers must
-    // be listed in strictly ascending threshold order; the CRD admission webhook
-    // enforces this via CEL validation.
+    // PriorityClass objects must be pre-created by the platform team AND each
+    // referenced name must appear on the GMC --allowed-priority-classes allowlist
+    // (Q132); the GMC validating webhook rejects any other name so a tenant
+    // cannot name a preempting class and evict other tenants' pods. Preemption
+    // behaviour is set on the platform-owned PriorityClass object itself (the
+    // platform should use preemptionPolicy: Never unless cross-tenant preemption
+    // is intended). Tiers must be listed in strictly ascending threshold order.
     //
     // When PriorityTiers is empty, no PriorityClass is set on worker pods and
     // the namespace ResourceQuota is the only active ceiling.
