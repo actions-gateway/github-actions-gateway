@@ -151,6 +151,49 @@ func TestManager_ProactiveRefresh(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// TestManager_NearExpiryTokenDoesNotHotLoop drives the manager with a token
+// whose TTL is shorter than the 5-minute refresh lead time, so the computed
+// post-success wait (ExpiresAt-5min-now) is negative. The pre-fix code clamped
+// that to 0 and spun fetch→wait(0)→fetch as a retry storm. With the
+// minRefreshInterval floor, the loop must park for 30s between fetches instead,
+// so the fetch count stays bounded across a simulated interval (Q107).
+func TestManager_NearExpiryTokenDoesNotHotLoop(t *testing.T) {
+	// 1-minute TTL < 5-minute lead time → negative computed wait.
+	shortTTL := epoch.Add(time.Minute)
+	tok1 := &githubapp.InstallationToken{Token: "tok-1", ExpiresAt: shortTTL}
+	tok2 := &githubapp.InstallationToken{Token: "tok-2", ExpiresAt: shortTTL.Add(time.Minute)}
+	provider := &stubProvider{tokens: []*githubapp.InstallationToken{tok1, tok2}}
+	clk := newFakeClock(epoch)
+
+	mgr := token.NewManager(provider, clk)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	mgr.Start(ctx)
+
+	got, err := mgr.Token(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "tok-1", got)
+
+	// Without advancing the clock, the floored 30s wait keeps the loop parked.
+	// A hot loop (wait clamped to 0) would issue many fetches in this window,
+	// since fakeClock.After(0) fires immediately. The floored wait fires only
+	// once the clock is advanced past 30s, which we never do here.
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, 1, provider.Calls(), "near-expiry token must not trigger a fetch storm")
+
+	// Advancing past the floor (minRefreshInterval = 30s) refreshes promptly —
+	// the short-TTL token is kept fresh, just throttled rather than hot-looped.
+	clk.Advance(30 * time.Second)
+	assert.Eventually(t, func() bool {
+		t2, e := mgr.Token(ctx)
+		return e == nil && t2 == "tok-2"
+	}, 2*time.Second, 10*time.Millisecond, "floored wait should still refresh once it elapses")
+
+	cancel()
+	clk.Stop()
+	time.Sleep(30 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
 func TestManager_ReadersDuringRefresh(t *testing.T) {
 	expiry := epoch.Add(time.Hour)
 	tok := &githubapp.InstallationToken{Token: "valid-tok", ExpiresAt: expiry}

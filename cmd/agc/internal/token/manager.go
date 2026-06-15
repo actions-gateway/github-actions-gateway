@@ -28,6 +28,18 @@ var RealClock Clock = realClock{}
 
 const refreshLeadTime = 5 * time.Minute
 
+// minRefreshInterval floors the wait between successful token fetches. A GitHub
+// installation token normally has a 1-hour TTL, so the proactive refresh fires
+// ~55 minutes out. But if a token arrives already inside the refreshLeadTime
+// window — a TTL shorter than 5 minutes, or wall-clock skew between us and
+// GitHub — the computed wait (ExpiresAt-refreshLeadTime-now) is non-positive.
+// Clamping that to 0 would spin the loop fetch→wait(0)→fetch as a retry storm
+// against the token endpoint. Flooring to 30s instead still refreshes promptly
+// (a genuinely short-TTL token is renewed every 30s, well ahead of a 1-minute
+// expiry) while bounding the success-path request rate to at most one fetch per
+// 30s. This is distinct from the exponential backoff used for *failed* fetches.
+const minRefreshInterval = 30 * time.Second
+
 // MetricsRecorder is implemented by listener.Metrics to record token events.
 // nil-safe: all methods must check for nil before calling.
 type MetricsRecorder interface {
@@ -171,11 +183,13 @@ func (m *Manager) loop(ctx context.Context) {
 			"validFor", tok.ExpiresAt.Sub(m.clock.Now()).Round(time.Second).String())
 		backoff = baseBackoff
 
-		// Sleep until T-5min before expiry.
+		// Sleep until T-5min before expiry, but never less than
+		// minRefreshInterval — see that const for why a non-positive wait must
+		// be floored rather than clamped to 0 (success-path storm prevention).
 		waitUntil := tok.ExpiresAt.Add(-refreshLeadTime)
 		wait := waitUntil.Sub(m.clock.Now())
-		if wait <= 0 {
-			wait = 0
+		if wait < minRefreshInterval {
+			wait = minRefreshInterval
 		}
 		select {
 		case <-ctx.Done():
