@@ -229,4 +229,37 @@ D-5.
 
 ---
 
+## G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement
+
+**Current behavior.** The platform-owned PriorityClass allowlist (Q132) is
+enforced by the GMC validating webhook on the tenant-facing `ActionsGateway` CR:
+a `priorityTiers[].priorityClassName` not on `--allowed-priority-classes` is
+rejected at admission. RunnerGroup CRs themselves are authored only by the GMC
+ServiceAccount (gated to tenant namespaces by the `gmc-tenant-resource-guard`
+ValidatingAdmissionPolicy); tenants are not expected to hold direct `runnergroups`
+create/update RBAC.
+
+**Gap.** A cluster operator who *does* grant a tenant direct `runnergroups` write
+access would bypass the `ActionsGateway` webhook, since that webhook matches only
+`actionsgateways`. Such a tenant could create a RunnerGroup naming an
+off-allowlist PriorityClass directly, and the AGC would stamp it onto worker pods.
+
+**What "added" would look like.** A `ValidatingAdmissionPolicy` on the
+`runnergroups` resource (alongside the existing GMC-SA guards in
+`cmd/gmc/config/admission-policy/`) that rejects any `priorityTiers` entry whose
+`priorityClassName` is not in an allowlist supplied via a `paramKind` (a ConfigMap
+or small custom resource the platform owns — CRD CEL `XValidation` cannot read
+external config, which is why the webhook, not a CRD rule, carries the allowlist
+today). This applies to *any* creator, including direct tenant writes, closing the
+bypass as defense-in-depth.
+
+**What would trigger building it.** A deployment model where tenants are granted
+direct RunnerGroup RBAC, or a hardening requirement that the allowlist hold even if
+the GMC webhook is bypassed or disabled.
+
+**Related finding.** [docs/plan/q132-priorityclass-allowlist.md](../plan/q132-priorityclass-allowlist.md);
+[05-security.md § Cross-Tenant Pod Preemption via PriorityClass](05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)

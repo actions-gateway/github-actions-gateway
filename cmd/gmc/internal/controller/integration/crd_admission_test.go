@@ -72,7 +72,7 @@ func TestCRD_ActionsGateway_NonHTTPSGitHubURL_Rejected(t *testing.T) {
 func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
 	// Pass "gmc-system" as the custom install namespace too — exercises both
 	// the default and runtime-derived reservation paths in one loop.
-	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("gmc-system")
+	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("gmc-system", nil)
 
 	for _, ns := range []string{"kube-system", "kube-public", "gmc-system"} {
 		ag := &gmcv1alpha1.ActionsGateway{
@@ -92,7 +92,7 @@ func TestCRD_ActionsGateway_WebhookRejectsKubeSystem(t *testing.T) {
 // XValidation rule because k8s ≤ 1.30 CEL cannot use has() on optional
 // non-pointer string fields; the webhook check is version-agnostic.
 func TestCRD_ActionsGateway_CrossNamespaceSecretRef_Rejected(t *testing.T) {
-	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("")
+	validator := webhookv1alpha1.NewActionsGatewayCustomValidator("", nil)
 	ag := &gmcv1alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: "cross-ns-ag", Namespace: "team-a"},
 		Spec: gmcv1alpha1.ActionsGatewaySpec{
@@ -105,6 +105,56 @@ func TestCRD_ActionsGateway_CrossNamespaceSecretRef_Rejected(t *testing.T) {
 	_, err := validator.ValidateCreate(context.Background(), ag)
 	require.Error(t, err, "ActionsGateway with gitHubAppRef.namespace set must be rejected by the webhook")
 	assert.Contains(t, err.Error(), "gitHubAppRef.namespace is not supported")
+}
+
+// agWithPriorityTier returns an ActionsGateway carrying a single RunnerGroup
+// whose priorityTiers names the given PriorityClass. Used by the allowlist tests.
+func agWithPriorityTier(name, ns, priorityClassName string) *gmcv1alpha1.ActionsGateway {
+	ag := newActionsGateway(name, ns, "github-app")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
+		{
+			MaxListeners: 1,
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+			},
+			PriorityTiers: []agcv1alpha1.PriorityTier{
+				{PriorityClassName: priorityClassName, Threshold: 5},
+			},
+		},
+	}
+	return ag
+}
+
+// TestCRD_ActionsGateway_PriorityClassAllowlist verifies the Q132 control: the
+// GMC webhook rejects a priorityTiers PriorityClass not on the platform
+// allowlist (so a tenant cannot name a high-priority, preempting class and evict
+// other tenants' worker pods) and admits one that is on it. An empty allowlist
+// forbids every reference (secure default). The webhook server runs without TLS
+// in envtest, so the validator is called directly.
+func TestCRD_ActionsGateway_PriorityClassAllowlist(t *testing.T) {
+	allowed := webhookv1alpha1.NewActionsGatewayCustomValidator("", []string{"runner-standard", "runner-opportunistic"})
+	empty := webhookv1alpha1.NewActionsGatewayCustomValidator("", nil)
+
+	// Disallowed class is rejected, naming both the class and the allowed set.
+	_, err := allowed.ValidateCreate(context.Background(), agWithPriorityTier("evil-ag", "team-a", "system-cluster-critical"))
+	require.Error(t, err, "a priorityClassName not on the allowlist must be rejected")
+	assert.Contains(t, err.Error(), "system-cluster-critical", "error should name the disallowed class")
+	assert.Contains(t, err.Error(), "runner-standard", "error should name the allowed set")
+
+	// Allowed class passes.
+	_, err = allowed.ValidateCreate(context.Background(), agWithPriorityTier("ok-ag", "team-a", "runner-standard"))
+	require.NoError(t, err, "a priorityClassName on the allowlist must be accepted")
+
+	// Empty allowlist forbids any class (secure default).
+	_, err = empty.ValidateCreate(context.Background(), agWithPriorityTier("nodefault-ag", "team-a", "runner-standard"))
+	require.Error(t, err, "an empty allowlist must reject every priorityTiers PriorityClass reference")
+
+	// Update path is gated identically.
+	_, err = allowed.ValidateUpdate(context.Background(),
+		agWithPriorityTier("evil-ag", "team-a", "runner-standard"),
+		agWithPriorityTier("evil-ag", "team-a", "system-cluster-critical"))
+	require.Error(t, err, "ValidateUpdate must reject a switch to a disallowed PriorityClass")
 }
 
 // TestCRD_ProxyConfig_MaxReplicas_TooHigh_Rejected verifies that proxy.maxReplicas > 100

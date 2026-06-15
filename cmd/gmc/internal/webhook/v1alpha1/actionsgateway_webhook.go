@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -43,21 +44,45 @@ func newReservedNamespaces(podNamespace string) map[string]bool {
 // ActionsGateway in the manager. The GMC's own install namespace is read
 // from the POD_NAMESPACE env var (which the Deployment populates via the
 // downward API) and added to the reserved-namespace set so tenants cannot
-// create an ActionsGateway in the operator's own namespace.
-func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager) error {
+// create an ActionsGateway in the operator's own namespace. allowedPriorityClasses
+// is the platform allowlist of cluster-scoped PriorityClass names tenants may
+// reference in priorityTiers (see ValidateCreate / validatePriorityClasses).
+func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager, allowedPriorityClasses []string) error {
 	return ctrl.NewWebhookManagedBy(mgr, &gmcv1alpha1.ActionsGateway{}).
-		WithValidator(NewActionsGatewayCustomValidator(os.Getenv("POD_NAMESPACE"))).
+		WithValidator(NewActionsGatewayCustomValidator(os.Getenv("POD_NAMESPACE"), allowedPriorityClasses)).
 		Complete()
 }
 
 // NewActionsGatewayCustomValidator returns a validator whose reserved-namespace
 // set includes the universal Kubernetes reserved namespaces, the GMC's default
-// install namespace, and the supplied podNamespace if non-empty. Tests use this
-// to drive the reservation behavior without relying on the global environment.
-func NewActionsGatewayCustomValidator(podNamespace string) *ActionsGatewayCustomValidator {
-	return &ActionsGatewayCustomValidator{
-		reservedNamespaces: newReservedNamespaces(podNamespace),
+// install namespace, and the supplied podNamespace if non-empty.
+// allowedPriorityClasses is the platform allowlist of cluster-scoped
+// PriorityClass names tenants may reference in priorityTiers; an empty slice
+// forbids every priorityTiers PriorityClass reference (secure default). Tests
+// use this to drive both behaviors without relying on the global environment.
+func NewActionsGatewayCustomValidator(podNamespace string, allowedPriorityClasses []string) *ActionsGatewayCustomValidator {
+	allowed := make(map[string]bool, len(allowedPriorityClasses))
+	for _, name := range allowedPriorityClasses {
+		if name != "" {
+			allowed[name] = true
+		}
 	}
+	return &ActionsGatewayCustomValidator{
+		reservedNamespaces:       newReservedNamespaces(podNamespace),
+		allowedPriorityClasses:   allowed,
+		allowedPriorityClassList: allowedPriorityClassNames(allowed),
+	}
+}
+
+// allowedPriorityClassNames returns the allowlist keys as a sorted slice for
+// deterministic error messages.
+func allowedPriorityClassNames(allowed map[string]bool) []string {
+	names := make([]string, 0, len(allowed))
+	for name := range allowed {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // +kubebuilder:webhook:path=/validate-actions-gateway-github-com-v1alpha1-actionsgateway,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.github.com,resources=actionsgateways,verbs=create;update,versions=v1alpha1,name=vactionsgateway-v1alpha1.kb.io,admissionReviewVersions=v1
@@ -72,6 +97,17 @@ type ActionsGatewayCustomValidator struct {
 	// check is a no-op — those tests are responsible for not relying on it.
 	// Production paths go through the constructor.
 	reservedNamespaces map[string]bool
+
+	// allowedPriorityClasses is the platform allowlist of cluster-scoped
+	// PriorityClass names a tenant may reference in priorityTiers. A nil/empty
+	// map forbids every PriorityClass reference (secure default): a tenant
+	// cannot name an arbitrary high-priority class and preempt other tenants'
+	// worker pods. Populated by NewActionsGatewayCustomValidator.
+	allowedPriorityClasses map[string]bool
+
+	// allowedPriorityClassList is the sorted allowlist, cached for deterministic
+	// rejection messages.
+	allowedPriorityClassList []string
 }
 
 // ValidateCreate rejects CRs created in reserved namespaces, with a cross-namespace
@@ -89,6 +125,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *g
 	if err := validateRunnerGroups(obj); err != nil {
 		return nil, err
 	}
+	if err := v.validatePriorityClasses(obj); err != nil {
+		return nil, err
+	}
 	return proxyResourceWarnings(obj), nil
 }
 
@@ -102,6 +141,9 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, oldObj
 		return nil, err
 	}
 	if err := validateRunnerGroups(newObj); err != nil {
+		return nil, err
+	}
+	if err := v.validatePriorityClasses(newObj); err != nil {
 		return nil, err
 	}
 	if err := validateSecurityProfileTransition(oldObj, newObj); err != nil {
@@ -172,6 +214,34 @@ func validateRunnerGroups(ag *gmcv1alpha1.ActionsGateway) error {
 		for _, c := range rg.PodTemplate.Spec.InitContainers {
 			if isPrivileged(c.SecurityContext) {
 				return fmt.Errorf("runnerGroups[%d]: privileged init containers are not permitted in worker pods (container %q)", i, c.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// validatePriorityClasses rejects any priorityTiers entry whose
+// priorityClassName is not on the platform allowlist. PriorityClass is a
+// cluster-scoped resource carrying a priority value and a preemptionPolicy; an
+// unvalidated tenant-chosen class lets a tenant name a high-priority, preempting
+// class and have the scheduler evict OTHER tenants' running worker pods —
+// breaking the cross-tenant isolation the per-tenant model promises (Q132). The
+// platform pre-creates the permitted classes and lists their names via
+// --allowed-priority-classes; the GMC only validates references against that
+// list (it never creates the cluster-scoped classes — that stays platform-owned,
+// consistent with the Q121/Q122/Q130 confinement model). An empty allowlist
+// forbids every reference (secure default).
+//
+// This is a webhook check, not a CRD CEL rule, because the allowlist is dynamic
+// platform config a spec-scoped CEL XValidation cannot read.
+func (v *ActionsGatewayCustomValidator) validatePriorityClasses(ag *gmcv1alpha1.ActionsGateway) error {
+	for i, rg := range ag.Spec.RunnerGroups {
+		for j, tier := range rg.PriorityTiers {
+			if !v.allowedPriorityClasses[tier.PriorityClassName] {
+				return fmt.Errorf(
+					"runnerGroups[%d].priorityTiers[%d]: priorityClassName %q is not in the platform allowlist %v; "+
+						"the platform admin must pre-create the PriorityClass and add it to the GMC --allowed-priority-classes flag",
+					i, j, tier.PriorityClassName, v.allowedPriorityClassList)
 			}
 		}
 	}

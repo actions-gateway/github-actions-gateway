@@ -61,6 +61,18 @@ proxy:
 # not enable in production. Leaving it false keeps the secure default.
 allowFloatingImageTags: false
 
+# allowedPriorityClasses is the platform allowlist of cluster-scoped PriorityClass
+# names that tenant RunnerGroups may reference in priorityTiers. It is passed to
+# the GMC as --allowed-priority-classes. The platform admin pre-creates these
+# PriorityClass objects (create them with preemptionPolicy: Never unless a tier is
+# genuinely meant to preempt cross-tenant — PriorityClasses are global) and lists
+# their names here; the admission webhook rejects any other name so a tenant cannot
+# name a high-priority class and evict other tenants' worker pods. Empty (default)
+# forbids all priorityTiers PriorityClass references — the secure default. See
+# docs/operations/security-operations.md § Priority classes.
+# e.g. allowedPriorityClasses: ["runner-standard", "runner-opportunistic"]
+allowedPriorityClasses: []
+
 # leaderElection gates the --leader-elect flag. Keep enabled when replicaCount
 # > 1, or two active managers will fight over reconciliation.
 leaderElection:
