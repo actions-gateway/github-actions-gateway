@@ -115,6 +115,9 @@ type provisionerOptions struct {
 	pollInterval       time.Duration
 	// registrar overrides the default brokerRegistrar. Nil uses the default.
 	registrar agentpool.Registrar
+	// baselineRecheckInterval overrides the reconciler's baseline re-check cadence
+	// (Q137). Zero leaves the production default.
+	baselineRecheckInterval time.Duration
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
@@ -194,6 +197,8 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 			// Short renew interval so integration tests can verify RenewJob is called.
 			RenewJobInterval: 50 * time.Millisecond,
 		},
+		// Q137 baseline re-check cadence; zero leaves the production default.
+		BaselineRecheckInterval: opts.baselineRecheckInterval,
 	}
 
 	if opts.enabled {

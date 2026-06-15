@@ -70,8 +70,15 @@ func jitRegister(t *testing.T, baseURL, name string) (int64, int) {
 
 func createSession(t *testing.T, baseURL string, agentID int64, bearer string) (string, int) {
 	t.Helper()
+	return createSessionWithOwner(t, baseURL, agentID, fmt.Sprintf("agent-%d", agentID), bearer)
+}
+
+// createSessionWithOwner is createSession with an explicit ownerName, so a test
+// can exercise the single-use simulation's owner scoping (Q135).
+func createSessionWithOwner(t *testing.T, baseURL string, agentID int64, owner, bearer string) (string, int) {
+	t.Helper()
 	body, _ := json.Marshal(map[string]any{
-		"ownerName": fmt.Sprintf("agent-%d", agentID),
+		"ownerName": owner,
 		"agent":     map[string]any{"id": agentID, "name": fmt.Sprintf("agent-%d", agentID)},
 	})
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/session", bytes.NewReader(body))
@@ -264,6 +271,40 @@ func TestSingleUseDisabledKeepsSessionsAlive(t *testing.T) {
 	// Session stays alive: next poll is a normal 202.
 	if status, _ = getMessage(t, main.URL, sessionID); status != http.StatusAccepted {
 		t.Fatalf("post-acquire poll with single-use off: want 202, got %d", status)
+	}
+}
+
+// TestSingleUseRejectionIsOwnerScoped is the Q135 regression: the single-use
+// simulation's session-creation 401 must honour the configured owner scope.
+// fakegithub is shared across parallel e2e specs, and agent IDs are not unique
+// across tenants — each AGC's StubRegistrar counts from the same base — so an
+// out-of-scope tenant's freshly recycled agent can collide by ID with an
+// in-scope tenant's consumed agent in the global consumedAgents map. Before the
+// fix that collision 401'd a healthy session creation, killing the
+// non-single-use tenant's permanent baseline and timing out
+// E2E_AGC_MultipleJobsQueued.
+func TestSingleUseRejectionIsOwnerScoped(t *testing.T) {
+	s := newServer()
+	s.singleUse.Store(true)
+	s.singleUseOwnerPrefix = "scoped-"
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+
+	// Agent id 1001 was consumed by an in-scope tenant's job acquisition.
+	s.mu.Lock()
+	s.consumedAgents[1001] = true
+	s.mu.Unlock()
+
+	// An out-of-scope tenant whose recycled agent collides on id 1001 must still
+	// be able to open a session — its owner is outside the single-use scope.
+	if _, status := createSessionWithOwner(t, main.URL, 1001, "other-0", "bearer-other"); status != http.StatusOK {
+		t.Fatalf("out-of-scope session for colliding agent id: want 200, got %d", status)
+	}
+
+	// An in-scope tenant reusing a consumed agent id is still rejected, exactly
+	// as real GitHub rejects a dead single-use credential.
+	if _, status := createSessionWithOwner(t, main.URL, 1001, "scoped-0", "bearer-scoped"); status != http.StatusUnauthorized {
+		t.Fatalf("in-scope session for consumed agent id: want 401, got %d", status)
 	}
 }
 

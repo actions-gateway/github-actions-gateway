@@ -29,6 +29,7 @@ type Server struct {
 	firstPollNotify     map[string]chan struct{}                // sessionID → closed on first GET /message
 	jobQueues           map[string]chan broker.TaskAgentMessage // sessionID → messages
 	bearerSessions      map[string]string                       // bearerToken → sessionID
+	failSessionOwner    string                                  // when non-empty, 401 POST /session for owners with this prefix
 	acquireJobResponse  any                                     // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
 	renewJobCount       atomic.Int64
@@ -194,6 +195,19 @@ func (s *Server) SetAcquireJobResponse(v any) {
 	s.mu.Unlock()
 }
 
+// FailCreateSessionForOwner makes POST /session return 401 Unauthorized for any
+// session whose ownerName has the given prefix, simulating a broker that rejects
+// a tenant's session creation. createSession maps the 401 to a NonRetriableError,
+// so the listener's permanent baseline exits without being auto-restarted —
+// letting a test drive the controller's baseline-revival path (Q137). An empty
+// prefix clears the override. The prefix is matched against ownerName
+// ("<group>-<agentIndex>"), so passing "<group>-" scopes it to one RunnerGroup.
+func (s *Server) FailCreateSessionForOwner(prefix string) {
+	s.mu.Lock()
+	s.failSessionOwner = prefix
+	s.mu.Unlock()
+}
+
 // Close shuts down the stub server.
 func (s *Server) Close() {
 	s.server.Close()
@@ -230,6 +244,17 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		s.mu.Lock()
+		// Simulate a broker that rejects this owner's session creation (e.g. a
+		// consumed single-use credential). createSession maps 401 to a
+		// NonRetriableError, so the listener's permanent baseline exits and is not
+		// auto-restarted — the precondition for the controller's baseline-revival
+		// path (Q137). Scoped by owner prefix so one test's failure injection does
+		// not affect other RunnerGroups sharing this stub.
+		if p := s.failSessionOwner; p != "" && strings.HasPrefix(reqBody.OwnerName, p) {
+			s.mu.Unlock()
+			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		s.sessionCounter++
 		sessionID := fmt.Sprintf("session-%d", s.sessionCounter)
 		s.sessions[sessionID] = true

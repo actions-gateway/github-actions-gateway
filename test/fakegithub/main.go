@@ -441,7 +441,14 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&reqBody)
 
 		s.mu.Lock()
-		if s.singleUse.Load() {
+		// Honour the single-use simulation only for in-scope owners. Agent IDs are
+		// not globally unique across tenants — each AGC's StubRegistrar counts from
+		// the same base — so an out-of-scope tenant's freshly recycled agent can
+		// collide by ID with an in-scope tenant's consumed agent in the global
+		// consumedAgents map. Without the owner guard that collision 401s a healthy
+		// session creation, killing the non-single-use tenant's baseline (Q135). An
+		// out-of-scope owner therefore behaves exactly as non-single-use mode.
+		if s.singleUse.Load() && s.inSingleUseScopeLocked(reqBody.OwnerName) {
 			if s.consumedAgents[reqBody.Agent.ID] {
 				// The agent's single-use runner record was consumed; like real
 				// GitHub, a new session under its credentials is rejected.
@@ -570,7 +577,7 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		if sid, ok := s.requestSessions[reqBody.JobMessageID]; ok {
 			delete(s.requestSessions, reqBody.JobMessageID)
-			if s.singleUseOwnerPrefix == "" || strings.HasPrefix(s.sessionOwners[sid], s.singleUseOwnerPrefix) {
+			if s.inSingleUseScopeLocked(s.sessionOwners[sid]) {
 				s.consumeSessionLocked(sid)
 			}
 		}
@@ -590,6 +597,22 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 			"planId": fmt.Sprintf("plan-%d", n),
 		},
 	})
+}
+
+// inSingleUseScopeLocked reports whether ownerName falls within the configured
+// single-use simulation scope. The single-use JIT lifecycle is opt-in per
+// RunnerGroup via the owner prefix so specs running in parallel against this
+// shared instance are unaffected (an empty prefix scopes to all owners).
+//
+// Both the consumption side (handleAcquireJob) and the rejection side
+// (handleSession) must honour the same scope: agent IDs are not globally unique
+// across tenants, so an out-of-scope tenant's recycled agent can collide by ID
+// with an in-scope tenant's consumed agent in the global consumedAgents map.
+// Scoping the rejection by owner keeps one tenant's single-use simulation from
+// spuriously rejecting another tenant's session creation (Q135). Caller must
+// hold s.mu.
+func (s *server) inSingleUseScopeLocked(ownerName string) bool {
+	return s.singleUseOwnerPrefix == "" || strings.HasPrefix(ownerName, s.singleUseOwnerPrefix)
 }
 
 // consumeSessionLocked marks a session's agent as consumed and the session as

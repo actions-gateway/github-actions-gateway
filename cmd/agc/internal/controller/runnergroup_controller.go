@@ -84,6 +84,12 @@ type RunnerGroupReconciler struct {
 	// tests inject a fixed clock to exercise TTL/deadline expiry.
 	Now func() time.Time
 
+	// BaselineRecheckInterval is the cadence at which a RunnerGroup is requeued
+	// while its multiplexer is below the desired listener count, so the permanent
+	// baseline is revived promptly after a non-retriable listener exit (Q137).
+	// Zero selects defaultBaselineRecheckInterval; tests set a small value.
+	BaselineRecheckInterval time.Duration
+
 	// in-process state; rebuilt from Secrets on restart.
 	multiplexersMu sync.Mutex
 	multiplexers   map[types.NamespacedName]*listener.Multiplexer
@@ -330,7 +336,39 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: reapAfter}, nil
+
+	// Schedule the next reconcile. reapAfter (0 when no worker pods are retained)
+	// covers the worker-pod reaper. Independently, while the multiplexer is below
+	// its desired listener count — most importantly when a non-retriable listener
+	// exit (e.g. a post-job agent-recycle failure) has left zero running
+	// listeners — poll on a bounded interval so the ActiveCount()==0 recovery
+	// above revives the permanent baseline promptly and status keeps tracking
+	// reality. Without it nothing re-reconciles after such an exit until the next
+	// worker-pod watch event or the 10h resync, leaving status.activeSessions and
+	// Ready=True stale against a dead listener (Q137).
+	requeueAfter := reapAfter
+	if rg.Spec.MaxListeners > 0 && mux.ActiveCount() < rg.Spec.MaxListeners {
+		if interval := r.baselineRecheckInterval(); requeueAfter <= 0 || interval < requeueAfter {
+			requeueAfter = interval
+		}
+	}
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+}
+
+// defaultBaselineRecheckInterval is the cadence at which a RunnerGroup is
+// requeued while its multiplexer is below the desired listener count, used when
+// RunnerGroupReconciler.BaselineRecheckInterval is unset. 15s revives a dead
+// permanent baseline well inside the e2e job budget while keeping reconcile
+// churn modest at the per-tenant scale of a single AGC instance (Q137).
+const defaultBaselineRecheckInterval = 15 * time.Second
+
+// baselineRecheckInterval returns the configured baseline re-check cadence,
+// defaulting when unset.
+func (r *RunnerGroupReconciler) baselineRecheckInterval() time.Duration {
+	if r.BaselineRecheckInterval > 0 {
+		return r.BaselineRecheckInterval
+	}
+	return defaultBaselineRecheckInterval
 }
 
 // reconcileDelete handles RunnerGroup deletion: stop goroutines, delete Secrets, remove finalizer.

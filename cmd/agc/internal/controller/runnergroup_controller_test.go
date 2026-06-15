@@ -428,6 +428,34 @@ func TestReconcile_StatusActiveSessions(t *testing.T) {
 	assert.Equal(t, rg.Generation, updated.Status.ObservedGeneration)
 }
 
+// TestReconcile_RequeuesWhileBelowDesiredListeners is the Q137 guard: while the
+// multiplexer is below the RunnerGroup's listener ceiling — the state a
+// non-retriable baseline exit leaves it in (ActiveCount drops to 0 and
+// multiplexer.go does not auto-restart it) — Reconcile must schedule a bounded
+// requeue so the ActiveCount()==0 recovery revives the baseline and status does
+// not go stale until the next worker-pod watch event or the 10h resync.
+func TestReconcile_RequeuesWhileBelowDesiredListeners(t *testing.T) {
+	rg := newRunnerGroup("default", "requeue-rg", 2)
+	fb := fake.NewClientBuilder().WithScheme(testScheme()).
+		WithObjects(rg).
+		WithStatusSubresource(rg).
+		Build()
+
+	r := newTestReconciler(fb)
+	r.BaselineRecheckInterval = 1234 * time.Millisecond
+	key := types.NamespacedName{Namespace: "default", Name: "requeue-rg"}
+
+	reconcile(t, r, key)        // add finalizer
+	res := reconcile(t, r, key) // provision agents + start multiplexer
+
+	// At rest the multiplexer runs one baseline (< maxListeners=2), so the next
+	// reconcile is scheduled at the baseline-recheck interval rather than deferred
+	// to the resync. No worker pods exist, so the reaper contributes no earlier
+	// deadline.
+	assert.Equal(t, 1234*time.Millisecond, res.RequeueAfter,
+		"expected a bounded requeue while below the listener ceiling (Q137)")
+}
+
 // ── Gap 9: Token manager failure ─────────────────────────────────────────────
 
 func TestReconcile_TokenManagerError(t *testing.T) {
