@@ -242,3 +242,47 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 	assert.Equal(t, int64(0), rerunCalls.Load(),
 		"rerun API must not be called when maxEvictionRetries=0")
 }
+
+// TestAGC_FailureRecovery_BaselineRevivedAfterNonRetriableExit is the Q137
+// guard. When the permanent baseline listener exits non-retriably — here the
+// broker 401s its CreateSession — multiplexer.go sets permAlive=false and does
+// not auto-restart it, and no RunnerGroup write or worker-pod event follows. So
+// without the reconciler's bounded baseline re-check nothing would re-reconcile
+// to run the ActiveCount()==0 recovery until the 10h resync, and status would go
+// stale against a dead listener. This test forces that exit, confirms no session
+// registers while it persists, then clears it and asserts the controller revives
+// the baseline purely on the periodic re-check.
+func TestAGC_FailureRecovery_BaselineRevivedAfterNonRetriableExit(t *testing.T) {
+	const nsName = "agc-baseline-revival"
+	const rgName = "revive-rg"
+	createNSForAGC(t, nsName)
+
+	// Reject this RunnerGroup's CreateSession (scoped to its owner so other tests'
+	// sessions on the shared stub are unaffected) before the baseline starts.
+	brokerStub.FailCreateSessionForOwner(rgName + "-")
+	t.Cleanup(func() { brokerStub.FailCreateSessionForOwner("") })
+
+	rg := newRunnerGroup(nsName, rgName, 2)
+	require.NoError(t, k8sClient.Create(ctx, rg))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rg) })
+
+	// Small re-check cadence so revival is observable within the test budget.
+	startAGCReconcilerOpts(t, provisionerOptions{baselineRecheckInterval: 100 * time.Millisecond})
+
+	// While CreateSession is rejected no session registers for revive-rg: every
+	// baseline the controller spawns dies non-retriably before creating one.
+	require.Never(t, func() bool {
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) > 0
+	}, 1500*time.Millisecond, 50*time.Millisecond,
+		"no session should register while CreateSession is rejected")
+
+	// Clear the rejection. Nothing else re-reconciles revive-rg (no worker pods,
+	// no RunnerGroup writes), so only the bounded baseline re-check brings the
+	// controller back to run the recovery — which now succeeds.
+	brokerStub.FailCreateSessionForOwner("")
+
+	require.Eventually(t, func() bool {
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
+	}, 10*time.Second, 50*time.Millisecond,
+		"baseline should be revived by the periodic re-check after the non-retriable exit clears (Q137)")
+}

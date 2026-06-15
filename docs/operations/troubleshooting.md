@@ -15,6 +15,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
+- [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
@@ -293,6 +294,19 @@ kubectl describe runnergroup -n <namespace> <name>
 **Resolution.**
 - Upgrade the AGC image to a version with the Q100 fix.
 - To clear excess listeners immediately on an affected version, restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`). Listener sessions are in-memory; the restarted AGC re-creates exactly one baseline per RunnerGroup.
+
+---
+
+## RunnerGroup Stops Serving Jobs With Stale Ready=True
+
+**Symptoms.** A RunnerGroup stops servicing queued jobs even though the AGC pod is healthy, while `status.activeSessions` and the `Ready=True` condition still report the group as operational. `kubectl get runnergroup -n <namespace> -o jsonpath='{.status.activeSessions}'` shows a stale nonzero value that does not match the (zero) sessions GitHub sees for the group.
+
+**What happened.** The permanent baseline listener exited *non-retriably* — e.g. GitHub returned `401 Unauthorized` on session creation for a credential it considers dead. The multiplexer does not auto-restart a non-retriable exit (that restart is reserved for recoverable crashes), so the in-memory listener count drops to zero. On AGC versions without the Q137 fix the RunnerGroup was only re-reconciled on a watch event (a RunnerGroup edit or a worker-pod lifecycle event) or the 10-hour informer resync, so with no such event the dead baseline — and the status written just before it died — could persist for hours.
+
+**Resolution.**
+- Upgrade the AGC image to a version with the Q137 fix. Fixed versions requeue the RunnerGroup on a bounded interval while the listener count is below the desired ceiling, so the reconciler re-runs its zero-listener recovery and revives the baseline within seconds; `status.activeSessions` and `Ready` then track reality again.
+- To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
+- If the baseline keeps exiting non-retriably after revival, the underlying credential or runner-version problem is real — check `kubectl describe runnergroup` for `Degraded` / `Unauthorized` / `VersionTooOld` conditions and resolve per the [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) section.
 
 ---
 
