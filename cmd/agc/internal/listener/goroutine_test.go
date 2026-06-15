@@ -1009,11 +1009,16 @@ func TestListener_PollErrorBackoff(t *testing.T) {
 	// Wait for the first poll to hit the 503.
 	assert.Eventually(t, func() bool { return pollCount.Load() >= 1 }, 2*time.Second, 10*time.Millisecond)
 
-	// Advance the clock to release the backoff timer.
-	clk.Advance(30 * time.Second)
-
-	// Goroutine should poll again after the backoff.
-	assert.Eventually(t, func() bool { return pollCount.Load() >= 2 }, 2*time.Second, 10*time.Millisecond,
+	// Advance the fake clock to release the backoff timer, retrying the advance
+	// inside the Eventually loop. The poll loop increments pollCount *before* it
+	// parks on Clock.After(wait); a single pre-advance races that park — if it
+	// lands first, the timer target is computed past the advanced clock and the
+	// backoff timer never fires. Re-advancing each iteration releases the timer
+	// once the goroutine has parked, however late that happens.
+	assert.Eventually(t, func() bool {
+		clk.Advance(30 * time.Second)
+		return pollCount.Load() >= 2
+	}, 2*time.Second, 10*time.Millisecond,
 		"goroutine should retry after backoff, not exit")
 
 	// Confirm goroutine is still alive (has not returned).
