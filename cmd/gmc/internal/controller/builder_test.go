@@ -596,12 +596,21 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 	}
 }
 
-// TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS locks in Q105: the port-53
-// egress rule on every GMC-managed NetworkPolicy must target the cluster DNS
-// service (kube-dns / CoreDNS in kube-system) and must NOT be open (To: nil ≡ any
-// resolver). An open DNS path is an unattributed exfiltration side-channel that
-// bypasses the per-tenant egress-IP attribution every other egress path enforces.
-// This is an authoring/spec-level guard because kindnet does not enforce egress
+// TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS locks in Q105 + Q136: the
+// port-53 egress rule on every GMC-managed NetworkPolicy must target cluster DNS
+// only and must NOT be open (To: nil ≡ any resolver). An open DNS path is an
+// unattributed exfiltration side-channel that bypasses the per-tenant egress-IP
+// attribution every other egress path enforces.
+//
+// Q136 widened the rule to two OR'd peers so NodeLocal DNSCache clusters resolve:
+//
+//   - the kube-dns / CoreDNS pods in kube-system (AND of namespace + pod
+//     selector — the direct path), and
+//   - the link-local block 169.254.0.0/16 (ipBlock — the node-local cache path).
+//
+// Both peers stay within Q105's attribution property: link-local is non-routable
+// and node-scoped, so it cannot reach an external resolver. This is an
+// authoring/spec-level guard because kindnet does not enforce egress
 // NetworkPolicy (see Q7b) — mirroring the egress-negative guard pattern.
 func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
@@ -624,16 +633,28 @@ func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
 		rule := dnsRules[0]
 		require.NotEmpty(t, rule.To,
 			"%s port-53 rule must have a To peer — an empty To opens DNS to any resolver (Q105)", np.Name)
-		require.Len(t, rule.To, 1, "%s DNS rule should select kube-dns via a single peer", np.Name)
+		require.Len(t, rule.To, 2,
+			"%s DNS rule must select kube-dns AND the node-local link-local block (Q136)", np.Name)
 
-		peer := rule.To[0]
-		assert.Nil(t, peer.IPBlock, "%s DNS peer must not be an ipBlock", np.Name)
-		require.NotNil(t, peer.NamespaceSelector, "%s DNS peer must select the kube-dns namespace", np.Name)
-		require.NotNil(t, peer.PodSelector, "%s DNS peer must select the kube-dns pods", np.Name)
-		assert.Equal(t, dnsNamespaceValue, peer.NamespaceSelector.MatchLabels[dnsNamespaceLabel],
+		// Peer 1: the cluster DNS Service (kube-dns / CoreDNS) selector peer.
+		kubeDNS := rule.To[0]
+		assert.Nil(t, kubeDNS.IPBlock, "%s kube-dns DNS peer must not be an ipBlock", np.Name)
+		require.NotNil(t, kubeDNS.NamespaceSelector, "%s DNS peer must select the kube-dns namespace", np.Name)
+		require.NotNil(t, kubeDNS.PodSelector, "%s DNS peer must select the kube-dns pods", np.Name)
+		assert.Equal(t, dnsNamespaceValue, kubeDNS.NamespaceSelector.MatchLabels[dnsNamespaceLabel],
 			"%s DNS peer namespace selector must match kube-system", np.Name)
-		assert.Equal(t, dnsPodValue, peer.PodSelector.MatchLabels[dnsPodLabel],
+		assert.Equal(t, dnsPodValue, kubeDNS.PodSelector.MatchLabels[dnsPodLabel],
 			"%s DNS peer pod selector must match k8s-app=kube-dns", np.Name)
+
+		// Peer 2: the NodeLocal DNSCache link-local ipBlock (Q136).
+		nodeLocal := rule.To[1]
+		require.NotNil(t, nodeLocal.IPBlock, "%s DNS rule must allow the node-local link-local block (Q136)", np.Name)
+		assert.Nil(t, nodeLocal.NamespaceSelector, "%s node-local DNS peer must be a bare ipBlock", np.Name)
+		assert.Nil(t, nodeLocal.PodSelector, "%s node-local DNS peer must be a bare ipBlock", np.Name)
+		assert.Equal(t, "169.254.0.0/16", nodeLocal.IPBlock.CIDR,
+			"%s node-local DNS peer must be the link-local block 169.254.0.0/16", np.Name)
+		assert.Empty(t, nodeLocal.IPBlock.Except,
+			"%s node-local DNS ipBlock must not carve out exceptions", np.Name)
 	}
 }
 
