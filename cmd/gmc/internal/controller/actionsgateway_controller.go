@@ -207,18 +207,67 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}
 
-	// 12. RunnerGroup CRs.
+	// 12. RunnerGroup CRs. Apply the desired set, then prune any owned
+	// RunnerGroup no longer in the spec (scale-down / reorder, Q101).
+	desired := make(map[string]struct{}, len(ag.Spec.RunnerGroups))
 	for i, spec := range ag.Spec.RunnerGroups {
-		name := fmt.Sprintf("%s-%d", ag.Name, i)
-		if len(spec.RunnerLabels) > 0 {
-			name = fmt.Sprintf("%s-%s", ag.Name, labelSafe(spec.RunnerLabels[0]))
-		}
+		name := runnerGroupName(ag, spec, i)
+		desired[name] = struct{}{}
 		if err := r.applyRunnerGroup(ctx, buildRunnerGroup(ag, spec, name)); err != nil {
 			return fmt.Errorf("RunnerGroup %s: %w", name, err)
 		}
 	}
+	if err := r.pruneRunnerGroups(ctx, ag, desired); err != nil {
+		return fmt.Errorf("prune RunnerGroups: %w", err)
+	}
 
 	return nil
+}
+
+// runnerGroupName derives the RunnerGroup CR name for a spec entry. A non-empty
+// first runner label yields a stable, content-derived name; an unlabeled entry
+// falls back to an index-based name. Pruning (pruneRunnerGroups) keys on the
+// owner labels rather than this name, so converging the desired set is correct
+// even when an entry is removed or reordered.
+func runnerGroupName(ag *gmcv1alpha1.ActionsGateway, spec agcv1alpha1.RunnerGroupSpec, i int) string {
+	if len(spec.RunnerLabels) > 0 {
+		return fmt.Sprintf("%s-%s", ag.Name, labelSafe(spec.RunnerLabels[0]))
+	}
+	return fmt.Sprintf("%s-%d", ag.Name, i)
+}
+
+// pruneRunnerGroups deletes RunnerGroup CRs owned by this ActionsGateway that
+// are no longer in the desired set — i.e. an entry removed from
+// spec.RunnerGroups, or a group orphaned by a reorder under index-based naming.
+// Without this, a removed/reordered RunnerGroup keeps running its listeners and
+// worker pods until the entire ActionsGateway is deleted (Q101).
+//
+// The desired set is keyed by RunnerGroup name, so pruning is reorder-safe: a
+// group whose name still appears is retained regardless of its position. The
+// owner-label selector matches reconcileDelete's, so it never touches a
+// RunnerGroup belonging to another ActionsGateway in the same namespace.
+//
+// Like reconcileDelete (Q125), this fails closed: every delete error other than
+// NotFound is collected and returned so the reconcile requeues rather than
+// leaving an orphan running. A NotFound is success — the group is already gone.
+func (r *ActionsGatewayReconciler) pruneRunnerGroups(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired map[string]struct{}) error {
+	var rgList agcv1alpha1.RunnerGroupList
+	sel := labels.SelectorFromSet(map[string]string{"actions-gateway/owner-name": ag.Name, "actions-gateway/owner-ns": ag.Namespace})
+	if err := r.List(ctx, &rgList, &client.ListOptions{Namespace: ag.Namespace, LabelSelector: sel}); err != nil {
+		return err
+	}
+	var errs []error
+	for i := range rgList.Items {
+		rg := &rgList.Items[i]
+		if _, ok := desired[rg.Name]; ok {
+			continue
+		}
+		if err := r.Delete(ctx, rg); client.IgnoreNotFound(err) != nil {
+			logf.FromContext(ctx).Error(err, "failed to prune orphaned RunnerGroup", "namespace", rg.Namespace, "name", rg.Name)
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) (ctrl.Result, error) {

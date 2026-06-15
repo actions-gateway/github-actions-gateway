@@ -16,6 +16,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [RunnerGroup ActiveSessions Exceeds maxListeners](#runnergroup-activesessions-exceeds-maxlisteners)
 - [RunnerGroup Stops Serving Jobs With Stale Ready=True](#runnergroup-stops-serving-jobs-with-stale-readytrue)
+- [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
@@ -307,6 +308,36 @@ kubectl describe runnergroup -n <namespace> <name>
 - Upgrade the AGC image to a version with the Q137 fix. Fixed versions requeue the RunnerGroup on a bounded interval while the listener count is below the desired ceiling, so the reconciler re-runs its zero-listener recovery and revives the baseline within seconds; `status.activeSessions` and `Ready` then track reality again.
 - To recover immediately on an affected version, trigger a reconcile by editing the RunnerGroup (e.g. a no-op annotation change) or restart the AGC Deployment (`kubectl rollout restart deploy/actions-gateway-controller -n <namespace>`); the restarted AGC re-creates one baseline per RunnerGroup from scratch.
 - If the baseline keeps exiting non-retriably after revival, the underlying credential or runner-version problem is real — check `kubectl describe runnergroup` for `Degraded` / `Unauthorized` / `VersionTooOld` conditions and resolve per the [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) section.
+
+---
+
+## Listener Stalls for Minutes After a Black-Holed Broker Connection
+
+**Symptoms.** One of a RunnerGroup's sessions stops picking up jobs for minutes at a stretch even though the AGC pod is healthy, the broker is reachable, and other sessions in the same group keep working. The stall typically follows a network event that silently drops an established connection — a firewall/NAT idle-timeout that discards packets without sending a RST, an egress-proxy failover, or a broker-side hang — so the long-poll's TCP connection is *black-holed*: accepted but never answered. `actions_gateway_message_poll_errors_total{reason="timeout"}` increments when an affected listener recovers.
+
+**What happened.** The broker `GetMessage` long-poll holds the connection open for ~50s waiting for a job. On AGC versions without the Q108 fix the broker client had no response-header deadline, so a black-holed connection blocked the listener goroutine inside a single `GetMessage` call until the operating system's TCP timeout expired — minutes — during which that listener served no jobs. Fixed versions give the broker client a `ResponseHeaderTimeout` sized just above the 50s hold: a healthy long-poll is never cut short, but a black-holed connection is torn down a few seconds past the hold, classified as a benign "no message, retry", and the listener immediately opens a fresh long-poll.
+
+**Resolution.**
+- Upgrade the AGC image to a version with the Q108 fix. No configuration is required; the bound is built in.
+- A steady stream of `actions_gateway_message_poll_errors_total{reason="timeout"}` after upgrade indicates the network is repeatedly black-holing broker connections (rather than wedging a listener). Investigate the egress path — proxy/NAT idle timeouts shorter than the 50s long-poll hold are the usual cause; raise the idle timeout above ~60s so healthy long-polls are not severed mid-hold.
+
+---
+
+## Orphaned RunnerGroup After Removing It From the Spec
+
+**Symptoms.** A runner group was removed from (or reordered within) `spec.runnerGroups` on an `ActionsGateway`, but a `RunnerGroup` for it still exists and keeps running listeners and worker pods. `kubectl get runnergroup -n <namespace>` lists more groups than the CR now declares:
+
+```sh
+# Owner-labelled RunnerGroups for a gateway vs. what the spec now declares
+kubectl get runnergroup -n <namespace> -l actions-gateway/owner-name=<gateway-name>
+kubectl get actionsgateway <gateway-name> -n <namespace> -o jsonpath='{range .spec.runnerGroups[*]}{.runnerLabels[0]}{"\n"}{end}'
+```
+
+**What happened.** On GMC versions without the Q101 fix, reconciliation only created/patched the groups currently in the spec and never deleted the ones removed — and because groups were keyed by list index, a remove or reorder could orphan a `RunnerGroup` CR that kept serving jobs until the entire `ActionsGateway` was deleted.
+
+**Resolution.**
+- Upgrade the GMC to a version with the Q101 fix. Fixed versions reconcile `spec.runnerGroups` to the desired set: after applying the declared groups, the GMC prunes any owner-labelled `RunnerGroup` no longer in the spec, and keys pruning on owner labels (not list index) so a reorder never orphans a group. A subsequent reconcile (edit the CR, or wait for the next resync) cleans up any pre-existing orphans automatically.
+- To remove a stranded group immediately on an affected version, delete its `RunnerGroup` directly: `kubectl delete runnergroup <name> -n <namespace>`. The AGC's RunnerGroup cleanup stops its listeners and cascades to its worker pods. Confirm you are deleting an orphan (its `runnerLabels` are not in the current `ActionsGateway` spec), not a live group.
 
 ---
 
