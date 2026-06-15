@@ -82,6 +82,15 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 	})
 
+	// On failure, dump AGC + fakegithub state before AfterAll tears down the
+	// namespace, so a "no session registered" / "no worker pod" timeout (Q134)
+	// is debuggable from CI logs rather than a bare Eventually timeout.
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpAGCSessionDiagnostics(tenantNS, agcName, infraNamespace, fakegithubServiceName)
+		}
+	})
+
 	AfterAll(func() {
 		if secPFCmd != nil && secPFCmd.Process != nil {
 			_ = secPFCmd.Process.Kill()

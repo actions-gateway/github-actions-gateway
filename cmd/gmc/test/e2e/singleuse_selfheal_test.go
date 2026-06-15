@@ -75,6 +75,15 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 			"/control/singleuse?enabled=true&owner="+agName+"-", nil)
 	})
 
+	// On failure, dump AGC + fakegithub state before AfterAll tears down the
+	// namespace, so a "no session registered" / "no worker pod" timeout (Q134)
+	// is debuggable from CI logs rather than a bare Eventually timeout.
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			utils.DumpAGCSessionDiagnostics(tenantNS, agcName, infraNamespace, fakegithubServiceName)
+		}
+	})
+
 	AfterAll(func() {
 		// Drop the simulation scope before tearing down.
 		fakegithubControlRequest(nil, "POST", "/control/singleuse?enabled=false", nil)
