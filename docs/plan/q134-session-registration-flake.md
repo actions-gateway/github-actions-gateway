@@ -123,12 +123,60 @@ shows which mode is occurring, and the targeted fix (Q137, or a test-side load
 change) follows from evidence instead of a guess. Q134 stays open until that
 evidence lands and a real fix produces multiple consecutive green runs.
 
+## First diagnostic capture (PR #240 e2e, run 27533137868)
+
+The diagnostics fired on their very first CI run — but on **Q135**
+(`E2E_AGC_MultipleJobsQueued`), not Q134, and the captured state proves mode 2
+(non-retriable baseline exit, the Q137 mechanism) is real in the wild. AGC log
+timeline (`tenant-job-lifecycle`):
+
+```
+08:21:15  listener started   agentIndex=0 sessionId=session-2   (permanent baseline)
+08:21:21  job received        agentIndex=0 messageId=2  → worker pod plan-2 created
+08:21:21  listener started   agentIndex=1 sessionId=session-4
+08:21:21  idle shutdown: 50 empty polls   agentIndex=1            (2nd listener gone)
+08:21:25  worker pod completed phase=Failed
+08:21:25  job finished; recycling single-use JIT agent  agentIndex=0
+08:21:25  WARN listener goroutine exited with error:
+          "post-job agent recycle: non-retriable: broker: unauthorized (HTTP 401)"  index=0
+```
+
+So the session registered fine; the failure is **downstream**:
+
+1. After the first job, the single-use JIT **agent recycle** (Q114 re-register)
+   gets **HTTP 401** from the broker → a `NonRetriableError`.
+2. `multiplexer.go` does not restart a non-retriable exit (`permAlive=false`), so
+   the permanent baseline (index 0) is gone.
+3. Nothing re-reconciles to revive it. The dumped `status.activeSessions: 1` /
+   `Ready: True` is **stale** — last written before the exit — exactly the
+   **Q137** symptom (`RequeueAfter=reapAfter` is 0 with no live worker pods).
+4. The 2nd queued job is never serviced → the 240s `MultipleJobsQueued` timeout.
+
+This is a real, deterministic-looking bug, not load: the flake is the race
+between picking up the 2nd job and the recycle-401 killing the baseline. Two
+distinct defects sit underneath it:
+
+- **The recycle 401 itself** — why does broker re-registration after a job return
+  401 when the installation token is freshly valid (`validFor 1h`)? Likely an
+  auth-context bug in the Q114 single-use recycle path (or a fakegithub stub
+  gap). This is the *primary* Q135 defect and needs its own investigation.
+- **Q137** — even granting a transient recycle error, the controller should
+  revive the baseline promptly instead of leaving a dead listener with stale
+  `Ready: True` until the 10h resync. Requeue when `ActiveCount < desired`.
+
+Q134 (`worker_securitycontext`, "no session registered") did **not** recur in
+this run — that spec passed — so its specific cause (first `createSession` never
+succeeding, *before* any job) is still uncaptured and distinct from this
+recycle-401 path. The diagnostics are now in place to catch it next time.
+
 ## Follow-ups (filed separately)
 
 - **Q136 / Q137** — `runnergroup_controller.go` returns `RequeueAfter=reapAfter`,
   which is 0 when the RunnerGroup has no worker pods. If the permanent baseline
-  exits *non-retriably* (pool-exhausted / unauthorized), the recovery at L317
-  (`if mux.ActiveCount()==0 { mux.Start() }`) only fires on the next watch event —
-  up to the 10h resync. Requeue when `ActiveCount < desired`. This is the leading
-  *code-fix* candidate for Q134 mode 2 above; the new diagnostics will confirm or
-  rule it out.
+  exits *non-retriably* (pool-exhausted / unauthorized / **recycle 401**), the
+  recovery at L317 (`if mux.ActiveCount()==0 { mux.Start() }`) only fires on the
+  next watch event — up to the 10h resync. Requeue when `ActiveCount < desired`.
+  Now **confirmed** by the PR #240 capture above as the revival half of Q135.
+- **Recycle-401 (under Q135)** — the broker returning 401 on post-job single-use
+  agent re-registration is the primary Q135 defect; investigate the Q114 recycle
+  auth path. Flagged for a separate session — out of scope for this diagnostics PR.
