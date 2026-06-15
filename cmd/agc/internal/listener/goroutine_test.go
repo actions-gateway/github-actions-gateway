@@ -459,23 +459,46 @@ func TestListener_IdleShutdownAt50(t *testing.T) {
 
 func TestListener_IdleNotShutdownIfLast(t *testing.T) {
 	oauthSrv := oauthStub()
+	const idleThreshold = 5
 	var polls atomic.Int32
+	// Closed once a poll lands strictly past the idle threshold: reaching it
+	// proves the last listener kept polling instead of idle-exiting at the
+	// threshold. Synchronizing on the poll event — rather than counting polls
+	// inside a fixed wall-clock window — keeps the test deterministic: a slow or
+	// loaded runner only delays the signal, it no longer changes the verdict
+	// (Q131; the old 300ms/≥5-polls window flaked when round-trips were slow).
+	pastThreshold := make(chan struct{})
+	var once sync.Once
 	mux := &brokerMux{}
 	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
-		polls.Add(1)
+		if polls.Add(1) > idleThreshold {
+			once.Do(func() { close(pastThreshold) })
+		}
 		w.WriteHeader(http.StatusAccepted)
 	})
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IdleThreshold = 5
+	cfg.IdleThreshold = idleThreshold
 	cfg.IsLastListener = func() bool { return true }
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_ = listener.Run(ctx, cfg)
-	assert.GreaterOrEqual(t, int(polls.Load()), 5, "should poll past threshold when last listener")
+	done := runAndWait(ctx, cfg)
+
+	select {
+	case <-pastThreshold:
+		// Polled past the idle threshold without exiting — the suppression held.
+	case err := <-done:
+		t.Fatalf("listener exited before polling past idle threshold (polls=%d, err=%v); "+
+			"idle shutdown was not suppressed for the last listener", polls.Load(), err)
+	case <-time.After(5 * time.Second):
+		t.Fatalf("listener did not poll past idle threshold within 5s (polls=%d)", polls.Load())
+	}
+
+	cancel()
+	<-done
 
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
