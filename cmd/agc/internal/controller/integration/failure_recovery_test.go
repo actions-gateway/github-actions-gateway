@@ -57,12 +57,18 @@ func TestAGC_FailureRecovery_PodCrash_NoSecretLeak(t *testing.T) {
 		maxEvictionRetries: 1,
 	})
 
-	// Enqueue a job.
+	// Enqueue a job on crash-rg's own session. Scoping the enqueue to this
+	// RunnerGroup's owner (via ActiveSessionsForOwner) rather than picking the last
+	// entry of the global RegisteredSessions list keeps the job from landing on a
+	// session another test left active on the shared broker stub — the cross-test
+	// contention that flaked these tests (Q113). enqueueJobOnOwnerSession also
+	// retries until an owner session is present, so it is immune to the picked
+	// session having just idle-shut.
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-	sessions := brokerStub.RegisteredSessions()
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+		return len(brokerStub.ActiveSessionsForOwner("crash-rg")) >= 1
+	}, 15*time.Second, 1*time.Millisecond, "crash-rg session should register")
+	sid := enqueueJobOnOwnerSession(15*time.Second, "crash-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sid, "should have found crash-rg session to enqueue on")
 
 	// Wait for a worker pod to appear.
 	pod := waitForWorkerPod(t, nsName, "crash-rg")
@@ -118,11 +124,12 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 		maxEvictionRetries: 1,
 	})
 
-	// Enqueue a job with owner/repo/runID so the provisioner can call rerun.
+	// Wait for eviction-rg's own session (owner-scoped, not the global session
+	// list — see crash-rg above, Q113), then set the AcquireJob response before
+	// enqueuing so the provisioner reads the eviction retry info on pickup.
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-	sessions := brokerStub.RegisteredSessions()
+		return len(brokerStub.ActiveSessionsForOwner("eviction-rg")) >= 1
+	}, 15*time.Second, 1*time.Millisecond, "eviction-rg session should register")
 
 	// The job body in the broker will come back via AcquireJob; the payload to the
 	// provisioner is the raw AcquireJobResponse from the broker fake. To embed the
@@ -136,7 +143,8 @@ func TestAGC_FailureRecovery_EvictionTriggersRequeue(t *testing.T) {
 		},
 	})
 	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	sid := enqueueJobOnOwnerSession(15*time.Second, "eviction-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sid, "should have found eviction-rg session to enqueue on")
 
 	// Wait for the worker pod.
 	pod := waitForWorkerPod(t, nsName, "eviction-rg")
@@ -191,10 +199,10 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 		maxEvictionRetries: 0, // budget exhausted immediately
 	})
 
+	// Owner-scoped session wait + enqueue (see crash-rg / eviction-rg above, Q113).
 	require.Eventually(t, func() bool {
-		return len(brokerStub.RegisteredSessions()) >= 1
-	}, 15*time.Second, 1*time.Millisecond)
-	sessions := brokerStub.RegisteredSessions()
+		return len(brokerStub.ActiveSessionsForOwner("budget-rg")) >= 1
+	}, 15*time.Second, 1*time.Millisecond, "budget-rg session should register")
 
 	brokerStub.SetAcquireJobResponse(map[string]interface{}{
 		"plan":   map[string]string{"planId": "budget-plan-1"},
@@ -205,7 +213,8 @@ func TestAGC_FailureRecovery_EvictionBudgetExhausted(t *testing.T) {
 		},
 	})
 	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
-	brokerStub.EnqueueJob(sessions[len(sessions)-1], broker.RunnerJobRequestBody{})
+	sid := enqueueJobOnOwnerSession(15*time.Second, "budget-rg", map[string]bool{}, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, sid, "should have found budget-rg session to enqueue on")
 
 	pod := waitForWorkerPod(t, nsName, "budget-rg")
 

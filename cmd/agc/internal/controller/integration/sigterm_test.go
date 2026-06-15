@@ -3,7 +3,6 @@
 package integration_test
 
 import (
-	"maps"
 	"net/http"
 	"testing"
 	"time"
@@ -51,62 +50,42 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	)
 
 	const nsName = "agc-sigterm-test"
+	const rgName = "sigterm-rg"
 	createNSForAGC(t, nsName)
 
-	rg := newRunnerGroup(nsName, "sigterm-rg", 3)
+	rg := newRunnerGroup(nsName, rgName, 3)
 	require.NoError(t, k8sClient.Create(ctx, rg))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rg) })
 
-	// Snapshot sessions from previous tests. We only want to operate on sessions
-	// created by THIS test's reconciler so that WaitForFirstPoll and the DELETE
-	// assertions don't block on sessions whose goroutines have already exited.
-	seenBefore := map[string]bool{}
-	for _, id := range brokerStub.RegisteredSessions() {
-		seenBefore[id] = true
-	}
-
 	cancelMgr, mgrDone := startAGCReconciler(t)
 
-	// Wait for the initial session from this test's reconciler.
+	// Scope every session operation to this RunnerGroup's owner ("sigterm-rg-").
+	// Because the broker stub is shared across the whole package, the global
+	// RegisteredSessions list can include sessions other tests left active; a
+	// previous snapshot-and-diff approach was fragile (Q120). Owner-scoping is the
+	// deterministic isolation: this RunnerGroup's name is unique to this test, so
+	// ActiveSessionsForOwner returns exactly the sessions we created — never a
+	// sibling's, and never one whose goroutine has already exited.
 	require.Eventually(t, func() bool {
-		for _, id := range brokerStub.RegisteredSessions() {
-			if !seenBefore[id] {
-				return true
-			}
-		}
-		return false
+		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
 	}, 15*time.Second, 1*time.Millisecond, "initial session should register")
 
-	// Burst to 3 sessions by sequentially enqueueing 2 jobs.
-	// seen tracks which sessions we have already enqueued on (to avoid re-using
-	// them). It starts as a deep copy of seenBefore so we also skip any
-	// pre-existing sessions; mutations to seen must not affect seenBefore because
-	// the require.Eventually closure below uses seenBefore to count only sessions
-	// created by this test's reconciler.
-	seen := maps.Clone(seenBefore)
+	// Burst to 3 sessions by sequentially enqueueing 2 jobs, each onto a fresh
+	// sigterm-rg session. seen tracks the sessions we have already enqueued on so
+	// each job lands on a distinct session.
+	seen := map[string]bool{}
 	for i := 0; i < 2; i++ {
-		id := enqueueJobWhenSessionAvailable(15*time.Second, seen, broker.RunnerJobRequestBody{})
+		id := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
 		require.NotEmpty(t, id, "new session must appear to enqueue job %d", i+1)
 		seen[id] = true
 		// Wait for the next spawned session before enqueueing the next job.
 		require.Eventually(t, func() bool {
-			newCount := 0
-			for _, s := range brokerStub.RegisteredSessions() {
-				if !seenBefore[s] {
-					newCount++
-				}
-			}
-			return newCount >= i+2
+			return len(brokerStub.ActiveSessionsForOwner(rgName)) >= i+2
 		}, 10*time.Second, 1*time.Millisecond)
 	}
 
-	// Capture only this test's session IDs before cancellation.
-	var sessionIDs []string
-	for _, id := range brokerStub.RegisteredSessions() {
-		if !seenBefore[id] {
-			sessionIDs = append(sessionIDs, id)
-		}
-	}
+	// Capture this RunnerGroup's active session IDs before cancellation.
+	sessionIDs := brokerStub.ActiveSessionsForOwner(rgName)
 	require.GreaterOrEqual(t, len(sessionIDs), 2,
 		"at least 2 sessions must be active before SIGTERM")
 
@@ -118,7 +97,7 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// the goroutine has fully started (passed createSession, registered the defer,
 	// and entered the poll loop) so SIGTERM is guaranteed to trigger cleanup.
 	for _, sid := range sessionIDs {
-		require.Truef(t, brokerStub.WaitForFirstPoll(sid, 5*time.Second),
+		require.Truef(t, brokerStub.WaitForFirstPoll(sid, 15*time.Second),
 			"session %q should reach the poll loop before SIGTERM", sid)
 	}
 
@@ -127,11 +106,16 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	<-mgrDone
 
 	// Assert all registered sessions are deleted via DELETE /session.
-	// WaitForSessionDelete ensures the broker has received and processed each
-	// DELETE, so by the time the loop finishes all HTTP responses have been
-	// (or are about to be) sent and the connections are idle in the transport.
+	// WaitForSessionDelete is a channel-based wait (it returns the instant the
+	// broker processes the DELETE, not on a poll tick), so the timeout is only a
+	// safety ceiling, not the expected latency. DELETE happens asynchronously after
+	// mgr.Start returns — under a CPU-starved 2-vCPU CI runner the last goroutine's
+	// DELETE round-trip can lag well past a few seconds, which flaked the old 10s
+	// ceiling (Q120). 30s gives generous headroom while staying inside the package's
+	// 5m test timeout; a session genuinely failing to delete still fails fast on
+	// the assert once the ceiling elapses.
 	for _, sid := range sessionIDs {
-		deleted := brokerStub.WaitForSessionDelete(sid, 10*time.Second)
+		deleted := brokerStub.WaitForSessionDelete(sid, 30*time.Second)
 		assert.Truef(t, deleted, "session %q should be deleted on SIGTERM", sid)
 	}
 
@@ -140,6 +124,3 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// responses have been processed and the connections are now idle.
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 }
-
-// Ensure broker import is used.
-var _ = broker.RunnerJobRequestBody{}
