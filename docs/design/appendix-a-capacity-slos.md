@@ -59,6 +59,8 @@ The following targets are conservative defaults derived from the architectural c
 
 These numbers must be re-derived once two consecutive weeks of production telemetry are available. Treat them as a load-test design input, not as a contract.
 
+> **Validation status (as of 1.0).** The headline capacity figure — up to ~1,000 concurrent virtual sessions per AGC pod — is a **design target derived from the memory-budget arithmetic above, not a measured result.** No load test has yet exercised an AGC at that concurrency: the load-test harness and the 1,000-session run are deferred post-1.0 (Q13). The per-goroutine resident-cost estimate (~60 KiB) is likewise an architectural projection. Operators should size against their own observed telemetry rather than treat these ceilings as proven.
+
 ---
 
 ← [Glossary](08-glossary.md) | [Back to index](README.md) | Next: [Appendix B — Worker Isolation →](appendix-b-worker-isolation.md)
