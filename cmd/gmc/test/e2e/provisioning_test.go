@@ -6,6 +6,7 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -334,8 +335,10 @@ spec:
 		Expect(workloadYAML).NotTo(MatchRegexp(`(?m)^\s*ingress:`),
 			"workload NP must carry no ingress rules — an ingress: block means inbound was allowed to worker pods (Q128):\n%s", workloadYAML)
 
-		// DNS egress rule: port 53 on both UDP and TCP, no `to:` peers
-		// (allows DNS to any destination).
+		// DNS egress rule: port 53 on both UDP and TCP. DNS is confined to
+		// cluster DNS (kube-dns / CoreDNS in kube-system) plus the node-local
+		// link-local block — not "any resolver" (Q105/Q136); the peer shape is
+		// asserted below.
 		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*UDP`),
 			"workload NP missing DNS UDP egress rule:\n%s", workloadYAML)
 		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*TCP`),
@@ -350,11 +353,19 @@ spec:
 		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*8080.*podSelector:.*matchLabels:.*app:\s*actions-gateway-proxy`),
 			"workload NP port-8080 egress rule missing podSelector app=actions-gateway-proxy (regression: rule broadened to any destination):\n%s", workloadYAML)
 
-		// The workload NP must NOT contain any egress to GitHub CIDRs — that
-		// is the proxy NP's job. The most likely regression is an ipBlock
-		// peer (any IPv4 cidr) appearing in the workload egress.
-		Expect(workloadYAML).NotTo(ContainSubstring("ipBlock:"),
-			"workload NP must not list any ipBlock egress peers (GitHub CIDRs belong on the proxy NP):\n%s", workloadYAML)
+		// The workload NP must NOT contain egress to GitHub CIDRs — that is the
+		// proxy NP's job. The only ipBlock permitted is the link-local block
+		// 169.254.0.0/16 used for NodeLocal DNSCache DNS egress (Q136): it is
+		// non-routable and node-scoped, so it cannot reach GitHub or an external
+		// resolver and preserves the per-tenant egress-IP attribution (Q105).
+		// Any other (routable) cidr — e.g. a GitHub CIDR leaking onto the
+		// workload NP — is a regression.
+		Expect(workloadYAML).To(ContainSubstring("cidr: 169.254.0.0/16"),
+			"workload NP missing the node-local DNS link-local ipBlock 169.254.0.0/16 (Q136):\n%s", workloadYAML)
+		for _, m := range regexp.MustCompile(`cidr:\s*(\S+)`).FindAllStringSubmatch(workloadYAML, -1) {
+			Expect(m[1]).To(Equal("169.254.0.0/16"),
+				"workload NP egress has an unexpected ipBlock cidr %q — only the node-local DNS link-local block is allowed; GitHub CIDRs belong on the proxy NP (Q136):\n%s", m[1], workloadYAML)
+		}
 
 		By("dumping the AGC NetworkPolicy as YAML")
 		agcYAML, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", agcName,
