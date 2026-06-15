@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -458,4 +459,139 @@ func TestGMC_TenantProvisioning_BootstrapRunnerGroups(t *testing.T) {
 	var rgList agcv1alpha1.RunnerGroupList
 	require.NoError(t, k8sClient.List(ctx, &rgList, client.InNamespace(nsName)))
 	require.Len(t, rgList.Items, 2)
+}
+
+// runnerGroupNames returns the sorted names of every RunnerGroup in the namespace.
+func runnerGroupNames(t *testing.T, ns string) []string {
+	t.Helper()
+	var rgList agcv1alpha1.RunnerGroupList
+	require.NoError(t, k8sClient.List(ctx, &rgList, client.InNamespace(ns)))
+	names := make([]string, 0, len(rgList.Items))
+	for i := range rgList.Items {
+		names = append(names, rgList.Items[i].Name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// TestGMC_RunnerGroups_ScaleDownPrunesRemoved asserts that removing a RunnerGroup
+// from spec.RunnerGroups prunes its RunnerGroup CR (Q101). Before the fix the GMC
+// only created/patched the groups currently in the spec and never deleted the
+// ones removed, leaving them running listeners + worker pods until the whole
+// ActionsGateway was deleted. The downstream worker-pod teardown is the AGC
+// RunnerGroup controller's job (via its cleanup finalizer); that controller does
+// not run in this GMC envtest suite, so here we assert the orphaned CR itself is
+// deleted — the precondition that lets the AGC tear its pods down.
+func TestGMC_RunnerGroups_ScaleDownPrunesRemoved(t *testing.T) {
+	const nsName = "team-rg-scaledown"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	minimalContainer := corev1.Container{Name: "runner", Image: "runner:test"}
+	rgSpec := func(label string) agcv1alpha1.RunnerGroupSpec {
+		return agcv1alpha1.RunnerGroupSpec{
+			RunnerLabels: []string{label},
+			MaxListeners: 2,
+			PodTemplate:  corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{minimalContainer}}},
+		}
+	}
+
+	ag := newActionsGateway("scaledown-gateway", nsName, "github-app")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{rgSpec("linux"), rgSpec("gpu")}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	// Both groups present after the initial reconcile.
+	g.Eventually(func() int {
+		return len(runnerGroupNames(t, nsName))
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Equal(2), "expected 2 RunnerGroup CRs initially")
+	initial := runnerGroupNames(t, nsName)
+
+	// Re-apply with only the "linux" group; the "gpu" group is removed from the spec.
+	require.Eventually(t, func() bool {
+		var fetched gmcv1alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "scaledown-gateway"}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{rgSpec("linux")}
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "remove the gpu RunnerGroup from the spec")
+
+	// The removed group's CR is pruned; exactly one group (linux) survives.
+	g.Eventually(func() []string {
+		return runnerGroupNames(t, nsName)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.HaveLen(1), "the removed RunnerGroup CR must be pruned")
+
+	surviving := runnerGroupNames(t, nsName)
+	require.Len(t, surviving, 1)
+	// The surviving group keeps its original name (it is patched, not recreated).
+	assert.Contains(t, initial, surviving[0])
+	assert.Contains(t, surviving[0], "linux", "the linux group must be the survivor")
+}
+
+// TestGMC_RunnerGroups_ReorderDoesNotOrphan asserts that reordering the entries
+// in spec.RunnerGroups never orphans a RunnerGroup CR (Q101). Because each
+// labeled group is named from its first runner label (not its index) and pruning
+// keys on the owner labels rather than the slice position, swapping the order
+// must leave the same set of CRs untouched — no deletes, no recreations.
+func TestGMC_RunnerGroups_ReorderDoesNotOrphan(t *testing.T) {
+	const nsName = "team-rg-reorder"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	minimalContainer := corev1.Container{Name: "runner", Image: "runner:test"}
+	rgSpec := func(label string) agcv1alpha1.RunnerGroupSpec {
+		return agcv1alpha1.RunnerGroupSpec{
+			RunnerLabels: []string{label},
+			MaxListeners: 2,
+			PodTemplate:  corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{minimalContainer}}},
+		}
+	}
+
+	ag := newActionsGateway("reorder-gateway", nsName, "github-app")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{rgSpec("linux"), rgSpec("gpu")}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startGMCReconciler(t, nil)
+
+	g := gomega.NewWithT(t)
+
+	g.Eventually(func() int {
+		return len(runnerGroupNames(t, nsName))
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Equal(2), "expected 2 RunnerGroup CRs initially")
+	before := runnerGroupNames(t, nsName)
+	// Capture the creation UIDs so we can prove the CRs were not recreated.
+	uidByName := func() map[string]types.UID {
+		var rgList agcv1alpha1.RunnerGroupList
+		require.NoError(t, k8sClient.List(ctx, &rgList, client.InNamespace(nsName)))
+		m := make(map[string]types.UID, len(rgList.Items))
+		for i := range rgList.Items {
+			m[rgList.Items[i].Name] = rgList.Items[i].UID
+		}
+		return m
+	}
+	uidsBefore := uidByName()
+
+	// Swap the order of the two entries.
+	require.Eventually(t, func() bool {
+		var fetched gmcv1alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "reorder-gateway"}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{rgSpec("gpu"), rgSpec("linux")}
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "reorder the RunnerGroups")
+
+	// Give the reconciler time to act on the reorder, then assert the set is
+	// unchanged: same names, same UIDs (no prune, no recreate). Consistently for
+	// a window so a late, erroneous delete would be caught.
+	g.Consistently(func() []string {
+		return runnerGroupNames(t, nsName)
+	}, 3*time.Second, 100*time.Millisecond).Should(gomega.Equal(before), "reorder must not orphan or churn RunnerGroup CRs")
+	assert.Equal(t, uidsBefore, uidByName(), "RunnerGroup CRs must be patched in place, not recreated, on reorder")
 }
