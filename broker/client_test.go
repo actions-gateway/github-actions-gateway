@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -327,6 +328,63 @@ func TestDeleteSession_IssuesDELETE(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodDelete, gotMethod)
 	assert.Equal(t, "/_apis/distributedtask/pools/1/sessions/sess-del", gotPath)
+}
+
+// TestGetMessage_StalledResponseBounded proves that a broker which accepts the
+// connection but never sends response headers cannot block GetMessage until the
+// OS TCP timeout: the client's ResponseHeaderTimeout fires, GetMessage returns
+// promptly, and the failure is a retryable client-side timeout (net.Error with
+// Timeout() == true) rather than a session-level error (Q108). A short
+// ResponseHeaderTimeout stands in for the production value
+// (broker.LongPollResponseHeaderTimeout) so the test does not wait 55s.
+func TestGetMessage_StalledResponseBounded(t *testing.T) {
+	t.Parallel()
+	// The handler simulates a black-holed broker: it never writes a response,
+	// returning only when the client aborts (the ResponseHeaderTimeout fires and
+	// closes the connection, cancelling r.Context()) or a safety cap elapses.
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(30 * time.Second):
+		}
+	}))
+	defer srv.Close()
+
+	const headerTimeout = 150 * time.Millisecond
+	transport := srv.Client().Transport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = headerTimeout
+	hc := &http.Client{Transport: transport}
+	defer transport.CloseIdleConnections()
+
+	c := &broker.Client{BrokerURL: srv.URL, PoolID: 1, HTTPClient: hc, Token: "test-token"}
+
+	start := time.Now()
+	msg, err := c.GetMessage(context.Background(), "sess-1")
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "a stalled long-poll must return an error, not hang")
+	assert.Nil(t, msg)
+	assert.Less(t, elapsed, 5*time.Second,
+		"GetMessage must be bounded by ResponseHeaderTimeout, not the OS TCP timeout (got %s)", elapsed)
+
+	var netErr net.Error
+	require.ErrorAs(t, err, &netErr, "stalled long-poll must surface as a net.Error")
+	assert.True(t, netErr.Timeout(),
+		"a black-holed long-poll must be classified as a retryable timeout")
+}
+
+// TestNewHTTPClient_BoundsLongPoll verifies the production broker client carries
+// a ResponseHeaderTimeout sized just above the broker's 50s long-poll hold, so a
+// healthy long-poll is never cut short while a black-holed connection is bounded
+// (Q108).
+func TestNewHTTPClient_BoundsLongPoll(t *testing.T) {
+	t.Parallel()
+	hc := broker.NewHTTPClient()
+	transport, ok := hc.Transport.(*http.Transport)
+	require.True(t, ok, "NewHTTPClient must use an *http.Transport")
+	assert.Equal(t, broker.LongPollResponseHeaderTimeout, transport.ResponseHeaderTimeout)
+	assert.Greater(t, broker.LongPollResponseHeaderTimeout, 50*time.Second,
+		"ResponseHeaderTimeout must exceed the broker's 50s long-poll hold")
 }
 
 // ── Rate-limit / backoff ──────────────────────────────────────────────────────
