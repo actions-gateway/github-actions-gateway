@@ -32,6 +32,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       status: ${{ steps.filter.outputs.status }}
       scripts: ${{ steps.filter.outputs.scripts }}
+      vendor: ${{ steps.filter.outputs.vendor }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -62,6 +63,20 @@ jobs:
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
+              - 'Makefile'
+              - '.github/workflows/unit-test.yml'
+            # Vendor-integrity gate scope: anything that determines what the
+            # committed vendor trees should contain. A pure .go edit can't change
+            # vendor contents, so it's deliberately narrower than `code` to avoid
+            # re-running the network re-vendor on every source change.
+            vendor:
+              - 'vendor/**'
+              - 'tools/vendor/**'
+              - '**/go.mod'
+              - '**/go.sum'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'scripts/vendor-check.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
 
@@ -133,6 +148,32 @@ jobs:
         # release signing-identity regexp (Q124). Same job as shellcheck since
         # both gate the scripts/ tree on a scripts-only change.
         run: make scripts-test
+  # Supply-chain integrity gate for the committed vendor trees (Q126). `go build
+  # -mod=vendor` only checks vendor/modules.txt consistency, never that the
+  # vendored source matches the go.sum hashes — so a tampered vendor/ edit would
+  # ship into the signed release images undetected. `make vendor-check` re-runs
+  # the workspace-vendor flow (re-fetching every module verified against go.sum)
+  # and fails on any drift vs the committed trees. Isolated from unit-test so a
+  # vendor/go.mod-only change doesn't also trigger the -race suite, and vice
+  # versa. A Dependabot go.mod bump legitimately fails here until a follow-up
+  # vendor sync lands — that's the intended signal (see scripts/vendor-check.sh).
+  vendor-check:
+    needs: [changes]
+    if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.work
+      # `make vendor-check` (scripts/vendor-check.sh) is the single source of
+      # truth so the local and CI verdicts match. It re-fetches modules from the
+      # proxy (verified against go.sum) when the setup-go module cache misses,
+      # else re-vendors offline from cache; either way the git diff is the gate.
+      - name: vendor integrity vs go.sum (make vendor-check)
+        run: make vendor-check
+
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'

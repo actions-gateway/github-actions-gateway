@@ -61,7 +61,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status shellcheck queue-unblock \
-        third-party-notices third-party-notices-check \
+        third-party-notices third-party-notices-check vendor-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
 ##@ General
@@ -213,6 +213,16 @@ third-party-notices: ## Regenerate THIRD-PARTY-NOTICES from the committed vendor
 .PHONY: third-party-notices-check
 third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (CI drift gate)
 	scripts/gen-third-party-notices.sh --check
+
+# Supply-chain integrity gate for the committed vendor trees. `-mod=vendor` only
+# checks modules.txt consistency, never that the vendored source matches go.sum;
+# this re-vendors (re-fetching modules verified against go.sum) and fails on any
+# diff, so a tampered vendor/ edit can't ship into the signed release images
+# (Q126). Runs the network re-fetch, so it stays out of the fast `make check`
+# gate and runs as its own CI job (unit-test.yml vendor-check).
+.PHONY: vendor-check
+vendor-check: ## Fail if vendor/ + tools/vendor/ drift from go.sum (CI supply-chain gate)
+	scripts/vendor-check.sh
 
 ##@ Security
 
