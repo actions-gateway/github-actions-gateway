@@ -16,7 +16,9 @@ ARG TARGETOS TARGETARCH
 # hash). Survives across layer-cache misses so incremental source edits only
 # recompile changed packages instead of the whole dep tree.
 # -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
-# build ID — together they make the binary bit-for-bit reproducible (SLSA-L3).
+# build ID — together they make the binary bit-for-bit reproducible (a
+# reproducible-build input for SLSA-L3; build provenance attestation is not yet
+# emitted, so this is not a full SLSA-L3 claim — see Q103).
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags=-buildid= -o /bin/proxy ./cmd/proxy

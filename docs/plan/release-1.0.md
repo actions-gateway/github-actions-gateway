@@ -185,11 +185,15 @@ catch.
 Because scale and sandboxing are deferred, the docs must not imply they
 are validated.
 
-- [ ] **Capacity claim reframed**: anywhere the docs state the
-  "thousands of sessions per AGC" figure, it is labelled a **design
+- [x] **Capacity claim reframed** (Q99, 2026-06-15): the
+  "thousands of sessions per AGC" figure is now labelled a **design
   target, not yet validated at scale** (1.0 ships without the
-  [Q13](../STATUS.md) load run). Remove or qualify any phrasing that
-  reads as a measured result.
+  [Q13](../STATUS.md) load run) at [README](../../README.md) Tier 2 and
+  [executive-summary](../design/01-executive-summary.md), anchored to
+  the validation-status note added to
+  [Appendix A](../design/appendix-a-capacity-slos.md). The ~60 KiB
+  per-goroutine cost is now stated as a design estimate, not a measured
+  result.
 - [x] **Egress enforcement scope stated honestly** (lifted 2026-06-11
   by Q7b): the negative path (non-proxy egress blocked) is now verified
   on the Calico kind profile, so the "unverified" caveat is gone. What
@@ -200,20 +204,30 @@ are validated.
   enforcement is the cluster CNI's job: production operators must run a
   CNI that enforces egress NetworkPolicy (Calico/Cilium); kindnet does
   not.
-- [ ] **Sandboxed runtime stated as untested opt-in**: gVisor/Kata
-  docs ([Appendix B](../design/appendix-b-worker-isolation.md)) say the
-  path is *documented and supported in spec but not exercised on a real
-  cluster as of 1.0*.
-- [ ] **SLSA-L3 claim made true or dropped** ([Q103](../STATUS.md)): the
-  Dockerfiles advertise SLSA-L3 reproducibility, but `publish.yml` emits
-  no provenance attestation. The honesty pass must either land the
-  provenance predicate (Q103) or strike the SLSA-L3 claim from the
-  Dockerfiles — an unbacked supply-chain claim is exactly the kind of
-  documented-but-false control this bucket exists to prevent.
-- [ ] **`docs/operations/` reflects the install artifact**:
-  onboarding/runbook/upgrade docs describe the real `helm install` /
-  `helm upgrade` flow (including the cert-manager toggle and the CRD
-  upgrade note), not the per-binary `cmd/*/config/` bases.
+- [x] **Sandboxed runtime stated as untested opt-in** (Q99,
+  2026-06-15): [Appendix B](../design/appendix-b-worker-isolation.md)
+  now carries a validation-status note stating the gVisor/Kata path is
+  *documented and supported in spec but not exercised on a real cluster
+  as of 1.0* (validation deferred post-1.0, Q15).
+- [x] **SLSA-L3 claim dropped to an honest qualifier** (Q99,
+  2026-06-15): the provenance predicate ([Q103](../STATUS.md)) is **not**
+  yet implemented, so the four Dockerfiles no longer assert "(SLSA-L3)" —
+  they now state the build is a reproducible-build input for SLSA-L3 with
+  provenance attestation not yet emitted (pointing at Q103). The strong
+  parts of the supply-chain story that *are* true (SHA-pinned actions +
+  tags-only keyless cosign signing + per-arch SBOM, Q123/Q124; vendor-vs-
+  `go.sum` gating + cosign checksum, Q126/Q127) remain described in
+  [05-security.md](../design/05-security.md), which already used the
+  honest "SLSA-L3-friendly" wording.
+- [x] **`docs/operations/` reflects the install artifact** (Q99,
+  2026-06-15): onboarding/runbook/upgrade docs describe the real `helm
+  install` / `helm upgrade` flow (cert-manager toggle + CRD-upgrade-via-
+  templates note verified honest and current), not the per-binary
+  `cmd/*/config/` bases. **Q98 carve-out remains:** the `oci://` chart-
+  pull references depend on Q98's first live chart publish — until then
+  [install.md](../operations/install.md) install-from-source-checkout is
+  the honest path and an HTML `<!-- Q98: … -->` marker flags where the
+  registry instructions slot in once the first `v*` tag publishes.
 
 ### F. Engineering quality gates — *gating*
 

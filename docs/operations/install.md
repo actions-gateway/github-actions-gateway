@@ -53,13 +53,18 @@ renders, offline validation), see the
 
 ## Install
 
-> **Chart source.** A tagged release publishes the chart to the GHCR registry, so
-> install a released version straight from there — no source checkout:
-> `oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z` (the chart
-> version is the release tag without the leading `v`; verify its cosign signature
-> per [release.md § Verify the publish](release.md#3-verify-the-publish)). The
-> `charts/actions-gateway` local path used in the examples below installs the same
-> chart from a source checkout — use it for development or an unreleased build.
+<!-- Q98: no chart has been published yet. Once the first v* tag publishes the
+chart to GHCR, replace the note below with the oci:// chart-pull instructions
+(oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z, chart
+version = tag without leading v, cosign-verify per release.md § Verify the
+publish) and make it the recommended install path. -->
+> **Chart source.** Install from a **source checkout** of this repository — the
+> `charts/actions-gateway` local path used in the examples below. The publishing
+> pipeline that pushes the chart to the GHCR OCI registry
+> (`oci://ghcr.io/actions-gateway/charts/...`) is in place but **no release has
+> been published yet** (tracked as Q98); once the first `v*` tag publishes, you
+> will be able to `helm install` a released, cosign-signed chart version straight
+> from the registry without a checkout.
 
 ```sh
 helm install gag charts/actions-gateway \

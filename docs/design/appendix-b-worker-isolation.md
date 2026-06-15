@@ -8,6 +8,8 @@ Worker pods execute arbitrary workflow code, which is untrusted by definition. T
 
 **This is optional.** Sandboxed runtimes add operational complexity (additional node configuration, larger pod startup latency, occasional kernel-feature incompatibilities) that may not be justified for every deployment. Use this appendix to decide whether to opt in.
 
+> **Validation status (as of 1.0).** This path is **documented and supported in the spec** — the AGC honours a `runtimeClassName` set on the worker `PodTemplate` and applies no override that would strip it — but it has **not been exercised on a real cluster** with gVisor or Kata installed. Validating it requires a cluster with the runtime handler and a nested-virt-capable / runsc-enabled node pool, which is deferred post-1.0 (Q15). Operators enabling it should validate the full job path on their own cluster before relying on it for isolation.
+
 ---
 
 ## B.1. Threat Coverage
