@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -186,7 +187,7 @@ func ParseRunnerRSAKey(path string) (*rsa.PrivateKey, error) {
 // (CreateSession, GetMessage, DeleteSession).
 func FetchRunnerOAuthToken(ctx context.Context, creds *RunnerCredentials, privateKey crypto.Signer, httpClient *http.Client) (string, error) {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = httpx.NewClient()
 	}
 
 	// Choose signing method and the key value jwt.SignedString expects.

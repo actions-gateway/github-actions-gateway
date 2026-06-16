@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
@@ -272,7 +272,10 @@ func main() {
 		}
 	}
 
-	httpClient := &http.Client{Timeout: 60 * time.Second}
+	// Bounded client for the GitHub meta IP-range fetch (Q138): an overall 60s
+	// deadline plus a transport ResponseHeaderTimeout, so a slow api.github.com
+	// cannot wedge the reconcile.
+	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
 
 	// AGC_EXTRA_<NAME>=<VALUE> env vars on the GMC pod are forwarded verbatim to
 	// each AGC Deployment the controller creates. Gate-flagged to prevent

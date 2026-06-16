@@ -41,6 +41,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -346,7 +347,10 @@ func run() error {
 	}
 
 	// ── 7. Register reconciler ───────────────────────────────────────────────
-	httpClient := &http.Client{Timeout: 60 * time.Second}
+	// Bounded client for the provisioner's GitHub REST calls (Q138): an overall
+	// 60s deadline plus a transport ResponseHeaderTimeout, so a slow GitHub API
+	// cannot wedge a reconcile.
+	httpClient := httpx.NewClientWithTimeout(60 * time.Second)
 	prov := provisioner.NewProvisioner(mgr.GetClient(), m,
 		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("provisioner"))))
 	prov.WorkerSA = os.Getenv("WORKER_SERVICE_ACCOUNT")

@@ -60,7 +60,7 @@ type Config struct {
 	// Broker is a per-goroutine Client instance. The goroutine sets
 	// Broker.Token before each API call via the agent's OAuth credentials.
 	Broker     *broker.Client
-	HTTPClient *http.Client // used for OAuth token fetch; nil uses http.DefaultClient
+	HTTPClient *http.Client // used for OAuth token fetch; nil uses a bounded httpx.NewClient()
 
 	Conditions    ConditionUpdater
 	Metrics       *Metrics
@@ -71,8 +71,8 @@ type Config struct {
 	// session-establishment path — the OAuth token exchange and CreateSession —
 	// so a slow or unresponsive broker cannot wedge the goroutine indefinitely.
 	// Without it those calls inherit only the long-lived manager context (the
-	// broker uses http.DefaultClient, which has no read timeout), so a broker
-	// that accepts the connection but is slow to respond — e.g. an overloaded
+	// broker's long-poll client carries no overall read deadline by design), so a
+	// broker that accepts the connection but is slow to respond — e.g. an overloaded
 	// shared fakegithub under parallel CI load — blocks the goroutine inside a
 	// single attempt and the RunnerGroup never registers a session (Q134). With
 	// a deadline the call fails fast and retriably, so the Multiplexer restarts

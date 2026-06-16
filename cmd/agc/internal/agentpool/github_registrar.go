@@ -40,6 +40,7 @@ import (
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
 
 // GithubRegistrar implements Registrar using the GitHub Actions runner JIT config API.
@@ -54,15 +55,20 @@ type GithubRegistrar struct {
 	// GroupID is the GitHub-side runner group ID to register agents into.
 	// Use 1 for the default runner group.
 	GroupID int
-	// HTTPClient is used for all outbound calls. nil uses http.DefaultClient.
+	// HTTPClient is used for all outbound calls. nil uses a bounded
+	// httpx.NewClient() (Q138) so a slow GitHub endpoint cannot wedge the caller.
 	HTTPClient *http.Client
 }
+
+// defaultRegistrarClient is the bounded fallback used when HTTPClient is nil.
+// Shared so the nil path does not allocate a fresh connection pool per call.
+var defaultRegistrarClient = httpx.NewClient()
 
 func (r *GithubRegistrar) httpClient() *http.Client {
 	if r.HTTPClient != nil {
 		return r.HTTPClient
 	}
-	return http.DefaultClient
+	return defaultRegistrarClient
 }
 
 // Register registers a new runner agent with GitHub using the JIT config API

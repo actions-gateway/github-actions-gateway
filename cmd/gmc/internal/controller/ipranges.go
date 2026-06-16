@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -64,9 +65,15 @@ type GitHubIPRangeFetcher interface {
 
 // HTTPGitHubIPRangeFetcher is the production fetcher that calls api.github.com/meta.
 type HTTPGitHubIPRangeFetcher struct {
+	// Client makes the meta API call. nil uses a bounded httpx.NewClient() (Q138)
+	// so a slow api.github.com cannot wedge the reconcile.
 	Client *http.Client
 	APIURL string // override in tests; default "https://api.github.com"
 }
+
+// defaultIPRangeClient is the bounded fallback used when Client is nil. Shared
+// so the nil path does not allocate a connection pool per refresh.
+var defaultIPRangeClient = httpx.NewClient()
 
 type githubMetaResponse struct {
 	// API is the api.github.com origin range; required for installation token
@@ -89,7 +96,7 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	}
 	hc := f.Client
 	if hc == nil {
-		hc = http.DefaultClient
+		hc = defaultIPRangeClient
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/meta", nil)
