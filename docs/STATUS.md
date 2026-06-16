@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-14
+Last touched: 2026-06-16
 
 ---
 
@@ -33,7 +33,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | M3: Worker pod | `milestone` | ✅ | All success criteria met; Tier-C live test green on 2026-05-30 — [plan](plan/milestone-3.md) |
 | M4: GMC + proxy | `milestone` | ✅ | Multi-tenant, delete-isolation, e2e proxy job live-validated 2026-06-12 (helm install + real GitHub); 4 bugs found → Q114 + Q115 + Q116 (fixed) + [Q117](#Q117) — [plan](plan/milestone-4.md) |
 | M5: Hardening | `milestone` `security` | ⚠️ | Security half + polaris posture scan done; packaging, load test harness open — [plan](plan/milestone-5.md) |
-| Release 1.0 | `milestone` | ✅ | **Shipped 2026-06-16.** `v1.0.0` published as a final release (4 multi-arch images + cosign-signed chart on GHCR, `prerelease: false`), verified live; GitHub Release + GA docs + public site launched ([Q129](#Q129)). Load test ([Q13](#Q13)) & gVisor ([Q15](#Q15)) deferred post-1.0 — [plan](plan/release-1.0.md) |
+| Release 1.0 | `milestone` | ✅ | **Shipped 2026-06-16.** `v1.0.0` published as a final release (4 multi-arch images + cosign-signed chart on GHCR, `prerelease: false`), verified live; GitHub Release + GA docs + public site launched at [actions-gateway.com](https://actions-gateway.com/) (<a id="Q129"></a>Q129). Load test ([Q13](#Q13)) & gVisor ([Q15](#Q15)) deferred post-1.0 — [plan](plan/release-1.0.md) |
 | Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
 | Security audit 2 (2026-06) | `security` | ⚠️ | 4 review tracks + govulncheck (clean); new findings queued as [Q121](#Q121)–[Q128](#Q128), known/accepted mapped in doc — [plan](plan/security-audit-2026-06.md) |
 | Worker egress proxy | `security` `infra` | ✅ | NetworkPolicy split + Tier-A positive + NP-spec guard shipped; runtime negatives observed enforcing on the Calico profile 2026-06-11 (Q7b); CI leg tracked as [Q119](#Q119) — [plan](plan/worker-egress-proxy.md) |
@@ -82,7 +82,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q133"></a>Q133 | Platform-gated eligibility for securityProfile: privileged | `security` | 🔲 | M | A tenant self-selects securityProfile: privileged at create; only downgrades are webhook-gated. Eligibility to run privileged should be a platform call — gate it behind a platform-applied namespace label. Extends Q127 item 8 (profile-aware webhook) |
 | <a id="Q110"></a>Q110 | coverage-baseline folds in untested test-helper packages | `tests` `infra` | 🔲 | S | coverage-baseline.txt floors (broker 48.3, gmc 48.2) fold in untested helpers (brokertest) and miss envtest coverage, so the ratchet misleads while core code is ~80%. Exclude helper pkgs so floors track production code. Sibling of Q77. |
 | <a id="Q55"></a>Q55 | Verify provisioner-test goleak cascade fix held in CI | `tests` `bug` | 🔲 | S | Intermittent ~20-test goleak cascade in `internal/provisioner` fixed by `waitForPodCreated` helper in 59c0714; delete row once CI is clean. If flakes recur, migrate remaining ~18 Eventually-on-Pod sites to the helper. |
-| <a id="Q129"></a>Q129 | [Public GitHub Pages website](plan/website.md) | `docs` `infra` | ✅ | L | [Public site](plan/website.md) now live at the custom apex domain [actions-gateway.com](https://actions-gateway.com/) (launched 2026-06-16); landing/banner show v1.0.0 GA install + Q99 capacity caveat. Cross-tree link reconcile → [Q52](#Q52). |
 | <a id="Q60"></a>Q60 | [Competitive analysis — GAG vs ARC-adjacent runner/queue tooling](design/appendix-d-alternatives-considered.md) | `docs` | 🔲 | M | vs ARC-adjacent tooling (Kueue, Exostellar, KEDA); expands [appendix-d](design/appendix-d-alternatives-considered.md). Per-benefit notes + verify-list in [competitive-analysis](plan/competitive-analysis.md). Kueue-vs-admission angle in [Q59](#Q59). |
 | <a id="Q62"></a>Q62 | Short per-attempt timeout on IP-range `/meta` fetch | `infra` `speed` | 🔲 | S | GMC HTTP client's 60s timeout is shared; a stalled `/meta` fetch burns 60s before the Q61 backoff retries. Add a ~10s per-attempt `context.WithTimeout` in `HTTPGitHubIPRangeFetcher.FetchIPRanges`. Follow-on to Q61. |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | Verified 2026-06-01: not deletable. Operator-doc for the `--agent-key-type=ed25519` opt-in; RSA-3072 stays the default regardless. Needs probe flag extensions + manual run with real credentials. Low priority: not a 1.0-gate. |
