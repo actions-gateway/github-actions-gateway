@@ -36,7 +36,8 @@ PRO_TO_MAX = date(2026, 5, 23)
 BASELINE = {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500}
 MODEL_COLORS = {
     "Sonnet 4.6": "#D4A24E", "Opus 4.7": "#7C5CBF",
-    "Opus 4.8": "#4361A8", "Haiku 4.5": "#9AA0A6", "Other": "#BBBBBB", "Unknown": "#DDDDDD",
+    "Opus 4.8": "#4361A8", "Fable 5": "#3E9A8C", "Haiku 4.5": "#9AA0A6",
+    "Other": "#BBBBBB", "Unknown": "#DDDDDD",
 }
 EST_NOTE = "shaded / hatched = pre-transcript days estimated from the Pro-era per-commit rate"
 
@@ -75,7 +76,7 @@ def chart_tokens_by_model():
     rows = load("model_daily.csv")
     days = sorted({r["date"] for r in rows})
     est_dates = {r["date"] for r in rows if is_est(r)}
-    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Haiku 4.5", "Other", "Unknown"]
+    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Fable 5", "Haiku 4.5", "Other", "Unknown"]
     by = {(r["date"], r["model"]): int(r["headline"]) for r in rows}
     xs = list(range(len(days)))
     fig, ax = plt.subplots(figsize=(11, 5.2))
@@ -170,14 +171,16 @@ def chart_growth_vs_codebase():
                     textcoords="offset points", va="center", fontsize=11, fontweight="bold", color=col)
     ax.axhline(1.0, color="#999", ls=":", lw=1.2, zorder=1)
     ax.text(dts[i_fm], 1.06, "day-7 post baseline (1×)", fontsize=9, color="#777")
+    # Headroom so the tallest series (tokens) and its end label stay on-canvas.
+    top = max(max(v) for v in series.values()) * 1.08
     ax.axvline(PRO_TO_MAX, color="#222", ls="--", lw=1.1, zorder=1)
-    ax.text(PRO_TO_MAX, 5.4, " Pro→Max", fontsize=9.5, fontweight="bold", color="#222")
+    ax.text(PRO_TO_MAX, top * 0.92, " Pro→Max", fontsize=9.5, fontweight="bold", color="#222")
     ax.set_title("Tokens vs. the codebase: cumulative growth", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("growth multiple  (× day-7 post value)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.set_ylim(0, 6.0)
+    ax.set_ylim(0, top)
     ax.set_xlim(dts[0], dts[-1])
     ax.legend(frameon=False, fontsize=10.5, loc="upper left")
     for s in ("top", "right"):
