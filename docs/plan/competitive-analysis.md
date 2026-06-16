@@ -25,15 +25,30 @@ Most individual benefits below ladder up to this. Lead the website with it.
 ## Automatic eviction retry — likely the strongest differentiator
 
 - ARC plays poorly with Kubernetes namespace `ResourceQuota`: when a job can't
-  schedule because quota is exhausted, it fails and needs a **manual** rerun.
+  schedule because quota is exhausted, the runner stalls and the job ultimately
+  needs a **manual** rerun.
 - That makes `ResourceQuota` risky to use with ARC, which in turn makes it risky
   to let tenants self-manage their own max-runner counts.
 - GAG fast-cancels the GitHub job lock and reruns automatically. Solving this one
   problem is what unlocks **platform-level quota management** → safe, true
   **tenant self-service** without compromising cluster-level allocations.
-- **VERIFY:** ARC's exact behavior on a quota-exhausted scheduling failure (no
-  retry? listener requeue? ephemeral-runner failure mode). Also clarify GAG's two
-  distinct paths and that *both* are covered: (a) the provisioner's in-place
+- **VERIFIED (2026-06-16):** ARC scale-set mode retries pod creation on the
+  *same* EphemeralRunner (~30s interval, [PR #4305](https://github.com/actions/actions-runner-controller/pull/4305)
+  fixing [#3629](https://github.com/actions/actions-runner-controller/issues/3629));
+  after a hardcoded 5 pod-creation failures the runner goes `Failed`
+  (`TooManyPodFailures`) and is not auto-replaced in older versions. There is
+  **no** mechanism to release the GitHub job and reassign it to a runner that can
+  run — the load-bearing "no fast lock-cancel + rerun" claim holds. Correction:
+  the relevant GitHub-side timeouts are **60s** (assigned runner doesn't pick up →
+  re-queue) and **24h** (queued with no runner → fail), per the
+  [self-hosted runners reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners);
+  there is **no "~10 minute" lock-expiry** — that figure conflated GAG's own
+  RenewJob window and was corrected in `docs/why-gag.md`. OOM/eviction mid-job is
+  worse than stated: zombie runner, job stuck `Queued` until manual cleanup
+  ([#4155](https://github.com/actions/actions-runner-controller/issues/4155),
+  [#4203](https://github.com/actions/actions-runner-controller/issues/4203)).
+  "Teams avoid enforcing `ResourceQuota`" is reasonable inference, not sourced.
+  GAG's two distinct paths both cover this: (a) the provisioner's in-place
   **quota-rejection retry** (`maxQuotaRetries`, holds the lock) and (b) the Job
   Lock Renewer's **eviction retry** (rerun-failed-jobs). Cross-ref [Q59](../STATUS.md)
   (pre-acquire capacity gate).
