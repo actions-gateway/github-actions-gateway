@@ -23,7 +23,7 @@ assembled from docs that already exist.
 | "vs ARC" comparison page | ✅ Shipped — `docs/why-gag.md` |
 | Annotated `ActionsGateway` CR example | ✅ Shipped — in `why-gag.md`, fields verified against `getting-started.md` |
 | Social card from existing asset | ✅ Shipped — OG/Twitter card via `overrides/main.html`; favicon left at Material default |
-| Public launch | ❌ Gated on Q99 + enabling Pages (manual `workflow_dispatch`) |
+| Public launch | ✅ Launched 2026-06-16 — Pages enabled, deployed via `workflow_dispatch`; landing + banner reflect the `v1.0.0` GA install and keep the Q99 capacity caveat |
 | Cross-tree link reconcile (build `--strict`) | ❌ Follow-up, folded into [Q52](../STATUS.md) — see below |
 
 ## Audience and the one job
@@ -206,8 +206,9 @@ out of this plan doc so they survive its eventual archival.
 
 ## Open decisions
 
-- **Pre-1.0 maturity banner.** *Lean:* yes — a subtle "alpha / pre-1.0" header
-  notice until 1.0 is cut; dovetails with Q99.
+- ~~**Pre-1.0 maturity banner.**~~ **Resolved:** the alpha banner ran until 1.0;
+  on the GA launch (2026-06-16) it was replaced with a "v1.0.0 is here" notice
+  that still links the Q99 capacity caveat (`overrides/main.html`).
 - **Analytics.** *Lean:* none for v1 (avoids a privacy/consent surface); add
   later if traffic matters.
 

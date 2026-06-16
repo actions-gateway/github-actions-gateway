@@ -53,21 +53,17 @@ see the [chart README](../../charts/actions-gateway/README.md).
 
 ## Install
 
-> **Release candidate — prerelease, not yet GA.** The first published chart is
-> **`1.0.0-rc.1`**, the project's first published artifact. It is cosign-signed
-> and installable straight from the GHCR OCI registry, but it is a **release
-> candidate / preview**, not a general-availability release: Artifact Hub flags
-> the listing as a prerelease (`artifacthub.io/prerelease: "true"`). Pin
-> `--version 1.0.0-rc.1` deliberately and treat it as a preview while the
-> pipeline and artifacts are validated ahead of the `v1.0.0` cut. The chart
-> version is the release tag without the leading `v`.
+> **General availability — `v1.0.0`.** The chart is published, cosign-signed,
+> and installable straight from the GHCR OCI registry. Pin `--version 1.0.0`
+> (the chart version is the release tag without the leading `v`). Newer patch
+> releases publish as `1.0.z`; pin the version you have verified.
 
 Install the published, signed chart straight from the registry — no source
 checkout needed:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.0.0-rc.1 \
+  --version 1.0.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -75,7 +71,7 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
 ```
 
 Copy the three image digests from the
-[release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1)
+[release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0)
 (the chart ships **no** baked-in digests — empty digests are the fail-closed
 secure default, so an unconfigured render is rejected). Verify the chart and
 image signatures before installing — see
@@ -134,7 +130,7 @@ Do **not** set `allowFloatingImageTags=true` in production.
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.0.0-rc.1 \
+  --version 1.0.0 \
   --namespace gmc-system --create-namespace \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
