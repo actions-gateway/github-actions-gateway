@@ -389,7 +389,10 @@ by-design / accepted.
   of any Secret in the cluster and create/overwrite Secrets anywhere —
   not just enumerate metadata. Tracked as Q121 (preventive confinement)
   in [security-audit-2026-06.md](security-audit-2026-06.md); Q29's audit
-  policy is the detective complement.
+  policy is the detective complement — shipped as a sample at
+  [docs/operations/examples/apiserver-audit-policy.yaml](../operations/examples/apiserver-audit-policy.yaml)
+  with operator wiring in
+  [security-operations.md § API server audit policy (sample)](../operations/security-operations.md#api-server-audit-policy-sample).
 
 ---
 

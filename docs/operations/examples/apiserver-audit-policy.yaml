@@ -1,0 +1,119 @@
+# Sample Kubernetes API server audit policy — Actions Gateway control-plane
+# Secret access and out-of-tenant write attempts.
+#
+# Purpose
+# -------
+# Surfaces the abuse signals in
+# docs/operations/security-operations.md § Audit-log abuse detections that
+# Prometheus cannot see: a *compromised* Gateway Manager Controller (GMC) or
+# Actions Gateway Controller (AGC) binary exercising its standing,
+# RBAC-permitted-but-anomalous access. The legitimate code paths avoid these
+# calls (the GMC reads each credential Secret only during reconcile via a
+# cache-bypassing Get; the AGC lists Secret *metadata* only, per security
+# finding H-2), so any matching event from a control-plane ServiceAccount is a
+# compromise indicator, not normal operation.
+#
+# Scope discipline
+# ----------------
+# This is a *focused sample*, NOT a cluster-wide RequestResponse firehose. It
+# logs only:
+#   * Secret get/list/watch by the GMC ServiceAccount (cluster-wide),
+#   * Secret get/list/watch by each AGC ServiceAccount, and
+#   * the GMC's write verbs on the kinds the gmc-tenant-resource-guard and
+#     namespace-psa-guard ValidatingAdmissionPolicies confine.
+# Everything else is left to whatever broader policy the cluster already runs.
+# Audit rules are first-match-wins: if you merge these into an existing policy,
+# place them ABOVE any broad catch-all rule, or the catch-all will shadow them.
+#
+# Why Metadata, not RequestResponse
+# ---------------------------------
+# Secret get/list responses contain `.data` — the very GitHub App private keys
+# this control protects. Logging them at `RequestResponse` would copy that key
+# material into the audit backend, creating a second exfiltration surface.
+# `Metadata` captures requester, verb, resource, name, namespace, timestamp,
+# and response code — enough to detect an anomalous read without duplicating the
+# secret. Keep the Secret rules at `Metadata`.
+#
+# Identity placeholders — substitute for your install
+# ---------------------------------------------------
+#   GMC ServiceAccount user:
+#     system:serviceaccount:<gmc-namespace>:<gmc-name>-controller-manager
+#     Defaults: namespace `gmc-system` (the Helm release namespace), name
+#     `gmc-controller-manager` (the name follows .Values.namePrefix, default
+#     "gmc"). The default user string is therefore
+#     `system:serviceaccount:gmc-system:gmc-controller-manager`.
+#   AGC ServiceAccount users:
+#     system:serviceaccount:<tenant-namespace>:actions-gateway-controller
+#     One per tenant namespace (the SA name is constant; the namespace is
+#     per-tenant). The audit `users:` field is an exact string match with no
+#     wildcard, so you must list one entry per tenant namespace and add a line
+#     when you onboard a new tenant. (If maintaining that list is impractical,
+#     replace the `users:` selector in rule 3 with a `namespaces:` list of every
+#     namespace marked `actions-gateway.github.com/tenant: "true"`; that is
+#     coarser — it also logs node/kubelet Secret mounts in those namespaces —
+#     but needs no per-SA enumeration.)
+#
+# Installation and how to read the resulting events:
+#   docs/operations/security-operations.md
+#     § API server audit policy (sample)
+apiVersion: audit.k8s.io/v1
+kind: Policy
+# Log one event per request, at completion, instead of two (request + response).
+# Detection only needs the completed event, and this halves audit volume.
+omitStages:
+  - RequestReceived
+# Managed-field metadata is noise for these detections.
+omitManagedFields: true
+rules:
+  # 1. GMC Secret reads (cluster-wide). The GMC reads each gitHubAppRef Secret
+  #    only during reconcile, via a cache-bypassing Get, and never lists or
+  #    watches Secret bodies. A get rate far above the reconcile/requeue cadence
+  #    — or any list/watch at all — is credential harvesting. Cluster-wide
+  #    (no `namespaces:`) on purpose: a compromised GMC could read Secrets in
+  #    kube-system or any other namespace, which is exactly what we want to see.
+  - level: Metadata
+    users:
+      - system:serviceaccount:gmc-system:gmc-controller-manager
+    verbs: ["get", "list", "watch"]
+    resources:
+      - group: ""
+        resources: ["secrets"]
+
+  # 2. GMC out-of-tenant / escalation write attempts. These writes are confined
+  #    at admission by gmc-tenant-resource-guard (tenant-resource create/update/
+  #    delete outside marked tenant namespaces) and namespace-psa-guard
+  #    (namespaces patch to non-tenant PSA labels). A denied request still
+  #    appears here with responseStatus.code 403 — a successful block, but a
+  #    signal that the GMC binary attempted it. Metadata captures the
+  #    responseStatus without the request body.
+  - level: Metadata
+    users:
+      - system:serviceaccount:gmc-system:gmc-controller-manager
+    verbs: ["create", "update", "patch", "delete"]
+    resources:
+      - group: ""
+        resources: ["secrets", "services", "serviceaccounts", "namespaces"]
+      - group: "apps"
+        resources: ["deployments"]
+      - group: "rbac.authorization.k8s.io"
+        resources: ["roles", "rolebindings"]
+      - group: "networking.k8s.io"
+        resources: ["networkpolicies"]
+      - group: "autoscaling"
+        resources: ["horizontalpodautoscalers"]
+      - group: "policy"
+        resources: ["poddisruptionbudgets"]
+
+  # 3. AGC Secret reads. The legit AGC path lists Secret *metadata* only (H-2)
+  #    and gets only its agent-pool / payload Secrets. A body list, or a get on
+  #    a user-managed Secret (e.g. ghcr-pull-token, slack-webhook), is
+  #    out-of-band enumeration. List one entry per tenant namespace (see the
+  #    identity note above for the coarser namespace-scoped alternative).
+  - level: Metadata
+    users:
+      - system:serviceaccount:tenant-acme:actions-gateway-controller    # <-- one per tenant namespace
+      - system:serviceaccount:tenant-globex:actions-gateway-controller
+    verbs: ["get", "list", "watch"]
+    resources:
+      - group: ""
+        resources: ["secrets"]
