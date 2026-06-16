@@ -87,7 +87,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status shellcheck chart-crds-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + chart-CRD drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status shellcheck chart-crds-check chart-rbac-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + chart-CRD/RBAC drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — currently the tags-only release signing-identity regexp (Q124).
@@ -253,9 +253,18 @@ chart-crds: ## Regenerate the Helm chart CRD templates from the controller-gen s
 chart-crds-check: ## Fail if the chart CRD templates drifted from their sources, or the GMC-bundled RunnerGroup CRD drifted from the AGC copy (Q73)
 	scripts/sync-chart-crds.sh --check
 
+.PHONY: chart-rbac
+chart-rbac: ## Regenerate the Helm chart manager-role rules fragment from the controller-gen source (single source of truth, Q142)
+	scripts/sync-chart-rbac.sh
+
+.PHONY: chart-rbac-check
+chart-rbac-check: ## Fail if the chart manager-role rules fragment drifted from cmd/gmc/config/rbac/role.yaml (Q142)
+	scripts/sync-chart-rbac.sh --check
+
 .PHONY: manifest-validate
 manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
 	scripts/sync-chart-crds.sh --check
+	scripts/sync-chart-rbac.sh --check
 	scripts/manifest-validate.sh
 
 ##@ e2e

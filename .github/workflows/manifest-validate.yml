@@ -1,16 +1,18 @@
 name: manifest-validate
 
 # Validates the SHIPPED install artifact so a malformed RBAC/CRD/policy file
-# cannot merge silently (Q66). Two layers, run by `make manifest-validate` so
-# local and CI verdicts match:
-#   - yamllint: catches ill-formed/ill-formatted YAML in the hand-maintained and
-#     generated manifests under cmd/*/config/** and the chart metadata.
-#   - kubeconform: schema-validates the rendered manifests (kustomize default
-#     overlay, the standalone opt-in manifests, and `helm template` output in
-#     digest-pinned, dev/test opt-out, and all-features form) against the
-#     Kubernetes API, plus `helm lint` on the chart itself and a fail-closed
-#     check that a default-values render (no gmc.image.digest) is REJECTED, so
-#     GMC image digest pinning cannot regress to fail-open (Q96).
+# cannot merge silently (Q66). The Helm chart is the SOLE install path (Q142);
+# there is no kustomize overlay to render. Two layers, run by
+# `make manifest-validate` so local and CI verdicts match:
+#   - yamllint: catches ill-formed/ill-formatted YAML in the controller-gen
+#     manifests under cmd/*/config/** and the chart metadata.
+#   - kubeconform: schema-validates the controller-gen manifests (the codegen +
+#     envtest substrate) and `helm template` output in digest-pinned, dev/test
+#     opt-out, and all-features form against the Kubernetes API, plus `helm lint`
+#     on the chart itself and a fail-closed check that a default-values render
+#     (no gmc.image.digest) is REJECTED, so GMC image digest pinning cannot
+#     regress to fail-open (Q96). The chart CRD/RBAC drift gates
+#     (sync-chart-{crds,rbac}.sh --check) run first inside `make manifest-validate`.
 on:
   pull_request:
     paths-ignore:
@@ -54,6 +56,7 @@ jobs:
               - 'Makefile'
               - 'scripts/manifest-validate.sh'
               - 'scripts/sync-chart-crds.sh'
+              - 'scripts/sync-chart-rbac.sh'
               - 'scripts/lib/**'
               - '.github/workflows/manifest-validate.yml'
 
@@ -65,10 +68,9 @@ jobs:
     permissions:
       contents: read
     env:
-      # Pinned tool versions. Bump deliberately (a new kubeconform/kustomize can
-      # change rendering or validation behaviour); keep in step with the versions
+      # Pinned tool versions. Bump deliberately (a new kubeconform can change
+      # validation behaviour); keep in step with the versions
       # `make manifest-validate` is documented against in docs/development/testing.md.
-      KUSTOMIZE_VERSION: v5.4.3
       KUBECONFORM_VERSION: v0.6.7
       YAMLLINT_VERSION: 1.37.1
       # Persist kubeconform's downloaded JSON schemas between runs so each run
@@ -87,14 +89,6 @@ jobs:
           tar -xzf "${RUNNER_TEMP}/kubeconform.tar.gz" -C "${RUNNER_TEMP}" kubeconform
           sudo install "${RUNNER_TEMP}/kubeconform" /usr/local/bin/kubeconform
           kubeconform -v
-      - name: install kustomize
-        run: |
-          set -euo pipefail
-          curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/kustomize.tar.gz" \
-            "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
-          tar -xzf "${RUNNER_TEMP}/kustomize.tar.gz" -C "${RUNNER_TEMP}" kustomize
-          sudo install "${RUNNER_TEMP}/kustomize" /usr/local/bin/kustomize
-          kustomize version
       # Cache kubeconform's schema dir keyed on the validated Kubernetes version.
       # The schema set for a fixed version is immutable, so a hit makes the run
       # fully offline; the key changes only when MANIFEST_K8S_VERSION (pinned in

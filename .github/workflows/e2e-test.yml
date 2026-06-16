@@ -97,6 +97,11 @@ jobs:
         with:
           go-version-file: go.work
 
+      # The e2e suite deploys the GMC via `helm upgrade --install` of
+      # charts/actions-gateway (Q142 — Helm is the sole install path), so helm
+      # must be on PATH. Pinned via the same action manifest-validate.yml uses.
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
       - name: Install kind ${{ env.KIND_VERSION }}
         # Pinned release binary + checksum instead of `go install ...@latest`:
         # ~20-40s faster (no compile), reproducible, and integrity-checked.

@@ -29,6 +29,16 @@ make chart-crds   # scripts/sync-chart-crds.sh — regenerates the chart CRD tem
 
 `make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, controller-gen's copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)). If that check fails, align the k8s.io/api versions ([Q68](../STATUS.md)) and re-run `make -C cmd/gmc manifests`.
 
+## Sync the Helm chart RBAC (after any RBAC marker change)
+
+The chart's GMC `manager-role` ClusterRole templates the metadata/binding, but its **rules** are the controller-gen output of the GMC controllers' `+kubebuilder:rbac` markers (`cmd/gmc/config/rbac/role.yaml`). The chart embeds them via `.Files.Get` from a *generated* fragment — do not hand-edit it. After regenerating manifests, re-sync the chart:
+
+```bash
+make chart-rbac   # scripts/sync-chart-rbac.sh — regenerates charts/actions-gateway/files/manager-role-rules.yaml
+```
+
+`make chart-rbac-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the fragment drifted from `cmd/gmc/config/rbac/role.yaml` — so a permission added via a marker but not propagated to the chart, which would leave the deployed GMC missing the grant, fails CI ([Q142](../STATUS.md)).
+
 ## RBAC marker placement
 
 `+kubebuilder:rbac` is a **package-level** marker (controller-gen v0.21+). It must appear before the `package` declaration, not in a type's doc comment. Placing it on a struct silently produces no output — controller-gen won't warn, it will just generate nothing.

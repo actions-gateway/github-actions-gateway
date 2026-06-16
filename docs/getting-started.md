@@ -22,7 +22,7 @@ helm install gag charts/actions-gateway \
 
 All three images must be **pinned by digest** — the chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on floating AGC/proxy tags — so pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
 
-> **Dev/CI alternative.** The `cmd/gmc/config/` kustomize bases drive a `make install` / `make deploy IMG=<registry>/gmc:tag` flow used for local iteration. The Helm chart is the supported distribution artifact; the kustomize bases remain the dev source of truth.
+> **Dev/CI.** The Helm chart is the single install path — there is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local `charts/actions-gateway` path for the `oci://…` ref above; `make deploy` (used by the e2e suite) wraps the same `helm install` with floating image tags for local iteration.
 
 ## 2. Create and mark the tenant namespace, and set its quota
 

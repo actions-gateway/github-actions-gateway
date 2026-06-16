@@ -160,7 +160,7 @@ Migration steps:
 ### Tenant namespaces now require the `actions-gateway.github.com/tenant` marker label
 
 The GMC's cluster-wide write grants are now gated by two ValidatingAdmissionPolicies
-(both shipped in `cmd/gmc/config/admission-policy/`, applied by `make deploy`):
+(both shipped by the Helm chart, gated on `admissionPolicy.enabled`):
 `namespace-psa-guard` gates `namespaces:patch`, and `gmc-tenant-resource-guard`
 gates create/update/delete of all tenant provisioning resources (Deployments,
 Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, PDBs,
@@ -226,8 +226,8 @@ instead of `actions-gateway-agc`. After upgrading the GMC:
 
 ### GMC manager NetworkPolicy is now enabled by default
 
-The default install (`config/default`) now ships the GMC manager NetworkPolicy
-enabled. This flips the controller-manager pod to default-deny ingress and
+The default install ships the GMC manager NetworkPolicy enabled
+(`networkPolicy.enabled=true`). This flips the controller-manager pod to default-deny ingress and
 admits its `:8443` `/metrics` endpoint **only** from namespaces labelled
 `metrics: enabled`. **If your Prometheus runs in an unlabelled namespace, GMC
 manager scrapes will start failing after upgrade.** Label it before (or right
@@ -241,9 +241,9 @@ The validating-webhook port (`9443`) is re-allowed from any source, so CR
 admission is unaffected. This change also adds a `PodDisruptionBudget`
 (`minAvailable: 1`) and `priorityClassName: system-cluster-critical` to the
 manager — no operator action required. Runtime NetworkPolicy enforcement depends
-on your CNI; see [observability.md](observability.md). The cert-manager metrics
-certificate and the Prometheus `ServiceMonitor` remain **opt-in** behind their
-kustomize comment blocks.
+on your CNI; see [observability.md](observability.md). The Prometheus
+`ServiceMonitor` remains **opt-in** behind the `metrics.serviceMonitor.enabled`
+chart value.
 
 ---
 
@@ -264,7 +264,7 @@ The invariant `lease-duration > renew-deadline > retry-period × 1.2` is validat
 
 ### GMC install and upgrade via Helm (recommended)
 
-The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy. It is the supported install/upgrade vehicle; the `make install` / `make deploy` flow in the steps below is the dev/CI path that drives the kustomize bases directly.
+The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy of the same chart. The chart is the **sole** install/upgrade vehicle — there is no kustomize path. For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
 
 > **Release candidate — prerelease, not yet GA.** The first published version is **`1.0.0-rc.1`** (chart version = release tag without the leading `v`), flagged on Artifact Hub as a prerelease. Pin `--version 1.0.0-rc.1` deliberately and treat it as a preview ahead of the `v1.0.0` cut. Copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
@@ -293,29 +293,8 @@ Four upgrade-time behaviors are specific to this chart:
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade. With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself. On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation). A `helm template` (no cluster) cannot look the Secret up and therefore renders a fresh cert each time — expected for offline rendering only.
 - **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied. To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
 
-The remaining steps describe the manual (kustomize/`make`) path used in dev/CI.
-
-### Step 1: Upgrade the CRDs
-
-If the release includes CRD changes, apply them before rolling the operator:
-
-```sh
-make install
-# or: kubectl apply -f config/crd/bases/
-```
-
-CRD changes are additive (new optional fields) by default. If a release includes breaking CRD changes, refer to the release notes for a migration procedure.
-
-### Step 2: Roll the GMC Deployment
-
-```sh
-make deploy IMG=<registry>/gmc:<new-tag>
-# or: kubectl set image deploy/gmc-controller-manager \
-#       manager=<registry>/gmc:<new-tag> \
-#       -n gmc-system
-```
-
-Watch the rollout:
+`helm upgrade` rolls the GMC Deployment (and carries additive CRD field changes —
+no separate CRD apply step). Watch the rollout:
 
 ```sh
 kubectl rollout status deploy/gmc-controller-manager -n gmc-system
@@ -323,7 +302,7 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 
 The rolling update replaces one replica at a time. Leadership transfers before the old leader is deleted. The total rollout time is typically < 30 seconds.
 
-### Step 3: Post-Upgrade Validation
+### Post-upgrade validation
 
 ```sh
 # Confirm both replicas are on the new image
@@ -341,12 +320,18 @@ kubectl describe actionsgateway -n <namespace> <name>
 
 ### Rollback
 
+Roll back to the previously deployed release with `helm rollback` (see the Helm
+section above):
+
 ```sh
-kubectl rollout undo deploy/gmc-controller-manager -n gmc-system
+helm rollback gag --namespace gmc-system
 kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
-If the rollback targets a different CRD schema version, re-apply the previous CRDs before rolling back the operator binary.
+`helm rollback` restores the prior release's values and manifests. CRDs carry
+`helm.sh/resource-policy: keep`, so they are not rolled back automatically; if the
+rollback targets a different CRD schema version, consult the release notes for any
+CRD migration.
 
 ---
 
