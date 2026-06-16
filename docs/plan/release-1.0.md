@@ -136,7 +136,19 @@ policy) can exist until there is an artifact to install and scan.
   tenant → green job; CRD `resource-policy: keep` observed on
   uninstall). Evidence:
   [q12-helm-chart.md](q12-helm-chart.md#live-validation-track-a--2026-06-12).
-  Publishing pipeline remains [Q98](../STATUS.md). Original gate text:
+  **Publishing pipeline proven live 2026-06-15** by the first real tag
+  **`v1.0.0-rc.1`** ([Q98](../STATUS.md)): `publish.yml` pushed all four
+  multi-arch (amd64+arm64) images to GHCR, keyless-cosign-signed them
+  (recursive: index + per-arch) with per-arch SPDX-JSON SBOM attestations and
+  buildkit SLSA-provenance-v1 attestations, and packaged + pushed + signed the
+  Helm chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway` as a
+  prerelease. Verified against the published artifacts:
+  `make verify-release VERSION=v1.0.0-rc.1` (tags-only Q124 identity) passed for
+  all four images + chart; `helm pull --version 1.0.0-rc.1` succeeded and the
+  pulled chart still fail-closes without a pinned digest and renders
+  digest-pinned image refs when one is supplied. **GA finalization remains**
+  (promote `v1.0.0`: flip the prerelease annotation, Artifact Hub listing,
+  `v1.0.0` docs, launch site [Q129](../STATUS.md)). Original gate text:
   a Helm chart under `charts/actions-gateway/` (Helm decided over
   Kustomize per [D-M5-1](milestone-5.md#11-install-vehicle--decided-helm-chart))
   that produces a working tenant from a single `helm install`. Contents
@@ -154,9 +166,12 @@ policy) can exist until there is an artifact to install and scan.
   audit against the rendered install artifact returns zero "danger"
   findings; intentional deviations live in a `polaris.yaml` suppression
   list with a per-entry design-doc citation.
-- [ ] **Images signed + SBOM** ([Q28](../STATUS.md), *recommended*):
-  cosign signatures + SBOM attached to published images. Strong supply
-  chain story; not strictly required to run.
+- [x] **Images signed + SBOM** ([Q28](../STATUS.md), *recommended*):
+  cosign signatures + SBOM attached to published images — **proven live on the
+  `v1.0.0-rc.1` publish** (recursive keyless cosign signatures on the index and
+  every per-arch manifest, plus a per-arch SPDX-JSON SBOM cosign attestation;
+  verified with `make verify-release` and `cosign verify-attestation`). Strong
+  supply chain story; not strictly required to run.
 - [ ] **API-server audit policy sample** ([Q29](../STATUS.md),
   *recommended*): ship a sample policy that surfaces a compromised
   GMC's Secret `get` calls.

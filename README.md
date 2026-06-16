@@ -88,15 +88,18 @@ For the full design, see [docs/design/](docs/design/README.md).
 
 GAG ships as the **`actions-gateway` Helm chart**, which installs the Gateway Manager Controller (GMC) and its cluster prerequisites. The GMC then provisions per-tenant gateways at runtime from each `ActionsGateway` CR.
 
+The chart is published, cosign-signed, to the GHCR OCI registry. The first published version is **`1.0.0-rc.1`** — a **release candidate / prerelease**, not yet a GA release; install it deliberately as a preview:
+
 ```sh
-helm install gag charts/actions-gateway \
+helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.0.0-rc.1 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
   --set proxy.image.digest=sha256:<proxy>
 ```
 
-See the [Installation guide](docs/operations/install.md) for prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall — and the [chart README](charts/actions-gateway/README.md) for the full values reference.
+Copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1) and verify the signatures before installing. See the [Installation guide](docs/operations/install.md) for prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall — and the [chart README](charts/actions-gateway/README.md) for the full values reference.
 
 For day-2 operations — `helm upgrade` / rollback, per-component upgrades, and runbooks — see the [operations docs](docs/operations/), in particular the [upgrade guide](docs/operations/upgrade.md).
 
