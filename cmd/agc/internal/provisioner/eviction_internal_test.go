@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
@@ -118,4 +119,75 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),
 		"budget must not refill across sequential evictions")
+}
+
+// TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh verifies the Q141 cleanup:
+// the background sweep deletes per-run counters older than the TTL while
+// retaining entries still inside the window. Bounding map growth this way is the
+// whole point — Q106 made the counter a hard lifetime cap with no delete on
+// exhaustion, so without the sweep one entry leaks per distinct evicted run_id.
+func TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh(t *testing.T) {
+	const ttl = 24 * time.Hour
+	base := time.Unix(1_700_000_000, 0)
+	clock := base
+	p := &Provisioner{now: func() time.Time { return clock }}
+
+	// Reserve a slot for an "old" run at base.
+	_, ok := p.reserveEvictionRetry("old", 2)
+	require.True(t, ok)
+
+	// Advance past the TTL, then touch a "fresh" run at the new now.
+	clock = base.Add(ttl + time.Hour)
+	_, ok = p.reserveEvictionRetry("fresh", 2)
+	require.True(t, ok)
+
+	n := p.sweepEvictionCounts(ttl)
+	assert.Equal(t, 1, n, "exactly the expired entry is reclaimed")
+
+	_, oldPresent := p.evictionCounts.Load("old")
+	assert.False(t, oldPresent, "expired entry deleted")
+	_, freshPresent := p.evictionCounts.Load("fresh")
+	assert.True(t, freshPresent, "in-TTL entry retained")
+}
+
+// TestSweepEvictionCounts_RefreshKeepsLiveRunPinned is the core Q141/Q106
+// invariant test. A still-evicting run is provably live, so the sweep must never
+// reclaim its counter — reclaiming would let the next eviction refill the retry
+// budget to zero (the Q106 over-budget bug). reserveEvictionRetry refreshes
+// lastUpdate on every eviction, including the exhausted/rejected path, so the
+// entry stays out of the sweep as long as evictions keep arriving within the TTL.
+func TestSweepEvictionCounts_RefreshKeepsLiveRunPinned(t *testing.T) {
+	const (
+		ttl        = 24 * time.Hour
+		maxRetries = 1
+	)
+	base := time.Unix(1_700_000_000, 0)
+	clock := base
+	p := &Provisioner{now: func() time.Time { return clock }}
+
+	// Exhaust the budget at base.
+	_, ok := p.reserveEvictionRetry("live", maxRetries)
+	require.True(t, ok)
+	_, ok = p.reserveEvictionRetry("live", maxRetries)
+	require.False(t, ok, "budget exhausted after maxRetries reservations")
+
+	// 18h later (within the TTL) the run is evicted again: rejected, but
+	// lastUpdate is refreshed to the current now.
+	clock = base.Add(18 * time.Hour)
+	_, ok = p.reserveEvictionRetry("live", maxRetries)
+	require.False(t, ok)
+
+	// 36h after base — but only 18h after the refresh — the entry must survive
+	// the sweep, proving lastUpdate moved on the exhausted path.
+	clock = base.Add(36 * time.Hour)
+	n := p.sweepEvictionCounts(ttl)
+	assert.Equal(t, 0, n, "still-evicting run must not be reclaimed")
+
+	v, present := p.evictionCounts.Load("live")
+	require.True(t, present, "live run's counter retained")
+	assert.Equal(t, maxRetries, v.(evictionEntry).count, "count stays pinned at the cap")
+
+	// The budget must still be exhausted — the surviving entry never refilled.
+	_, ok = p.reserveEvictionRetry("live", maxRetries)
+	assert.False(t, ok, "budget must not refill while the run is live")
 }

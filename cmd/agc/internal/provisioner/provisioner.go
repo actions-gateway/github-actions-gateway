@@ -239,8 +239,13 @@ type Provisioner struct {
 	// HTTPClient is used for GitHub API calls. Defaults to http.DefaultClient.
 	HTTPClient *http.Client
 
-	// evictionCounts tracks per run_id eviction retry counts.
-	evictionCounts sync.Map // key: run_id (string) → value: int
+	// evictionCounts tracks per run_id eviction retry counts. The value carries
+	// the running count plus the time of the last eviction touch, which the
+	// background sweeper uses to reclaim entries for runs that can no longer be
+	// evicted (Q141). Q106 made the count a hard lifetime cap (no delete on
+	// exhaustion), so without the sweep one entry would leak per distinct evicted
+	// run_id for the process lifetime.
+	evictionCounts sync.Map // key: run_id (string) → value: evictionEntry
 
 	// evictionLocks serializes the per-run check-and-increment of
 	// evictionCounts so the budget is never exceeded under concurrency (Q106).
@@ -248,12 +253,40 @@ type Provisioner struct {
 	// construction (no per-key map to grow or reap), while still letting
 	// distinct runs evict concurrently. The zero value is ready to use.
 	evictionLocks [evictionLockShards]sync.Mutex
+
+	// now returns the current time. nil means time.Now; tests override it to
+	// drive the eviction-counter TTL sweep deterministically.
+	now func() time.Time
+}
+
+// evictionEntry is the value stored in evictionCounts. count is the number of
+// reruns already reserved for the run (capped at maxRetries — Q106); lastUpdate
+// is the time of the most recent eviction of the run, refreshed on every
+// eviction whether or not a retry slot was granted. The sweeper reclaims an
+// entry once lastUpdate is older than the TTL, by which point the run can no
+// longer produce an evicted pod (see sweepEvictionCounts).
+type evictionEntry struct {
+	count      int
+	lastUpdate time.Time
 }
 
 // evictionLockShards is the number of mutexes in the sharded eviction lock.
 // Eviction is a rare, node-pressure-driven event, so a small fixed pool keeps
 // contention between distinct run_ids negligible without unbounded growth.
 const evictionLockShards = 64
+
+const (
+	// defaultEvictionCounterTTL bounds how long a per-run eviction-retry counter
+	// is retained after the run's last eviction. It is chosen well beyond a
+	// realistic GitHub Actions run lifetime: an entry is reclaimed only once its
+	// run can no longer produce an evicted pod, because reclaiming a live run's
+	// counter would reset it to zero and refill the retry budget — the Q106 bug.
+	// (Q141)
+	defaultEvictionCounterTTL = 24 * time.Hour
+	// defaultEvictionSweepInterval is how often the background sweeper scans
+	// evictionCounts for entries older than the TTL.
+	defaultEvictionSweepInterval = time.Hour
+)
 
 // NewProvisioner creates a Provisioner with sensible defaults.
 func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Provisioner {
@@ -565,19 +598,111 @@ func (p *Provisioner) reserveEvictionRetry(runID string, maxRetries int) (attemp
 	mu.Lock()
 	defer mu.Unlock()
 
-	actual, _ := p.evictionCounts.LoadOrStore(runID, 0)
-	count := actual.(int)
+	now := p.nowFn()
+	var count int
+	if v, loaded := p.evictionCounts.Load(runID); loaded {
+		count = v.(evictionEntry).count
+	}
 	if count >= maxRetries {
 		// Budget is a hard lifetime cap: leave the count pinned so every later
 		// eviction of this run is a no-op. We deliberately do NOT delete the
 		// entry here — deleting reset the count to zero and let the budget refill
 		// on the next eviction, which both defeats the cap and (combined with the
-		// concurrent read-modify-write) is the Q106 over-budget bug.
+		// concurrent read-modify-write) is the Q106 over-budget bug. We DO refresh
+		// lastUpdate: an exhausted but still-evicting run is provably live, so its
+		// entry must not be a sweep candidate yet (Q141).
+		p.evictionCounts.Store(runID, evictionEntry{count: count, lastUpdate: now})
 		return 0, false
 	}
-	p.evictionCounts.Store(runID, count+1)
+	p.evictionCounts.Store(runID, evictionEntry{count: count + 1, lastUpdate: now})
 	return count + 1, true
 }
+
+// nowFn returns the current time, honouring the test-injected p.now override.
+func (p *Provisioner) nowFn() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
+
+// sweepEvictionCounts deletes per-run eviction-retry counters whose last
+// eviction was more than ttl ago, returning the number of entries reclaimed.
+//
+// Correctness rests on a single fact: an evicted worker pod only ever exists for
+// a live run, so a run that has produced no eviction for ttl can no longer
+// produce one. With ttl chosen well beyond a realistic run lifetime, an entry is
+// reclaimed only after its run is provably dead — so the LoadOrStore that a later
+// eviction would do (refilling the budget to zero) can never happen for a run we
+// swept. That preserves the Q106 invariant (at most maxRetries reruns per live
+// run) while bounding evictionCounts to run_ids evicted within the trailing ttl
+// window. The per-entry shard lock is taken (and lastUpdate re-checked under it)
+// so a concurrent reserveEvictionRetry that just refreshed the entry is never
+// raced away.
+func (p *Provisioner) sweepEvictionCounts(ttl time.Duration) int {
+	now := p.nowFn()
+	var swept int
+	p.evictionCounts.Range(func(key, value any) bool {
+		if now.Sub(value.(evictionEntry).lastUpdate) <= ttl {
+			return true
+		}
+		runID := key.(string)
+		mu := &p.evictionLocks[evictionShard(runID)]
+		mu.Lock()
+		if v, loaded := p.evictionCounts.Load(runID); loaded &&
+			now.Sub(v.(evictionEntry).lastUpdate) > ttl {
+			p.evictionCounts.Delete(runID)
+			swept++
+		}
+		mu.Unlock()
+		return true
+	})
+	return swept
+}
+
+// EvictionSweeper periodically reclaims expired entries from a Provisioner's
+// eviction-retry counter map. It implements sigs.k8s.io/controller-runtime/pkg/
+// manager.Runnable; wire it with mgr.Add. Each AGC replica manages its own
+// counters, so it runs on every replica (NeedLeaderElection is false).
+type EvictionSweeper struct {
+	p        *Provisioner
+	interval time.Duration
+	ttl      time.Duration
+}
+
+// NewEvictionSweeper returns an EvictionSweeper for p using the default sweep
+// interval and counter TTL.
+func NewEvictionSweeper(p *Provisioner) *EvictionSweeper {
+	return &EvictionSweeper{
+		p:        p,
+		interval: defaultEvictionSweepInterval,
+		ttl:      defaultEvictionCounterTTL,
+	}
+}
+
+// Start runs the sweep loop until ctx is cancelled. It satisfies
+// sigs.k8s.io/controller-runtime/pkg/manager.Runnable.
+func (s *EvictionSweeper) Start(ctx context.Context) error {
+	t := time.NewTicker(s.interval)
+	defer t.Stop()
+	log := s.p.logFor(nil)
+	log.Info("eviction-counter sweeper started", "interval", s.interval, "ttl", s.ttl)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-t.C:
+			if n := s.p.sweepEvictionCounts(s.ttl); n > 0 {
+				log.Info("reclaimed expired eviction-retry counters", "count", n)
+			}
+		}
+	}
+}
+
+// NeedLeaderElection reports that the sweeper runs on every replica, not only
+// the leader: each AGC instance owns the eviction counters for the pods it
+// provisioned.
+func (s *EvictionSweeper) NeedLeaderElection() bool { return false }
 
 // evictionShard maps a run_id to one of evictionLockShards mutex indices.
 func evictionShard(runID string) uint32 {
