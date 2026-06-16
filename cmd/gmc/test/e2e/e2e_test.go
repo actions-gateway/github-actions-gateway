@@ -186,8 +186,11 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("waiting for the webhook service endpoints to be ready")
 			verifyWebhookEndpointsReady := func(g Gomega) {
+				// The Helm chart names the webhook Service "webhook-service"
+				// (unprefixed; the webhook clientConfig points at it) — not the
+				// kustomize-era "gmc-webhook-service".
 				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
-					"-l", "kubernetes.io/service-name=gmc-webhook-service",
+					"-l", "kubernetes.io/service-name=webhook-service",
 					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.addresses[*]}{end}{end}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred(), "Webhook endpoints should exist")
