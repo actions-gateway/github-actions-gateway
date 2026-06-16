@@ -35,6 +35,7 @@ Two detection substrates are used:
 - [Threat → signal map](#threat--signal-map)
 - [Prometheus abuse alerts](#prometheus-abuse-alerts)
 - [Audit-log abuse detections](#audit-log-abuse-detections)
+  - [API server audit policy (sample)](#api-server-audit-policy-sample)
 - [Response playbooks](#response-playbooks)
   - [Suspected compromised AGC (tenant-scoped)](#suspected-compromised-agc-tenant-scoped)
   - [Suspected compromised GMC (cluster-scoped, Tier-0)](#suspected-compromised-gmc-cluster-scoped-tier-0)
@@ -211,9 +212,11 @@ doing something its source does not.
 Detecting these requires an **API-server audit policy** that logs the
 relevant verbs at `Metadata` level or higher, shipped to a security
 information and event management (SIEM) system or log-based alerting
-backend. A sample policy and its wiring are tracked as a
-separate deliverable; this runbook specifies *what to alert on* once that
-policy is in place.
+backend. A ready-to-adapt sample policy ships at
+[`examples/apiserver-audit-policy.yaml`](examples/apiserver-audit-policy.yaml);
+[§ API server audit policy (sample)](#api-server-audit-policy-sample) below
+covers installing it and reading the events. The table specifies *what to
+alert on* once that policy is in place.
 
 | Detection | Audit predicate | Why it matters | Response |
 |---|---|---|---|
@@ -224,7 +227,7 @@ policy is in place.
 | **GMC out-of-tenant resource write** | `gmc-tenant-resource-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked `actions-gateway.github.com/tenant=true` (e.g. a Deployment or Secret into `kube-system`). A denial means the GMC tried (Q121/Q122). | A denial is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC workload creation outside reconcile** | `verb=create resource=deployments|roles|rolebindings` by the GMC SA in a *marked tenant* namespace with no corresponding `ActionsGateway` CR change | The `gmc-tenant-resource-guard` VAP already blocks writes into *unmarked* namespaces; this catches the residual — provisioning inside a legitimate tenant namespace without a triggering CR edit, which is lateral movement within the GMC's confined scope. | Isolate the GMC; diff provisioned resources against live `ActionsGateway` CRs. |
 
-Until the audit policy lands, these threats are mitigated structurally
+Without the audit policy, these threats are mitigated structurally
 (RBAC scope, cache-bypass, the `namespace-psa-guard` and
 `gmc-tenant-resource-guard` VAPs, no Secret informer) but write-confinement
 denials aside are **not observable** — there is no alert that fires if a
@@ -234,6 +237,108 @@ gap is the value of the audit policy. Note the two VAPs confine GMC *writes*
 gated at admission and remain cluster-wide at the RBAC layer — the audit
 policy is the only detective control for them (see
 [§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)).
+
+### API server audit policy (sample)
+
+A sample audit policy that captures exactly the verbs the table above alerts
+on — and nothing else — ships at
+[`examples/apiserver-audit-policy.yaml`](examples/apiserver-audit-policy.yaml).
+
+**What it detects.** Three focused rule groups, all at `Metadata` level:
+
+1. **GMC Secret reads** (`get`/`list`/`watch secrets`) by the GMC
+   ServiceAccount, cluster-wide — surfaces credential harvesting and any
+   read outside the GMC's tenant namespaces.
+2. **GMC out-of-tenant write attempts** (`create`/`update`/`patch`/`delete`)
+   on the kinds the `gmc-tenant-resource-guard` and `namespace-psa-guard`
+   VAPs confine — a `403` `responseStatus` is a successful block but a signal
+   the binary tried.
+3. **AGC Secret reads** (`get`/`list`/`watch secrets`) by each AGC
+   ServiceAccount — surfaces the full-body `list` and out-of-scope `get` the
+   legitimate metadata-only code path never makes.
+
+**Why `Metadata`, not `RequestResponse`.** A Secret `get`/`list` *response*
+body contains `.data` — the GitHub App private keys this control protects.
+Logging at `RequestResponse` would copy that key material into the audit
+backend, creating a second exfiltration surface. `Metadata` records the
+requester, verb, resource, name, namespace, timestamp, and response code —
+enough to detect an anomalous read without duplicating the secret. Keep the
+Secret rules at `Metadata`.
+
+**Before you install,** edit the placeholders (the file's header comment lists
+them): the GMC ServiceAccount user string if you overrode the install
+namespace or `namePrefix`, and one `users:` entry per tenant namespace for the
+AGC rule (the audit `users:` field is an exact match with no wildcard).
+
+**Install on a self-managed API server.** The policy is a static file read by
+`kube-apiserver`, not a cluster object — you cannot `kubectl apply` it. On a
+kubeadm control plane:
+
+1. Copy the file onto every control-plane node, e.g.
+   `/etc/kubernetes/audit/policy.yaml`.
+2. Edit the static-pod manifest `/etc/kubernetes/manifests/kube-apiserver.yaml`
+   to add the audit flags and mount the policy file and a log directory:
+
+   ```yaml
+   spec:
+     containers:
+     - command:
+       - kube-apiserver
+       # ...existing flags...
+       - --audit-policy-file=/etc/kubernetes/audit/policy.yaml
+       - --audit-log-path=/var/log/kubernetes/audit/audit.log
+       - --audit-log-maxage=30
+       - --audit-log-maxbackup=10
+       - --audit-log-maxsize=100
+       volumeMounts:
+       - name: audit-policy
+         mountPath: /etc/kubernetes/audit/policy.yaml
+         readOnly: true
+       - name: audit-log
+         mountPath: /var/log/kubernetes/audit
+     volumes:
+     - name: audit-policy
+       hostPath:
+         path: /etc/kubernetes/audit/policy.yaml
+         type: File
+     - name: audit-log
+       hostPath:
+         path: /var/log/kubernetes/audit
+         type: DirectoryOrCreate
+   ```
+
+   The kubelet restarts the API server automatically when the manifest
+   changes. Use `--audit-log-path=-` to emit to stdout instead of a file (e.g.
+   to ship via a log agent). Forward the log to your SIEM and translate the
+   table's predicates into alert rules there.
+
+**Managed control planes.** EKS, GKE, and AKS do not let you supply a custom
+`--audit-policy-file` — the provider owns the API server flags and ships a
+fixed audit configuration to its own log sink (CloudWatch / Cloud Audit Logs /
+Azure Monitor). You cannot install this file there. Instead, enable the
+provider's API-server (control-plane) audit logging and apply the **same
+predicates** — requester `user.username`, `verb`, `objectRef.resource` —
+as filters/alerts against that managed log stream. The detection logic is
+identical; only the substrate differs.
+
+**Read the events.** Audit events are one JSON object per line. To see GMC
+Secret reads (substitute your GMC user string):
+
+```bash
+jq -c 'select(.user.username == "system:serviceaccount:gmc-system:gmc-controller-manager"
+        and .objectRef.resource == "secrets")
+       | {stage, verb, ns: .objectRef.namespace, name: .objectRef.name,
+          code: .responseStatus.code, t: .requestReceivedTimestamp}' \
+  /var/log/kubernetes/audit/audit.log
+```
+
+A baseline is one `get` per `gitHubAppRef` Secret per reconcile, only in
+tenant namespaces. Alert on: any `list`/`watch`; a `get` rate well above the
+reconcile cadence; or any `get` outside a tenant namespace (e.g.
+`kube-system`). For the GMC write rule, a `responseStatus.code` of `403`
+is a VAP block — investigate the binary that attempted it. For AGC reads,
+filter by each AGC user string and alert on `verb == "list"` (the legit path
+is metadata-only) or a `get` on a Secret name the AGC does not own.
 
 ---
 
