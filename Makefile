@@ -87,7 +87,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status shellcheck scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status shellcheck chart-crds-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + chart-CRD drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — currently the tags-only release signing-identity regexp (Q124).
@@ -245,8 +245,17 @@ trivy-scan: ## Build each image locally and scan it with trivy (requires trivy +
 polaris-scan: ## Render the Helm chart and audit its Kubernetes posture with polaris (gates on danger findings; requires helm + polaris on PATH; matches the CI polaris gate)
 	scripts/polaris-scan.sh
 
+.PHONY: chart-crds
+chart-crds: ## Regenerate the Helm chart CRD templates from the controller-gen sources (single source of truth, Q73/Q142)
+	scripts/sync-chart-crds.sh
+
+.PHONY: chart-crds-check
+chart-crds-check: ## Fail if the chart CRD templates drifted from their sources, or the GMC-bundled RunnerGroup CRD drifted from the AGC copy (Q73)
+	scripts/sync-chart-crds.sh --check
+
 .PHONY: manifest-validate
 manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
+	scripts/sync-chart-crds.sh --check
 	scripts/manifest-validate.sh
 
 ##@ e2e

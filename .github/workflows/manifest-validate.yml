@@ -53,6 +53,7 @@ jobs:
               - '.yamllint.yaml'
               - 'Makefile'
               - 'scripts/manifest-validate.sh'
+              - 'scripts/sync-chart-crds.sh'
               - 'scripts/lib/**'
               - '.github/workflows/manifest-validate.yml'
 
