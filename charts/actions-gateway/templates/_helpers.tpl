@@ -91,6 +91,27 @@ Takes the root context.
 {{- end -}}
 
 {{/*
+Whether the GMC metrics server uses a cert-manager-issued serving cert that the
+ServiceMonitor verifies (vs controller-runtime's self-signed cert scraped with
+insecureSkipVerify). True only when metrics are on, the metrics cert-manager
+toggle is on, AND certManager.enabled is on — the metrics Certificate reuses the
+webhook's selfsigned-issuer, which only exists in that case. Emits "true" or "".
+*/}}
+{{- define "actions-gateway.metricsCertManagerEnabled" -}}
+{{- if and .Values.metrics.enabled .Values.metrics.tls.certManager.enabled .Values.certManager.enabled -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+DNS name (and TLS serverName) of the GMC metrics Service, e.g.
+"gmc-controller-manager-metrics-service.gmc-system.svc". Used both as a SAN on
+the cert-manager metrics Certificate and as the ServiceMonitor tlsConfig
+serverName so the two always agree.
+*/}}
+{{- define "actions-gateway.metricsServiceDNSName" -}}
+{{- printf "%s-metrics-service.%s.svc" (include "actions-gateway.managerName" .) .Release.Namespace -}}
+{{- end -}}
+
+{{/*
 Self-signed webhook serving cert used when certManager.enabled=false.
 
 Generates a CA + serving cert for webhook-service ONCE per render and memoizes

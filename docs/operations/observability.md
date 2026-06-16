@@ -161,6 +161,45 @@ Prometheus Operator scraping. It is left off by default because the
 `ServiceMonitor` CRD only exists once the Prometheus Operator is installed, so
 rendering it unconditionally would break `helm install` on clusters without it.
 
+### Verifying the metrics scrape TLS (GMC manager)
+
+The GMC metrics endpoint (`:8443`) is served over TLS. How the scrape verifies
+that certificate is controlled by `metrics.tls.certManager.enabled`:
+
+- **`true` (default, secure):** cert-manager issues a dedicated metrics serving
+  cert — the `metrics-serving-cert` `Certificate`, minted from the same
+  `selfsigned-issuer` as the webhook into the `metrics-server-cert` Secret. The
+  GMC serves it (`--metrics-cert-path`), and the rendered `ServiceMonitor`
+  verifies it against the issuing CA:
+
+  ```yaml
+  tlsConfig:
+    serverName: <namePrefix>-controller-manager-metrics-service.<namespace>.svc
+    ca:
+      secret:
+        name: metrics-server-cert
+        key: ca.crt
+  ```
+
+  The scrape is authenticated end-to-end and **not** MITM-able. This path
+  requires cert-manager (it reuses the webhook's Issuer) and is automatically
+  inert when `certManager.enabled=false`.
+
+- **`false`, or `certManager.enabled=false`:** the GMC falls back to
+  controller-runtime's auto-generated self-signed metrics cert, and the
+  `ServiceMonitor` scrapes with `tlsConfig.insecureSkipVerify: true`. Prometheus
+  cannot verify the server, so an in-cluster attacker who can intercept the
+  scrape connection could impersonate the metrics endpoint (the bearer token
+  still authenticates the *scraper* to the server, but not the server to the
+  scraper). Use this only on clusters without cert-manager, accepting the weaker
+  posture.
+
+The metrics-server-cert Secret is read from the **ServiceMonitor's namespace**
+(the GMC release namespace), where the chart creates it — no extra copying is
+needed. Because verification follows `certManager.enabled` by default, an
+install that already uses cert-manager for the webhook (the default) gets
+verified metrics scraping automatically once the `ServiceMonitor` is enabled.
+
 ---
 
 ## Full Metrics Reference

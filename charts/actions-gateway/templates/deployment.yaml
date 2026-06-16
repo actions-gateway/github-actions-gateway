@@ -31,6 +31,12 @@ spec:
         args:
         {{- if .Values.metrics.enabled }}
         - --metrics-bind-address=:8443
+        {{- if (include "actions-gateway.metricsCertManagerEnabled" .) }}
+        # Serve the cert-manager-issued metrics cert (mounted below) instead of
+        # controller-runtime's self-signed one, so the ServiceMonitor can verify
+        # the scrape. cert/key names default to tls.crt/tls.key (cert-manager's).
+        - --metrics-cert-path=/tmp/k8s-metrics-server/serving-certs
+        {{- end }}
         {{- end }}
         {{- if .Values.leaderElection.enabled }}
         - --leader-elect
@@ -99,10 +105,20 @@ spec:
         - mountPath: /tmp/k8s-webhook-server/serving-certs
           name: webhook-certs
           readOnly: true
+        {{- if (include "actions-gateway.metricsCertManagerEnabled" .) }}
+        - mountPath: /tmp/k8s-metrics-server/serving-certs
+          name: metrics-certs
+          readOnly: true
+        {{- end }}
       volumes:
       - name: webhook-certs
         secret:
           secretName: webhook-server-cert
+      {{- if (include "actions-gateway.metricsCertManagerEnabled" .) }}
+      - name: metrics-certs
+        secret:
+          secretName: metrics-server-cert
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

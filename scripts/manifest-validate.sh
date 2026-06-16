@@ -103,4 +103,10 @@ helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST"
 	--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
 	| kubeconform $kubeconform_flags
 
+echo "==> kubeconform: Helm chart render (cert-manager-verified metrics scrape: ServiceMonitor + metrics.tls.certManager)"
+# shellcheck disable=SC2086
+helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST" \
+	--set metrics.serviceMonitor.enabled=true \
+	| kubeconform $kubeconform_flags
+
 echo "OK: install artifact validates"

@@ -1,10 +1,11 @@
 {{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
 # Prometheus-Operator ServiceMonitor. Opt-in: requires the monitoring.coreos.com
 # CRD (Prometheus Operator) installed, and the scraper's namespace labeled
-# `metrics: enabled` so the NetworkPolicy admits it. insecureSkipVerify is set
-# because the metrics endpoint uses controller-runtime's self-signed cert;
-# switch to a cert-manager-issued metrics cert for verified scraping (see
-# docs/operations/observability.md).
+# `metrics: enabled` so the NetworkPolicy admits it. The scrape TLS posture
+# follows metrics.tls.certManager.enabled: by default it verifies the
+# cert-manager-issued metrics cert against its CA; with the toggle (or
+# certManager) off it falls back to insecureSkipVerify against
+# controller-runtime's self-signed cert (see docs/operations/observability.md).
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -19,7 +20,22 @@ spec:
       scheme: https
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
+        {{- if (include "actions-gateway.metricsCertManagerEnabled" .) }}
+        # Verify the cert-manager-issued metrics serving cert against its CA.
+        # serverName matches a SAN on that cert; ca.crt is read from the
+        # metrics-server-cert Secret in this (the ServiceMonitor's) namespace.
+        serverName: {{ include "actions-gateway.metricsServiceDNSName" . }}
+        ca:
+          secret:
+            name: metrics-server-cert
+            key: ca.crt
+        {{- else }}
+        # No cert-manager metrics cert: the GMC serves controller-runtime's
+        # auto-generated self-signed cert, which Prometheus cannot verify, so
+        # the scrape is MITM-able. Enable metrics.tls.certManager (and
+        # certManager) for verified scraping.
         insecureSkipVerify: true
+        {{- end }}
   selector:
     matchLabels:
       {{- include "actions-gateway.selectorLabels" . | nindent 6 }}

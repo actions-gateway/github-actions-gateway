@@ -113,6 +113,7 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `leaderElection.enabled` | `true` | Pass `--leader-elect`. Keep on when `replicaCount > 1`. |
 | `metrics.enabled` | `true` | Expose the HTTPS `:8443` metrics endpoint + Service. |
 | `metrics.serviceMonitor.enabled` | `false` | Emit a Prometheus-Operator ServiceMonitor (needs its CRD). |
+| `metrics.tls.certManager.enabled` | `true` | Issue a cert-manager metrics serving cert that the ServiceMonitor verifies (secure default). `false`/`certManager.enabled=false` falls back to the self-signed cert scraped with `insecureSkipVerify` (MITM trade-off). |
 | `networkPolicy.enabled` | `true` | Ship the GMC ingress NetworkPolicies (needs an enforcing CNI). |
 | `podDisruptionBudget.enabled` | `true` | Ship the `minAvailable: 1` PDB. |
 | `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard` and `tenant-resource-guard` VAPs + bindings (needs k8s ≥ 1.30). |
