@@ -1,12 +1,35 @@
 # Documentation website
 
-The public documentation + marketing site, served at
-`actions-gateway.github.io/github-actions-gateway/` and built from the `docs/`
+The public documentation + marketing site, served at the custom apex domain
+[`actions-gateway.com`](https://actions-gateway.com/) and built from the `docs/`
 tree with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 - Config: `mkdocs.yml` · theme overrides: `overrides/` · styles + scripts:
   `docs/stylesheets/extra.css`, `docs/javascripts/extra.js`
 - Deployed by `.github/workflows/pages.yml`
+
+## Custom domain
+
+The site is served from the apex domain **`actions-gateway.com`** (purchased
+2026-06; replaced the original `actions-gateway.github.io/github-actions-gateway/`
+project-page subpath). Two pieces keep the domain bound to the Actions-based
+Pages deploy:
+
+- **`docs/CNAME`** — contains the bare domain `actions-gateway.com`. MkDocs copies
+  `docs_dir` root files verbatim into the built site root, so every Pages artifact
+  re-asserts the domain. Without it, an Actions deploy would clear the custom
+  domain. Don't delete or rename it.
+- **`site_url: https://actions-gateway.com/`** in `mkdocs.yml` — drives canonical
+  URLs, `sitemap.xml`, and Open Graph / social meta, and roots the site at `/`
+  (no more `/github-actions-gateway/` base path).
+
+DNS (managed at the registrar): four apex `A` records → GitHub Pages
+`185.199.108–111.153`, matching `AAAA` records, and a `www` `CNAME` →
+`actions-gateway.github.io`. The repo Pages custom domain is set server-side
+(`gh api -X PUT repos/{owner}/{repo}/pages -f cname=actions-gateway.com`), which
+provisions a Let's Encrypt cert; "Enforce HTTPS" is enabled once the cert reads
+`approved`. **DNSSEC and org-level domain verification remain optional future
+hardening — not yet done.**
 
 (The original build plan and decision log is `docs/plan/website.md`; this doc is
 the durable how-to-maintain reference.)
@@ -15,7 +38,7 @@ the durable how-to-maintain reference.)
 
 ```sh
 pip install -r requirements-docs.txt   # pinned: mkdocs 1.6.1, mkdocs-material 9.7.6
-mkdocs serve                           # http://localhost:8000/github-actions-gateway/
+mkdocs serve                           # http://localhost:8000/
 ```
 
 The toolchain is pinned **exactly** — MkDocs 2.0 is incompatible with Material 9.x,

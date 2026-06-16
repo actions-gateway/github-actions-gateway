@@ -3,7 +3,7 @@ site_description: >-
   An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions
   runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover
   evicted jobs automatically, and isolate every tenant's GitHub egress.
-site_url: https://actions-gateway.github.io/github-actions-gateway/
+site_url: https://actions-gateway.com/
 repo_url: https://github.com/actions-gateway/github-actions-gateway
 repo_name: actions-gateway/github-actions-gateway
 edit_uri: edit/main/docs/
