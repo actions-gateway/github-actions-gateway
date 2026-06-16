@@ -87,7 +87,15 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status shellcheck chart-crds-check chart-rbac-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + shellcheck + chart-CRD/RBAC drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+
+# Enforce the "all go modules use the same Go version" rule (Q68). The two
+# go.work.gen files feed `make manifests` via GOWORK= and have silently drifted
+# off the repo `go` directive before, breaking code generation. This asserts the
+# `go` directive matches across go.work, every go.mod, and every go.work.gen.
+.PHONY: go-version-check
+go-version-check: ## Assert a single `go` directive across go.work / go.mod / go.work.gen
+	scripts/check-go-version.sh
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — currently the tags-only release signing-identity regexp (Q124).

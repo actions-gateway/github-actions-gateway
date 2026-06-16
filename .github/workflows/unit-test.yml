@@ -109,6 +109,10 @@ jobs:
         run: make lint
       - name: lint STATUS.md
         run: make lint-status
+      # Enforce a single Go version across go.work / all go.mod / all go.work.gen
+      # (Q68). The go.work.gen files feed `make manifests` and have drifted before.
+      - name: single Go version (make go-version-check)
+        run: make go-version-check
   # Shellcheck the standalone helper scripts under scripts/. actionlint already
   # covers inline workflow `run:` blocks, but the tracked scripts/*.sh files ship
   # unlinted otherwise. Isolated from the `lint` job so a scripts-only change does
