@@ -161,16 +161,21 @@ var _ = SynchronizedAfterSuite(
 	},
 )
 
-// setupGMC deploys the GMC controller and waits for it to be ready.
+// setupGMC deploys the GMC controller via the Helm chart and waits for it to be
+// ready. `make deploy` runs `helm upgrade --install` of charts/actions-gateway —
+// the SAME chart published to the OCI registry — so the artifact we ship is the
+// one e2e exercises (Q142). The chart sets allowFloatingImageTags=true (the
+// dev/CI image refs are tag-only, not digest-pinned) and renders the gmc/agc/proxy
+// image values from GMC_IMG/AGC_IMG/PROXY_IMG.
 func setupGMC() {
 	fakegithubBaseURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 		fakegithubServiceName, infraNamespace, fakegithubServicePort)
 
-	By("deploying GMC")
+	By("deploying GMC via the Helm chart")
 	cmd := exec.Command("make", "deploy",
-		fmt.Sprintf("IMG=%s", gmcImage),
-		fmt.Sprintf("AGC_IMAGE=%s", agcImage),
-		fmt.Sprintf("PROXY_IMAGE=%s", proxyImage),
+		fmt.Sprintf("GMC_IMG=%s", gmcImage),
+		fmt.Sprintf("AGC_IMG=%s", agcImage),
+		fmt.Sprintf("PROXY_IMG=%s", proxyImage),
 	)
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "deploy GMC")
@@ -178,20 +183,19 @@ func setupGMC() {
 	By("enabling AGC_EXTRA_* forwarding and injecting fakegithub env vars")
 	// --allow-agc-extra-env=true tells GMC to forward AGC_EXTRA_* env vars from its
 	// own pod to the AGC Deployments it creates. This is required for e2e tests so
-	// that AGC pods can reach fakegithub instead of real GitHub.
-	// --allow-floating-image-tags=true lets the suite use locally-built tag refs
-	// (e.g. localhost:5000/agc:e2e-...) instead of digest-pinned images, which the
-	// GMC otherwise requires for AGC_IMAGE/PROXY_IMAGE.
+	// that AGC pods can reach fakegithub instead of real GitHub. It is an e2e-only
+	// knob with no chart value, so it is patched in after the Helm install; the
+	// digest-pin relaxation is already handled by the chart's
+	// allowFloatingImageTags=true (set by `make deploy`).
 	cmd = exec.Command("kubectl", "patch", "deployment", "gmc-controller-manager",
 		"-n", gmcNamespace,
 		"--type=json",
 		`-p=[`+
-			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-agc-extra-env=true"},`+
-			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-floating-image-tags=true"}`+
+			`{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--allow-agc-extra-env=true"}`+
 			`]`,
 	)
 	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "patch GMC args to enable allow-agc-extra-env and allow-floating-image-tags")
+	Expect(err).NotTo(HaveOccurred(), "patch GMC args to enable allow-agc-extra-env")
 
 	cmd = exec.Command("kubectl", "set", "env",
 		"deployment/gmc-controller-manager",
@@ -210,7 +214,7 @@ func setupGMC() {
 	// rollout stalls. Wait for the Secret before polling rollout status.
 	By("waiting for webhook cert Secret to be issued by cert-manager")
 	// cert-manager creates a Secret whose name matches Certificate.spec.secretName
-	// ("webhook-server-cert"), NOT the Certificate CR name ("gmc-serving-cert").
+	// ("webhook-server-cert"), NOT the Certificate CR name ("serving-cert").
 	Eventually(func(g Gomega) {
 		cmd := exec.Command("kubectl", "get", "secret", "webhook-server-cert", "-n", gmcNamespace)
 		_, err := utils.Run(cmd)
@@ -230,12 +234,11 @@ func setupGMC() {
 }
 
 func teardownGMC() {
-	By("undeploying GMC")
+	By("undeploying GMC (helm uninstall)")
+	// `make undeploy` runs `helm uninstall`. The CRDs carry
+	// helm.sh/resource-policy: keep, so they survive the uninstall — that is
+	// fine here: the whole kind cluster is deleted by the workflow's final step.
 	cmd := exec.Command("make", "undeploy")
-	_, _ = utils.Run(cmd)
-
-	By("uninstalling CRDs")
-	cmd = exec.Command("make", "uninstall")
 	_, _ = utils.Run(cmd)
 }
 

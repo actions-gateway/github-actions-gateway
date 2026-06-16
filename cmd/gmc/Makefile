@@ -92,42 +92,35 @@ uninstall-cert-manager: ## Remove cert-manager from the current kube-context
 
 ##@ Deploy
 
-# Install CRDs into the cluster.
-# Uses standalone kustomize (not kubectl -k) to support the replacements field.
-# Uses --server-side to avoid the 262144-byte last-applied-configuration limit on large CRDs.
-.PHONY: install
-install: ## Install GMC CRDs into the current kube-context
-	kustomize build config/crd | kubectl apply --server-side -f -
+# The Helm chart is the SOLE cluster-install path (Q142): the artifact published
+# to the OCI registry is the one this target deploys and CI e2e exercises. The
+# chart owns the CRDs, RBAC, webhook + cert-manager wiring, NetworkPolicies, the
+# two confinement ValidatingAdmissionPolicies (namespace-psa-guard,
+# tenant-resource-guard), and the agc-tenant-role ClusterRole — everything the
+# retired kustomize overlay used to apply.
+HELM_RELEASE ?= actions-gateway
+CHART_DIR    := $(REPO_ROOT)/charts/actions-gateway
 
-.PHONY: uninstall
-uninstall: ## Remove GMC CRDs from the current kube-context
-	kustomize build config/crd | kubectl delete --ignore-not-found=true -f -
-
-# Deploy the controller to the cluster.
-# The agc-tenant-role ClusterRole and the ValidatingAdmissionPolicies under
-# config/admission-policy/ (namespace-psa-guard, tenant-resource-guard) are applied
-# separately from the prefixed kustomize tree so their cluster-scoped names stay stable
-# (the agc-tenant-role matching the GMC's `clusterroles:bind` resourceNames; each VAP
-# binding's policyName reference). See config/agc-tenant-role/ and
-# config/admission-policy/ for why.
-# After kustomize apply, override the image and inject AGC/proxy image env vars.
+# Deploy the GMC via the Helm chart for dev/CI iteration.
+# allowFloatingImageTags=true relaxes the GMC's digest-pin requirement so the
+# locally-built, tag-only images (localhost:5000/*:e2e-<sha>) are accepted; it is
+# the documented DEV/TEST opt-out, never a production default. The {gmc,agc,proxy}
+# image refs are split into repository + tag for the chart's image values (the
+# refs always carry a tag in dev/CI). CRDs ship with the chart, so no separate
+# install step is needed.
 .PHONY: deploy
-deploy: ## Deploy the GMC controller into the current kube-context
-	kubectl apply --server-side -f config/agc-tenant-role/agc_tenant_role.yaml
-	kubectl apply --server-side -f config/admission-policy/namespace-psa-guard.yaml
-	kubectl apply --server-side -f config/admission-policy/tenant-resource-guard.yaml
-	kustomize build config/default | kubectl apply --server-side --force-conflicts -f -
-	kubectl set image deployment/gmc-controller-manager manager=$(GMC_IMG) -n gmc-system
-	kubectl set env deployment/gmc-controller-manager -c manager \
-		AGC_IMAGE=$(AGC_IMG) PROXY_IMAGE=$(PROXY_IMG) \
-		-n gmc-system
+deploy: ## Deploy the GMC into the current kube-context via the Helm chart (dev/CI: floating image tags)
+	GMC_IMG='$(GMC_IMG)'; AGC_IMG='$(AGC_IMG)'; PROXY_IMG='$(PROXY_IMG)'; \
+	helm upgrade --install $(HELM_RELEASE) "$(CHART_DIR)" \
+		--namespace gmc-system --create-namespace \
+		--set allowFloatingImageTags=true \
+		--set gmc.image.repository="$${GMC_IMG%:*}",gmc.image.tag="$${GMC_IMG##*:}" \
+		--set agc.image.repository="$${AGC_IMG%:*}",agc.image.tag="$${AGC_IMG##*:}" \
+		--set proxy.image.repository="$${PROXY_IMG%:*}",proxy.image.tag="$${PROXY_IMG##*:}"
 
 .PHONY: undeploy
-undeploy: ## Remove the GMC controller from the current kube-context
-	kustomize build config/default | kubectl delete --ignore-not-found=true -f -
-	kubectl delete --ignore-not-found=true -f config/admission-policy/tenant-resource-guard.yaml
-	kubectl delete --ignore-not-found=true -f config/admission-policy/namespace-psa-guard.yaml
-	kubectl delete --ignore-not-found=true -f config/agc-tenant-role/agc_tenant_role.yaml
+undeploy: ## Remove the GMC Helm release from the current kube-context (CRDs retained: resource-policy keep)
+	helm uninstall $(HELM_RELEASE) --namespace gmc-system --ignore-not-found
 
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(REPO_ROOT) tools
