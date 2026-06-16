@@ -25,6 +25,8 @@ sources:
 maintainers:
   - name: actions-gateway maintainers
 annotations:
-  # cert-manager is an optional dependency, not a hard requirement: the chart
-  # falls back to a self-signed serving cert when certManager.enabled=false.
-  artifacthub.io/prerelease: "true"
+  # Stable GA release: Artifact Hub must not flag the listing as a prerelease.
+  # Keep "true" only while cutting 0.x / -rc tags (see docs/operations/release.md
+  # § Chart version & metadata). publish.yml packages the chart from this dir as
+  # is, so this annotation is baked into the published chart at tag time.
+  artifacthub.io/prerelease: "false"
