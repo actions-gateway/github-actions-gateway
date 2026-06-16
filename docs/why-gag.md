@@ -12,11 +12,13 @@ runners. GAG was built to solve them together.
 
 - **`ResourceQuota` is unsafe with ARC — so self-service is too.** When a runner
   pod is preempted, OOM-killed, or simply can't schedule because the namespace
-  quota is full, ARC has no built-in flow to fast-cancel the GitHub job lock and
-  rerun. The job sits until the lock expires (~10 minutes), then fails and needs
-  a manual rerun. Because quota exhaustion turns into failed jobs, teams avoid
-  enforcing `ResourceQuota` — exactly the control you need to safely let tenants
-  manage their own runner counts.
+  quota is full, ARC has no built-in flow to release the GitHub job and reassign
+  it to a runner that can run. It retries pod creation on the same runner and,
+  after a fixed number of failures, marks the runner `Failed` — leaving the job
+  stuck in GitHub's queue (up to its 24-hour timeout) until someone clears the
+  runner and reruns the job manually. Quota exhaustion turns into stuck jobs
+  rather than graceful queueing, which discourages enforcing the very
+  `ResourceQuota` you need to safely let tenants manage their own runner counts.
 - **Scheduling starvation under a shared quota.** Each ARC `AutoscalingRunnerSet`
   has its own `maxRunners` cap, but there is no primitive for "GPU runners must
   always claim at least N slots, regardless of how many CPU runners are active."
@@ -35,7 +37,7 @@ runners. GAG was built to solve them together.
 
 | Capability | ARC scale-set mode | GitHub Actions Gateway |
 | --- | --- | --- |
-| Safe under a per-tenant `ResourceQuota` | Quota-blocked jobs fail; manual rerun | [Auto fast lock-cancel + rerun, per-job budget](design/04-operational-flows.md) |
+| Safe under a per-tenant `ResourceQuota` | Quota-blocked jobs stall; manual cleanup + rerun | [Auto fast lock-cancel + rerun, per-job budget](design/04-operational-flows.md) |
 | Guaranteed floor for critical runner types | No per-quota primitive | [Priority tiers per runner group](design/02-architecture.md) |
 | Scale workers to zero between jobs | Yes (`minRunners: 0`) | Yes — workers exist only while a job runs |
 | Per-tenant dedicated egress IPs | Shared cluster egress | [Per-tenant HTTPS CONNECT proxy pool](design/network-architecture.md) |
