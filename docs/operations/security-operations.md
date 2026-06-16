@@ -48,6 +48,7 @@ Two detection substrates are used:
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
+  - [Verify build provenance](#verify-build-provenance)
   - [Retrieve and inspect the SBOM](#retrieve-and-inspect-the-sbom)
 - [Reference Links](#reference-links)
 
@@ -629,6 +630,14 @@ GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on eve
   per-arch manifest carry a signature, so verification succeeds against the
   pinned index digest and also against a per-arch manifest digest (e.g. an image
   mirrored or referenced by platform-specific manifest).
+- **Carrying a signed SLSA build-provenance attestation** (from
+  [`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance)),
+  attached to the index digest as an OCI referrer through the same keyless
+  Fulcio/Rekor path. It records *how* the image was built — the workflow, repo,
+  commit, and trigger — and is authenticated, so a pusher can't forge it. This
+  meets **SLSA Build L2**; buildx's unsigned default provenance is disabled in
+  favour of it (full SLSA Build L3 would need an isolated reusable-workflow
+  builder, not yet adopted).
 - **Accompanied by an SPDX-JSON SBOM per architecture** (generated with
   [syft](https://github.com/anchore/syft)) attached as a cosign attestation to
   that architecture's manifest, so you can enumerate exactly what shipped in the
@@ -664,6 +673,41 @@ cosign verify \
   cluster-wide enforcement is the operator's to configure (the gateway does not
   ship it, mirroring the registry-allowlist split in
   [§5.2 Supply-Chain](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
+
+### Verify build provenance
+
+The build-provenance attestation answers *how and where* the image was built —
+the complement to the signature's *who signed it*. It is bound to the **index**
+digest (unlike the per-arch SBOM attestations), so a tag or index-digest
+reference verifies directly. The one-command check uses the GitHub CLI:
+
+```bash
+# Confirms the signed SLSA provenance was minted by this project's publish
+# workflow. Resolve the tag to the index digest first for a workload check.
+gh attestation verify oci://ghcr.io/actions-gateway/gmc:<tag-or-digest> \
+  --repo actions-gateway/github-actions-gateway \
+  --signer-workflow actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+```
+
+`cosign` verifies the same attestation against the keyless identity, matching the
+signature/SBOM commands above (the predicate type is the SLSA provenance v1
+in-toto type):
+
+```bash
+cosign verify-attestation --type slsaprovenance1 \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  ghcr.io/actions-gateway/gmc:<tag-or-digest> \
+  | jq -r '.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters'
+```
+
+- **A provenance verification failure is a stop-ship / incident signal**, exactly
+  like a `cosign verify` failure: the image was not built-and-attested by the
+  publish workflow. The same identity pair is what an admission policy engine can
+  enforce so only images with valid provenance run.
+- The provenance is **authenticated** (signed via Fulcio, logged in Rekor), which
+  is the property buildx's unsigned default provenance lacks — that is why the
+  pipeline disables the default and emits this signed one instead.
 
 ### Retrieve and inspect the SBOM
 

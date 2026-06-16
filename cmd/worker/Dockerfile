@@ -17,8 +17,10 @@ COPY . .
 ARG TARGETOS TARGETARCH
 # -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
 # build ID — together they make the binary bit-for-bit reproducible (a
-# reproducible-build input for SLSA-L3; build provenance attestation is not yet
-# emitted, so this is not a full SLSA-L3 claim — see Q103).
+# reproducible-build input). At publish time publish.yml emits a signed,
+# Rekor-logged build-provenance attestation for the image (SLSA Build L2 via
+# GitHub Actions OIDC + Sigstore); reaching SLSA Build L3 would additionally
+# require an isolated reusable-workflow builder, not yet adopted.
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags=-buildid= -o /wrapper ./cmd/worker

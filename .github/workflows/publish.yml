@@ -17,6 +17,13 @@ name: publish
 # SBOM (generated with syft, one per architecture) is attached to each per-arch
 # manifest as a cosign attestation, itself keyless-signed.
 #
+# A signed SLSA BUILD-PROVENANCE attestation (actions/attest-build-provenance,
+# Q103) is also attached to each image's index digest as an OCI referrer. It
+# travels the SAME keyless path — ambient OIDC → Fulcio cert → Rekor — so the
+# provenance is authenticated (SLSA Build L2), not the unsigned, overwritable
+# attestation buildx emits by default (which we disable). Reaching SLSA Build
+# L3 would additionally need an isolated reusable-workflow builder.
+#
 # This runs ONLY on a v* tag push (or manual dispatch) — i.e. on PUBLISH, not on
 # PRs. PR CI (security-scan.yml) builds each image and generates its SBOM so that
 # path can't silently break, but it does NOT push, sign, or attest: signing needs
@@ -49,7 +56,8 @@ jobs:
     permissions:
       contents: read # checkout
       packages: write # push images, signatures, and attestations to GHCR
-      id-token: write # KEYLESS cosign — mint the OIDC token Fulcio signs against
+      id-token: write # KEYLESS cosign + provenance — mint the OIDC token Fulcio signs against
+      attestations: write # actions/attest-build-provenance writes the signed SLSA provenance
     strategy:
       fail-fast: false
       # One leg per first-party Dockerfile. fakegithub is a test fixture, not a
@@ -137,6 +145,28 @@ jobs:
           # misses and builds fresh); no cache-to so a publish never evicts the
           # PR build cache.
           cache-from: type=gha,scope=${{ matrix.name }}
+          # Disable buildx's default provenance attestation (mode=max for public
+          # repos): it is UNSIGNED and would embed extra attestation manifests in
+          # the index. The authenticated, Rekor-logged SLSA provenance comes from
+          # the attest-build-provenance step below instead, keeping the index the
+          # two arch manifests the SBOM/sign steps assume.
+          provenance: false
+      - name: Attest build provenance (signed, keyless)
+        # Signed SLSA build-provenance for the pushed multi-arch INDEX (the digest
+        # operators pin). KEYLESS, mirroring the cosign flow: the action mints the
+        # ambient GitHub OIDC token (id-token: write), exchanges it for a
+        # short-lived Fulcio cert, and records the in-toto SLSA provenance
+        # predicate in Rekor — no key material. push-to-registry attaches the
+        # attestation to GHCR as an OCI referrer of the index digest (needs
+        # packages: write + attestations: write), so a consumer resolves it from
+        # the same ref. This authenticated provenance — not buildx's unsigned
+        # default (disabled above) — is what backs the images' SLSA claim
+        # (SLSA Build L2; see docs/operations/release.md).
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
       - name: Install cosign
         uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
         with:

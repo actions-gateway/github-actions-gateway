@@ -27,6 +27,15 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   Actions OIDC — no signing key, no stored secret), signed **recursively** — the
   index *and* each per-arch manifest — and an **SPDX-JSON SBOM per architecture**
   attached as a keyless cosign attestation to that architecture's manifest.
+- A signed **SLSA build-provenance attestation** on every image
+  (`actions/attest-build-provenance`), attached to the index digest as an OCI
+  referrer. It is generated through the *same* keyless path as the signatures —
+  the publish workflow's GitHub OIDC identity → a short-lived Fulcio cert →
+  Rekor — so the provenance is **authenticated** (it records the workflow, repo,
+  commit, and trigger that produced the image and cannot be forged by a pusher).
+  This reaches **SLSA Build L2**; buildx's own *unsigned* default provenance is
+  disabled in favour of it. Consumers verify it with `gh attestation verify` or
+  `cosign verify-attestation` (see step 3).
 - The **Helm chart**, packaged and pushed as an OCI artifact to
   `oci://ghcr.io/actions-gateway/charts/actions-gateway`, with its `version` and
   `appVersion` set to the release tag and a keyless **cosign signature** from the
@@ -60,8 +69,9 @@ The maintainer's job is to cut the tag and verify the result.
    and distribute pull credentials. Verification by *this project's* CI and by
    anyone with pull access works either way.
 2. **Workflow permissions** are already declared in `publish.yml`
-   (`packages: write` to push, `id-token: write` for keyless cosign). No repo
-   secret is required — that is the point of keyless signing.
+   (`packages: write` to push, `id-token: write` for keyless cosign and
+   provenance, `attestations: write` for the build-provenance attestation). No
+   repo secret is required — that is the point of keyless signing.
 
 ## Release sequence
 
@@ -125,6 +135,22 @@ cosign verify-attestation --type spdxjson \
 Also spot-check that the index actually carries both platforms
 (`docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z` should
 list `linux/amd64` and `linux/arm64` manifests).
+
+Finally, confirm the **build-provenance attestation** is present and was minted
+by *this* workflow. The attestation binds to the **index** digest (unlike the
+per-arch SBOMs), so a tag reference resolves correctly:
+
+```bash
+# Verifies the signed SLSA provenance against the publish workflow's identity.
+gh attestation verify oci://ghcr.io/actions-gateway/gmc:vX.Y.Z \
+  --repo actions-gateway/github-actions-gateway \
+  --signer-workflow actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+```
+
+The equivalent cosign command and the predicate-inspection one-liner are in
+[security-operations.md § Verify build provenance](security-operations.md#verify-build-provenance).
+A provenance verification failure is the same **stop-ship** signal as a
+`cosign verify` failure.
 
 ### 4. Record the published digests
 
@@ -215,19 +241,20 @@ first-party worker is a separate decision tracked on the backlog.
 
 ## PR CI vs publish — what runs where
 
-| Stage | Build image | Generate SBOM | Push to GHCR | Sign + attest |
-|---|---|---|---|---|
-| Pull request (`security-scan.yml`) | ✅ | ✅ (artifact) | — | — |
-| Release tag (`publish.yml`) | ✅ | ✅ (attached) | ✅ | ✅ keyless |
+| Stage | Build image | Generate SBOM | Push to GHCR | Sign + SBOM-attest | Provenance attest |
+|---|---|---|---|---|---|
+| Pull request (`security-scan.yml`) | ✅ | ✅ (artifact) | — | — | — |
+| Release tag (`publish.yml`) | ✅ | ✅ (attached) | ✅ | ✅ keyless | ✅ keyless (SLSA L2) |
 
 PR CI proves the image builds and the SBOM generates so those paths can't silently
-break; signing and attestation are first exercised on a real `v*` tag, which is
-why step 3 verification matters on every release.
+break; signing, SBOM attestation, and build-provenance attestation are all first
+exercised on a real `v*` tag, which is why step 3 verification matters on every
+release.
 
 ## Supply-chain integrity of the pipeline itself
 
-The publish job holds `packages: write` + `id-token: write`: its ambient OIDC
-identity *is* the release trust root. A hijacked upstream action tag executing in
+The publish job holds `packages: write` + `id-token: write` + `attestations:
+write`: its ambient OIDC identity *is* the release trust root. A hijacked upstream action tag executing in
 that job could push and keyless-sign malicious images as the legitimate publish
 identity. Three controls keep the pipeline itself trustworthy.
 
