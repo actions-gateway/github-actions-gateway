@@ -10,7 +10,12 @@
 // that grant is least privilege (Q122/Q130). See docs/design/05-security.md.
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
+// events: the reconciler emits Kubernetes Events on teardown and PSA-label
+// failures. Both groups are required — the manager's new-style recorder
+// (mgr.GetEventRecorder) writes events.k8s.io/v1 Events, so with only the core
+// ("") grant every Event is silently 403'd (Q112; same class as the AGC Q95 fix).
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // Per-tenant RoleBindings reference the shipped agc-tenant-role ClusterRole.
 // `bind` is scoped to that single name so a compromised GMC cannot wire its
