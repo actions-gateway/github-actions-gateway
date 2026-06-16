@@ -63,6 +63,22 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to delete pods")
 	})
 
+	It("E2E_GMC_ManagerCanWriteEventsK8sIO: GMC manager SA can create events.k8s.io Events", func() {
+		By("checking the manager ClusterRole grants create on the events.k8s.io group (Q112)")
+		// The GMC's recorder (mgr.GetEventRecorder) writes events.k8s.io/v1
+		// Events. With only the core ("") grant every write is silently 403'd
+		// and dropped by the broadcaster, so reconcile-failure Events never
+		// surface in the tenant namespace. Assert the grant the fix added.
+		cmd := exec.Command("kubectl", "auth", "can-i", "create", "events.events.k8s.io",
+			"--as", "system:serviceaccount:"+gmcNamespace+":"+serviceAccountName,
+			"-n", tenantNS,
+		)
+		out, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(out).To(ContainSubstring("yes"),
+			"GMC manager SA should be able to create events.k8s.io Events; without this the recorder's writes are silently 403'd (Q112)")
+	})
+
 	It("E2E_GMC_AGCCannotAccessOtherNamespaces: AGC SA has no access to other namespaces", func() {
 		By("checking AGC SA cannot create pods in gmc-system")
 		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
