@@ -243,6 +243,14 @@ are validated.
   [install.md](../operations/install.md) install-from-source-checkout is
   the honest path and an HTML `<!-- Q98: … -->` marker flags where the
   registry instructions slot in once the first `v*` tag publishes.
+- [x] **Helm is the sole install path** (Q142, 2026-06-16): elevated by the
+  user to a pre-1.0-GA requirement so the GA cut ships **one** consistent
+  install path. The kustomize *deploy* overlays under `cmd/*/config/` are
+  deleted; `make deploy` and the kind e2e suite now `helm install` the same
+  chart we publish (so CI continuously tests the shipped artifact); the chart's
+  CRDs **and** `manager-role` RBAC are single-sourced from the controller-gen
+  output with drift gates (`make chart-crds-check` / `chart-rbac-check`). What
+  remains under `config/` is codegen + envtest substrate, not an install vehicle.
 
 ### F. Engineering quality gates — *gating*
 

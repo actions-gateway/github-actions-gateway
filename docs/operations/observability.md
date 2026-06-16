@@ -128,8 +128,8 @@ The metrics port is named `metrics` in the Service spec.
 
 ### Install-time scraping prerequisites (GMC manager)
 
-The default GMC install (`config/default`) now ships the manager NetworkPolicy
-**enabled by default**. Selecting the manager pod flips it to default-deny on
+The default GMC install ships the manager NetworkPolicy **enabled by default**
+(`networkPolicy.enabled=true`). Selecting the manager pod flips it to default-deny on
 ingress, so its `/metrics` endpoint admits traffic only from namespaces carrying
 the right label:
 
@@ -155,19 +155,11 @@ already admits monitoring-namespace scrapes of the metrics port).
 > egress limitation in [troubleshooting.md](troubleshooting.md)). The manager NP
 > is verified by manifest review and is pending a Tier-A runtime check.
 
-Two related integrations stay **opt-in** (not enabled by the default base), each
-behind its kustomize comment block — they will become Helm values toggles when
-the chart lands:
-
-- **`ServiceMonitor` (`../prometheus`):** out-of-box Prometheus Operator
-  scraping. Pure observability wiring; left opt-in because the `ServiceMonitor`
-  CRD only exists once the Prometheus Operator is installed, so enabling it
-  unconditionally would break `kubectl apply` on clusters without it.
-- **cert-manager metrics certificate (`[METRICS-WITH-CERTS]`):** replaces
-  controller-runtime's self-signed metrics cert with a cert-manager-issued one
-  so scrapers verify it instead of using `insecure_skip_verify`. The endpoint is
-  already TLS + RBAC-authn gated, so this is defense-in-depth; left opt-in
-  because it hard-requires cert-manager at install time.
+The `ServiceMonitor` integration stays **opt-in**, behind the
+`metrics.serviceMonitor.enabled` chart value (default `false`): out-of-box
+Prometheus Operator scraping. It is left off by default because the
+`ServiceMonitor` CRD only exists once the Prometheus Operator is installed, so
+rendering it unconditionally would break `helm install` on clusters without it.
 
 ---
 

@@ -52,26 +52,45 @@ under k8s.io/api skew — the exact Q73 hazard.
 This removes the chart-side hand-copy as a source of truth (it becomes
 generated) and gates the GMC-bundled copy against AGC.
 
-### B. e2e installs via Helm — *later PR*
+### B. e2e installs via Helm — *DONE*
 
-Switch the kind e2e suite's `setupGMC()` from `make deploy` (kustomize) to
-`helm install` of the chart, so the chart install path is exercised on every
-e2e run. Needs a CI e2e cycle to validate; cannot complete in a local-only
-session.
+`cmd/gmc/Makefile`'s `deploy`/`undeploy` now wrap `helm upgrade --install` /
+`helm uninstall` of `charts/actions-gateway` (the same chart we publish), and the
+kind e2e suite's `setupGMC()`/`teardownGMC()` drive them — so the chart install
+path is exercised on every e2e run. The chart sets `allowFloatingImageTags=true`
+and the gmc/agc/proxy image values from `GMC_IMG`/`AGC_IMG`/`PROXY_IMG`; the
+e2e-only `--allow-agc-extra-env` + `AGC_EXTRA_*` env injection stays as a
+post-install `kubectl patch`. An `azure/setup-helm` step was added to
+`e2e-test.yml`. The green e2e CI run on the PR is the proof.
 
-### C. Delete kustomize overlays — *later PR, after B*
+### C. Delete kustomize overlays — *DONE*
 
-Once e2e installs via Helm, remove the kustomize *deploy* path (`config/default`
-overlays, the `make deploy`/`make install` kustomize wiring) and replace the dev
-loop with a `helm install ... allowFloatingImageTags=true` shortcut. Keep the
-controller-gen plain-YAML output under `config/` for codegen + envtest. The one
-real seam to design through is RBAC: controller-gen emits the role *rules* under
-a fixed `roleName`, while the chart templates the *metadata/names* — so RBAC
-becomes a generate-rules + Helm-template-wrapper step, not a copy.
+Removed the kustomize *deploy* path: `config/default`, `config/manager`,
+`config/certmanager`, `config/network-policy`, `config/prometheus`,
+`config/samples`, the `config/agc-tenant-role` copy, and the deploy-only
+`config/rbac` scaffolding (leader-election, metrics, editor/viewer/admin roles,
+service account, role binding, kustomizations), plus the `make deploy`/`install`
+kustomize wiring. The chart owns every one of those resources.
 
-## Out of scope
+**What stays** under `cmd/*/config/` is the codegen + envtest substrate, NOT an
+install vehicle: the controller-gen CRD/RBAC/webhook outputs (also the
+single-source inputs to the chart generators, and what `rbac_test.go` + envtest
+load) and the two `admission-policy` ValidatingAdmissionPolicies the GMC
+integration suite applies in envtest. `make manifests` reproduces them.
 
-- Generating the chart's **RBAC** from `config/rbac` (slice C seam) — deferred
-  with slice C.
-- Removing the GMC's bundled RunnerGroup copy entirely (vs. gating it) — that
-  depends on reworking the GMC kustomization/envtest paths in slice C.
+**RBAC seam — single-sourced now** (user decision, this PR). `scripts/sync-chart-rbac.sh`
+generates `charts/actions-gateway/files/manager-role-rules.yaml` from
+`cmd/gmc/config/rbac/role.yaml`; the chart's `manager-role` template embeds it
+via `.Files.Get`, and `make chart-rbac-check` gates drift (wired into `make check`
+and `make manifest-validate`) — mirroring slice A's CRD gate. `manifest-validate`
+no longer renders any kustomize overlay; it schema-validates the retained
+controller-gen manifests + VAPs as standalone files plus the chart renders.
+
+## Out of scope (follow-ups)
+
+- Single-sourcing the chart's **webhook** config and the **agc-tenant-role** /
+  metrics / leader-election roles from their controller-gen/config copies — the
+  same drift class as RBAC, not covered by this PR's RBAC gate. The chart copies
+  and the retained `config/` copies are currently kept in sync by review +
+  manifest-validate, not a generator. Worth a follow-up Queue item.
+- Removing the GMC's bundled RunnerGroup copy entirely (vs. gating it).

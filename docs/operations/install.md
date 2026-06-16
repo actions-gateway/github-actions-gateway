@@ -13,11 +13,11 @@ The Helm chart installs the GMC and its cluster prerequisites **only** — CRDs,
 RBAC, the validating webhook, the `namespace-psa-guard` and
 `gmc-tenant-resource-guard` admission policies, and NetworkPolicies. Per-tenant Actions Gateway Controller (AGC) instances and
 egress proxy pools are **not** chart resources; the GMC provisions them at
-runtime from each tenant's `ActionsGateway` CR. The chart is the supported
-distribution artifact; the `cmd/gmc/config/` kustomize bases remain the dev/CI
-source of truth. For the full chart reference (every value, the templates it
-renders, offline validation), see the
-[chart README](../../charts/actions-gateway/README.md).
+runtime from each tenant's `ActionsGateway` CR. The chart is the **sole** install
+path — there is no kustomize overlay; the plain-YAML files under `cmd/gmc/config/`
+are the controller-gen codegen + test substrate, not an install vehicle. For the
+full chart reference (every value, the templates it renders, offline validation),
+see the [chart README](../../charts/actions-gateway/README.md).
 
 ---
 

@@ -7,11 +7,13 @@ Actions Gateway Controller (AGC) instances and egress proxy pools are
 **provisioned by the GMC at runtime** from each `ActionsGateway` CR; they are
 not chart resources.
 
-> The `cmd/gmc/config/` and `cmd/agc/config/` kustomize bases remain the
-> dev/CI source of truth (they back `make manifests`, envtest, and e2e). This
-> chart is the shipped install artifact, generated to match them. Helm was
-> chosen over a Kustomize overlay for versioned releases and a real day-2
-> `helm upgrade`/`rollback` lifecycle (decision D-M5-1).
+> This chart is the **sole** install path (Q142) — there is no kustomize
+> overlay. The plain-YAML files under `cmd/gmc/config/` and `cmd/agc/config/`
+> are the controller-gen codegen + envtest substrate (they back `make manifests`
+> and envtest) and the single-source inputs to this chart's CRD/RBAC generators;
+> they are not an install vehicle. Helm was chosen over a Kustomize overlay for
+> versioned releases and a real day-2 `helm upgrade`/`rollback` lifecycle
+> (decision D-M5-1).
 
 ## What it installs
 
@@ -23,7 +25,11 @@ not chart resources.
   hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall
   out of sync. See [code-generation.md](../../docs/development/code-generation.md).
 - The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`,
-  cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole.
+  cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole. The manager
+  ClusterRole's **rules are generated** from the controller-gen output of the
+  GMC's `+kubebuilder:rbac` markers (`cmd/gmc/config/rbac/role.yaml`) into
+  `files/manager-role-rules.yaml` by `make chart-rbac`; a CI drift gate
+  (`make chart-rbac-check`) fails if they fall out of sync. Do not hand-edit them.
 - The validating webhook (`ValidatingWebhookConfiguration` + Service) and its
   serving cert (cert-manager or self-signed — see below).
 - Two ValidatingAdmissionPolicies that confine the GMC's cluster-wide write

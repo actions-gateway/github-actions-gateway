@@ -81,9 +81,9 @@ the grant:
   the *existing* namespace already carries the marker (read from
   `oldObject`, which the requester cannot forge), and denies any change
   to a namespace label other than the six `pod-security.kubernetes.io/*`
-  keys or to any annotation. It ships in
-  `cmd/gmc/config/admission-policy/namespace-psa-guard.yaml` and is
-  applied by `make deploy`.
+  keys or to any annotation. It ships in the Helm chart
+  (`charts/actions-gateway/templates/namespace-psa-guard.yaml`, gated on
+  `admissionPolicy.enabled`).
 
 The policy deliberately does **not** ban writing `privileged` outright,
 because `securityProfile: privileged` is a supported per-tenant opt-in

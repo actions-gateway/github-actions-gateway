@@ -143,7 +143,7 @@ kubectl get actionsgateway -n <namespace> <name> -o jsonpath='{.status.condition
 
 **Resolution.**
 - If the GMC pod is not running, restore it from its Deployment.
-- If RBAC is missing, re-run `make install` and `make deploy` from the GMC source.
+- If RBAC is missing, re-run `helm upgrade --install` of the chart (RBAC ships with it).
 - If the admission webhook is rejecting the CR, fix the CR spec and re-apply.
 - If a reconcile error is logged (e.g. `failed to create Deployment`), check the `actions_gateway_reconcile_errors_total` metric and read the full error from the GMC logs. Fix the underlying permissions or quota issue and the GMC's reconciler will retry.
 
