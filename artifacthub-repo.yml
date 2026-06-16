@@ -1,0 +1,29 @@
+# Artifact Hub repository metadata for the published OCI Helm chart
+# (oci://ghcr.io/actions-gateway/charts/actions-gateway).
+#
+# This file is the ownership-verification metadata Artifact Hub reads for the
+# repository. For an OCI-based Helm repository it is pushed to the registry as an
+# OCI artifact alongside the chart; Artifact Hub then matches the repositoryID
+# below against the one it assigned when the repository was registered in the
+# control panel, proving the repo is owned by this project.
+#
+# One-time maintainer steps to finalize the listing (external, control-panel):
+#   1. In the Artifact Hub control panel, add a repository of kind "Helm charts"
+#      with URL oci://ghcr.io/actions-gateway/charts/actions-gateway.
+#   2. Copy the repositoryID it assigns into the field below and commit it.
+#   3. Push this file to the registry as the repository-metadata OCI artifact:
+#        oras push \
+#          ghcr.io/actions-gateway/charts/actions-gateway:artifacthub.io \
+#          artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
+#   4. Trigger a refresh in the control panel; the listing verifies as owned.
+#
+# Chart discoverability metadata (description, prerelease flag, etc.) lives in
+# the chart's own annotations — see charts/actions-gateway/Chart.yaml.
+
+# repositoryID assigned by Artifact Hub on registration (step 1 above). Until it
+# is filled, ownership is unverified but the chart still indexes from its
+# Chart.yaml annotations.
+repositoryID: ""
+
+owners:
+  - name: actions-gateway maintainers

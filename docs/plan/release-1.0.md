@@ -4,6 +4,15 @@
 
 ---
 
+> **1.0 SHIPPED — 2026-06-16.** `v1.0.0` is published as a final release:
+> all four multi-arch images + the cosign-signed Helm chart are live on GHCR
+> (`artifacthub.io/prerelease: "false"`), verified end-to-end against the
+> published artifacts, with a GitHub Release carrying the pinned digests, GA
+> install docs, and the public website launched ([Q129](../STATUS.md)). All
+> gating buckets below are satisfied; the last packaging gate (Q98) is closed.
+
+---
+
 ## What 1.0 means
 
 1.0 is the first release an operator can **install, run multi-tenant in
@@ -146,9 +155,16 @@ policy) can exist until there is an artifact to install and scan.
   `make verify-release VERSION=v1.0.0-rc.1` (tags-only Q124 identity) passed for
   all four images + chart; `helm pull --version 1.0.0-rc.1` succeeded and the
   pulled chart still fail-closes without a pinned digest and renders
-  digest-pinned image refs when one is supplied. **GA finalization remains**
-  (promote `v1.0.0`: flip the prerelease annotation, Artifact Hub listing,
-  `v1.0.0` docs, launch site [Q129](../STATUS.md)). Original gate text:
+  digest-pinned image refs when one is supplied. **GA shipped 2026-06-16**
+  (Q98 closed): the **`v1.0.0`** tag published all four multi-arch images + the
+  chart to GHCR as a **final** release (`artifacthub.io/prerelease: "false"`,
+  flipped pre-tag in #252); re-verified live against the published `v1.0.0`
+  artifacts — `make verify-release VERSION=v1.0.0` passed for all four images +
+  chart, `cosign verify`/`verify-attestation` against `refs/tags/v1.0.0`
+  succeeded, `helm pull --version 1.0.0` rendered digest-pinned refs and
+  fail-closed without one. GitHub Release cut with the four digests; docs flipped
+  to the GA install path; public website launched ([Q129](../STATUS.md)).
+  Original gate text:
   a Helm chart under `charts/actions-gateway/` (Helm decided over
   Kustomize per [D-M5-1](milestone-5.md#11-install-vehicle--decided-helm-chart))
   that produces a working tenant from a single `helm install`. Contents

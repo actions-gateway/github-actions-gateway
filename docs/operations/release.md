@@ -154,9 +154,20 @@ there is **no manual Chart.yaml version bump** to remember — the in-repo
 Two things still need a maintainer's eye, in a normal PR (not on the tag):
 
 - **Prerelease annotation.** [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml)
-  carries `artifacthub.io/prerelease: "true"`. Keep it `true` while cutting `0.x`
-  / `-rc` tags; set it to `false` for the first stable `v1.0.0+` release so Artifact
-  Hub stops flagging the listing as a prerelease.
+  carries `artifacthub.io/prerelease`. **`publish.yml` does not derive this from
+  the tag** — it packages the chart from `charts/actions-gateway/` as is, so the
+  committed value is baked into the published chart at tag time and is immutable
+  once tagged. Keep it `"true"` while cutting `0.x` / `-rc` tags; it was flipped
+  to `"false"` for the `v1.0.0` GA cut (Q98) so Artifact Hub no longer flags the
+  listing as a prerelease. This flip must land in a normal PR **before** the
+  stable tag is pushed.
+- **Artifact Hub listing.** Discoverability metadata (description, keywords,
+  prerelease flag) ships in the chart's own annotations. Ownership verification
+  uses [`artifacthub-repo.yml`](../../artifacthub-repo.yml) at the repo root —
+  register the OCI repository in the Artifact Hub control panel, copy the
+  assigned `repositoryID` into that file, and push it to the registry as the
+  repository-metadata OCI artifact (the file's header documents the exact
+  steps). This is a one-time control-panel action, not part of `publish.yml`.
 - **Empty `values.yaml` digests.** **Do not** commit real `sha256:…` digests into
   [`values.yaml`](../../charts/actions-gateway/values.yaml). The empty `digest`
   fields are the *secure default*: an unconfigured install fails closed (the GMC
