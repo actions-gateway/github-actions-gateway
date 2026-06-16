@@ -18,7 +18,10 @@ not chart resources.
 - The two CRDs — `ActionsGateway` and `RunnerGroup` — under `templates/crds/`
   with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field
   changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall`
-  preserves tenant objects.
+  preserves tenant objects. **These files are generated** from the authoritative
+  controller-gen sources (`cmd/*/config/crd`) by `make chart-crds` — do not
+  hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall
+  out of sync. See [code-generation.md](../../docs/development/code-generation.md).
 - The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`,
   cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole.
 - The validating webhook (`ValidatingWebhookConfiguration` + Service) and its
