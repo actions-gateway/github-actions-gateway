@@ -19,6 +19,7 @@ import (
 type fakeClock struct {
 	mu       sync.Mutex
 	now      time.Time
+	waiters  int // live After() waiters; lets a test wait until the loop is parked before advancing
 	done     chan struct{}
 	stopOnce sync.Once
 }
@@ -46,10 +47,22 @@ func (c *fakeClock) Stop() {
 
 // After returns a channel that fires once the clock is advanced past the
 // target time. The polling goroutine exits when Stop() is called.
+//
+// The target is captured and the waiter is counted synchronously, before the
+// polling goroutine starts, so a test that observes Waiters() sees the wait the
+// caller has already committed to (computed against the pre-advance clock).
 func (c *fakeClock) After(d time.Duration) <-chan time.Time {
 	ch := make(chan time.Time, 1)
-	target := c.Now().Add(d)
+	c.mu.Lock()
+	target := c.now.Add(d)
+	c.waiters++
+	c.mu.Unlock()
 	go func() {
+		defer func() {
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
+		}()
 		for {
 			select {
 			case <-c.done:
@@ -67,6 +80,16 @@ func (c *fakeClock) After(d time.Duration) <-chan time.Time {
 		}
 	}()
 	return ch
+}
+
+// Waiters reports how many After() waiters are currently parked. A test uses it
+// to wait until the manager's refresh loop has entered its proactive sleep
+// before advancing the clock — advancing earlier would let the loop compute its
+// wait against the already-advanced time and park past the target.
+func (c *fakeClock) Waiters() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.waiters
 }
 
 // stubProvider records calls and returns preset tokens.
@@ -135,6 +158,15 @@ func TestManager_ProactiveRefresh(t *testing.T) {
 	tok, err := mgr.Token(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "tok-1", tok)
+
+	// The loop closes m.ready (unblocking Token above) *before* it parks in
+	// clock.After for the ~55min proactive sleep. Wait until that waiter is
+	// registered, otherwise advancing the clock here can win the race: the loop
+	// would then compute its wait against the already-advanced time, floor it to
+	// minRefreshInterval, and park 30s past our target — so the refresh never
+	// fires within the assertion window below (the source of a -race flake).
+	require.Eventually(t, func() bool { return clk.Waiters() >= 1 }, 2*time.Second, 5*time.Millisecond,
+		"refresh loop never parked in clock.After after the first fetch")
 
 	// Advance to T-5min before expiry to trigger proactive refresh.
 	clk.Advance(expiry.Sub(epoch) - 5*time.Minute)
