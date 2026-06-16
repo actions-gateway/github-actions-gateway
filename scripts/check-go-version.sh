@@ -47,7 +47,7 @@ go_directive() {
 
 canonical="$(go_directive go.work)"
 if [[ -z "$canonical" ]]; then
-    printf 'check-go-version: go.work has no `go` directive\n' >&2
+    printf 'check-go-version: go.work has no go directive\n' >&2
     exit 2
 fi
 
@@ -79,7 +79,7 @@ done
 
 if (( exit_code != 0 )); then
     printf '\ncheck-go-version: Go version drift detected. All go.work, go.mod, and\n' >&2
-    printf 'go.work.gen files must declare the same `go` directive as go.work (%s).\n' "$canonical" >&2
+    printf 'go.work.gen files must declare the same go directive as go.work (%s).\n' "$canonical" >&2
     printf 'Offending files: %s\n' "${offenders[*]}" >&2
     printf 'Align the drifted file(s) to %s — do not bump go.work up to match them\n' "$canonical" >&2
     printf '(a version bump is a coupled change; see CLAUDE.md / reference docs).\n' >&2
