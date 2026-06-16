@@ -6,7 +6,9 @@ tree with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 - Config: `mkdocs.yml` · theme overrides: `overrides/` · styles + scripts:
   `docs/stylesheets/extra.css`, `docs/javascripts/extra.js`
-- Deployed by `.github/workflows/pages.yml`
+- Deployed by `.github/workflows/pages.yml` — pushing docs changes to `main`
+  publishes automatically; `workflow_dispatch` is available for a manual
+  redeploy. Pull requests only build/validate (never publish).
 
 ## Custom domain
 

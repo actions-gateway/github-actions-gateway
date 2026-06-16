@@ -15,10 +15,11 @@ on:
       - 'overrides/**'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
-  # Deploy is gated on a manual run (see the deploy job's `if`). Until the public
-  # launch (gated on Q99), pull_request and push only validate that the site
-  # builds; nothing is published. To launch: enable Pages (Settings → Pages →
-  # Source: GitHub Actions) and run this workflow from the Actions tab.
+  # The site is launched (Q129). Deploy now runs automatically on push to main
+  # (see the deploy job's `if`): merging docs changes publishes them to
+  # https://actions-gateway.com with no manual step. workflow_dispatch remains
+  # available for an on-demand redeploy. pull_request only validates that the
+  # site builds; it never publishes.
   workflow_dispatch:
 
 concurrency:
@@ -42,7 +43,7 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
