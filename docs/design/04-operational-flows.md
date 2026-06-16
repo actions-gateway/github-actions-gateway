@@ -177,6 +177,8 @@ The AGC stops renewal immediately on detecting `Evicted` (rather than waiting fo
 
 `maxEvictionRetries` is a hard lifetime cap per `run_id`, not a per-eviction-wave allowance: once exhausted, every subsequent eviction of that run is a no-op (counted by `eviction_retries_exhausted_total`) until the AGC restarts and the in-memory counters reset. Because a single workflow run can have several worker pods evicted simultaneously under node pressure, the check-and-increment of the per-run counter is serialized per `run_id`, so concurrent evictions can never collectively exceed the budget.
 
+To keep the per-`run_id` counter map from growing unbounded over the AGC's uptime, a background sweeper reclaims a run's counter once it has gone a fixed TTL (24 hours — well beyond any run's realistic lifetime) without a further eviction, bounding the map to runs evicted within that trailing window. An evicted worker pod only ever exists for a live run, so a counter idle for the TTL belongs to a run that can no longer be evicted; reclaiming it therefore never refills a live run's budget, and the hard cap above still holds (Q141).
+
 ---
 
 ### Stuck-Pending Worker Pod

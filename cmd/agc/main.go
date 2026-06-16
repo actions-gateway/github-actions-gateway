@@ -380,6 +380,14 @@ func run() error {
 	}
 	prov.Waiter = podWaiter
 
+	// Periodically reclaim expired per-run eviction-retry counters so the map
+	// does not grow unbounded over the process lifetime (Q141). The TTL is well
+	// beyond a realistic run lifetime, so reclamation never refills a live run's
+	// retry budget (the Q106 hard-cap invariant).
+	if err := mgr.Add(provisioner.NewEvictionSweeper(prov)); err != nil {
+		return fmt.Errorf("add eviction-counter sweeper: %w", err)
+	}
+
 	// Choose registrar:
 	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
 	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
