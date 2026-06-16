@@ -62,9 +62,9 @@ const (
 
 	// metricsScrapeNamespaceLabel / metricsScrapeNamespaceValue select the
 	// namespace(s) permitted to scrape the proxy and AGC metrics port.
-	// Mirrors the kubebuilder convention used by the GMC's own
-	// allow-metrics-traffic NetworkPolicy
-	// (cmd/gmc/config/network-policy/allow-metrics-traffic.yaml): an operator
+	// Mirrors the convention used by the GMC's own metrics-allow
+	// NetworkPolicy shipped by the chart
+	// (charts/actions-gateway/templates/networkpolicy.yaml): an operator
 	// labels their Prometheus namespace `metrics: enabled`. Kubelet probe
 	// traffic originates from the node and is exempted from NetworkPolicy
 	// enforcement by every CNI this project targets, so no explicit kubelet

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 #
-# Validate the shipped install artifact: yamllint over the hand-maintained
-# manifests and chart, kubeconform schema-validation of every rendered form,
+# Validate the shipped install artifact: yamllint over the controller-gen
+# manifests and chart, kubeconform schema-validation of every chart render,
 # helm lint, and the fail-closed digest-pinning assertion (Q96). Backs
 # `make manifest-validate` and mirrors the CI `validate` job in
 # .github/workflows/manifest-validate.yml exactly so local and CI verdicts
-# match. Requires yamllint, kubeconform, kustomize, and helm on PATH.
+# match. Requires yamllint, kubeconform, and helm on PATH.
+#
+# The Helm chart is the SOLE install path (Q142): there is no kustomize overlay
+# to render. The plain-YAML files left under cmd/*/config/ are controller-gen
+# output (CRDs, RBAC, webhook) retained as the codegen + envtest substrate and
+# the single-source inputs to the chart CRD/RBAC generators; they are
+# schema-validated below as standalone manifests.
 #
 # Env:
 #   MANIFEST_K8S_VERSION   Kubernetes version kubeconform validates against
@@ -27,7 +33,6 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 require_cmd yamllint "https://yamllint.readthedocs.io/en/stable/quickstart.html"
 require_cmd kubeconform "https://github.com/yannh/kubeconform#installation"
-require_cmd kustomize "https://kubectl.docs.kubernetes.io/installation/kustomize/"
 require_cmd helm "https://helm.sh/docs/intro/install/"
 
 MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-1.30.0}"
@@ -46,28 +51,26 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 
 yamllint_paths="charts/actions-gateway cmd/agc/config cmd/gmc/config"
 
-# Standalone manifests not emitted by `kustomize build cmd/gmc/config/default`
-# (they are opt-in or separately-applied resources). kustomization.yaml files
-# and strategic-merge/JSON6902 patch fragments are deliberately NOT listed:
-# they are not standalone manifests (no kind/apiVersion, or a bare patch
-# array) and kubeconform cannot parse them — their validity is proven when
-# `kustomize build` succeeds and by yamllint.
+# The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
+# (CRDs, manager RBAC role, webhook config) that are the codegen substrate and
+# single-source inputs to the chart CRD/RBAC generators, plus the two
+# ValidatingAdmissionPolicies the GMC integration suite applies in envtest.
+# Schema-validate them directly since there is no longer a kustomize overlay that
+# renders them.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
 cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
+cmd/gmc/config/rbac/role.yaml
+cmd/gmc/config/webhook/manifests.yaml
+cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
+cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
-cmd/gmc/config/agc-tenant-role/agc_tenant_role.yaml
-cmd/gmc/config/prometheus/monitor.yaml
-cmd/gmc/config/samples/actions-gateway.github.com_v1alpha1_actionsgateway.yaml"
+cmd/gmc/config/admission-policy/tenant-resource-guard.yaml"
 
 echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally
 yamllint --strict -c "$REPO_ROOT/.yamllint.yaml" $yamllint_paths
 
-echo "==> kubeconform: kustomize-rendered GMC default overlay (k8s $MANIFEST_K8S_VERSION)"
-# shellcheck disable=SC2086
-kustomize build "$REPO_ROOT/cmd/gmc/config/default" | kubeconform $kubeconform_flags
-
-echo "==> kubeconform: standalone manifests not in the default overlay"
+echo "==> kubeconform: controller-gen manifests (codegen substrate; k8s $MANIFEST_K8S_VERSION)"
 # shellcheck disable=SC2086
 kubeconform $kubeconform_flags $standalone_manifests
 

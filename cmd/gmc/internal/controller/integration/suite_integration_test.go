@@ -76,7 +76,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Install the agc-tenant-role ClusterRole. In production this ships with
-	// the GMC kustomize bundle (cmd/gmc/config/rbac/agc_tenant_role.yaml); in
+	// the Helm chart (charts/actions-gateway/templates/agc-tenant-role.yaml); in
 	// envtest we install it programmatically so per-tenant RoleBindings can
 	// actually grant their referenced permissions to impersonated SAs.
 	if err := installAGCTenantClusterRole(ctx, k8sClient); err != nil {
@@ -147,8 +147,9 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	return ipRangeReconciler
 }
 
-// installAGCTenantClusterRole mirrors cmd/gmc/config/rbac/agc_tenant_role.yaml.
-// The production install applies it once at GMC install time; envtest needs the
+// installAGCTenantClusterRole mirrors the agc-tenant-role ClusterRole the Helm
+// chart ships (charts/actions-gateway/templates/agc-tenant-role.yaml). The
+// production install applies it once at GMC install time; envtest needs the
 // same singleton for per-tenant RoleBindings to grant any permission.
 func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
 	cr := &rbacv1.ClusterRole{
