@@ -61,7 +61,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
         ginkgo golangci-lint lint lint-status shellcheck queue-unblock \
-        third-party-notices third-party-notices-check vendor-check \
+        third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
 ##@ General
@@ -231,6 +231,18 @@ third-party-notices-check: ## Fail if THIRD-PARTY-NOTICES is stale vs vendor/ (C
 .PHONY: vendor-check
 vendor-check: ## Fail if vendor/ + tools/vendor/ drift from go.sum (CI supply-chain gate)
 	scripts/vendor-check.sh
+
+# Tidiness gate for the workspace module files (Q94). `go mod tidy` is the
+# canonical normaliser for go.mod/go.sum; a non-canonical committed go.sum makes
+# the documented tidy flow re-add the /go.mod hash rows, so contributors revert
+# spurious diffs. This re-runs the tidy flow (go-work-tidy.sh + go work sync) and
+# fails on any go.mod/go.sum/go.work.sum drift. Sibling of vendor-check (Q126):
+# this makes the module files canonical, vendor-check makes vendor/ match them.
+# Like vendor-check it can need network on a cold cache, so it stays out of the
+# fast `make check` gate and runs as its own CI job (unit-test.yml tidy-check).
+.PHONY: tidy-check
+tidy-check: ## Fail if any go.mod/go.sum/go.work.sum is not tidy (CI tidiness gate)
+	scripts/go-tidy-check.sh
 
 ##@ Security
 
