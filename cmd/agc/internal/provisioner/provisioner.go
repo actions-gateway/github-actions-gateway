@@ -36,6 +36,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -53,6 +54,10 @@ import (
 // global provider, which is the no-op provider unless main.go's tracing.Init
 // installed an exporter — so these spans cost almost nothing when tracing is off.
 var tracer = otel.Tracer(tracing.InstrumentationName)
+
+// defaultProvisionerClient is the bounded fallback used when Provisioner.HTTPClient
+// is nil. Shared so the nil path does not allocate a connection pool per call.
+var defaultProvisionerClient = httpx.NewClient()
 
 const (
 	labelManagedBy = "app.kubernetes.io/managed-by"
@@ -236,7 +241,8 @@ type Provisioner struct {
 	// Defaults to "https://api.github.com"; override in tests.
 	GitHubAPIURL string
 
-	// HTTPClient is used for GitHub API calls. Defaults to http.DefaultClient.
+	// HTTPClient is used for GitHub API calls. nil uses a bounded
+	// httpx.NewClient() (Q138) so a slow GitHub endpoint cannot wedge the caller.
 	HTTPClient *http.Client
 
 	// evictionCounts tracks per run_id eviction retry counts. The value carries
@@ -750,7 +756,7 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 
 	hc := p.HTTPClient
 	if hc == nil {
-		hc = http.DefaultClient
+		hc = defaultProvisionerClient
 	}
 	resp, err := hc.Do(req)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -71,7 +72,7 @@ func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client) (T
 		return nil, fmt.Errorf("githubapp: parse private key: %w", err)
 	}
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = httpx.NewClient()
 	}
 	return &installationTokenProvider{
 		creds:      creds,

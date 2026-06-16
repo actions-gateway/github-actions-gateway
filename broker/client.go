@@ -196,17 +196,32 @@ const LongPollResponseHeaderTimeout = longPollHold + longPollResponseHeaderSlack
 // (CreateSession, DeleteSession, AcquireJob, RenewJob) are bounded more tightly
 // by the listener's per-call ControlPlaneTimeout context; ResponseHeaderTimeout
 // is the long-poll's backstop and only a coarse ceiling for the rest.
+//
+// This is the one sanctioned exception to the bounded-by-default httpx policy
+// (Q138): it deliberately sets no overall http.Client.Timeout, because such a
+// deadline would sever a healthy GetMessage long-poll. Short, non-long-poll
+// callers should use githubapp/httpx.NewClient instead.
 func NewHTTPClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = LongPollResponseHeaderTimeout
 	return &http.Client{Transport: transport}
 }
 
+// defaultBrokerClient is the bounded fallback used when Client.HTTPClient is
+// nil. The broker is the one sanctioned exception to the bounded-by-default
+// httpx policy (Q138): GetMessage long-polls — it holds the connection open for
+// the server's poll window by design — so it cannot carry an overall read
+// deadline. NewHTTPClient bounds it with a transport ResponseHeaderTimeout
+// instead (sized just above the long-poll hold), which still tears down a
+// black-holed connection without severing a healthy poll. Shared so the nil
+// path does not allocate a connection pool per call.
+var defaultBrokerClient = NewHTTPClient()
+
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
-	return http.DefaultClient
+	return defaultBrokerClient
 }
 
 // newRequest builds a JSON POST request to url with body marshalled from v.

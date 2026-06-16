@@ -323,6 +323,18 @@ kubectl describe runnergroup -n <namespace> <name>
 
 ---
 
+## Reconcile or Token Mint Hangs on a Slow GitHub Endpoint
+
+**Symptoms.** An AGC or GMC operation that calls a GitHub REST endpoint — installation-token mint, runner registration (`generate-jitconfig`), rerun-failed-jobs, or the GMC's `api.github.com/meta` IP-range fetch — appears to stall, and on a fixed version the logs now show a prompt `context deadline exceeded` / `Client.Timeout exceeded` error instead. These are short request/response calls, distinct from the broker long-poll above.
+
+**What happened.** Before the Q138 fix these clients fell back to `http.DefaultClient`, which has no timeout: a peer that accepted the TCP connection but was slow — or never — to send response headers wedged the calling goroutine (a reconcile or a token fetch) until the multi-minute OS TCP timeout. Fixed versions build these clients with a bounded default (an overall request timeout plus a transport response-header timeout), so a slow GitHub endpoint fails fast and retriably rather than stalling the work. The broker long-poll is the one deliberate exception — it is bounded by the response-header deadline above, not an overall timeout.
+
+**Resolution.**
+- Upgrade to a version with the Q138 fix. No configuration is required; the bound is built in.
+- Repeated timeout errors point at the egress path to `api.github.com` / `*.githubusercontent.com` (proxy, NAT, or DNS latency), not the gateway — investigate connectivity to those hosts.
+
+---
+
 ## Orphaned RunnerGroup After Removing It From the Spec
 
 **Symptoms.** A runner group was removed from (or reordered within) `spec.runnerGroups` on an `ActionsGateway`, but a `RunnerGroup` for it still exists and keeps running listeners and worker pods. `kubectl get runnergroup -n <namespace>` lists more groups than the CR now declares:

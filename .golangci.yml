@@ -13,12 +13,36 @@ linters:
   enable:
     - dupl
     - errcheck
+    - forbidigo
     - gosec
     - govet
     - ineffassign
     - staticcheck
     - unused
   settings:
+    forbidigo:
+      # Bounded-by-default HTTP clients (Q138). http.DefaultClient and the
+      # http.Get/Post/... package helpers have no timeout: a slow or black-holed
+      # peer wedges the calling goroutine until the multi-minute OS TCP timeout
+      # (the Q108/Q134 failure class). Production code must build its client with
+      # githubapp/httpx.NewClient instead. The one sanctioned exception — the
+      # broker long-poll listener (broker.NewHTTPClient) — holds the connection
+      # open by design and is annotated inline where it must use the default.
+      #
+      # noctx was evaluated for the request-without-context half of this class but
+      # is too coarse to pair here: golangci-lint exposes no noctx config, so it
+      # also fails net.Listen, net.DialTimeout, and os/exec.Command — all
+      # legitimate and unrelated to the no-read-timeout bug (e.g. the egress
+      # proxy's listeners). Production request construction already uses
+      # http.NewRequestWithContext throughout, so forbidigo alone covers Q138.
+      forbid:
+        - pattern: ^http\.DefaultClient$
+          msg: "http.DefaultClient has no timeout and wedges the caller on a slow peer (Q138); use githubapp/httpx.NewClient(). Long-poll is the documented exception: broker.NewHTTPClient."
+        - pattern: ^http\.(Get|Post|PostForm|Head)$
+          msg: "the http.Get/Post/PostForm/Head helpers use http.DefaultClient (no timeout, no context) (Q138); build a request and call (*http.Client).Do on a githubapp/httpx.NewClient()."
+      # Comments are not forbidden — only real expressions.
+      exclude-godoc-examples: true
+      analyze-types: true
     dupl:
       # Token threshold for a clone to be reported. golangci-lint's default is
       # 150; we keep it. Lower values (the dupl binary's own default is 50) drown
@@ -77,6 +101,12 @@ linters:
       - path: _test\.go
         linters:
           - dupl
+      # forbidigo targets production HTTP clients (Q138). Tests legitimately use
+      # http.DefaultClient and http.Get against local httptest servers, which are
+      # bounded by the test itself.
+      - path: _test\.go
+        linters:
+          - forbidigo
       # Kubebuilder-generated GroupVersion scaffolding still uses
       # scheme.Builder; not under our control until kubebuilder updates.
       - path: api/v1alpha1/groupversion_info\.go

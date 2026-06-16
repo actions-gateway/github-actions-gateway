@@ -41,6 +41,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 )
 
 func main() {
@@ -377,7 +378,9 @@ func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Clien
 
 	client := bc.HTTPClient
 	if client == nil {
-		client = http.DefaultClient
+		// Short one-shot ack; a bounded client keeps the probe from hanging on a
+		// black-holed broker (Q138). This is not the long-poll path.
+		client = httpx.NewClient()
 	}
 	resp, err := client.Do(req)
 	if err != nil {
