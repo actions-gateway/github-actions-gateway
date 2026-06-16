@@ -95,10 +95,16 @@ Options, in order of preference:
    from the code repo and reinvites docs drift. Not worth it for a single
    project — reconsider only if the org grows to host multiple projects.
 
-**Decision:** ship as the project page (option 1). A vanity domain is **punted**
-— the org move removed the personal-handle problem, so a custom domain is a
-nice-to-have, not a need, and remains a trivial CNAME-only upgrade (option 2) if
-we ever want one.
+**Decision:** shipped initially as the project page (option 1), then upgraded to
+the **custom domain** (option 2) in 2026-06 once `actions-gateway.com` was
+purchased. The site now serves from the apex `https://actions-gateway.com/`: a
+`docs/CNAME` file (copied verbatim into the build output) plus
+`site_url: https://actions-gateway.com/` and the registrar DNS records (apex `A`
+→ `185.199.108–111.153`, `AAAA`, `www` `CNAME` → `actions-gateway.github.io`).
+As predicted, the move was DNS + two file changes — no rebuild or content
+rewrite. DNSSEC and org-level domain verification remain optional future
+hardening. See [`docs/development/website.md`](../development/website.md#custom-domain)
+for the durable how-to.
 
 ## Site map
 
