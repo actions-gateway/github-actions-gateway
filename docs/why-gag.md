@@ -12,13 +12,15 @@ runners. GAG was built to solve them together.
 
 - **`ResourceQuota` is unsafe with ARC — so self-service is too.** When a runner
   pod is preempted, OOM-killed, or simply can't schedule because the namespace
-  quota is full, ARC has no built-in flow to release the GitHub job and reassign
-  it to a runner that can run. It retries pod creation on the same runner and,
-  after a fixed number of failures, marks the runner `Failed` — leaving the job
-  stuck in GitHub's queue (up to its 24-hour timeout) until someone clears the
-  runner and reruns the job manually. Quota exhaustion turns into stuck jobs
-  rather than graceful queueing, which discourages enforcing the very
-  `ResourceQuota` you need to safely let tenants manage their own runner counts.
+  quota is full, ARC retries pod creation on the same runner (a 30-second retry
+  loop was added in [recent versions](https://github.com/actions/actions-runner-controller/pull/4305)),
+  but it has no flow to release the GitHub job and reassign it to a runner that
+  *can* run. After a fixed number of failures the runner is marked `Failed`,
+  leaving the job stuck in GitHub's queue (up to its 24-hour timeout) until
+  someone clears the runner and reruns the job manually. Quota exhaustion turns
+  into stuck jobs rather than graceful queueing, which discourages enforcing the
+  very `ResourceQuota` you need to safely let tenants manage their own runner
+  counts.
 - **Scheduling starvation under a shared quota.** Each ARC `AutoscalingRunnerSet`
   has its own `maxRunners` cap, but there is no primitive for "GPU runners must
   always claim at least N slots, regardless of how many CPU runners are active."
