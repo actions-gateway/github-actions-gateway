@@ -39,6 +39,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -427,6 +428,10 @@ func run() error {
 			RunnerOS:      os.Getenv("GITHUB_RUNNER_OS"),
 			RunnerArch:    os.Getenv("GITHUB_RUNNER_ARCH"),
 			UseV2Flow:     os.Getenv("GITHUB_USE_VSTS_FLOW") != "true",
+			// Tuned client bounds the GetMessage long-poll: a black-holed broker
+			// connection is torn down a few seconds past the 50s hold rather than
+			// blocking a listener for the multi-minute OS TCP timeout (Q108).
+			HTTPClient: broker.NewHTTPClient(),
 		},
 	}
 	if err := r.SetupWithManager(mgr); err != nil {

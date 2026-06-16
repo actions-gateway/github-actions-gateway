@@ -437,6 +437,68 @@ func TestListener_GetMessage202Loop(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// TestListener_GetMessageStallDoesNotWedge proves that a broker which accepts
+// the GetMessage connection but never answers cannot wedge the goroutine: the
+// broker client's ResponseHeaderTimeout fires, the poll loop classifies the
+// timeout as a benign "no message, retry", and the listener keeps polling rather
+// than blocking on a single call for the multi-minute OS TCP timeout (Q108). The
+// goroutine must neither exit nor heal the session — only retry.
+func TestListener_GetMessageStallDoesNotWedge(t *testing.T) {
+	oauthSrv := oauthStub()
+
+	var polls atomic.Int32
+	secondPoll := make(chan struct{})
+	var once sync.Once
+	mux := &brokerMux{}
+	mux.SetGetMessage(func(_ http.ResponseWriter, r *http.Request) {
+		if polls.Add(1) >= 2 {
+			once.Do(func() { close(secondPoll) })
+		}
+		// Never write a response: simulate a black-holed long-poll. Return when
+		// the client aborts (ResponseHeaderTimeout fires) or a safety cap elapses.
+		select {
+		case <-r.Context().Done():
+		case <-time.After(30 * time.Second):
+		}
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.IsLastListener = func() bool { return true }
+	// Short ResponseHeaderTimeout stands in for the production value so the test
+	// observes several bounded polls quickly instead of waiting 55s each.
+	transport := brokerSrv.Client().Transport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 150 * time.Millisecond
+	cfg.Broker.HTTPClient = &http.Client{Transport: transport}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	// A second bounded poll proves the loop retried rather than wedging on the
+	// first stalled call.
+	select {
+	case <-secondPoll:
+	case err := <-done:
+		t.Fatalf("listener exited instead of retrying a stalled poll (polls=%d, err=%v)", polls.Load(), err)
+	case <-time.After(5 * time.Second):
+		t.Fatalf("listener did not retry a stalled poll within 5s (polls=%d)", polls.Load())
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		assert.NoError(t, err, "context cancellation during a stalled poll should return nil")
+	case <-time.After(5 * time.Second):
+		t.Fatal("listener did not return after context cancellation")
+	}
+
+	transport.CloseIdleConnections()
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 func TestListener_IdleShutdownAt50(t *testing.T) {
 	oauthSrv := oauthStub()
 	mux := &brokerMux{} // default: always 202

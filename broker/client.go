@@ -160,6 +160,48 @@ func (c *Client) PoolBase() string {
 		strings.TrimRight(c.BrokerURL, "/"), poolID)
 }
 
+// longPollHold is the broker's server-side long-poll duration: GetMessage holds
+// the connection open for up to this long, waiting for a job, before returning
+// 202 Accepted. It is a property of the GitHub broker protocol (the runner SDK's
+// BrokerHttpClient / Task Agent Message API), not something the client controls.
+// Any client-side response deadline must sit above it so a healthy long-poll is
+// never cut short.
+const longPollHold = 50 * time.Second
+
+// longPollResponseHeaderSlack is added to longPollHold to derive the broker
+// client's ResponseHeaderTimeout. It absorbs normal scheduling and network
+// jitter on top of the server's hold so a healthy poll is never severed, while
+// still bounding a black-holed connection to a few seconds past the hold.
+const longPollResponseHeaderSlack = 5 * time.Second
+
+// LongPollResponseHeaderTimeout is the maximum time the broker client waits for
+// response headers after writing a request. It is sized just above longPollHold
+// (the broker's long-poll window) so a normal GetMessage long-poll — which
+// withholds headers for up to longPollHold — completes, while a black-holed
+// connection (one the broker accepts but never answers) is torn down shortly
+// after the hold elapses instead of blocking the caller until the OS TCP
+// timeout, which is minutes long and wedges the listener goroutine (Q108).
+const LongPollResponseHeaderTimeout = longPollHold + longPollResponseHeaderSlack
+
+// NewHTTPClient returns an *http.Client tuned for the broker protocol's
+// long-poll. It clones http.DefaultTransport (preserving proxy, TLS, and
+// connection-pool defaults) and sets ResponseHeaderTimeout to
+// LongPollResponseHeaderTimeout, so a connection the broker accepts but never
+// answers cannot wedge a listener goroutine for the multi-minute OS TCP timeout
+// (Q108). The connect phase is already bounded by the cloned transport's
+// DialContext timeout, so a broker that never completes the TCP handshake is
+// bounded too.
+//
+// The same tuned client backs every broker call. The short control-plane calls
+// (CreateSession, DeleteSession, AcquireJob, RenewJob) are bounded more tightly
+// by the listener's per-call ControlPlaneTimeout context; ResponseHeaderTimeout
+// is the long-poll's backstop and only a coarse ceiling for the rest.
+func NewHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = LongPollResponseHeaderTimeout
+	return &http.Client{Transport: transport}
+}
+
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
@@ -282,11 +324,21 @@ func (c *Client) CreateSession(ctx context.Context, agentID int64, agentName, ru
 	return result, nil
 }
 
-// GetMessage opens a 50-second long-poll against the broker.
+// GetMessage opens a long-poll against the broker: the server holds the
+// connection open for up to longPollHold (50s) waiting for a job before
+// returning 202 Accepted.
 // Returns (nil, nil) on 202 Accepted (no job queued).
 // Returns a non-nil *TaskAgentMessage when a job is available.
 // Callers are responsible for retrying on nil/nil with appropriate backoff.
 // Returns *RateLimitError on 429.
+//
+// Because the long-poll withholds response headers for the duration of the
+// hold, callers must drive GetMessage with an HTTPClient whose
+// ResponseHeaderTimeout sits above longPollHold (see NewHTTPClient). Otherwise a
+// black-holed connection — accepted by the broker but never answered — blocks
+// for the multi-minute OS TCP timeout, wedging the listener goroutine (Q108). A
+// timeout surfaces as a client-side net.Error with Timeout() == true, which the
+// listener classifies as a benign "no message, retry".
 func (c *Client) GetMessage(ctx context.Context, sessionID string) (*TaskAgentMessage, error) {
 	var reqURL string
 	if c.UseV2Flow {

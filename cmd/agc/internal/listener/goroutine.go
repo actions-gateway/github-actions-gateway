@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"math/rand"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -209,6 +210,22 @@ func Run(ctx context.Context, cfg Config) error {
 		if pollErr != nil {
 			if ctx.Err() != nil {
 				return nil
+			}
+
+			// A long-poll that stalled past the broker client's
+			// ResponseHeaderTimeout — a black-holed connection the broker accepts
+			// but never answers — surfaces here as a client-side timeout. It is
+			// benign: treat it like an empty poll and retry, without escalating
+			// backoff or healing the session (Q108). The bound itself lives in the
+			// broker client's tuned HTTPClient (broker.NewHTTPClient); without it
+			// the goroutine would block on a single GetMessage for the multi-minute
+			// OS TCP timeout, wedging this listener.
+			if isPollTimeout(pollErr) {
+				if cfg.Metrics != nil {
+					cfg.Metrics.MessagePollErrorsTotal.WithLabelValues(cfg.Namespace, "timeout").Inc()
+				}
+				log.Debug("GetMessage long-poll timed out; retrying", "error", pollErr)
+				continue
 			}
 
 			var rlErr *broker.RateLimitError
@@ -649,6 +666,19 @@ func isUnauthorized(err error) bool {
 func isSessionExpired(err error) bool {
 	var typed *broker.SessionExpiredError
 	return errors.As(err, &typed)
+}
+
+// isPollTimeout reports whether a GetMessage error is a client-side timeout
+// rather than a broker-reported status. It fires when the broker client's
+// ResponseHeaderTimeout (broker.LongPollResponseHeaderTimeout) elapses on a
+// black-holed long-poll — the broker accepts the connection but never answers
+// (Q108). The poll loop already returns early on parent-context cancellation, so
+// the only timeout that reaches here is the per-request response-header (or
+// connect) deadline, which is a benign "no message, retry" — not a session-level
+// failure that should trip backoff or a heal.
+func isPollTimeout(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 // isDecodeEOF reports whether a GetMessage error is a 200 response whose body
