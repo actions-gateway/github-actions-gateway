@@ -171,14 +171,16 @@ def chart_growth_vs_codebase():
                     textcoords="offset points", va="center", fontsize=11, fontweight="bold", color=col)
     ax.axhline(1.0, color="#999", ls=":", lw=1.2, zorder=1)
     ax.text(dts[i_fm], 1.06, "day-7 post baseline (1×)", fontsize=9, color="#777")
+    # Headroom so the tallest series (tokens) and its end label stay on-canvas.
+    top = max(max(v) for v in series.values()) * 1.08
     ax.axvline(PRO_TO_MAX, color="#222", ls="--", lw=1.1, zorder=1)
-    ax.text(PRO_TO_MAX, 5.4, " Pro→Max", fontsize=9.5, fontweight="bold", color="#222")
+    ax.text(PRO_TO_MAX, top * 0.92, " Pro→Max", fontsize=9.5, fontweight="bold", color="#222")
     ax.set_title("Tokens vs. the codebase: cumulative growth", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("growth multiple  (× day-7 post value)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.set_ylim(0, 6.0)
+    ax.set_ylim(0, top)
     ax.set_xlim(dts[0], dts[-1])
     ax.legend(frameon=False, fontsize=10.5, loc="upper left")
     for s in ("top", "right"):
