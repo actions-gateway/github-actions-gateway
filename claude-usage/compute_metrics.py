@@ -68,6 +68,8 @@ def model_family(m):
         return "Opus 4.7"
     if "haiku" in m:
         return "Haiku 4.5"
+    if "fable" in m:
+        return "Fable 5"
     return "Other"
 
 

@@ -52,27 +52,27 @@ reproduce identically on any machine, even with no transcripts present.
 
 ## Results
 
-Snapshot at **2026-06-07** (project day 22; first commit 2026-05-16). "Day 7" is
-the [original day-7 Bluesky post][post1]'s published figures; the charts here
-back the [day-22 follow-up][post2].
+Latest snapshot **2026-06-16** (project day 31; first commit 2026-05-16). "Day 7"
+is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the
+[day-22 follow-up][post2]; "Day 31" is the current snapshot the charts here back.
 
-| Metric | Day 7 | Day 22 | Source |
-|---|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | **56.2M** | transcripts + est. |
-| └ measured only | — | 53.7M | transcripts |
-| └ estimated backfill (May 16–18) | — | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | **2.02B** | transcripts + est. |
-| Cache reuse ratio (reads ÷ writes) | — | **~44×** | transcripts |
-| Git commits | 232 | **617** | git |
-| Tests (`func Test*`) | 269 | **393** | git |
-| Lines of Go (code) | 15.5k | **20.9k** | git |
-| Lines of Go (comments) | 2.3k | **4.2k** | git |
-| Markdown (non-blank) | 14.3k | **14.0k** | git |
-| YAML (hand-written) | 1.5k | **2.3k** | git |
-| Model mix | mostly Sonnet 4.6 | **Sonnet 43% / Opus 57%** | transcripts |
+| Metric | Day 7 | Day 22 | Day 31 | Source |
+|---|--:|--:|--:|---|
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **94.1M** | transcripts + est. |
+| └ measured only | — | 53.7M | 91.6M | transcripts |
+| └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
+| └ incl. cache reads | — | 2.02B | **3.18B** | transcripts + est. |
+| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~41×** | transcripts |
+| Git commits | 232 | 617 | **716** | git |
+| Tests (`func Test*`) | 269 | 393 | **479** | git |
+| Lines of Go (code) | 15.5k | 20.9k | **25.3k** | git |
+| Lines of Go (comments) | 2.3k | 4.2k | **6.1k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | **18.6k** | git |
+| YAML (hand-written) | 1.5k | 2.3k | **4.4k** | git |
+| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 70% / Sonnet 23% / Fable 7%** | transcripts |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the
-archived first three days; the measured-only floor is 53.7M. Live totals (with
+archived first three days; the measured-only floor is 91.6M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
 
@@ -84,12 +84,13 @@ regenerable from the CSVs.
 ### Daily token usage by model
 ![Daily token usage by model](charts/tokens_by_model.png)
 The Pro→Max upgrade (dashed line, 2026-05-23) is visible as the hand-off from
-Sonnet 4.6 (gold) to Opus 4.7 (purple), then Opus 4.8 (blue).
+Sonnet 4.6 (gold) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5
+(teal) appearing from June 9.
 
 ### Tokens vs. the codebase: cumulative growth
 ![Cumulative growth vs the codebase](charts/growth_vs_codebase.png)
 Each series normalized to its **day-7 post value** (1×), so the lines cross
-near the post and fan apart. Token spend grew ~5× while the code grew ~1.4×.
+near the post and fan apart. Token spend grew ~9× while the code grew ~1.6×.
 
 ### Anatomy of token usage (log scale)
 ![Token usage anatomy on a log scale](charts/token_anatomy.png)
@@ -98,7 +99,7 @@ order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
-Cumulative cache reads (1.9B) vs writes (42M). Write once, replay ~45×.
+Cumulative cache reads (3.1B) vs writes (75M). Write once, replay ~41×.
 
 ## Data files
 
@@ -139,7 +140,7 @@ full provenance.
   (2026-05-19), so their token usage is gone from the logs. Those days are
   **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
-  figure, not a measurement — the defensible measured-only floor is 53.7M. The
+  figure, not a measurement — the defensible measured-only floor is 91.6M. The
   git series is fully measured from 2026-05-16.
 - **Growth-chart baseline.** Normalized against the *published* day-7 post values
   (10M / 232 / 269 / 15.5k), not a recomputed day-7 — so endpoints stay

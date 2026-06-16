@@ -36,7 +36,8 @@ PRO_TO_MAX = date(2026, 5, 23)
 BASELINE = {"tokens": 10_000_000, "commits": 232, "tests": 269, "go_code": 15500}
 MODEL_COLORS = {
     "Sonnet 4.6": "#D4A24E", "Opus 4.7": "#7C5CBF",
-    "Opus 4.8": "#4361A8", "Haiku 4.5": "#9AA0A6", "Other": "#BBBBBB", "Unknown": "#DDDDDD",
+    "Opus 4.8": "#4361A8", "Fable 5": "#3E9A8C", "Haiku 4.5": "#9AA0A6",
+    "Other": "#BBBBBB", "Unknown": "#DDDDDD",
 }
 EST_NOTE = "shaded / hatched = pre-transcript days estimated from the Pro-era per-commit rate"
 
@@ -75,7 +76,7 @@ def chart_tokens_by_model():
     rows = load("model_daily.csv")
     days = sorted({r["date"] for r in rows})
     est_dates = {r["date"] for r in rows if is_est(r)}
-    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Haiku 4.5", "Other", "Unknown"]
+    models = ["Sonnet 4.6", "Opus 4.7", "Opus 4.8", "Fable 5", "Haiku 4.5", "Other", "Unknown"]
     by = {(r["date"], r["model"]): int(r["headline"]) for r in rows}
     xs = list(range(len(days)))
     fig, ax = plt.subplots(figsize=(11, 5.2))

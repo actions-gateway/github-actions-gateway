@@ -1,14 +1,14 @@
 {
   "provenance": {
-    "snapshot_date": "2026-06-08",
+    "snapshot_date": "2026-06-16",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 171,
+    "transcript_files_read": 253,
     "token_date_basis": "UTC date of message timestamp",
     "git_date_basis": "author date (local), --date=short",
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-06-08",
+    "last_measured_date": "2026-06-16",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -39,13 +39,13 @@
   },
   "totals": {
     "measured": {
-      "input": 743099,
-      "output": 10650018,
-      "cache_creation": 43102204,
-      "cache_read": 1916195229,
-      "assistant_msgs": 15817,
-      "user_msgs": 18151,
-      "headline_input_output_cachecreation": 54495321
+      "input": 2093130,
+      "output": 16424689,
+      "cache_creation": 73089734,
+      "cache_read": 3014185835,
+      "assistant_msgs": 22429,
+      "user_msgs": 25602,
+      "headline_input_output_cachecreation": 91607553
     },
     "estimated": {
       "input": 6559,
@@ -57,15 +57,15 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 749658,
-      "output": 11128954,
-      "cache_creation": 45111629,
-      "cache_read": 1983714072,
-      "assistant_msgs": 16559,
-      "user_msgs": 19012,
-      "headline_input_output_cachecreation": 56990241,
-      "grand_total_incl_cache_read": 2040704313,
-      "cache_reuse_ratio": 43.97
+      "input": 2099689,
+      "output": 16903625,
+      "cache_creation": 75099159,
+      "cache_read": 3081704678,
+      "assistant_msgs": 23171,
+      "user_msgs": 26463,
+      "headline_input_output_cachecreation": 94102473,
+      "grand_total_incl_cache_read": 3175807151,
+      "cache_reuse_ratio": 41.04
     }
   },
   "by_model": {
@@ -77,7 +77,7 @@
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 34
+      "messages": 58
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -90,18 +90,23 @@
       "messages": 27
     },
     "Opus 4.8": {
-      "headline": 17889437,
-      "output": 3621475,
-      "messages": 4179
+      "headline": 48816747,
+      "output": 8485192,
+      "messages": 9618
+    },
+    "Fable 5": {
+      "headline": 6184922,
+      "output": 910954,
+      "messages": 1149
     }
   },
   "head_snapshot": {
-    "go_code": 20913,
-    "go_comments": 4244,
-    "markdown_nonblank": 14014,
-    "yaml_handwritten": 2322,
-    "yaml_generated": 25531,
-    "tests": 393,
-    "commits": 622
+    "go_code": 25337,
+    "go_comments": 6149,
+    "markdown_nonblank": 18597,
+    "yaml_handwritten": 4437,
+    "yaml_generated": 43993,
+    "tests": 479,
+    "commits": 716
   }
 }
