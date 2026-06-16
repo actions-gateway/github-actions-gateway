@@ -264,18 +264,22 @@ The invariant `lease-duration > renew-deadline > retry-period × 1.2` is validat
 
 ### GMC install and upgrade via Helm (recommended)
 
-The shipped install artifact is the **`actions-gateway` Helm chart** under [`charts/actions-gateway/`](../../charts/actions-gateway/README.md). It is the supported 1.0 install/upgrade vehicle; the `make install` / `make deploy` flow in the steps below is the dev/CI path that drives the kustomize bases directly.
+The shipped install artifact is the **`actions-gateway` Helm chart**, published and cosign-signed to the GHCR OCI registry (`oci://ghcr.io/actions-gateway/charts/actions-gateway`); the [`charts/actions-gateway/`](../../charts/actions-gateway/README.md) source path is the dev/CI copy. It is the supported install/upgrade vehicle; the `make install` / `make deploy` flow in the steps below is the dev/CI path that drives the kustomize bases directly.
+
+> **Release candidate — prerelease, not yet GA.** The first published version is **`1.0.0-rc.1`** (chart version = release tag without the leading `v`), flagged on Artifact Hub as a prerelease. Pin `--version 1.0.0-rc.1` deliberately and treat it as a preview ahead of the `v1.0.0` cut. Copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
 ```sh
-# First install
-helm install gag charts/actions-gateway \
+# First install (from the published, signed OCI chart)
+helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.0.0-rc.1 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
   --set proxy.image.digest=sha256:<proxy>
 
-# Upgrade in place (carries CRD field changes — see below)
-helm upgrade gag charts/actions-gateway --namespace gmc-system --reuse-values \
+# Upgrade in place to a newer published chart version (carries CRD field changes — see below)
+helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <new-chart-version> --namespace gmc-system --reuse-values \
   --set gmc.image.digest=sha256:<new-gmc>
 
 # Roll back to the previous release

@@ -53,26 +53,46 @@ renders, offline validation), see the
 
 ## Install
 
-<!-- Q98: no chart has been published yet. Once the first v* tag publishes the
-chart to GHCR, replace the note below with the oci:// chart-pull instructions
-(oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z, chart
-version = tag without leading v, cosign-verify per release.md § Verify the
-publish) and make it the recommended install path. -->
-> **Chart source.** Install from a **source checkout** of this repository — the
-> `charts/actions-gateway` local path used in the examples below. The publishing
-> pipeline that pushes the chart to the GHCR OCI registry
-> (`oci://ghcr.io/actions-gateway/charts/...`) is in place but **no release has
-> been published yet** (tracked as Q98); once the first `v*` tag publishes, you
-> will be able to `helm install` a released, cosign-signed chart version straight
-> from the registry without a checkout.
+> **Release candidate — prerelease, not yet GA.** The first published chart is
+> **`1.0.0-rc.1`**, the project's first published artifact. It is cosign-signed
+> and installable straight from the GHCR OCI registry, but it is a **release
+> candidate / preview**, not a general-availability release: Artifact Hub flags
+> the listing as a prerelease (`artifacthub.io/prerelease: "true"`). Pin
+> `--version 1.0.0-rc.1` deliberately and treat it as a preview while the
+> pipeline and artifacts are validated ahead of the `v1.0.0` cut. The chart
+> version is the release tag without the leading `v`.
+
+Install the published, signed chart straight from the registry — no source
+checkout needed:
 
 ```sh
-helm install gag charts/actions-gateway \
+helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.0.0-rc.1 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
   --set proxy.image.digest=sha256:<proxy>
 ```
+
+Copy the three image digests from the
+[release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0-rc.1)
+(the chart ships **no** baked-in digests — empty digests are the fail-closed
+secure default, so an unconfigured render is rejected). Verify the chart and
+image signatures before installing — see
+[release.md § Verify the publish](release.md#3-verify-the-publish) and
+[security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification).
+
+> **Installing from a source checkout** (dev/CI, or to install an unreleased
+> chart) still works — substitute the local `charts/actions-gateway` path for the
+> `oci://…` ref in any command on this page:
+>
+> ```sh
+> helm install gag charts/actions-gateway \
+>   --namespace gmc-system --create-namespace \
+>   --set gmc.image.digest=sha256:<gmc> \
+>   --set agc.image.digest=sha256:<agc> \
+>   --set proxy.image.digest=sha256:<proxy>
+> ```
 
 `gag` is the Helm release name and `gmc-system` is the install namespace; both
 are conventions you can change. Keep `namePrefix` at its default `gmc` unless
@@ -113,7 +133,8 @@ Do **not** set `allowFloatingImageTags=true` in production.
 ### Without cert-manager
 
 ```sh
-helm install gag charts/actions-gateway \
+helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.0.0-rc.1 \
   --namespace gmc-system --create-namespace \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
