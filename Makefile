@@ -253,6 +253,17 @@ vendor-check: ## Fail if vendor/ + tools/vendor/ drift from go.sum (CI supply-ch
 tidy-check: ## Fail if any go.mod/go.sum/go.work.sum is not tidy (CI tidiness gate)
 	scripts/go-tidy-check.sh
 
+# One-shot remedy for the three drift gates above. Runs the full "Changing
+# dependencies" flow — tidy + go work sync + re-vendor (workspace + tools) +
+# regenerate THIRD-PARTY-NOTICES — mutating the working tree so the committed
+# go.mod/go.sum, vendor/, and THIRD-PARTY-NOTICES line back up. It is the fix a
+# human runs after a dependency change, and what the dependabot-go-sync workflow
+# runs to auto-repair a Dependabot Go bump (Q111), which can't run `go work
+# vendor` itself. No-ops cleanly when nothing drifted.
+.PHONY: vendor-sync
+vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the dependency-change / Dependabot remedy)
+	scripts/vendor-sync.sh
+
 ##@ Security
 
 # The security gates are scripted (scripts/{go-vulncheck,trivy-scan,

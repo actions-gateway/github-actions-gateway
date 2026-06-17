@@ -1,0 +1,79 @@
+name: dependabot-go-sync
+
+# Auto-repair Dependabot Go-module bumps. Dependabot updates a single module's
+# go.mod/go.sum but cannot run `go work vendor`, so the shared repo-root
+# vendor/, tools/vendor/, go.work.sum, and THIRD-PARTY-NOTICES all desync and the
+# vendor-check / tidy-check / license-notices gates fail on the bot's PR (#198
+# needed a hand-crafted sync commit). This workflow re-runs the full sync flow
+# (make vendor-sync) on the PR branch and commits the result back, so a human no
+# longer has to (Q111). Sibling of the go.sum tidiness normalization (Q94).
+#
+# Loop safety: the sync commit is pushed with the default GITHUB_TOKEN, and
+# GitHub never re-triggers workflows from a GITHUB_TOKEN push — so the bot commit
+# cannot re-fire this workflow on itself. That same rule means the required PR
+# checks (vendor-check, tidy-check, license-notices, unit-test) do NOT
+# automatically re-run on the synced commit; a maintainer re-triggers them with
+# one click (close+reopen the PR, or `@dependabot recreate`). See
+# docs/development/go-workspaces.md § Dependabot Go bumps for the full rationale
+# and why a stored PAT — which would re-trigger CI — is deliberately not used.
+on:
+  pull_request:
+
+# Read-only by default; the sync job elevates to contents:write for itself.
+permissions:
+  contents: read
+
+# One sync run per PR branch; cancel a superseded run if Dependabot force-pushes
+# a rebased branch while a sync is mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    # Gate strictly: only Dependabot-authored, same-repo PRs whose branch is a
+    # Go-module update (dependabot/gomod/...). github_actions / docker bumps and
+    # every human PR are skipped. The same-repo head check holds for this repo —
+    # Dependabot pushes its branches here, not from a fork — and a fork-head PR
+    # could not be pushed to via GITHUB_TOKEN anyway.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'dependabot/gomod/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          # Check out the PR branch tip (not the read-only merge ref) so the sync
+          # commit lands back on it. The default GITHUB_TOKEN — with contents:
+          # write above — can push to this same-repo Dependabot branch.
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.work
+      # Re-run the full dependency-change remedy: tidy + go work sync + re-vendor
+      # (workspace + tools) + regenerate THIRD-PARTY-NOTICES. Single source of
+      # truth shared with the local remedy and the *-check gates. No-ops cleanly
+      # when nothing drifted.
+      - name: re-sync vendor + notices (make vendor-sync)
+        run: make vendor-sync
+      - name: commit and push any drift
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "vendor/, module files, and THIRD-PARTY-NOTICES already in sync — nothing to commit."
+            exit 0
+          fi
+          # Commit as github-actions[bot] — honest provenance for a GITHUB_TOKEN
+          # commit. (The push identity is github-actions regardless of author, so
+          # this does not impersonate Dependabot.)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(deps): sync workspace vendor + THIRD-PARTY-NOTICES'
+          git push origin "HEAD:${HEAD_REF}"
+        env:
+          HEAD_REF: ${{ github.head_ref }}
