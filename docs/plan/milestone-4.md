@@ -1006,6 +1006,12 @@ caught by unit/Tier-A/Tier-B tiers:
    listeners.** After patching the CR (observedGeneration advanced),
    newly provisioned worker pods still used the old template until the
    AGC pod was restarted.
+   **Fixed (Q117):** the provisioner re-reads the RunnerGroup from the
+   shared (cache-backed) client at pod-build time instead of using the
+   listener-start snapshot, so a `podTemplate` (and any other spec) edit
+   takes effect on the next acquired job with no AGC restart. The
+   start-time snapshot is kept only as a fallback when the cached read
+   fails (e.g. the group was deleted mid-shutdown).
 4. **Q116 — no production path for the GitHub org URL** (see Setup
    deviation above). **Fixed (Q116):** added the required first-class
    `ActionsGateway.spec.gitHubURL` field, threaded to the AGC Deployment as

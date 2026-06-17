@@ -311,28 +311,69 @@ func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Pro
 
 // HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup.
 // The returned function is injected into listener.Config.JobHandler.
-// Per-RunnerGroup settings override the provisioner-level defaults.
+//
+// The rg passed here is a snapshot captured when the listener started. It is
+// used only for identity (namespace/name) and as a fallback: provision re-reads
+// the current RunnerGroup from the cached client on every acquired job so that
+// podTemplate (and other spec) edits made after listener start take effect on
+// the next job without an AGC restart (Q117). Per-RunnerGroup settings derived
+// from that fresh spec override the provisioner-level defaults.
 func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
-	maxEviction := p.MaxEvictionRetries
-	if rg.Spec.MaxEvictionRetries != nil {
-		maxEviction = int(*rg.Spec.MaxEvictionRetries)
-	}
-	evictionDelay := p.EvictionRetryDelay
-	if rg.Spec.EvictionRetryDelay != nil && rg.Spec.EvictionRetryDelay.Duration > 0 {
-		evictionDelay = rg.Spec.EvictionRetryDelay.Duration
-	}
-	maxQuota := p.MaxQuotaRetries
-	if rg.Spec.MaxQuotaRetries != nil {
-		maxQuota = int(*rg.Spec.MaxQuotaRetries)
-	}
-	quotaDelay := p.QuotaRetryDelay
-	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
-		quotaDelay = rg.Spec.QuotaRetryDelay.Duration
-	}
-	completedTTL := EffectiveCompletedPodTTL(rg)
 	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
-		return p.provision(ctx, rg, planID, payload, jitConfig, maxEviction, evictionDelay, maxQuota, quotaDelay, completedTTL)
+		return p.provision(ctx, rg, planID, payload, jitConfig)
 	}
+}
+
+// rgSettings holds the per-RunnerGroup provisioning knobs derived from spec,
+// falling back to the provisioner-level defaults when a field is unset. They are
+// recomputed from the freshly read RunnerGroup on every job so spec edits are
+// honoured without a listener restart (Q117).
+type rgSettings struct {
+	maxEviction   int
+	evictionDelay time.Duration
+	maxQuota      int
+	quotaDelay    time.Duration
+	completedTTL  time.Duration
+}
+
+// settingsFor derives the per-RunnerGroup provisioning knobs from rg.Spec,
+// applying the provisioner-level defaults where a field is unset.
+func (p *Provisioner) settingsFor(rg *v1alpha1.RunnerGroup) rgSettings {
+	s := rgSettings{
+		maxEviction:   p.MaxEvictionRetries,
+		evictionDelay: p.EvictionRetryDelay,
+		maxQuota:      p.MaxQuotaRetries,
+		quotaDelay:    p.QuotaRetryDelay,
+		completedTTL:  EffectiveCompletedPodTTL(rg),
+	}
+	if rg.Spec.MaxEvictionRetries != nil {
+		s.maxEviction = int(*rg.Spec.MaxEvictionRetries)
+	}
+	if rg.Spec.EvictionRetryDelay != nil && rg.Spec.EvictionRetryDelay.Duration > 0 {
+		s.evictionDelay = rg.Spec.EvictionRetryDelay.Duration
+	}
+	if rg.Spec.MaxQuotaRetries != nil {
+		s.maxQuota = int(*rg.Spec.MaxQuotaRetries)
+	}
+	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
+		s.quotaDelay = rg.Spec.QuotaRetryDelay.Duration
+	}
+	return s
+}
+
+// currentRunnerGroup re-reads the RunnerGroup named by the listener-start
+// snapshot from the (cache-backed) client so each job sees the latest spec.
+// On any read error — including the group having been deleted out from under a
+// listener mid-shutdown — it logs and falls back to the snapshot, preserving the
+// pre-Q117 behaviour rather than failing the job. The read hits the shared
+// informer cache (mgr.GetClient()), not the API server, so it is cheap per job.
+func (p *Provisioner) currentRunnerGroup(ctx context.Context, snapshot *v1alpha1.RunnerGroup) *v1alpha1.RunnerGroup {
+	fresh := &v1alpha1.RunnerGroup{}
+	if err := p.Client.Get(ctx, client.ObjectKeyFromObject(snapshot), fresh); err != nil {
+		p.logFor(snapshot).Warn("could not re-read RunnerGroup for current spec; using listener-start snapshot", "error", err)
+		return snapshot
+	}
+	return fresh
 }
 
 // acquirePayload extracts eviction-retry fields from the raw AcquireJob response.
@@ -370,7 +411,12 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string, maxEviction int, evictionDelay time.Duration, maxQuota int, quotaDelay time.Duration, completedTTL time.Duration) (err error) {
+func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string) (err error) {
+	// Re-read the current RunnerGroup so podTemplate (and other spec) edits made
+	// after the listener started are honoured on this job without an AGC restart
+	// (Q117). The listener-start snapshot is used only as a fallback.
+	rg := p.currentRunnerGroup(ctx, snapshot)
+	settings := p.settingsFor(rg)
 	log := p.logFor(rg)
 	start := time.Now()
 
@@ -444,7 +490,7 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 	// 4. Build and create the pod (with quota retry).
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
 		pod := p.buildPod(rg, podName, secretName, priorityClass)
-		return p.createPodWithQuotaRetry(ctx, rg, pod, maxQuota, quotaDelay, log)
+		return p.createPodWithQuotaRetry(ctx, rg, pod, settings.maxQuota, settings.quotaDelay, log)
 	}); err != nil {
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
@@ -477,14 +523,14 @@ func (p *Provisioner) provision(ctx context.Context, rg *v1alpha1.RunnerGroup, p
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, rg, owner, repo, runID, log, maxEviction, evictionDelay)
+		p.handleEviction(ctx, rg, owner, repo, runID, log, settings.maxEviction, settings.evictionDelay)
 	}
 
 	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
 	// immediately only when the group's completedPodTTL is zero; otherwise the
 	// RunnerGroup reconciler's reaper deletes it once the TTL elapses — the
 	// reaper is also the restart-safe backstop for pods no goroutine watches.
-	if completedTTL == 0 {
+	if settings.completedTTL == 0 {
 		_ = p.deletePod(ctx, rg.Namespace, podName)
 	}
 	_ = p.deleteSecret(ctx, rg.Namespace, secretName)

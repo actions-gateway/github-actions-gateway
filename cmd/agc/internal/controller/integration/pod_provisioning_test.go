@@ -110,6 +110,110 @@ func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 	assert.True(t, envNames["NO_PROXY"], "NO_PROXY must be injected")
 }
 
+// waitForWorkerPodMatching polls until a worker Pod in nsName for rgName satisfies
+// match, returning it. Unlike waitForWorkerPod it can wait for a *specific* pod
+// among several — e.g. the one built from an edited PodTemplate.
+func waitForWorkerPodMatching(t *testing.T, nsName, rgName string, match func(corev1.Pod) bool) corev1.Pod {
+	t.Helper()
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods,
+			client.InNamespace(nsName),
+			client.MatchingLabels{"actions-gateway/runner-group": rgName},
+		); err != nil {
+			return false
+		}
+		for _, p := range pods.Items {
+			if strings.HasPrefix(p.Name, "runner-") && match(p) {
+				pod = p
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "a worker Pod matching the predicate should be created in %s", nsName)
+	return pod
+}
+
+// TestAGC_PodProvisioning_PodTemplateEditTakesEffectWithoutRestart is the Q117
+// regression test. A listener started with one PodTemplate snapshot must honour a
+// later podTemplate edit on the *next* acquired job — without restarting the AGC.
+// Before the fix the running listener kept the start-time snapshot, so newly
+// provisioned pods used the stale template until the process restarted.
+//
+// NodeSelector is the discriminator: buildPod copies PodTemplate.Spec verbatim
+// and never rewrites NodeSelector, so it cleanly reflects whichever template
+// version was read at pod-build time.
+func TestAGC_PodProvisioning_PodTemplateEditTakesEffectWithoutRestart(t *testing.T) {
+	const nsName = "agc-pod-tmpl-edit"
+	const rgName = "tmpl-edit-rg"
+	createNSForAGC(t, nsName)
+
+	rg := &v1alpha1.RunnerGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: rgName, Namespace: nsName},
+		Spec: v1alpha1.RunnerGroupSpec{
+			// Several listeners so a second, idle session is available for the
+			// post-edit job while the first is parked in provision.
+			MaxListeners: 3,
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					NodeSelector: map[string]string{"q117-template": "original"},
+					Containers:   []corev1.Container{{Name: "runner", Image: "runner:test"}},
+				},
+			},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, rg))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
+
+	// Start the AGC once; it is NOT restarted for the rest of the test.
+	startAGCReconcilerWithProvisioner(t, provisionerOptions{})
+
+	// First job: the listener snapshots the original template and builds a pod
+	// carrying the original NodeSelector.
+	seen := map[string]bool{}
+	id1 := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id1, "a session for %s should register", rgName)
+	seen[id1] = true
+
+	pod1 := waitForWorkerPod(t, nsName, rgName)
+	assert.Equal(t, "original", pod1.Spec.NodeSelector["q117-template"],
+		"first pod should use the original PodTemplate")
+
+	// Edit the PodTemplate while the AGC keeps running.
+	var fetched v1alpha1.RunnerGroup
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(rg), &fetched))
+	fetched.Spec.PodTemplate.Spec.NodeSelector = map[string]string{"q117-template": "edited"}
+	require.NoError(t, k8sClient.Update(ctx, &fetched))
+	editedGen := fetched.Generation
+
+	// Wait until the reconciler has observed the edit (observedGeneration catches
+	// up). The reconciler and the provisioner share the same manager cache, so
+	// once observedGeneration reflects the edit the provisioner's re-read will too
+	// — this removes informer-lag flakiness without weakening the assertion.
+	require.Eventually(t, func() bool {
+		var g v1alpha1.RunnerGroup
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rg), &g); err != nil {
+			return false
+		}
+		return g.Status.ObservedGeneration >= editedGen
+	}, 15*time.Second, 50*time.Millisecond, "reconciler should observe the podTemplate edit")
+
+	// Second job on a different (still-running) session. The newly built pod must
+	// reflect the EDITED template — proving running listeners pick up the change
+	// without an AGC restart.
+	id2 := enqueueJobOnOwnerSession(15*time.Second, rgName, seen, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id2, "a second session for %s should be available", rgName)
+
+	pod2 := waitForWorkerPodMatching(t, nsName, rgName, func(p corev1.Pod) bool {
+		return p.Spec.NodeSelector["q117-template"] == "edited"
+	})
+	assert.Equal(t, "edited", pod2.Spec.NodeSelector["q117-template"],
+		"pod built after the edit must use the updated PodTemplate without an AGC restart")
+	assert.NotEqual(t, pod1.Name, pod2.Name, "the edited pod must be a distinct, newly provisioned pod")
+}
+
 func TestAGC_PodProvisioning_PriorityTiers(t *testing.T) {
 	const nsName = "agc-pod-priority"
 	createNSForAGC(t, nsName)

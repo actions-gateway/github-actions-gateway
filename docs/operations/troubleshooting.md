@@ -961,9 +961,9 @@ kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath=
         runAsGroup: <image-gid>
   ```
 
-  Note: a `podTemplate` change does not reach already-running listeners
-  ([Q117](../STATUS.md)) — restart the AGC pod (`kubectl delete pod -n
-  <tenant-namespace> -l app=actions-gateway-controller`) after applying it.
+  Note: a `podTemplate` edit takes effect on the next acquired job — the AGC
+  re-reads the RunnerGroup at pod-build time, so no AGC restart is needed
+  (Q117). Pods already running keep the template they were built with.
 - Root-based image that must run as root: the defaults are gap-fill only — set an explicit `securityContext.runAsNonRoot: false` (and `runAsUser`/`runAsGroup` as needed) on the runner container in the RunnerGroup `podTemplate`. No profile escalation is required for `baseline`.
 - Job genuinely needs `sudo`/capabilities: move that workload to a `baseline` `ActionsGateway` (the default), which does not stamp the privilege-escalation/capability floor. Reserve `restricted` for workloads that can run without them.
 - Workload needs a real privileged container (DinD, kernel modules): set `securityProfile: privileged` on the `ActionsGateway` and pair it with a sandbox runtime — see [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
