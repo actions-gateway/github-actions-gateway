@@ -45,7 +45,7 @@ Two detection substrates are used:
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
-- [Priority classes: the `--allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
+- [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
   - [Verify a signature](#verify-a-signature)
@@ -618,7 +618,7 @@ GMC-managed regardless.
 
 ---
 
-## Priority classes: the `--allowed-priority-classes` allowlist
+## Priority classes: the `allowed-priority-classes` allowlist
 
 A tenant `RunnerGroup` can request scheduling priority for its worker pods via
 `priorityTiers[].priorityClassName`, which the AGC stamps onto the pods as

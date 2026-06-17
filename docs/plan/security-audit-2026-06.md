@@ -33,16 +33,16 @@ unimplemented at the authorization layer.
 | No GitHub Actions SHA-pinned; publish.yml runs tag-pinned actions with `id-token: write` | High | **Resolved (Q123)** — every `uses:` SHA-pinned, syft version-pinned, Dependabot `github-actions` ecosystem bumps the pins |
 | `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/verify-release-test.sh` |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **Resolved (Q125):** `deleteIfExists` returns its error (NotFound = success); `reconcileDelete` collects delete errors, emits a `TeardownIncomplete` event, and requeues without removing the finalizer until every delete is confirmed gone. Fail-closed and idempotent. |
-| Vendored deps never integrity-checked against go.sum in CI | Medium | **New → [Q126](../STATUS.md#Q126)** |
+| Vendored deps never integrity-checked against go.sum in CI | Medium | **New → Q126** |
 | 8 smaller hardening items (see below) | Low | **New → [Q127](../STATUS.md#Q127)** (batch) |
 | DNS egress allows port 53 to any destination | Medium | **Fixed (Q105)** — port-53 egress confined to cluster DNS (`k8s-app: kube-dns` in `kube-system`) across all three per-tenant NetworkPolicies |
 | Proxy has no app-layer destination allowlist / connection cap | Medium | Accepted by design — security.md M-2, Appendix G §G.1, [Q19](../STATUS.md#Q19). This audit adds the metadata-service/SSRF framing as a revisit argument |
 | ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. Remaining per-cluster proxy HPA-max guard work stays in [Q82](../STATUS.md#Q82). |
-| No SLSA provenance attestation | Info | Known — [Q103](../STATUS.md#Q103) |
+| No SLSA provenance attestation | Info | Known — Q103 |
 | Worker trivy leg report-only | Info | Known — [Q70](../STATUS.md#Q70) |
-| ServiceMonitor `insecureSkipVerify` | Low | Known — [Q104](../STATUS.md#Q104) |
-| Library agent-key-type default Ed25519 | Low | Known — [Q109](../STATUS.md#Q109) |
-| Docs claim CRD CEL rejects reserved podTemplate fields; no such rules (runtime overwrite layer does exist and holds) | Info | Docs-honesty — fold into [Q99](../STATUS.md#Q99) |
+| ServiceMonitor `insecureSkipVerify` | Low | Known — Q104 |
+| Library agent-key-type default Ed25519 | Low | Known — Q109 |
+| Docs claim CRD CEL rejects reserved podTemplate fields; no such rules (runtime overwrite layer does exist and holds) | Info | Docs-honesty — fold into Q99 |
 | `GITHUB_API_BASE_URL` env override of token exchange | Low | Residual of M-14 fix (`--allow-agc-extra-env` default-off); guard option listed under Q127 |
 | Missing explicit `permissions:` on read-only workflows | Info | Repo default verified read-only; declare-in-file is a nice-to-have, not queued |
 | GHCR version tags mutable + re-dispatchable | Info | Mitigated by digest-pin consumption + Q124 fix; revisit if GHCR ships tag immutability |

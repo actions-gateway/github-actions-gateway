@@ -102,7 +102,7 @@ after the quota change lands.
 - **RBAC:** dropped the `resourcequotas` verbs from
   [role.yaml](../../cmd/gmc/config/rbac/role.yaml) and the chart
   [rbac.yaml](../../charts/actions-gateway/templates/rbac.yaml). No `limitranges`
-  grant existed. Partially subsumes [Q122](security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high).
+  grant existed. Partially subsumes [Q122](security-audit-2026-06.md#q122--gmc-workload-writes-are-cluster-wide-docs-claim-confinement-high--resolved).
 - **Tests:** `TestGMC_TenantProvisioning_NoResourceQuotaCreated` (envtest) asserts the
   GMC creates no quota and leaves a pre-existing platform quota untouched; the
   `TestBuildResourceQuota_PassesThrough` unit test was removed.

@@ -970,7 +970,7 @@ by-design / accepted.
 - **Status (2026-06-04): Done (Q25).** Both the proxy and AGC NetworkPolicies
   now carry an explicit ingress rule admitting the `:8081` health/metrics port
   only from namespaces labelled `metrics: enabled` (the kubebuilder convention
-  the GMC's own [allow-metrics-traffic.yaml](../../cmd/gmc/config/network-policy/allow-metrics-traffic.yaml)
+  the GMC's own `allow-metrics-traffic.yaml`
   already uses). The AGC NP previously declared no ingress policy type at all, so
   any pod in the tenant namespace could scrape its metrics; it now declares
   `PolicyTypeIngress` (default-deny) plus the scrape rule. The AGC's

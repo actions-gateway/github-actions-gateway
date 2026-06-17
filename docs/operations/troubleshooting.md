@@ -279,7 +279,7 @@ kubectl describe runnergroup -n <namespace> <name>
 ```
 
 **Resolution.**
-- If the Secret is missing or has wrong keys, recreate it. See [Getting Started — GitHub App Secret](../getting-started.md#2-create-a-github-app-credential-secret).
+- If the Secret is missing or has wrong keys, recreate it. See [Getting Started — GitHub App Secret](../getting-started.md#3-create-a-github-app-credential-secret).
 - If the private key format is wrong, ensure it is a PEM-encoded RSA key starting with `-----BEGIN RSA PRIVATE KEY-----`. The Secret `stringData.privateKey` must include the full key including header and footer lines.
 - If the runner version is outdated, update `workerImage` in the RunnerGroup spec (or the AGC's `--worker-image` flag). Watch for `RunnerGroup` conditions with reason `VersionTooOld`.
 - If `appId` or `installationId` are wrong, update the Secret.

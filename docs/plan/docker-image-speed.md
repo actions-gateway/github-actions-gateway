@@ -67,7 +67,7 @@ A cold-cache run of `make e2e-images` builds four images sequentially:
 | **Total (warm, current GHA cache hit)** | **~1–2 min** |
 
 CI already enables `cache-from: type=gha` per image in
-[.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml), so warm runs
+[.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml), so warm runs
 do reuse layer blobs. The catch: BuildKit invalidates the `go build` layer the
 moment any file inside `COPY . .` changes — which is every PR. With no
 `--mount=type=cache` for `/go/pkg/mod` or `/root/.cache/go-build`, every
@@ -91,7 +91,7 @@ cache invalidations**
 
 Docker reads `.dockerignore` from the **context root**, not from the directory
 next to the Dockerfile. The only `.dockerignore` in the repo is at
-[cmd/gmc/.dockerignore](cmd/gmc/.dockerignore), but every Dockerfile except
+`cmd/gmc/.dockerignore`, but every Dockerfile except
 proxy builds with `context: .`. That means none of those builds get a
 dockerignore applied. (BuildKit also supports `<dockerfile>.dockerignore` next
 to the Dockerfile, but the file would have to be named e.g.
@@ -115,7 +115,7 @@ the `COPY . .` layer and forces a full `go build` rebuild.
 Add a single root `.dockerignore` that excludes everything by default and
 re-includes only Go source, module files, and the workspace files needed for
 multi-module builds. Model after the existing
-[cmd/gmc/.dockerignore](cmd/gmc/.dockerignore).
+`cmd/gmc/.dockerignore`.
 
 ### Implementation steps
 
@@ -142,7 +142,7 @@ multi-module builds. Model after the existing
    # directories.
    ```
 
-2. **Delete [cmd/gmc/.dockerignore](cmd/gmc/.dockerignore)** — superseded by
+2. **Delete `cmd/gmc/.dockerignore`** — superseded by
    the root file, and ignored anyway when context is `.`.
 
 3. **Add `cmd/proxy/.dockerignore`** mirroring the root file. The proxy build
@@ -194,10 +194,10 @@ module cache at all.
 
 1. Pinned `# syntax=docker/dockerfile:1.7` at the top of each Dockerfile.
 2. Added `--mount=type=cache,target=/root/.cache/go-build` to the `go build`
-   step in [cmd/gmc/Dockerfile](cmd/gmc/Dockerfile),
-   [cmd/agc/Dockerfile](cmd/agc/Dockerfile),
-   [cmd/proxy/Dockerfile](cmd/proxy/Dockerfile),
-   and [test/fakegithub/Dockerfile](test/fakegithub/Dockerfile).
+   step in [cmd/gmc/Dockerfile](../../cmd/gmc/Dockerfile),
+   [cmd/agc/Dockerfile](../../cmd/agc/Dockerfile),
+   [cmd/proxy/Dockerfile](../../cmd/proxy/Dockerfile),
+   and [test/fakegithub/Dockerfile](../../test/fakegithub/Dockerfile).
 
 ### Notes
 
@@ -222,9 +222,9 @@ module cache at all.
 
 ### Problem
 
-[cmd/gmc/Dockerfile:11](cmd/gmc/Dockerfile),
-[cmd/agc/Dockerfile:10](cmd/agc/Dockerfile), and
-[test/fakegithub/Dockerfile:11](test/fakegithub/Dockerfile) all ran
+[cmd/gmc/Dockerfile:11](../../cmd/gmc/Dockerfile),
+[cmd/agc/Dockerfile:10](../../cmd/agc/Dockerfile), and
+[test/fakegithub/Dockerfile:11](../../test/fakegithub/Dockerfile) all ran
 `RUN go work sync 2>/dev/null || true` immediately before `COPY . .`. The next
 layer overwrites the working directory, so any side-effect of `go work sync`
 was thrown away. It was a no-op step that produced its own layer and added
@@ -264,14 +264,14 @@ mount from §2 is shared across siblings.
 
 The implementation added a `GHA_CACHE` variable that toggles the
 `type=gha` cache-from/cache-to flags so local invocations don't fail with
-"ActionsRuntimeToken required" — see [docker-bake.hcl](docker-bake.hcl).
+"ActionsRuntimeToken required" — see [docker-bake.hcl](../../docker-bake.hcl).
 
 ### Files
 
-- [docker-bake.hcl](docker-bake.hcl) (new)
-- [Makefile](Makefile) — `e2e-images` and `docker-build-*` targets call bake
-- [.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml) and
-  [.github/workflows/e2e-multi-node.yml](.github/workflows/e2e-multi-node.yml)
+- [docker-bake.hcl](../../docker-bake.hcl) (new)
+- [Makefile](../../Makefile) — `e2e-images` and `docker-build-*` targets call bake
+- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) and
+  `.github/workflows/e2e-multi-node.yml`
   — four build-push-action steps collapsed into one bake step
 
 ---
@@ -354,7 +354,7 @@ repo's branch protection settings so that skipped runs count as passing.
 
 ### Files
 
-- [.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml) — `changes` job + `if:` on `e2e` job
+- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) — `changes` job + `if:` on `e2e` job
 
 ---
 
@@ -425,7 +425,7 @@ runs alongside the kind cluster on the kind docker network; each node's
 containerd is configured to mirror `localhost:5000` → `kind-registry:5000`;
 buildx pushes directly to the registry; pods pull on demand.
 
-[scripts/kind-with-registry.sh](scripts/kind-with-registry.sh) handles the
+[scripts/kind-with-registry.sh](../../scripts/kind-with-registry.sh) handles the
 whole setup idempotently. `make e2e-cluster` invokes it; the legacy `kind
 load` flow was removed entirely (replaced rather than gated). Image tags now
 include `localhost:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache
@@ -433,14 +433,14 @@ can't serve a stale image across cluster reuse.
 
 ### Files
 
-- [scripts/kind-with-registry.sh](scripts/kind-with-registry.sh) (new)
-- [Makefile](Makefile) — `e2e-cluster` invokes the script;
+- [scripts/kind-with-registry.sh](../../scripts/kind-with-registry.sh) (new)
+- [Makefile](../../Makefile) — `e2e-cluster` invokes the script;
   `e2e-load-images` removed; image tags include the registry prefix
-- [.github/workflows/e2e-test.yml](.github/workflows/e2e-test.yml) and
-  [.github/workflows/e2e-multi-node.yml](.github/workflows/e2e-multi-node.yml)
+- [.github/workflows/e2e-test.yml](../../.github/workflows/e2e-test.yml) and
+  `.github/workflows/e2e-multi-node.yml`
   — drop the `kind load` step; setup-buildx-action uses `network=host` so
   buildx can push to the host registry
-- [cmd/gmc/test/e2e/e2e_suite_test.go](cmd/gmc/test/e2e/e2e_suite_test.go) —
+- [cmd/gmc/test/e2e/e2e_suite_test.go](../../cmd/gmc/test/e2e/e2e_suite_test.go) —
   dropped the redundant `LoadImageToKindClusterWithName` loop; flipped the
   fakegithub manifest's `imagePullPolicy: Never` → `IfNotPresent`
 
