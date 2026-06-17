@@ -10,6 +10,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
@@ -110,44 +111,61 @@ type ActionsGatewayCustomValidator struct {
 	allowedPriorityClassList []string
 }
 
+// logRejection records a server-side audit line whenever an admission request is
+// denied. The webhook returns rich rejection messages to the API client, but
+// without this the GMC keeps no trail of who attempted a privileged-container or
+// reserved-namespace create — exactly the events an operator needs after the
+// fact. It is logged at Info (not Debug): admission denials are rare and
+// security-relevant, so the audit trail must be visible by default. The error
+// text is a validation message (namespace, URL, container, or PriorityClass
+// names) and never carries Secret contents or credentials.
+func logRejection(ctx context.Context, op string, ag *gmcv1alpha1.ActionsGateway, err error) error {
+	logf.FromContext(ctx).Info("ActionsGateway admission denied",
+		"operation", op,
+		"namespace", ag.Namespace,
+		"name", ag.Name,
+		"reason", err.Error())
+	return err
+}
+
 // ValidateCreate rejects CRs created in reserved namespaces, with a cross-namespace
 // gitHubAppRef, or with privileged containers.
-func (v *ActionsGatewayCustomValidator) ValidateCreate(_ context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
+func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
-		return nil, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace)
+		return nil, logRejection(ctx, "create", obj, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
 	}
 	if err := validateGitHubAppRef(obj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "create", obj, err)
 	}
 	if err := validateGitHubURL(obj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "create", obj, err)
 	}
 	if err := validateRunnerGroups(obj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "create", obj, err)
 	}
 	if err := v.validatePriorityClasses(obj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "create", obj, err)
 	}
 	return proxyResourceWarnings(obj), nil
 }
 
 // ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef,
 // privileged containers, or a silent securityProfile downgrade.
-func (v *ActionsGatewayCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
+func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if err := validateGitHubAppRef(newObj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateGitHubURL(newObj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateRunnerGroups(newObj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := v.validatePriorityClasses(newObj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateSecurityProfileTransition(oldObj, newObj); err != nil {
-		return nil, err
+		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	return proxyResourceWarnings(newObj), nil
 }

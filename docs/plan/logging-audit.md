@@ -155,24 +155,34 @@ contexts (builds on Theme A's logger-injection).
 
 ## Theme E — Debugging blind spots (Q88)
 
-Add targeted Debug logs where a stuck/failed path is currently silent:
+✅ **Resolved** — debug diagnostics added to every previously-silent stuck/failed
+path. Operator-facing grep anchors documented in
+[observability.md](../operations/observability.md) § Debug diagnostics.
 
-- `provisioner/podwaiter.go` has **zero logs** — a session stuck waiting for pod
-  completion (missed informer event, pod never terminal) produces no output;
-  this is the single most likely "stuck session" cause. Add debug logs around
-  register/resolve/WaitForCompletion.
+- `provisioner/podwaiter.go` had **zero logs** — a session stuck waiting for pod
+  completion (missed informer event, pod never terminal) produced no output;
+  this is the single most likely "stuck session" cause. Debug logs now cover
+  register/resolve/cancel in `WaitForCompletion` (`pod already terminal at
+  registration`, `registered for pod completion`, `pod completion observed`,
+  `pod wait cancelled before completion`), each carrying `namespace`/`name`.
 - The multiplexer baseline-goroutine **restart/backoff** path
-  (`listener/multiplexer.go` ~142–157) is silent; an operator sees repeated
-  "exited with error" with no "restarting" signal — looks like a dead loop.
-- GMC `reconcileResources` (`actionsgateway_controller.go`) runs ~12
-  provisioning steps with no per-step logs; a stalled tenant shows one wrapped
-  error, not which step. Add debug step markers.
+  (`listener/multiplexer.go`) was silent; an operator saw repeated "exited with
+  error" with no "restarting" signal. Now emits `restarting after backoff`
+  (with `index`/`delay`) and `restart aborted` at debug.
+- GMC `reconcileResources` (`actionsgateway_controller.go`) ran ~12
+  provisioning steps with no per-step logs; a stalled tenant showed one wrapped
+  error, not which step. Now emits a `reconcileResources step` debug marker per
+  step (V(1)).
 - The GMC validating webhook
-  (`internal/webhook/v1alpha1/actionsgateway_webhook.go`) returns excellent
-  rejection messages but never **logs** them server-side — no audit trail of
-  privileged-container/reserved-namespace attempts. Add a server-side log on
-  rejection.
-- Cert generation/renewal in the GMC is silent.
+  (`internal/webhook/v1alpha1/actionsgateway_webhook.go`) returned excellent
+  rejection messages but never **logged** them server-side — no audit trail of
+  privileged-container/reserved-namespace attempts. Now logs `ActionsGateway
+  admission denied` (operation/namespace/name/reason) on every rejection. This
+  one is at **info**, not debug: an audit trail of denials must be visible by
+  default, and admission denials add negligible volume.
+- Cert generation/renewal in the GMC is no longer silent: `ensureProxyCert` and
+  `ensureMetricsCerts` log the (re)issuance and the reason (`secret missing` /
+  `unparseable cert` / `near expiry`) at debug, never any key material.
 
 ---
 

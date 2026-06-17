@@ -200,6 +200,11 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		if delay == 0 {
 			delay = time.Second
 		}
+		// Without this Debug line the restart/backoff path is silent: an operator
+		// sees only the repeated "exited with error" Warn above and cannot tell a
+		// self-healing baseline from a dead loop. Kept at Debug so the steady-state
+		// recoverable-crash churn does not add Info volume.
+		m.log.Debug("permanent baseline listener exited; restarting after backoff", "index", idx, "delay", delay)
 		aborted := false
 		select {
 		case <-ctx.Done():
@@ -214,6 +219,7 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		defer m.mu.Unlock()
 		delete(m.restarting, idx)
 		if aborted || m.stopped {
+			m.log.Debug("permanent baseline listener restart aborted (multiplexer stopping)", "index", idx)
 			m.permAlive = false
 			return
 		}

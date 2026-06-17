@@ -1,8 +1,10 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +17,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// lockedBuffer is a goroutine-safe io.Writer for capturing slog output emitted
+// from the waiter's own goroutine.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // These tests exercise InformerPodWaiter's registry, terminal detection, and
 // race handling without a real informer: the registration-time current-state
@@ -268,6 +289,43 @@ func TestInformerPodWaiter_MultipleWaiters(t *testing.T) {
 	}
 	if count != n {
 		t.Fatalf("resolved %d waiters, want %d", count, n)
+	}
+}
+
+// A stuck/cancelled wait must leave a Debug trail: the loop is otherwise silent,
+// so a session blocked on a pod that never terminates produces no output. This
+// asserts the cancel-path Debug line is emitted (Q88, logging-audit Theme E).
+func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
+	buf := &lockedBuffer{}
+	log := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	w := &InformerPodWaiter{
+		reader:  fake.NewClientBuilder().WithScheme(waiterScheme()).WithObjects(pod("ns", "p", corev1.PodRunning, "")).Build(),
+		log:     log,
+		waiters: make(map[string]map[chan podResult]struct{}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := w.WaitForCompletion(ctx, "ns", "p")
+		errCh <- err
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	cancel()
+
+	select {
+	case <-errCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter did not return after context cancel")
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, "pod wait cancelled before completion") {
+		t.Fatalf("expected cancel-path debug log, got:\n%s", got)
+	}
+	if !strings.Contains(got, "namespace=ns") || !strings.Contains(got, "name=p") {
+		t.Fatalf("expected namespace/name correlation fields in debug log, got:\n%s", got)
 	}
 }
 

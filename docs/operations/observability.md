@@ -34,6 +34,19 @@ The controllers (GMC, AGC) take controller-runtime's standard `zap` flags. For l
 
 The egress proxy and the worker wrapper are not controllers; they read their level from the `LOG_LEVEL` environment variable (`info` | `debug`, default `info`).
 
+### Debug diagnostics for otherwise-silent paths
+
+Several paths that can stall a tenant or a session emit **debug**-level diagnostics (suppressed at the default info level). Raise the component to debug — `--zap-log-level=debug` for a controller, `LOG_LEVEL=debug` for the proxy/worker — to surface them. Useful `grep` anchors:
+
+| Path | Component | Log message substring |
+|---|---|---|
+| Session waiting on a worker pod that never reaches a terminal phase (top "stuck session" cause) | AGC | `pod already terminal at registration`, `registered for pod completion`, `pod completion observed`, `pod wait cancelled before completion` |
+| Permanent baseline listener crash/restart backoff (otherwise only the `exited with error` warning is visible) | AGC | `restarting after backoff`, `restart aborted` |
+| Which of the ~12 per-tenant provisioning steps a stalled reconcile is on | GMC | `reconcileResources step` |
+| Per-tenant TLS cert issuance / renewal | GMC | `issuing proxy TLS cert`, `generating metrics mTLS bundle` |
+
+Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
+
 ---
 
 ## Distributed Tracing (AGC)

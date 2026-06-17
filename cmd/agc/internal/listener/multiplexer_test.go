@@ -1,10 +1,14 @@
 package listener_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -31,6 +35,13 @@ func drainHTTP(oauthSrv, brokerSrv *httptest.Server) {
 // before calling goleak.VerifyNone.
 func newMuxWithServers(t *testing.T, maxListeners int32, mux *brokerMux) (*listener.Multiplexer, *httptest.Server, *httptest.Server) {
 	t.Helper()
+	return newMuxWithServersLog(t, maxListeners, mux, nil)
+}
+
+// newMuxWithServersLog is newMuxWithServers with an explicit logger, so tests can
+// observe the Multiplexer's Debug output (e.g. the restart/backoff trail).
+func newMuxWithServersLog(t *testing.T, maxListeners int32, mux *brokerMux, log *slog.Logger) (*listener.Multiplexer, *httptest.Server, *httptest.Server) {
+	t.Helper()
 	oauthSrv := oauthStub()
 	brokerSrv := httptest.NewServer(mux)
 
@@ -54,9 +65,28 @@ func newMuxWithServers(t *testing.T, maxListeners int32, mux *brokerMux) (*liste
 		}
 	}
 
-	m := listener.NewMultiplexer(factory, maxListeners, nil)
+	m := listener.NewMultiplexer(factory, maxListeners, log)
 	m.RestartDelay = time.Millisecond
 	return m, oauthSrv, brokerSrv
+}
+
+// lockedBuffer is a goroutine-safe io.Writer for capturing slog output emitted
+// from the Multiplexer's restart goroutine.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestMultiplexer_AtRestOneGoroutine(t *testing.T) {
@@ -248,6 +278,41 @@ func TestMultiplexer_RestartOnCrash(t *testing.T) {
 	// then succeeds. ActiveCount should settle at 1.
 	assert.Eventually(t, func() bool { return m.ActiveCount() == 1 }, 4*time.Second, 10*time.Millisecond,
 		"permanent goroutine should restart after initial crash and be running")
+
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// A recoverable baseline crash must leave a Debug trail of the restart: without
+// it an operator sees only the repeated "exited with error" Warn and cannot tell
+// a self-healing baseline from a dead loop (Q88, logging-audit Theme E).
+func TestMultiplexer_RestartLogsBackoff(t *testing.T) {
+	var createCount atomic.Int32
+	mux := &brokerMux{}
+	mux.SetCreate(func(w http.ResponseWriter, _ *http.Request) {
+		if createCount.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError) // crash on first attempt
+			return
+		}
+		defaultSession(w)
+	})
+
+	buf := &lockedBuffer{}
+	log := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	m, oauthSrv, brokerSrv := newMuxWithServersLog(t, 3, mux, log)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+	assert.Eventually(t, func() bool { return m.ActiveCount() == 1 }, 4*time.Second, 10*time.Millisecond,
+		"permanent goroutine should restart after initial crash and be running")
+
+	assert.Eventually(t, func() bool {
+		return strings.Contains(buf.String(), "restarting after backoff")
+	}, 2*time.Second, 10*time.Millisecond, "expected a restart/backoff debug log after a recoverable crash")
 
 	cancel()
 	m.Stop()
