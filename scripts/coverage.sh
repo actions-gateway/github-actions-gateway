@@ -46,10 +46,21 @@ BASELINE_FILE="${BASELINE_FILE:-coverage-baseline.txt}"
 TOLERANCE="${COVERAGE_TOLERANCE:-0.5}"
 
 # Files excluded from the coverage profile before the percentage is computed, so
-# the floor reflects hand-written logic rather than mechanically-generated code
-# that would churn the number without any test change:
+# the floor reflects production logic rather than code that churns the number
+# without any test change:
 #   zz_generated.*       controller-gen DeepCopy methods
 #   groupversion_info.go kubebuilder scheme-registration boilerplate
+#   /<pkg>test/, /test/   test-only helper packages (see below)
+#
+# Test-helper packages exist only to support other packages' tests, not to ship
+# in any binary: the `<pkg>test` external-helper convention (e.g. broker/brokertest,
+# an HTTP stub for the broker protocol) and anything under a `test/` helper tree
+# (e.g. gmc/test/utils, the e2e kubectl/diagnostics helpers; test/fakegithub).
+# Their own coverage is partial and irrelevant to shipped code, so folding it
+# into a module's floor made the ratchet track helper code — e.g. broker measured
+# ~48% blended while its production package was ~80% (Q110, sibling of Q77).
+# Excluding them makes each floor track the production packages it's meant to
+# defend.
 #
 # We deliberately do NOT exclude main.go. In this repo several binaries
 # (cmd/worker, cmd/proxy) keep real, unit-tested logic in their `package main`,
@@ -59,7 +70,7 @@ TOLERANCE="${COVERAGE_TOLERANCE:-0.5}"
 # costs the ratchet nothing: a lower floor never causes a false failure, and the
 # only thing that grows mechanically without a test change (generated code) is
 # already filtered above.
-EXCLUDE_RE='(zz_generated.*\.go|groupversion_info\.go)'
+EXCLUDE_RE='(zz_generated.*\.go|groupversion_info\.go|/[a-z]+test/|/test/)'
 
 MODULES=$(go work edit -json | jq -r '.Use[].DiskPath')
 
