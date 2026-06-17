@@ -37,6 +37,13 @@ spec:
         # the scrape. cert/key names default to tls.crt/tls.key (cert-manager's).
         - --metrics-cert-path=/tmp/k8s-metrics-server/serving-certs
         {{- end }}
+        {{- if .Values.metrics.serviceMonitor.enabled }}
+        # Also emit a per-tenant ServiceMonitor for each provisioned tenant's
+        # proxy/AGC mTLS metrics ports (:8443), presenting that tenant's scraper
+        # client bundle. One switch covers the manager ServiceMonitor (below) and
+        # the per-tenant ones. Requires the monitoring.coreos.com CRD.
+        - --enable-tenant-service-monitors
+        {{- end }}
         {{- end }}
         {{- if .Values.leaderElection.enabled }}
         - --leader-elect

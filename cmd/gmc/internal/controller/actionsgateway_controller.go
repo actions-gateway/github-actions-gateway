@@ -28,6 +28,13 @@
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// servicemonitors: the GMC creates a per-tenant Prometheus-Operator
+// ServiceMonitor for the proxy and AGC mTLS metrics ports (Q72). This grant is
+// always present in the ClusterRole, but is only exercised when an operator
+// opts in via metrics.serviceMonitor.enabled (--enable-tenant-service-monitors)
+// AND the monitoring.coreos.com CRD is installed; the reconciler skips
+// gracefully when the CRD is absent so the unused grant is harmless.
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
 package controller
 
@@ -51,6 +58,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -83,6 +91,15 @@ type ActionsGatewayReconciler struct {
 	AGCImage    string
 	ProxyImage  string
 	AGCExtraEnv []corev1.EnvVar // extra env vars forwarded to AGC pods (e.g. for tests)
+	// EnableTenantServiceMonitors gates creation of the per-tenant
+	// Prometheus-Operator ServiceMonitors that scrape the proxy/AGC mTLS metrics
+	// ports (Q72). Off by default: the monitoring.coreos.com CRD is an optional,
+	// operator-installed prerequisite, so creating ServiceMonitors unconditionally
+	// would break provisioning on clusters without it. The chart wires this from
+	// metrics.serviceMonitor.enabled. When off, the metrics Services are still
+	// created (they are always correct and dependency-free) and any
+	// previously-created ServiceMonitors are pruned.
+	EnableTenantServiceMonitors bool
 	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
 	// May be nil in unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
@@ -192,6 +209,11 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	if err := r.applyService(ctx, buildProxyService(ag)); err != nil {
 		return fmt.Errorf("proxy Service: %w", err)
 	}
+	// AGC metrics Service — the AGC has no other Service; this exposes its mTLS
+	// metrics port (:8443) so a ServiceMonitor can scrape it (Q72).
+	if err := r.applyService(ctx, buildAGCService(ag)); err != nil {
+		return fmt.Errorf("AGC Service: %w", err)
+	}
 
 	// 5. NetworkPolicies. The workload policy targets the proxy by PodSelector
 	// (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
@@ -227,6 +249,13 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	step("AGC Deployment")
 	if err := r.applyDeployment(ctx, ag, buildAGCDeployment(ag, r.AGCImage, proxyAddr, r.AGCExtraEnv)); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
+	}
+
+	// 11b. Per-tenant ServiceMonitors for the proxy/AGC mTLS metrics ports (Q72).
+	// Opt-in (EnableTenantServiceMonitors): applied when enabled, pruned when not.
+	step("ServiceMonitors")
+	if err := r.applyOrPruneServiceMonitors(ctx, ag); err != nil {
+		return fmt.Errorf("ServiceMonitors: %w", err)
 	}
 
 	// 12. RunnerGroup CRs. Apply the desired set, then prune any owned
@@ -323,6 +352,16 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 			errs = append(errs, err)
 		}
 	}
+	// delServiceMonitor deletes a per-tenant ServiceMonitor (unstructured, Q72).
+	// A missing monitoring.coreos.com CRD (the operator never opted in) yields a
+	// NoMatch error, which is success here — there is nothing to tear down.
+	delServiceMonitor := func(name string) {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		if err := r.deleteIfExists(ctx, sm, ns, name); err != nil && !meta.IsNoMatchError(err) {
+			errs = append(errs, err)
+		}
+	}
 
 	// 2. AGC Deployment.
 	del(&appsv1.Deployment{}, agcAppName)
@@ -333,7 +372,14 @@ func (r *ActionsGatewayReconciler) reconcileDelete(ctx context.Context, ag *gmcv
 	del(&autoscalingv2.HorizontalPodAutoscaler{}, proxyServiceName)
 	del(&policyv1.PodDisruptionBudget{}, proxyServiceName)
 	del(&corev1.Service{}, proxyServiceName)
+	del(&corev1.Service{}, agcAppName) // AGC metrics Service (Q72)
 	del(&appsv1.Deployment{}, proxyServiceName)
+	// Per-tenant ServiceMonitors (Q72). They carry an owner reference so the
+	// garbage collector also removes them, but delete explicitly so teardown is
+	// confirmed fail-closed like the rest. A missing monitoring.coreos.com CRD
+	// (never opted in) is treated as success — there is nothing to delete.
+	delServiceMonitor(proxyServiceMonitorName)
+	delServiceMonitor(agcServiceMonitorName)
 	// 4. NetworkPolicies. The namespace ResourceQuota is platform-owned (Q130) —
 	// the GMC neither creates nor deletes it. A ResourceQuota left over from a
 	// pre-Q130 install (ownerRef → this ActionsGateway) is garbage-collected by
@@ -744,6 +790,79 @@ func (r *ActionsGatewayReconciler) applyOwnedSecret(ctx context.Context, ag *gmc
 		obj.Labels = desired.Labels
 		obj.Type = desired.Type
 		obj.Data = desired.Data
+		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+	})
+	return err
+}
+
+// applyOrPruneServiceMonitors reconciles the two per-tenant ServiceMonitors
+// (proxy + AGC, Q72) according to EnableTenantServiceMonitors:
+//
+//   - enabled: create/patch both, presenting the per-tenant scraper client
+//     bundle for mTLS. If the monitoring.coreos.com CRD is not installed, the
+//     apply fails with a NoMatch error — this is downgraded to a Warning Event
+//     and a logged warning rather than failing the whole reconcile, so a missing
+//     optional scrape prerequisite never blocks tenant provisioning.
+//   - disabled (default): best-effort delete both, so flipping the flag off (or
+//     never opting in) leaves no stale ServiceMonitors behind. A NoMatch error
+//     (CRD absent) is success — there is nothing to prune.
+func (r *ActionsGatewayReconciler) applyOrPruneServiceMonitors(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	monitors := []struct {
+		name    string
+		appName string
+		svcName string
+	}{
+		{proxyServiceMonitorName, proxyAppName, proxyServiceName},
+		{agcServiceMonitorName, agcAppName, agcAppName},
+	}
+
+	if !r.EnableTenantServiceMonitors {
+		for _, m := range monitors {
+			sm := &unstructured.Unstructured{}
+			sm.SetGroupVersionKind(serviceMonitorGVK)
+			if err := r.deleteIfExists(ctx, sm, ag.Namespace, m.name); err != nil && !meta.IsNoMatchError(err) {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, m := range monitors {
+		if err := r.applyServiceMonitor(ctx, ag, buildMetricsServiceMonitor(ag, m.name, m.appName, m.svcName)); err != nil {
+			if meta.IsNoMatchError(err) {
+				// The monitoring.coreos.com CRD is not installed. Surface an
+				// actionable signal but do not fail provisioning — the operator
+				// opted into ServiceMonitors without (yet) installing the
+				// Prometheus Operator.
+				logf.FromContext(ctx).Info("skipping ServiceMonitor: monitoring.coreos.com CRD not installed", "name", m.name)
+				if r.Recorder != nil {
+					r.Recorder.Eventf(ag, nil, corev1.EventTypeWarning, "ServiceMonitorCRDMissing", "ApplyServiceMonitors",
+						"Tenant ServiceMonitors are enabled but the monitoring.coreos.com ServiceMonitor CRD is not installed; install the Prometheus Operator to enable metrics scraping. Skipping %q.",
+						m.name)
+				}
+				return nil
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// applyServiceMonitor creates or patches an unstructured ServiceMonitor, setting
+// the controller-managed labels + spec and an owner reference on the
+// ActionsGateway so it is GC'd on delete. Mirrors the other apply* helpers:
+// CreateOrPatch writes only the fields set in the mutate closure.
+func (r *ActionsGatewayReconciler) applyServiceMonitor(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *unstructured.Unstructured) error {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(serviceMonitorGVK)
+	obj.SetNamespace(desired.GetNamespace())
+	obj.SetName(desired.GetName())
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.SetLabels(desired.GetLabels())
+		spec, _, _ := unstructured.NestedMap(desired.Object, "spec")
+		if err := unstructured.SetNestedMap(obj.Object, spec, "spec"); err != nil {
+			return err
+		}
 		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
 	})
 	return err

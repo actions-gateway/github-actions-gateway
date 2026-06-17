@@ -14,7 +14,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -95,8 +97,11 @@ func TestApplyService_PreservesClusterIP(t *testing.T) {
 	var svc corev1.Service
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: proxyServiceName}, &svc))
 	assert.Equal(t, "10.0.0.42", svc.Spec.ClusterIP, "server-assigned ClusterIP must be preserved")
-	require.Len(t, svc.Spec.Ports, 1)
+	// The proxy Service carries the data port (:8080) and the metrics port (:8443, Q72).
+	require.Len(t, svc.Spec.Ports, 2)
 	assert.Equal(t, int32(proxyPort), svc.Spec.Ports[0].Port, "managed ports must be updated")
+	assert.Equal(t, "metrics", svc.Spec.Ports[1].Name)
+	assert.Equal(t, int32(metricsPort), svc.Spec.Ports[1].Port)
 	assert.Equal(t, map[string]string{"app": proxyAppName}, svc.Spec.Selector)
 }
 
@@ -189,4 +194,90 @@ func TestApplyOwnedSecret_CreateThenUpdate(t *testing.T) {
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: "owned"}, &got))
 	assert.Equal(t, []byte("v2"), got.Data["tls.crt"])
 	require.Len(t, got.OwnerReferences, 1)
+}
+
+// serviceMonitorTestScheme returns a scheme that also maps the ServiceMonitor
+// GVK to the unstructured types, so the fake client's RESTMapper resolves it —
+// simulating a cluster with the monitoring.coreos.com CRD installed.
+func serviceMonitorTestScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := applyTestScheme(t)
+	s.AddKnownTypeWithName(serviceMonitorGVK, &unstructured.Unstructured{})
+	listGVK := serviceMonitorGVK
+	listGVK.Kind += "List"
+	s.AddKnownTypeWithName(listGVK, &unstructured.UnstructuredList{})
+	return s
+}
+
+// TestApplyOrPruneServiceMonitors_DisabledIsNoOp verifies that with the flag off
+// (the default) no ServiceMonitor is created — even when the CRD is absent (the
+// scheme does not register the GVK), the call must not error.
+func TestApplyOrPruneServiceMonitors_DisabledIsNoOp(t *testing.T) {
+	scheme := applyTestScheme(t)
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	r := applyTestReconciler(t, c, scheme)
+	r.EnableTenantServiceMonitors = false
+	ag := applyTestAG()
+
+	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+}
+
+// TestApplyOrPruneServiceMonitors_EnabledCreatesBoth verifies that with the flag
+// on and the CRD present, both per-tenant ServiceMonitors are created with the
+// tenant-scoped selector and an owner reference for GC.
+func TestApplyOrPruneServiceMonitors_EnabledCreatesBoth(t *testing.T) {
+	scheme := serviceMonitorTestScheme(t)
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	r := applyTestReconciler(t, c, scheme)
+	r.EnableTenantServiceMonitors = true
+	ag := applyTestAG()
+
+	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+
+	for _, name := range []string{proxyServiceMonitorName, agcServiceMonitorName} {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: name}, sm))
+		require.Len(t, sm.GetOwnerReferences(), 1, "ServiceMonitor must be owned for GC on delete")
+		assert.Equal(t, ag.Name, sm.GetOwnerReferences()[0].Name)
+		matchLabels, _, _ := unstructured.NestedStringMap(sm.Object, "spec", "selector", "matchLabels")
+		assert.Equal(t, ag.Name, matchLabels["actions-gateway/owner-name"])
+	}
+}
+
+// TestApplyOrPruneServiceMonitors_EnabledMissingCRDSkips verifies that opting in
+// without the CRD installed does NOT fail the reconcile (a missing optional
+// scrape prerequisite must not block tenant provisioning).
+func TestApplyOrPruneServiceMonitors_EnabledMissingCRDSkips(t *testing.T) {
+	scheme := applyTestScheme(t) // no ServiceMonitor GVK registered → NoMatch
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	r := applyTestReconciler(t, c, scheme)
+	r.EnableTenantServiceMonitors = true
+	ag := applyTestAG()
+
+	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+}
+
+// TestApplyOrPruneServiceMonitors_DisabledPrunesExisting verifies that flipping
+// the flag off deletes previously-created ServiceMonitors.
+func TestApplyOrPruneServiceMonitors_DisabledPrunesExisting(t *testing.T) {
+	scheme := serviceMonitorTestScheme(t)
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	r := applyTestReconciler(t, c, scheme)
+	ag := applyTestAG()
+
+	// Create both with the flag on.
+	r.EnableTenantServiceMonitors = true
+	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+
+	// Flip off → prune.
+	r.EnableTenantServiceMonitors = false
+	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+
+	for _, name := range []string{proxyServiceMonitorName, agcServiceMonitorName} {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		err := c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: name}, sm)
+		assert.True(t, apierrors.IsNotFound(err), "ServiceMonitor %s should be pruned", name)
+	}
 }

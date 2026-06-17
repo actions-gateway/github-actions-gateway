@@ -2,7 +2,10 @@
 
 > **Audience:** SRE, Platform engineer
 
-Both the GMC and AGC expose Prometheus metrics at `:8080/metrics` (no authentication required by default). The standard `controller-runtime` metrics server is used; additional built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics below.
+Every component exposes Prometheus metrics from the standard `controller-runtime` metrics server, so built-in metrics (reconcile latency, work queue depth, etc.) are emitted automatically alongside the custom metrics below. The serving posture differs by component:
+
+- **GMC manager** — `:8443/metrics`, served over TLS. How a scrape verifies the cert is controlled by `metrics.tls.certManager.enabled` (see [Verifying the metrics scrape TLS (GMC manager)](#verifying-the-metrics-scrape-tls-gmc-manager)).
+- **Per-tenant AGC and proxy** — `:8443/metrics`, served over **mutual TLS**: a scraper must present a client certificate signed by that tenant's metrics CA. The GMC publishes the scraper's client bundle per tenant. See [Scraping per-tenant AGC and proxy metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls).
 
 For SLO targets associated with these metrics, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
 
@@ -16,6 +19,8 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
   - [Enabling tracing on GMC-managed AGCs](#enabling-tracing-on-gmc-managed-agcs)
 - [How to Access Metrics](#how-to-access-metrics)
   - [Install-time scraping prerequisites (GMC manager)](#install-time-scraping-prerequisites-gmc-manager)
+  - [Verifying the metrics scrape TLS (GMC manager)](#verifying-the-metrics-scrape-tls-gmc-manager)
+  - [Scraping per-tenant AGC and proxy metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls)
 - [Full Metrics Reference](#full-metrics-reference)
   - [Proxy metrics](#proxy-metrics)
 - [Symptom → Metric Mapping](#symptom--metric-mapping)
@@ -112,32 +117,16 @@ spec:
 
 ## How to Access Metrics
 
-**Port forward (ad-hoc):**
-```sh
-kubectl port-forward -n <namespace> deploy/actions-gateway-controller 8080:8080
-curl http://localhost:8080/metrics
-```
+**Port forward (ad-hoc):** the per-tenant AGC/proxy metrics ports require a client
+certificate (mTLS), so a plain `curl` is rejected at the TLS handshake. Present the
+published scraper bundle (see [the per-tenant section](#scraping-per-tenant-agc-and-proxy-metrics-mtls)
+for the Secret name and an end-to-end `curl --cert/--key/--cacert` example).
 
-**Prometheus operator (production):**
-
-Create a `ServiceMonitor` targeting the AGC and GMC services:
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: actions-gateway
-  namespace: <namespace>
-spec:
-  selector:
-    matchLabels:
-      app: actions-gateway-controller
-  endpoints:
-    - port: metrics
-      interval: 30s
-```
-
-The metrics port is named `metrics` in the Service spec.
+**Prometheus operator (production):** the chart wires scraping automatically when
+`metrics.serviceMonitor.enabled=true` — both the GMC manager `ServiceMonitor` and a
+per-tenant `ServiceMonitor` for each provisioned tenant's AGC/proxy. The metrics port
+is named `metrics` (`:8443`) on every Service. You do not hand-author these
+`ServiceMonitor`s; the sections below describe what they wire and the prerequisites.
 
 ### Install-time scraping prerequisites (GMC manager)
 
@@ -160,8 +149,9 @@ caBundle authenticated, so the sensitive surface stays the `metrics: enabled`
 restriction above. No namespace label is required for CR admission.
 
 This applies to the **GMC manager** only. The per-tenant AGC and proxy metrics
-are governed by the per-tenant NetworkPolicies the GMC generates (the AGC NP
-already admits monitoring-namespace scrapes of the metrics port).
+are governed by the per-tenant NetworkPolicies the GMC generates (the AGC and
+proxy NPs already admit monitoring-namespace scrapes of the metrics port) and use
+mutual TLS — see [Scraping per-tenant AGC and proxy metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls).
 
 > Runtime enforcement of these policies depends on the CNI; kindnet's
 > `kube-network-policies` does not drop all egress negatives (see the worker
@@ -212,6 +202,77 @@ The metrics-server-cert Secret is read from the **ServiceMonitor's namespace**
 needed. Because verification follows `certManager.enabled` by default, an
 install that already uses cert-manager for the webhook (the default) gets
 verified metrics scraping automatically once the `ServiceMonitor` is enabled.
+
+### Scraping per-tenant AGC and proxy metrics (mTLS)
+
+Each provisioned tenant runs its own AGC and egress-proxy pods, which serve
+`/metrics` over **mutual TLS** on `:8443`. Unlike the GMC manager, the listener
+**requires a client certificate** signed by that tenant's metrics CA — there is
+no bearer-token or `insecureSkipVerify` fallback. Three things are wired
+per tenant so Prometheus can scrape them:
+
+1. **Metrics Services (always created).** The GMC creates a `metrics`-named
+   `:8443` port on the proxy `Service` (`actions-gateway-proxy`) and a dedicated
+   AGC `Service` (`actions-gateway-controller`), both in the tenant namespace.
+   These exist regardless of the scrape toggle.
+2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`,
+   the GMC also creates one `ServiceMonitor` per component in the tenant
+   namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
+   Each selects only its own component's Service via the tenant's owner labels, so
+   one tenant's monitor never selects another tenant's pods.
+3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the
+   per-tenant scraper client bundle from the `actions-gateway-metrics-client`
+   Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper
+   to the listener and `ca.crt` verifies the listener's server cert. `serverName`
+   is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server
+   cert), so the scrape is verified end-to-end and **not** MITM-able:
+
+   ```yaml
+   tlsConfig:
+     serverName: actions-gateway-proxy.<tenant-namespace>.svc
+     ca:        { secret: { name: actions-gateway-metrics-client, key: ca.crt } }
+     cert:      { secret: { name: actions-gateway-metrics-client, key: tls.crt } }
+     keySecret: { name: actions-gateway-metrics-client, key: tls.key }
+   ```
+
+**Prerequisites:**
+
+- **Prometheus Operator** must be installed (the `monitoring.coreos.com`
+  `ServiceMonitor` CRD must exist). The toggle is off by default precisely
+  because the CRD is not present on every cluster. If the CRD is absent when the
+  toggle is on, the GMC logs a warning and emits a `ServiceMonitorCRDMissing`
+  Event on the `ActionsGateway` and continues — a missing scrape prerequisite
+  never blocks tenant provisioning.
+- **Prometheus reads the client bundle from the `ServiceMonitor`'s namespace**
+  (the tenant namespace), so the scraping Prometheus must be configured to select
+  `ServiceMonitor`s across tenant namespaces (`serviceMonitorNamespaceSelector`)
+  and granted read access to the per-tenant `actions-gateway-metrics-client`
+  Secret. Each tenant has a distinct CA and client cert, which is why a single
+  cluster-wide `ServiceMonitor` cannot scrape them — the wiring is necessarily
+  per tenant.
+- **NetworkPolicy:** label the Prometheus namespace `metrics: enabled` so the
+  per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit
+  the `:8443` metrics port only from `metrics=enabled` namespaces).
+
+**Ad-hoc verification** (mounting the published bundle locally):
+
+```sh
+ns=<tenant-namespace>
+kubectl get secret actions-gateway-metrics-client -n "$ns" \
+  -o jsonpath='{.data.tls\.crt}' | base64 -d > client.crt
+kubectl get secret actions-gateway-metrics-client -n "$ns" \
+  -o jsonpath='{.data.tls\.key}' | base64 -d > client.key
+kubectl get secret actions-gateway-metrics-client -n "$ns" \
+  -o jsonpath='{.data.ca\.crt}'  | base64 -d > ca.crt
+kubectl port-forward -n "$ns" svc/actions-gateway-controller 8443:8443 &
+curl --cert client.crt --key client.key --cacert ca.crt \
+  https://actions-gateway-controller.$ns.svc:8443/metrics --resolve \
+  "actions-gateway-controller.$ns.svc:8443:127.0.0.1"
+rm -f client.crt client.key ca.crt   # delete the cert material when done
+```
+
+(The bundle is a client *certificate*, not a long-lived account credential; still
+remove the files when finished.)
 
 ---
 
