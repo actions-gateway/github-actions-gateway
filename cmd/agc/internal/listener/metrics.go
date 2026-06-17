@@ -16,6 +16,7 @@ type Metrics struct {
 	RenewJobErrorsTotal     *prometheus.CounterVec
 	MessagePollErrorsTotal  *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
+	PodCreationLatency       *prometheus.HistogramVec
 	JobDuration              *prometheus.HistogramVec
 	EvictionRetries          *prometheus.CounterVec
 	EvictionRetriesExhausted *prometheus.CounterVec
@@ -69,6 +70,14 @@ func NewMetrics() *Metrics {
 			Help: "Total number of GetMessage errors.",
 		}, []string{"namespace", "reason"}),
 
+		PodCreationLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "actions_gateway_pod_creation_latency_seconds",
+			Help: "Time from worker pod creation to the runner container starting (includes scheduling and image pull).",
+			// Bracket the Appendix A SLO (p95 ≤ 15s, p99 ≤ 60s): sub-second on warm
+			// nodes, tens of seconds when a cold node must pull the runner image.
+			Buckets: []float64{0.5, 1, 2.5, 5, 10, 15, 30, 60, 120, 300},
+		}, []string{"namespace"}),
+
 		JobDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "actions_gateway_job_duration_seconds",
 			Help:    "Wall time from acquirejob to worker pod completion.",
@@ -119,6 +128,7 @@ func NewMetrics() *Metrics {
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,
 		m.MessagePollErrorsTotal,
+		m.PodCreationLatency,
 		m.JobDuration,
 		m.EvictionRetries,
 		m.EvictionRetriesExhausted,

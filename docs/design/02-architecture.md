@@ -186,7 +186,7 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired |
 | `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures (404/409/422/other) |
 | `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from acquirejob to pod completion |
-| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from acquirejob to pod Scheduled event |
+| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to runner container start (scheduling + image pull) |
 | `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful installation token refreshes |
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refreshes |
 | `actions_gateway_renewjob_errors_total` | Counter | `namespace` | RenewJob call failures (leading indicator for cancelled jobs) |
@@ -198,7 +198,7 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered (`post_job`, `stale_session`, `startup`, `reconcile_repair`) |
 | `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed attempts to re-register a single-use JIT agent |
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace` | GetMessage errors (non-empty-poll, non-session-expired) |
-| `actions_gateway_reconcile_errors_total` | Counter | `controller`, `resource` | GMC/AGC reconcile errors |
+| `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors (controller-runtime built-in; no `actions_gateway_` prefix) |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | NetworkPolicy egress rule refreshes from GitHub meta API |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC |
 

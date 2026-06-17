@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	toolscache "k8s.io/client-go/tools/cache"
@@ -37,10 +39,53 @@ func terminalPhase(pod *corev1.Pod) (corev1.PodPhase, string, bool) {
 	}
 }
 
-// podResult is delivered to a blocked waiter when its pod resolves.
+// podResult is delivered to a blocked waiter when its pod resolves. It also
+// carries the optional pod-creation latency observation so resolve can emit it
+// exactly once per pod (on the first resolving event that still has waiters).
 type podResult struct {
 	phase  corev1.PodPhase
 	reason string
+	// namespace and latency carry the pod-creation-latency observation.
+	// latencyValid is false when the pod never started (no container StartedAt),
+	// in which case no observation is emitted.
+	namespace    string
+	latency      time.Duration
+	latencyValid bool
+}
+
+// podCreationLatency returns the time from the pod's creation to the earliest
+// container start (Running.StartedAt or Terminated.StartedAt). The boolean is
+// false when no container has started yet, so the pod was scheduled but its
+// runner image has not finished pulling — no meaningful latency to record.
+func podCreationLatency(pod *corev1.Pod) (time.Duration, bool) {
+	created := pod.CreationTimestamp.Time
+	if created.IsZero() {
+		return 0, false
+	}
+	var first time.Time
+	for i := range pod.Status.ContainerStatuses {
+		st := &pod.Status.ContainerStatuses[i].State
+		var started time.Time
+		switch {
+		case st.Running != nil && !st.Running.StartedAt.IsZero():
+			started = st.Running.StartedAt.Time
+		case st.Terminated != nil && !st.Terminated.StartedAt.IsZero():
+			started = st.Terminated.StartedAt.Time
+		default:
+			continue
+		}
+		if first.IsZero() || started.Before(first) {
+			first = started
+		}
+	}
+	if first.IsZero() {
+		return 0, false
+	}
+	d := first.Sub(created)
+	if d < 0 {
+		d = 0
+	}
+	return d, true
 }
 
 // InformerPodWaiter detects worker-pod completion by registering a single event
@@ -61,6 +106,11 @@ type InformerPodWaiter struct {
 	// inject a fake client.Reader here.
 	reader client.Reader
 	log    *slog.Logger
+
+	// PodCreationLatency, when non-nil, is observed once per pod when the pod
+	// resolves: the time from pod creation to its runner container starting
+	// (scheduling + image pull). Optional so unit tests can omit it.
+	PodCreationLatency *prometheus.HistogramVec
 
 	mu      sync.Mutex
 	waiters map[string]map[chan podResult]struct{} // key: "namespace/name"
@@ -182,6 +232,13 @@ func (w *InformerPodWaiter) resolve(key string, res podResult) {
 	if set == nil {
 		return
 	}
+	// Emit the pod-creation-latency observation here — guarded by the non-nil
+	// waiter set — so it fires exactly once per pod (the first resolving event
+	// that still has registered waiters), even though the informer delivers many
+	// post-terminal update events.
+	if w.PodCreationLatency != nil && res.latencyValid {
+		w.PodCreationLatency.WithLabelValues(res.namespace).Observe(res.latency.Seconds())
+	}
 	for ch := range set {
 		select {
 		case ch <- res:
@@ -199,7 +256,14 @@ func (w *InformerPodWaiter) onPodEvent(obj any) {
 		return
 	}
 	if phase, reason, ok := terminalPhase(pod); ok {
-		w.resolve(pod.Namespace+"/"+pod.Name, podResult{phase: phase, reason: reason})
+		latency, ok := podCreationLatency(pod)
+		w.resolve(pod.Namespace+"/"+pod.Name, podResult{
+			phase:        phase,
+			reason:       reason,
+			namespace:    pod.Namespace,
+			latency:      latency,
+			latencyValid: ok,
+		})
 	}
 }
 

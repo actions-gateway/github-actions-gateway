@@ -12,13 +12,14 @@ and not a restructure.
 |---|---|---|---|
 | 1 | Terminology consistency | ✅ done | Glossary linked from all section READMEs; GMC/AGC expanded in appendices; rest left to glossary (decision recorded) |
 | 2 | Cross-reference architecture | ✅ done | 0 broken file links; all 127 in-page anchors validated, 5 pre-existing breaks fixed; optional link-check CI gate still open |
-| 3 | Version / conditional logic | ⚠️ finding | **6 documented metrics are not implemented** — filed to backlog as a code+docs task |
+| 3 | Version / conditional logic | ✅ done | **6 documented metrics reconciled with code (Q51)** — `pod_creation_latency_seconds`, `managed_gateways`, `ip_range_updates_total` implemented; `reconcile_errors_total` re-pointed to the controller-runtime built-in; `proxy_replicas` marked `(planned)` |
 | 4 | Metadata / taxonomy | ✅ done | README indexes complete; k8s-audit plan added to plan index; no front matter (by decision) |
 | 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
 | 6 | Reusable content blocks | ✅ done | `go test` list canonical in testing.md; human docs no longer link to CLAUDE.md; no partials mechanism (by decision) |
 
-**One open item remains:** the Layer 3 metrics gap (tracked in `docs/STATUS.md`). The
-optional Layer 2 link-check CI gate is a separate decision, not blocking.
+**All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see
+[q51-metrics-reconcile.md](q51-metrics-reconcile.md)). The optional Layer 2
+link-check CI gate is a separate decision, not blocking.
 
 ---
 
@@ -118,25 +119,22 @@ Task:
    implemented; the docs reference 6 that have no code definition at all** — operator
    docs document telemetry an operator cannot scrape.
 
-   | Documented metric | Implemented? | Documented in |
+   | Documented metric | Originally implemented? | Resolution (Q51) |
    |---|---|---|
-   | `actions_gateway_pod_creation_latency_seconds` | ❌ no | observability, runbook, upgrade, tenant-onboarding, 02-architecture, appendix-a (**headline pod-latency SLO**) |
-   | `actions_gateway_managed_gateways` | ❌ no | observability, 02-architecture |
-   | `actions_gateway_reconcile_errors_total` | ❌ no — controller-runtime emits `controller_runtime_reconcile_errors_total` instead | observability, runbook, upgrade, troubleshooting, 02-architecture |
-   | `actions_gateway_ip_range_updates_total` | ❌ no | observability, troubleshooting, 02-architecture |
-   | `actions_gateway_proxy_replicas` | ❌ no | milestone-5 (plan only) |
-   | `actions_gateway_proxy_tunnel_duration_seconds` | ✅ yes (M-17/M-18, 2026-05-31) | security, milestone-4 |
+   | `actions_gateway_pod_creation_latency_seconds` | ❌ no | **Implemented** — histogram observed in the AGC `InformerPodWaiter` (pod creation → runner container start) |
+   | `actions_gateway_managed_gateways` | ❌ no | **Implemented** — GMC scrape-time collector listing `ActionsGateway` CRs |
+   | `actions_gateway_reconcile_errors_total` | ❌ no — controller-runtime emits `controller_runtime_reconcile_errors_total` instead | **Re-pointed** — docs now reference the controller-runtime built-in |
+   | `actions_gateway_ip_range_updates_total` | ❌ no | **Implemented** — GMC counter incremented on each successful NetworkPolicy patch |
+   | `actions_gateway_proxy_replicas` | ❌ no | **Marked `(planned)`** — proxy HPA autoscaling (Milestone 5), plan-only |
+   | `actions_gateway_proxy_tunnel_duration_seconds` | ✅ yes (M-17/M-18, 2026-05-31) | No change — already implemented |
 
    (`_bucket`/`_sum` suffixes on histograms are Prometheus-derived, not separate
    metrics — not counted as gaps.)
 
-   **Remediation is out of scope for a docs audit** (implementing
-   `pod_creation_latency_seconds` needs pod-scheduling-event instrumentation; the
-   `reconcile_errors_total` case is a doc-naming error pointing operators at a
-   non-existent name instead of the controller-runtime built-in). Filed to the backlog
-   as a code+docs task rather than annotating the operator docs unilaterally — whether
-   each metric should be *implemented*, *re-pointed to the built-in*, or *marked
-   `(planned)`* is a product call. See `docs/STATUS.md` Queue.
+   **Resolved by Q51** — see [q51-metrics-reconcile.md](q51-metrics-reconcile.md)
+   for the per-metric rationale. Docs and code now agree: every documented
+   non-`(planned)` metric is registered, and the re-pointed name matches what
+   controller-runtime actually emits.
 
    No other class of "described as shipped but not implemented" prose was found:
    design docs describe intended behavior in present tense (conventional for a design

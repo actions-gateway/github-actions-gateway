@@ -56,7 +56,7 @@ kubectl get pods --all-namespaces -l app=actions-gateway-proxy
 kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -v Terminating
 
 # 5. No recent reconcile errors
-# Metric: rate(actions_gateway_reconcile_errors_total[5m]) == 0
+# Metric: rate(controller_runtime_reconcile_errors_total[5m]) == 0
 ```
 
 Also check the release notes for the new version before upgrading, particularly:
@@ -310,7 +310,7 @@ kubectl get pods -n gmc-system -o wide
 kubectl get lease -n gmc-system
 
 # Confirm no new reconcile errors appeared
-# Metric: actions_gateway_reconcile_errors_total
+# Metric: controller_runtime_reconcile_errors_total
 
 # Spot-check one ActionsGateway CR
 kubectl describe actionsgateway -n <namespace> <name>

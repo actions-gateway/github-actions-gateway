@@ -72,7 +72,7 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 | `actions_gateway_pod_creation_latency_seconds` p99 | > 60s | Page | Indicates scheduling stall or quota exhaustion |
 | `actions_gateway_eviction_retries_exhausted_total` | rate > 0 | Ticket | Each increment requires a manual re-run |
 | `actions_gateway_active_sessions` | = 0 for a RunnerGroup | Page | No listener polling; jobs queue indefinitely |
-| `actions_gateway_reconcile_errors_total` | rate > 1/5min | Ticket | Persistent reconcile failure; resources may be stale |
+| `controller_runtime_reconcile_errors_total` | rate > 1/5min | Ticket | Persistent reconcile failure; resources may be stale |
 | `ActionsGateway` condition `RateLimited=True` | duration > 10 minutes | Page | Installation is over API budget |
 | Proxy HPA `TARGETS: <unknown>` | any | Ticket | HPA metric broken; autoscaling not working |
 | AGC pod OOMKilled | any | Page | AGC has no active sessions while restarting |

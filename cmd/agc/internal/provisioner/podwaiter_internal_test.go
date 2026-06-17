@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,7 +92,7 @@ func TestInformerPodWaiter_EventDrivenSucceeded(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	// Let the goroutine register before the event fires.
@@ -109,7 +111,7 @@ func TestInformerPodWaiter_EventDrivenEviction(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -127,7 +129,7 @@ func TestInformerPodWaiter_DeleteResolvesSucceeded(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -145,7 +147,7 @@ func TestInformerPodWaiter_DeleteTombstone(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -168,7 +170,7 @@ func TestInformerPodWaiter_NotFoundThenTerminal(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -225,7 +227,7 @@ func TestInformerPodWaiter_NonTerminalEventIgnored(t *testing.T) {
 	done := make(chan podResult, 1)
 	go func() {
 		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
-		done <- podResult{ph, rs}
+		done <- podResult{phase: ph, reason: rs}
 	}()
 
 	waitForRegistration(t, w, "ns/p")
@@ -326,6 +328,82 @@ func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
 	}
 	if !strings.Contains(got, "namespace=ns") || !strings.Contains(got, "name=p") {
 		t.Fatalf("expected namespace/name correlation fields in debug log, got:\n%s", got)
+	}
+}
+
+// newLatencyHistogram returns an unregistered histogram with the production
+// label set, for asserting pod-creation-latency observations in isolation.
+func newLatencyHistogram() *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "test_pod_creation_latency_seconds",
+		Buckets: []float64{0.5, 1, 5, 30},
+	}, []string{"namespace"})
+}
+
+// startedPod builds a pod whose runner container started startedAfter the pod
+// was created, in the given phase. A terminal phase carries Terminated.StartedAt;
+// a Running phase carries Running.StartedAt.
+func startedPod(ns, name string, phase corev1.PodPhase, startedAfter time.Duration) *corev1.Pod {
+	created := metav1.Now()
+	startedAt := metav1.NewTime(created.Add(startedAfter))
+	state := corev1.ContainerState{}
+	if phase == corev1.PodRunning {
+		state.Running = &corev1.ContainerStateRunning{StartedAt: startedAt}
+	} else {
+		state.Terminated = &corev1.ContainerStateTerminated{StartedAt: startedAt}
+	}
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, CreationTimestamp: created},
+		Status: corev1.PodStatus{
+			Phase:             phase,
+			ContainerStatuses: []corev1.ContainerStatus{{Name: "runner", State: state}},
+		},
+	}
+}
+
+// A terminal pod that started must yield exactly one latency observation, emitted
+// once even though the informer delivers further post-terminal update events.
+func TestInformerPodWaiter_PodCreationLatencyObservedOnce(t *testing.T) {
+	w := newTestWaiter(startedPod("ns", "p", corev1.PodPending, 3*time.Second))
+	w.PodCreationLatency = newLatencyHistogram()
+
+	done := make(chan podResult, 1)
+	go func() {
+		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{phase: ph, reason: rs}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	terminal := startedPod("ns", "p", corev1.PodSucceeded, 3*time.Second)
+	w.onPodEvent(terminal)
+	mustResolve(t, done)
+
+	// A second post-terminal event must not double-count (no waiters remain).
+	w.onPodEvent(terminal)
+
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 1 {
+		t.Fatalf("got %d latency observations, want exactly 1", got)
+	}
+}
+
+// A pod that reached a terminal phase without any container ever starting (no
+// StartedAt) must not produce a latency observation.
+func TestInformerPodWaiter_PodCreationLatencySkippedWhenNeverStarted(t *testing.T) {
+	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
+	w.PodCreationLatency = newLatencyHistogram()
+
+	done := make(chan podResult, 1)
+	go func() {
+		ph, rs, _ := w.WaitForCompletion(context.Background(), "ns", "p")
+		done <- podResult{phase: ph, reason: rs}
+	}()
+
+	waitForRegistration(t, w, "ns/p")
+	w.onPodEvent(pod("ns", "p", corev1.PodFailed, "")) // no container ever started
+	mustResolve(t, done)
+
+	if got := testutil.CollectAndCount(w.PodCreationLatency); got != 0 {
+		t.Fatalf("got %d latency observations, want 0 for a never-started pod", got)
 	}
 }
 
