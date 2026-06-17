@@ -13,6 +13,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -741,11 +743,113 @@ func TestBuildAGCRoleBinding_WiresCorrectSA(t *testing.T) {
 func TestBuildProxyService_PortAndSelector(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
 	svc := buildProxyService(ag)
-	require.Len(t, svc.Spec.Ports, 1)
-	assert.Equal(t, proxyPort, svc.Spec.Ports[0].Port)
-	assert.Equal(t, corev1.ProtocolTCP, svc.Spec.Ports[0].Protocol)
+	ports := servicePortsByName(svc)
+	// Both the data port (:8080) and the mTLS metrics port (:8443, Q72) are exposed.
+	require.Len(t, svc.Spec.Ports, 2)
+	require.Contains(t, ports, "proxy")
+	require.Contains(t, ports, "metrics")
+	assert.Equal(t, proxyPort, ports["proxy"].Port)
+	assert.Equal(t, intstr.FromInt32(proxyPort), ports["proxy"].TargetPort)
+	assert.Equal(t, metricsPort, ports["metrics"].Port)
+	assert.Equal(t, intstr.FromInt32(metricsPort), ports["metrics"].TargetPort)
+	assert.Equal(t, corev1.ProtocolTCP, ports["metrics"].Protocol)
 	assert.Equal(t, corev1.ServiceTypeClusterIP, svc.Spec.Type)
 	assert.Equal(t, proxyAppName, svc.Spec.Selector["app"])
+	// The `app` label on the Service metadata lets the per-tenant ServiceMonitor
+	// select it precisely.
+	assert.Equal(t, proxyAppName, svc.Labels["app"])
+	assert.Equal(t, ag.Name, svc.Labels["actions-gateway/owner-name"])
+}
+
+func TestBuildAGCService_MetricsPortAndSelector(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	svc := buildAGCService(ag)
+	// Named agcAppName so the metrics server cert SANs already cover its DNS names.
+	assert.Equal(t, agcAppName, svc.Name)
+	assert.Equal(t, ag.Namespace, svc.Namespace)
+	require.Len(t, svc.Spec.Ports, 1)
+	assert.Equal(t, "metrics", svc.Spec.Ports[0].Name)
+	assert.Equal(t, metricsPort, svc.Spec.Ports[0].Port)
+	assert.Equal(t, intstr.FromInt32(metricsPort), svc.Spec.Ports[0].TargetPort)
+	assert.Equal(t, corev1.ServiceTypeClusterIP, svc.Spec.Type)
+	assert.Equal(t, agcAppName, svc.Spec.Selector["app"])
+	assert.Equal(t, agcAppName, svc.Labels["app"])
+	assert.Equal(t, ag.Name, svc.Labels["actions-gateway/owner-name"])
+}
+
+// servicePortsByName indexes a Service's ports by name for assertion.
+func servicePortsByName(svc *corev1.Service) map[string]corev1.ServicePort {
+	m := make(map[string]corev1.ServicePort, len(svc.Spec.Ports))
+	for _, p := range svc.Spec.Ports {
+		m[p.Name] = p
+	}
+	return m
+}
+
+// TestBuildMetricsServiceMonitor verifies the per-tenant ServiceMonitor wires an
+// mTLS HTTPS scrape of the `metrics` port presenting the per-tenant scraper
+// client bundle, with a tenant-scoped selector and a verifiable serverName.
+func TestBuildMetricsServiceMonitor(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+
+	cases := []struct {
+		name       string
+		smName     string
+		appName    string
+		svcName    string
+		wantServer string
+	}{
+		{"proxy", proxyServiceMonitorName, proxyAppName, proxyServiceName, "actions-gateway-proxy.team-a.svc"},
+		{"agc", agcServiceMonitorName, agcAppName, agcAppName, "actions-gateway-controller.team-a.svc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sm := buildMetricsServiceMonitor(ag, tc.smName, tc.appName, tc.svcName)
+
+			assert.Equal(t, serviceMonitorGVK, sm.GroupVersionKind())
+			assert.Equal(t, tc.smName, sm.GetName())
+			assert.Equal(t, ag.Namespace, sm.GetNamespace())
+			// Tenant-scoped selector: owner labels + the component `app` label.
+			assert.Equal(t, tc.appName, sm.GetLabels()["app"])
+
+			matchLabels, found, err := unstructured.NestedStringMap(sm.Object, "spec", "selector", "matchLabels")
+			require.NoError(t, err)
+			require.True(t, found)
+			assert.Equal(t, tc.appName, matchLabels["app"])
+			assert.Equal(t, ag.Name, matchLabels["actions-gateway/owner-name"])
+			assert.Equal(t, ag.Namespace, matchLabels["actions-gateway/owner-ns"])
+			assert.Equal(t, labelManagerValue, matchLabels[labelManagedBy])
+
+			endpoints, found, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+			require.NoError(t, err)
+			require.True(t, found)
+			require.Len(t, endpoints, 1)
+			ep := endpoints[0].(map[string]interface{})
+			assert.Equal(t, "metrics", ep["port"])
+			assert.Equal(t, "/metrics", ep["path"])
+			assert.Equal(t, "https", ep["scheme"])
+
+			tlsConfig := ep["tlsConfig"].(map[string]interface{})
+			// serverName must be a SAN on the per-tenant metrics server cert.
+			assert.Equal(t, tc.wantServer, tlsConfig["serverName"])
+			assert.Contains(t, metricsServerSANs(ag), tlsConfig["serverName"])
+
+			// mTLS: client cert+key+ca all sourced from the published scraper
+			// client Secret (never the server bundle, which holds the private key
+			// mounted into pods).
+			ca := tlsConfig["ca"].(map[string]interface{})["secret"].(map[string]interface{})
+			assert.Equal(t, metricsClientSecretName, ca["name"])
+			assert.Equal(t, metricsCACertKey, ca["key"])
+
+			cert := tlsConfig["cert"].(map[string]interface{})["secret"].(map[string]interface{})
+			assert.Equal(t, metricsClientSecretName, cert["name"])
+			assert.Equal(t, corev1.TLSCertKey, cert["key"])
+
+			keySecret := tlsConfig["keySecret"].(map[string]interface{})
+			assert.Equal(t, metricsClientSecretName, keySecret["name"])
+			assert.Equal(t, corev1.TLSPrivateKeyKey, keySecret["key"])
+		})
+	}
 }
 
 func TestBuildRunnerGroup_SetsSpecAndLabels(t *testing.T) {

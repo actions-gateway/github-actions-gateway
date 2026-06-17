@@ -105,6 +105,12 @@ func main() {
 	flag.BoolVar(&allowFloatingImageTags, "allow-floating-image-tags", false,
 		"Permit non-digest-pinned AGC_IMAGE/PROXY_IMAGE references (floating tags). "+
 			"Intended for dev/test only; production requires the name@sha256:<digest> form.")
+	var enableTenantServiceMonitors bool
+	flag.BoolVar(&enableTenantServiceMonitors, "enable-tenant-service-monitors", false,
+		"Create a per-tenant Prometheus-Operator ServiceMonitor for the proxy and AGC mTLS "+
+			"metrics ports (:8443). Off by default: requires the monitoring.coreos.com CRD "+
+			"(Prometheus Operator) installed. When off, the metrics Services are still created "+
+			"but nothing is wired to scrape them. The chart sets this from metrics.serviceMonitor.enabled.")
 	var allowedPriorityClasses string
 	flag.StringVar(&allowedPriorityClasses, "allowed-priority-classes", "",
 		"Comma-separated allowlist of cluster-scoped PriorityClass names that tenant "+
@@ -310,13 +316,14 @@ func main() {
 	gmcMetrics := controller.NewMetrics(mgr.GetClient())
 
 	if err := (&controller.ActionsGatewayReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		IPCache:     ipCache,
-		AGCImage:    agcImage,
-		ProxyImage:  proxyImage,
-		AGCExtraEnv: agcExtraEnv,
-		Recorder:    mgr.GetEventRecorder("actionsgateway-controller"),
+		Client:                      mgr.GetClient(),
+		Scheme:                      mgr.GetScheme(),
+		IPCache:                     ipCache,
+		AGCImage:                    agcImage,
+		ProxyImage:                  proxyImage,
+		AGCExtraEnv:                 agcExtraEnv,
+		EnableTenantServiceMonitors: enableTenantServiceMonitors,
+		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
 		os.Exit(1)

@@ -101,11 +101,19 @@ metrics:
       #   without cert-manager, accepting the weaker posture. See
       #   docs/operations/observability.md.
       enabled: true
-  # serviceMonitor emits a Prometheus-Operator ServiceMonitor. Opt-in (off by
+  # serviceMonitor emits Prometheus-Operator ServiceMonitors. Opt-in (off by
   # default): the ServiceMonitor CRD only exists once the Prometheus Operator
   # is installed, so enabling it without that CRD breaks `helm install`. Label
   # your Prometheus namespace `metrics: enabled` so the NetworkPolicy admits
   # the scraper. See docs/operations/observability.md.
+  #
+  # Enabling this turns on BOTH the GMC manager ServiceMonitor (this release's
+  # namespace) AND a per-tenant ServiceMonitor for every provisioned tenant's
+  # proxy/AGC mTLS metrics ports (:8443) — the GMC creates the latter in each
+  # tenant namespace, presenting that tenant's scraper client bundle for mTLS
+  # (it passes --enable-tenant-service-monitors to the manager). The per-tenant
+  # metrics Services (:8443) are always created regardless of this switch; only
+  # the scrape wiring is gated.
   serviceMonitor:
     enabled: false
 

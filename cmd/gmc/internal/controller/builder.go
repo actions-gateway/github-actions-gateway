@@ -18,6 +18,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -43,7 +45,13 @@ const (
 	agcCredsMountPath  = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
 
 	proxyServiceName = gmcnames.ProxyName
-	proxyPort        = int32(8080)
+	// proxyServiceMonitorName / agcServiceMonitorName are the per-tenant
+	// Prometheus-Operator ServiceMonitors that scrape the proxy and AGC mTLS
+	// metrics ports (Q72). One per component so each carries the correct TLS
+	// serverName for its Service.
+	proxyServiceMonitorName = proxyServiceName + "-metrics"
+	agcServiceMonitorName   = agcAppName + "-metrics"
+	proxyPort               = int32(8080)
 	// healthMetricsPort is the plaintext health listener port (/healthz,
 	// /readyz) probed by the kubelet on both the proxy and the AGC pods. It
 	// carries no Prometheus metrics — those moved to the mTLS metricsPort below
@@ -544,15 +552,140 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 	}
 }
 
+// metricsServiceLabels returns the metadata labels stamped on a metrics Service
+// so its per-tenant ServiceMonitor can select it precisely: the managed labels
+// (which include the owner-name/owner-ns that scope the selector to a single
+// tenant) plus the component `app` label that distinguishes the proxy Service
+// from the AGC Service within the namespace.
+func metricsServiceLabels(ag *gmcv1alpha1.ActionsGateway, appName string) map[string]string {
+	labels := managedLabels(ag)
+	labels["app"] = appName
+	return labels
+}
+
 func buildProxyService(ag *gmcv1alpha1.ActionsGateway) *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: metricsServiceLabels(ag, proxyAppName)},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": proxyAppName},
-			Ports:    []corev1.ServicePort{{Name: "proxy", Port: proxyPort, TargetPort: intstr.FromInt32(proxyPort), Protocol: corev1.ProtocolTCP}},
+			Ports: []corev1.ServicePort{
+				{Name: "proxy", Port: proxyPort, TargetPort: intstr.FromInt32(proxyPort), Protocol: corev1.ProtocolTCP},
+				// metrics: the mTLS Prometheus listener (metricsPort/:8443). Q69
+				// ships the serving side; this port + the proxy ServiceMonitor make
+				// it scrapeable (Q72). Named "metrics" so the ServiceMonitor endpoint
+				// can target it by name without scraping the proxy's :8080 data port.
+				{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt32(metricsPort), Protocol: corev1.ProtocolTCP},
+			},
+			Type: corev1.ServiceTypeClusterIP,
+		},
+	}
+}
+
+// buildAGCService builds the AGC metrics Service. The AGC pod is otherwise a
+// pure client (no Service today), but its controller-runtime metrics server
+// listens on metricsPort (:8443); a Service is needed so a ServiceMonitor can
+// discover and scrape it (Q72). It is named agcAppName so the metrics server
+// cert SANs (metricsServerSANs) already cover its DNS names and the scrape
+// verifies without insecureSkipVerify.
+func buildAGCService(ag *gmcv1alpha1.ActionsGateway) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: ag.Namespace, Labels: metricsServiceLabels(ag, agcAppName)},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{"app": agcAppName},
+			Ports:    []corev1.ServicePort{{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt32(metricsPort), Protocol: corev1.ProtocolTCP}},
 			Type:     corev1.ServiceTypeClusterIP,
 		},
 	}
+}
+
+// metricsServiceDNSName returns the in-cluster `<svc>.<ns>.svc` DNS name used as
+// the TLS serverName when scraping a metrics Service. It is one of the SANs on
+// the per-tenant metrics server cert (metricsServerSANs), so a ServiceMonitor
+// setting serverName to this value verifies the scrape against the metrics CA.
+func metricsServiceDNSName(ag *gmcv1alpha1.ActionsGateway, svcName string) string {
+	return fmt.Sprintf("%s.%s.svc", svcName, ag.Namespace)
+}
+
+// serviceMonitorGVK is the Prometheus-Operator ServiceMonitor GroupVersionKind.
+// Per-tenant ServiceMonitors are built as unstructured objects so the GMC does
+// not take a compile-time dependency on the prometheus-operator API module;
+// the monitoring.coreos.com CRD is an optional, operator-installed prerequisite
+// (see applyOrPruneServiceMonitors for the graceful CRD-absent handling).
+var serviceMonitorGVK = schema.GroupVersionKind{
+	Group:   "monitoring.coreos.com",
+	Version: "v1",
+	Kind:    "ServiceMonitor",
+}
+
+// buildMetricsServiceMonitor builds a per-tenant ServiceMonitor that scrapes one
+// component's (proxy or AGC) mTLS metrics port. It is built as an unstructured
+// object (see serviceMonitorGVK). The ServiceMonitor lives in the tenant
+// namespace and — with no namespaceSelector — selects only Services in that
+// namespace, so a tenant's monitor can never select another tenant's pods.
+//
+// The selector matches the component's metrics Service by its managed labels
+// (which include owner-name/owner-ns) plus the `app` label, and the single
+// endpoint scrapes the Service's `metrics` port over HTTPS. mTLS is satisfied by
+// presenting the per-tenant scraper client bundle from the
+// actions-gateway-metrics-client Secret (published by buildMetricsClientSecret
+// in this same namespace): tls.crt/tls.key authenticate the scraper to the
+// listener, and ca.crt verifies the listener's server cert. serverName is the
+// component Service's `<svc>.<ns>.svc` DNS name, which is a SAN on that server
+// cert, so the scrape verifies without insecureSkipVerify.
+func buildMetricsServiceMonitor(ag *gmcv1alpha1.ActionsGateway, smName, appName, svcName string) *unstructured.Unstructured {
+	secretRef := func(key string) map[string]interface{} {
+		return map[string]interface{}{
+			"secret": map[string]interface{}{
+				"name": metricsClientSecretName,
+				"key":  key,
+			},
+		}
+	}
+
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(serviceMonitorGVK)
+	sm.SetName(smName)
+	sm.SetNamespace(ag.Namespace)
+	sm.SetLabels(metricsServiceLabels(ag, appName))
+
+	spec := map[string]interface{}{
+		"selector": map[string]interface{}{
+			"matchLabels": toStringMapIface(metricsServiceLabels(ag, appName)),
+		},
+		"endpoints": []interface{}{
+			map[string]interface{}{
+				"port":   "metrics",
+				"path":   "/metrics",
+				"scheme": "https",
+				"tlsConfig": map[string]interface{}{
+					"serverName": metricsServiceDNSName(ag, svcName),
+					"ca":         secretRef(metricsCACertKey),
+					"cert":       secretRef(corev1.TLSCertKey),
+					// keySecret is a bare SecretKeySelector (no enclosing "secret").
+					"keySecret": map[string]interface{}{
+						"name": metricsClientSecretName,
+						"key":  corev1.TLSPrivateKeyKey,
+					},
+				},
+			},
+		},
+	}
+	// unstructured.SetNestedMap deep-copies spec into sm.Object; it only errors on
+	// non-JSON value types, and every value above is a JSON-compatible type.
+	if err := unstructured.SetNestedMap(sm.Object, spec, "spec"); err != nil {
+		panic(fmt.Sprintf("build ServiceMonitor spec: %v", err))
+	}
+	return sm
+}
+
+// toStringMapIface converts a map[string]string to the map[string]interface{}
+// shape unstructured nested content requires.
+func toStringMapIface(m map[string]string) map[string]interface{} {
+	out := make(map[string]interface{}, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func buildProxyServiceAddr(ag *gmcv1alpha1.ActionsGateway) string {
