@@ -271,6 +271,69 @@ func TestHTTPFetcher_ContextCancelled(t *testing.T) {
 	require.Error(t, err, "cancelled context should produce an error")
 }
 
+// TestHTTPFetcher_PerAttemptTimeout verifies that a stalled attempt is bounded
+// by HTTPGitHubIPRangeFetcher.AttemptTimeout (Q62), not by the client's overall
+// Timeout. The server blocks until the request context is cancelled; with a long
+// overall budget on the parent context, FetchIPRanges must still return shortly
+// after the per-attempt deadline so the Q61 backoff loop can retry.
+func TestHTTPFetcher_PerAttemptTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // never responds; relies on the per-attempt deadline
+	}))
+	defer ts.Close()
+
+	const attempt = 100 * time.Millisecond
+	f := &HTTPGitHubIPRangeFetcher{APIURL: ts.URL, AttemptTimeout: attempt}
+
+	// A parent context far longer than the per-attempt timeout: if the attempt
+	// were bounded by the parent (or an unbounded client) it would block well
+	// past the deadline below.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err := f.FetchIPRanges(ctx)
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "stalled attempt should fail at the per-attempt deadline")
+	assert.NoError(t, ctx.Err(), "parent context must not be cancelled — only the per-attempt one")
+	assert.Less(t, elapsed, 2*time.Second,
+		"attempt should be cut near AttemptTimeout (%s), not run to the parent budget; took %s", attempt, elapsed)
+}
+
+// TestHTTPFetcher_RetriesProceedAfterStall verifies that once a stalled attempt
+// is cut by the per-attempt timeout, a subsequent attempt against a healthy
+// server succeeds — i.e. the Q61 backoff can make progress within the overall
+// budget rather than being wedged on the first stalled attempt (Q62).
+func TestHTTPFetcher_RetriesProceedAfterStall(t *testing.T) {
+	var calls int
+	var mu sync.Mutex
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		n := calls
+		mu.Unlock()
+		if n == 1 {
+			<-r.Context().Done() // first attempt stalls until the per-attempt deadline
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"actions":["140.82.112.0/20"]}`)
+	}))
+	defer ts.Close()
+
+	f := &HTTPGitHubIPRangeFetcher{APIURL: ts.URL, AttemptTimeout: 100 * time.Millisecond}
+
+	// First attempt: stalled, cut by the per-attempt timeout.
+	_, err := f.FetchIPRanges(context.Background())
+	require.Error(t, err, "first (stalled) attempt should fail")
+
+	// Second attempt: healthy server responds, fetch succeeds.
+	cidrs, err := f.FetchIPRanges(context.Background())
+	require.NoError(t, err, "retry after a stalled attempt should succeed")
+	assert.Len(t, cidrs, 1)
+}
+
 func TestHTTPFetcher_EmptyActions(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `{"actions":[]}`)

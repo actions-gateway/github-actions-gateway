@@ -69,7 +69,20 @@ type HTTPGitHubIPRangeFetcher struct {
 	// so a slow api.github.com cannot wedge the reconcile.
 	Client *http.Client
 	APIURL string // override in tests; default "https://api.github.com"
+
+	// AttemptTimeout bounds a single FetchIPRanges call (one retry attempt).
+	// Zero selects defaultFetchAttemptTimeout. See FetchIPRanges (Q62).
+	AttemptTimeout time.Duration
 }
+
+// defaultFetchAttemptTimeout bounds one /meta fetch attempt. The reconcileInitial
+// backoff loop (Q61) retries FetchIPRanges on failure; without a per-attempt
+// deadline a stalled attempt would burn the client's full overall Timeout (Q138's
+// httpx.DefaultTimeout, 30s) before the backoff can retry. A tighter per-attempt
+// cap cuts a black-holed attempt quickly so several retries fit inside one
+// overall budget. It is the per-attempt analogue of, and sits below, the client's
+// overall Timeout (Q62).
+const defaultFetchAttemptTimeout = 10 * time.Second
 
 // defaultIPRangeClient is the bounded fallback used when Client is nil. Shared
 // so the nil path does not allocate a connection pool per refresh.
@@ -98,6 +111,17 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	if hc == nil {
 		hc = defaultIPRangeClient
 	}
+
+	// Bound this single attempt below the client's overall Timeout so a stalled
+	// fetch is cut quickly and the Q61 backoff can retry within the overall
+	// budget instead of burning the whole client Timeout on one black-holed
+	// attempt (Q62).
+	attemptTimeout := f.AttemptTimeout
+	if attemptTimeout <= 0 {
+		attemptTimeout = defaultFetchAttemptTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, attemptTimeout)
+	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL+"/meta", nil)
 	if err != nil {
