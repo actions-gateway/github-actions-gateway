@@ -49,6 +49,21 @@ Several paths that can stall a tenant or a session emit **debug**-level diagnost
 | Permanent baseline listener crash/restart backoff (otherwise only the `exited with error` warning is visible) | AGC | `restarting after backoff`, `restart aborted` |
 | Which of the ~12 per-tenant provisioning steps a stalled reconcile is on | GMC | `reconcileResources step` |
 | Per-tenant TLS cert issuance / renewal | GMC | `issuing proxy TLS cert`, `generating metrics mTLS bundle` |
+| Per-session / per-job lifecycle (one line per listener spawn, job pickup, heal, and worker pod) | AGC | `listener goroutine started`, `job message received`, `idle shutdown`, `healing stale session`, `job finished; recycling single-use JIT agent`, `job Secret created`, `worker pod created`, `worker pod completed` |
+
+These per-session/per-job lines are at **debug** by design: at thousands of
+concurrent sessions they dominate log volume, so the default info stream carries
+only the operator-relevant lifecycle events (concurrency-ceiling holds, quota
+and eviction retries, errors). Raise the AGC to `--zap-log-level=debug` to follow
+an individual job.
+
+**Correlation fields.** AGC log lines carry structured fields that let you follow
+one session→job→pod through a log pipeline. Filter on `namespace` and `group`
+(RunnerGroup name) to scope to a tenant's RunnerGroup; `agentIndex` and
+`sessionId` identify a single listener goroutine and its current broker session
+(the `sessionId` is rebound when a session is healed or an agent recycled, so it
+always names the live session); `podName` appears on the provisioner lines for an
+acquired job's worker pod.
 
 Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 
