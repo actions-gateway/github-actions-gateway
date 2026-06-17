@@ -138,12 +138,21 @@ func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet, proxyAddr string) error {
+	// Debug step markers: this method applies ~12 child resources and on failure
+	// returns a single wrapped error, so a tenant stalled on one step (e.g. a
+	// quota-blocked Deployment) gives no signal about which step is stuck. The
+	// markers stay at V(1) (Debug) so steady-state reconciles add no Info volume.
+	log := logf.FromContext(ctx)
+	step := func(name string) { log.V(1).Info("reconcileResources step", "step", name) }
+
 	// 0. Stamp Pod Security Admission labels on the tenant namespace.
+	step("namespace PSA labels")
 	if err := r.applyNamespacePSA(ctx, ag); err != nil {
 		return fmt.Errorf("namespace PSA labels: %w", err)
 	}
 
 	// 1 & 2. ServiceAccounts.
+	step("ServiceAccounts")
 	if err := r.applyServiceAccount(ctx, buildAGCServiceAccount(ag)); err != nil {
 		return fmt.Errorf("AGC ServiceAccount: %w", err)
 	}
@@ -153,6 +162,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 
 	// 3 & 4. RoleBinding — binds the AGC SA to the shipped agc-tenant-role ClusterRole.
 	// (Pre-v0.X installs created a per-tenant Role here; reconcileDelete still GCs it.)
+	step("AGC RoleBinding")
 	if err := r.applyRoleBinding(ctx, buildAGCRoleBinding(ag)); err != nil {
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
@@ -162,17 +172,20 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	// no longer creates or mutates a ResourceQuota.
 
 	// 7a. Proxy TLS cert Secret — must exist before the proxy Deployment references it.
+	step("proxy TLS cert")
 	if err := r.ensureProxyCert(ctx, ag); err != nil {
 		return fmt.Errorf("proxy TLS cert: %w", err)
 	}
 
 	// 7b. Metrics mTLS bundle — the server Secret is mounted by both the proxy
 	// and AGC Deployments, so it must exist before either is applied.
+	step("metrics TLS certs")
 	if err := r.ensureMetricsCerts(ctx, ag); err != nil {
 		return fmt.Errorf("metrics TLS certs: %w", err)
 	}
 
 	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
+	step("proxy Deployment + Service")
 	if err := r.applyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
 	}
@@ -183,6 +196,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	// 5. NetworkPolicies. The workload policy targets the proxy by PodSelector
 	// (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
 	// so an ipBlock on the ClusterIP would silently drop all proxy-bound traffic).
+	step("NetworkPolicies")
 	if err := r.applyNetworkPolicy(ctx, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
 		return fmt.Errorf("proxy NetworkPolicy: %w", err)
 	}
@@ -198,22 +212,26 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	_ = r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
 
 	// 9. PDB.
+	step("PodDisruptionBudget")
 	if err := r.applyPDB(ctx, buildPDB(ag)); err != nil {
 		return fmt.Errorf("PodDisruptionBudget: %w", err)
 	}
 
 	// 10. HPA.
+	step("HorizontalPodAutoscaler")
 	if err := r.applyHPA(ctx, buildHPA(ag)); err != nil {
 		return fmt.Errorf("HorizontalPodAutoscaler: %w", err)
 	}
 
 	// 11. AGC Deployment.
+	step("AGC Deployment")
 	if err := r.applyDeployment(ctx, ag, buildAGCDeployment(ag, r.AGCImage, proxyAddr, r.AGCExtraEnv)); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}
 
 	// 12. RunnerGroup CRs. Apply the desired set, then prune any owned
 	// RunnerGroup no longer in the spec (scale-down / reorder, Q101).
+	step("RunnerGroups")
 	desired := make(map[string]struct{}, len(ag.Spec.RunnerGroups))
 	for i, spec := range ag.Spec.RunnerGroups {
 		name := runnerGroupName(ag, spec, i)
@@ -641,13 +659,22 @@ func (r *ActionsGatewayReconciler) ensureProxyCert(ctx context.Context, ag *gmcv
 		return getErr
 	}
 
+	// reason records why the cert is being (re)issued, for the Debug audit below.
+	// This branch is otherwise silent: a renewal that runs on every reconcile (the
+	// cert keeps landing within the renew-before window) gives no operator signal.
+	// No key material is logged — only the Secret name, reason, and expiry.
+	reason := "secret missing"
 	if !apierrors.IsNotFound(getErr) {
+		reason = "unparseable cert"
 		if cert, err := parseCertPEM(existing.Data[corev1.TLSCertKey]); err == nil {
 			if time.Until(cert.NotAfter) > proxyCertRenewBefore {
 				return nil // cert is valid and not near expiry
 			}
+			reason = "near expiry"
 		}
 	}
+
+	logf.FromContext(ctx).V(1).Info("issuing proxy TLS cert", "secret", proxyTLSSecretName, "reason", reason)
 
 	certPEM, keyPEM, err := generateProxyCert(ag)
 	if err != nil {
@@ -677,13 +704,21 @@ func (r *ActionsGatewayReconciler) ensureMetricsCerts(ctx context.Context, ag *g
 		return clientErr
 	}
 
+	// reason records why the bundle is being (re)generated, for the Debug audit
+	// below — mirroring ensureProxyCert. The renewal path is otherwise silent. No
+	// key material is logged — only the Secret name, reason, and (implicit) expiry.
+	reason := "secret missing"
 	if !apierrors.IsNotFound(serverErr) && !apierrors.IsNotFound(clientErr) {
+		reason = "unparseable cert"
 		if cert, err := parseCertPEM(serverSec.Data[corev1.TLSCertKey]); err == nil {
 			if time.Until(cert.NotAfter) > metricsCertRenewBefore {
 				return nil // both Secrets present and the server cert is not near expiry
 			}
+			reason = "near expiry"
 		}
 	}
+
+	logf.FromContext(ctx).V(1).Info("generating metrics mTLS bundle", "secret", metricsTLSSecretName, "reason", reason)
 
 	bundle, err := generateMetricsCerts(ag)
 	if err != nil {

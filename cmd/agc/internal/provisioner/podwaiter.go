@@ -109,6 +109,11 @@ func (w *InformerPodWaiter) NeedLeaderElection() bool { return false }
 // WaitForCompletion implements PodWaiter.
 func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, name string) (corev1.PodPhase, string, error) {
 	key := namespace + "/" + name
+	// Debug-level traces of the wait lifecycle: this loop is otherwise silent, so
+	// a session stuck waiting on a pod that never reaches a terminal phase (missed
+	// informer event, never-terminating pod) produces no output at all. The traces
+	// stay at Debug so they add no volume at Info under thousands of sessions.
+	log := w.log.With("namespace", namespace, "name", name)
 	ch := make(chan podResult, 1)
 	w.register(key, ch)
 	defer w.deregister(key, ch)
@@ -122,18 +127,23 @@ func (w *InformerPodWaiter) WaitForCompletion(ctx context.Context, namespace, na
 	switch err := w.reader.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &pod); {
 	case err == nil:
 		if phase, reason, ok := terminalPhase(&pod); ok {
+			log.Debug("pod already terminal at registration", "phase", phase, "reason", reason)
 			return phase, reason, nil
 		}
+		log.Debug("registered for pod completion; pod not yet terminal", "phase", pod.Status.Phase)
 	case apierrors.IsNotFound(err):
 		// Not yet synced or already deleted — wait for an event.
+		log.Debug("registered for pod completion; pod not yet in cache, awaiting event")
 	default:
 		return "", "", fmt.Errorf("provisioner: pod waiter cache get: %w", err)
 	}
 
 	select {
 	case <-ctx.Done():
+		log.Debug("pod wait cancelled before completion", "error", ctx.Err())
 		return "", "", ctx.Err()
 	case res := <-ch:
+		log.Debug("pod completion observed", "phase", res.phase, "reason", res.reason)
 		return res.phase, res.reason, nil
 	}
 }

@@ -2,17 +2,44 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
+
+// captureSink is a minimal logr.LogSink that records Info/Error lines emitted
+// during a test, so the rejection-audit log can be asserted without a live
+// logging backend.
+type captureSink struct{ lines *[]string }
+
+func (s captureSink) Init(logr.RuntimeInfo)          {}
+func (s captureSink) Enabled(int) bool               { return true }
+func (s captureSink) WithName(string) logr.LogSink   { return s }
+func (s captureSink) WithValues(...any) logr.LogSink { return s }
+func (s captureSink) Error(_ error, msg string, kv ...any) {
+	*s.lines = append(*s.lines, fmt.Sprint(append([]any{msg}, kv...)...))
+}
+func (s captureSink) Info(_ int, msg string, kv ...any) {
+	*s.lines = append(*s.lines, fmt.Sprint(append([]any{msg}, kv...)...))
+}
+
+// ctxWithCapture returns a context carrying a capturing logr logger plus the
+// slice that logger appends to.
+func ctxWithCapture() (context.Context, *[]string) {
+	lines := &[]string{}
+	return logf.IntoContext(context.Background(), logr.New(captureSink{lines: lines})), lines
+}
 
 func newAG(namespace string) *gmcv1alpha1.ActionsGateway {
 	return &gmcv1alpha1.ActionsGateway{
@@ -57,6 +84,21 @@ func TestWebhook_RejectsCustomInstallNamespace(t *testing.T) {
 	_, err := v.ValidateCreate(context.Background(), newAG("actions-gateway-operator"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "actions-gateway-operator")
+}
+
+// A rejected create must leave a server-side audit line naming the operation,
+// namespace, and reason — the GMC otherwise keeps no trail of reserved-namespace
+// or privileged-container attempts (Q88, logging-audit Theme E).
+func TestWebhook_RejectionIsAudited(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ctx, lines := ctxWithCapture()
+	_, err := v.ValidateCreate(ctx, newAG("kube-system"))
+	require.Error(t, err)
+
+	joined := strings.Join(*lines, "\n")
+	assert.Contains(t, joined, "admission denied")
+	assert.Contains(t, joined, "kube-system")
+	assert.Contains(t, joined, "create")
 }
 
 func TestWebhook_AllowsTenantNamespace(t *testing.T) {
