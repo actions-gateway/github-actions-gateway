@@ -159,19 +159,25 @@ func Run(ctx context.Context, cfg Config) error {
 		return &NonRetriableError{Cause: fmt.Errorf("pool exhausted: no agent available")}
 	}
 
-	log := cfg.Log.With("group", cfg.Group, "namespace", cfg.Namespace,
+	// baseLog carries the per-listener correlation fields (group, namespace,
+	// agentIndex). log adds the session-scoped sessionId once a session exists and
+	// is rebound on every heal/recycle, so every line beneath it traces back to
+	// the live session — making one session→job→pod followable in a log pipeline
+	// (Q87, Theme F).
+	baseLog := cfg.Log.With("group", cfg.Group, "namespace", cfg.Namespace,
 		"agentIndex", cfg.Agent.Index)
 
 	// 1+2. Fetch a broker OAuth token and create a session. healSession with no
 	// prior session is exactly that, plus one agent-recycle retry if the stored
 	// credentials are rejected — the signature of a single-use JIT agent that
 	// was consumed before a restart (Q114).
-	sess, err := healSession(ctx, &cfg, log, "")
+	sess, err := healSession(ctx, &cfg, baseLog, "")
 	if err != nil {
 		return err
 	}
 	sessionID := sess.sessionID
 	aesKey := sess.aesKey
+	log := baseLog.With("sessionId", sessionID)
 
 	defer func() {
 		// Best-effort session cleanup on exit. sessionID is empty while a heal
@@ -193,7 +199,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if cfg.Metrics != nil {
 		cfg.Metrics.ActiveSessions.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
 	}
-	log.Info("listener goroutine started", "sessionId", sessionID)
+	// Per-session lifecycle line: one per listener spawn, so kept at Debug to hold
+	// down log volume at thousands of concurrent sessions (Q87, Theme D).
+	log.Debug("listener goroutine started")
 
 	// 3. Poll loop.
 	consecutiveEmpty := 0
@@ -271,7 +279,9 @@ func Run(ctx context.Context, cfg Config) error {
 				}
 			}
 			if healReason != "" {
-				log.Info("healing stale session", "reason", healReason, "error", pollErr, "sessionId", sessionID)
+				// Per-session heal event; sessionId is already on the logger context.
+				// Debug to keep steady-state heal churn out of info volume (Q87, Theme D).
+				log.Debug("healing stale session", "reason", healReason, "error", pollErr)
 				// Hand session ownership to the heal: it deletes the old session
 				// up front, so the exit defer must not re-delete it if the heal
 				// fails partway.
@@ -286,6 +296,7 @@ func Run(ctx context.Context, cfg Config) error {
 				}
 				sessionID = newSess.sessionID
 				aesKey = newSess.aesKey
+				log = baseLog.With("sessionId", sessionID)
 				consecutiveEmpty = 0
 				pollErrors = 0
 				staleEOFs = 0
@@ -317,7 +328,9 @@ func Run(ctx context.Context, cfg Config) error {
 			consecutiveEmpty++
 			if consecutiveEmpty >= cfg.IdleThreshold {
 				if cfg.IsLastListener == nil || !cfg.IsLastListener() {
-					log.Info("idle shutdown: consecutive empty polls reached threshold", "count", consecutiveEmpty)
+					// One per idle listener exit — high-cardinality per-session noise,
+					// so Debug (Q87, Theme D).
+					log.Debug("idle shutdown: consecutive empty polls reached threshold", "count", consecutiveEmpty)
 					return nil // idle exit; Multiplexer will not restart this one
 				}
 			}
@@ -332,7 +345,8 @@ func Run(ctx context.Context, cfg Config) error {
 		// Reset idle counter on job delivery.
 		consecutiveEmpty = 0
 
-		log.Info("job message received", "messageId", msg.MessageID)
+		// One per delivered job — dominates volume at scale, so Debug (Q87, Theme D).
+		log.Debug("job message received", "messageId", msg.MessageID)
 
 		acquired, jobErr := handleJob(ctx, cfg, log, aesKey, msg)
 		if jobErr != nil {
@@ -346,7 +360,9 @@ func Run(ctx context.Context, cfg Config) error {
 			// would degrade into empty-200/401 loops forever (Q114). Re-register
 			// the agent and open a fresh session; the goroutine keeps its
 			// listener slot throughout, so maxListeners capacity is preserved.
-			log.Info("job finished; recycling single-use JIT agent", "sessionId", sessionID)
+			// One per completed job; sessionId is already on the logger context.
+			// Debug to keep the per-job recycle churn out of info volume (Q87, Theme D).
+			log.Debug("job finished; recycling single-use JIT agent")
 			// As in the poll-loop heal: the recycle deletes the old session up
 			// front, so the exit defer must not re-delete it on failure.
 			oldSession := sessionID
@@ -360,6 +376,7 @@ func Run(ctx context.Context, cfg Config) error {
 			}
 			sessionID = newSess.sessionID
 			aesKey = newSess.aesKey
+			log = baseLog.With("sessionId", sessionID)
 			staleEOFs = 0
 		}
 	}

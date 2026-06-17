@@ -527,7 +527,11 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 		}
 	}
 
-	mux := listener.NewMultiplexer(factory, rg.Spec.MaxListeners, r.Log)
+	// Give the Multiplexer a logger scoped to this RunnerGroup so its
+	// listener-lifecycle lines (spawn/restart/backoff) carry namespace/group
+	// correlation; per-goroutine lines add agentIndex/sessionId beneath (Q87, Theme F).
+	muxLog := r.Log.With("namespace", rg.Namespace, "group", rg.Name)
+	mux := listener.NewMultiplexer(factory, rg.Spec.MaxListeners, muxLog)
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

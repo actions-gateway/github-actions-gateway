@@ -427,6 +427,9 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	if len(podName) > 63 {
 		podName = podName[:63]
 	}
+	// Scope every line for this job to its worker pod (atop namespace/runnerGroup
+	// from logFor), so a session→job→pod trail is followable (Q87, Theme F).
+	log = log.With("podName", podName)
 
 	// Root span for the whole job-provisioning path. Child spans below break out
 	// the latency of each phase (secret staging, pod-count, pod creation, and the
@@ -463,7 +466,9 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	}); err != nil {
 		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
 	}
-	log.Info("job Secret created", "secret", secretName)
+	// One of three lines per provisioned pod; Debug to keep per-job volume down
+	// at scale (Q87, Theme D).
+	log.Debug("job Secret created", "secret", secretName)
 
 	// 2. Count active pods for ceiling check.
 	var count int32
@@ -495,7 +500,8 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
 	}
-	log.Info("worker pod created", "pod", podName, "priorityClass", priorityClass)
+	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
+	log.Debug("worker pod created", "priorityClass", priorityClass)
 
 	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
 	var phase corev1.PodPhase
@@ -516,7 +522,8 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 		attribute.String("pod.reason", reason),
 		attribute.Float64("duration_seconds", duration.Seconds()),
 	)
-	log.Info("worker pod completed", "pod", podName, "phase", phase, "reason", reason, "duration", duration)
+	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
+	log.Debug("worker pod completed", "phase", phase, "reason", reason, "duration", duration)
 	if p.Metrics != nil {
 		p.Metrics.JobDuration.WithLabelValues(rg.Namespace, rg.Name).Observe(duration.Seconds())
 	}
