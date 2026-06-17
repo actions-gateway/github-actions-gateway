@@ -87,7 +87,16 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check scripts-test test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC drift + scripts-test + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
+
+# Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
+# every tracked, non-vendored Markdown file and fails on dead relative file
+# links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
+# CI `doc-links` job in unit-test.yml runs this same target, so local and CI
+# verdicts match.
+.PHONY: doc-links
+doc-links: ## Fail on broken relative links / heading anchors in tracked Markdown
+	scripts/check-doc-links.sh
 
 # Enforce the "all go modules use the same Go version" rule (Q68). The two
 # go.work.gen files feed `make manifests` via GOWORK= and have silently drifted

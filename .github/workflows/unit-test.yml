@@ -1,15 +1,10 @@
+# No workflow-level paths-ignore: Markdown changes must be able to trigger the
+# `doc-links` gate (Q52). The per-job `if:` conditions below (driven by the
+# `changes` filter job) keep the Go gates from running on a docs-only change.
 on:
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '!docs/STATUS.md'
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '!docs/STATUS.md'
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
@@ -19,10 +14,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Fine-grained path gate. The coarse paths-ignore above still lets non-code,
-  # non-docs files (e.g. .gitignore, LICENSE) trigger this workflow, so classify
-  # the diff and skip the jobs when nothing they cover changed. Mirrors
-  # e2e-test.yml. On push to main the jobs always run, so outputs only matter on PRs.
+  # Fine-grained path gate. With no workflow-level paths-ignore, every push/PR
+  # reaches this job; it classifies the diff so each downstream job runs only
+  # when something it covers changed. dorny/paths-filter compares against the PR
+  # base (pull_request) or the previous commit (push), so the outputs are
+  # accurate on both event types — the per-job `if:` conditions key off them for
+  # pushes to main as well, which is what keeps a docs-only merge from running
+  # the Go suite while still triggering the `doc-links` gate. Mirrors e2e-test.yml.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -34,6 +32,7 @@ jobs:
       scripts: ${{ steps.filter.outputs.scripts }}
       vendor: ${{ steps.filter.outputs.vendor }}
       modules: ${{ steps.filter.outputs.modules }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -93,11 +92,17 @@ jobs:
               - 'scripts/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
+            # Doc link/anchor gate scope (Q52): any Markdown file, plus the
+            # checker and the workflow itself.
+            docs:
+              - '**.md'
+              - 'scripts/check-doc-links.sh'
+              - '.github/workflows/unit-test.yml'
 
   lint:
     needs: [changes]
     # gofmt/golangci need code; lint-status needs the STATUS.md filter.
-    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -135,7 +140,7 @@ jobs:
   # scripts/*.sh, recursive).
   shellcheck:
     needs: [changes]
-    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.scripts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Pin the shellcheck version rather than using ubuntu-latest's preinstalled
@@ -177,7 +182,7 @@ jobs:
   # vendor sync lands — that's the intended signal (see scripts/vendor-check.sh).
   vendor-check:
     needs: [changes]
-    if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.vendor == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -204,7 +209,7 @@ jobs:
   # re-run, and vice versa.
   tidy-check:
     needs: [changes]
-    if: needs.changes.outputs.modules == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.modules == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -222,7 +227,7 @@ jobs:
 
   unit-test:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     # -race roughly doubles unit runtime vs. plain `go test`, so allow more
     # headroom than the lint job. The race detector needs cgo, which the
@@ -250,7 +255,7 @@ jobs:
   # (uninstrumented) test run.
   coverage:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -260,3 +265,20 @@ jobs:
           go-version-file: go.work
       - name: coverage ratchet (make cover-check)
         run: make cover-check
+
+  # Markdown link + anchor integrity gate (Q52). Walks every tracked,
+  # non-vendored Markdown file and fails on dead relative file links or
+  # `#anchors` that match no GitHub heading slug / explicit <a id>. `make
+  # doc-links` (scripts/check-doc-links.sh) is the single source of truth, so
+  # the local and CI verdicts match. No Go toolchain needed — just a checkout
+  # so `git ls-files` sees the tracked tree. This is the one job that runs on a
+  # docs-only change (the `docs` filter covers any **.md edit).
+  doc-links:
+    needs: [changes]
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: markdown links + anchors (make doc-links)
+        run: make doc-links

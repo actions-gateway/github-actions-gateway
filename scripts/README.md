@@ -18,6 +18,7 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 | [download-cosign.sh](download-cosign.sh) | Download the pinned cosign release binary for the current platform. Backs the Makefile's `$(COSIGN)` rule. |
 | [gen-third-party-notices.sh](gen-third-party-notices.sh) | Regenerate (or `--check`) THIRD-PARTY-NOTICES from the committed vendor/ trees. Backs `make third-party-notices(-check)`. |
 | [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`), by `make check`, and by the pre-commit hook. |
+| [check-doc-links.sh](check-doc-links.sh) | GitHub-slug-aware Markdown link/anchor checker: fails on dead relative file links or `#anchors` with no matching heading slug / `<a id>`. Backs `make doc-links` and the CI `doc-links` job. |
 | [local-throttle.sh](local-throttle.sh) | Detect an interactive GUI dev shell and emit a parallelism cap + low-priority QoS command prefix (empty on CI/headless), so heavy gates stay desktop-safe. |
 | [queue-unblock.sh](queue-unblock.sh) | List `docs/STATUS.md` Queue items blocked on a given ID. Backs `make queue-unblock`. |
 
