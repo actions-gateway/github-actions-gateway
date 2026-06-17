@@ -27,6 +27,28 @@ spec:
     kind: Issuer
     name: selfsigned-issuer
   secretName: webhook-server-cert
+{{- if (include "actions-gateway.metricsCertManagerEnabled" .) }}
+---
+# Metrics serving cert (metrics.tls.certManager.enabled, default). Reuses the
+# selfsigned-issuer above to mint a cert for the metrics Service into the
+# metrics-server-cert Secret; the GMC serves it via --metrics-cert-path and the
+# ServiceMonitor verifies it against the CA, so the scrape is not MITM-able.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: metrics-serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+  - {{ include "actions-gateway.metricsServiceDNSName" . }}
+  - {{ printf "%s-metrics-service.%s.svc.cluster.local" (include "actions-gateway.managerName" .) .Release.Namespace }}
+  issuerRef:
+    kind: Issuer
+    name: selfsigned-issuer
+  secretName: metrics-server-cert
+{{- end }}
 {{- else }}
 # Self-signed fallback (certManager.enabled=false). The chart generates the
 # serving cert at render time and writes it straight into the Secret the

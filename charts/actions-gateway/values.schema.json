@@ -34,6 +34,15 @@
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "certManager": {
+              "type": "object",
+              "properties": { "enabled": { "type": "boolean" } }
+            }
+          }
+        },
         "serviceMonitor": {
           "type": "object",
           "properties": { "enabled": { "type": "boolean" } }

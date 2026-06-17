@@ -82,6 +82,25 @@ leaderElection:
 # TokenReview/SubjectAccessReview-gated).
 metrics:
   enabled: true
+  # tls controls how the GMC metrics server's serving certificate is issued and
+  # whether the ServiceMonitor verifies it when scraping.
+  tls:
+    certManager:
+      # enabled: true (default) — cert-manager issues a dedicated metrics
+      #   serving cert (the `metrics-serving-cert` Certificate from the same
+      #   selfsigned-issuer as the webhook), the GMC serves it via
+      #   --metrics-cert-path, and the ServiceMonitor verifies it against the
+      #   issuing CA (tlsConfig.ca + serverName). This is the secure default:
+      #   the scrape is no longer MITM-able. REQUIRES certManager.enabled=true
+      #   (the metrics path reuses the webhook's cert-manager Issuer); it is
+      #   automatically inert when certManager.enabled=false.
+      # enabled: false (or certManager.enabled=false) — the GMC falls back to
+      #   controller-runtime's auto-generated self-signed metrics cert and the
+      #   ServiceMonitor scrapes with insecureSkipVerify:true. Prometheus cannot
+      #   verify the server, so the scrape is MITM-able. Use only on clusters
+      #   without cert-manager, accepting the weaker posture. See
+      #   docs/operations/observability.md.
+      enabled: true
   # serviceMonitor emits a Prometheus-Operator ServiceMonitor. Opt-in (off by
   # default): the ServiceMonitor CRD only exists once the Prometheus Operator
   # is installed, so enabling it without that CRD breaks `helm install`. Label
