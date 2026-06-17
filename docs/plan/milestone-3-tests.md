@@ -14,11 +14,34 @@ This document catalogues test quality gaps identified by reviewing the Milestone
 
 Items are ranked by impact on bug detection.
 
+## Status
+
+**All High- and Medium-priority items are implemented and merged** — H1 landed first,
+and H2–H5 plus M1–M4 landed together in commit `17a7f5c`
+("test: implement Milestone 3 test improvements from plan"). The Low-priority items
+are resolved or obsolete (see L1/L2 below). Q9 is therefore complete.
+
+| Item | State | Where |
+|---|---|---|
+| H1 | ✅ Done | `JobDuration`/`EvictionRetries`/`EvictionRetriesExhausted` asserted in `provisioner_test.go`; dead `PodCreationLatency` field removed from `metrics.go`. |
+| H2 | ✅ Done | `TestProvisioner_EvictionRerunAPI5xx` (provisioner_test.go). |
+| H3 | ✅ Done | `TestListener_DecryptFailureFallsBackToPlaintext` (goroutine_test.go). |
+| H4 | ✅ Done | `TestProvisioner_PriorityTiersSecondTier` + `TestProvisioner_PriorityTiersBoundary`. |
+| H5 | ✅ Done | `TestProvisioner_EvictionRetryBudgetExhausted` — metric-counter assertion, no wall-clock sleep. |
+| M1 | ✅ Done | `TestListener_PlaintextSessionKey` + `TestListener_NoSessionKey`. |
+| M2 | ✅ Done | `TestWrapper_WriteJobMessage_Empty` + `TestWrapper_WriteJobMessage_Large` (worker_test.go). |
+| M3 | ✅ Done | `TestProvisioner_PendingPodsCountTowardCeiling`. |
+| M4 | ✅ Done | `TestProvisioner_PodDeletedExternallySucceeds`. |
+| L1 | ❎ Obsolete | The named-pipe FIFO wrapper was removed; the wrapper now writes via `WriteJobMessage` to a generic `io.Writer`, already covered by the `TestWrapper_WriteJobMessage_*` tests. No FIFO open to time out. |
+| L2 | ✅ Done | `closeHTTP` now calls `srv.CloseClientConnections()` before `srv.Close()`. The few remaining `time.Sleep` calls in individual tests guard fake-clock goroutine drain, a different race than the HTTP-transport one. |
+
+Per-item detail follows below for historical context.
+
 ---
 
 ## High Priority
 
-### H1 — No metric assertions for any M3 Prometheus metrics
+### H1 — No metric assertions for any M3 Prometheus metrics ✅ Done
 
 **What's missing:** The provisioner tests pass `nil` for `*listener.Metrics`, so `JobDuration`, `EvictionRetries`, and `EvictionRetriesExhausted` are never asserted. `PodCreationLatency` is declared in `Metrics` but never emitted anywhere in `provisioner.go` — dead code that a metric assertion would immediately surface.
 
@@ -32,7 +55,7 @@ Items are ranked by impact on bug detection.
 
 ---
 
-### H2 — Rerun API 5xx is non-fatal but no test verifies it
+### H2 — Rerun API 5xx is non-fatal but no test verifies it ✅ Done
 
 **What's missing:** `handleEviction` logs the error and continues when the GitHub rerun API returns a non-2xx status. No test verifies that: (a) `provision` still returns `nil` (non-fatal), (b) the retry budget counter is still incremented. A regression making the error fatal would go undetected.
 
@@ -47,7 +70,7 @@ Add `TestProvisioner_EvictionRerunAPI5xx`:
 
 ---
 
-### H3 — `handleJob` decryption-failure fallback path is untested
+### H3 — `handleJob` decryption-failure fallback path is untested ✅ Done
 
 **What's missing:** `goroutine.go` falls back to the raw `msg.Body` when `DecryptMessageBody` fails (wrong key produces bad PKCS#7 padding). No test exercises this branch. The contract — silent fallback vs. metric/log — is unverified, and a wrong-key scenario producing garbage is invisible to the test suite.
 
@@ -60,7 +83,7 @@ Add `TestListener_DecryptFailureFallsBackToPlaintext`:
 
 ---
 
-### H4 — Second priority tier never assigned; tier boundary off-by-one untested
+### H4 — Second priority tier never assigned; tier boundary off-by-one untested ✅ Done
 
 **What's missing:** `TestProvisioner_PriorityTiersAssignment` tests only 3 active pods against thresholds of 5 and 10, so only tier 1 (`runner-critical`) is ever assigned. Flipping `<` to `<=` in `ceilingCheck` would silently mis-assign pods at the boundary without any test failing.
 
@@ -71,7 +94,7 @@ Add `TestListener_DecryptFailureFallsBackToPlaintext`:
 
 ---
 
-### H5 — Budget-exhaustion negative assertion uses a 100 ms wall-clock sleep
+### H5 — Budget-exhaustion negative assertion uses a 100 ms wall-clock sleep ✅ Done
 
 **What's missing:** `TestProvisioner_EvictionRetryBudgetExhausted` uses `time.After(100ms)` to assert "no API call made." This is racy on loaded CI machines (the handler may not have returned yet) and would silently pass if a bug introduced a >100 ms delay before calling the API.
 
@@ -83,7 +106,7 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ## Medium Priority
 
-### M1 — `createSession` raw-key and no-key branches untested
+### M1 — `createSession` raw-key and no-key branches untested ✅ Done
 
 **What's missing:** `createSession` has three encryption branches: (a) `encrypted == true` — RSA decrypt (tested); (b) `encrypted == false` — use raw key bytes; (c) no `encryptionKey` field — `aesKey` stays `nil`, messages parsed as plaintext. Branches (b) and (c) are dead to the test suite. A bug that sets `aesKey` to an empty slice instead of `nil` in branch (b) would cause every subsequent `DecryptMessageBody` call to fail with a cipher error.
 
@@ -94,7 +117,7 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ---
 
-### M2 — `writePayloadToPipe` with an empty payload is untested
+### M2 — `writePayloadToPipe` with an empty payload is untested ✅ Done
 
 **What's missing:** A misconfigured empty Kubernetes Secret produces a `[0,0,0,0]` wire message with no body bytes. `Runner.Worker` would then read zero bytes after the prefix, potentially hanging or erroring. No test covers this case or verifies the length prefix round-trips correctly for large payloads.
 
@@ -105,7 +128,7 @@ Replace the channel-based negative assertion with a synchronous metric counter c
 
 ---
 
-### M3 — `activePodCount` Pending-pod branch is untested
+### M3 — `activePodCount` Pending-pod branch is untested ✅ Done
 
 **What's missing:** `activePodCount` counts both `PodRunning` and `PodPending` pods, but every ceiling test seeds only `PodRunning` pods. Removing the `PodPending` branch from the count would silently allow over-provisioning past the ceiling.
 
@@ -115,7 +138,7 @@ Add `TestProvisioner_PendingPodsCountTowardCeiling`: pre-populate 2 Running + 1 
 
 ---
 
-### M4 — Externally deleted pod path untested
+### M4 — Externally deleted pod path untested ✅ Done
 
 **What's missing:** `waitForPodCompletion` returns `(PodSucceeded, "", nil)` when a pod disappears (not-found), representing an operator manually deleting the pod mid-run. No test verifies this does not trigger eviction-retry handling. Inverting the not-found logic to return `PodFailed` would spuriously fire the rerun API.
 
@@ -131,7 +154,7 @@ Add `TestProvisioner_PodDeletedExternallySucceeds`:
 
 ## Low Priority
 
-### L1 — `TestWrapper_WritesToNamedPipes` has no timeout
+### L1 — `TestWrapper_WritesToNamedPipes` has no timeout ❎ Obsolete
 
 **What's missing:** The reader goroutine has no deadline. A blocked FIFO open (e.g., `Mkfifo` fails silently and `writePayloadToPipe` never opens the write end) would hang the test indefinitely in CI rather than report a clear failure.
 
@@ -141,7 +164,7 @@ Add a `context.WithTimeout(t.Context(), 5*time.Second)` and select on `ctx.Done(
 
 ---
 
-### L2 — `closeHTTP` uses an unconditional 50 ms sleep for goroutine drain
+### L2 — `closeHTTP` uses an unconditional 50 ms sleep for goroutine drain ✅ Done
 
 **What's missing:** `closeHTTP` in `goroutine_test.go` calls `time.Sleep(50ms)` before returning, and this pattern appears ~13 times in the file, adding ~650 ms of synthetic wait per test run. The sleep is undocumented and may be insufficient on slow hardware.
 
