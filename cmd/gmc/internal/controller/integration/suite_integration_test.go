@@ -4,8 +4,12 @@ package integration_test
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net"
 	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -14,12 +18,15 @@ import (
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -27,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 // Shared resource name constants — single source of truth for all integration
@@ -40,11 +48,12 @@ const (
 )
 
 var (
-	testEnv    *envtest.Environment
-	k8sClient  client.Client
-	testScheme *runtime.Scheme
-	ctx        context.Context
-	cancel     context.CancelFunc
+	testEnv       *envtest.Environment
+	k8sClient     client.Client
+	testScheme    *runtime.Scheme
+	ctx           context.Context
+	cancel        context.CancelFunc
+	webhookCancel context.CancelFunc
 )
 
 func TestMain(m *testing.M) {
@@ -63,6 +72,13 @@ func TestMain(m *testing.M) {
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,
+		// Install the GMC validating webhook into the test apiserver so admission
+		// is exercised end-to-end (apiserver -> webhook -> CA), not just via direct
+		// validator calls. envtest allocates a serving host/port + cert dir and
+		// patches the CABundle into the ValidatingWebhookConfiguration on Start().
+		WebhookInstallOptions: envtest.WebhookInstallOptions{
+			Paths: []string{filepath.Join("..", "..", "..", "config", "webhook")},
+		},
 	}
 
 	cfg, err := testEnv.Start()
@@ -83,10 +99,112 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	// Start the validating webhook server and block until it is actually serving.
+	// The ValidatingWebhookConfiguration uses failurePolicy=Fail, so every
+	// actionsgateways create/update in the suite is routed through this server —
+	// if it is not ready first, those creates fail with a connection error that
+	// looks like a rejection.
+	if err := startValidatingWebhook(); err != nil {
+		panic(err)
+	}
+
 	exitCode := m.Run()
+	if webhookCancel != nil {
+		webhookCancel()
+	}
 	_ = testEnv.Stop()
 	cancel()
 	os.Exit(exitCode)
+}
+
+// startValidatingWebhook starts a manager that serves only the ActionsGateway
+// validating webhook against the envtest apiserver, then blocks until the
+// webhook is reachable. The manager is mirrored on the production wiring
+// (SetupActionsGatewayWebhookWithManager): no POD_NAMESPACE override (the
+// defaults reserve kube-system/kube-public/gmc-system) and an empty
+// PriorityClass allowlist (secure default — no integration ActionsGateway
+// references a priorityTier).
+func startValidatingWebhook() error {
+	opts := testEnv.WebhookInstallOptions
+	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
+		Scheme:                 testScheme,
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "0",
+		LeaderElection:         false,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Host:    opts.LocalServingHost,
+			Port:    opts.LocalServingPort,
+			CertDir: opts.LocalServingCertDir,
+		}),
+	})
+	if err != nil {
+		return fmt.Errorf("create webhook manager: %w", err)
+	}
+	if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, nil); err != nil {
+		return fmt.Errorf("register validating webhook: %w", err)
+	}
+
+	var mgrCtx context.Context
+	mgrCtx, webhookCancel = context.WithCancel(ctx)
+	go func() { _ = mgr.Start(mgrCtx) }()
+
+	return waitForWebhookReady(opts)
+}
+
+// waitForWebhookReady blocks until the validating webhook is serving and the
+// apiserver can reach it. It first waits for the TLS listener to accept
+// connections, then proves the full admission path end-to-end: with
+// failurePolicy=Fail the apiserver rejects every actionsgateways create until
+// it can both reach the webhook and trust its CA, so a known-good create that
+// succeeds is the definitive readiness signal. Asserting readiness here (rather
+// than retrying inside individual tests) keeps the per-test rejection
+// assertions unambiguous: an error then means the webhook denied the request,
+// not that it was not yet listening.
+func waitForWebhookReady(opts envtest.WebhookInstallOptions) error {
+	addr := net.JoinHostPort(opts.LocalServingHost, strconv.Itoa(opts.LocalServingPort))
+	dialErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true,
+		func(context.Context) (bool, error) {
+			conn, err := tls.DialWithDialer(&net.Dialer{Timeout: time.Second}, "tcp", addr,
+				&tls.Config{InsecureSkipVerify: true}) //nolint:gosec // local envtest serving cert, identity is irrelevant
+			if err != nil {
+				return false, nil
+			}
+			_ = conn.Close()
+			return true, nil
+		})
+	if dialErr != nil {
+		return fmt.Errorf("webhook TLS listener never came up at %s: %w", addr, dialErr)
+	}
+
+	const readinessNS = "gmc-webhook-readiness"
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: readinessNS}}
+	if err := k8sClient.Create(ctx, ns); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create readiness namespace: %w", err)
+	}
+	defer func() { _ = k8sClient.Delete(context.Background(), ns) }()
+
+	readyErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true,
+		func(context.Context) (bool, error) {
+			probe := newActionsGateway("webhook-readiness-probe", readinessNS, "github-app")
+			err := k8sClient.Create(ctx, probe)
+			switch {
+			case err == nil:
+				_ = k8sClient.Delete(ctx, probe)
+				return true, nil
+			case apierrors.IsInvalid(err):
+				// CRD/webhook validation reached us but rejected the probe object —
+				// the path works; fail loudly rather than spin forever.
+				return false, fmt.Errorf("readiness probe rejected as invalid: %w", err)
+			default:
+				// Webhook not reachable yet (connection refused / no endpoints) —
+				// keep polling.
+				return false, nil
+			}
+		})
+	if readyErr != nil {
+		return fmt.Errorf("validating webhook never became ready: %w", readyErr)
+	}
+	return nil
 }
 
 // startGMCReconciler starts an ActionsGatewayReconciler for the duration of a test.
