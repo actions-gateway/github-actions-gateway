@@ -262,4 +262,84 @@ the GMC webhook is bypassed or disabled.
 
 ---
 
+## G.8. Optional (Disable-able) Egress Proxy
+
+**Current behavior.** The per-tenant egress proxy pool
+([§2.3](02-architecture.md#23-tier-3--egress-proxy-pool)) is provisioned
+unconditionally for every `ActionsGateway`. The Gateway Manager
+Controller (GMC) always emits the proxy `Deployment`, `Service`, `HPA`,
+`PodDisruptionBudget`, and TLS cert `Secret`, and the workload
+`NetworkPolicy` ([`buildWorkloadNetworkPolicy`](../../cmd/gmc/internal/controller/builder.go))
+grants Actions Gateway Controller (AGC) and worker pods egress to
+*only* cluster DNS and the proxy on port 8080 — so with no proxy, those
+pods have no network path to GitHub at all. `spec.proxy` is `+optional`,
+but only its *tuning* (replica counts, resources) is; the pool itself
+cannot be turned off. `spec.proxy.managedNetworkPolicy: false` is **not**
+a disable switch — it only drops the GitHub-CIDR rule from the proxy's
+own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and
+still carries all traffic.
+
+**Why it was left out.** Routing *all* GitHub-bound traffic — AGC
+control-plane and worker data-plane alike — through the per-tenant
+proxy is what makes the gateway's differentiating claim coherent:
+stable per-tenant egress IPs at GitHub. Four downstream capabilities
+rest on it (see [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md)):
+GitHub-side IP allowlisting, per-tenant audit attribution, GitHub-side
+incident containment (a rate-limit / abuse-flag / IP-ban hits one
+tenant, not whoever shares the node), and the one-operation per-tenant
+kill-switch (drain the pool). These are network-attribution,
+compliance, and operability properties — **not** a security boundary
+against a compromised worker, which the installation token already
+scopes. Making the proxy optional therefore forfeits attribution and
+containment without breaching the token boundary. For the
+multi-tenant deployments the design targets, that trade is not worth a
+default, so the proxy stays mandatory.
+
+**Gap.** Niche deployments pay for a property they may not need:
+cost-sensitive single-tenant or dev clusters that don't require
+per-tenant egress IPs, and clusters that already attribute egress at
+the node or cloud layer (per-namespace NAT, a cloud NAT gateway per
+tenant). For these, the always-on floor of `minReplicas: 2` proxy pods
+per tenant is pure overhead.
+
+**What "added" would look like.**
+
+- A new field on `ProxyConfig`, e.g. `mode: Required` (default) `|
+  Disabled` (or `enabled: true` default-true).
+- When disabled, the GMC skips the proxy `Deployment` / `Service` /
+  `HPA` / `PDB` / cert `Secret`, and does not inject `HTTP(S)_PROXY`
+  onto the AGC (workers already no-op the proxy-CA mount on an empty
+  `ProxyTLSSecretName`).
+- `buildWorkloadNetworkPolicy` swaps its `→ proxy:8080` egress rule for
+  direct egress to the GitHub CIDRs on 443, reusing the IP-range
+  refresh loop that already feeds `buildProxyNetworkPolicy`. DNS stays
+  confined to cluster DNS (an independent control — the exfiltration
+  side-channel mitigation in [§5.2](05-security.md) is unaffected).
+- `updateStatus` drops `ProxyAvailable` from the `Ready` computation
+  when the proxy is disabled.
+- The validating webhook emits a *warning* (not a rejection) on
+  create/update that the attribution / containment / kill-switch
+  properties are forfeited.
+
+Estimated cost: an M-sized change across GMC provisioning, the workload
+NetworkPolicy, env injection, status, and the webhook, plus CRD docs.
+
+**Secure-by-default constraint.** Disabling the proxy is a security and
+isolation regression, so per the project's secure-by-default rule it
+must default to `Required`, be reachable only as an explicit opt-in to
+the less-secure mode, and carry the forfeited properties prominently in
+the operator-facing docs. It must never become the default or a silent
+behavior.
+
+**What would trigger building it.** A concrete operator ask for a
+single-tenant / dev / cost-sensitive deployment, or a deployment that
+already provides per-tenant egress attribution at the node or cloud
+layer and wants to shed the proxy's always-on cost.
+
+**Related finding.** [docs/plan/worker-egress-proxy.md](../plan/worker-egress-proxy.md)
+(the four properties forfeited);
+[02-architecture.md §2.3](02-architecture.md#23-tier-3--egress-proxy-pool).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
