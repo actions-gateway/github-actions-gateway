@@ -92,7 +92,7 @@ check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
 # links or `#anchors` that match no GitHub heading slug / explicit <a id>. The
-# CI `doc-links` job in unit-test.yml runs this same target, so local and CI
+# dedicated doc-links.yml CI workflow runs this same target, so local and CI
 # verdicts match.
 .PHONY: doc-links
 doc-links: ## Fail on broken relative links / heading anchors in tracked Markdown
