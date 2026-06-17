@@ -130,26 +130,39 @@ threads a level to the AGC + proxy. Tracked under Q89.
 
 ## Theme D + F — Hot-path INFO spam + weak correlation (Q87)
 
-Done together — both touch the listener/multiplexer logging.
+✅ **Resolved** — done together, since both touch the listener/multiplexer
+logging.
 
-**D — demote per-session/per-job INFO to Debug** (at thousands of concurrent
+**D — demoted per-session/per-job INFO to Debug** (at thousands of concurrent
 sessions these dominate log volume):
 
-- `listener/goroutine.go` ~131 ("listener goroutine started"), ~231 ("job
-  message received"), ~216 (idle shutdown), ~175 (session expired; recreating).
-- `provisioner/provisioner.go` ~280/303/314 (3 lines per provisioned pod).
+- `listener/goroutine.go` — "listener goroutine started" (per spawn), "job
+  message received" (per job), idle-shutdown, "healing stale session" (per
+  heal), and "job finished; recycling single-use JIT agent" (per job) are now
+  Debug.
+- `provisioner/provisioner.go` — the three per-pod lines ("job Secret created",
+  "worker pod created", "worker pod completed") are now Debug.
 
-**F — add correlation fields so one session→job→pod is traceable:**
+Genuinely operator-relevant lifecycle events kept at INFO: concurrency-ceiling
+holds, quota-retry, eviction auto-retry, and the credential-rejection recycle
+notices in `healSession` (recovery events, not steady-state churn).
 
-- The multiplexer logger carries only `index` — add namespace/RunnerGroup
-  (available at `NewMultiplexer` construction).
-- `sessionId` is missing from the listener's base `.With()` context
-  (`goroutine.go` ~100) and from the error/warn lines that matter most.
-- `jobID`/`messageId` are inconsistent across handleJob/AcquireJob/renew.
-- `pool.go` ~170 uses the global `slog` (drops all context).
+**F — added correlation fields so one session→job→pod is traceable:**
 
-Add namespace/group/sessionId/podName to the listener + multiplexer base
-contexts (builds on Theme A's logger-injection).
+- The multiplexer logger now carries `namespace`/`group` (woven on at the
+  `NewMultiplexer` call site in `runnergroup_controller.go`); its
+  listener-lifecycle lines add `index` beneath.
+- The listener's per-goroutine logger now carries `sessionId` on its base
+  context (woven on after session creation and rebound on every heal/recycle so
+  it always reflects the live session), atop the existing
+  `group`/`namespace`/`agentIndex`.
+- The provisioner's per-job logger now carries `podName`, atop the
+  `namespace`/`runnerGroup` from `logFor`.
+
+Not addressed here (out of the hot-path scope, left as backlog): `jobID`/
+`messageId` field-name consistency across handleJob/AcquireJob/renew, and
+`pool.go`'s reconcile-path use of the package-global `slog` (drops context, but
+fires on the reconcile loop, not the per-session hot path).
 
 ---
 
