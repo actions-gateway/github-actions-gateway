@@ -3,7 +3,7 @@
 **Status:** ✅ Done — uniform mTLS shipped for the AGC + proxy `/metrics` on `:8443`.
 **Size:** M
 **Labels:** `security` `infra`
-**Queue row:** [Q69](../STATUS.md#Q69) (to be removed)
+**Queue row:** Q69 (removed)
 
 ## What shipped
 

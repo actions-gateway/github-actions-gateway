@@ -1,0 +1,44 @@
+# Markdown link + anchor integrity gate (Q52). Kept as its own workflow rather
+# than a job in unit-test.yml: that workflow deliberately path-ignores docs, so
+# a docs-only change must trigger *this* lightweight check and nothing else —
+# the Go suite never runs on a pure-docs PR. Mirrors how e2e-test.yml is its own
+# workflow. The `paths` below scope it to Markdown plus the checker and this
+# workflow file, so a code-only change doesn't trigger it.
+name: doc-links
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'scripts/check-doc-links.sh'
+      - 'Makefile'
+      - '.github/workflows/doc-links.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - 'scripts/check-doc-links.sh'
+      - 'Makefile'
+      - '.github/workflows/doc-links.yml'
+
+# Cancel superseded runs on the same PR; pushes to main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Walk every tracked, non-vendored Markdown file and fail on dead relative
+  # file links or `#anchors` that match no GitHub heading slug / explicit
+  # <a id>. `make doc-links` (scripts/check-doc-links.sh) is the single source
+  # of truth, so the local and CI verdicts match. No Go toolchain needed — just
+  # a checkout so `git ls-files` sees the tracked tree.
+  doc-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: markdown links + anchors (make doc-links)
+        run: make doc-links

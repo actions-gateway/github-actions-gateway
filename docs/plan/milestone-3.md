@@ -766,7 +766,7 @@ The GMC already mounts this Secret into the AGC pod (cert only, via
 ~lines 494-509 — and the AGC code path reads it via the
 `appendProxyCAToSystemPool` helper landed under Q5f. Worker
 pods need the symmetric treatment, but the AGC provisioner's `BuildPod`
-([cmd/agc/internal/provisioner/pod_builder.go](../../cmd/agc/internal/provisioner/pod_builder.go))
+([cmd/agc/internal/provisioner/provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go))
 never adds that volume.
 
 **Fix sketch (tracked as Q5h):**
