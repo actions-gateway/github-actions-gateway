@@ -128,10 +128,12 @@ spec:
     minReplicas: 2
     maxReplicas: 10
     # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.
-    # Entries MUST be CIDR prefixes (10.0.0.0/8, or a single host as 203.0.113.5/32) —
-    # a hostname like "github.com" is rejected by admission, because a non-CIDR
-    # NO_PROXY entry would silently route that traffic around the proxy and break
-    # egress-IP attribution. Never list GitHub here; GitHub must go through the proxy.
+    # Entries may be CIDRs (10.0.0.0/8), bare IPs, or NO_PROXY domain suffixes
+    # (svc.cluster.local, internal.example.com). Admission rejects any entry that
+    # would route this tenant's GitHub traffic around the proxy — a hostname
+    # matching the gitHubURL host or the public GitHub domains (github.com,
+    # githubusercontent.com, ghcr.io) — since that breaks egress-IP attribution.
+    # Never list GitHub here. Cluster-internal defaults are appended automatically.
     # noProxyCIDRs: ["10.0.0.0/8"]
   # The namespace ResourceQuota is platform-owned and set on the namespace in
   # Step 1b — it is not a field on this CR.

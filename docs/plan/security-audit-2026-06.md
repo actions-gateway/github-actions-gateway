@@ -251,12 +251,17 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
    validating webhook's `ValidateCreate` now lists existing `ActionsGateway`s in
    the namespace (via the manager's uncached API reader) and rejects a second
    one, fail-closed. Covered by an envtest admission-through-apiserver test.
-3. **`proxy.noProxyCIDRs` unvalidated** — **RESOLVED.** The webhook now rejects
-   any `noProxyCIDRs` entry that is not a valid CIDR prefix (`netip.ParsePrefix`),
-   so a hostname like `github.com` can no longer silently bypass the proxy. A CIDR
-   that *covers* GitHub's rotating ranges is intentionally not blocked (an in-tree
-   blocklist would rot); the operator residual is documented. Unit + envtest
-   coverage; CRD field godoc and `03-api-contracts.md` updated to CIDR-only.
+3. **`proxy.noProxyCIDRs` unvalidated** — **RESOLVED.** The webhook now rejects any
+   `noProxyCIDRs` entry that would route the tenant's GitHub traffic around the
+   proxy — a hostname NO_PROXY-matching the configured `gitHubURL` host or the
+   public GitHub domains (github.com, githubusercontent.com, ghcr.io, …) — so
+   `["github.com"]` no longer silently bypasses the proxy. The check is surgical,
+   not "CIDRs only": NO_PROXY domain suffixes for *internal* destinations
+   (`svc.cluster.local` and friends — which the GMC default and the e2e rely on)
+   stay valid, as do CIDRs and bare IPs. A CIDR/IP covering GitHub's rotating
+   ranges is intentionally not blocked (an in-tree blocklist would rot); that
+   residual is documented. Unit + envtest coverage; CRD field godoc,
+   `03-api-contracts.md`, troubleshooting, and onboarding updated.
 4. **CONNECT listener lacks explicit `MinVersion`** — **RESOLVED.** The CONNECT
    listener's `tls.Config` now pins `MinVersion: tls.VersionTLS12` (matching the
    metrics listener). Guarded by `TestProxy_TLS_RejectsBelowTLS12`.

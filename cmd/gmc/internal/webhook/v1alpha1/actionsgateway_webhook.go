@@ -350,33 +350,81 @@ func (v *ActionsGatewayCustomValidator) validatePriorityClasses(ag *gmcv1alpha1.
 	return nil
 }
 
-// validateNoProxyCIDRs rejects any spec.proxy.noProxyCIDRs entry that is not a
-// well-formed CIDR prefix. The field's contract is CIDRs only, but it was
-// previously unvalidated: a value like "github.com" is threaded verbatim into
-// the AGC's NO_PROXY env var (builder.go buildNoProxy), where Go's httpproxy
-// treats it as a domain-suffix match — so GitHub-bound traffic silently
-// bypasses the per-tenant egress proxy, defeating the egress-IP attribution the
-// proxy exists to provide. Requiring CIDR notation makes that bypass
-// impossible: a hostname no longer parses, and an operator who genuinely wants
-// to exclude a single host must write it as an explicit /32 or /128 and accept
-// that it is a deliberate, auditable carve-out.
+// githubNoProxyHosts is the set of public GitHub hostnames that the AGC and
+// worker pods must always reach *through* the per-tenant egress proxy for the
+// egress-IP attribution to hold. A NO_PROXY entry that matches any of these
+// would route that tenant's GitHub traffic around the proxy. The tenant's own
+// gitHubURL host (including a GitHub Enterprise Server host) is added
+// dynamically in validateNoProxyCIDRs.
+var githubNoProxyHosts = []string{
+	"github.com",
+	"api.github.com",
+	"codeload.github.com",
+	"objects.githubusercontent.com",
+	"raw.githubusercontent.com",
+	"pkg-containers.githubusercontent.com",
+	"ghcr.io",
+}
+
+// validateNoProxyCIDRs rejects any spec.proxy.noProxyCIDRs entry that would route
+// the tenant's GitHub-bound traffic around the per-tenant egress proxy, defeating
+// the egress-IP attribution that isolates tenants. Each entry is threaded
+// verbatim into the AGC/worker NO_PROXY env var (builder.go buildNoProxy), where
+// Go's httpproxy matches a hostname entry as a domain suffix. So an entry like
+// "github.com" (or ".github.com", or an over-broad ".com") would silently
+// exclude GitHub from the proxy — the documented footgun.
 //
-// This is a webhook check, not a CRD CEL rule: CEL's isCIDR()/cidr() helpers are
-// only available on newer Kubernetes and the webhook is version-agnostic
-// (mirroring validateGitHubAppRef). A CIDR that happens to cover GitHub's
-// published ranges is NOT rejected here — those ranges rotate and an in-tree
-// blocklist would rot into a false sense of safety; docs/operations cover the
-// residual operator responsibility.
+// The check is surgical, not a blanket "CIDRs only" rule: NO_PROXY legitimately
+// takes domain-suffix entries for cluster-internal destinations (the GMC's own
+// default appends svc.cluster.local/localhost, and tenants reach in-cluster
+// services that way), so forbidding all hostnames would break a supported,
+// load-bearing pattern. Only entries that NO_PROXY-match the GitHub hosts the
+// tenant registers against are rejected. A CIDR/IP entry is allowed through here
+// even if it happens to cover GitHub's published ranges — those ranges rotate
+// and an in-tree IP blocklist would rot into a false sense of safety; that
+// residual is the operator's responsibility (see 05-security.md §5.2).
+//
+// This is a webhook check, not a CRD CEL rule, because it depends on the
+// gitHubURL host parse and is version-agnostic (mirroring validateGitHubAppRef).
 func validateNoProxyCIDRs(ag *gmcv1alpha1.ActionsGateway) error {
+	protected := append([]string{}, githubNoProxyHosts...)
+	if u, err := url.Parse(ag.Spec.GitHubURL); err == nil && u.Hostname() != "" {
+		protected = append(protected, u.Hostname())
+	}
 	for i, entry := range ag.Spec.Proxy.NoProxyCIDRs {
-		if _, err := netip.ParsePrefix(entry); err != nil {
-			return fmt.Errorf(
-				"proxy.noProxyCIDRs[%d]: %q is not a valid CIDR prefix (e.g. 10.0.0.0/8 or a single host as 203.0.113.5/32); "+
-					"hostnames are rejected because a non-CIDR NO_PROXY entry silently routes matching traffic around the per-tenant egress proxy",
-				i, entry)
+		// CIDR / bare-IP entries cannot be a hostname-suffix bypass; the
+		// IP-range residual is accepted and documented.
+		if _, err := netip.ParsePrefix(entry); err == nil {
+			continue
+		}
+		if _, err := netip.ParseAddr(entry); err == nil {
+			continue
+		}
+		for _, host := range protected {
+			if noProxyHostnameMatches(entry, host) {
+				return fmt.Errorf(
+					"proxy.noProxyCIDRs[%d]: %q would route GitHub traffic (%s) around the per-tenant egress proxy, "+
+						"defeating egress-IP attribution; remove it — GitHub must always traverse the proxy. "+
+						"noProxyCIDRs may exclude internal destinations (CIDRs or domain suffixes), never GitHub",
+					i, entry, host)
+			}
 		}
 	}
 	return nil
+}
+
+// noProxyHostnameMatches reports whether a NO_PROXY hostname entry would match
+// the given host under Go's httpproxy domain-suffix semantics: an entry matches a
+// host that equals it or is a sub-domain of it. A leading dot on the entry is
+// insignificant for this purpose (".github.com" and "github.com" both match
+// "api.github.com"); the comparison is case-insensitive.
+func noProxyHostnameMatches(entry, host string) bool {
+	e := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(entry), "."))
+	h := strings.ToLower(host)
+	if e == "" {
+		return false
+	}
+	return h == e || strings.HasSuffix(h, "."+e)
 }
 
 // securityProfileRank orders the Pod Security Admission profiles from least to

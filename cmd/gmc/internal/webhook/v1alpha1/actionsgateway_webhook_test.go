@@ -301,30 +301,41 @@ func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
-func TestWebhook_RejectsHostnameInNoProxyCIDRs(t *testing.T) {
+func TestWebhook_RejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("", nil)
-	ag := newAG("team-a")
-	ag.Spec.Proxy.NoProxyCIDRs = []string{"github.com"}
-	_, err := v.ValidateCreate(context.Background(), ag)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "noProxyCIDRs")
-	assert.Contains(t, err.Error(), "not a valid CIDR")
+	for _, entry := range []string{"github.com", ".github.com", "api.github.com", "githubusercontent.com", ".com"} {
+		ag := newAG("team-a")
+		ag.Spec.Proxy.NoProxyCIDRs = []string{entry}
+		_, err := v.ValidateCreate(context.Background(), ag)
+		require.Errorf(t, err, "entry %q should be rejected", entry)
+		assert.Contains(t, err.Error(), "noProxyCIDRs[0]")
+		assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+	}
 }
 
-func TestWebhook_RejectsBareIPInNoProxyCIDRs(t *testing.T) {
+func TestWebhook_RejectsGitHubEnterpriseHostInNoProxyCIDRs(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("", nil)
 	ag := newAG("team-a")
-	// A bare IP (no prefix length) is not a CIDR; require explicit /32.
-	ag.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.5"}
+	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
+	// An entry that NO_PROXY-matches the tenant's GHES host bypasses the proxy.
+	ag.Spec.Proxy.NoProxyCIDRs = []string{"example.com"}
 	_, err := v.ValidateCreate(context.Background(), ag)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "noProxyCIDRs[0]")
+	assert.Contains(t, err.Error(), "ghes.example.com")
 }
 
-func TestWebhook_AllowsValidNoProxyCIDRs(t *testing.T) {
+// noProxyCIDRs legitimately takes CIDRs, bare IPs, and non-GitHub domain
+// suffixes (e.g. svc.cluster.local — the in-cluster pattern the project's own
+// defaults and e2e rely on). None of these may be rejected.
+func TestWebhook_AllowsNonGitHubNoProxyEntries(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("", nil)
 	ag := newAG("team-a")
-	ag.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "203.0.113.5/32", "fd00::/8"}
+	ag.Spec.Proxy.NoProxyCIDRs = []string{
+		"10.0.0.0/8", "203.0.113.5/32", "fd00::/8", // CIDRs
+		"10.0.0.5",                       // bare IP
+		"svc.cluster.local", "localhost", // cluster-internal domain suffixes
+		"internal.example.com", // a non-GitHub internal domain
+	}
 	_, err := v.ValidateCreate(context.Background(), ag)
 	require.NoError(t, err)
 }
@@ -336,7 +347,7 @@ func TestWebhook_AllowsEmptyNoProxyCIDRs(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestWebhook_UpdateRejectsHostnameInNoProxyCIDRs(t *testing.T) {
+func TestWebhook_UpdateRejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("", nil)
 	updated := newAG("team-a")
 	updated.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "api.github.com"}

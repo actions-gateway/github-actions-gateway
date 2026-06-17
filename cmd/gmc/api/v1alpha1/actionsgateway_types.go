@@ -43,17 +43,20 @@ type ProxyConfig struct {
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// NoProxyCIDRs lists CIDR prefixes appended to the NO_PROXY environment
-	// variable of the AGC and worker pods, excluding those destinations from the
-	// per-tenant egress proxy. Every entry MUST be a valid CIDR prefix (e.g.
-	// "10.0.0.0/8", or a single host as "203.0.113.5/32"); the admission webhook
-	// rejects hostnames and bare IPs. A non-CIDR NO_PROXY entry (e.g.
-	// "github.com") would be treated as a domain-suffix match and silently route
-	// that traffic around the proxy, defeating per-tenant egress-IP attribution —
-	// never list GitHub here. Cluster-internal destinations (the service CIDR,
-	// localhost, the in-cluster API hostname) are appended automatically by the
-	// GMC and need not be set here; override only to add a non-default service
-	// CIDR (discover it via `kubectl cluster-info dump | grep -m1
+	// NoProxyCIDRs lists destinations appended to the NO_PROXY environment
+	// variable of the AGC and worker pods, excluding them from the per-tenant
+	// egress proxy. Entries may be CIDR prefixes ("10.0.0.0/8"), bare IPs, or
+	// NO_PROXY domain suffixes for internal destinations ("svc.cluster.local",
+	// "internal.example.com"). The admission webhook rejects any entry that would
+	// route the tenant's GitHub traffic around the proxy — a hostname matching
+	// the configured gitHubURL host or the public GitHub domains (github.com,
+	// githubusercontent.com, ghcr.io, …) — because that would silently defeat
+	// per-tenant egress-IP attribution; never list GitHub here. A CIDR/IP that
+	// happens to cover GitHub's (rotating) ranges is not detected and remains the
+	// operator's responsibility. Cluster-internal destinations (the service CIDR,
+	// localhost, svc.cluster.local) are appended automatically by the GMC and
+	// need not be set here; override only to add a non-default service CIDR
+	// (discover it via `kubectl cluster-info dump | grep -m1
 	// service-cluster-ip-range`).
 	// +optional
 	NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`

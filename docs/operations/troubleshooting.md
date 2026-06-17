@@ -36,7 +36,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
 - [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
-- [`proxy.noProxyCIDRs` Rejected: Not a Valid CIDR](#proxynoproxycidrs-rejected-not-a-valid-cidr)
+- [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
@@ -1032,22 +1032,23 @@ per-tenant resources and would flap the namespace's Pod Security Admission label
 
 ---
 
-## `proxy.noProxyCIDRs` Rejected: Not a Valid CIDR
+## `proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub
 
 **Symptoms.** A `kubectl apply` is rejected by the GMC validating webhook with:
 
 ```
 admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-proxy.noProxyCIDRs[0]: "github.com" is not a valid CIDR prefix (e.g. 10.0.0.0/8
-or a single host as 203.0.113.5/32); hostnames are rejected because a non-CIDR
-NO_PROXY entry silently routes matching traffic around the per-tenant egress proxy
+proxy.noProxyCIDRs[0]: "github.com" would route GitHub traffic (github.com)
+around the per-tenant egress proxy, defeating egress-IP attribution; remove it
+— GitHub must always traverse the proxy. noProxyCIDRs may exclude internal
+destinations (CIDRs or domain suffixes), never GitHub
 ```
 
-**Likely cause.** A `spec.proxy.noProxyCIDRs` entry is a hostname (`github.com`, `api.github.com`) or a bare IP without a prefix length (`10.0.0.5`). The field's contract is **CIDR prefixes only**.
+**Likely cause.** A `spec.proxy.noProxyCIDRs` entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `gitHubURL` host (including a GitHub Enterprise Server host), or an over-broad suffix like `.com` that covers them.
 
-**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC's `NO_PROXY` environment variable. A hostname there is treated as a domain-suffix match, so traffic to that host bypasses the per-tenant egress proxy entirely — defeating the egress-IP attribution that isolates tenants. Requiring CIDR notation makes that bypass impossible.
+**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match. If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
 
-**Resolution.** Write each entry as a CIDR prefix: a network as `10.0.0.0/8`, a single host as `203.0.113.5/32` (or `/128` for IPv6). Never list GitHub hostnames or GitHub IP ranges here — doing so would route GitHub traffic around the proxy, which the guard cannot detect for an IP range (it only enforces CIDR *syntax*). If you intended to exclude an internal service from the proxy, use its CIDR; GitHub must always go through the proxy.
+**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy. `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`). Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.
 
 ---
 

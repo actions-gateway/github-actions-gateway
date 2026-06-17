@@ -60,14 +60,17 @@ type ProxyConfig struct {
     // +optional
     Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-    // NoProxyCIDRs is a list of CIDR prefixes appended to the NO_PROXY
-    // environment variable injected into the AGC and worker pods, excluding those
-    // destinations from the per-tenant egress proxy. Every entry MUST be a valid
-    // CIDR prefix (e.g. "10.0.0.0/8", or a single host as "203.0.113.5/32"); the
-    // admission webhook rejects hostnames and bare IPs, because a non-CIDR
-    // NO_PROXY entry (e.g. "github.com") would be a domain-suffix match that
-    // silently routes that traffic around the proxy and defeats egress-IP
-    // attribution. Never list GitHub here.
+    // NoProxyCIDRs is a list of destinations appended to the NO_PROXY environment
+    // variable injected into the AGC and worker pods, excluding them from the
+    // per-tenant egress proxy. Entries may be CIDR prefixes ("10.0.0.0/8"), bare
+    // IPs, or NO_PROXY domain suffixes for internal destinations
+    // ("svc.cluster.local", "internal.example.com"). The admission webhook rejects
+    // any entry that would route the tenant's GitHub traffic around the proxy — a
+    // hostname matching the configured gitHubURL host or the public GitHub domains
+    // (github.com, githubusercontent.com, ghcr.io, …) — because that silently
+    // defeats egress-IP attribution. Never list GitHub here. A CIDR/IP covering
+    // GitHub's rotating ranges is not detected and stays the operator's
+    // responsibility.
     // Cluster-internal destinations are appended automatically by the GMC
     // (svc.cluster.local, localhost, 127.0.0.1, 10.96.0.0/12); set this field only
     // to add a non-default service CIDR.

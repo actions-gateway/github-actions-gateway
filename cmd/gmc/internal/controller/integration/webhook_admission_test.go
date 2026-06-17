@@ -202,18 +202,20 @@ func TestWebhookAdmission_NoProxyCIDRs(t *testing.T) {
 	const nsName = "team-webhook-noproxy"
 	createNamespace(t, nsName)
 
-	bad := newActionsGateway("noproxy-hostname-ag", nsName, "github-app")
+	bad := newActionsGateway("noproxy-github-ag", nsName, "github-app")
 	bad.Spec.Proxy.NoProxyCIDRs = []string{"github.com"}
 	err := k8sClient.Create(ctx, bad)
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), bad)) })
-	require.Error(t, err, "a hostname in noProxyCIDRs must be rejected by the webhook through the apiserver")
-	assert.Contains(t, err.Error(), "not a valid CIDR",
+	require.Error(t, err, "a GitHub host in noProxyCIDRs must be rejected by the webhook through the apiserver")
+	assert.Contains(t, err.Error(), "around the per-tenant egress proxy",
 		"rejection must come from the GMC validating webhook")
 
-	good := newActionsGateway("noproxy-cidr-ag", nsName, "github-app")
-	good.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "203.0.113.5/32"}
+	// CIDRs and non-GitHub domain suffixes (svc.cluster.local — the in-cluster
+	// pattern the e2e relies on) must be admitted.
+	good := newActionsGateway("noproxy-ok-ag", nsName, "github-app")
+	good.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "203.0.113.5/32", "svc.cluster.local"}
 	require.NoError(t, k8sClient.Create(ctx, good),
-		"well-formed CIDRs in noProxyCIDRs must be admitted")
+		"CIDRs and non-GitHub domain suffixes in noProxyCIDRs must be admitted")
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), good)) })
 }
 
