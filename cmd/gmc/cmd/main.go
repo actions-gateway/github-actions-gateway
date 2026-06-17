@@ -304,6 +304,11 @@ func main() {
 	// could stall the queue when the API was slow.
 	ipCache := &controller.IPRangeCache{}
 
+	// Register the GMC's custom metrics. The managed-gateways collector lists
+	// ActionsGateway CRs from the manager cache at scrape time, so it must be
+	// given a cached reader.
+	gmcMetrics := controller.NewMetrics(mgr.GetClient())
+
 	if err := (&controller.ActionsGatewayReconciler{
 		Client:      mgr.GetClient(),
 		Scheme:      mgr.GetScheme(),
@@ -324,6 +329,7 @@ func main() {
 		Cache:    ipCache,
 		Interval: ipInterval,
 		Log:      slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
+		Metrics:  gmcMetrics,
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")
 		os.Exit(1)

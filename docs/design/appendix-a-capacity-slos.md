@@ -10,7 +10,7 @@ The following targets are conservative defaults derived from the architectural c
 
 | Metric | Target | Source | Note |
 | --- | --- | --- | --- |
-| Pod-creation latency (p95) | ≤ 15s | `actions_gateway_pod_creation_latency_seconds` | From `acquirejob` success to pod `Scheduled` event. Dominated by image pull on cold nodes; sub-second on warm. |
+| Pod-creation latency (p95) | ≤ 15s | `actions_gateway_pod_creation_latency_seconds` | From worker pod creation to runner container start (scheduling + image pull). Dominated by image pull on cold nodes; sub-second on warm. |
 | Pod-creation latency (p99) | ≤ 60s | `actions_gateway_pod_creation_latency_seconds` | Tolerates cold-start image pull. |
 | Session reacquisition after Actions Gateway Controller (AGC) restart | ≤ 2 min | derived | Equal to GitHub's redelivery window; jobs redelivered within this window suffer no observable disruption. |
 | Token refresh failure budget | < 1 / hour | `actions_gateway_token_refresh_errors_total` | Anything above this rate indicates either GitHub API instability or a credential problem. |

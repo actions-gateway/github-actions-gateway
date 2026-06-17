@@ -379,6 +379,9 @@ func run() error {
 	// as a manager Runnable so the handler is registered after the cache syncs.
 	podWaiter := provisioner.NewInformerPodWaiter(mgr.GetCache(),
 		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("podwaiter"))))
+	// Observe pod-creation latency (creation → runner container start) off the
+	// same pod events, once per pod, for the headline pod-startup SLO.
+	podWaiter.PodCreationLatency = m.PodCreationLatency
 	if err := mgr.Add(podWaiter); err != nil {
 		return fmt.Errorf("add pod completion watcher: %w", err)
 	}

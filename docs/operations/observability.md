@@ -223,7 +223,7 @@ verified metrics scraping automatically once the `ServiceMonitor` is enabled.
 | `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired from the broker. |
 | `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures. Reason values: `already_claimed` (benign race), `delivery_window_expired` (job redelivered), `version_too_old`, `other`. |
 | `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from `acquirejob` success to worker pod terminal phase. |
-| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from `acquirejob` to pod `Scheduled` event. Key SLO metric. |
+| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see [Appendix A](../design/appendix-a-capacity-slos.md). |
 | `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful GitHub App installation token refreshes. |
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refresh attempts. See SLO threshold below. |
 | `actions_gateway_renewjob_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. |
@@ -233,7 +233,7 @@ verified metrics scraping automatically once the `ServiceMonitor` is enabled.
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace`, `reason` | `GetMessage` errors (excludes empty polls and session expiry — those are normal). `reason="rate_limited"` is a 429; `reason="timeout"` is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see [Listener Stalls After a Black-Holed Broker Connection](troubleshooting.md#listener-stalls-for-minutes-after-a-black-holed-broker-connection)); `reason="other"` is any remaining transport/decode error. |
 | `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered. `trigger="post_job"` is routine (one per completed job); `stale_session`/`startup` mean a dead agent was detected and healed after the fact; `reconcile_repair` means a parked agent was repaired by the reconciler. |
 | `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero). |
-| `actions_gateway_reconcile_errors_total` | Counter | `controller`, `resource` | GMC/AGC reconcile errors. Non-zero values deserve investigation. |
+| `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors. Emitted by controller-runtime (no `actions_gateway_` prefix); the `controller` label distinguishes `actionsgateway`, `runnergroup`, etc. Non-zero values deserve investigation. |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC. |
 
@@ -356,7 +356,7 @@ groups:
       # Ticket: reconcile errors need investigation
       - alert: ActionsGatewayReconcileErrors
         expr: |
-          rate(actions_gateway_reconcile_errors_total[5m]) > 0.033
+          rate(controller_runtime_reconcile_errors_total[5m]) > 0.033
         for: 10m
         labels:
           severity: warning
@@ -483,7 +483,7 @@ The following panels cover the key health and performance signals. Use the recor
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Managed gateways | `actions_gateway_managed_gateways` | Stat |
-| Reconcile errors | `rate(actions_gateway_reconcile_errors_total[5m])` | Time series by controller |
+| Reconcile errors | `rate(controller_runtime_reconcile_errors_total[5m])` | Time series by controller |
 | IP range refreshes | `increase(actions_gateway_ip_range_updates_total[24h])` | Stat |
 
 ### Dashboard Variables

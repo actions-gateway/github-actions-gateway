@@ -200,7 +200,7 @@ avoids real GitHub API quota and keeps the test deterministic.
 | Dropped messages | Count `actions_gateway_message_poll_errors_total` minus expected (rate-limit) errors; assert 0 unexpected |
 | Cross-tenant resource visibility | After load, walk each tenant namespace and assert no pods/secrets carry labels from another tenant |
 | Goroutine deadlocks | `pprof` goroutine dump at peak; assert no goroutine has been blocked > 5 min on a channel |
-| Proxy HPA scale-up | `actions_gateway_proxy_replicas` (or HPA status) ≥ `minReplicas + 1` during burst |
+| Proxy HPA scale-up | `actions_gateway_proxy_replicas` _(planned — not yet emitted; use HPA/Deployment status until proxy autoscaling lands)_ ≥ `minReplicas + 1` during burst |
 | Proxy HPA scale-down | Within 5 min of load drop, replicas return to `minReplicas` |
 | Job acquisition latency p95 | Histogram percentile from `actions_gateway_pod_creation_latency_seconds`; compare against Appendix A SLO |
 

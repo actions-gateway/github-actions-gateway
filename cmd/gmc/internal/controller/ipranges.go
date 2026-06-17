@@ -181,6 +181,9 @@ type IPRangeReconciler struct {
 	Cache    *IPRangeCache
 	Interval time.Duration
 	Log      *slog.Logger
+	// Metrics, when non-nil, counts each successful NetworkPolicy patch via
+	// actions_gateway_ip_range_updates_total. Optional so tests can omit it.
+	Metrics *Metrics
 
 	// InitialBackoff and MaxBackoff bound the capped exponential backoff used
 	// to retry the initial fetch in Start (see reconcileInitial). Zero selects
@@ -314,5 +317,11 @@ func (r *IPRangeReconciler) patchNetworkPolicy(ctx context.Context, ag *gmcv1alp
 	np.Spec.Egress = desired.Spec.Egress
 	np.Spec.Ingress = desired.Spec.Ingress
 
-	return r.Update(ctx, &np)
+	if err := r.Update(ctx, &np); err != nil {
+		return err
+	}
+	if r.Metrics != nil {
+		r.Metrics.IPRangeUpdates.WithLabelValues(ag.Namespace).Inc()
+	}
+	return nil
 }
