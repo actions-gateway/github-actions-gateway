@@ -49,6 +49,8 @@ When you change any module's `go.mod` (add, upgrade, or remove a dep):
 3. Run `go work vendor` at the repo root to update the shared `vendor/`.
 4. Commit the `go.mod`, `go.sum`, and `vendor/` changes together in the same commit so they stay in sync.
 
+`make vendor-sync` (→ `scripts/vendor-sync.sh`) runs steps 1–3 plus the `THIRD-PARTY-NOTICES` regen in one shot, so you can do the whole sync with a single command and then commit the result. It is the same remedy the [Dependabot auto-sync workflow](#dependabot-go-bumps-are-auto-synced) runs.
+
 If the change **added, removed, or re-pointed an inter-module `replace` edge** (or added/deleted a workspace module), also update the module table's **Internal deps** column and the **Dependency direction** graph in [Workspace layout](#workspace-layout) above — those are maintained by hand and will otherwise drift.
 
 Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
@@ -61,7 +63,17 @@ Do not run `go mod tidy` or `go mod vendor` inside an individual module — that
 
 `go build -mod=vendor` checks only `vendor/modules.txt` consistency — it never verifies that the vendored *source* matches the hashes in `go.sum`, so a tampered `vendor/` (or `tools/vendor/`) edit would compile into the signed release images undetected (Q126). The `vendor-check` CI job (`make vendor-check` → `scripts/vendor-check.sh`) re-runs the vendor flow above — which re-fetches every module verified against `go.sum` — and fails on any diff against the committed trees. Run `make vendor-check` locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally **not** part of the fast `make check` gate.
 
-A **Dependabot** `go.mod`/`go.sum` bump lands a desynced vendor tree (the bot can't run `go work vendor`), so it fails this gate by design — the fix is the follow-up vendor sync from [Changing dependencies](#changing-dependencies) above, not an exemption.
+A **Dependabot** `go.mod`/`go.sum` bump lands a desynced vendor tree (the bot can't run `go work vendor`), so it fails this gate by design — the fix is the follow-up vendor sync, which is now automated (see [Dependabot Go bumps are auto-synced](#dependabot-go-bumps-are-auto-synced) below), not an exemption.
+
+### Dependabot Go bumps are auto-synced
+
+A Dependabot Go-module PR updates one module's `go.mod`/`go.sum` but **cannot** run `go work vendor`, `go work sync`, or regenerate `THIRD-PARTY-NOTICES`. So the shared `vendor/`, `tools/vendor/`, `go.work.sum`, and `THIRD-PARTY-NOTICES` all desync and the `vendor-check`, `tidy-check`, and `license-notices` gates fail together — historically (#198) a maintainer had to hand-craft a sync commit.
+
+The `dependabot-go-sync` workflow (`.github/workflows/dependabot-go-sync.yml`, Q111) does that for you. It triggers on every PR but its job runs only for a same-repo, Dependabot-authored PR whose branch is a Go-module update (`dependabot/gomod/…`). It runs `make vendor-sync` — the one-shot remedy that performs the whole [Changing dependencies](#changing-dependencies) flow plus the notices regen — and pushes any resulting diff back onto the Dependabot branch as a `chore(deps): sync …` commit. It no-ops cleanly (no commit) when nothing drifted, so a metadata-only bump costs one fast run.
+
+Run the same remedy locally with `make vendor-sync` (→ `scripts/vendor-sync.sh`) whenever you change a dependency by hand.
+
+**Limitation — the checks need a re-trigger.** The sync commit is pushed with the workflow's default `GITHUB_TOKEN`. GitHub deliberately does **not** re-run workflows from a `GITHUB_TOKEN` push (this is what stops the bot commit from looping the sync workflow back on itself). The same rule means the required PR checks do **not** automatically re-evaluate on the synced commit — they stay reported against the pre-sync commit. A maintainer clears this with one click: **close and reopen the PR**, or comment `@dependabot recreate`, which re-fires the `pull_request` checks against the new head, and they pass. Using a stored Personal Access Token (PAT) instead of `GITHUB_TOKEN` would re-trigger the checks automatically, but the repo deliberately keeps no such credential — the one-click re-trigger is the accepted trade-off. (Fork-authored Dependabot PRs are out of scope: `GITHUB_TOKEN` can't push to a fork, and this repo's Dependabot pushes branches to the repo itself, not a fork.)
 
 ## Worktrees
 
