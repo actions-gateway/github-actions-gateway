@@ -33,6 +33,7 @@ jobs:
       status: ${{ steps.filter.outputs.status }}
       scripts: ${{ steps.filter.outputs.scripts }}
       vendor: ${{ steps.filter.outputs.vendor }}
+      modules: ${{ steps.filter.outputs.modules }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
@@ -77,6 +78,19 @@ jobs:
               - 'go.work'
               - 'go.work.sum'
               - 'scripts/vendor-check.sh'
+              - 'Makefile'
+              - '.github/workflows/unit-test.yml'
+            # Tidiness gate scope (Q94): anything that determines the tidy-canonical
+            # shape of the workspace module files. Narrower than `vendor` — a
+            # vendor/ source edit can't change what `go mod tidy` produces, so the
+            # vendored trees are deliberately excluded here.
+            modules:
+              - '**/go.mod'
+              - '**/go.sum'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'scripts/go-tidy-check.sh'
+              - 'scripts/go-work-tidy.sh'
               - 'Makefile'
               - '.github/workflows/unit-test.yml'
 
@@ -177,6 +191,34 @@ jobs:
       # else re-vendors offline from cache; either way the git diff is the gate.
       - name: vendor integrity vs go.sum (make vendor-check)
         run: make vendor-check
+
+  # Tidiness gate for the workspace module files (Q94). A non-canonical committed
+  # go.sum makes the documented tidy flow (scripts/go-work-tidy.sh + go work sync)
+  # re-add the /go.mod hash rows to broker/probe/proxy/githubapp and re-resolve
+  # cmd/gmc's stale indirect requires, so contributors keep reverting spurious
+  # diffs. `make tidy-check` re-runs that flow and fails on any go.mod/go.sum/
+  # go.work.sum drift, keeping the committed files tidy-canonical. Sibling of
+  # vendor-check (Q126): this gates the module files, vendor-check gates that
+  # vendor/ matches them. Isolated as its own job (and its own narrower `modules`
+  # path filter) so a vendor-only or source-only change doesn't trigger the tidy
+  # re-run, and vice versa.
+  tidy-check:
+    needs: [changes]
+    if: needs.changes.outputs.modules == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.work
+      # `make tidy-check` (scripts/go-tidy-check.sh) is the single source of truth
+      # so the local and CI verdicts match. It re-runs the documented tidy flow;
+      # on a cold module cache `go mod tidy` re-fetches the build-graph go.mod
+      # files (verified against go.sum), else tidies offline. The git diff is the
+      # gate.
+      - name: module files are tidy (make tidy-check)
+        run: make tidy-check
 
   unit-test:
     needs: [changes]

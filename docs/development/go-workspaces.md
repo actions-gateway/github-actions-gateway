@@ -53,6 +53,10 @@ If the change **added, removed, or re-pointed an inter-module `replace` edge** (
 
 Do not run `go mod tidy` or `go mod vendor` inside an individual module — that produces state that conflicts with the workspace vendor. `scripts/go-work-tidy.sh` handles correct ordering across modules so you don't have to.
 
+### Module-file tidiness is gated in CI
+
+`go mod tidy` is the canonical normaliser for each module's `go.mod`/`go.sum`: it adds the missing entries (including a `/go.mod` hash row for every module in the build graph) and drops the unused ones. If a committed `go.sum` is not in that canonical shape, step 1 above re-adds those rows and step 2 re-resolves any stale indirect `require` versions — producing a spurious diff that contributors keep reverting (Q94). The `tidy-check` CI job (`make tidy-check` → `scripts/go-tidy-check.sh`) re-runs steps 1–2 and fails on any drift in `go.mod`/`go.sum`/`go.work.sum`, so the committed module files stay tidy-canonical. Run `make tidy-check` locally to reproduce the gate; like `vendor-check` it can need network on a cold cache, so it is intentionally **not** part of the fast `make check` gate. The remedy for a failure is steps 1–2 + commit, never an exemption.
+
 ### Vendor integrity is gated in CI
 
 `go build -mod=vendor` checks only `vendor/modules.txt` consistency — it never verifies that the vendored *source* matches the hashes in `go.sum`, so a tampered `vendor/` (or `tools/vendor/`) edit would compile into the signed release images undetected (Q126). The `vendor-check` CI job (`make vendor-check` → `scripts/vendor-check.sh`) re-runs the vendor flow above — which re-fetches every module verified against `go.sum` — and fails on any diff against the committed trees. Run `make vendor-check` locally to reproduce the gate; it needs network on a cold module cache (it re-fetches from the proxy), so it is intentionally **not** part of the fast `make check` gate.
