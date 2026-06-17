@@ -34,7 +34,7 @@ unimplemented at the authorization layer.
 | `make verify-release` accepts `refs/heads/.*` signing identities | Medium | **Resolved (Q124)** — identity regexp anchored tags-only (`@refs/tags/v.*$`); publish.yml refuses non-tag refs; regexp guarded by `scripts/verify-release-test.sh` |
 | GMC teardown fail-open (`deleteIfExists` swallows errors, finalizer removed) | Medium | **Resolved (Q125):** `deleteIfExists` returns its error (NotFound = success); `reconcileDelete` collects delete errors, emits a `TeardownIncomplete` event, and requeues without removing the finalizer until every delete is confirmed gone. Fail-closed and idempotent. |
 | Vendored deps never integrity-checked against go.sum in CI | Medium | **New → Q126** |
-| 8 smaller hardening items (see below) | Low | **New → [Q127](../STATUS.md#Q127)** (batch) |
+| 8 smaller hardening items (see below) | Low | **Resolved (Q127):** all eight addressed (item 5's cosign leg landed earlier via Q126); the single optional sub-item of #8 (non-HTTPS `GITHUB_API_BASE_URL` guard) is carved out to its own Queue item. See [Q127 batch detail](#q127-hardening-batch-items). |
 | DNS egress allows port 53 to any destination | Medium | **Fixed (Q105)** — port-53 egress confined to cluster DNS (`k8s-app: kube-dns` in `kube-system`) across all three per-tenant NetworkPolicies |
 | Proxy has no app-layer destination allowlist / connection cap | Medium | Accepted by design — security.md M-2, Appendix G §G.1, [Q19](../STATUS.md#Q19). This audit adds the metadata-service/SSRF framing as a revisit argument |
 | ResourceQuota is optional and tenant-controlled | Medium | **Resolved (Q130, 2026-06-14):** the tenant-authored `spec.namespaceQuota` was removed; the `ResourceQuota` is now platform-owned (the platform admin must provision it on the namespace), so it is no longer tenant-controlled. Remaining per-cluster proxy HPA-max guard work stays in [Q82](../STATUS.md#Q82). |
@@ -235,58 +235,64 @@ verification) + `git diff --exit-code vendor/ tools/vendor/`.
 
 ## Q127 hardening-batch items
 
-Small items, one Queue row; fix opportunistically or as one PR:
+Small items, one Queue row; fix opportunistically or as one PR. **All eight
+RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
 
-1. **`namespace-psa-guard` hardcodes the GMC SA username**
-   (`cmd/gmc/config/admission-policy/namespace-psa-guard.yaml:44`). A GMC
-   installed under any other namespace/name is silently not subject to the
-   policy. Parameterize via deploy tooling; add an e2e assertion.
-2. **No ActionsGateway-singleton guard per namespace.** Two CRs fight over
-   fixed-name resources; with different `securityProfile`s the namespace
-   PSA labels flap (intermittently admitting privileged pods), and
-   deleting either CR tears down the survivor's infrastructure. Reject a
-   second CR in `ValidateCreate`.
-3. **`proxy.noProxyCIDRs` unvalidated** (`actionsgateway_types.go:47` →
-   `builder.go:819`). `["github.com"]` silently bypasses the egress proxy
-   for GitHub traffic, defeating egress-IP attribution. CEL-validate as
-   CIDRs; reject/flag values matching GitHub endpoints.
-4. **CONNECT listener lacks explicit `MinVersion`**
-   (`cmd/proxy/proxy.go:219`) — metrics listener pins TLS 1.2, the CONNECT
-   listener inherits the Go default. Pin explicitly.
-5. **Tool downloads not checksum-verified** (cosign `Makefile:548`,
-   kubeconform/kustomize `manifest-validate.yml`, shellcheck, polaris).
-   GitHub release assets are replaceable for an existing tag; cosign is
-   the sharpest case (it's the release verifier). Mirror the
-   `KIND_BINARY_SHA256` pattern.
-   - **cosign — RESOLVED.** `scripts/download-cosign.sh` now pins the expected
-     SHA256 per (version, platform) in-repo and refuses to install a binary
-     whose bytes don't match, failing closed on an unpinned version (bumping
-     `COSIGN_VERSION` must add the new digests). The publish pipeline already
-     fetches cosign via the SHA-pinned `sigstore/cosign-installer`; this covers
-     the local `make verify-release` path. Documented in `release.md §
-     Supply-chain integrity`. The remaining tools (kubeconform/kustomize,
-     shellcheck, polaris) are still raw downloads — that part of item 5 stays
-     open in this Q127 row.
-6. **Release images assemble from GHA BuildKit cache**
-   (`publish.yml:129` `cache-from`). Layers of signed releases may come
-   from cache, not the tagged source. Drop `cache-from` (or `no-cache:
-   true`) on tag builds. Related: `moby/buildkit:buildx-stable-1` builder
-   tag is floating — digest-pin it.
-7. **AGC egress allows any destination on 443/6443**
-   (`builder.go:327-332`, rationale in the function comment). The pod
-   holding the GitHub App key has effectively unrestricted 443 egress.
-   Scope to apiserver endpoints where the platform allows, else document
-   the residual in `05-security.md` §5.2.
-8. **Privileged-profile webhook incoherence.** The webhook rejects
-   `privileged: true` on the GMC path unconditionally
-   (`actionsgateway_webhook.go:126`), so the documented Kata/DinD
-   privileged pattern (`05-security.md:161-178`) is rejected even under
-   `securityProfile: privileged`; meanwhile direct RunnerGroup CRs skip
-   the check entirely (PSA is the real backstop). Make the check
-   profile-aware; document PSA as the enforcement layer for the direct
-   path. Optional hardening from the same track: refuse non-HTTPS
-   `GITHUB_API_BASE_URL` overrides outside dev mode
-   (`githubapp/auth.go:129`).
+1. **`namespace-psa-guard` hardcodes the GMC SA username** — **RESOLVED.** The
+   Helm chart is the sole install path (Q142) and both admission-policy templates
+   already parameterize the username from `.Release.Namespace` + the
+   `serviceAccountName` helper, so a GMC installed anywhere is covered. Added a
+   render-level drift guard in `scripts/manifest-validate.sh` (renders under a
+   non-default `--namespace` and asserts the policy matchConditions bind to the
+   rendered GMC ServiceAccount, never a hardcoded `gmc-system` identity), and
+   clarified that the raw `config/admission-policy/*.yaml` is the codegen/envtest
+   fixture, not the deployed artifact.
+2. **No ActionsGateway-singleton guard per namespace** — **RESOLVED.** The
+   validating webhook's `ValidateCreate` now lists existing `ActionsGateway`s in
+   the namespace (via the manager's uncached API reader) and rejects a second
+   one, fail-closed. Covered by an envtest admission-through-apiserver test.
+3. **`proxy.noProxyCIDRs` unvalidated** — **RESOLVED.** The webhook now rejects
+   any `noProxyCIDRs` entry that is not a valid CIDR prefix (`netip.ParsePrefix`),
+   so a hostname like `github.com` can no longer silently bypass the proxy. A CIDR
+   that *covers* GitHub's rotating ranges is intentionally not blocked (an in-tree
+   blocklist would rot); the operator residual is documented. Unit + envtest
+   coverage; CRD field godoc and `03-api-contracts.md` updated to CIDR-only.
+4. **CONNECT listener lacks explicit `MinVersion`** — **RESOLVED.** The CONNECT
+   listener's `tls.Config` now pins `MinVersion: tls.VersionTLS12` (matching the
+   metrics listener). Guarded by `TestProxy_TLS_RejectsBelowTLS12`.
+5. **Tool downloads not checksum-verified** — **RESOLVED.**
+   - **cosign** (done earlier, Q126 PR): `scripts/download-cosign.sh` pins the
+     SHA256 per (version, platform) and fails closed.
+   - **kubeconform / shellcheck / polaris** (this PR): each CI install step now
+     verifies the downloaded tarball against a pinned in-repo SHA256
+     (`sha256sum -c`), failing closed; bump the digest with the version.
+   - **kustomize: N/A** — no longer downloaded in CI. The Helm chart is the sole
+     install path (Q142); `manifest-validate.yml` renders with `helm` only.
+6. **Release images assemble from GHA BuildKit cache** — **RESOLVED.** `publish.yml`
+   tag builds now set `no-cache: true` (was `cache-from: type=gha`), so every layer
+   of a signed release builds from the tagged source, not a PR-populated cache. The
+   `moby/buildkit:buildx-stable-1` builder image is digest-pinned.
+7. **AGC egress allows any destination on 443/6443** — **RESOLVED (documented
+   residual).** Portable scoping is impossible: kube-proxy DNATs the `kubernetes`
+   Service ClusterIP to provider-specific apiserver IPs before NetworkPolicy is
+   evaluated, so a precise `ipBlock` is non-portable and a wrong one severs
+   apiserver access (the PR #59 trap). `05-security.md` §5.2 now documents the
+   residual honestly with its compensating controls; a first-class opt-in
+   (operator-supplied apiserver CIDR allowlist on the AGC NetworkPolicy) is queued
+   as a follow-up.
+8. **Privileged-profile webhook incoherence** — **RESOLVED.** `validateRunnerGroups`
+   is now profile-aware: a `privileged: true` worker container is admitted only
+   under `securityProfile: privileged` (which stamps the namespace PSA to match),
+   and is still rejected under the default `baseline`/`restricted` — secure by
+   default. `05-security.md` §5.3 documents PSA as the enforcement backstop for the
+   direct RunnerGroup path. Unit + envtest coverage.
+   - **Optional hardening CARVED OUT:** refusing non-HTTPS `GITHUB_API_BASE_URL`
+     overrides (`githubapp/auth.go`). Production already blocks this env entirely
+     via `--allow-agc-extra-env` (default-off), so the marginal value is small,
+     while a clean implementation needs a dev-mode escape plumbed through the
+     recently-stabilized e2e gate (the fakegithub base URL is a cluster-DNS
+     `http://…svc.cluster.local`). Deferred to its own Queue item to avoid
+     destabilizing e2e for low gain — see the Q127 PR description.
 
 ## Verified strengths
 

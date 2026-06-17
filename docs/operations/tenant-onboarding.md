@@ -100,6 +100,8 @@ gateway will not fight it.
 
 Apply the `ActionsGateway` CR in the tenant's namespace. Adjust `proxy` and `runnerGroups` for the tenant's workload. The namespace quota is set separately on the namespace (Step 1b), not on this CR.
 
+**One `ActionsGateway` per namespace.** The admission webhook rejects a second `ActionsGateway` in a namespace that already has one — every per-tenant resource has a fixed, namespace-scoped name, so two CRs would contend over them and flap the namespace's PSA labels. To run a second logical gateway (e.g. a `privileged` profile alongside a `baseline` one), give it its own namespace. See [troubleshooting: second ActionsGateway rejected](troubleshooting.md#second-actionsgateway-in-a-namespace-rejected-singleton-guard).
+
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
@@ -118,10 +120,19 @@ spec:
   # Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.
   # Set to "restricted" for stricter isolation, or "privileged" only if the workload
   # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).
+  # A privileged worker container (securityContext.privileged: true in a podTemplate)
+  # is ONLY admitted under securityProfile: privileged — under baseline/restricted the
+  # webhook rejects it. See troubleshooting: privileged worker container rejected.
   securityProfile: baseline
   proxy:
     minReplicas: 2
     maxReplicas: 10
+    # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.
+    # Entries MUST be CIDR prefixes (10.0.0.0/8, or a single host as 203.0.113.5/32) —
+    # a hostname like "github.com" is rejected by admission, because a non-CIDR
+    # NO_PROXY entry would silently route that traffic around the proxy and break
+    # egress-IP attribution. Never list GitHub here; GitHub must go through the proxy.
+    # noProxyCIDRs: ["10.0.0.0/8"]
   # The namespace ResourceQuota is platform-owned and set on the namespace in
   # Step 1b — it is not a field on this CR.
   runnerGroups:

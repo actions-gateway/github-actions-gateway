@@ -268,6 +268,83 @@ func TestWebhook_UpdateRejectsPrivilegedContainer(t *testing.T) {
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
+// Under the explicit privileged securityProfile, the documented Kata/DinD
+// privileged worker pattern must be admitted (Q127): the namespace PSA is
+// stamped `privileged` to match, so the webhook no longer rejects it.
+func TestWebhook_AllowsPrivilegedContainerUnderPrivilegedProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "privileged"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+// The privileged exemption is keyed strictly on the privileged profile; the
+// restricted profile (a hardening) must still reject privileged containers.
+func TestWebhook_RejectsPrivilegedContainerUnderRestrictedProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "restricted"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+// The empty (default) profile maps to baseline and must keep rejecting
+// privileged containers — secure by default, no silent opt-in.
+func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "" // defaults to baseline
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+func TestWebhook_RejectsHostnameInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a")
+	ag.Spec.Proxy.NoProxyCIDRs = []string{"github.com"}
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "noProxyCIDRs")
+	assert.Contains(t, err.Error(), "not a valid CIDR")
+}
+
+func TestWebhook_RejectsBareIPInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a")
+	// A bare IP (no prefix length) is not a CIDR; require explicit /32.
+	ag.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.5"}
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "noProxyCIDRs[0]")
+}
+
+func TestWebhook_AllowsValidNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a")
+	ag.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "203.0.113.5/32", "fd00::/8"}
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_AllowsEmptyNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a") // NoProxyCIDRs nil
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateRejectsHostnameInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	updated := newAG("team-a")
+	updated.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "api.github.com"}
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "noProxyCIDRs[1]")
+}
+
 // agWithPriorityTier returns a tenant-namespace AG whose single RunnerGroup
 // names the given PriorityClass in priorityTiers.
 func agWithPriorityTier(priorityClassName string) *gmcv1alpha1.ActionsGateway {

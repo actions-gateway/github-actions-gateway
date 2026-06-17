@@ -60,14 +60,20 @@ type ProxyConfig struct {
     // +optional
     Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-    // NoProxyCIDRs is a list of CIDR ranges and hostnames appended to the
-    // NO_PROXY environment variable injected into the AGC and worker pods,
-    // preventing Kubernetes API traffic from being routed through the proxy.
-    // The cluster service CIDR must always be included here.
-    // Defaults to ["kubernetes.default.svc.cluster.local","localhost","127.0.0.1","10.96.0.0/12"].
+    // NoProxyCIDRs is a list of CIDR prefixes appended to the NO_PROXY
+    // environment variable injected into the AGC and worker pods, excluding those
+    // destinations from the per-tenant egress proxy. Every entry MUST be a valid
+    // CIDR prefix (e.g. "10.0.0.0/8", or a single host as "203.0.113.5/32"); the
+    // admission webhook rejects hostnames and bare IPs, because a non-CIDR
+    // NO_PROXY entry (e.g. "github.com") would be a domain-suffix match that
+    // silently routes that traffic around the proxy and defeats egress-IP
+    // attribution. Never list GitHub here.
+    // Cluster-internal destinations are appended automatically by the GMC
+    // (svc.cluster.local, localhost, 127.0.0.1, 10.96.0.0/12); set this field only
+    // to add a non-default service CIDR.
     // NOTE: 10.96.0.0/12 is the kubeadm default service CIDR. EKS uses 10.100.0.0/16;
-    // GKE and other providers may differ. Operators must override this field when the
-    // cluster service CIDR does not fall within 10.96.0.0/12.
+    // GKE and other providers may differ. Operators must override this field (with a
+    // CIDR) when the cluster service CIDR does not fall within 10.96.0.0/12.
     // To discover the value: kubectl cluster-info dump | grep -m1 service-cluster-ip-range
     // +optional
     NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`

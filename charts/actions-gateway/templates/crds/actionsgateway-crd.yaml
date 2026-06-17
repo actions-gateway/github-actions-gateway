@@ -135,6 +135,19 @@ spec:
                     minimum: 1
                     type: integer
                   noProxyCIDRs:
+                    description: |-
+                      NoProxyCIDRs lists CIDR prefixes appended to the NO_PROXY environment
+                      variable of the AGC and worker pods, excluding those destinations from the
+                      per-tenant egress proxy. Every entry MUST be a valid CIDR prefix (e.g.
+                      "10.0.0.0/8", or a single host as "203.0.113.5/32"); the admission webhook
+                      rejects hostnames and bare IPs. A non-CIDR NO_PROXY entry (e.g.
+                      "github.com") would be treated as a domain-suffix match and silently route
+                      that traffic around the proxy, defeating per-tenant egress-IP attribution —
+                      never list GitHub here. Cluster-internal destinations (the service CIDR,
+                      localhost, the in-cluster API hostname) are appended automatically by the
+                      GMC and need not be set here; override only to add a non-default service
+                      CIDR (discover it via `kubectl cluster-info dump | grep -m1
+                      service-cluster-ip-range`).
                     items:
                       type: string
                     type: array

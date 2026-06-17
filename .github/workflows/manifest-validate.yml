@@ -72,6 +72,10 @@ jobs:
       # validation behaviour); keep in step with the versions
       # `make manifest-validate` is documented against in docs/development/testing.md.
       KUBECONFORM_VERSION: v0.6.7
+      # SHA256 of kubeconform-linux-amd64.tar.gz for KUBECONFORM_VERSION (Q127).
+      # Release assets are mutable for an existing tag; verify before trusting.
+      # Bump this digest alongside KUBECONFORM_VERSION.
+      KUBECONFORM_SHA256: 95f14e87aa28c09d5941f11bd024c1d02fdc0303ccaa23f61cef67bc92619d73
       YAMLLINT_VERSION: 1.37.1
       # Persist kubeconform's downloaded JSON schemas between runs so each run
       # does not re-fetch the schema set from GitHub (a rate-limit flake source).
@@ -86,6 +90,7 @@ jobs:
           set -euo pipefail
           curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/kubeconform.tar.gz" \
             "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  ${RUNNER_TEMP}/kubeconform.tar.gz" | sha256sum -c -
           tar -xzf "${RUNNER_TEMP}/kubeconform.tar.gz" -C "${RUNNER_TEMP}" kubeconform
           sudo install "${RUNNER_TEMP}/kubeconform" /usr/local/bin/kubeconform
           kubeconform -v
