@@ -101,7 +101,10 @@ deliberately: a boolean-looking label value invites the YAML coercion
 footgun (`allow-privileged: true` parses as a boolean, which a string
 label value then rejects or mishandles — and YAML 1.1 coerces
 `yes`/`no`/`on`/`off` too), so a non-boolean keyword is both safer to
-author and self-documenting. The value is matched exactly.
+author and self-documenting. The value is matched exactly. This is the
+project-wide convention for new operator-set labels and annotations —
+see
+[Kubernetes API conventions](../development/kubernetes-conventions.md#label--annotation-value-conventions).
 
 The gate is **fail-closed**: an absent label, any value other than
 `allowed`, or a namespace the webhook cannot read all leave privileged
