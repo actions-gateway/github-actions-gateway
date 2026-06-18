@@ -33,6 +33,49 @@ func TestCRD_ValidActionsGateway_Accepted(t *testing.T) {
 	assert.Equal(t, "github-app", fetched.Spec.GitHubAppRef.Name)
 }
 
+// TestCRD_ActionsGateway_LogLevel_DefaultsToInfo verifies the apiserver applies
+// the CRD default (info) when spec.logLevel is omitted. The default is enforced
+// by the OpenAPI schema, so it is observable only at the envtest tier — a fake
+// client does not apply defaults. Defaulting to info (never debug) keeps a CR
+// that omits the field from silently running at debug verbosity.
+func TestCRD_ActionsGateway_LogLevel_DefaultsToInfo(t *testing.T) {
+	const nsName = "team-crd-loglevel-default"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	ag := newActionsGateway("loglevel-default-ag", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, ag),
+		"an ActionsGateway omitting spec.logLevel must be accepted")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	var fetched gmcv1alpha1.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "loglevel-default-ag"}, &fetched))
+	assert.Equal(t, "info", fetched.Spec.LogLevel,
+		"spec.logLevel must default to info when omitted")
+}
+
+// TestCRD_ActionsGateway_LogLevel_InvalidValue_Rejected verifies the CRD enum
+// (info|debug) rejects any other value at the apiserver. A conforming value
+// (debug) is accepted in the same test to guard against an over-tight enum.
+func TestCRD_ActionsGateway_LogLevel_InvalidValue_Rejected(t *testing.T) {
+	const nsName = "team-crd-loglevel-enum"
+	createNamespace(t, nsName)
+	createGitHubAppSecret(t, nsName, "github-app")
+
+	bad := newActionsGateway("loglevel-bad-ag", nsName, "github-app")
+	bad.Spec.LogLevel = "trace" // not in the enum
+	err := k8sClient.Create(ctx, bad)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), bad)) })
+	require.Error(t, err, "ActionsGateway with an out-of-enum spec.logLevel must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected an Invalid API error, got: %v", err)
+
+	good := newActionsGateway("loglevel-good-ag", nsName, "github-app")
+	good.Spec.LogLevel = "debug"
+	require.NoError(t, k8sClient.Create(ctx, good),
+		"ActionsGateway with spec.logLevel=debug must be accepted")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), good) })
+}
+
 // TestCRD_ActionsGateway_MissingGitHubURL_Rejected verifies the apiserver rejects
 // an ActionsGateway with no gitHubURL — the field is required (MinLength=1), so a
 // gateway with nothing to register against cannot be created. This is enforced by

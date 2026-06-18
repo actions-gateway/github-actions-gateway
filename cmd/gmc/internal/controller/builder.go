@@ -130,6 +130,12 @@ const (
 	// +kubebuilder:default; kept here so hand-applied CRs without the field
 	// still get baseline rather than an empty (unenforced) profile.
 	defaultSecurityProfile = "baseline"
+
+	// defaultLogLevel is the log verbosity threaded to the AGC and proxy when an
+	// ActionsGateway omits spec.logLevel. Mirrors the CRD's +kubebuilder:default;
+	// kept here so a hand-applied CR without the field still runs at info rather
+	// than emitting an empty LOG_LEVEL the workloads would have to interpret.
+	defaultLogLevel = "info"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -141,6 +147,15 @@ func securityProfileOrDefault(profile string) string {
 		return defaultSecurityProfile
 	}
 	return profile
+}
+
+// logLevelOrDefault returns the configured log level, falling back to
+// defaultLogLevel when unset. Threaded to the AGC and proxy as LOG_LEVEL.
+func logLevelOrDefault(level string) string {
+	if level == "" {
+		return defaultLogLevel
+	}
+	return level
 }
 
 // hardenedContainerSecurityContext returns the restricted container
@@ -515,6 +530,12 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						Env: []corev1.EnvVar{
+							// LOG_LEVEL mirrors spec.logLevel (info|debug, default
+							// info) — the same per-tenant verbosity knob threaded to
+							// the AGC. The proxy reads it to set its slog level
+							// (cmd/proxy/main.go); changing it rolls the proxy
+							// Deployment, so it is a rolling restart, not a hot reload.
+							{Name: "LOG_LEVEL", Value: logLevelOrDefault(ag.Spec.LogLevel)},
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
 							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
 							{Name: "PROXY_METRICS_PORT", Value: fmt.Sprintf("%d", metricsPort)},
@@ -823,6 +844,14 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 		// applies the CRD default, but be explicit so a hand-applied CR without
 		// the field still gets the hardened defaults rather than none).
 		{Name: "SECURITY_PROFILE", Value: securityProfileOrDefault(ag.Spec.SecurityProfile)},
+		// LOG_LEVEL mirrors spec.logLevel (info|debug, default info) so an
+		// operator can crank one tenant's AGC to debug for a bug repro via
+		// `kubectl edit ag`, no GMC redeploy. The AGC reads it to set its zap
+		// level (cmd/agc/main.go); changing it rolls the AGC Deployment (the env
+		// is part of the pod template), so it is a rolling restart, not a hot
+		// reload. Default to info when unset so a hand-applied CR never silently
+		// runs at debug verbosity.
+		{Name: "LOG_LEVEL", Value: logLevelOrDefault(ag.Spec.LogLevel)},
 		// GITHUB_RUNNER_VERSION is the pinned actions/runner version (single
 		// source of truth: agcnames.RunnerVersion, which also drives the AGC's
 		// default worker image). The AGC forwards it as agent.version on

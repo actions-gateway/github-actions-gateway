@@ -39,9 +39,11 @@ The controllers (GMC, AGC) take controller-runtime's standard `zap` flags. For l
 
 The egress proxy and the worker wrapper are not controllers; they read their level from the `LOG_LEVEL` environment variable (`info` | `debug`, default `info`).
 
+**Per-tenant log level (GMC-managed AGCs).** For a tenant the GMC provisions, you do not set `--zap-log-level` or `LOG_LEVEL` by hand. Set `spec.logLevel` (`info` | `debug`, default `info`) on the `ActionsGateway` CR and the GMC threads it to **both** the AGC and that tenant's egress proxy as `LOG_LEVEL` (the AGC honors `LOG_LEVEL` unless an explicit `--zap-log-level` flag is passed; the GMC never stamps one). Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not a hot reload. See [tenant onboarding — per-tenant log level](tenant-onboarding.md#per-tenant-log-level).
+
 ### Debug diagnostics for otherwise-silent paths
 
-Several paths that can stall a tenant or a session emit **debug**-level diagnostics (suppressed at the default info level). Raise the component to debug — `--zap-log-level=debug` for a controller, `LOG_LEVEL=debug` for the proxy/worker — to surface them. Useful `grep` anchors:
+Several paths that can stall a tenant or a session emit **debug**-level diagnostics (suppressed at the default info level). Raise the component to debug to surface them — for a GMC-managed tenant, set `spec.logLevel: debug` on the `ActionsGateway` (the GMC threads it to the AGC and proxy); for a standalone controller, `--zap-log-level=debug`; for a standalone proxy/worker, `LOG_LEVEL=debug`. Useful `grep` anchors:
 
 | Path | Component | Log message substring |
 |---|---|---|
@@ -54,8 +56,9 @@ Several paths that can stall a tenant or a session emit **debug**-level diagnost
 These per-session/per-job lines are at **debug** by design: at thousands of
 concurrent sessions they dominate log volume, so the default info stream carries
 only the operator-relevant lifecycle events (concurrency-ceiling holds, quota
-and eviction retries, errors). Raise the AGC to `--zap-log-level=debug` to follow
-an individual job.
+and eviction retries, errors). Raise the AGC to debug — `spec.logLevel: debug`
+for a GMC-managed tenant, or `--zap-log-level=debug` standalone — to follow an
+individual job.
 
 **Correlation fields.** AGC log lines carry structured fields that let you follow
 one session→job→pod through a log pipeline. Filter on `namespace` and `group`

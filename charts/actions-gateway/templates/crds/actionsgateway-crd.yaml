@@ -117,6 +117,20 @@ spec:
                 minLength: 1
                 pattern: ^https://
                 type: string
+              logLevel:
+                default: info
+                description: |-
+                  LogLevel controls the log verbosity of this tenant's AGC and egress proxy.
+                  Allowed values: info (default), debug. The GMC threads it to both
+                  workloads as the LOG_LEVEL environment variable; changing it is a rolling
+                  restart of the AGC and proxy (not a hot reload), so the new level takes
+                  effect once the pods roll. Use debug only for a bug repro — at thousands of
+                  concurrent sessions the per-session/per-job debug lines dominate log volume.
+                  The default is info so a tenant never silently runs at debug verbosity.
+                enum:
+                - info
+                - debug
+                type: string
               proxy:
                 description: ProxyConfig configures the per-tenant egress proxy pool.
                 properties:

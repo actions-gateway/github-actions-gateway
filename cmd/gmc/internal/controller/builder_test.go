@@ -233,6 +233,36 @@ func TestBuildAGCDeployment_RunnerVersionEnv(t *testing.T) {
 		"GITHUB_RUNNER_VERSION must equal the pinned agcnames.RunnerVersion")
 }
 
+// TestBuildAGCDeployment_LogLevel verifies spec.logLevel is threaded to the AGC
+// Deployment as the LOG_LEVEL env var: info by default (so a CR without the
+// field never silently runs at debug verbosity) and the explicit value when set.
+func TestBuildAGCDeployment_LogLevel(t *testing.T) {
+	def := buildAGCDeployment(newTestAG("gateway", "team-a"), "agc:latest", "http://proxy:8080", nil)
+	assert.Equal(t, "info", envMap(def.Spec.Template.Spec.Containers[0].Env)["LOG_LEVEL"].Value,
+		"LOG_LEVEL must default to info when spec.logLevel is unset")
+
+	dbg := newTestAG("gateway", "team-a")
+	dbg.Spec.LogLevel = "debug"
+	depDbg := buildAGCDeployment(dbg, "agc:latest", "http://proxy:8080", nil)
+	assert.Equal(t, "debug", envMap(depDbg.Spec.Template.Spec.Containers[0].Env)["LOG_LEVEL"].Value,
+		"LOG_LEVEL must reflect spec.logLevel=debug")
+}
+
+// TestBuildProxyDeployment_LogLevel verifies spec.logLevel is threaded to the
+// proxy Deployment as LOG_LEVEL identically to the AGC — the same per-tenant
+// verbosity knob flows to both workloads.
+func TestBuildProxyDeployment_LogLevel(t *testing.T) {
+	def := buildProxyDeployment(newTestAG("gateway", "team-a"), "proxy:latest")
+	assert.Equal(t, "info", envMap(def.Spec.Template.Spec.Containers[0].Env)["LOG_LEVEL"].Value,
+		"proxy LOG_LEVEL must default to info when spec.logLevel is unset")
+
+	dbg := newTestAG("gateway", "team-a")
+	dbg.Spec.LogLevel = "debug"
+	depDbg := buildProxyDeployment(dbg, "proxy:latest")
+	assert.Equal(t, "debug", envMap(depDbg.Spec.Template.Spec.Containers[0].Env)["LOG_LEVEL"].Value,
+		"proxy LOG_LEVEL must reflect spec.logLevel=debug")
+}
+
 // TestBuildAGCDeployment_GitHubURL verifies that spec.gitHubURL is threaded to
 // the AGC Deployment as the GITHUB_ORG_URL env var — the first-class production
 // path that replaces the testing-only AGC_EXTRA_GITHUB_ORG_URL passthrough.

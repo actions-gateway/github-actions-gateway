@@ -183,6 +183,19 @@ type ActionsGatewaySpec struct {
 	// +kubebuilder:default=baseline
 	SecurityProfile string `json:"securityProfile,omitempty"`
 
+	// LogLevel controls the log verbosity of this tenant's AGC and egress proxy.
+	// Allowed values: info (default), debug. The GMC threads it to both
+	// workloads as the LOG_LEVEL environment variable; changing it is a rolling
+	// restart of the AGC and proxy (not a hot reload), so the new level takes
+	// effect once the pods roll. Use debug only for a bug repro — at thousands of
+	// concurrent sessions the per-session/per-job debug lines dominate log volume.
+	// The default is info so a tenant never silently runs at debug verbosity.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=info;debug
+	// +kubebuilder:default=info
+	LogLevel string `json:"logLevel,omitempty"`
+
 	// Tracing configures opt-in OpenTelemetry distributed tracing for this
 	// tenant's AGC. Tracing stays off unless tracing.endpoint is set.
 	//

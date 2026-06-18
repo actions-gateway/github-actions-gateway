@@ -201,6 +201,30 @@ path. Operator-facing grep anchors documented in
 
 ## Theme G — CRD-driven per-tenant log level (Q89) — post-1.0
 
+✅ **Resolved** — `spec.logLevel` (enum `info|debug`, default `info`) added to
+`ActionsGateway`. The GMC threads it to **both** the AGC and the egress proxy as
+the `LOG_LEVEL` environment variable in `builder.go` (`buildAGCDeployment` and
+`buildProxyDeployment` via `logLevelOrDefault`), exactly as `spec.securityProfile`
+flows as `SECURITY_PROFILE`. The proxy already read `LOG_LEVEL` (Theme A); the AGC
+now reads it too (`cmd/agc/main.go` `zapLevelFromEnv`) to set its zap level unless
+an explicit `--zap-log-level` flag is passed — the GMC never stamps one, so in
+production `LOG_LEVEL` is the sole level source. Because the env lives on the pod
+template, flipping `spec.logLevel` is a **rolling restart** of the AGC and proxy
+(not a hot reload). Default is `info`, never `debug`, so a CR omitting the field
+never silently runs at debug verbosity. `debug` surfaces the Theme D/F
+per-session/per-job correlation lines. Tests: envtest defaulting + enum rejection
+(`crd_admission_test.go`) and the restart-on-change path
+(`log_level_test.go`); builder unit tests for both Deployments
+(`builder_test.go`); AGC level-mapping unit test (`main_test.go`). Docs updated:
+[03-api-contracts.md](../design/03-api-contracts.md),
+[02-architecture.md](../design/02-architecture.md),
+[tenant-onboarding.md](../operations/tenant-onboarding.md), and
+[observability.md](../operations/observability.md).
+
+---
+
+### Original plan
+
 Add `spec.logLevel` (enum `info|debug`, default `info`) to `ActionsGateway`
 (`cmd/gmc/api/v1alpha1/actionsgateway_types.go`), threaded by the GMC into the
 AGC + proxy **exactly** the way `spec.securityProfile` already flows:

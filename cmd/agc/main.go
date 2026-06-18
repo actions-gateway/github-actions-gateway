@@ -43,6 +43,8 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
+	uberzap "go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -104,6 +106,21 @@ const (
 	healthProbeBindAddress = ":8081"
 )
 
+// zapLevelFromEnv maps the LOG_LEVEL env value (info|debug, default info) to a
+// zap level override, or nil when no override is needed. "debug" returns a
+// debug AtomicLevel so the AGC surfaces the per-session/per-job debug lines
+// (logging-audit Theme F); "info" and "" return nil so the caller leaves
+// zap.Options at its production default (info). Any other value is treated as
+// info — the CRD enum already rejects out-of-range values before they reach the
+// AGC, so this is only a defensive fallback. Mirrors cmd/proxy's logLevelFromEnv.
+func zapLevelFromEnv(v string) zapcore.LevelEnabler {
+	if strings.EqualFold(v, "debug") {
+		lvl := uberzap.NewAtomicLevelAt(zapcore.DebugLevel)
+		return &lvl
+	}
+	return nil
+}
+
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
 	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
@@ -119,6 +136,18 @@ func run() error {
 	zapOpts := zap.Options{Development: false}
 	zapOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
+	// LOG_LEVEL (info|debug, default info) is the per-tenant verbosity knob the
+	// GMC threads from ActionsGateway.spec.logLevel (logging-audit Theme G),
+	// mirroring how spec.securityProfile flows as SECURITY_PROFILE. BindFlags only
+	// sets zapOpts.Level when --zap-log-level is passed explicitly, so applying
+	// the env solely when Level is still nil lets a local developer's flag win;
+	// the GMC never stamps logging flags onto the AGC Deployment, so in
+	// production LOG_LEVEL is the sole level source.
+	if zapOpts.Level == nil {
+		if lvl := zapLevelFromEnv(os.Getenv("LOG_LEVEL")); lvl != nil {
+			zapOpts.Level = lvl
+		}
+	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	// Bridge log/slog onto the same zap logger. The listener, provisioner, and
 	// agentpool packages log through log/slog; without this, slog.Default() is
