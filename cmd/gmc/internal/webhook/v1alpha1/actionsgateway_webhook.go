@@ -251,7 +251,7 @@ func (v *ActionsGatewayCustomValidator) validateSingleton(ctx context.Context, a
 
 // validatePrivilegedEligibility rejects an ActionsGateway requesting
 // securityProfile: privileged unless its namespace carries
-// AllowPrivilegedProfileLabel set to AllowPrivilegedProfileValue ("true") — at
+// PrivilegedProfileLabel set to PrivilegedProfileAllowed ("true") — at
 // create OR update (Q133). It closes a self-granted-escalation gap: a tenant
 // owns the ActionsGateway CR and may freely set securityProfile: privileged at
 // create (only *downgrades* are otherwise gated, by
@@ -291,14 +291,14 @@ func (v *ActionsGatewayCustomValidator) validatePrivilegedEligibility(ctx contex
 		return fmt.Errorf(
 			"cannot verify privileged eligibility for namespace %q: %w; securityProfile: privileged requires the "+
 				"namespace label %s=%s applied by a platform administrator",
-			ag.Namespace, err, gmcv1alpha1.AllowPrivilegedProfileLabel, gmcv1alpha1.AllowPrivilegedProfileValue)
+			ag.Namespace, err, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed)
 	}
-	if ns.Labels[gmcv1alpha1.AllowPrivilegedProfileLabel] != gmcv1alpha1.AllowPrivilegedProfileValue {
+	if ns.Labels[gmcv1alpha1.PrivilegedProfileLabel] != gmcv1alpha1.PrivilegedProfileAllowed {
 		return fmt.Errorf(
 			"securityProfile: privileged is not eligible in namespace %q: it requires the namespace label %s=%s, "+
 				"which only a platform administrator may apply — privileged eligibility is a platform decision and is "+
 				"deliberately not tenant-settable",
-			ag.Namespace, gmcv1alpha1.AllowPrivilegedProfileLabel, gmcv1alpha1.AllowPrivilegedProfileValue)
+			ag.Namespace, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed)
 	}
 	return nil
 }

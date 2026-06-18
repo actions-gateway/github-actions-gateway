@@ -21,7 +21,7 @@ Why:
   `"true"` (quoted) every time. YAML 1.1 coerces `yes`/`no`/`on`/`off` (and
   their capitalised variants) the same way, so the trap is wider than just
   `true`/`false`.
-- **Self-documenting.** `actions-gateway.github.com/allow-privileged: allowed`
+- **Self-documenting.** `actions-gateway.github.com/privileged-profile: allowed`
   reads as a deliberate grant. `…: "true"` carries no meaning and invites the
   reader to drop the quotes.
 
@@ -35,10 +35,10 @@ than silently granted.
 ```yaml
 metadata:
   labels:
-    actions-gateway.github.com/allow-privileged: allowed   # not "true"
+    actions-gateway.github.com/privileged-profile: allowed   # not "true"
 ```
 
-See `AllowPrivilegedProfileValue` in
+See `PrivilegedProfileLabel` / `PrivilegedProfileAllowed` in
 [`cmd/gmc/api/v1alpha1/actionsgateway_types.go`](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)
 and [§5.3 of the security design](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 

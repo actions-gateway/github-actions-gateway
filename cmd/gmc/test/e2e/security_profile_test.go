@@ -22,11 +22,11 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-		// The allow-privileged label is the platform-applied eligibility gate for
+		// The privileged-profile label is the platform-applied eligibility gate for
 		// securityProfile: privileged (Q133); the privileged sub-test below patches
 		// the CR to privileged, which the validating webhook rejects without it.
 		utils.CreateNamespace(ns, map[string]string{
-			gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+			gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 		})
 		utils.CreateGitHubAppSecret(ns, secretName, 55555, 66666, testRSAKeyPEM)
 		utils.ApplyActionsGatewayCR(ns, agName, secretName)

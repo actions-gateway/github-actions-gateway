@@ -170,12 +170,12 @@ func TestWebhookAdmission_Singleton(t *testing.T) {
 // once a tenant explicitly opts into securityProfile: privileged, the apiserver
 // admits the documented Kata/DinD privileged worker pattern that is otherwise
 // rejected under the (default) baseline profile. The namespace carries the
-// platform-applied allow-privileged label (Q133), without which privileged would
+// platform-applied privileged-profile label (Q133), without which privileged would
 // be ineligible regardless of the container's securityContext.
 func TestWebhookAdmission_PrivilegedProfileAllowsPrivilegedContainer(t *testing.T) {
 	const nsName = "team-webhook-privileged-profile"
 	createNamespaceWithLabels(t, nsName, map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 	})
 
 	privileged := true
@@ -202,16 +202,16 @@ func TestWebhookAdmission_PrivilegedProfileAllowsPrivilegedContainer(t *testing.
 // TestWebhookAdmission_PrivilegedProfileEligibility verifies the platform-gated
 // eligibility for securityProfile: privileged through the real apiserver (Q133).
 // privileged is rejected at CREATE and at UPDATE in a namespace that lacks the
-// platform-applied allow-privileged label, and admitted once the label is
+// platform-applied privileged-profile label, and admitted once the label is
 // present — closing the create-time self-escalation gap (a tenant could
 // otherwise self-select the cluster's least-restrictive PSA posture). The label
 // is a platform decision, never tenant-settable.
 func TestWebhookAdmission_PrivilegedProfileEligibility(t *testing.T) {
 	const unlabeledNS = "team-webhook-privileged-eligibility-unlabeled"
 	const labeledNS = "team-webhook-privileged-eligibility-labeled"
-	createNamespace(t, unlabeledNS) // no allow-privileged label
+	createNamespace(t, unlabeledNS) // no privileged-profile label
 	createNamespaceWithLabels(t, labeledNS, map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 	})
 
 	// CREATE rejected: privileged in an unlabeled namespace is a self-granted
@@ -223,7 +223,7 @@ func TestWebhookAdmission_PrivilegedProfileEligibility(t *testing.T) {
 	require.Error(t, err, "creating a privileged-profile ActionsGateway in an unlabeled namespace must be rejected")
 	assert.Contains(t, err.Error(), "not eligible",
 		"rejection must come from the GMC privileged-eligibility gate")
-	assert.Contains(t, err.Error(), gmcv1alpha1.AllowPrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
 
 	// CREATE admitted: same request in a labeled namespace.
 	good := newActionsGateway("priv-eligibility-ok", labeledNS, "github-app")
@@ -247,7 +247,7 @@ func TestWebhookAdmission_PrivilegedProfileEligibility(t *testing.T) {
 		ag.Spec.SecurityProfile = "privileged"
 	})
 	require.Error(t, err, "raising securityProfile to privileged in an unlabeled namespace must be rejected on update")
-	assert.Contains(t, err.Error(), gmcv1alpha1.AllowPrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
 }
 
 // TestWebhookAdmission_NoProxyCIDRs verifies the apiserver rejects a

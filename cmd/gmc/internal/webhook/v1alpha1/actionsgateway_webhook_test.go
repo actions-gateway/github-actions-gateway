@@ -331,7 +331,7 @@ func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
 // --- Privileged-profile eligibility gate (Q133) ---------------------------
 //
 // securityProfile: privileged is eligible only in a namespace a platform admin
-// has labelled actions-gateway.github.com/allow-privileged=allowed. The gate is
+// has labelled actions-gateway.github.com/privileged-profile=allowed. The gate is
 // fail-closed: absent the label (or a wrong value, or an unreadable namespace),
 // privileged is rejected at create AND update. A tenant cannot self-grant it.
 
@@ -347,7 +347,7 @@ func TestWebhook_RejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T) {
 	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", nil))
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
 	require.Error(t, err, "privileged is not eligible without the platform label")
-	assert.Contains(t, err.Error(), gmcv1alpha1.AllowPrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
 	assert.Contains(t, err.Error(), "not eligible")
 	assert.Contains(t, err.Error(), "not tenant-settable")
 }
@@ -355,11 +355,11 @@ func TestWebhook_RejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T) {
 func TestWebhook_RejectsPrivilegedProfileWithWrongLabelValue(t *testing.T) {
 	// A present-but-non-"true" value must not grant eligibility (fail closed).
 	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: "yes",
+		gmcv1alpha1.PrivilegedProfileLabel: "yes",
 	}))
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), gmcv1alpha1.AllowPrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
 }
 
 func TestWebhook_RejectsPrivilegedProfileWhenNamespaceUnreadable(t *testing.T) {
@@ -373,7 +373,7 @@ func TestWebhook_RejectsPrivilegedProfileWhenNamespaceUnreadable(t *testing.T) {
 
 func TestWebhook_AllowsPrivilegedProfileInLabeledNamespace(t *testing.T) {
 	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 	}))
 	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
 	require.NoError(t, err, "privileged is eligible once the platform applies the label")
@@ -398,7 +398,7 @@ func TestWebhook_UpdateRejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T
 	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}
 	_, err := v.ValidateUpdate(context.Background(), agWithProfile("baseline"), newObj)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), gmcv1alpha1.AllowPrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
 }
 
 // On update, raising to privileged is admitted once the namespace is labelled
@@ -406,7 +406,7 @@ func TestWebhook_UpdateRejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T
 // downgrade in rank).
 func TestWebhook_UpdateAllowsPrivilegedProfileInLabeledNamespace(t *testing.T) {
 	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 	}))
 	newObj := agWithPrivilegedProfile("team-a")
 	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}

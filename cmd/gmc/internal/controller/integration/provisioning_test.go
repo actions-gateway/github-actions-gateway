@@ -46,7 +46,7 @@ func createNamespace(t *testing.T, name string) {
 
 // createNamespaceWithLabels creates a namespace carrying the given labels. The
 // privileged-eligibility gate (Q133) keys on the
-// actions-gateway.github.com/allow-privileged label, so tests exercising the
+// actions-gateway.github.com/privileged-profile label, so tests exercising the
 // privileged profile through the apiserver use this to apply it.
 func createNamespaceWithLabels(t *testing.T, name string, labels map[string]string) {
 	t.Helper()
@@ -406,11 +406,11 @@ func TestGMC_TenantProvisioning_PSALabelsStamped(t *testing.T) {
 
 func TestGMC_TenantProvisioning_PSALabels_CustomProfile(t *testing.T) {
 	const nsName = "team-psa-privileged"
-	// The allow-privileged label is the platform-applied eligibility gate for
+	// The privileged-profile label is the platform-applied eligibility gate for
 	// securityProfile: privileged (Q133); without it the validating webhook
 	// rejects the privileged-profile create below.
 	createNamespaceWithLabels(t, nsName, map[string]string{
-		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
 	})
 	createGitHubAppSecret(t, nsName, "github-app")
 
