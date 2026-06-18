@@ -291,6 +291,15 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
    and is still rejected under the default `baseline`/`restricted` — secure by
    default. `05-security.md` §5.3 documents PSA as the enforcement backstop for the
    direct RunnerGroup path. Unit + envtest coverage.
+   - **Follow-up CLOSED (Q133):** create-time `securityProfile: privileged` was a
+     self-granted escalation — a tenant owns the CR and only *downgrades* were
+     webhook-gated, so any tenant who could create an `ActionsGateway` could stamp
+     their namespace PSA to `privileged`. The webhook now gates privileged
+     eligibility (create AND update) behind a platform-applied namespace label
+     `actions-gateway.github.com/privileged-profile=allowed`, fail-closed: absent the
+     label privileged is rejected, and the tenant cannot self-grant it (they don't
+     own namespace labels). Unit + envtest coverage; `05-security.md` §5.3,
+     tenant-onboarding, and troubleshooting updated.
    - **Optional hardening CARVED OUT:** refusing non-HTTPS `GITHUB_API_BASE_URL`
      overrides (`githubapp/auth.go`). Production already blocks this env entirely
      via `--allow-agc-extra-env` (default-off), so the marginal value is small,

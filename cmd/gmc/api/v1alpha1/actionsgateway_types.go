@@ -127,6 +127,34 @@ type TracingConfig struct {
 // isolation must be a deliberate, auditable act. See docs/design/05-security.md §5.3.
 const AllowProfileDowngradeAnnotation = "actions-gateway.github.com/allow-profile-downgrade"
 
+// PrivilegedProfileLabel is the namespace label that gates eligibility to run
+// securityProfile: privileged. The GMC validating webhook rejects any
+// ActionsGateway requesting securityProfile: privileged — at create OR update —
+// unless its namespace carries this label set to PrivilegedProfileAllowed.
+// Eligibility to run privileged workers is a platform decision: a platform
+// administrator grants it by labelling the tenant namespace, exactly as they
+// already apply the actions-gateway.github.com/tenant marker (see
+// TenantNamespaceMarkerLabel). A tenant cannot self-grant it — the tenant owns
+// the ActionsGateway CR but not its namespace's labels, and the
+// namespace-psa-guard ValidatingAdmissionPolicy confines even the GMC to the PSA
+// label keys. The gate is fail-closed: an absent label, or any value other than
+// PrivilegedProfileAllowed, leaves privileged ineligible and the request is
+// rejected. See docs/design/05-security.md §5.3.
+const PrivilegedProfileLabel = "actions-gateway.github.com/privileged-profile"
+
+// PrivilegedProfileAllowed is the only value of PrivilegedProfileLabel that
+// grants privileged eligibility. Any other value — or an absent label — leaves
+// the namespace ineligible for securityProfile: privileged (fail closed).
+//
+// It is the enum keyword "allowed" rather than a boolean-looking value
+// deliberately: an unquoted `privileged-profile: true` is a YAML footgun (YAML
+// 1.1 also coerces yes/no/on/off), and a Kubernetes label value must be a
+// string — so a non-boolean enum keyword is both safer to author and
+// self-documenting (its antonym is "denied"). The value is matched exactly, so
+// the footgun cannot silently grant eligibility either way. See
+// docs/development/kubernetes-conventions.md.
+const PrivilegedProfileAllowed = "allowed"
+
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
 //
 // securityProfile changes are gated by the GMC validating webhook rather than a

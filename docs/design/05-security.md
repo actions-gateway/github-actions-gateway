@@ -63,7 +63,72 @@ stamps the corresponding label on the tenant namespace.
 
 The default is `baseline`. A tenant must explicitly set
 `securityProfile: privileged` on the `ActionsGateway` to allow
-privileged worker pods — there is no silent path to it.
+privileged worker pods — there is no silent path to it. And setting it
+is necessary but **not sufficient**: `privileged` is only *eligible* in a
+namespace a platform administrator has opted in — see
+[Privileged eligibility is a platform decision](#privileged-eligibility-is-a-platform-decision)
+below.
+
+### Privileged eligibility is a platform decision
+
+The tenant owns the `ActionsGateway` CR, so a tenant can *self-select*
+`securityProfile: privileged` at create — only *downgrades* of an
+existing CR are otherwise gated (see
+[No silent profile downgrades](#no-silent-profile-downgrades) below).
+That left a self-granted-escalation gap: `privileged` makes the GMC
+stamp the namespace PSA to `privileged`, the cluster's
+least-restrictive pod-security posture, so a tenant who could create an
+`ActionsGateway` could grant their own namespace that posture at
+will (Q133).
+
+Whether a namespace may run privileged workers is a **platform**
+decision, not a tenant one. The GMC validating webhook therefore
+rejects any `ActionsGateway` requesting `securityProfile: privileged`
+— at **create or update** — unless its namespace carries the label
+
+```
+actions-gateway.github.com/privileged-profile: allowed
+```
+
+applied by a platform administrator. This is the same trust model as
+the `actions-gateway.github.com/tenant` marker (see
+[Constraining the GMC's PSA-stamping privilege](#constraining-the-gmcs-psa-stamping-privilege)):
+a label on the *namespace*, an object the tenant does not own and
+cannot edit, set by a trusted identity. The GMC never sets it itself.
+
+The granting value is the enum keyword `allowed`, **not** `true`,
+deliberately: a boolean-looking label value invites the YAML coercion
+footgun (`privileged-profile: true` parses as a boolean, which a string
+label value then rejects or mishandles — and YAML 1.1 coerces
+`yes`/`no`/`on`/`off` too), so a non-boolean keyword is both safer to
+author and self-documenting. The value is matched exactly. This is the
+project-wide convention for new operator-set labels and annotations —
+see
+[Kubernetes API conventions](../development/kubernetes-conventions.md#label--annotation-value-conventions).
+
+The gate is **fail-closed**: an absent label, any value other than
+`allowed`, or a namespace the webhook cannot read all leave privileged
+**ineligible** and the request is rejected. Non-privileged profiles
+(`baseline`, `restricted`, and the empty default) never consult the
+label and are unaffected.
+
+The two privileged gates are independent and both must pass: the
+namespace must be labelled eligible (this check), *and* on an update the
+rank-downgrade guard still requires the
+`actions-gateway.github.com/allow-profile-downgrade` annotation
+(anything → `privileged` is a downgrade in rank). The label is the
+platform's eligibility decision; the annotation is the tenant's
+deliberate, auditable act of relaxing their own profile.
+
+This is a webhook check rather than a CRD CEL `XValidation` rule
+because the decision depends on a label of a *different* object (the
+namespace), which a spec-scoped CEL rule cannot read. The webhook reads
+the namespace's current label through the uncached API reader, so a
+tenant cannot smuggle eligibility in through the CR. Operators grant
+eligibility per
+[Tenant Onboarding](../operations/tenant-onboarding.md); a tenant who
+hits the rejection is pointed at
+[troubleshooting: privileged profile rejected](../operations/troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible).
 
 ### Constraining the GMC's PSA-stamping privilege
 

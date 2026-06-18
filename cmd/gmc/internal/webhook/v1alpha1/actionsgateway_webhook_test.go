@@ -12,11 +12,38 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
+
+// validatorWithNamespaces returns a validator whose API reader is a fake client
+// preloaded with the given namespaces, so the privileged-eligibility gate
+// (validatePrivilegedEligibility) can be exercised in unit tests without a live
+// apiserver. Production wires mgr.GetAPIReader(); these tests wire a fake.
+func validatorWithNamespaces(t *testing.T, namespaces ...*corev1.Namespace) *ActionsGatewayCustomValidator {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
+	objs := make([]client.Object, 0, len(namespaces))
+	for _, ns := range namespaces {
+		objs = append(objs, ns)
+	}
+	v := NewActionsGatewayCustomValidator("", nil)
+	v.reader = fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	return v
+}
+
+// namespaceWithLabels builds a corev1.Namespace carrying the given labels.
+func namespaceWithLabels(name string, labels map[string]string) *corev1.Namespace {
+	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels}}
+}
 
 // captureSink is a minimal logr.LogSink that records Info/Error lines emitted
 // during a test, so the rejection-audit log can be asserted without a live
@@ -299,6 +326,104 @@ func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
 	_, err := v.ValidateCreate(context.Background(), ag)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+// --- Privileged-profile eligibility gate (Q133) ---------------------------
+//
+// securityProfile: privileged is eligible only in a namespace a platform admin
+// has labelled actions-gateway.github.com/privileged-profile=allowed. The gate is
+// fail-closed: absent the label (or a wrong value, or an unreadable namespace),
+// privileged is rejected at create AND update. A tenant cannot self-grant it.
+
+// agWithPrivilegedProfile returns an AG in the given namespace requesting
+// securityProfile: privileged.
+func agWithPrivilegedProfile(namespace string) *gmcv1alpha1.ActionsGateway {
+	ag := newAG(namespace)
+	ag.Spec.SecurityProfile = "privileged"
+	return ag
+}
+
+func TestWebhook_RejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", nil))
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
+	require.Error(t, err, "privileged is not eligible without the platform label")
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
+	assert.Contains(t, err.Error(), "not eligible")
+	assert.Contains(t, err.Error(), "not tenant-settable")
+}
+
+func TestWebhook_RejectsPrivilegedProfileWithWrongLabelValue(t *testing.T) {
+	// A present-but-non-"true" value must not grant eligibility (fail closed).
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
+		gmcv1alpha1.PrivilegedProfileLabel: "yes",
+	}))
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
+}
+
+func TestWebhook_RejectsPrivilegedProfileWhenNamespaceUnreadable(t *testing.T) {
+	// The namespace object is absent from the reader: eligibility cannot be
+	// confirmed, so the request is rejected (fail closed) rather than admitted.
+	v := validatorWithNamespaces(t) // no namespaces preloaded
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot verify privileged eligibility")
+}
+
+func TestWebhook_AllowsPrivilegedProfileInLabeledNamespace(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
+	}))
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
+	require.NoError(t, err, "privileged is eligible once the platform applies the label")
+}
+
+// A non-privileged profile never consults the label — an unlabeled namespace
+// must still admit baseline/restricted.
+func TestWebhook_AllowsNonPrivilegedProfileWithoutLabel(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", nil))
+	for _, profile := range []string{"", "baseline", "restricted"} {
+		_, err := v.ValidateCreate(context.Background(), agWithProfile(profile))
+		require.NoErrorf(t, err, "profile %q must not require the privileged label", profile)
+	}
+}
+
+// On update, raising to privileged in an unlabeled namespace is rejected even
+// when the (separate) downgrade gate would otherwise be satisfied — the platform
+// label is an independent, fail-closed requirement.
+func TestWebhook_UpdateRejectsPrivilegedProfileInUnlabeledNamespace(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", nil))
+	newObj := agWithPrivilegedProfile("team-a")
+	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("baseline"), newObj)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), gmcv1alpha1.PrivilegedProfileLabel)
+}
+
+// On update, raising to privileged is admitted once the namespace is labelled
+// (and the downgrade annotation is present, since anything→privileged is a
+// downgrade in rank).
+func TestWebhook_UpdateAllowsPrivilegedProfileInLabeledNamespace(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
+		gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
+	}))
+	newObj := agWithPrivilegedProfile("team-a")
+	newObj.Annotations = map[string]string{gmcv1alpha1.AllowProfileDowngradeAnnotation: "true"}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("baseline"), newObj)
+	require.NoError(t, err)
+}
+
+// The rejection must leave a server-side audit line (logRejection), the same as
+// the other admission denials.
+func TestWebhook_PrivilegedEligibilityRejectionIsAudited(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", nil))
+	ctx, lines := ctxWithCapture()
+	_, err := v.ValidateCreate(ctx, agWithPrivilegedProfile("team-a"))
+	require.Error(t, err)
+	joined := strings.Join(*lines, "\n")
+	assert.Contains(t, joined, "admission denied")
+	assert.Contains(t, joined, "team-a")
 }
 
 func TestWebhook_RejectsGitHubHostInNoProxyCIDRs(t *testing.T) {

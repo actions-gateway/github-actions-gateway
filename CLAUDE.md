@@ -116,6 +116,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Writing or editing any shell script | `docs/development/bash-style.md` |
 | Updating docs after a change — CRD fields, new behaviour, admission/validation rules, operator-visible changes, security, module dependencies | `docs/development/doc-update-matrix.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
+| Adding a label/annotation an operator sets, or a hand-set CRD field | `docs/development/kubernetes-conventions.md` |
 | Building binaries | `docs/development/building.md` |
 | Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — run `gh pr list` first and skip any Queue item already covered by an open PR |
