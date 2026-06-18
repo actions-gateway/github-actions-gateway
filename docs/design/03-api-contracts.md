@@ -201,6 +201,29 @@ type ActionsGatewaySpec struct {
     // +kubebuilder:validation:Enum=baseline;restricted;privileged
     SecurityProfile string `json:"securityProfile,omitempty"`
 
+    // LogLevel sets the log verbosity of this tenant's AGC and egress proxy:
+    // info (default) or debug. The GMC threads it to both workloads as the
+    // LOG_LEVEL environment variable, exactly as securityProfile flows as
+    // SECURITY_PROFILE. The proxy reads LOG_LEVEL directly; the AGC reads it to
+    // set its zap level unless an explicit --zap-log-level flag is passed (the
+    // GMC never stamps one). Changing it is a rolling restart of the AGC and
+    // proxy Deployments — the value is part of their pod templates — not a hot
+    // reload; the new level takes effect once the pods roll.
+    //
+    // debug surfaces the AGC's per-session/per-job/per-pod lifecycle lines (the
+    // listener/multiplexer/provisioner traces with their correlation fields) and
+    // the proxy's per-CONNECT detail. At thousands of concurrent sessions those
+    // lines dominate log volume, so debug is a deliberate, temporary opt-in for a
+    // bug repro. The default is info — never debug — so a CR that omits the field
+    // never silently runs at debug verbosity (a verbosity/noise regression).
+    // Unlike securityProfile there is no downgrade gate: lowering verbosity is not
+    // a security relaxation, so info<->debug transitions are unconstrained.
+    //
+    // +optional
+    // +kubebuilder:default=info
+    // +kubebuilder:validation:Enum=info;debug
+    LogLevel string `json:"logLevel,omitempty"`
+
     // Tracing configures opt-in OpenTelemetry distributed tracing for this
     // tenant's AGC. The GMC translates these fields into the standard
     // OpenTelemetry OTEL_* environment variables on the AGC Deployment — the
