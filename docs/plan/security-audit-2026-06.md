@@ -296,7 +296,7 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
      webhook-gated, so any tenant who could create an `ActionsGateway` could stamp
      their namespace PSA to `privileged`. The webhook now gates privileged
      eligibility (create AND update) behind a platform-applied namespace label
-     `actions-gateway.github.com/allow-privileged=true`, fail-closed: absent the
+     `actions-gateway.github.com/allow-privileged=allowed`, fail-closed: absent the
      label privileged is rejected, and the tenant cannot self-grant it (they don't
      own namespace labels). Unit + envtest coverage; `05-security.md` §5.3,
      tenant-onboarding, and troubleshooting updated.

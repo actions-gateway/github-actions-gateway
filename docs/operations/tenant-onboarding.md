@@ -29,10 +29,10 @@ Before beginning, confirm all of the following:
 - [ ] **Privileged eligibility granted (only if the tenant needs `privileged`).** `securityProfile: privileged` is a **platform** decision, not tenant-settable: the GMC validating webhook rejects it (at create *and* update) unless the namespace carries the eligibility label, applied by a trusted administrator:
 
   ```bash
-  kubectl label namespace <tenant-namespace> actions-gateway.github.com/allow-privileged=true
+  kubectl label namespace <tenant-namespace> actions-gateway.github.com/allow-privileged=allowed
   ```
 
-  This is a separate gate from the `actions-gateway.github.com/tenant` marker (which authorizes GMC management at all): without `allow-privileged`, the tenant can still run `baseline`/`restricted` but not `privileged`. The gate is fail-closed — absent the label, privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture by creating a CR. Apply this only for tenants approved for docker-in-docker / kernel-module workloads, ideally paired with a sandbox `runtimeClassName`. Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/allow-privileged}'` → `true`. To revoke, remove the label (`…/allow-privileged-`). See [troubleshooting: privileged securityProfile rejected](troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible) and [§5.3](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
+  The granting value is the enum keyword `allowed`, not `true` — a boolean-looking label value is a YAML footgun. This is a separate gate from the `actions-gateway.github.com/tenant` marker (which authorizes GMC management at all): without `allow-privileged`, the tenant can still run `baseline`/`restricted` but not `privileged`. The gate is fail-closed — absent the label (or any value other than `allowed`), privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture by creating a CR. Apply this only for tenants approved for docker-in-docker / kernel-module workloads, ideally paired with a sandbox `runtimeClassName`. Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/allow-privileged}'` → `allowed`. To revoke, remove the label (`…/allow-privileged-`). See [troubleshooting: privileged securityProfile rejected](troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible) and [§5.3](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 
 ---
 
@@ -128,7 +128,7 @@ spec:
   # Set to "restricted" for stricter isolation, or "privileged" only if the workload
   # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).
   # "privileged" requires the namespace to be eligible: a platform admin must label it
-  # actions-gateway.github.com/allow-privileged=true (see Pre-Conditions), else the webhook
+  # actions-gateway.github.com/allow-privileged=allowed (see Pre-Conditions), else the webhook
   # rejects the CR at create/update. It is deliberately not tenant-settable.
   # A privileged worker container (securityContext.privileged: true in a podTemplate)
   # is ONLY admitted under securityProfile: privileged — under baseline/restricted the

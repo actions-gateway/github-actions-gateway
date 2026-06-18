@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
@@ -25,7 +26,7 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		// securityProfile: privileged (Q133); the privileged sub-test below patches
 		// the CR to privileged, which the validating webhook rejects without it.
 		utils.CreateNamespace(ns, map[string]string{
-			"actions-gateway.github.com/allow-privileged": "true",
+			gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
 		})
 		utils.CreateGitHubAppSecret(ns, secretName, 55555, 66666, testRSAKeyPEM)
 		utils.ApplyActionsGatewayCR(ns, agName, secretName)

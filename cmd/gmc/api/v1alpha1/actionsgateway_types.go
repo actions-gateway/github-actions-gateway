@@ -145,7 +145,14 @@ const AllowPrivilegedProfileLabel = "actions-gateway.github.com/allow-privileged
 // AllowPrivilegedProfileValue is the only value of AllowPrivilegedProfileLabel
 // that grants privileged eligibility. Any other value — or an absent label —
 // leaves the namespace ineligible for securityProfile: privileged (fail closed).
-const AllowPrivilegedProfileValue = "true"
+//
+// It is the enum string "allowed" rather than "true" deliberately: an unquoted
+// boolean-looking label value (`allow-privileged: true`) is a YAML footgun
+// (YAML 1.1 also coerces yes/no/on/off), and a Kubernetes label value must be a
+// string — so a non-boolean enum keyword is both safer to author and
+// self-documenting. The value is matched exactly, so this footgun cannot
+// silently grant eligibility either way.
+const AllowPrivilegedProfileValue = "allowed"
 
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
 //

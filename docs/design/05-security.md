@@ -87,7 +87,7 @@ rejects any `ActionsGateway` requesting `securityProfile: privileged`
 — at **create or update** — unless its namespace carries the label
 
 ```
-actions-gateway.github.com/allow-privileged: "true"
+actions-gateway.github.com/allow-privileged: allowed
 ```
 
 applied by a platform administrator. This is the same trust model as
@@ -96,8 +96,15 @@ the `actions-gateway.github.com/tenant` marker (see
 a label on the *namespace*, an object the tenant does not own and
 cannot edit, set by a trusted identity. The GMC never sets it itself.
 
+The granting value is the enum keyword `allowed`, **not** `true`,
+deliberately: a boolean-looking label value invites the YAML coercion
+footgun (`allow-privileged: true` parses as a boolean, which a string
+label value then rejects or mishandles — and YAML 1.1 coerces
+`yes`/`no`/`on`/`off` too), so a non-boolean keyword is both safer to
+author and self-documenting. The value is matched exactly.
+
 The gate is **fail-closed**: an absent label, any value other than
-`"true"`, or a namespace the webhook cannot read all leave privileged
+`allowed`, or a namespace the webhook cannot read all leave privileged
 **ineligible** and the request is rejected. Non-privileged profiles
 (`baseline`, `restricted`, and the empty default) never consult the
 label and are unaffected.

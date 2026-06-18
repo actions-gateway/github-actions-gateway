@@ -331,7 +331,7 @@ func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
 // --- Privileged-profile eligibility gate (Q133) ---------------------------
 //
 // securityProfile: privileged is eligible only in a namespace a platform admin
-// has labelled actions-gateway.github.com/allow-privileged=true. The gate is
+// has labelled actions-gateway.github.com/allow-privileged=allowed. The gate is
 // fail-closed: absent the label (or a wrong value, or an unreadable namespace),
 // privileged is rejected at create AND update. A tenant cannot self-grant it.
 
