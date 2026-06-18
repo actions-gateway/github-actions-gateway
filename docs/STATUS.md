@@ -25,23 +25,23 @@ Last touched: 2026-06-16
 
 Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces remain open in the Queue below.
 
-| Item | Labels | Status | Notes |
-|---|---|---|---|
-| M1: Wire-protocol probe | `milestone` | ✅ | [plan](plan/milestone-1.md) |
-| M1: Unit-test coverage | `milestone` `tests` | ✅ | All 5 gaps closed — [plan](plan/milestone-1-tests.md) |
-| M2: AGC controller | `milestone` | ✅ | All criteria met including live kind check (`activeSessions==1`) — [plan](plan/milestone-2.md) |
-| M3: Worker pod | `milestone` | ✅ | All success criteria met; Tier-C live test green on 2026-05-30 — [plan](plan/milestone-3.md) |
-| M4: GMC + proxy | `milestone` | ✅ | Multi-tenant, delete-isolation, e2e proxy job live-validated 2026-06-12 (helm install + real GitHub); 4 bugs found → Q114 + Q115 + Q116 + Q117 (all fixed) — [plan](plan/milestone-4.md) |
-| M5: Hardening | `milestone` `security` | ⚠️ | Security half + polaris posture scan done; packaging, load test harness open — [plan](plan/milestone-5.md) |
-| Release 1.0 | `milestone` | ✅ | **Shipped 2026-06-16.** `v1.0.0` published as a final release (4 multi-arch images + cosign-signed chart on GHCR, `prerelease: false`), verified live; GitHub Release + GA docs + public site launched at [actions-gateway.com](https://actions-gateway.com/) (<a id="Q129"></a>Q129). Load test ([Q13](#Q13)) & gVisor ([Q15](#Q15)) deferred post-1.0 — [plan](plan/release-1.0.md) |
-| Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
-| Security audit 2 (2026-06) | `security` | ⚠️ | 4 review tracks + govulncheck (clean); new findings queued as Q121–Q128, known/accepted mapped in doc — [plan](plan/security-audit-2026-06.md) |
-| Worker egress proxy | `security` `infra` | ✅ | NetworkPolicy split + Tier-A positive + NP-spec guard shipped; runtime negatives observed enforcing on the Calico profile 2026-06-11 (Q7b); CI leg tracked as [Q119](#Q119) — [plan](plan/worker-egress-proxy.md) |
-| Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
-| Six-layer docs audit | `docs` | ✅ | All six layers audited and fixed (0 broken links/anchors); follow-ons Q51 + Q52 done — [plan](plan/docs-six-layer-audit.md) |
-| Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
-| Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
-| e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
+| Item | Labels | Status |
+|---|---|---|
+| [M1: Wire-protocol probe](plan/milestone-1.md) | `milestone` | ✅ |
+| [M1: Unit-test coverage](plan/milestone-1-tests.md) | `milestone` `tests` | ✅ |
+| [M2: AGC controller](plan/milestone-2.md) | `milestone` | ✅ |
+| [M3: Worker pod](plan/milestone-3.md) | `milestone` | ✅ |
+| [M4: GMC + proxy](plan/milestone-4.md) | `milestone` | ✅ |
+| [M5: Hardening](plan/milestone-5.md) | `milestone` `security` | ⚠️ |
+| [Release 1.0](plan/release-1.0.md) | `milestone` | ✅ |
+| [Security hardening](plan/security.md) | `security` | ⚠️ |
+| [Security audit 2 (2026-06)](plan/security-audit-2026-06.md) | `security` | ⚠️ |
+| [Worker egress proxy](plan/worker-egress-proxy.md) | `security` `infra` | ✅ |
+| [Docs](plan/docs.md) | `docs` | ✅ |
+| [Six-layer docs audit](plan/docs-six-layer-audit.md) | `docs` | ✅ |
+| [Make UX](plan/make.md) | `infra` | ✅ |
+| [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
+| [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 
 ---
 
