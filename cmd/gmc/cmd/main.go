@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"regexp"
 	"strings"
@@ -118,6 +119,14 @@ func main() {
 			"these classes and lists them here; the admission webhook rejects any other "+
 			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
 			"forbids all priorityTiers PriorityClass references.")
+	var apiServerCIDRs string
+	flag.StringVar(&apiServerCIDRs, "apiserver-cidrs", "",
+		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
+			"(443/6443) egress rule. When set, the rule is scoped to these CIDRs (ipBlock) "+
+			"instead of allowing any destination — an opt-in tightening for platforms whose "+
+			"apiserver endpoint exposes a stable CIDR (Q145). Empty (default) keeps the "+
+			"any-destination rule, required where the post-DNAT apiserver IP is not "+
+			"predictable. Each entry must be a valid CIDR; a malformed value fails startup.")
 	// Default to production logging: structured JSON at info level, which log
 	// aggregators can parse out of the box. Developers pass --zap-devel for
 	// human-readable console logs at debug level when running locally. Keeping
@@ -315,6 +324,12 @@ func main() {
 	// given a cached reader.
 	gmcMetrics := controller.NewMetrics(mgr.GetClient())
 
+	parsedAPIServerCIDRs, err := parseAPIServerCIDRs(apiServerCIDRs)
+	if err != nil {
+		setupLog.Error(err, "Invalid --apiserver-cidrs value")
+		os.Exit(1)
+	}
+
 	if err := (&controller.ActionsGatewayReconciler{
 		Client:                      mgr.GetClient(),
 		Scheme:                      mgr.GetScheme(),
@@ -323,6 +338,7 @@ func main() {
 		ProxyImage:                  proxyImage,
 		AGCExtraEnv:                 agcExtraEnv,
 		EnableTenantServiceMonitors: enableTenantServiceMonitors,
+		APIServerCIDRs:              parsedAPIServerCIDRs,
 		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
@@ -389,6 +405,28 @@ func parseAllowedPriorityClasses(raw string) []string {
 		}
 	}
 	return names
+}
+
+// parseAPIServerCIDRs splits the --apiserver-cidrs flag value (comma-separated
+// CIDRs) into a slice, trimming whitespace and dropping empty entries. Each
+// remaining entry must parse as a CIDR; a malformed one returns an error so the
+// GMC fails closed at startup rather than reconciling a NetworkPolicy the
+// apiserver rejects or that silently mis-scopes AGC apiserver egress. An empty
+// or whitespace-only value yields a nil slice, which keeps the AGC NetworkPolicy
+// apiserver-egress rule any-destination (the secure default for Q145).
+func parseAPIServerCIDRs(raw string) ([]string, error) {
+	var cidrs []string
+	for _, part := range strings.Split(raw, ",") {
+		entry := strings.TrimSpace(part)
+		if entry == "" {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(entry); err != nil {
+			return nil, fmt.Errorf("invalid apiserver CIDR %q: %w", entry, err)
+		}
+		cidrs = append(cidrs, entry)
+	}
+	return cidrs, nil
 }
 
 func mustEnv(name string) (string, error) {

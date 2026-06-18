@@ -73,6 +73,22 @@ allowFloatingImageTags: false
 # e.g. allowedPriorityClasses: ["runner-standard", "runner-opportunistic"]
 allowedPriorityClasses: []
 
+# apiServerCIDRs optionally scopes the AGC NetworkPolicy's Kubernetes API server
+# (443/6443) egress rule to a known apiserver CIDR set, passed to the GMC as
+# --apiserver-cidrs. By default this rule allows egress to ANY destination on
+# 443/6443: kube-proxy DNATs the kubernetes Service ClusterIP to a
+# provider-specific apiserver IP *before* NetworkPolicy is evaluated, so a
+# precise ipBlock is not portable and a wrong one silently severs the AGC's
+# apiserver access (the PR #59 post-DNAT trap). Leaving this EMPTY (default)
+# preserves that any-destination behavior — required where the post-DNAT
+# apiserver IP is unpredictable. On a platform whose apiserver endpoint exposes a
+# STABLE CIDR, set it here to tighten the rule to those CIDRs (ipBlock) — an
+# opt-in tightening that narrows the GitHub-App-key exfil surface (Q145,
+# docs/design/05-security.md §5.2). Each entry must be a valid CIDR; the GMC
+# fails startup on a malformed one. See docs/operations/security-operations.md.
+# e.g. apiServerCIDRs: ["10.0.0.1/32", "172.16.0.0/12"]
+apiServerCIDRs: []
+
 # leaderElection gates the --leader-elect flag. Keep enabled when replicaCount
 # > 1, or two active managers will fight over reconciliation.
 leaderElection:
