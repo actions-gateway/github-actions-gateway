@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -75,6 +76,46 @@ func TestValidateImageDigest(t *testing.T) {
 			}
 			if !tt.wantErr && err != nil {
 				t.Errorf("validateImageDigest(%q) = %v, want nil", tt.ref, err)
+			}
+		})
+	}
+}
+
+func TestParseAPIServerCIDRs(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    []string
+		wantErr bool
+	}{
+		{name: "empty yields nil (secure default)", raw: "", want: nil},
+		{name: "whitespace only yields nil", raw: "  ,  , ", want: nil},
+		{name: "single CIDR", raw: "10.0.0.1/32", want: []string{"10.0.0.1/32"}},
+		{
+			name: "multiple with whitespace and empties",
+			raw:  " 10.0.0.0/8 ,, 172.16.0.0/12 ",
+			want: []string{"10.0.0.0/8", "172.16.0.0/12"},
+		},
+		{name: "IPv6 CIDR", raw: "fd00::/8", want: []string{"fd00::/8"}},
+		{name: "bare IP without mask is rejected", raw: "10.0.0.1", wantErr: true},
+		{name: "garbage is rejected", raw: "not-a-cidr", wantErr: true},
+		{name: "one bad entry fails the whole flag", raw: "10.0.0.0/8,bogus", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseAPIServerCIDRs(tt.raw)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseAPIServerCIDRs(%q) = %v, nil; want error", tt.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAPIServerCIDRs(%q) returned error: %v", tt.raw, err)
+			}
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("parseAPIServerCIDRs(%q) = %v, want %v", tt.raw, got, tt.want)
 			}
 		})
 	}

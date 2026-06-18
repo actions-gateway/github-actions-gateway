@@ -120,6 +120,8 @@ Selects the AGC Deployment pods by `app: actions-gateway-controller`. Adds (addi
 
 Both apiserver ports are listed deliberately. NetworkPolicy port matches are evaluated against the **post-DNAT** destination port. Most production clusters expose the apiserver via the `kubernetes` Service at 443 → backends on 443, so a 443-only rule works. Kind (and any cluster where the apiserver Endpoints listen on 6443) translates ClusterIP `10.96.0.1:443` → `<node-ip>:6443`, and the policy evaluator sees 6443 — a 443-only rule silently drops every k8s API call. Allowing both ports keeps the rule precise (only apiserver-style ports) while working in both topologies. See [`docs/development/networkpolicy-port-matching.md`](../development/networkpolicy-port-matching.md) for the diagnosis and a worked repro.
 
+By default this rule has **no destination restriction** (any-dest): the post-DNAT apiserver IP is provider-specific and not predictable at deploy time, so a portable `ipBlock` cannot be hard-coded and any-dest is the secure default (the breadth is the [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped) residual). Operators whose platform exposes a **stable** apiserver CIDR can opt in to scoping it: the GMC's `--apiserver-cidrs` flag (Helm value `apiServerCIDRs`) attaches an `ipBlock` peer per CIDR to this rule (ports unchanged) — an opt-in tightening, validated as CIDRs at GMC startup (Q145). Empty (the default) leaves the rule any-destination. See [security-operations.md § Tightening AGC apiserver egress](../operations/security-operations.md#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist).
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

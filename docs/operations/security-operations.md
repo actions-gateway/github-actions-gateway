@@ -45,6 +45,7 @@ Two detection substrates are used:
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
+- [Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist](#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
@@ -615,6 +616,63 @@ hand-written `NetworkPolicy`:
 
 The labels above are what make all of these targetable; the secure floor stays
 GMC-managed regardless.
+
+---
+
+## Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist
+
+The AGC pod holds the tenant's GitHub App private key and is the only workload
+that needs the Kubernetes API server. The GMC therefore reconciles a NetworkPolicy
+(`actions-gateway-controller`) admitting AGC egress on the apiserver ports **443
+and 6443**. By default that rule has **no destination restriction** (any-dest):
+kube-proxy DNATs the `kubernetes` Service ClusterIP to a provider-specific
+apiserver IP *before* NetworkPolicy is evaluated, so a precise `ipBlock` is not
+portable and a wrong one silently severs the AGC's apiserver access (the PR #59
+post-DNAT trap). That breadth is a documented residual
+([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)):
+a compromised AGC could in principle reach an arbitrary external HTTPS endpoint
+on 443, not just the apiserver.
+
+**If your platform exposes the apiserver on a *stable* CIDR**, you can close that
+residual by scoping the rule to it. Set the chart value `apiServerCIDRs` (passed
+to the GMC as `--apiserver-cidrs`) to the apiserver CIDR set:
+
+```yaml
+# values.yaml — opt-in tightening of the AGC apiserver-egress rule.
+apiServerCIDRs:
+  - "10.0.0.1/32"        # the apiserver's post-DNAT endpoint (single IP)
+  - "172.16.0.0/12"      # or a CIDR covering the control-plane node pool
+```
+
+When set, the GMC scopes every tenant's AGC NetworkPolicy 443/6443 rule to these
+CIDRs via `ipBlock` peers (ports unchanged); when **empty (the default)** the rule
+stays any-destination — no behavior change. This is an **opt-in tightening, never
+a loosening**, applied cluster-wide (the apiserver is the same endpoint for every
+tenant). The GMC **validates each entry as a CIDR at startup and refuses to start
+on a malformed one**, so a typo fails fast rather than reconciling a NetworkPolicy
+the apiserver rejects.
+
+**Finding the right CIDR — and the cost of getting it wrong.** The value must
+cover the destination the AGC's apiserver traffic carries **after** kube-proxy
+DNAT, which is cluster-topology-specific:
+
+- Inspect what `kubernetes.default.svc` resolves/DNATs to. On many managed
+  platforms it is the control-plane node IPs or a load-balancer VIP; confirm with
+  `kubectl get endpoints kubernetes -o wide` (the `ENDPOINTS` are the post-DNAT
+  targets NetworkPolicy evaluates against).
+- A CIDR that is too narrow (or that the platform rotates without notice) will
+  **break the AGC's apiserver access** — the AGC then cannot acquire jobs or
+  manage worker pods for that tenant. Symptom: AGC logs show apiserver dial
+  timeouts after a rollout that introduced or changed `apiServerCIDRs`. **Remedy:
+  widen the CIDR or clear `apiServerCIDRs` to restore the any-destination
+  default.** Treat this as you would any egress tightening — validate on one
+  cluster before fleet-wide rollout, and re-confirm after control-plane scaling
+  or IP changes.
+
+Leave `apiServerCIDRs` unset unless you have a confirmed, stable apiserver CIDR —
+the any-destination default is bounded by the §5.2 compensating controls (key
+mounted read-only, never an env var; workers carry no apiserver egress at all;
+digest-pinned non-root AGC; all GitHub-bound traffic still through the proxy).
 
 ---
 

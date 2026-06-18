@@ -402,9 +402,16 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // policy precise (only apiserver-style ports) while working in both kind and
 // every production deployment topology this controller targets.
 //
-// The egress rule has no `To` restriction because the Kubernetes API server
-// is not a regular pod; its ClusterIP/node IPs are not predictable at
-// controller deploy time across all cloud providers.
+// By default the egress rule has no `To` restriction because the Kubernetes API
+// server is not a regular pod; its ClusterIP/node IPs are not predictable at
+// controller deploy time across all cloud providers. An operator whose platform
+// exposes a *stable* apiserver endpoint CIDR can opt in to scoping this rule via
+// the GMC's --apiserver-cidrs flag (chart value apiServerCIDRs), passed here as
+// apiServerCIDRs: when non-empty, the 443/6443 rule gains an `ipBlock` peer per
+// CIDR — a strict tightening (Q145). When empty (the default), the rule stays
+// any-destination so clusters with unpredictable post-DNAT apiserver IPs keep
+// working. This is an opt-in tightening, never a loosening; the entries are
+// pre-validated as CIDRs at GMC startup.
 //
 // Ingress: the policy declares PolicyTypeIngress (default-deny) and admits only
 // monitoring-namespace scrapes of the metrics port. Nothing else connects to
@@ -412,7 +419,24 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // calls the k8s API, and dials the proxy), so default-deny closes L-8: without
 // this, the AGC NP carried no ingress policy type and any pod in the namespace
 // could scrape per-tenant metrics off the controller-runtime metrics server.
-func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
+func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
+	apiEgress := networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{
+			{Port: ptr(intstr.FromInt32(443))},
+			{Port: ptr(intstr.FromInt32(6443))},
+		},
+	}
+	// Opt-in scoping (Q145): narrow the apiserver-ports rule to the operator's
+	// CIDRs. An empty list leaves `To` nil — any-destination, the secure-default
+	// behavior that does not depend on a predictable apiserver IP.
+	if len(apiServerCIDRs) > 0 {
+		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(apiServerCIDRs))
+		for _, cidr := range apiServerCIDRs {
+			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: cidr}})
+		}
+		apiEgress.To = peers
+	}
+
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
@@ -421,12 +445,7 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Network
 			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
 				dnsEgressRule(),
-				{
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: ptr(intstr.FromInt32(443))},
-						{Port: ptr(intstr.FromInt32(6443))},
-					},
-				},
+				apiEgress,
 			},
 		},
 	}
