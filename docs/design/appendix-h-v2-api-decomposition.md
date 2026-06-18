@@ -9,7 +9,7 @@
 > `ActionsGateway` + `RunnerGroup` model. It is recorded here for review.
 > Nothing in the shipped `v1alpha1` API changes until this is accepted and
 > scheduled. Adopting it is a multi-session effort with a deliberate cutover
-> (see [§H.9](#h9-migration-v2-tool-assisted)).
+> (see [§H.11](#h11-migration-v2-tool-assisted)).
 
 ---
 
