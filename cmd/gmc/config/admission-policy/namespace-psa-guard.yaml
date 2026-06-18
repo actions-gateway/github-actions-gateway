@@ -39,8 +39,16 @@ spec:
         resources: ["namespaces"]
   matchConditions:
     # Only the GMC ServiceAccount is subject to this policy; every other principal
-    # is admitted unchanged. This is the default install identity — if the GMC is
-    # installed under a different namespace or name, update this single string.
+    # is admitted unchanged.
+    #
+    # This file is the codegen + envtest fixture, NOT the deployed artifact: the
+    # Helm chart is the sole install path (Q142) and its template
+    # (charts/actions-gateway/templates/namespace-psa-guard.yaml) parameterizes
+    # this username from .Release.Namespace + the serviceAccountName helper, so a
+    # GMC installed under any namespace/name is covered automatically (asserted by
+    # scripts/manifest-validate.sh). The literal below matches the envtest install
+    # identity; a hand-applied copy of THIS file under a different namespace/name
+    # must update this single string — prefer the chart.
     - name: only-gmc-service-account
       expression: "request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'"
   variables:

@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -49,8 +51,14 @@ func newReservedNamespaces(podNamespace string) map[string]bool {
 // is the platform allowlist of cluster-scoped PriorityClass names tenants may
 // reference in priorityTiers (see ValidateCreate / validatePriorityClasses).
 func SetupActionsGatewayWebhookWithManager(mgr ctrl.Manager, allowedPriorityClasses []string) error {
+	v := NewActionsGatewayCustomValidator(os.Getenv("POD_NAMESPACE"), allowedPriorityClasses)
+	// The per-namespace singleton guard lists existing ActionsGateways. Use the
+	// uncached API reader, not the manager's cache-backed client: a just-created
+	// CR may not be in the informer cache yet, and admitting a second CR through
+	// a stale cache is exactly the race the guard exists to prevent.
+	v.reader = mgr.GetAPIReader()
 	return ctrl.NewWebhookManagedBy(mgr, &gmcv1alpha1.ActionsGateway{}).
-		WithValidator(NewActionsGatewayCustomValidator(os.Getenv("POD_NAMESPACE"), allowedPriorityClasses)).
+		WithValidator(v).
 		Complete()
 }
 
@@ -109,6 +117,14 @@ type ActionsGatewayCustomValidator struct {
 	// allowedPriorityClassList is the sorted allowlist, cached for deterministic
 	// rejection messages.
 	allowedPriorityClassList []string
+
+	// reader lists existing ActionsGateways for the per-namespace singleton
+	// guard (validateSingleton). It is the manager's uncached API reader in
+	// production (wired by SetupActionsGatewayWebhookWithManager). A nil reader
+	// disables the singleton check — unit tests that construct the validator
+	// directly are not exercising it; the integration/e2e and production paths
+	// always wire a reader.
+	reader client.Reader
 }
 
 // logRejection records a server-side audit line whenever an admission request is
@@ -134,6 +150,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "create", obj, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
 	}
+	if err := v.validateSingleton(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "create", obj, err)
+	}
 	if err := validateGitHubAppRef(obj); err != nil {
 		return nil, logRejection(ctx, "create", obj, err)
 	}
@@ -144,6 +163,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 		return nil, logRejection(ctx, "create", obj, err)
 	}
 	if err := v.validatePriorityClasses(obj); err != nil {
+		return nil, logRejection(ctx, "create", obj, err)
+	}
+	if err := validateNoProxyCIDRs(obj); err != nil {
 		return nil, logRejection(ctx, "create", obj, err)
 	}
 	return proxyResourceWarnings(obj), nil
@@ -167,12 +189,56 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := validateSecurityProfileTransition(oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "update", newObj, err)
 	}
+	if err := validateNoProxyCIDRs(newObj); err != nil {
+		return nil, logRejection(ctx, "update", newObj, err)
+	}
 	return proxyResourceWarnings(newObj), nil
 }
 
 // ValidateDelete is a no-op.
 func (v *ActionsGatewayCustomValidator) ValidateDelete(_ context.Context, _ *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	return nil, nil
+}
+
+// validateSingleton rejects creating a second ActionsGateway in a namespace that
+// already has one (Q127). Only one ActionsGateway per namespace is supported:
+// every per-tenant resource (the AGC Deployment, proxy Deployment, Services,
+// NetworkPolicies, RoleBindings) has a fixed, namespace-scoped name, so two CRs
+// fight over the same objects — and because each CR's securityProfile drives the
+// namespace's Pod Security Admission labels, two CRs with different profiles make
+// the GMC flap those labels, intermittently admitting privileged pods. Deleting
+// either CR then tears down the survivor's infrastructure. Rejecting the second
+// create at admission is the clean guard.
+//
+// The check is fail-closed: if the singleton invariant cannot be verified (the
+// List errors), the create is rejected rather than admitted on faith — admitting
+// a possible second CR is the failure mode this guards against. It runs only on
+// CREATE; an update never adds a CR, and the per-namespace name uniqueness the
+// apiserver already enforces means an update cannot turn one CR into two.
+func (v *ActionsGatewayCustomValidator) validateSingleton(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	if v.reader == nil {
+		// No reader wired (unit-test path); the integration/e2e and production
+		// paths always wire one. Skipping here keeps direct-construction unit
+		// tests focused on the validation they exercise.
+		return nil
+	}
+	var existing gmcv1alpha1.ActionsGatewayList
+	if err := v.reader.List(ctx, &existing, client.InNamespace(ag.Namespace)); err != nil {
+		return fmt.Errorf("cannot verify the one-ActionsGateway-per-namespace invariant for namespace %q: %w", ag.Namespace, err)
+	}
+	for i := range existing.Items {
+		// On CREATE the new object is not yet persisted, so any returned item is
+		// pre-existing. Skip a name match defensively (a re-create observed
+		// through an unexpected path must not self-trip).
+		if existing.Items[i].Name == ag.Name {
+			continue
+		}
+		return fmt.Errorf(
+			"an ActionsGateway (%q) already exists in namespace %q; only one ActionsGateway per namespace is supported — "+
+				"a second CR contends over fixed-name per-tenant resources and would flap the namespace's Pod Security Admission labels",
+			existing.Items[i].Name, ag.Namespace)
+	}
+	return nil
 }
 
 // validateGitHubAppRef rejects a non-empty gitHubAppRef.namespace. The field is
@@ -218,11 +284,29 @@ func validateGitHubURL(ag *gmcv1alpha1.ActionsGateway) error {
 	return nil
 }
 
-// validateRunnerGroups rejects privileged containers in any RunnerGroup's PodTemplate.
+// validateRunnerGroups rejects privileged containers in any RunnerGroup's PodTemplate,
+// EXCEPT when the ActionsGateway has explicitly opted into securityProfile: privileged.
 // This check was previously expressed as a CEL x-kubernetes-validations rule on the CRD, but
 // iterating over an unbounded corev1.PodTemplateSpec.containers array exceeds the k8s 1.35
 // CEL cost budget. The admission webhook is the correct place for this validation.
+//
+// Profile-awareness (Q127) resolves an incoherence: securityProfile: privileged is a
+// documented, supported opt-in for Kata/DinD worker patterns (05-security.md), and it makes
+// the GMC stamp the namespace PSA to `privileged` so Pod Security Admission admits privileged
+// pods — yet this webhook still rejected privileged containers unconditionally, making the
+// documented pattern impossible to actually apply. Gating the rejection on the profile keeps
+// the behaviour secure by default (baseline/restricted, including the empty default, still
+// reject privileged) while honouring the explicit privileged opt-in. The GMC-managed path is
+// the only one that flows through this webhook; a directly-applied RunnerGroup CR bypasses it
+// entirely, so Pod Security Admission (stamped per the namespace's profile) is the real
+// enforcement backstop for both paths — see 05-security.md.
 func validateRunnerGroups(ag *gmcv1alpha1.ActionsGateway) error {
+	if effectiveProfile(ag.Spec.SecurityProfile) == "privileged" {
+		// The tenant has explicitly opted into the privileged profile; the
+		// namespace PSA is stamped `privileged` to match, so privileged worker
+		// containers are a coherent, admitted configuration here.
+		return nil
+	}
 	for i, rg := range ag.Spec.RunnerGroups {
 		for _, c := range rg.PodTemplate.Spec.Containers {
 			if isPrivileged(c.SecurityContext) {
@@ -264,6 +348,83 @@ func (v *ActionsGatewayCustomValidator) validatePriorityClasses(ag *gmcv1alpha1.
 		}
 	}
 	return nil
+}
+
+// githubNoProxyHosts is the set of public GitHub hostnames that the AGC and
+// worker pods must always reach *through* the per-tenant egress proxy for the
+// egress-IP attribution to hold. A NO_PROXY entry that matches any of these
+// would route that tenant's GitHub traffic around the proxy. The tenant's own
+// gitHubURL host (including a GitHub Enterprise Server host) is added
+// dynamically in validateNoProxyCIDRs.
+var githubNoProxyHosts = []string{
+	"github.com",
+	"api.github.com",
+	"codeload.github.com",
+	"objects.githubusercontent.com",
+	"raw.githubusercontent.com",
+	"pkg-containers.githubusercontent.com",
+	"ghcr.io",
+}
+
+// validateNoProxyCIDRs rejects any spec.proxy.noProxyCIDRs entry that would route
+// the tenant's GitHub-bound traffic around the per-tenant egress proxy, defeating
+// the egress-IP attribution that isolates tenants. Each entry is threaded
+// verbatim into the AGC/worker NO_PROXY env var (builder.go buildNoProxy), where
+// Go's httpproxy matches a hostname entry as a domain suffix. So an entry like
+// "github.com" (or ".github.com", or an over-broad ".com") would silently
+// exclude GitHub from the proxy — the documented footgun.
+//
+// The check is surgical, not a blanket "CIDRs only" rule: NO_PROXY legitimately
+// takes domain-suffix entries for cluster-internal destinations (the GMC's own
+// default appends svc.cluster.local/localhost, and tenants reach in-cluster
+// services that way), so forbidding all hostnames would break a supported,
+// load-bearing pattern. Only entries that NO_PROXY-match the GitHub hosts the
+// tenant registers against are rejected. A CIDR/IP entry is allowed through here
+// even if it happens to cover GitHub's published ranges — those ranges rotate
+// and an in-tree IP blocklist would rot into a false sense of safety; that
+// residual is the operator's responsibility (see 05-security.md §5.2).
+//
+// This is a webhook check, not a CRD CEL rule, because it depends on the
+// gitHubURL host parse and is version-agnostic (mirroring validateGitHubAppRef).
+func validateNoProxyCIDRs(ag *gmcv1alpha1.ActionsGateway) error {
+	protected := append([]string{}, githubNoProxyHosts...)
+	if u, err := url.Parse(ag.Spec.GitHubURL); err == nil && u.Hostname() != "" {
+		protected = append(protected, u.Hostname())
+	}
+	for i, entry := range ag.Spec.Proxy.NoProxyCIDRs {
+		// CIDR / bare-IP entries cannot be a hostname-suffix bypass; the
+		// IP-range residual is accepted and documented.
+		if _, err := netip.ParsePrefix(entry); err == nil {
+			continue
+		}
+		if _, err := netip.ParseAddr(entry); err == nil {
+			continue
+		}
+		for _, host := range protected {
+			if noProxyHostnameMatches(entry, host) {
+				return fmt.Errorf(
+					"proxy.noProxyCIDRs[%d]: %q would route GitHub traffic (%s) around the per-tenant egress proxy, "+
+						"defeating egress-IP attribution; remove it — GitHub must always traverse the proxy. "+
+						"noProxyCIDRs may exclude internal destinations (CIDRs or domain suffixes), never GitHub",
+					i, entry, host)
+			}
+		}
+	}
+	return nil
+}
+
+// noProxyHostnameMatches reports whether a NO_PROXY hostname entry would match
+// the given host under Go's httpproxy domain-suffix semantics: an entry matches a
+// host that equals it or is a sub-domain of it. A leading dot on the entry is
+// insignificant for this purpose (".github.com" and "github.com" both match
+// "api.github.com"); the comparison is case-insensitive.
+func noProxyHostnameMatches(entry, host string) bool {
+	e := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(entry), "."))
+	h := strings.ToLower(host)
+	if e == "" {
+		return false
+	}
+	return h == e || strings.HasSuffix(h, "."+e)
 }
 
 // securityProfileRank orders the Pod Security Admission profiles from least to

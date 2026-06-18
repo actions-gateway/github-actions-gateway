@@ -218,13 +218,19 @@ jobs:
       # Pin the polaris release scanned. Bump deliberately (new checks can change
       # the verdict); keep in step with the version `make polaris-scan` expects.
       POLARIS_VERSION: 9.6.0
+      # SHA256 of polaris_linux_amd64.tar.gz for POLARIS_VERSION (Q127). Release
+      # assets are mutable for an existing tag; verify before trusting. Bump this
+      # digest alongside POLARIS_VERSION.
+      POLARIS_SHA256: d424a12e27eadbe2e8a92957dad09e30cee919212b06f2e93c465f7b7703d9fe
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       - name: install polaris
         run: |
+          set -euo pipefail
           curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
             "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/polaris_linux_amd64.tar.gz"
+          echo "${POLARIS_SHA256}  ${RUNNER_TEMP}/polaris.tar.gz" | sha256sum -c -
           tar -xzf "${RUNNER_TEMP}/polaris.tar.gz" -C "${RUNNER_TEMP}" polaris
           sudo install "${RUNNER_TEMP}/polaris" /usr/local/bin/polaris
           polaris version

@@ -109,4 +109,31 @@ helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST"
 	--set metrics.serviceMonitor.enabled=true \
 	| kubeconform $kubeconform_flags
 
+echo "==> helm template: admission-policy matchConditions bind to the install-specific GMC ServiceAccount (Q127)"
+# The namespace-psa-guard and tenant-resource-guard policies gate the GMC
+# ServiceAccount by username (system:serviceaccount:<ns>:<name>). That identity
+# MUST track the install (.Release.Namespace + the serviceAccountName helper),
+# never a hardcoded gmc-system identity — a GMC installed elsewhere would
+# otherwise be silently exempt from its own confinement policies. Render under a
+# non-default namespace and assert the rendered username follows it, and that the
+# referenced ServiceAccount is actually one the chart creates.
+psa_render_ns="psa-guard-render-ns"
+psa_render="$(helm template ag "$chart" --namespace "$psa_render_ns" \
+	--set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST")"
+if ! grep -q "system:serviceaccount:${psa_render_ns}:" <<<"$psa_render"; then
+	echo "ERROR: admission-policy matchCondition username is not bound to the install namespace ($psa_render_ns); the GMC SA identity appears hardcoded" >&2
+	exit 1
+fi
+if grep -q "system:serviceaccount:gmc-system:" <<<"$psa_render"; then
+	echo "ERROR: admission-policy matchCondition still references the default gmc-system namespace under a custom --namespace install — username is not parameterized" >&2
+	exit 1
+fi
+psa_sa_ref="$(grep -oE "system:serviceaccount:${psa_render_ns}:[A-Za-z0-9_.-]+" <<<"$psa_render" | head -1)"
+psa_sa_name="${psa_sa_ref##*:}"
+if ! awk -v want="$psa_sa_name" '/^kind:/{k=$2} k=="ServiceAccount" && $1=="name:"{if($2==want)f=1} END{exit f?0:1}' <<<"$psa_render"; then
+	echo "ERROR: admission policies reference ServiceAccount '$psa_sa_name' but the chart renders no such ServiceAccount" >&2
+	exit 1
+fi
+echo "OK: admission-policy matchConditions bind to the rendered GMC ServiceAccount ($psa_sa_ref)"
+
 echo "OK: install artifact validates"

@@ -216,7 +216,13 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		// client then sends an HTTP/1.1 CONNECT line over what is now an HTTP/2
 		// connection and the proxy responds with an HTTP/2 SETTINGS frame —
 		// surfaced to the client as `malformed HTTP response`.
-		TLSConfig:    &tls.Config{NextProtos: []string{"http/1.1"}},
+		//
+		// MinVersion is pinned to TLS 1.2 to match the metrics listener
+		// (metricsTLSConfig) rather than inheriting Go's default floor: the
+		// worker→proxy CONNECT leg carries every tenant's GitHub-bound traffic,
+		// so its TLS floor is a tenant-isolation boundary and must be explicit
+		// and modern, not whatever the toolchain happens to default to.
+		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}},
 		TLSNextProto: map[string]func(*http.Server, *tls.Conn, http.Handler){},
 	}
 

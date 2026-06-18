@@ -268,6 +268,94 @@ func TestWebhook_UpdateRejectsPrivilegedContainer(t *testing.T) {
 	assert.Contains(t, err.Error(), "privileged containers are not permitted")
 }
 
+// Under the explicit privileged securityProfile, the documented Kata/DinD
+// privileged worker pattern must be admitted (Q127): the namespace PSA is
+// stamped `privileged` to match, so the webhook no longer rejects it.
+func TestWebhook_AllowsPrivilegedContainerUnderPrivilegedProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "privileged"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+// The privileged exemption is keyed strictly on the privileged profile; the
+// restricted profile (a hardening) must still reject privileged containers.
+func TestWebhook_RejectsPrivilegedContainerUnderRestrictedProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "restricted"
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+// The empty (default) profile maps to baseline and must keep rejecting
+// privileged containers — secure by default, no silent opt-in.
+func TestWebhook_RejectsPrivilegedContainerUnderDefaultProfile(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := agWithPrivilegedContainer(true)
+	ag.Spec.SecurityProfile = "" // defaults to baseline
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "privileged containers are not permitted")
+}
+
+func TestWebhook_RejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	for _, entry := range []string{"github.com", ".github.com", "api.github.com", "githubusercontent.com", ".com"} {
+		ag := newAG("team-a")
+		ag.Spec.Proxy.NoProxyCIDRs = []string{entry}
+		_, err := v.ValidateCreate(context.Background(), ag)
+		require.Errorf(t, err, "entry %q should be rejected", entry)
+		assert.Contains(t, err.Error(), "noProxyCIDRs[0]")
+		assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+	}
+}
+
+func TestWebhook_RejectsGitHubEnterpriseHostInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a")
+	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
+	// An entry that NO_PROXY-matches the tenant's GHES host bypasses the proxy.
+	ag.Spec.Proxy.NoProxyCIDRs = []string{"example.com"}
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ghes.example.com")
+}
+
+// noProxyCIDRs legitimately takes CIDRs, bare IPs, and non-GitHub domain
+// suffixes (e.g. svc.cluster.local — the in-cluster pattern the project's own
+// defaults and e2e rely on). None of these may be rejected.
+func TestWebhook_AllowsNonGitHubNoProxyEntries(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a")
+	ag.Spec.Proxy.NoProxyCIDRs = []string{
+		"10.0.0.0/8", "203.0.113.5/32", "fd00::/8", // CIDRs
+		"10.0.0.5",                       // bare IP
+		"svc.cluster.local", "localhost", // cluster-internal domain suffixes
+		"internal.example.com", // a non-GitHub internal domain
+	}
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_AllowsEmptyNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	ag := newAG("team-a") // NoProxyCIDRs nil
+	_, err := v.ValidateCreate(context.Background(), ag)
+	require.NoError(t, err)
+}
+
+func TestWebhook_UpdateRejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	updated := newAG("team-a")
+	updated.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "api.github.com"}
+	_, err := v.ValidateUpdate(context.Background(), newAG("team-a"), updated)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "noProxyCIDRs[1]")
+}
+
 // agWithPriorityTier returns a tenant-namespace AG whose single RunnerGroup
 // names the given PriorityClass in priorityTiers.
 func agWithPriorityTier(priorityClassName string) *gmcv1alpha1.ActionsGateway {

@@ -434,6 +434,45 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 	assert.Equal(t, "HTTP/1.1 200 Connection established\r\n", statusLine)
 }
 
+// TestProxy_TLS_RejectsBelowTLS12 asserts the CONNECT listener pins a TLS 1.2
+// floor (Q127): a client that caps its MaxVersion at TLS 1.1 must fail the
+// handshake outright. The worker→proxy CONNECT leg carries every tenant's
+// GitHub-bound traffic, so the floor is a tenant-isolation boundary and must be
+// explicit rather than inherited from the toolchain default.
+func TestProxy_TLS_RejectsBelowTLS12(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	certPath, keyPath := writeTestTLSCert(t)
+
+	reg := prometheus.NewRegistry()
+	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv.TLSCertFile = certPath
+	srv.TLSKeyFile = keyPath
+
+	startServer(t, srv)
+
+	// Client offers only up to TLS 1.1 — below the pinned floor. The handshake
+	// must fail; the proxy must not negotiate a sub-1.2 session.
+	conn, err := tls.Dial("tcp", srv.Addr, &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // G402: test client probing a self-signed local listener
+		MinVersion:         tls.VersionTLS10,
+		MaxVersion:         tls.VersionTLS11,
+	})
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("CONNECT listener accepted a TLS 1.1 handshake; MinVersion floor not enforced")
+	}
+
+	// A TLS 1.2 client must still succeed, proving the floor admits the modern path.
+	ok, err := tls.Dial("tcp", srv.Addr, &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // G402: test client probing a self-signed local listener
+		MinVersion:         tls.VersionTLS12,
+	})
+	require.NoError(t, err, "CONNECT listener rejected a TLS 1.2 handshake")
+	defer func() { _ = ok.Close() }()
+	assert.GreaterOrEqual(t, ok.ConnectionState().Version, uint16(tls.VersionTLS12))
+}
+
 // histogramCount returns the sample count for the first metric in the named
 // histogram, or 0 if the metric is not present.
 func histogramCount(t *testing.T, reg *prometheus.Registry, name string) uint64 {

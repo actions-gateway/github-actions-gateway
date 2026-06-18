@@ -90,17 +90,24 @@ func TestWebhookAdmission_PrivilegedContainer(t *testing.T) {
 // the allow-downgrade annotation, admits a non-downgrade update (baseline ->
 // restricted), and admits the same downgrade once the annotation is present.
 func TestWebhookAdmission_SecurityProfileDowngrade(t *testing.T) {
-	const nsName = "team-webhook-profile"
-	createNamespace(t, nsName)
+	// Each CR lives in its own namespace: the one-ActionsGateway-per-namespace
+	// singleton guard forbids more than one CR per namespace, so the three
+	// transition scenarios below cannot share a namespace.
+	const downgradeNS = "team-webhook-profile-downgrade"
+	const upgradeNS = "team-webhook-profile-upgrade"
+	const annotatedNS = "team-webhook-profile-annotated"
+	createNamespace(t, downgradeNS)
+	createNamespace(t, upgradeNS)
+	createNamespace(t, annotatedNS)
 
 	// Reject: restricted -> baseline without the annotation.
-	downgrade := newActionsGateway("downgrade-ag", nsName, "github-app")
+	downgrade := newActionsGateway("downgrade-ag", downgradeNS, "github-app")
 	downgrade.Spec.SecurityProfile = "restricted"
 	require.NoError(t, k8sClient.Create(ctx, downgrade),
 		"creating a restricted-profile ActionsGateway must be admitted")
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), downgrade) })
 
-	err := updateActionsGateway(t, nsName, "downgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
+	err := updateActionsGateway(t, downgradeNS, "downgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
 		ag.Spec.SecurityProfile = "baseline"
 	})
 	require.Error(t, err, "lowering securityProfile without the annotation must be rejected by the webhook")
@@ -108,26 +115,108 @@ func TestWebhookAdmission_SecurityProfileDowngrade(t *testing.T) {
 		"rejection must come from the GMC validating webhook")
 
 	// Admit: baseline -> restricted (an upgrade) on a fresh CR.
-	upgrade := newActionsGateway("upgrade-ag", nsName, "github-app")
+	upgrade := newActionsGateway("upgrade-ag", upgradeNS, "github-app")
 	upgrade.Spec.SecurityProfile = "baseline"
 	require.NoError(t, k8sClient.Create(ctx, upgrade))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), upgrade) })
-	require.NoError(t, updateActionsGateway(t, nsName, "upgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
+	require.NoError(t, updateActionsGateway(t, upgradeNS, "upgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
 		ag.Spec.SecurityProfile = "restricted"
 	}), "raising securityProfile (an upgrade) must be admitted")
 
 	// Admit: restricted -> baseline once the allow-downgrade annotation is set.
-	annotated := newActionsGateway("annotated-downgrade-ag", nsName, "github-app")
+	annotated := newActionsGateway("annotated-downgrade-ag", annotatedNS, "github-app")
 	annotated.Spec.SecurityProfile = "restricted"
 	require.NoError(t, k8sClient.Create(ctx, annotated))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), annotated) })
-	require.NoError(t, updateActionsGateway(t, nsName, "annotated-downgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
+	require.NoError(t, updateActionsGateway(t, annotatedNS, "annotated-downgrade-ag", func(ag *gmcv1alpha1.ActionsGateway) {
 		if ag.Annotations == nil {
 			ag.Annotations = map[string]string{}
 		}
 		ag.Annotations[gmcv1alpha1.AllowProfileDowngradeAnnotation] = "true"
 		ag.Spec.SecurityProfile = "baseline"
 	}), "a deliberate downgrade carrying the allow-downgrade annotation must be admitted")
+}
+
+// TestWebhookAdmission_Singleton verifies the apiserver admits the first
+// ActionsGateway in a namespace, rejects a second one in the SAME namespace, and
+// still admits one in a DIFFERENT namespace (the guard is per-namespace, not
+// global).
+func TestWebhookAdmission_Singleton(t *testing.T) {
+	const nsName = "team-webhook-singleton"
+	const otherNS = "team-webhook-singleton-other"
+	createNamespace(t, nsName)
+	createNamespace(t, otherNS)
+
+	first := newActionsGateway("first-ag", nsName, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, first),
+		"the first ActionsGateway in a namespace must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), first)) })
+
+	second := newActionsGateway("second-ag", nsName, "github-app")
+	err := k8sClient.Create(ctx, second)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), second)) })
+	require.Error(t, err, "a second ActionsGateway in the same namespace must be rejected by the webhook")
+	assert.Contains(t, err.Error(), "only one ActionsGateway per namespace is supported",
+		"rejection must come from the GMC validating webhook singleton guard")
+
+	// A different namespace is independent — its first CR is admitted.
+	otherFirst := newActionsGateway("other-first-ag", otherNS, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, otherFirst),
+		"the singleton guard is per-namespace; a different namespace's first CR must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), otherFirst)) })
+}
+
+// TestWebhookAdmission_PrivilegedProfileAllowsPrivilegedContainer verifies that
+// once a tenant explicitly opts into securityProfile: privileged, the apiserver
+// admits the documented Kata/DinD privileged worker pattern that is otherwise
+// rejected under the (default) baseline profile.
+func TestWebhookAdmission_PrivilegedProfileAllowsPrivilegedContainer(t *testing.T) {
+	const nsName = "team-webhook-privileged-profile"
+	createNamespace(t, nsName)
+
+	privileged := true
+	rg := agcv1alpha1.RunnerGroupSpec{
+		RunnerLabels: []string{"self-hosted"},
+		MaxListeners: 1,
+		PodTemplate: corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "runner", Image: "runner:test", SecurityContext: &corev1.SecurityContext{Privileged: &privileged}},
+				},
+			},
+		},
+	}
+
+	ag := newActionsGateway("privileged-profile-ag", nsName, "github-app")
+	ag.Spec.SecurityProfile = "privileged"
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{rg}
+	require.NoError(t, k8sClient.Create(ctx, ag),
+		"a privileged container under securityProfile: privileged must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), ag)) })
+}
+
+// TestWebhookAdmission_NoProxyCIDRs verifies the apiserver rejects a
+// non-CIDR proxy.noProxyCIDRs entry (which would silently route matching traffic
+// around the per-tenant egress proxy) and admits well-formed CIDRs.
+func TestWebhookAdmission_NoProxyCIDRs(t *testing.T) {
+	const nsName = "team-webhook-noproxy"
+	createNamespace(t, nsName)
+
+	bad := newActionsGateway("noproxy-github-ag", nsName, "github-app")
+	bad.Spec.Proxy.NoProxyCIDRs = []string{"github.com"}
+	err := k8sClient.Create(ctx, bad)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), bad)) })
+	require.Error(t, err, "a GitHub host in noProxyCIDRs must be rejected by the webhook through the apiserver")
+	assert.Contains(t, err.Error(), "around the per-tenant egress proxy",
+		"rejection must come from the GMC validating webhook")
+
+	// CIDRs and non-GitHub domain suffixes (svc.cluster.local — the in-cluster
+	// pattern the e2e relies on) must be admitted.
+	good := newActionsGateway("noproxy-ok-ag", nsName, "github-app")
+	good.Spec.Proxy.NoProxyCIDRs = []string{"10.0.0.0/8", "203.0.113.5/32", "svc.cluster.local"}
+	require.NoError(t, k8sClient.Create(ctx, good),
+		"CIDRs and non-GitHub domain suffixes in noProxyCIDRs must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), good)) })
 }
 
 // updateActionsGateway fetches the latest version of the named ActionsGateway,

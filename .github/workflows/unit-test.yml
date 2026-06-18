@@ -145,6 +145,10 @@ jobs:
     # install the same version to match (see docs/development/testing.md).
     env:
       SHELLCHECK_VERSION: v0.11.0
+      # SHA256 of shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz (Q127).
+      # GitHub release assets are mutable for an existing tag, so verify the
+      # bytes before trusting the binary; bump this digest alongside the version.
+      SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: install pinned shellcheck
@@ -156,6 +160,7 @@ jobs:
             if curl -fsSL "$url" -o "$RUNNER_TEMP/sc.tar.xz"; then break; fi
             echo "download attempt $attempt failed; retrying" >&2; sleep 5
           done
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/sc.tar.xz" | sha256sum -c -
           tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
           sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
           shellcheck --version

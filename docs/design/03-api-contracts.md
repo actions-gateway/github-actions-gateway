@@ -60,14 +60,23 @@ type ProxyConfig struct {
     // +optional
     Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-    // NoProxyCIDRs is a list of CIDR ranges and hostnames appended to the
-    // NO_PROXY environment variable injected into the AGC and worker pods,
-    // preventing Kubernetes API traffic from being routed through the proxy.
-    // The cluster service CIDR must always be included here.
-    // Defaults to ["kubernetes.default.svc.cluster.local","localhost","127.0.0.1","10.96.0.0/12"].
+    // NoProxyCIDRs is a list of destinations appended to the NO_PROXY environment
+    // variable injected into the AGC and worker pods, excluding them from the
+    // per-tenant egress proxy. Entries may be CIDR prefixes ("10.0.0.0/8"), bare
+    // IPs, or NO_PROXY domain suffixes for internal destinations
+    // ("svc.cluster.local", "internal.example.com"). The admission webhook rejects
+    // any entry that would route the tenant's GitHub traffic around the proxy — a
+    // hostname matching the configured gitHubURL host or the public GitHub domains
+    // (github.com, githubusercontent.com, ghcr.io, …) — because that silently
+    // defeats egress-IP attribution. Never list GitHub here. A CIDR/IP covering
+    // GitHub's rotating ranges is not detected and stays the operator's
+    // responsibility.
+    // Cluster-internal destinations are appended automatically by the GMC
+    // (svc.cluster.local, localhost, 127.0.0.1, 10.96.0.0/12); set this field only
+    // to add a non-default service CIDR.
     // NOTE: 10.96.0.0/12 is the kubeadm default service CIDR. EKS uses 10.100.0.0/16;
-    // GKE and other providers may differ. Operators must override this field when the
-    // cluster service CIDR does not fall within 10.96.0.0/12.
+    // GKE and other providers may differ. Operators must override this field (with a
+    // CIDR) when the cluster service CIDR does not fall within 10.96.0.0/12.
     // To discover the value: kubectl cluster-info dump | grep -m1 service-cluster-ip-range
     // +optional
     NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`

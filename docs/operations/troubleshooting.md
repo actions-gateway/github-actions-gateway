@@ -35,6 +35,9 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
 - [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
+- [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
+- [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
+- [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
@@ -1005,6 +1008,67 @@ kubectl get actionsgateway -n <tenant-namespace> <name> -o jsonpath='{.spec.secu
 - **If the downgrade is accidental (drift):** do **not** add the annotation — fix the manifest to match the live profile (set `securityProfile: restricted`, or stop omitting it) so GitOps stops trying to weaken the namespace.
 
 > Note: this guard catches *silent* downgrades; it is not an absolute boundary. Anyone with edit access to the CR can set the annotation, and an operator with direct namespace `patch` rights can change the PSA labels regardless. See [§5.3 — No silent profile downgrades](../design/05-security.md#no-silent-profile-downgrades).
+
+---
+
+## Second ActionsGateway in a Namespace Rejected (Singleton Guard)
+
+**Symptoms.** Creating an `ActionsGateway` in a namespace that already has one is rejected by the GMC validating webhook with:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+an ActionsGateway ("first-ag") already exists in namespace "team-a"; only one
+ActionsGateway per namespace is supported — a second CR contends over fixed-name
+per-tenant resources and would flap the namespace's Pod Security Admission labels
+```
+
+**Likely causes.**
+- Two manifests (or two GitOps apps) target the same tenant namespace.
+- A renamed CR applied before the old one was deleted (the guard reads live state, so the old CR still counts until its delete completes).
+
+**Why it is enforced.** Every per-tenant resource the GMC provisions — the AGC Deployment, the proxy Deployment, Services, NetworkPolicies, RoleBindings — has a fixed, namespace-scoped name. Two CRs fight over those objects, and because each CR's `securityProfile` drives the namespace's Pod Security Admission labels, two CRs with different profiles make the GMC flap those labels (intermittently admitting privileged pods). Deleting either CR then tears down the survivor's infrastructure.
+
+**Resolution.** Use one `ActionsGateway` per namespace. To run a second logical gateway, give it its own namespace (the guard is per-namespace, so a different namespace's first CR is admitted). To rename or replace an existing CR, delete the old one and wait for teardown to complete before creating the replacement.
+
+---
+
+## `proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub
+
+**Symptoms.** A `kubectl apply` is rejected by the GMC validating webhook with:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+proxy.noProxyCIDRs[0]: "github.com" would route GitHub traffic (github.com)
+around the per-tenant egress proxy, defeating egress-IP attribution; remove it
+— GitHub must always traverse the proxy. noProxyCIDRs may exclude internal
+destinations (CIDRs or domain suffixes), never GitHub
+```
+
+**Likely cause.** A `spec.proxy.noProxyCIDRs` entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `gitHubURL` host (including a GitHub Enterprise Server host), or an over-broad suffix like `.com` that covers them.
+
+**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match. If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
+
+**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy. `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`). Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.
+
+---
+
+## Privileged Worker Container Rejected by Admission
+
+**Symptoms.** An `ActionsGateway` whose `runnerGroups[].podTemplate` requests a privileged container or init container is rejected by the GMC validating webhook with:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+runnerGroups[0]: privileged containers are not permitted in worker pods
+(container "runner")
+```
+
+**Likely cause.** The CR requests `securityContext.privileged: true` while `spec.securityProfile` is `baseline` (the default) or `restricted`. Privileged worker containers are permitted **only** under the explicit `securityProfile: privileged` opt-in, which also stamps the namespace's Pod Security Admission level to `privileged` so the pod is actually admittable.
+
+**Resolution.**
+- If the privileged worker is intended (e.g. the Kata/DinD pattern), set `spec.securityProfile: privileged` on the same `ActionsGateway`. Privileged is a deliberate, audited relaxation — pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template; the secure-by-default profiles reject it on purpose.
+
+> Note: this webhook check only covers the GMC-managed `ActionsGateway` path. A directly-applied `RunnerGroup` CR bypasses the webhook entirely — Pod Security Admission (stamped per the namespace's profile) is the real enforcement backstop for both paths.
 
 ---
 
