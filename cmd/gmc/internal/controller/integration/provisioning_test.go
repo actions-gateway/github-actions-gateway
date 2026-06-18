@@ -41,7 +41,16 @@ func newActionsGateway(name, ns, secretName string) *gmcv1alpha1.ActionsGateway 
 
 func createNamespace(t *testing.T, name string) {
 	t.Helper()
-	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	createNamespaceWithLabels(t, name, nil)
+}
+
+// createNamespaceWithLabels creates a namespace carrying the given labels. The
+// privileged-eligibility gate (Q133) keys on the
+// actions-gateway.github.com/allow-privileged label, so tests exercising the
+// privileged profile through the apiserver use this to apply it.
+func createNamespaceWithLabels(t *testing.T, name string, labels map[string]string) {
+	t.Helper()
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels}}
 	err := k8sClient.Create(ctx, ns)
 	if err != nil {
 		// namespace might already exist from a previous test run
@@ -397,7 +406,12 @@ func TestGMC_TenantProvisioning_PSALabelsStamped(t *testing.T) {
 
 func TestGMC_TenantProvisioning_PSALabels_CustomProfile(t *testing.T) {
 	const nsName = "team-psa-privileged"
-	createNamespace(t, nsName)
+	// The allow-privileged label is the platform-applied eligibility gate for
+	// securityProfile: privileged (Q133); without it the validating webhook
+	// rejects the privileged-profile create below.
+	createNamespaceWithLabels(t, nsName, map[string]string{
+		gmcv1alpha1.AllowPrivilegedProfileLabel: gmcv1alpha1.AllowPrivilegedProfileValue,
+	})
 	createGitHubAppSecret(t, nsName, "github-app")
 
 	ag := newActionsGateway("priv-gateway", nsName, "github-app")

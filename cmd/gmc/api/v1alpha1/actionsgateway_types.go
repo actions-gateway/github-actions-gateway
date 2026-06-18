@@ -127,6 +127,26 @@ type TracingConfig struct {
 // isolation must be a deliberate, auditable act. See docs/design/05-security.md §5.3.
 const AllowProfileDowngradeAnnotation = "actions-gateway.github.com/allow-profile-downgrade"
 
+// AllowPrivilegedProfileLabel is the namespace label that gates eligibility to
+// run securityProfile: privileged. The GMC validating webhook rejects any
+// ActionsGateway requesting securityProfile: privileged — at create OR update —
+// unless its namespace carries this label set to AllowPrivilegedProfileValue.
+// Eligibility to run privileged workers is a platform decision: a platform
+// administrator grants it by labelling the tenant namespace, exactly as they
+// already apply the actions-gateway.github.com/tenant marker (see
+// TenantNamespaceMarkerLabel). A tenant cannot self-grant it — the tenant owns
+// the ActionsGateway CR but not its namespace's labels, and the
+// namespace-psa-guard ValidatingAdmissionPolicy confines even the GMC to the PSA
+// label keys. The gate is fail-closed: an absent label, or any value other than
+// AllowPrivilegedProfileValue, leaves privileged ineligible and the request is
+// rejected. See docs/design/05-security.md §5.3.
+const AllowPrivilegedProfileLabel = "actions-gateway.github.com/allow-privileged"
+
+// AllowPrivilegedProfileValue is the only value of AllowPrivilegedProfileLabel
+// that grants privileged eligibility. Any other value — or an absent label —
+// leaves the namespace ineligible for securityProfile: privileged (fail closed).
+const AllowPrivilegedProfileValue = "true"
+
 // ActionsGatewaySpec is the desired state of an ActionsGateway.
 //
 // securityProfile changes are gated by the GMC validating webhook rather than a

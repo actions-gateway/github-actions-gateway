@@ -26,6 +26,13 @@ Before beginning, confirm all of the following:
 - [ ] **PriorityClass objects exist and are allowlisted** (priority-tiered tenants only). Any `priorityClassName` a tenant references in `priorityTiers` must (1) be pre-created at the cluster level by the platform (`kubectl get priorityclass`) **and** (2) appear on the GMC `--allowed-priority-classes` flag. The GMC validating webhook rejects any `priorityClassName` not on the allowlist (an empty allowlist rejects *all* of them) — this stops a tenant naming a high-priority, preempting class and evicting other tenants' worker pods. Create allowlisted classes with `preemptionPolicy: Never` unless cross-tenant preemption is genuinely intended for that tier; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist).
 - [ ] **Cluster service CIDR is known.** Needed if the tenant's `noProxyCIDRs` must be customized: `kubectl cluster-info dump | grep -m1 service-cluster-ip-range`.
 - [ ] **Security profile decided.** Default `baseline` is correct for normal CI workloads (builds, tests). Confirm with the tenant whether they need `restricted` (compliance / high-isolation) or `privileged` (docker-in-docker, kernel-module workflows). Tenants with both needs deploy two `ActionsGateway` CRs in two namespaces. You can *harden* a profile later in place (`baseline → restricted`) freely, but *relaxing* it (a downgrade) is rejected by admission unless you set the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation — see [troubleshooting: securityProfile downgrade rejected](troubleshooting.md#securityprofile-downgrade-rejected-by-admission-webhook). See [§5.3 — Security Profiles](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- [ ] **Privileged eligibility granted (only if the tenant needs `privileged`).** `securityProfile: privileged` is a **platform** decision, not tenant-settable: the GMC validating webhook rejects it (at create *and* update) unless the namespace carries the eligibility label, applied by a trusted administrator:
+
+  ```bash
+  kubectl label namespace <tenant-namespace> actions-gateway.github.com/allow-privileged=true
+  ```
+
+  This is a separate gate from the `actions-gateway.github.com/tenant` marker (which authorizes GMC management at all): without `allow-privileged`, the tenant can still run `baseline`/`restricted` but not `privileged`. The gate is fail-closed — absent the label, privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture by creating a CR. Apply this only for tenants approved for docker-in-docker / kernel-module workloads, ideally paired with a sandbox `runtimeClassName`. Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/allow-privileged}'` → `true`. To revoke, remove the label (`…/allow-privileged-`). See [troubleshooting: privileged securityProfile rejected](troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible) and [§5.3](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 
 ---
 
@@ -120,6 +127,9 @@ spec:
   # Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.
   # Set to "restricted" for stricter isolation, or "privileged" only if the workload
   # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).
+  # "privileged" requires the namespace to be eligible: a platform admin must label it
+  # actions-gateway.github.com/allow-privileged=true (see Pre-Conditions), else the webhook
+  # rejects the CR at create/update. It is deliberately not tenant-settable.
   # A privileged worker container (securityContext.privileged: true in a podTemplate)
   # is ONLY admitted under securityProfile: privileged — under baseline/restricted the
   # webhook rejects it. See troubleshooting: privileged worker container rejected.

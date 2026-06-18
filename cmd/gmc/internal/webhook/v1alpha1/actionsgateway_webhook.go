@@ -145,12 +145,16 @@ func logRejection(ctx context.Context, op string, ag *gmcv1alpha1.ActionsGateway
 }
 
 // ValidateCreate rejects CRs created in reserved namespaces, with a cross-namespace
-// gitHubAppRef, or with privileged containers.
+// gitHubAppRef, with privileged containers, or requesting securityProfile:
+// privileged in a namespace the platform has not labelled eligible.
 func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "create", obj, fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
 	}
 	if err := v.validateSingleton(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "create", obj, err)
+	}
+	if err := v.validatePrivilegedEligibility(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "create", obj, err)
 	}
 	if err := validateGitHubAppRef(obj); err != nil {
@@ -172,7 +176,8 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 }
 
 // ValidateUpdate rejects updates that introduce a cross-namespace gitHubAppRef,
-// privileged containers, or a silent securityProfile downgrade.
+// privileged containers, a silent securityProfile downgrade, or securityProfile:
+// privileged in a namespace the platform has not labelled eligible.
 func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *gmcv1alpha1.ActionsGateway) (admission.Warnings, error) {
 	if err := validateGitHubAppRef(newObj); err != nil {
 		return nil, logRejection(ctx, "update", newObj, err)
@@ -187,6 +192,9 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateSecurityProfileTransition(oldObj, newObj); err != nil {
+		return nil, logRejection(ctx, "update", newObj, err)
+	}
+	if err := v.validatePrivilegedEligibility(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "update", newObj, err)
 	}
 	if err := validateNoProxyCIDRs(newObj); err != nil {
@@ -237,6 +245,60 @@ func (v *ActionsGatewayCustomValidator) validateSingleton(ctx context.Context, a
 			"an ActionsGateway (%q) already exists in namespace %q; only one ActionsGateway per namespace is supported — "+
 				"a second CR contends over fixed-name per-tenant resources and would flap the namespace's Pod Security Admission labels",
 			existing.Items[i].Name, ag.Namespace)
+	}
+	return nil
+}
+
+// validatePrivilegedEligibility rejects an ActionsGateway requesting
+// securityProfile: privileged unless its namespace carries
+// AllowPrivilegedProfileLabel set to AllowPrivilegedProfileValue ("true") — at
+// create OR update (Q133). It closes a self-granted-escalation gap: a tenant
+// owns the ActionsGateway CR and may freely set securityProfile: privileged at
+// create (only *downgrades* are otherwise gated, by
+// validateSecurityProfileTransition), and that profile makes the GMC stamp the
+// namespace PSA to `privileged`. So without this gate a tenant could grant
+// themselves the cluster's least-restrictive pod-security posture. Eligibility to
+// run privileged is instead a platform decision: a platform administrator opts a
+// namespace in by labelling it (the same trust model as the
+// actions-gateway.github.com/tenant marker), and the tenant cannot self-grant it
+// because they do not control namespace labels.
+//
+// The check is fail-closed in every direction. Non-privileged profiles never
+// consult the label. For privileged, the namespace must be readable AND carry the
+// exact label/value; a read error, a missing label, or any other value rejects
+// the request. The eligibility decision is made on the namespace's CURRENT label
+// (read via the uncached API reader) — a tenant cannot smuggle the label in
+// through the ActionsGateway CR, which carries no namespace labels.
+//
+// This is a webhook check, not a CRD CEL rule, because the decision depends on a
+// label of a *different* object (the namespace) that a spec-scoped CEL
+// XValidation cannot read.
+func (v *ActionsGatewayCustomValidator) validatePrivilegedEligibility(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) error {
+	if effectiveProfile(ag.Spec.SecurityProfile) != "privileged" {
+		return nil
+	}
+	if v.reader == nil {
+		// No reader wired (direct-construction unit-test path). The
+		// integration/e2e and production paths always wire the uncached API
+		// reader (SetupActionsGatewayWebhookWithManager), and exercise the label
+		// gate end to end; skipping here keeps direct-construction unit tests
+		// focused on the validation they exercise, mirroring validateSingleton.
+		return nil
+	}
+	var ns corev1.Namespace
+	if err := v.reader.Get(ctx, client.ObjectKey{Name: ag.Namespace}, &ns); err != nil {
+		// Fail closed: if eligibility cannot be confirmed, privileged is denied.
+		return fmt.Errorf(
+			"cannot verify privileged eligibility for namespace %q: %w; securityProfile: privileged requires the "+
+				"namespace label %s=%s applied by a platform administrator",
+			ag.Namespace, err, gmcv1alpha1.AllowPrivilegedProfileLabel, gmcv1alpha1.AllowPrivilegedProfileValue)
+	}
+	if ns.Labels[gmcv1alpha1.AllowPrivilegedProfileLabel] != gmcv1alpha1.AllowPrivilegedProfileValue {
+		return fmt.Errorf(
+			"securityProfile: privileged is not eligible in namespace %q: it requires the namespace label %s=%s, "+
+				"which only a platform administrator may apply — privileged eligibility is a platform decision and is "+
+				"deliberately not tenant-settable",
+			ag.Namespace, gmcv1alpha1.AllowPrivilegedProfileLabel, gmcv1alpha1.AllowPrivilegedProfileValue)
 	}
 	return nil
 }

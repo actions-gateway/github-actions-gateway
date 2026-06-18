@@ -38,6 +38,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
 - [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
+- [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
@@ -1065,10 +1066,48 @@ runnerGroups[0]: privileged containers are not permitted in worker pods
 **Likely cause.** The CR requests `securityContext.privileged: true` while `spec.securityProfile` is `baseline` (the default) or `restricted`. Privileged worker containers are permitted **only** under the explicit `securityProfile: privileged` opt-in, which also stamps the namespace's Pod Security Admission level to `privileged` so the pod is actually admittable.
 
 **Resolution.**
-- If the privileged worker is intended (e.g. the Kata/DinD pattern), set `spec.securityProfile: privileged` on the same `ActionsGateway`. Privileged is a deliberate, audited relaxation — pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- If the privileged worker is intended (e.g. the Kata/DinD pattern), set `spec.securityProfile: privileged` on the same `ActionsGateway`. This requires the namespace to be **eligible** for privileged — a platform admin must label it `actions-gateway.github.com/allow-privileged=true` (see [Privileged securityProfile Rejected](#privileged-securityprofile-rejected-namespace-not-eligible) below). Privileged is a deliberate, audited relaxation — pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
 - If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template; the secure-by-default profiles reject it on purpose.
 
 > Note: this webhook check only covers the GMC-managed `ActionsGateway` path. A directly-applied `RunnerGroup` CR bypasses the webhook entirely — Pod Security Admission (stamped per the namespace's profile) is the real enforcement backstop for both paths.
+
+---
+
+## Privileged securityProfile Rejected: Namespace Not Eligible
+
+**Symptoms.** An `ActionsGateway` requesting `spec.securityProfile: privileged` is rejected by the GMC validating webhook at create or update with:
+
+```
+admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+securityProfile: privileged is not eligible in namespace "team-builds": it
+requires the namespace label actions-gateway.github.com/allow-privileged=true,
+which only a platform administrator may apply — privileged eligibility is a
+platform decision and is deliberately not tenant-settable
+```
+
+A variant names a read failure (`cannot verify privileged eligibility for namespace …`) when the webhook cannot read the namespace; the gate is fail-closed, so that too rejects.
+
+**Likely cause.** Whether a namespace may run privileged workers is a **platform** decision, not a tenant one. Because the tenant owns the `ActionsGateway` CR, they could otherwise self-select the cluster's least-restrictive Pod Security Admission posture simply by creating a CR. The webhook therefore gates `securityProfile: privileged` behind a label the platform applies to the *namespace* (which the tenant does not own): `actions-gateway.github.com/allow-privileged=true`. Absent the label — or with any other value — privileged is ineligible and rejected.
+
+**Resolution (platform administrator).** If this tenant is approved to run privileged workers, label the namespace:
+
+```bash
+kubectl label namespace <tenant-namespace> actions-gateway.github.com/allow-privileged=true
+```
+
+Apply it with a trusted (administrator) identity — the GMC must never set it itself, and tenants cannot. Verify:
+
+```bash
+kubectl get namespace <tenant-namespace> \
+  -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/allow-privileged}'
+# Expected: true
+```
+
+Re-apply the `ActionsGateway`; the create/update is now admitted. To **revoke** eligibility, remove the label (`kubectl label namespace <ns> actions-gateway.github.com/allow-privileged-`); existing CRs already at `privileged` keep running, but any future create or profile change to `privileged` is rejected again.
+
+> On an **update** that raises an existing CR from a stricter profile to `privileged`, the webhook also requires the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation (anything → `privileged` is a rank downgrade — see [securityProfile Downgrade Rejected](#securityprofile-downgrade-rejected-by-admission-webhook)). Both gates are independent: the namespace label is the platform's eligibility decision, the annotation is the tenant's deliberate relaxation.
+
+If the privileged profile was **not** intended, set `spec.securityProfile` to `baseline` (the default) or `restricted`; neither consults the label.
 
 ---
 
