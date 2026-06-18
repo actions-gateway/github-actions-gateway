@@ -447,7 +447,7 @@ func TestBuildProxyNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
 // controller-runtime metrics.
 func TestBuildAGCNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildAGCNetworkPolicy(ag)
+	np := buildAGCNetworkPolicy(ag, nil)
 
 	assert.Contains(t, np.Spec.PolicyTypes, networkingv1.PolicyTypeIngress,
 		"AGC NP must declare PolicyTypeIngress so ingress defaults to deny")
@@ -607,7 +607,7 @@ func TestBuildNetworkPolicy_DNSEgressAlwaysPresent(t *testing.T) {
 		for _, np := range []*networkingv1.NetworkPolicy{
 			buildProxyNetworkPolicy(ag, nil),
 			buildWorkloadNetworkPolicy(ag),
-			buildAGCNetworkPolicy(ag),
+			buildAGCNetworkPolicy(ag, nil),
 		} {
 			udpFound, tcpFound := false, false
 			for _, rule := range np.Spec.Egress {
@@ -649,7 +649,7 @@ func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
 	for _, np := range []*networkingv1.NetworkPolicy{
 		buildProxyNetworkPolicy(ag, nil),
 		buildWorkloadNetworkPolicy(ag),
-		buildAGCNetworkPolicy(ag),
+		buildAGCNetworkPolicy(ag, nil),
 	} {
 		var dnsRules []networkingv1.NetworkPolicyEgressRule
 		for _, rule := range np.Spec.Egress {
@@ -692,7 +692,7 @@ func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
 
 func TestBuildAGCNetworkPolicy_PodSelectorIsAGCOnly(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildAGCNetworkPolicy(ag)
+	np := buildAGCNetworkPolicy(ag, nil)
 
 	assert.Equal(t, npAGCName, np.Name)
 	// Must select AGC pods by app label, not the broad workload label.
@@ -704,7 +704,7 @@ func TestBuildAGCNetworkPolicy_PodSelectorIsAGCOnly(t *testing.T) {
 
 func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")
-	np := buildAGCNetworkPolicy(ag)
+	np := buildAGCNetworkPolicy(ag, nil)
 
 	// The AGC NP must allow egress on BOTH 443 and 6443:
 	//   - 443: production clusters where the kubernetes Service backends listen on 443.
@@ -736,12 +736,79 @@ func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
 			"docs/development/networkpolicy-port-matching.md)")
 }
 
+// TestBuildAGCNetworkPolicy_APIServerCIDRsScoped locks in Q145: when the
+// operator supplies an apiserver-CIDR allowlist, the AGC NP's 443/6443 egress
+// rule is scoped to those CIDRs via ipBlock peers (a strict tightening) while
+// the ports are unchanged. An empty allowlist preserves any-destination.
+func TestBuildAGCNetworkPolicy_APIServerCIDRsScoped(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	cidrs := []string{"10.0.0.1/32", "172.16.0.0/12"}
+	np := buildAGCNetworkPolicy(ag, cidrs)
+
+	// Find the apiserver-ports egress rule (the one carrying 443/6443).
+	var apiRule *networkingv1.NetworkPolicyEgressRule
+	for i := range np.Spec.Egress {
+		for _, port := range np.Spec.Egress[i].Ports {
+			if port.Port != nil && (port.Port.IntVal == 443 || port.Port.IntVal == 6443) {
+				apiRule = &np.Spec.Egress[i]
+				break
+			}
+		}
+	}
+	require.NotNil(t, apiRule, "AGC NP must still carry the apiserver-ports egress rule")
+
+	// Ports unchanged: both 443 and 6443 still present.
+	saw443, saw6443 := false, false
+	for _, port := range apiRule.Ports {
+		if port.Port == nil {
+			continue
+		}
+		switch port.Port.IntVal {
+		case 443:
+			saw443 = true
+		case 6443:
+			saw6443 = true
+		}
+	}
+	assert.True(t, saw443 && saw6443, "scoping must not drop either apiserver port")
+
+	// `To` must list exactly one ipBlock peer per supplied CIDR.
+	require.Len(t, apiRule.To, len(cidrs),
+		"apiserver egress must be scoped to one ipBlock peer per operator CIDR")
+	got := make([]string, 0, len(apiRule.To))
+	for _, peer := range apiRule.To {
+		require.NotNil(t, peer.IPBlock, "scoped apiserver egress peer must be an ipBlock")
+		assert.Nil(t, peer.PodSelector, "scoped apiserver egress peer must not select pods")
+		assert.Nil(t, peer.NamespaceSelector, "scoped apiserver egress peer must not select namespaces")
+		got = append(got, peer.IPBlock.CIDR)
+	}
+	assert.ElementsMatch(t, cidrs, got, "scoped CIDRs must match the operator allowlist")
+}
+
+// TestBuildAGCNetworkPolicy_APIServerCIDRsEmptyKeepsAnyDest asserts the
+// secure-default Q145 behavior: an empty (or nil) allowlist renders exactly the
+// pre-Q145 rule — apiserver ports open to any destination, no `To`.
+func TestBuildAGCNetworkPolicy_APIServerCIDRsEmptyKeepsAnyDest(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	for _, cidrs := range [][]string{nil, {}} {
+		np := buildAGCNetworkPolicy(ag, cidrs)
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port != nil && (port.Port.IntVal == 443 || port.Port.IntVal == 6443) {
+					assert.Empty(t, rule.To,
+						"empty apiserver-CIDR allowlist must leave the apiserver egress any-destination")
+				}
+			}
+		}
+	}
+}
+
 func TestBuildAGCNetworkPolicy_NoDirectGitHubEgressByItself(t *testing.T) {
 	// Verify the AGC NetworkPolicy allows port 443 (k8s API) but that this is distinct
 	// from the proxy-only restriction that buildWorkloadNetworkPolicy applies to workers.
 	// Workers lack the `app: actions-gateway-controller` selector, so this policy doesn't apply to them.
 	ag := newTestAG("gateway", "team-a")
-	np := buildAGCNetworkPolicy(ag)
+	np := buildAGCNetworkPolicy(ag, nil)
 
 	// The AGC NP selector must NOT match worker pods (which have labelComponent: workload
 	// but not app: agcAppName). This is a structural check — only app: agcAppName is selected.

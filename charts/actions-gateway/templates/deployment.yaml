@@ -59,6 +59,12 @@ spec:
         # priorityTiers may reference. Empty/unset rejects all (secure default).
         - --allowed-priority-classes={{ join "," . }}
         {{- end }}
+        {{- with .Values.apiServerCIDRs }}
+        # Opt-in tightening (Q145): scope the AGC NetworkPolicy apiserver
+        # (443/6443) egress to these CIDRs. Empty/unset keeps any-destination —
+        # required where the post-DNAT apiserver IP is unpredictable.
+        - --apiserver-cidrs={{ join "," . }}
+        {{- end }}
         env:
         # POD_NAMESPACE is read by the admission webhook to forbid ActionsGateway
         # CRs in the GMC's own install namespace. Downward API so custom installs

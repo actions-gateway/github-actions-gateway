@@ -281,10 +281,14 @@ RESOLVED in the Q127 PR** except the one optional sub-item carved out below.
    residual).** Portable scoping is impossible: kube-proxy DNATs the `kubernetes`
    Service ClusterIP to provider-specific apiserver IPs before NetworkPolicy is
    evaluated, so a precise `ipBlock` is non-portable and a wrong one severs
-   apiserver access (the PR #59 trap). `05-security.md` §5.2 now documents the
-   residual honestly with its compensating controls; a first-class opt-in
-   (operator-supplied apiserver CIDR allowlist on the AGC NetworkPolicy) is queued
-   as a follow-up.
+   apiserver access (the PR #59 trap), so any-destination stays the secure
+   default. `05-security.md` §5.2 documents the residual honestly with its
+   compensating controls. **Follow-up delivered (Q145):** a first-class opt-in —
+   the GMC `--apiserver-cidrs` flag / Helm `apiServerCIDRs` value — now lets an
+   operator scope the AGC NetworkPolicy's 443/6443 rule to a stable apiserver
+   CIDR set via `ipBlock`. It is opt-in tightening only: empty preserves the
+   any-destination default, so clusters with unpredictable post-DNAT apiserver
+   IPs are unaffected.
 8. **Privileged-profile webhook incoherence** — **RESOLVED.** `validateRunnerGroups`
    is now profile-aware: a `privileged: true` worker container is admitted only
    under `securityProfile: privileged` (which stamps the namespace PSA to match),

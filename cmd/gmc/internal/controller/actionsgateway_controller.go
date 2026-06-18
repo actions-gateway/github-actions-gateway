@@ -100,6 +100,14 @@ type ActionsGatewayReconciler struct {
 	// created (they are always correct and dependency-free) and any
 	// previously-created ServiceMonitors are pruned.
 	EnableTenantServiceMonitors bool
+	// APIServerCIDRs, when non-empty, scopes the AGC NetworkPolicy's apiserver
+	// (443/6443) egress rule to these CIDRs via ipBlock peers instead of allowing
+	// any destination (Q145). It is a platform/operator opt-in tightening wired
+	// from the GMC's --apiserver-cidrs flag (chart value apiServerCIDRs); the
+	// entries are validated as CIDRs at startup. Empty (the default) preserves the
+	// any-destination behavior required where the post-DNAT apiserver IP is not
+	// predictable. See buildAGCNetworkPolicy.
+	APIServerCIDRs []string
 	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
 	// May be nil in unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
@@ -225,7 +233,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	if err := r.applyNetworkPolicy(ctx, buildWorkloadNetworkPolicy(ag)); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, buildAGCNetworkPolicy(ag, r.APIServerCIDRs)); err != nil {
 		return fmt.Errorf("AGC NetworkPolicy: %w", err)
 	}
 	// Delete the legacy single-policy "actions-gateway" NetworkPolicy left by previous
