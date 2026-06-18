@@ -49,6 +49,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix E — Capacity Planning & RunnerGroup Design](appendix-e-capacity-planning.md)
 - [Appendix F — Cost Model](appendix-f-cost-model.md)
 - [Appendix G — Optional Future Enhancements](appendix-g-future-enhancements.md)
+- [Appendix H — v2 API Decomposition (Proposal)](appendix-h-v2-api-decomposition.md)
 - [Network Architecture](network-architecture.md)
 
 **Operations**
