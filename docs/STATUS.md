@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-16
+Last touched: 2026-06-18
 
 ---
 
@@ -25,23 +25,23 @@ Last touched: 2026-06-16
 
 Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces remain open in the Queue below.
 
-| Item | Labels | Status | Notes |
-|---|---|---|---|
-| M1: Wire-protocol probe | `milestone` | ✅ | [plan](plan/milestone-1.md) |
-| M1: Unit-test coverage | `milestone` `tests` | ✅ | All 5 gaps closed — [plan](plan/milestone-1-tests.md) |
-| M2: AGC controller | `milestone` | ✅ | All criteria met including live kind check (`activeSessions==1`) — [plan](plan/milestone-2.md) |
-| M3: Worker pod | `milestone` | ✅ | All success criteria met; Tier-C live test green on 2026-05-30 — [plan](plan/milestone-3.md) |
-| M4: GMC + proxy | `milestone` | ✅ | Multi-tenant, delete-isolation, e2e proxy job live-validated 2026-06-12 (helm install + real GitHub); 4 bugs found → Q114 + Q115 + Q116 + Q117 (all fixed) — [plan](plan/milestone-4.md) |
-| M5: Hardening | `milestone` `security` | ⚠️ | Security half + polaris posture scan done; packaging, load test harness open — [plan](plan/milestone-5.md) |
-| Release 1.0 | `milestone` | ✅ | **Shipped 2026-06-16.** `v1.0.0` published as a final release (4 multi-arch images + cosign-signed chart on GHCR, `prerelease: false`), verified live; GitHub Release + GA docs + public site launched at [actions-gateway.com](https://actions-gateway.com/) (<a id="Q129"></a>Q129). Load test ([Q13](#Q13)) & gVisor ([Q15](#Q15)) deferred post-1.0 — [plan](plan/release-1.0.md) |
-| Security hardening | `security` | ⚠️ | W2–W8/M-12/13/L-2/3/7 shipped; M-11b + live kind validation remain — [plan](plan/security.md) |
-| Security audit 2 (2026-06) | `security` | ⚠️ | 4 review tracks + govulncheck (clean); new findings queued as Q121–Q128, known/accepted mapped in doc — [plan](plan/security-audit-2026-06.md) |
-| Worker egress proxy | `security` `infra` | ✅ | NetworkPolicy split + Tier-A positive + NP-spec guard shipped; runtime negatives observed enforcing on the Calico profile 2026-06-11 (Q7b); CI leg tracked as [Q119](#Q119) — [plan](plan/worker-egress-proxy.md) |
-| Docs | `docs` | ✅ | All Phase 1–3 items done; alerting.md deferred — [plan](plan/docs.md) |
-| Six-layer docs audit | `docs` | ✅ | All six layers audited and fixed (0 broken links/anchors); follow-ons Q51 + Q52 done — [plan](plan/docs-six-layer-audit.md) |
-| Make UX | `infra` | ✅ | Phase 1 + Phase 2 done — [plan](plan/make.md) |
-| Docker image speed | `speed` | ✅ | All items done or explicitly closed — [plan](plan/docker-image-speed.md) |
-| e2e test speed | `speed` `tests` | ✅ | All items done — [plan](plan/e2e-tests-speed.md) |
+| Item | Labels | Status |
+|---|---|---|
+| [M1: Wire-protocol probe](plan/milestone-1.md) | `milestone` | ✅ |
+| [M1: Unit-test coverage](plan/milestone-1-tests.md) | `milestone` `tests` | ✅ |
+| [M2: AGC controller](plan/milestone-2.md) | `milestone` | ✅ |
+| [M3: Worker pod](plan/milestone-3.md) | `milestone` | ✅ |
+| [M4: GMC + proxy](plan/milestone-4.md) | `milestone` | ✅ |
+| [M5: Hardening](plan/milestone-5.md) | `milestone` `security` | ⚠️ |
+| [Release 1.0](plan/release-1.0.md) | `milestone` | ✅ |
+| [Security hardening](plan/security.md) | `security` | ⚠️ |
+| [Security audit 2 (2026-06)](plan/security-audit-2026-06.md) | `security` | ⚠️ |
+| [Worker egress proxy](plan/worker-egress-proxy.md) | `security` `infra` | ✅ |
+| [Docs](plan/docs.md) | `docs` | ✅ |
+| [Six-layer docs audit](plan/docs-six-layer-audit.md) | `docs` | ✅ |
+| [Make UX](plan/make.md) | `infra` | ✅ |
+| [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
+| [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 
 ---
 
@@ -59,7 +59,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
 | <a id="Q59"></a>Q59 | [Pre-acquisition admission control (capacity-gated `acquirejob`)](plan/acquire-admission-control.md) | `infra` `speed` | 🔲 | L | AGC acquires jobs before checking pod capacity, so ceiling-held jobs are claimed-then-dropped under pressure. Add a capacity gate before `acquirejob` (not a durable queue — GitHub is the queue). |
 | <a id="Q82"></a>Q82 | Per-cluster proxy HPA-max guard (admission webhook + quota) | `infra` `security` | 🔲 | L | From Q34/E8. Proxy HPA `maxReplicas` allows up to 100/tenant, no per-cluster guard. Add a validating webhook correlating it with the namespace ResourceQuota — chosen over a lower CRD max (would reject existing tenants on re-apply). |
-| <a id="Q45"></a>Q45 | Compress Progress table — drop Notes column | `docs` | 🔲 | S | Most cells just say "see plan" or restate the plan doc; the plan link in the row's name already carries the detail. Reduces edit surface and width. |
 | <a id="Q146"></a>Q146 | Refuse non-HTTPS GITHUB_API_BASE_URL outside dev mode | `security` | 🔲 | S | Q127 item 8 carve-out: reject non-HTTPS `GITHUB_API_BASE_URL` (`githubapp/auth.go`). Low value — prod blocks the env via `--allow-agc-extra-env` (default-off); a clean fix needs a dev escape plumbed through the e2e fakegithub `http` svc-DNS URL. |
 | <a id="Q55"></a>Q55 | Verify provisioner-test goleak cascade fix held in CI | `tests` `bug` | 🔲 | S | Intermittent ~20-test goleak cascade in `internal/provisioner` fixed by `waitForPodCreated` helper in 59c0714; delete row once CI is clean. If flakes recur, migrate remaining ~18 Eventually-on-Pod sites to the helper. |
 | <a id="Q60"></a>Q60 | [Competitive analysis — GAG vs ARC-adjacent runner/queue tooling](design/appendix-d-alternatives-considered.md) | `docs` | 🔲 | M | vs ARC-adjacent tooling (Kueue, Exostellar, KEDA); expands [appendix-d](design/appendix-d-alternatives-considered.md). Per-benefit notes + verify-list in [competitive-analysis](plan/competitive-analysis.md). Kueue-vs-admission angle in [Q59](#Q59). |
