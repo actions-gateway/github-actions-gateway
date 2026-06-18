@@ -1,3 +1,10 @@
+{{- /*
+Generated from cmd/gmc/config/webhook/manifests.yaml by 'make chart-webhook' — DO NOT EDIT.
+The webhook body (rules, failurePolicy, path, sideEffects, admissionReviewVersions) is the
+controller-gen output of the +kubebuilder:webhook marker; this template re-injects the chart's
+Helm wiring (name prefix, labels, namespace, cert-manager CA inject / caBundle). Re-run
+'make chart-webhook' after any webhook-marker change. Drift is gated by 'make chart-webhook-check'.
+*/ -}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:

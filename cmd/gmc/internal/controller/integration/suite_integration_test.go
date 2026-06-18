@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/yaml"
 )
 
 // Shared resource name constants — single source of truth for all integration
@@ -265,20 +266,33 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	return ipRangeReconciler
 }
 
-// installAGCTenantClusterRole mirrors the agc-tenant-role ClusterRole the Helm
-// chart ships (charts/actions-gateway/templates/agc-tenant-role.yaml). The
-// production install applies it once at GMC install time; envtest needs the
+// agcTenantRoleRulesPath is the Helm chart fragment that single-sources the
+// agc-tenant-role permission rules (Q143). The chart embeds it via .Files.Get in
+// templates/agc-tenant-role.yaml; this suite reads the SAME file so the role
+// granted in envtest is byte-identical to the one production ships — the
+// RBAC-scope test can never silently drift from the deployed permission set.
+var agcTenantRoleRulesPath = filepath.Join(
+	"..", "..", "..", "..", "..",
+	"charts", "actions-gateway", "files", "agc-tenant-role-rules.yaml",
+)
+
+// installAGCTenantClusterRole installs the agc-tenant-role ClusterRole the Helm
+// chart ships (charts/actions-gateway/templates/agc-tenant-role.yaml), loading
+// its rules from the chart's single-source fragment (agcTenantRoleRulesPath).
+// The production install applies it once at GMC install time; envtest needs the
 // same singleton for per-tenant RoleBindings to grant any permission.
 func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
+	data, err := os.ReadFile(agcTenantRoleRulesPath)
+	if err != nil {
+		return fmt.Errorf("read agc-tenant-role rules fragment %s: %w", agcTenantRoleRulesPath, err)
+	}
+	var rules []rbacv1.PolicyRule
+	if err := yaml.Unmarshal(data, &rules); err != nil {
+		return fmt.Errorf("parse agc-tenant-role rules fragment %s: %w", agcTenantRoleRulesPath, err)
+	}
 	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "agc-tenant-role"},
-		Rules: []rbacv1.PolicyRule{
-			{APIGroups: []string{""}, Resources: []string{"pods"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
-			{APIGroups: []string{""}, Resources: []string{"pods/status"}, Verbs: []string{"get"}},
-			{APIGroups: []string{""}, Resources: []string{"secrets"}, Verbs: []string{"get", "list", "watch", "create", "delete"}},
-			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups"}, Verbs: []string{"get", "list", "watch", "update", "patch"}},
-			{APIGroups: []string{"actions-gateway.github.com"}, Resources: []string{"runnergroups/status", "runnergroups/finalizers"}, Verbs: []string{"get", "update", "patch"}},
-		},
+		Rules:      rules,
 	}
 	if err := c.Create(ctx, cr); err != nil && !apierrors.IsAlreadyExists(err) {
 		return err

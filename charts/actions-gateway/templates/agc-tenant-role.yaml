@@ -1,3 +1,13 @@
+{{- /*
+The agc-tenant-role rules are single-sourced in files/agc-tenant-role-rules.yaml
+(Q143). This template embeds them via .Files.Get, and the GMC integration suite
+(installAGCTenantClusterRole in suite_integration_test.go) reads the SAME file —
+so the shipped permission set and the RBAC-scope test can never drift. Edit the
+fragment, not this block. This is NOT generated from the AGC +kubebuilder:rbac
+markers (cmd/agc/config/rbac/role.yaml): the tenant role deliberately withholds
+runnergroup create/delete and secret patch that the markers grant (least
+privilege), so the fragment is the authoritative hand-maintained source.
+*/ -}}
 # agc-tenant-role — the permission set granted to every AGC ServiceAccount.
 # A singleton ClusterRole; per-tenant isolation comes from RoleBindings (one
 # per ActionsGateway namespace) the GMC creates that reference it.
@@ -6,7 +16,7 @@
 # GMC manager-role grants `bind` only on this exact resourceName, and the GMC
 # only has `bind` (not create/escalate) on it. Renaming it breaks provisioning.
 # It is also a public API surface (the AGC permission contract), not an
-# internal GMC resource. See cmd/gmc/config/agc-tenant-role/.
+# internal GMC resource.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -17,34 +27,4 @@ metadata:
     app.kubernetes.io/part-of: actions-gateway
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch", "create", "delete"]
-- apiGroups: [""]
-  resources: ["pods/status"]
-  verbs: ["get"]
-# events: the RunnerGroup reconciler emits Kubernetes Events on credential,
-# agent-pool, listener, and deregistration failures plus Ready transitions
-# and worker-pod reaps. Both groups are required: the AGC's new-style
-# recorder (mgr.GetEventRecorder) writes events.k8s.io/v1 Events — with only
-# the core ("") grant those writes are silently 403'd.
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create", "patch"]
-- apiGroups: ["events.k8s.io"]
-  resources: ["events"]
-  verbs: ["create", "patch"]
-# list on secrets: the agent pool enumerates its own per-runner Secrets to
-# reconcile pool state (metadata-only PartialObjectMetadataList — names/labels,
-# never credential bodies). watch is deliberately omitted (no Secret informer).
-# update: the single-use JIT agent recycle (Q114) rewrites an agent's Secret
-# in place after re-registering it post-job.
-- apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["get", "list", "create", "update", "delete"]
-- apiGroups: ["actions-gateway.github.com"]
-  resources: ["runnergroups"]
-  verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: ["actions-gateway.github.com"]
-  resources: ["runnergroups/status", "runnergroups/finalizers"]
-  verbs: ["get", "update", "patch"]
+  {{- .Files.Get "files/agc-tenant-role-rules.yaml" | trimSuffix "\n" | nindent 0 }}

@@ -39,6 +39,20 @@ make chart-rbac   # scripts/sync-chart-rbac.sh — regenerates charts/actions-ga
 
 `make chart-rbac-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the fragment drifted from `cmd/gmc/config/rbac/role.yaml` — so a permission added via a marker but not propagated to the chart, which would leave the deployed GMC missing the grant, fails CI ([Q142](../STATUS.md)).
 
+## Sync the Helm chart webhook (after any webhook-marker change)
+
+The chart ships the `ValidatingWebhookConfiguration` at `charts/actions-gateway/templates/webhook.yaml`, but the authoritative webhook **body** (rules, `failurePolicy`, `sideEffects`, `admissionReviewVersions`, the service path) is the controller-gen output of the `+kubebuilder:webhook` marker (`cmd/gmc/config/webhook/manifests.yaml` — the same file the GMC integration suite loads into envtest). The chart template is *generated* from that source, re-injecting the chart's Helm wiring (name prefix, labels, the cert-manager CA-inject annotation, the templated namespace, and the non-cert-manager `caBundle`) — do not hand-edit it. After regenerating manifests, re-sync the chart:
+
+```bash
+make chart-webhook   # scripts/sync-chart-webhook.sh — regenerates charts/actions-gateway/templates/webhook.yaml
+```
+
+`make chart-webhook-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if the chart template drifted from the controller-gen source — so a marker change (a new intercepted resource/operation, a path or `failurePolicy` change) that is regenerated into `config/` but not propagated to the chart fails CI ([Q143](../STATUS.md)).
+
+## agc-tenant-role rules (NOT controller-gen)
+
+The `agc-tenant-role` ClusterRole — the permission set every AGC ServiceAccount runs as — is **not** generated from a `+kubebuilder:rbac` marker. It deliberately withholds permissions the AGC's own marker role (`cmd/agc/config/rbac/role.yaml`, ClusterRole `agc-role`) grants (e.g. `runnergroups` create/delete, `secrets` patch) for least privilege, so generating it from the markers would be a privilege escalation. Its single source is the hand-maintained fragment `charts/actions-gateway/files/agc-tenant-role-rules.yaml`: the chart embeds it via `.Files.Get` in `templates/agc-tenant-role.yaml`, and the GMC integration suite (`installAGCTenantClusterRole`) reads the same file — so the shipped role and the RBAC-scope test can never drift. Edit the fragment, not either consumer ([Q143](../STATUS.md)).
+
 ## RBAC marker placement
 
 `+kubebuilder:rbac` is a **package-level** marker (controller-gen v0.21+). It must appear before the `package` declaration, not in a type's doc comment. Placing it on a struct silently produces no output — controller-gen won't warn, it will just generate nothing.

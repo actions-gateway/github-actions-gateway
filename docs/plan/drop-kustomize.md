@@ -88,9 +88,14 @@ controller-gen manifests + VAPs as standalone files plus the chart renders.
 
 ## Out of scope (follow-ups)
 
-- Single-sourcing the chart's **webhook** config and the **agc-tenant-role** /
-  metrics / leader-election roles from their controller-gen/config copies — the
-  same drift class as RBAC, not covered by this PR's RBAC gate. The chart copies
-  and the retained `config/` copies are currently kept in sync by review +
-  manifest-validate, not a generator. Worth a follow-up Queue item.
+- ~~Single-sourcing the chart's **webhook** config and the **agc-tenant-role** /
+  metrics / leader-election roles.~~ **DONE in [Q143](q143-single-source-webhook-roles.md).**
+  The webhook now generates from `cmd/gmc/config/webhook/manifests.yaml`
+  (`make chart-webhook` + `chart-webhook-check`); the agc-tenant-role rules are
+  single-sourced in a shared `files/` fragment read by both the chart and the GMC
+  integration suite. The metrics / leader-election roles needed no work: slice C
+  removed their `config/` copies, so the chart is already their sole copy and no
+  controller-gen generator exists for that standard scaffolding. (The original
+  note here assumed retained `config/` copies for all four; only the webhook
+  still had one.)
 - Removing the GMC's bundled RunnerGroup copy entirely (vs. gating it).

@@ -11,8 +11,9 @@ name: manifest-validate
 #     opt-out, and all-features form against the Kubernetes API, plus `helm lint`
 #     on the chart itself and a fail-closed check that a default-values render
 #     (no gmc.image.digest) is REJECTED, so GMC image digest pinning cannot
-#     regress to fail-open (Q96). The chart CRD/RBAC drift gates
-#     (sync-chart-{crds,rbac}.sh --check) run first inside `make manifest-validate`.
+#     regress to fail-open (Q96). The chart CRD/RBAC/webhook drift gates
+#     (sync-chart-{crds,rbac,webhook}.sh --check) run first inside
+#     `make manifest-validate`.
 on:
   pull_request:
     paths-ignore:
@@ -57,6 +58,7 @@ jobs:
               - 'scripts/manifest-validate.sh'
               - 'scripts/sync-chart-crds.sh'
               - 'scripts/sync-chart-rbac.sh'
+              - 'scripts/sync-chart-webhook.sh'
               - 'scripts/lib/**'
               - '.github/workflows/manifest-validate.yml'
 
