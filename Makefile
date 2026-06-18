@@ -87,7 +87,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
@@ -301,10 +301,19 @@ chart-rbac: ## Regenerate the Helm chart manager-role rules fragment from the co
 chart-rbac-check: ## Fail if the chart manager-role rules fragment drifted from cmd/gmc/config/rbac/role.yaml (Q142)
 	scripts/sync-chart-rbac.sh --check
 
+.PHONY: chart-webhook
+chart-webhook: ## Regenerate the Helm chart validating-webhook template from the controller-gen source (single source of truth, Q143)
+	scripts/sync-chart-webhook.sh
+
+.PHONY: chart-webhook-check
+chart-webhook-check: ## Fail if the chart webhook template drifted from cmd/gmc/config/webhook/manifests.yaml (Q143)
+	scripts/sync-chart-webhook.sh --check
+
 .PHONY: manifest-validate
 manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
 	scripts/sync-chart-crds.sh --check
 	scripts/sync-chart-rbac.sh --check
+	scripts/sync-chart-webhook.sh --check
 	scripts/manifest-validate.sh
 
 ##@ e2e
