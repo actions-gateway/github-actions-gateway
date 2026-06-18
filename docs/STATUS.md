@@ -67,6 +67,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q55"></a>Q55 | Verify provisioner-test goleak cascade fix held in CI | `tests` `bug` | 🔲 | S | Intermittent ~20-test goleak cascade in `internal/provisioner` fixed by `waitForPodCreated` helper in 59c0714; delete row once CI is clean. If flakes recur, migrate remaining ~18 Eventually-on-Pod sites to the helper. |
 | <a id="Q60"></a>Q60 | [Competitive analysis — GAG vs ARC-adjacent runner/queue tooling](design/appendix-d-alternatives-considered.md) | `docs` | 🔲 | M | vs ARC-adjacent tooling (Kueue, Exostellar, KEDA); expands [appendix-d](design/appendix-d-alternatives-considered.md). Per-benefit notes + verify-list in [competitive-analysis](plan/competitive-analysis.md). Kueue-vs-admission angle in [Q59](#Q59). |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | Verified 2026-06-01: not deletable. Operator-doc for the `--agent-key-type=ed25519` opt-in; RSA-3072 stays the default regardless. Needs probe flag extensions + manual run with real credentials. Low priority: not a 1.0-gate. |
+| <a id="Q147"></a>Q147 | Align grandfathered label/annotation values to no-boolean convention | `infra` `docs` | 🔲 | M | Align grandfathered `tenant`/`allow-profile-downgrade` `"true"` values to the no-boolean [convention](development/kubernetes-conventions.md); breaking (VAPs, onboarding, live namespaces) — needs a dual-read migration. Low priority. |
 
 ---
 
