@@ -58,37 +58,27 @@ egress proxy to the tenant 1:1, and assumes one gateway per namespace.**
 ## H.3. The CRD set
 
 Two controller kinds (`ActionsGateway`, `RunnerSet`) and two data kinds
-(`RunnerTemplate`/`ClusterRunnerTemplate`, `EgressProxy`).
+(`RunnerTemplate`/`ClusterRunnerTemplate`, `EgressProxy`). Boxes are kinds;
+arrows are references (a `RunnerSet` points at the objects it uses). Per-kind
+fields are in [§H.4](#h4-spec-sketches).
 
 ```
-                         ┌──────────────────────┐
-        GitHub binding   │   ActionsGateway      │  (1..N per namespace)
-        + AGC ctrl plane │   - gitHubAppRef      │
-                         │   - gitHubURL         │
-                         │   - securityProfile   │
-                         │   - defaultProxyRef? ──┼──┐ (optional)
-                         └──────────┬───────────┘  │
-                                    │ gatewayRef    │
-                         ┌──────────┴───────────┐  │
-   scheduling / quota →  │      RunnerSet        │  │
-   (small object)        │   - gatewayRef        │  │
-                         │   - templateRef ──────┼──┼──► RunnerTemplate /
-                         │   - proxyRef? ────────┼──┤    ClusterRunnerTemplate
-                         │   - runnerLabels      │  │     - podTemplate (the big field)
-                         │   - maxListeners      │  │     - workerImage
-                         │   - maxWorkers        │  │
-                         │   - priorityTiers     │  │
-                         │   - lifecycle tunables│  │
-                         └──────────────────────┘  │
-                                                    ▼ (optional)
-                                          ┌──────────────────┐
-                         egress pool →    │   EgressProxy     │  shared by many
-                         (standalone)     │   - min/maxReplicas│ RunnerSets
-                                          │   - resources      │
-                                          │   - noProxyCIDRs   │
-                                          │   - managedNetPol   │
-                                          │   - sharing?        │
-                                          └──────────────────┘
+┌──────────────────────────────┐
+│ ActionsGateway               │   GitHub binding + AGC control plane
+│ (1..N per namespace)         │
+└──────────────▲───────────────┘
+               │ gatewayRef
+┌──────────────┴───────────────┐
+│ RunnerSet                    │   scheduling / quota (small object)
+│ scheduling / quota           │
+└──────┬────────────────┬──────┘
+       │ templateRef    └───────────────────────┐ proxyRef? (optional;
+       ▼                                        ▼ else gateway.defaultProxyRef)
+┌──────┴───────────────────────┐   ┌────────────┴─────────────────┐
+│ RunnerTemplate /             │   │ EgressProxy       (optional) │
+│ ClusterRunnerTemplate        │   │ shared egress proxy pool     │
+│ pod shape (large); reusable  │   │ sharing? → cross-ns consent  │
+└──────────────────────────────┘   └──────────────────────────────┘
 ```
 
 This mirrors the Gateway API pattern (`GatewayClass` → `Gateway` → route
