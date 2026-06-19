@@ -216,22 +216,35 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   to curl via --proxy-cacert so the CONNECT handshake to the proxy is
 		//   TLS-verified end-to-end.
 		// Retry (Q139):
-		//   The CONNECT tunnel terminates at the *live* api.github.com, whose edge
-		//   occasionally returns a transient 504 Gateway Timeout — observed on main
-		//   run 27661005022 (fast ~8s fail, HTTP_CODE=504) and corroborated in the
-		//   same run by the GMC IPRangeReconciler's independent direct fetch of
-		//   api.github.com/meta also returning 504. The proxy cannot be the source:
-		//   it emits 502 on dial failure and never 504 (see cmd/proxy:
-		//   TestProxy_DialFailure), and curl exited 22 (HTTP error from the target
-		//   URL, not a proxy/connect error), so the 504 is GitHub's own response
-		//   carried end-to-end through an already-established tunnel. We use plain
-		//   --retry (which retries transient HTTP 5xx and timeouts) and deliberately
-		//   NOT --retry-all-errors: a genuine proxy/NP/TLS bug surfaces as a TLS
-		//   cert error (exit 60, not retried → fails fast) or a persistent
-		//   connect/timeout (retried but never recovers → still fails), so the
-		//   test's PR-#59 bug-catching power is preserved while a flaky-upstream 504
-		//   self-heals. --retry-max-time caps total retrying so a real persistent
-		//   failure still terminates well inside the 2-minute pod-phase wait.
+		//   This CONNECT can fail transiently in two distinct ways, and the retry
+		//   must cover BOTH:
+		//   (a) Upstream HTTP 5xx through an already-established tunnel. The tunnel
+		//       terminates at the *live* api.github.com, whose edge occasionally
+		//       returns a transient 504 — observed on main run 27661005022 (fast
+		//       ~8s fail, HTTP_CODE=504), corroborated in the same run by the GMC
+		//       IPRangeReconciler's independent direct /meta fetch also getting 504.
+		//       curl exits 22 (HTTP error from the target URL); plain --retry
+		//       already retries this.
+		//   (b) Upstream *dial* failure at CONNECT-establishment time. The proxy
+		//       emits 502 (never 504; see cmd/proxy: TestProxy_DialFailure) only
+		//       when its net.DialTimeout to api.github.com:443 fails — a transient
+		//       TCP-level failure to GitHub, or a brief egress-dataplane window on
+		//       the Calico lane before Felix programs the new ipBlock rules. curl
+		//       then exits 56 ("CONNECT tunnel failed, response 502", HTTP_CODE=000)
+		//       — observed on PR-307 run 27839987830 (e2e-calico lane).
+		//   Plain --retry does NOT retry case (b): curl exit 56 (CURLE_RECV_ERROR)
+		//   is not in curl's default transient-retry set, and the proxy's 502 is
+		//   never surfaced as the transfer response code (it is the CONNECT code, so
+		//   %{http_code} is 000), so the HTTP-5xx retry path never triggers. Verified
+		//   empirically: with plain --retry curl makes exactly one CONNECT attempt
+		//   against a 502-returning proxy; with --retry-all-errors it retries. We
+		//   therefore add --retry-all-errors so case (b) self-heals too.
+		//   Bug-catching power is preserved: a genuine *persistent* proxy/NP/TLS
+		//   regression (wrong SAN → exit 60, proxy down / NP drop → exit 56/28)
+		//   fails on every retry and still fails the test — --retry-all-errors only
+		//   adds bounded retries, it cannot turn a deterministic failure green.
+		//   --retry-max-time caps total retrying so a real persistent failure still
+		//   terminates well inside the 2-minute pod-phase wait.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
@@ -251,7 +264,7 @@ spec:
       set -eu
       curl --silent --show-error --fail-with-body \
            --max-time 30 \
-           --retry 5 --retry-delay 2 --retry-max-time 60 \
+           --retry 5 --retry-delay 2 --retry-max-time 60 --retry-all-errors \
            --proxy %s \
            --proxy-cacert /etc/proxy-ca/tls.crt \
            --output /tmp/body \
