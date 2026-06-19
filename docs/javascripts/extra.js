@@ -12,7 +12,7 @@
   document.documentElement.classList.add("gag-reveal-ready");
 
   var targets = document.querySelectorAll(
-    ".md-content h2, .gag-pillars .grid.cards > ul > li, .gag-flow, .md-typeset table:not([class])"
+    ".md-content h2, .gag-pillars .grid.cards > ul > li, .gag-flow, .gag-stat, .md-typeset table:not([class])"
   );
   targets.forEach(function (el) {
     el.classList.add("gag-reveal");
@@ -21,6 +21,11 @@
   // Stagger the benefit tiles within each row of three.
   document.querySelectorAll(".gag-pillars .grid.cards > ul > li").forEach(function (el, i) {
     el.style.transitionDelay = (i % 3) * 70 + "ms";
+  });
+
+  // Stagger the why-GAG stat band so its four numbers ripple in left-to-right.
+  document.querySelectorAll(".gag-stat").forEach(function (el, i) {
+    el.style.transitionDelay = i * 60 + "ms";
   });
 
   var io = new IntersectionObserver(

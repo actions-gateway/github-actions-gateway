@@ -14,6 +14,15 @@ body[data-md-color-scheme="default"] {
   --md-accent-fg-color: #326ce5;
   --md-accent-fg-color--transparent: rgba(50, 108, 229, 0.1);
   --md-typeset-a-color: #2456c9; /* darker blue for link-text contrast on white */
+
+  /* Semantic red/green used across the why-gag page (problem chips, table
+     verdicts, proof rows, stat numbers). "ink" = text/icon colour; "fill" =
+     solid background carrying white text. Tuned per palette so they stay
+     legible and harmonised — change them here, everywhere follows. */
+  --gag-win-ink: #0f8a5f;
+  --gag-win-fill: #0f8a5f;
+  --gag-bad-ink: #c23a22;
+  --gag-bad-fill: #c23a22;
 }
 
 body[data-md-color-scheme="slate"] {
@@ -22,6 +31,13 @@ body[data-md-color-scheme="slate"] {
   --md-typeset-a-color: #6fa0f5;
   --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
   --gag-elev-2: 0 10px 24px rgba(0, 0, 0, 0.5);
+
+  /* Lighter inks for legible text/icons on the dark surface. Fills stay deep
+     enough to carry white text (the proof-row pills, problem-card chips). */
+  --gag-win-ink: #50c878;
+  --gag-win-fill: #0f8a5f;
+  --gag-bad-ink: #f4744f;
+  --gag-bad-fill: #e5533c;
 }
 
 .gag-hero {
@@ -120,6 +136,221 @@ body[data-md-color-scheme="slate"] {
   }
 }
 
+/* Why-GAG marketing page: give the content more side breathing room on wide
+   screens. Scoped via :has() to the page carrying the split hero, so the
+   landing page and the nav-inset docs pages are untouched (no JS needed). */
+@media screen and (min-width: 60rem) {
+  .md-content__inner:has(.gag-vs-hero) {
+    padding-left: 3.5rem;
+    padding-right: 3.5rem;
+  }
+}
+
+/* Why-GAG split hero: left-aligned argument + a right-hand ARC-vs-GAG proof
+   card, so the comparison starts in the first screenful (distinct from the
+   centered landing hero). Stacks to one column on narrow screens. */
+.gag-vs-hero {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 2.5rem;
+  align-items: center;
+  padding: 2.5rem 0 2rem;
+}
+
+@media screen and (max-width: 55rem) {
+  .gag-vs-hero {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+  }
+}
+
+.gag-vs-hero h1 {
+  font-size: clamp(1.9rem, 1.4rem + 2.4vw, 2.8rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.8rem;
+  text-wrap: balance;
+}
+
+/* Hero headline is the page banner, not a deep-link target — drop its ¶ permalink. */
+.gag-vs-hero h1 .headerlink {
+  display: none;
+}
+
+.gag-vs-hero__lede {
+  font-size: clamp(1rem, 0.95rem + 0.35vw, 1.12rem);
+  color: var(--md-default-fg-color--light);
+  max-width: 34rem;
+  margin: 0 0 1.5rem;
+  text-wrap: pretty;
+}
+
+.gag-vs-hero .md-button {
+  margin: 0.25rem 0.5rem 0.25rem 0;
+  border-radius: 0.45rem;
+  transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
+    background-color 0.2s var(--gag-ease), color 0.2s var(--gag-ease);
+}
+
+.gag-vs-hero .md-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--gag-elev-2);
+}
+
+.gag-vs-hero .md-button--primary {
+  box-shadow: var(--gag-elev-1);
+}
+
+/* The proof card: ARC's failure mode stacked above GAG's, on the same scenario. */
+.gag-vs-hero__proof {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.7rem;
+  padding: 1rem;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--gag-elev-1);
+}
+
+.gag-vs-hero__proof-cap {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  margin: 0 0 0.1rem;
+}
+
+.gag-vs-hero__proof-cap code {
+  text-transform: none;
+}
+
+.gag-vs-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--md-default-fg-color);
+}
+
+/* Warm tint for the ARC pain, cool/green for the GAG outcome — the row colour
+   carries the contrast (matching the warm problem-card chips elsewhere). */
+.gag-vs-row--arc {
+  background: color-mix(in srgb, var(--gag-bad-fill) 10%, transparent);
+}
+
+.gag-vs-row--gag {
+  background: color-mix(in srgb, var(--gag-win-fill) 12%, transparent);
+}
+
+.gag-vs-row__tag {
+  flex: none;
+  align-self: center;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.3rem;
+  color: #fff;
+}
+
+.gag-vs-row--arc .gag-vs-row__tag {
+  background: var(--gag-bad-fill);
+}
+
+.gag-vs-row--gag .gag-vs-row__tag {
+  background: var(--gag-win-fill);
+}
+
+/* Why-GAG problem cards: 2 across (the four problems pair up), reusing the
+   benefit-card visuals below. Collapses to one column on narrow screens. */
+.gag-pillars.gag-cols-2 .grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media screen and (max-width: 45rem) {
+  .gag-pillars.gag-cols-2 .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Problem cards read as "the pain", so fill their icon chip red (vs the accent
+   blue used for GAG's benefits) — the eye separates problem from solution. */
+.gag-pillars.gag-pillars--problem .grid.cards .twemoji.lg {
+  background: var(--gag-bad-fill);
+  color: #fff;
+}
+
+/* Stat band: a row of headline numbers — the scannable "spice" for skimmers,
+   each tied to a claim spelled out in the table and appendices below. */
+.gag-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.5rem 0 1.75rem;
+}
+
+.gag-stat {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.6rem;
+  padding: 1.1rem 1rem;
+  text-align: center;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--gag-elev-1);
+  transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
+    border-color 0.2s var(--gag-ease);
+}
+
+.gag-stat:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--gag-elev-2);
+  border-color: var(--gag-accent-line);
+}
+
+.gag-stat__num {
+  display: block;
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.2rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  /* Green = "GAG win" (same language as the table ✓ and hero GAG pill), so the
+     stat band reads as the red problem cards above it, now fixed. */
+  color: var(--gag-win-ink);
+}
+
+.gag-stat__label {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--md-default-fg-color--light);
+  text-wrap: pretty;
+}
+
+/* Bold lead phrase (before the em-dash) at full text strength, so it reads as a
+   mini-heading above the muted supporting detail. */
+.gag-stat__lead {
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+@media screen and (max-width: 50rem) {
+  .gag-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 30rem) {
+  .gag-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Four-tier flow: real DOM boxes so text stays legible and the layout reflows
    (branching row on wide screens, stacked on narrow) instead of scaling an SVG. */
 .gag-flow {
@@ -207,52 +438,153 @@ body[data-md-color-scheme="slate"] {
   border-color: var(--gag-accent-line);
 }
 
-.gag-pillars .grid.cards .twemoji.lg {
+/* Card header: icon chip sits inline-left of the title, vertically centred —
+   not floating as a separate block above it. */
+.gag-pillars .grid.cards > ul > li > p:first-child {
   display: flex;
   align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Bold, solid icon chip with a white glyph so the card headers pop. */
+.gag-pillars .grid.cards .twemoji.lg {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  width: 2.1rem;
-  height: 2.1rem;
-  margin-bottom: 0.35rem;
-  border-radius: 0.5rem;
-  background: var(--gag-accent-soft);
-  color: var(--md-accent-fg-color);
+  vertical-align: middle;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  background: var(--md-accent-fg-color);
+  color: #fff;
 }
 
 .gag-pillars .grid.cards .twemoji.lg svg {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
-/* Comparison table: bigger text, rounded frame, emphasized header + GAG column. */
-.md-typeset table:not([class]) {
+/* Comparison / data tables: bigger text, rounded frame, emphasized header + GAG
+   column. NB: do not re-add a :not([class]) guard here — the scroll-reveal JS
+   stamps .gag-reveal onto marketing-page tables, which a :not([class]) selector
+   would then exclude, dropping all this styling (that was the why-gag bug). */
+.md-typeset table {
   font-size: 0.8rem;
   border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: 0.5rem;
   overflow: hidden;
 }
 
-.md-typeset table:not([class]) th {
+.md-typeset table th {
   font-weight: 700;
   background: var(--md-default-fg-color--lightest);
 }
 
-.md-typeset table:not([class]) td:first-child {
+.md-typeset table td:first-child {
   font-weight: 500;
 }
 
 /* Last column = GitHub Actions Gateway: tint it so the eye lands on "us". */
-.md-typeset table:not([class]) th:last-child {
+.md-typeset table th:last-child {
   color: var(--md-accent-fg-color);
 }
 
-.md-typeset table:not([class]) th:last-child,
-.md-typeset table:not([class]) td:last-child {
+.md-typeset table th:last-child,
+.md-typeset table td:last-child {
   background: var(--gag-accent-soft);
 }
 
-.md-typeset table:not([class]) tbody tr:hover td:not(:last-child) {
+.md-typeset table tbody tr:hover td:not(:last-child) {
   background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
+}
+
+/* The why-gag comparison table: fill the column (so it isn't left-aligned with a
+   right-hand gap) and restore roomy cell padding. Material's default cell padding
+   is :not([class])-guarded, so the reveal JS that classes this table drops it —
+   hence re-stating it here. Scoped to this page so other tables are untouched. */
+.md-content__inner:has(.gag-vs-hero) table {
+  width: 100%;
+}
+
+.md-content__inner:has(.gag-vs-hero) table th,
+.md-content__inner:has(.gag-vs-hero) table td {
+  padding: 0.7rem 1.05rem;
+  vertical-align: top;
+}
+
+/* On phones the 3-column table is unreadable (cells wrap to many lines, code
+   tokens break mid-word), so stack each row: the capability becomes a heading
+   with the ARC and GAG outcomes labelled and full-width beneath it. */
+@media screen and (max-width: 38rem) {
+  .md-content__inner:has(.gag-vs-hero) table,
+  .md-content__inner:has(.gag-vs-hero) table tbody,
+  .md-content__inner:has(.gag-vs-hero) table tr,
+  .md-content__inner:has(.gag-vs-hero) table td {
+    display: block;
+    width: auto;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table thead {
+    display: none;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table tr {
+    padding: 0.6rem 0.4rem;
+    border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table td {
+    padding: 0.15rem 0.8rem;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table td:first-child {
+    font-weight: 700;
+    font-size: 0.92rem;
+    padding-bottom: 0.4rem;
+  }
+
+  /* Drop the per-cell GAG tint when stacked, and label the two outcome lines. */
+  .md-content__inner:has(.gag-vs-hero) table td:last-child {
+    background: transparent;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table td:nth-child(2)::before,
+  .md-content__inner:has(.gag-vs-hero) table td:last-child::before {
+    font-weight: 700;
+    margin-right: 0.15rem;
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table td:nth-child(2)::before {
+    content: "ARC";
+    color: var(--gag-bad-ink);
+  }
+
+  .md-content__inner:has(.gag-vs-hero) table td:last-child::before {
+    content: "GAG";
+    color: var(--gag-win-ink);
+  }
+}
+
+/* Verdict icons in the comparison table: green for a GAG win, warm red for an
+   ARC shortfall (matching the proof-card and problem-card colour language). */
+.md-typeset .gag-yes,
+.md-typeset .gag-no {
+  margin-right: 0.15rem;
+  vertical-align: text-bottom;
+}
+
+.md-typeset .gag-yes {
+  color: var(--gag-win-ink);
+}
+
+.md-typeset .gag-no {
+  color: var(--gag-bad-ink);
 }
 
 /* Scroll reveals — only when JS adds .gag-reveal-ready. No-JS and reduced-motion
