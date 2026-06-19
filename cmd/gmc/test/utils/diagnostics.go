@@ -36,8 +36,11 @@ func DumpAGCSessionDiagnostics(tenantNS, agcDeployment, infraNS, fakegithubDeplo
 		"kubectl", "get", "runnergroup", "-n", tenantNS, "-o", "yaml")
 	dumpCommand("pod descriptions in "+tenantNS,
 		"kubectl", "describe", "pods", "-n", tenantNS)
+	// --tail is generous: the session tenants run their AGC at debug (so this dump
+	// captures the listener's per-session/job/recycle trail — Q148), which is far
+	// more verbose than info, and the trail must not scroll out behind it.
 	dumpCommand("AGC logs in "+tenantNS,
-		"kubectl", "logs", "deploy/"+agcDeployment, "-n", tenantNS, "--tail=300", "--all-containers")
+		"kubectl", "logs", "deploy/"+agcDeployment, "-n", tenantNS, "--tail=2000", "--all-containers")
 	// --previous surfaces a crash-looped AGC's prior logs; absent on first boot.
 	dumpCommand("AGC previous-container logs in "+tenantNS,
 		"kubectl", "logs", "deploy/"+agcDeployment, "-n", tenantNS, "--tail=300", "--all-containers", "--previous")

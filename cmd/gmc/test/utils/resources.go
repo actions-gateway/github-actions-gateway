@@ -119,6 +119,15 @@ spec:
   # so this URL is not used for registration in the default stub flow. The
   # real-GitHub suite overrides it with AGC_EXTRA_GITHUB_ORG_URL.
   gitHubURL: https://github.com/e2e-org
+  # Run this tenant's AGC at debug so a session/worker-pod timeout is diagnosable.
+  # The session/job specs gate a DumpAGCSessionDiagnostics dump on failure, but the
+  # listener's per-session lifecycle trail — session start, job received, heal,
+  # single-use recycle, idle shutdown — was demoted to Debug in the logging-audit
+  # (Q87, Theme D). At the default info level a "no worker pod scheduled yet"
+  # timeout (Q134/Q148) therefore dumps only AGC startup logs and gives no hint why
+  # a job was never acquired. The extra volume is negligible here (maxListeners: 2,
+  # a handful of jobs) and the dump is only consumed on failure (Q148).
+  logLevel: debug
   proxy:
     minReplicas: 1
     maxReplicas: 3
@@ -155,6 +164,15 @@ spec:
   # so this URL is not used for registration in the default stub flow. The
   # real-GitHub suite overrides it with AGC_EXTRA_GITHUB_ORG_URL.
   gitHubURL: https://github.com/e2e-org
+  # Run this tenant's AGC at debug so a session/worker-pod timeout is diagnosable.
+  # The session/job specs gate a DumpAGCSessionDiagnostics dump on failure, but the
+  # listener's per-session lifecycle trail — session start, job received, heal,
+  # single-use recycle, idle shutdown — was demoted to Debug in the logging-audit
+  # (Q87, Theme D). At the default info level a "no worker pod scheduled yet"
+  # timeout (Q134/Q148) therefore dumps only AGC startup logs and gives no hint why
+  # a job was never acquired. The extra volume is negligible here (maxListeners: 2,
+  # a handful of jobs) and the dump is only consumed on failure (Q148).
+  logLevel: debug
   proxy:
     minReplicas: 1
     maxReplicas: 3
