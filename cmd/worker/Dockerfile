@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+# ^ BuildKit frontend pinned by digest. Dependabot's docker ecosystem does not
+#   bump syntax directives, so re-pin manually when bumping the 1.7 tag:
+#     docker buildx imagetools inspect docker/dockerfile:1.7
 ## Stage 1: build the Go entrypoint wrapper.
 ## This produces a static binary that reads the job payload Secret
 ## and feeds it into Runner.Worker via anonymous pipes.
@@ -78,4 +81,8 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
 # Regenerate THIRD-PARTY-NOTICES with `make third-party-notices`.
 COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 COPY --from=builder /wrapper /usr/local/bin/wrapper
+# The actions-runner base already ends as USER runner (UID 1001); pin it
+# explicitly so the non-root guarantee is local to this Dockerfile and survives
+# a base-image change rather than depending on the upstream's final USER.
+USER runner
 ENTRYPOINT ["/usr/local/bin/wrapper"]
