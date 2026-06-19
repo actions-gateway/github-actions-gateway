@@ -33,7 +33,7 @@ is what operators pin. All five Dockerfiles (the four production images plus
   build host's native platform — and **cross-compiles** with
   `GOOS=$TARGETOS GOARCH=$TARGETARCH`. BuildKit populates both args per target
   platform, so no QEMU emulation is needed for the build.
-- The **runtime stages** contain no `RUN` (only `COPY`/`ENV`/`LABEL`), so
+- The **runtime stages** contain no `RUN` (only `COPY`/`ENV`/`LABEL`/`USER`), so
   assembling the foreign-arch image needs no emulation either. All pinned base
   digests (`golang`, `distroless/static`, `actions-runner`) are multi-arch
   index digests covering both platforms.
@@ -103,3 +103,25 @@ what ships at `/licenses/` is in
 
 The test-only `test/fakegithub` image is not published as a product artifact and
 does not carry `/licenses/`.
+
+### Image hardening
+
+A few build-time hardening conventions are shared by every Dockerfile and gated
+by the [`dockerfile-lint` CI workflow](testing.md#the-dockerfile-lint-gate)
+(`hadolint` at the strictest `style` threshold):
+
+- **Explicit non-root `USER`.** Each final stage pins its runtime user even
+  though the base already defaults to one — `USER 65532:65532` on the distroless
+  images, `USER runner` on the actions-runner-based worker — so the non-root
+  guarantee is local to the Dockerfile and survives a base-image/tag change. The
+  worker keeps the user **by name** (not a numeric UID) on purpose; see
+  [security §5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)
+  for why the GMC supplies the numeric `runAsUser: 1001` that lets kubelet verify
+  it.
+- **Digest-pinned BuildKit frontend.** The `# syntax=docker/dockerfile:1.7`
+  directive carries an `@sha256:…` digest. Dependabot's docker ecosystem does
+  **not** bump syntax directives, so re-pin it manually when bumping the tag:
+  `docker buildx imagetools inspect docker/dockerfile:1.7`.
+- **Digest-pinned bases**, multi-stage builds onto a minimal/distroless runtime,
+  `CGO_ENABLED=0` static binaries, and reproducible-build flags — covered above
+  and in [security §threat-model](../design/05-security.md).

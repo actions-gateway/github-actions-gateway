@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+# ^ BuildKit frontend pinned by digest. Dependabot's docker ecosystem does not
+#   bump syntax directives, so re-pin manually when bumping the 1.7 tag:
+#     docker buildx imagetools inspect docker/dockerfile:1.7
 # golang:1.26 — pinned to the multi-arch manifest digest for cache stability.
 # Update with: docker buildx imagetools inspect golang:1.26
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
@@ -48,4 +51,8 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
 # with `make third-party-notices`. COPY needs no shell, so this works on distroless.
 COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
 COPY --from=builder /bin/proxy /proxy
+# distroless :nonroot already runs as UID 65532; pin it explicitly so the
+# non-root guarantee survives a base-image/tag change instead of living only in
+# the FROM tag.
+USER 65532:65532
 ENTRYPOINT ["/proxy"]

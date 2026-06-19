@@ -200,6 +200,10 @@ The cluster/image/test plumbing for the e2e suite lives in one reusable workflow
 
   **Calico image caching.** The Calico manifest pulls `calico/node`, `calico/cni`, and `calico/kube-controllers` from quay.io/docker.io on every node during install — and those pulls happen *before* the local registry is wired into the nodes, so they cannot be mirrored the way the curl image is. Instead the lane pre-pulls the exact image refs the pinned manifest references into the runner's Docker daemon (cached via `actions/cache`, keyed on `CALICO_VERSION`, retried), and `scripts/kind-with-registry.sh` `kind load`s whatever is present onto the nodes so the rollout never touches quay.io. This keeps the per-PR Calico cost bounded and quay.io off the critical path. Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom. `CALICO_VERSION` is pinned in both the root `Makefile` and the workflow env — bump them together.
 
+### The Dockerfile-lint gate
+
+[`.github/workflows/dockerfile-lint.yml`](../../.github/workflows/dockerfile-lint.yml) runs `hadolint` over all five Dockerfiles (a matrix leg each), path-gated on `**/Dockerfile`. The failure threshold is `style` — the strictest level, which all five currently pass clean — so a regression such as an unpinned base tag, a dropped digest pin, or a relaxed non-root `USER` fails at PR time. It is its own lightweight workflow (like `doc-links.yml` and `status-lint.yml`), so a Dockerfile-only change does not trigger the Go suite. There is no local `make` target; reproduce a run with `docker run --rm -i hadolint/hadolint hadolint --failure-threshold style - < cmd/gmc/Dockerfile`.
+
 ## Security scanning
 
 The `security-scan.yml` workflow runs three gates on every PR (and on push to `main`), independent of the unit/integration/e2e suites — two supply-chain scans plus a Kubernetes posture scan. All three have local equivalents so you can reproduce a CI verdict before pushing.
