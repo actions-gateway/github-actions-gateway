@@ -20,6 +20,6 @@ Shared test fixtures and configuration used by integration and end-to-end tests.
 | Tier B (kind + fakegithub) | Local `kind` cluster | AGC lifecycle against the in-cluster `fakegithub/` server — no real GitHub quota burned | [docs/design/07-test-plan.md §7.3](../docs/design/07-test-plan.md#73-end-to-end-tests) |
 | Tier C (live) | Real cluster + real GitHub App | Real workflow dispatch end-to-end against `actions-gateway-test` | [docs/design/07-test-plan.md §7.3](../docs/design/07-test-plan.md#73-end-to-end-tests) |
 
-For operational details (Make targets, running a single spec, local-only tests, Tier C env vars), see [docs/development/testing.md](../docs/development/testing.md). For iterating on Tier A/B locally (image-tag caching, distroless debugging, sub-minute inner loop), see [docs/development/kind-iteration.md](../docs/development/kind-iteration.md).
+For operational details (Make targets, running a single spec, the `multi-node` label and `SUITE` filter, Tier C env vars), see [docs/development/testing.md](../docs/development/testing.md). For iterating on Tier A/B locally (image-tag caching, distroless debugging, sub-minute inner loop), see [docs/development/kind-iteration.md](../docs/development/kind-iteration.md).
 
 **Pick the right tier for the bug class.** Unit/envtest can't observe behaviours that emerge from real CNI, DNAT, kubelet, or TLS — when a change crosses one of those boundaries, only Tier A proves it.
