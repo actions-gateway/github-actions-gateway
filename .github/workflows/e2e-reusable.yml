@@ -42,6 +42,11 @@ jobs:
       # `make e2e-cluster`, so the pre-pulled images match what the manifest
       # references. Ignored on the kindnet caller.
       CALICO_VERSION: v3.31.5
+      # cert-manager release applied on every e2e run (both CNIs). Keep in sync
+      # with CERTMANAGER_VERSION in cmd/gmc/Makefile. Used to key the image cache
+      # and pin the manifest the pre-pull step reads, so the images kind-loaded
+      # onto the nodes match what `make apply-cert-manager` applies.
+      CERTMANAGER_VERSION: v1.20.2
       # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
       # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
       # the cluster's K8s version is deterministic and the image is cacheable by
@@ -235,6 +240,53 @@ jobs:
             docker save -o "$tar" "${images[@]}"
           fi
 
+      - name: Cache cert-manager images
+        # Both CNIs: cert-manager is applied on every e2e run. Keyed on
+        # CERTMANAGER_VERSION so a bump invalidates it. The cached dir holds the
+        # image tar and the image list, so a hit needs no manifest fetch.
+        id: cert-manager-image-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/cert-manager-images
+          key: cert-manager-images-${{ env.CERTMANAGER_VERSION }}
+
+      - name: Pre-pull cert-manager images
+        # Both CNIs. `make apply-cert-manager` (in the cluster step below) makes
+        # kubelet pull the cert-manager controller/webhook/cainjector images from
+        # quay.io on the nodes, and that rollout is then waited on — squarely on
+        # the critical path. Pre-pull the exact refs the pinned manifest
+        # references into the runner's Docker daemon here (cached + retried); the
+        # cluster step then kind-loads them onto the nodes so the rollout never
+        # touches quay.io. The image list is persisted alongside the tar so the
+        # load step needs neither a manifest fetch nor a re-extract.
+        run: |
+          set -euo pipefail
+          dir=/tmp/cert-manager-images
+          tar="$dir/cert-manager.tar"
+          list="$dir/images.txt"
+          if [[ -f "$tar" && -f "$list" ]]; then
+            echo "==> loading cert-manager images from cache"
+            docker load -i "$tar"
+          else
+            manifest="$(mktemp)"
+            trap 'rm -f "$manifest"' EXIT
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
+              "https://github.com/cert-manager/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.yaml"
+            mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
+            if [[ "${#images[@]}" -eq 0 ]]; then
+              echo "no images found in cert-manager manifest for ${CERTMANAGER_VERSION}" >&2
+              exit 1
+            fi
+            echo "cert-manager images: ${images[*]}"
+            for img in "${images[@]}"; do
+              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+                scripts/pull-image-with-retry.sh "$img"
+            done
+            mkdir -p "$dir"
+            docker save -o "$tar" "${images[@]}"
+            printf '%s\n' "${images[@]}" > "$list"
+          fi
+
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
         # only on the registry (already up), not the cluster, so run it in the
@@ -267,6 +319,18 @@ jobs:
           # nodes so the rollout never touches quay.io. CALICO_VERSION is passed
           # so those pre-pulled images match the manifest the script applies.
           make e2e-cluster KIND_CLUSTER=actions-gateway-e2e KIND_NODE_IMAGE="${KIND_NODE_IMAGE%@*}" KIND_CNI="${KIND_CNI}" CALICO_VERSION="${CALICO_VERSION}"
+
+          # Preload the pre-pulled cert-manager images onto the nodes before
+          # applying the manifest, so the rollout the wait step blocks on never
+          # pulls them from quay.io. IfNotPresent on the manifest's pinned tags
+          # makes the load a hit. (Calico's equivalent load is inside
+          # kind-with-registry.sh because its create/install are coupled; the
+          # cert-manager apply is a separate step, so its load lives here.)
+          while read -r img; do
+            [[ -z "$img" ]] && continue
+            echo "==> preloading $img onto kind nodes"
+            kind load docker-image --name actions-gateway-e2e "$img"
+          done < /tmp/cert-manager-images/images.txt
           make apply-cert-manager
 
           echo "==> waiting for image build (bake) to finish"
