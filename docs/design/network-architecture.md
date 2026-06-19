@@ -344,6 +344,33 @@ kubectl run nettest-xtenant -n <tenant-a-namespace> --rm -it --restart=Never \
 # tenant A's own proxy ClusterIP, not arbitrary in-cluster services)
 ```
 
+### Confirm the GMC manager metrics endpoint is restricted to `metrics: enabled` namespaces
+
+The GMC manager NetworkPolicy (`networkPolicy.enabled=true`, default) admits the manager's `:8443` `/metrics` endpoint **only** from namespaces labelled `metrics: enabled`, while leaving the webhook port `:9443` open so admission keeps working. Unlike the per-tenant policies above this one keys on the *namespace* label (a `namespaceSelector`), so the probe pod's own labels are irrelevant — only the label on its namespace decides. Verified at runtime on a Calico kind cluster on 2026-06-18 (Q83) and codified as the Calico-gated Tier-A spec `Manager NetworkPolicy` (`E2E_GMC_ManagerMetricsNP_*` / `E2E_GMC_ManagerWebhookNP_AdmissionStillWorks`).
+
+```sh
+URL="https://gmc-controller-manager-metrics-service.gmc-system.svc.cluster.local:8443/metrics"
+
+# NEGATIVE: scrape from a namespace WITHOUT the label is blocked.
+kubectl create namespace np-denied
+kubectl run probe -n np-denied --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  -- curl -sk -o /dev/null -w 'HTTP_CODE=%{http_code}\n' --connect-timeout 10 "$URL"
+# Expected: curl: (28) ... Timeout; HTTP_CODE=000 (manager NP denies the unlabelled namespace)
+
+# POSITIVE: scrape from a namespace WITH the label reaches the endpoint.
+kubectl create namespace np-allowed
+kubectl label namespace np-allowed metrics=enabled
+kubectl run probe -n np-allowed --rm -it --restart=Never \
+  --image=curlimages/curl:latest \
+  -- curl -sk -o /dev/null -w 'HTTP_CODE=%{http_code}\n' --connect-timeout 10 "$URL"
+# Expected: HTTP_CODE=401 (connection allowed through the NP; 401 is the metrics
+# authn layer rejecting the missing bearer token — proof the TCP/TLS path reached
+# the server, not the network blocking it)
+```
+
+Admission itself proves `:9443` stays open: creating any ActionsGateway (valid or invalid) returns the validating webhook's verdict rather than a `failed calling webhook … context deadline exceeded` transport error.
+
 ---
 
 ← [Security](05-security.md) | [Back to index](README.md)
