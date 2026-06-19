@@ -20,6 +20,13 @@ REGISTRY_PORT=${REGISTRY_PORT:-5000}
 running="$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null || true)"
 if [[ "${running}" != 'true' ]]; then
   echo "==> starting registry container ${REGISTRY_NAME} on host 127.0.0.1:${REGISTRY_PORT}"
+  # Publish on the IPv4 loopback only. Callers must therefore reference the
+  # registry as 127.0.0.1:${REGISTRY_PORT}, NOT localhost — Docker daemon IPv6 is
+  # not guaranteed on GitHub runners, so a pusher that resolves "localhost" to
+  # IPv6 [::1] first would hit a closed port and fail intermittently with
+  # "connect: connection refused". All host-side refs (docker-bake.hcl
+  # IMAGE_REGISTRY, the *_IMG env vars, the kind certs.d host dir) use 127.0.0.1
+  # to stay deterministically IPv4.
   docker run \
     -d --restart=always \
     -p "127.0.0.1:${REGISTRY_PORT}:5000" \

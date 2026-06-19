@@ -19,7 +19,7 @@
 #   CALICO_VERSION   — Calico release tag for KIND_CNI=calico (default: v3.31.5)
 #
 # After this script runs:
-#   * Images pushed to localhost:${REGISTRY_PORT}/... from the host are
+#   * Images pushed to 127.0.0.1:${REGISTRY_PORT}/... from the host are
 #     pull-able by kind nodes inside the cluster.
 #   * The `local-registry-hosting` ConfigMap in `kube-public` advertises the
 #     endpoint per https://kind.sigs.k8s.io/docs/user/local-registry/.
@@ -138,9 +138,18 @@ if [[ "${KIND_CNI}" == "calico" ]]; then
   install_calico
 fi
 
-# 3. Wire each node's containerd to resolve localhost:${REGISTRY_PORT} via the
-#    registry container's hostname on the kind network.
-REGISTRY_DIR="/etc/containerd/certs.d/localhost:${REGISTRY_PORT}"
+# 3. Wire each node's containerd to resolve 127.0.0.1:${REGISTRY_PORT} via the
+#    registry container's hostname on the kind network. The host portion here
+#    must match the registry-host prefix of the image refs the workload pods
+#    use (set via the *_IMG env vars / docker-bake.hcl IMAGE_REGISTRY): containerd
+#    keys the certs.d mirror config on that literal string. We use 127.0.0.1 (not
+#    "localhost") so the host-side buildx/docker push target is unambiguously
+#    IPv4 — the registry is published IPv4-only, and a pusher that resolves
+#    "localhost" to IPv6 [::1] first fails intermittently with "connection
+#    refused". This in-cluster routing is otherwise independent of the host
+#    address: the mirror always forwards to ${REGISTRY_NAME}:5000 on the kind
+#    network, which is unaffected by the host-side family choice.
+REGISTRY_DIR="/etc/containerd/certs.d/127.0.0.1:${REGISTRY_PORT}"
 for node in $(kind get nodes --name "${KIND_CLUSTER}"); do
   docker exec "${node}" mkdir -p "${REGISTRY_DIR}"
   cat <<EOF | docker exec -i "${node}" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml"
@@ -163,8 +172,8 @@ metadata:
   namespace: kube-public
 data:
   localRegistryHosting.v1: |
-    host: "localhost:${REGISTRY_PORT}"
+    host: "127.0.0.1:${REGISTRY_PORT}"
     help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
 EOF
 
-echo "==> registry ready at localhost:${REGISTRY_PORT} (kind-network: ${REGISTRY_NAME}:5000)"
+echo "==> registry ready at 127.0.0.1:${REGISTRY_PORT} (kind-network: ${REGISTRY_NAME}:5000)"

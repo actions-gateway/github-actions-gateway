@@ -11,7 +11,7 @@ make wait-cert-manager
 make e2e-images           # builds and pushes gmc/agc/proxy/worker/fakegithub
 ```
 
-The Makefile pipeline pushes to `localhost:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `localhost:5000/*` against the host registry.
+The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `127.0.0.1:5000/*` against the host registry. (The literal IPv4 loopback is used, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently with "connection refused".)
 
 ### CNI selection: kindnet (default) vs Calico
 
@@ -29,19 +29,19 @@ The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgres
 
 ### Image tag caching
 
-Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `localhost:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
+Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
 
 Two options:
 - Push to a unique tag per iteration (`-v2`, `-v3`, or a content hash) and update the deployment image:
   ```bash
-  docker buildx bake --file docker-bake.hcl --set "agc.tags=localhost:5000/agc:e2e-d667096-v2" agc
-  kubectl set env -n gmc-system deployment/gmc-controller-manager AGC_IMAGE=localhost:5000/agc:e2e-d667096-v2
+  docker buildx bake --file docker-bake.hcl --set "agc.tags=127.0.0.1:5000/agc:e2e-d667096-v2" agc
+  kubectl set env -n gmc-system deployment/gmc-controller-manager AGC_IMAGE=127.0.0.1:5000/agc:e2e-d667096-v2
   ```
 - Or set `imagePullPolicy: Always` on the deployment template (only viable for components where you control the spec).
 
 ### GMC rejects floating `AGC_IMAGE`/`PROXY_IMAGE` tags by default
 
-The GMC requires `AGC_IMAGE` and `PROXY_IMAGE` to be pinned by `@sha256:` digest, so a floating tag like `localhost:5000/agc:e2e-d667096-v2` makes it exit at startup with a "not digest-pinned" error. For local iteration, start the GMC with `--allow-floating-image-tags=true` (the e2e suite patches this flag in automatically):
+The GMC requires `AGC_IMAGE` and `PROXY_IMAGE` to be pinned by `@sha256:` digest, so a floating tag like `127.0.0.1:5000/agc:e2e-d667096-v2` makes it exit at startup with a "not digest-pinned" error. For local iteration, start the GMC with `--allow-floating-image-tags=true` (the e2e suite patches this flag in automatically):
 
 ```bash
 kubectl patch deployment -n gmc-system gmc-controller-manager --type=json \
@@ -145,7 +145,7 @@ The GMC rolls itself after env changes; tenant AGC pods pick up the new env on t
 A full `make e2e-up` run is ~10 minutes per cycle. To iterate on a single component:
 
 1. Stand up the cluster + cert-manager + GMC once with `E2E_SKIP_TEARDOWN=true ginkgo run --focus '<spec>' ...`. The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.
-2. Rebuild the changed component only: `docker buildx bake --file docker-bake.hcl --set "<target>.tags=localhost:5000/<name>:<unique-tag>" <target>`.
+2. Rebuild the changed component only: `docker buildx bake --file docker-bake.hcl --set "<target>.tags=127.0.0.1:5000/<name>:<unique-tag>" <target>`.
 3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WORKER_IMAGE` on the GMC).
 4. Force a fresh pod: `kubectl delete pod -l <selector>`.
 5. Test the path with a label-matched `kubectl run` debug pod (above).

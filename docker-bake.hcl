@@ -15,8 +15,15 @@ variable "GIT_SHA" {
   default = ""
 }
 
+// Use the literal IPv4 loopback, not "localhost". The registry container is
+// published IPv4-only (-p 127.0.0.1:5000:5000 in scripts/start-registry.sh), so
+// a pusher that resolves "localhost" to the IPv6 [::1] first hits a closed port
+// and fails intermittently ("connect: connection refused"). 127.0.0.1 is
+// unambiguous. This string is also the image-name prefix the kind nodes'
+// containerd mirror is keyed on, so it must stay in sync with the certs.d host
+// dir in scripts/kind-with-registry.sh and the *_IMG refs that pods consume.
 variable "IMAGE_REGISTRY" {
-  default = "localhost:5000"
+  default = "127.0.0.1:5000"
 }
 
 // VERSION stamps org.opencontainers.image.version. Defaults empty so the
