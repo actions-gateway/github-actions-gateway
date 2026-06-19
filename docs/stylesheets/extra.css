@@ -40,11 +40,34 @@ body[data-md-color-scheme="slate"] {
   --gag-bad-fill: #e5533c;
 }
 
+/* Header: Material gives the site title a 1rem left margin, which leaves a big
+   gap after the logomark. Tighten it so the wordmark sits beside the mark, with
+   the logo's own padding giving roughly equal space on each side. */
+[dir="ltr"] .md-header__title {
+  margin-left: 0.2rem;
+}
+
+/* Hamburger drawer header: centre the logomark across the top and enlarge it a
+   touch; let the header grow and add top room so the bigger mark clears the
+   site title beneath it (Material left-aligns it at a fixed 5.6rem height). */
+.md-nav--primary .md-nav__title {
+  height: auto;
+  padding-top: 4rem;
+  text-align: center;
+}
+
+.md-nav--primary .md-nav__title .md-logo img {
+  height: 3rem;
+  margin-inline: auto;
+}
+
 .gag-hero {
   position: relative;
   isolation: isolate;
-  text-align: center;
-  padding: 3rem 0 1.75rem;
+  text-align: left;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.25rem 0 1.75rem;
 }
 
 /* Subtle dot-grid behind the hero, faded out toward the edges. */
@@ -60,14 +83,78 @@ body[data-md-color-scheme="slate"] {
   opacity: 0.6;
 }
 
-/* Hero logomark — the faceted ring, front and centre above the headline.
-   Fluidly sized so it dominates on desktop without crowding the title on phones. */
+/* Illuminated-initial logomark: the faceted ring sits like a manuscript drop
+   cap at the start of the hero, with the eyebrow, headline, and description
+   flowing around and beneath it. flow-root contains the float so the call-to-
+   action buttons clear it and start on their own line below. */
+.gag-hero__intro {
+  display: flow-root;
+}
+
+/* Logomark + headline as a lockup, the logo vertically centred against the
+   title so it never leaves a gap; the description and call-to-action sit below.
+   Markdown wraps the <img> in a <p>, so collapse that wrapper to make the image
+   itself the flex item. */
+.gag-hero__intro {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1.2rem;
+}
+
+.gag-hero__intro > p:has(.gag-hero__logo) {
+  display: contents;
+}
+
 .gag-hero__logo {
-  display: block;
-  width: clamp(96px, 13vw, 160px);
+  flex-shrink: 0;
+  width: clamp(92px, 11vw, 132px);
   height: auto;
-  margin: 0 auto 1.25rem;
   filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--md-accent-fg-color) 30%, transparent));
+}
+
+.gag-hero__headline > :first-child {
+  margin-top: 0;
+}
+
+.gag-hero__headline > :last-child {
+  margin-bottom: 0;
+}
+
+/* Narrow screens: stack the lockup with the logo centred above the title. */
+@media screen and (max-width: 42rem) {
+  .gag-hero__intro {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 1rem;
+  }
+}
+
+/* Install snippet: shrink to the width of its longest line and centre it, so
+   the block doesn't stretch full width with dead space to the right of the
+   short helm flags. max-width (not width) keeps it a full-width block when the
+   viewport is narrower than the content, so the code scrolls instead of being
+   clipped. */
+.gag-install {
+  max-width: fit-content;
+  margin-inline: auto;
+}
+
+/* Section intro (heading + lede): both landing sections share the hero's width
+   and are centred as a block, with the text left-aligned inside — so the hero,
+   "What GAG gives you", and "How it fits together" all line up consistently.
+   Caps to the viewport (and wraps) on narrow screens. */
+.gag-section-intro {
+  max-width: 44rem;
+  margin-inline: auto;
+}
+
+/* Caption beneath the architecture flow: centred under the centred diagram. */
+.gag-flow__caption {
+  max-width: 40rem;
+  margin-inline: auto;
+  text-align: center;
 }
 
 .gag-eyebrow {
@@ -80,12 +167,13 @@ body[data-md-color-scheme="slate"] {
 }
 
 .gag-hero h1 {
-  font-size: clamp(2rem, 1.3rem + 3.1vw, 3.1rem);
+  font-size: clamp(1.9rem, 1.25rem + 2.4vw, 2.9rem);
   line-height: 1.12;
   letter-spacing: -0.01em;
   margin: 0 0 0.7rem;
-  /* Even out the headline so the last word doesn't dangle on its own line. */
-  text-wrap: balance;
+  /* Pretty (not balance): the headline wraps around the floated logomark, so
+     keep the lines flush-left rather than centre-balanced. */
+  text-wrap: pretty;
 }
 
 /* The hero title is the page banner, not a deep-link target — drop its ¶ permalink. */
@@ -96,13 +184,17 @@ body[data-md-color-scheme="slate"] {
 .gag-hero .gag-tagline {
   font-size: clamp(1rem, 0.95rem + 0.4vw, 1.15rem);
   color: var(--md-default-fg-color--light);
-  max-width: 40rem;
-  margin: 0 auto 1.5rem;
+  margin: 0 0 1.5rem;
   text-wrap: pretty;
 }
 
+/* Center the call-to-action row even though the hero text is left-aligned. */
+.gag-hero p:has(.md-button) {
+  text-align: center;
+}
+
 .gag-hero .md-button {
-  margin: 0.25rem 0.3rem;
+  margin: 0.5rem 0.3rem 0;
   border-radius: 0.45rem;
   transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
     background-color 0.2s var(--gag-ease), color 0.2s var(--gag-ease);
@@ -120,8 +212,8 @@ body[data-md-color-scheme="slate"] {
 .gag-reassure {
   font-size: 0.82rem;
   color: var(--md-default-fg-color--light);
-  max-width: 38rem;
-  margin: 1.1rem auto 0;
+  max-width: 48rem;
+  margin: 1.1rem 0 0;
   text-wrap: pretty;
 }
 
@@ -134,22 +226,23 @@ body[data-md-color-scheme="slate"] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-@media screen and (max-width: 50rem) {
+@media screen and (max-width: 56rem) {
   .gag-pillars .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media screen and (max-width: 30rem) {
+@media screen and (max-width: 42rem) {
   .gag-pillars .grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* Why-GAG marketing page: give the content more side breathing room on wide
-   screens. Scoped via :has() to the page carrying the split hero, so the
-   landing page and the nav-inset docs pages are untouched (no JS needed). */
-@media screen and (min-width: 60rem) {
+/* Marketing pages (landing + Why-GAG): give the content more side breathing
+   room on wide screens. Scoped via :has() to the pages carrying the heroes, so
+   the nav-inset docs pages are untouched (no JS needed). */
+@media screen and (min-width: 72rem) {
+  .md-content__inner:has(.gag-hero),
   .md-content__inner:has(.gag-vs-hero) {
     padding-left: 3.5rem;
     padding-right: 3.5rem;
