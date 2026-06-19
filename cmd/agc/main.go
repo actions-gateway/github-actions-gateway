@@ -134,6 +134,22 @@ func zapLevelFromEnv(v string) zapcore.LevelEnabler {
 	return nil
 }
 
+// normalizeDebugLevel deepens a plain "debug" override to slogDebugZapLevel so
+// that "debug" surfaces the hot-path slog.Debug lines regardless of whether it
+// arrived via --zap-log-level=debug or LOG_LEVEL=debug. --zap-log-level=debug
+// binds the level to zapcore.DebugLevel (-1), which surfaces controller-runtime's
+// own V(0)/V(1) lines but NOT the V(4) slog.Debug lines (see slogDebugZapLevel);
+// zapLevelFromEnv already lands at the right level. The override is returned
+// unchanged when nil, not debug-enabled (info/warn/error), or already at least as
+// deep as slogDebugZapLevel — so only an explicit DebugLevel is deepened (Q148).
+func normalizeDebugLevel(lvl zapcore.LevelEnabler) zapcore.LevelEnabler {
+	if lvl != nil && lvl.Enabled(zapcore.DebugLevel) && !lvl.Enabled(slogDebugZapLevel) {
+		out := uberzap.NewAtomicLevelAt(slogDebugZapLevel)
+		return &out
+	}
+	return lvl
+}
+
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
 	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
@@ -161,6 +177,7 @@ func run() error {
 			zapOpts.Level = lvl
 		}
 	}
+	zapOpts.Level = normalizeDebugLevel(zapOpts.Level)
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
 	// Bridge log/slog onto the same zap logger. The listener, provisioner, and
 	// agentpool packages log through log/slog; without this, slog.Default() is

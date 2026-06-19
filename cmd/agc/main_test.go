@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	crzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -45,6 +46,48 @@ func TestZapLevelFromEnv(t *testing.T) {
 		t.Run("no override for "+v, func(t *testing.T) {
 			if lvl := zapLevelFromEnv(v); lvl != nil {
 				t.Errorf("LOG_LEVEL=%q must not override the default level, got %v", v, lvl)
+			}
+		})
+	}
+}
+
+// TestNormalizeDebugLevel verifies that a plain "debug" override (whether from
+// --zap-log-level=debug or LOG_LEVEL=debug) is deepened to surface the V(4)
+// slog.Debug hot-path lines, while every other level is left untouched (Q148).
+func TestNormalizeDebugLevel(t *testing.T) {
+	t.Run("nil stays nil (default info)", func(t *testing.T) {
+		if got := normalizeDebugLevel(nil); got != nil {
+			t.Errorf("nil override must stay nil, got %v", got)
+		}
+	})
+
+	t.Run("plain DebugLevel is deepened to slog.Debug", func(t *testing.T) {
+		in := zap.NewAtomicLevelAt(zapcore.DebugLevel)
+		got := normalizeDebugLevel(&in)
+		if got == nil || !got.Enabled(slogDebugZapLevel) {
+			t.Errorf("--zap-log-level=debug must be deepened to enable the slog.Debug level, got %v", got)
+		}
+	})
+
+	t.Run("already-deep level is unchanged", func(t *testing.T) {
+		in := zap.NewAtomicLevelAt(slogDebugZapLevel)
+		if got := normalizeDebugLevel(&in); got != &in {
+			t.Error("an override already at the slog.Debug level must be returned unchanged")
+		}
+	})
+
+	for _, tc := range []struct {
+		name  string
+		level zapcore.Level
+	}{
+		{"info", zapcore.InfoLevel},
+		{"warn", zapcore.WarnLevel},
+		{"error", zapcore.ErrorLevel},
+	} {
+		t.Run(tc.name+" is unchanged", func(t *testing.T) {
+			in := zap.NewAtomicLevelAt(tc.level)
+			if got := normalizeDebugLevel(&in); got != &in {
+				t.Errorf("%s must be returned unchanged, got %v", tc.name, got)
 			}
 		})
 	}
