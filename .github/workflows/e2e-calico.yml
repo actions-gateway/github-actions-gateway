@@ -1,0 +1,51 @@
+# Nightly e2e run on the Calico (egress-enforcing) CNI profile — Q119.
+#
+# kindnet (the per-PR e2e CNI in e2e-test.yml) accepts NetworkPolicy objects but
+# its bundled kube-network-policies enforcer does not drop egress, so the
+# NetworkPolicy-enforcement specs cannot be validated there and self-skip. Q7b
+# confirmed they enforce on Calico v3.31.5 locally; this lane makes that a
+# standing CI gate. On Calico the full suite runs and these specs activate:
+#   - E2E_GMC_TenantProvisioning_ProxyConnectWorks       (runs on both CNIs)
+#   - E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod  (calico-only)
+#   - E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI            (calico-only)
+#   - E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace            (calico-only, Q83)
+#   - E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace             (calico-only, Q83)
+#
+# Scheduled rather than added to every PR: Calico bring-up (image pulls from
+# quay + calico-node rollout) lengthens the leg, and these are
+# enforcement-regression guards, not per-change logic — nightly coverage keeps
+# PR latency low while still catching a regression within a day. Trigger it
+# on-demand with the workflow_dispatch button (Actions tab) after a change that
+# touches NetworkPolicy generation or the egress proxy.
+#
+# This lane runs only on the default branch (schedule/dispatch), so it cannot
+# gate the PR that introduces it — validate that PR by reading the YAML and, if
+# possible, a local `make e2e-cluster KIND_CNI=calico` run; the first real signal
+# is the first nightly run or a manual dispatch post-merge.
+name: e2e (calico)
+
+on:
+  schedule:
+    # 04:17 UTC daily. Off-the-hour to avoid the top-of-hour scheduler congestion
+    # GitHub warns about, and outside US/EU working hours to keep runner pressure low.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+# Don't pile up nightly runs: if a manual dispatch lands while a run is in
+# flight, let the running one finish (it is a ~45 min full e2e suite) and queue
+# the new one rather than cancelling mid-suite.
+concurrency:
+  group: e2e-calico-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  e2e-calico:
+    uses: ./.github/workflows/e2e-reusable.yml
+    permissions:
+      contents: read
+    with:
+      kind_cni: calico
+      # Extra headroom over the kindnet leg's 45m: Calico adds the calico-node
+      # image pull + rollout to cluster bring-up, and the egress-negative specs
+      # that self-skip on kindnet actually run here.
+      timeout_minutes: 60

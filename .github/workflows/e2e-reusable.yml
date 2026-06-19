@@ -1,0 +1,312 @@
+# Reusable e2e job, parameterized by CNI. Two callers drive it:
+#   - e2e-test.yml   — per-PR / push-to-main, KIND_CNI=kindnet (the default).
+#   - e2e-calico.yml — nightly + manual, KIND_CNI=calico (egress-enforcing
+#                      profile; activates the NetworkPolicy-enforcement specs
+#                      that self-skip on kindnet — Q119).
+# Keeping the cluster/image/test plumbing here means a kind bump, image-tag
+# change, or flake mitigation is made once and both lanes inherit it (no drift
+# between two near-identical ~300-line workflows).
+name: e2e (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      kind_cni:
+        description: 'CNI to install in the kind cluster: kindnet (kind default) or calico (egress-enforcing).'
+        type: string
+        default: kindnet
+      timeout_minutes:
+        description: 'Job timeout in minutes. Calico bring-up (image pulls from quay + calico-node rollout) needs more headroom than kindnet.'
+        type: number
+        default: 45
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    permissions:
+      contents: read
+
+    env:
+      # The CNI to build the kind cluster with, threaded to `make e2e-cluster`
+      # as a make argument below. Trusted enum (kindnet|calico) validated by
+      # scripts/kind-with-registry.sh; surfaced as an env var rather than
+      # interpolated into a run: script directly (no script-injection surface).
+      KIND_CNI: ${{ inputs.kind_cni }}
+      # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
+      # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
+      # the cluster's K8s version is deterministic and the image is cacheable by
+      # a stable key. Bump all three together when upgrading kind.
+      KIND_VERSION: v0.31.0
+      KIND_BINARY_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+      KIND_NODE_IMAGE: kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
+      # All five images live in the local registry the e2e-cluster target
+      # stands up. SHA-suffixed so kubelet's IfNotPresent cache cannot serve a
+      # stale image across runs that reuse the cluster. The full ${{ github.sha }}
+      # is used here (not the Makefile's short SHA default) so the tags match
+      # the ones the bake step pushes — leaving any of these unset would let
+      # the Makefile default to its short-SHA tag and the lookup would miss.
+      GMC_IMG: localhost:5000/gmc:e2e-${{ github.sha }}
+      AGC_IMG: localhost:5000/agc:e2e-${{ github.sha }}
+      PROXY_IMG: localhost:5000/proxy:e2e-${{ github.sha }}
+      FAKEGITHUB_IMG: localhost:5000/fakegithub:e2e-${{ github.sha }}
+      WORKER_IMG: localhost:5000/worker:e2e-${{ github.sha }}
+      # The curl-based test pods (proxy connectivity, cross-tenant isolation,
+      # metrics scrape) otherwise pull curlimages/curl live from Docker Hub on
+      # the kind nodes, which flakes under Hub anonymous rate limits (HTTP 429).
+      # Mirror it into the local registry once and point the suite at that ref
+      # via E2E_CURL_IMAGE so kubelet never touches Docker Hub. Bump the pinned
+      # upstream tag and the mirror tag together.
+      E2E_CURL_UPSTREAM: curlimages/curl:8.10.1
+      E2E_CURL_IMAGE: localhost:5000/curlimages/curl:8.10.1
+      # The buildkit image docker/setup-buildx-action boots its docker-container
+      # builder from. Default floating tag the action would otherwise pull
+      # implicitly; named here so the pre-pull step and the builder pin below
+      # reference one source. Bump together with the action major if it changes.
+      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.work
+
+      # The e2e suite deploys the GMC via `helm upgrade --install` of
+      # charts/actions-gateway (Q142 — Helm is the sole install path), so helm
+      # must be on PATH. Pinned via the same action manifest-validate.yml uses.
+      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Install kind ${{ env.KIND_VERSION }}
+        # Pinned release binary + checksum instead of `go install ...@latest`:
+        # ~20-40s faster (no compile), reproducible, and integrity-checked.
+        run: |
+          # --retry/--retry-all-errors so a transient GitHub releases CDN
+          # gateway error (observed: curl 22 / HTTP 504) is retried in-step
+          # instead of failing the run and needing a manual re-run. The
+          # sha256sum check below still gates on content integrity.
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o /tmp/kind \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_BINARY_SHA256}  /tmp/kind" | sha256sum -c -
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+          kind version
+
+      - name: Pre-pull buildkit builder image
+        # docker/setup-buildx-action boots its docker-container builder from
+        # ${BUILDKIT_IMAGE}, pulled from Docker Hub (registry-1.docker.io) with
+        # no retry of its own — a timeout/rate-limit flake (observed: "net/http:
+        # request canceled (Client.Timeout exceeded while awaiting headers)").
+        # Pre-pull it here with retries so the buildx boot below finds it already
+        # in the local image cache and never touches Hub. Routing it through the
+        # e2e local registry would not help: that registry isn't up yet at this
+        # point, and seeding it would still require this same one Hub pull — so a
+        # retried runner-side pull is the simpler equivalent.
+        run: scripts/pull-image-with-retry.sh "${BUILDKIT_IMAGE}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        with:
+          # image pins the builder to the buildkit image pre-pulled above so the
+          # boot uses the local cache instead of pulling from Docker Hub.
+          # network=host so the docker-container builder can push to the
+          # registry container published on the runner's 127.0.0.1:5000.
+          driver-opts: |
+            image=${{ env.BUILDKIT_IMAGE }}
+            network=host
+
+      - name: Cache kind node image
+        # The node image (~1 GB) is otherwise pulled from Docker Hub on every
+        # run, which is both slow and a flake source under Hub rate limits.
+        # Keyed on the digest-pinned image so a kind bump invalidates it.
+        id: kind-node-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/kind-node-image
+          key: kind-node-${{ env.KIND_NODE_IMAGE }}
+
+      - name: Load or pull kind node image
+        run: |
+          tar=/tmp/kind-node-image/node.tar
+          node_tag="${KIND_NODE_IMAGE%@*}"                                  # kindest/node:vX.Y.Z
+          node_digest_ref="${KIND_NODE_IMAGE%%:*}@${KIND_NODE_IMAGE##*@}"   # kindest/node@sha256:...
+          if [[ -f "$tar" ]]; then
+            echo "==> loading kind node image from cache"
+            docker load -i "$tar"
+          else
+            echo "==> pulling kind node image ${KIND_NODE_IMAGE}"
+            docker pull "${KIND_NODE_IMAGE}"
+            # `docker pull name:tag@digest` stores the image under the digest ref
+            # only, not the tag — re-tag so it can be saved by (and on a later run
+            # loaded/used as) the tag-only ref kind is given.
+            docker tag "$node_digest_ref" "$node_tag"
+            mkdir -p /tmp/kind-node-image
+            docker save -o "$tar" "$node_tag"
+          fi
+
+      - name: Start local image registry
+        # Up front so the background image build below can push to it while the
+        # kind cluster is still being created.
+        run: make e2e-registry
+
+      - name: Cache curl test image
+        # Avoids even the single runner-side Docker Hub pull on warm runs.
+        # Keyed on the pinned upstream tag so a curl bump invalidates it.
+        id: curl-image-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/curl-image
+          key: curl-image-${{ env.E2E_CURL_UPSTREAM }}
+
+      - name: Mirror curl test image into local registry
+        # The e2e curl-based test pods otherwise pull curlimages/curl live from
+        # Docker Hub on the kind nodes, which flakes under Hub anonymous rate
+        # limits (HTTP 429). Pull once on the runner (cached) and push to the
+        # local registry the kind nodes already resolve, so kubelet never
+        # touches Docker Hub. Retried because the cold-cache pull is the one
+        # remaining Hub touch.
+        run: |
+          set -euo pipefail
+          tar=/tmp/curl-image/curl.tar
+          if [[ -f "$tar" ]]; then
+            echo "==> loading curl image from cache"
+            docker load -i "$tar"
+          else
+            echo "==> pulling ${E2E_CURL_UPSTREAM}"
+            PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+              scripts/pull-image-with-retry.sh "${E2E_CURL_UPSTREAM}"
+            mkdir -p /tmp/curl-image
+            docker save -o "$tar" "${E2E_CURL_UPSTREAM}"
+          fi
+          docker tag "${E2E_CURL_UPSTREAM}" "${E2E_CURL_IMAGE}"
+          docker push "${E2E_CURL_IMAGE}"
+
+      - name: Build images while the kind cluster and cert-manager come up
+        # The image build is the long pole on a cold cache (~8 min). It depends
+        # only on the registry (already up), not the cluster, so run it in the
+        # background and bring up the cluster + cert-manager (~2 min, more on
+        # Calico) underneath it instead of before it. cert-manager is applied
+        # (not waited on) here so its pods pull and start during the build too.
+        env:
+          GIT_SHA: ${{ github.sha }}
+          GHA_CACHE: "true"
+        run: |
+          bake_log="$(mktemp)"
+          docker buildx bake --file docker-bake.hcl >"$bake_log" 2>&1 &
+          bake_pid=$!
+          # If cluster bring-up fails (set -e aborts the step), don't leave the
+          # build orphaned.
+          trap 'kill "$bake_pid" 2>/dev/null || true' EXIT
+
+          # Hand kind the tag-only ref: `docker save`/`load` drops the registry
+          # digest, so a `@sha256:` ref would miss the pre-loaded image and kind
+          # would re-pull. We already pulled the exact digest above, so the
+          # tagged image is the pinned content.
+          #
+          # KIND_CNI selects the CNI: kindnet (default) or calico. On calico the
+          # e2e-cluster target creates the cluster with disableDefaultCNI, applies
+          # the pinned Calico manifest, and blocks on calico-node rollout + all
+          # nodes Ready before returning, so the tests below never race CNI
+          # startup (scripts/kind-with-registry.sh install_calico).
+          make e2e-cluster KIND_CLUSTER=actions-gateway-e2e KIND_NODE_IMAGE="${KIND_NODE_IMAGE%@*}" KIND_CNI="${KIND_CNI}"
+          make apply-cert-manager
+
+          echo "==> waiting for image build (bake) to finish"
+          bake_rc=0
+          wait "$bake_pid" || bake_rc=$?
+          echo "::group::docker buildx bake output"
+          cat "$bake_log"
+          echo "::endgroup::"
+          if [[ "$bake_rc" -ne 0 ]]; then
+            echo "image build (bake) failed with exit code ${bake_rc}" >&2
+            exit "$bake_rc"
+          fi
+
+      - name: Wait for cert-manager to be ready
+        # cert-manager pods have been starting since the cluster step; by the
+        # time the image build finishes they are typically already Available.
+        run: make wait-cert-manager
+
+      - name: Run e2e tests
+        # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive
+        # after the suite finishes so the diagnostic step can dump real cluster
+        # state on failure. The kind cluster itself is still deleted by the
+        # final cleanup step regardless.
+        #
+        # The full suite runs on both CNIs. The NetworkPolicy-enforcement specs
+        # (the two TenantProvisioning egress negatives + the two ManagerMetricsNP
+        # specs) self-skip on kindnet and assert real packet drops on calico, so
+        # the calico caller exercises them while the kindnet caller skips them —
+        # no per-lane spec selection needed here (Q7b/Q83/Q119).
+        env:
+          E2E_SKIP_TEARDOWN: "true"
+        run: make e2e KIND_CLUSTER=actions-gateway-e2e
+
+      - name: Upload e2e test report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-junit-report-${{ inputs.kind_cni }}
+          path: /tmp/e2e-report.xml
+
+      - name: Collect diagnostic info on failure
+        # Also fire on cancellation so a manually-cancelled run still produces
+        # cluster state; the previous `if: failure()` skipped this entirely
+        # when the user clicked Cancel.
+        if: always() && (failure() || cancelled())
+        run: |
+          set +e
+          echo "=== nodes ==="
+          kubectl get nodes -o wide
+          echo
+          echo "=== GMC pods ==="
+          kubectl get pods -n gmc-system -o wide
+          echo
+          echo "=== GMC pod describe ==="
+          kubectl describe pods -n gmc-system
+          echo
+          echo "=== GMC controller logs ==="
+          kubectl logs -n gmc-system -l control-plane=controller-manager --tail=300
+          echo
+          echo "=== e2e-infra pods ==="
+          kubectl get pods -n e2e-infra -o wide
+          echo
+          echo "=== fakegithub logs ==="
+          kubectl logs -n e2e-infra -l app=fakegithub --tail=100
+          echo
+          echo "=== ALL pods (every namespace) ==="
+          kubectl get pods --all-namespaces -o wide
+          echo
+          echo "=== ActionsGateway CRs ==="
+          kubectl get actionsgateway --all-namespaces -o yaml
+          echo
+          echo "=== proxy Deployments ==="
+          kubectl get deploy --all-namespaces -l app=actions-gateway-proxy -o yaml
+          echo
+          echo "=== tenant pod descriptions ==="
+          for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            echo "--- namespace: $ns ---"
+            kubectl describe pods -n "$ns"
+            echo
+          done
+          echo "=== tenant NetworkPolicies (proxy ipBlock peers populated by IPRangeReconciler) ==="
+          for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            echo "--- namespace: $ns ---"
+            kubectl get networkpolicy -n "$ns" -o yaml
+            echo
+          done
+          echo "=== tenant container logs (current + previous) ==="
+          for ns in $(kubectl get ns -o name | grep tenant- | sed 's|namespace/||'); do
+            for pod in $(kubectl get pods -n "$ns" -o name); do
+              echo "--- LOGS $ns/$pod (current) ---"
+              kubectl logs -n "$ns" "$pod" --all-containers --tail=200
+              echo "--- LOGS $ns/$pod (previous, if crashed) ---"
+              kubectl logs -n "$ns" "$pod" --all-containers --tail=200 --previous
+              echo
+            done
+          done
+          echo "=== events (last 200) ==="
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -200
+
+      - name: Delete kind cluster
+        if: always()
+        run: make e2e-cluster-delete KIND_CLUSTER=actions-gateway-e2e

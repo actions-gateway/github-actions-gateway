@@ -165,7 +165,7 @@ make e2e-clean          # tear down when done
 
 For iterating against a single spec without re-creating the cluster, see [kind-iteration.md](kind-iteration.md). It also covers pointing AGC at fakegithub vs. real GitHub via the `AGC_EXTRA_*` env vars and using `E2E_SKIP_TEARDOWN=true` to keep state between runs.
 
-**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)). The two runtime egress-negative specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) skip themselves on kindnet — whose enforcer does not drop egress — and only assert real packet drops on a Calico/Cilium cluster. Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b).
+**Egress-enforcing CNI profile.** `make e2e-cluster KIND_CNI=calico` builds the cluster with Calico instead of kindnet (see [kind-iteration.md § CNI selection](kind-iteration.md#cni-selection-kindnet-default-vs-calico)). The two runtime egress-negative specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) and the two manager metrics-NP specs (`E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace`, `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace`) skip themselves on kindnet — whose enforcer does not drop egress — and only assert real packet drops on a Calico/Cilium cluster. Run them with the Calico profile when validating NetworkPolicy enforcement changes (Q7b/Q83). CI runs this profile nightly — see [the Calico e2e lane](#the-calico-e2e-lane-nightly) below.
 
 **Curl test image.** The connectivity, isolation, and metrics specs run a `curlimages/curl` pod. It defaults to the upstream Docker Hub ref (`curlimages/curl:8.10.1`), which is fine locally. CI sets `E2E_CURL_IMAGE` to a local-registry mirror (`localhost:5000/curlimages/curl:8.10.1`, populated by the workflow's mirror step) so the kind nodes never pull from Docker Hub — anonymous Hub rate limits (HTTP 429) were starving these pods and flaking three specs.
 
@@ -183,6 +183,18 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 ## CI workflows and scripts
 
 CI must use the same per-module commands as [Running tests](#running-tests) above — never `go test ./...` from the repo root, which does not work with the Go workspace layout.
+
+### The e2e workflows: kindnet (per-PR) and Calico (nightly)
+
+The cluster/image/test plumbing for the e2e suite lives in one reusable workflow, [`.github/workflows/e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) (`workflow_call`, parameterized by a `kind_cni` input). Two callers drive it so a kind bump, image-tag change, or flake mitigation is made once and both lanes inherit it:
+
+- **[`e2e-test.yml`](../../.github/workflows/e2e-test.yml)** — the per-PR / push-to-main leg, `kind_cni: kindnet`. Path-gated (skips PRs touching no e2e-relevant files) and `cancel-in-progress` on PRs. This is the merge gate.
+
+#### The Calico e2e lane (nightly)
+
+- **[`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)** — a scheduled lane, `kind_cni: calico` (Q119). kindnet accepts `NetworkPolicy` but its bundled enforcer does not drop egress, so the NetworkPolicy-enforcement specs self-skip on the per-PR leg; on Calico they assert real packet drops. The full suite runs on both CNIs — these specs simply activate under Calico: the two `TenantProvisioning` egress negatives (`WorkloadEgressBlockedToNonProxyPod`, `WorkerCannotReachK8sAPI`), `ProxyConnectWorks` (which runs on both but is only truly enforced here), and the two `ManagerMetricsNP` specs (Q83). No per-lane spec selection is needed — the suite's runtime `egressEnforcingCNI()` self-skip does the routing.
+
+  **When it runs:** nightly at 04:17 UTC. **Trigger it manually** from the Actions tab → *e2e (calico)* → *Run workflow* (`workflow_dispatch`) after a change that touches NetworkPolicy generation or the egress proxy. Because the lane runs only on the default branch, it cannot gate the PR that changes it — validate such a PR by reading the YAML and, where possible, a local `make e2e-cluster KIND_CNI=calico` run; the first real CI signal is the next nightly run or a manual dispatch post-merge. Calico bring-up (the `calico-node` image pull + rollout) is why it gets a 60-minute timeout vs. the kindnet leg's 45.
 
 ## Security scanning
 
