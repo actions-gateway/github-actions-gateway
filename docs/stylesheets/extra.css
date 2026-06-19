@@ -60,6 +60,16 @@ body[data-md-color-scheme="slate"] {
   opacity: 0.6;
 }
 
+/* Hero logomark — the faceted ring, front and centre above the headline.
+   Fluidly sized so it dominates on desktop without crowding the title on phones. */
+.gag-hero__logo {
+  display: block;
+  width: clamp(96px, 13vw, 160px);
+  height: auto;
+  margin: 0 auto 1.25rem;
+  filter: drop-shadow(0 6px 16px color-mix(in srgb, var(--md-accent-fg-color) 30%, transparent));
+}
+
 .gag-eyebrow {
   font-size: 0.72rem;
   font-weight: 700;

@@ -6,6 +6,8 @@ hide:
 
 <div class="gag-hero" markdown>
 
+<img class="gag-hero__logo" src="assets/logo.svg" alt="GitHub Actions Gateway logomark" width="128" height="128">
+
 <p class="gag-eyebrow">Multi-tenant runner platform for Kubernetes</p>
 
 # Self-hosted GitHub Actions runners with zero idle compute

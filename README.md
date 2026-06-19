@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="GitHub Actions Gateway logo" width="140" height="140">
+</p>
+
 # GitHub Actions Gateway
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
