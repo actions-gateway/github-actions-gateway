@@ -106,16 +106,29 @@ const (
 	healthProbeBindAddress = ":8081"
 )
 
+// slogDebugZapLevel is the zap core level that must be enabled for the AGC's
+// hot-path slog.Debug lines (listener/provisioner/agentpool) to surface. The
+// process logs through log/slog bridged onto controller-runtime's logr logger
+// (slog.SetDefault(logr.ToSlogHandler(ctrl.Log)) below). go-logr maps slog.Debug
+// (slog.LevelDebug, -4) to logr V(4), and zapr inverts logr V(n) to zap level -n
+// (zapr.toZapLevel) — so a slog.Debug record is gated at zap level -4. That is
+// BELOW zapcore.DebugLevel (-1): a LOG_LEVEL=debug that only set DebugLevel would
+// surface controller-runtime's own V(0)/V(1) lines but silently drop every
+// per-session/per-job slog.Debug line the knob exists to surface, leaving the
+// e2e session diagnostics dump blind to why a job was never acquired (Q148). The
+// proxy is unaffected — it logs through a native slog handler, not this bridge.
+const slogDebugZapLevel = zapcore.Level(-4)
+
 // zapLevelFromEnv maps the LOG_LEVEL env value (info|debug, default info) to a
-// zap level override, or nil when no override is needed. "debug" returns a
-// debug AtomicLevel so the AGC surfaces the per-session/per-job debug lines
-// (logging-audit Theme F); "info" and "" return nil so the caller leaves
+// zap level override, or nil when no override is needed. "debug" enables down to
+// slogDebugZapLevel so the AGC actually surfaces the per-session/per-job slog.Debug
+// lines (logging-audit Theme F); "info" and "" return nil so the caller leaves
 // zap.Options at its production default (info). Any other value is treated as
 // info — the CRD enum already rejects out-of-range values before they reach the
 // AGC, so this is only a defensive fallback. Mirrors cmd/proxy's logLevelFromEnv.
 func zapLevelFromEnv(v string) zapcore.LevelEnabler {
 	if strings.EqualFold(v, "debug") {
-		lvl := uberzap.NewAtomicLevelAt(zapcore.DebugLevel)
+		lvl := uberzap.NewAtomicLevelAt(slogDebugZapLevel)
 		return &lvl
 	}
 	return nil
