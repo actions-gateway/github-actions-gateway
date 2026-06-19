@@ -1,0 +1,62 @@
+# Keep CALICO_VERSION current in both files that pin it: the egress-enforcing
+# e2e lane (.github/workflows/e2e-reusable.yml) and the root Makefile, which must
+# match. updatecli resolves the latest projectcalico/calico release and rewrites
+# both in one PR, so the two copies can no longer drift by hand. Version-only:
+# Calico is referenced as a manifest URL built from the version, not a
+# checksummed binary. Run by .github/workflows/updatecli.yml.
+#
+# A bump can outrun the Kubernetes version the e2e cluster pins (KIND_NODE_IMAGE),
+# so the calico e2e lane must pass on the PR before merge — see
+# docs/development/dependency-updates.md.
+name: 'Bump Calico (e2e) version'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  calicoVersion:
+    name: 'Latest Calico release tag'
+    kind: githubrelease
+    spec:
+      owner: projectcalico
+      repository: calico
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+
+targets:
+  e2e:
+    name: 'CALICO_VERSION in e2e-reusable.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/e2e-reusable.yml
+      matchpattern: '(CALICO_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "calicoVersion" }}'
+  makefile:
+    name: 'CALICO_VERSION in Makefile'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: Makefile
+      matchpattern: '(CALICO_VERSION \?= )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "calicoVersion" }}'

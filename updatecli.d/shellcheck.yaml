@@ -1,0 +1,71 @@
+# Keep the shellcheck version + checksum in .github/workflows/unit-test.yml
+# current. shellcheck publishes no checksum file, so the checksum source hashes
+# the release tarball directly (scripts/updatecli/sha256-of-url.sh). updatecli
+# bumps SHELLCHECK_VERSION and SHELLCHECK_SHA256 together in one PR — the
+# version+checksum pair Dependabot cannot track. Run by
+# .github/workflows/updatecli.yml.
+#
+# shellcheck is a lint gate: a new release can add findings, so the bump PR may
+# go red. That is the intended signal — a human adopts the new version (fixing or
+# justifying the findings) or holds it. See docs/development/dependency-updates.md.
+name: 'Bump shellcheck (CI) version + checksum'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  shellcheckVersion:
+    name: 'Latest shellcheck release tag'
+    kind: githubrelease
+    spec:
+      owner: koalaman
+      repository: shellcheck
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+  shellcheckChecksum:
+    name: 'sha256 of the shellcheck linux.x86_64 tarball for the resolved version'
+    kind: shell
+    dependson:
+      - shellcheckVersion
+    spec:
+      command: 'scripts/updatecli/sha256-of-url.sh https://github.com/koalaman/shellcheck/releases/download/{{ source "shellcheckVersion" }}/shellcheck-{{ source "shellcheckVersion" }}.linux.x86_64.tar.xz'
+      environments:
+        - name: PATH
+
+targets:
+  version:
+    name: 'SHELLCHECK_VERSION in unit-test.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/unit-test.yml
+      matchpattern: '(SHELLCHECK_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "shellcheckVersion" }}'
+  checksum:
+    name: 'SHELLCHECK_SHA256 in unit-test.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/unit-test.yml
+      matchpattern: '(SHELLCHECK_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "shellcheckChecksum" }}'

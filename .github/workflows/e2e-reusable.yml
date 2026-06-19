@@ -36,8 +36,10 @@ jobs:
       # scripts/kind-with-registry.sh; surfaced as an env var rather than
       # interpolated into a run: script directly (no script-injection surface).
       KIND_CNI: ${{ inputs.kind_cni }}
-      # Calico release for the egress-enforcing profile (KIND_CNI=calico). Keep
-      # in sync with CALICO_VERSION in the root Makefile. Used to (a) key the
+      # Calico release for the egress-enforcing profile (KIND_CNI=calico).
+      # Auto-bumped in lockstep with the root Makefile's CALICO_VERSION by
+      # updatecli (updatecli.d/calico.yaml), so the two copies cannot drift. Used
+      # to (a) key the
       # Calico image cache and pre-pull below and (b) pin the version passed to
       # `make e2e-cluster`, so the pre-pulled images match what the manifest
       # references. Ignored on the kindnet caller.

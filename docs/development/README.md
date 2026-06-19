@@ -14,7 +14,7 @@ Developer workflow references. Read the relevant doc before starting a task in t
 | [code-generation.md](code-generation.md) | Modifying CRD types under `cmd/agc/api/` or `cmd/gmc/api/` — when to regenerate, what gets regenerated, how to verify. |
 | [kubernetes-conventions.md](kubernetes-conventions.md) | Project conventions for labels/annotations the operator sets — enum (not boolean-looking) values, the `actions-gateway.github.com/` key prefix, and the const-not-literal rule. Read before adding a new label, annotation, or hand-set CRD field. |
 | [go-workspaces.md](go-workspaces.md) | Working across modules — workspace layout, vendoring, worktree gotchas. |
-| [dependency-updates.md](dependency-updates.md) | How pinned deps stay current — Dependabot lanes, the Go-bump auto-sync, and the updatecli lane for version+checksum pins Dependabot can't see (kind, with a planned fan-out). |
+| [dependency-updates.md](dependency-updates.md) | How pinned deps stay current — Dependabot lanes, the Go-bump auto-sync, and the updatecli lane for version+checksum CI pins Dependabot can't see (kind, Calico, shellcheck). |
 | [github-app-credentials.md](github-app-credentials.md) | Setting up GitHub App credentials for live-cluster tests (M2 kind check, M3/M4 end-to-end, Ed25519 probe, egress). |
 | [technical-debt.md](technical-debt.md) | The technical-debt policy and strategy — how we classify debt, decide to fix/flag/defer/decline, what we measure, and how quality gates keep it paid down. |
 | [maintaining-backlog.md](maintaining-backlog.md) | Editing [docs/STATUS.md](../STATUS.md) — Queue, Progress table, header. Rules that keep merge conflicts trivial. |
