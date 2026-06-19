@@ -60,11 +60,16 @@ jobs:
       # is used here (not the Makefile's short SHA default) so the tags match
       # the ones the bake step pushes — leaving any of these unset would let
       # the Makefile default to its short-SHA tag and the lookup would miss.
-      GMC_IMG: localhost:5000/gmc:e2e-${{ github.sha }}
-      AGC_IMG: localhost:5000/agc:e2e-${{ github.sha }}
-      PROXY_IMG: localhost:5000/proxy:e2e-${{ github.sha }}
-      FAKEGITHUB_IMG: localhost:5000/fakegithub:e2e-${{ github.sha }}
-      WORKER_IMG: localhost:5000/worker:e2e-${{ github.sha }}
+      # The registry host is the literal IPv4 loopback, not "localhost": the
+      # registry is published IPv4-only, and a buildx/docker pusher that resolves
+      # "localhost" to IPv6 [::1] first fails intermittently with "connection
+      # refused". Must match docker-bake.hcl's IMAGE_REGISTRY default and the
+      # containerd certs.d host dir in scripts/kind-with-registry.sh.
+      GMC_IMG: 127.0.0.1:5000/gmc:e2e-${{ github.sha }}
+      AGC_IMG: 127.0.0.1:5000/agc:e2e-${{ github.sha }}
+      PROXY_IMG: 127.0.0.1:5000/proxy:e2e-${{ github.sha }}
+      FAKEGITHUB_IMG: 127.0.0.1:5000/fakegithub:e2e-${{ github.sha }}
+      WORKER_IMG: 127.0.0.1:5000/worker:e2e-${{ github.sha }}
       # The curl-based test pods (proxy connectivity, cross-tenant isolation,
       # metrics scrape) otherwise pull curlimages/curl live from Docker Hub on
       # the kind nodes, which flakes under Hub anonymous rate limits (HTTP 429).
@@ -72,7 +77,7 @@ jobs:
       # via E2E_CURL_IMAGE so kubelet never touches Docker Hub. Bump the pinned
       # upstream tag and the mirror tag together.
       E2E_CURL_UPSTREAM: curlimages/curl:8.10.1
-      E2E_CURL_IMAGE: localhost:5000/curlimages/curl:8.10.1
+      E2E_CURL_IMAGE: 127.0.0.1:5000/curlimages/curl:8.10.1
       # The buildkit image docker/setup-buildx-action boots its docker-container
       # builder from. Default floating tag the action would otherwise pull
       # implicitly; named here so the pre-pull step and the builder pin below

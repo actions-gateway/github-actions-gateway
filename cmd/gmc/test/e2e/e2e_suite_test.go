@@ -79,12 +79,14 @@ var _ = SynchronizedBeforeSuite(
 	func() []byte {
 		// Fallback defaults match the local-registry naming the root Makefile
 		// emits; `make e2e-up` overrides via env. Kind nodes pull these names
-		// via scripts/kind-with-registry.sh's containerd config.
-		gmcImg := envOrDefault("GMC_IMG", "localhost:5000/gmc:e2e")
-		agcImg := envOrDefault("AGC_IMG", "localhost:5000/agc:e2e")
-		proxyImg := envOrDefault("PROXY_IMG", "localhost:5000/proxy:e2e")
-		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "localhost:5000/fakegithub:e2e")
-		workerImg := envOrDefault("WORKER_IMG", "localhost:5000/worker:e2e")
+		// via scripts/kind-with-registry.sh's containerd config. The host is the
+		// literal IPv4 loopback (not localhost) so the host-side push target is
+		// unambiguously IPv4 — matches the containerd certs.d mirror key.
+		gmcImg := envOrDefault("GMC_IMG", "127.0.0.1:5000/gmc:e2e")
+		agcImg := envOrDefault("AGC_IMG", "127.0.0.1:5000/agc:e2e")
+		proxyImg := envOrDefault("PROXY_IMG", "127.0.0.1:5000/proxy:e2e")
+		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "127.0.0.1:5000/fakegithub:e2e")
+		workerImg := envOrDefault("WORKER_IMG", "127.0.0.1:5000/worker:e2e")
 		curlImg := envOrDefault("E2E_CURL_IMAGE", "curlimages/curl:8.10.1")
 
 		By("generating test RSA private key")

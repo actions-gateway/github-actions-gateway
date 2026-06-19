@@ -47,7 +47,10 @@ GIT_SHA       := $(shell git rev-parse --short HEAD)
 # when the same tag is rebuilt.
 REGISTRY_NAME  ?= kind-registry
 REGISTRY_PORT  ?= 5000
-IMAGE_REGISTRY ?= localhost:$(REGISTRY_PORT)
+# 127.0.0.1, not localhost: the registry is published IPv4-only, so a pusher
+# that resolves localhost to IPv6 [::1] first fails intermittently. This string
+# is also the containerd mirror key kind nodes resolve (scripts/kind-with-registry.sh).
+IMAGE_REGISTRY ?= 127.0.0.1:$(REGISTRY_PORT)
 GMC_IMG        ?= $(IMAGE_REGISTRY)/gmc:e2e-$(GIT_SHA)
 AGC_IMG        ?= $(IMAGE_REGISTRY)/agc:e2e-$(GIT_SHA)
 PROXY_IMG      ?= $(IMAGE_REGISTRY)/proxy:e2e-$(GIT_SHA)

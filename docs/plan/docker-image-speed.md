@@ -341,7 +341,7 @@ if: needs.changes.outputs.e2e == 'true' || github.event_name == 'push'
 Pushes to `main` always run. PRs that touch only CI configs for other suites,
 `.claude/`, etc. skip both bake and the full test run entirely.
 
-**Why not per-bake-target skipping?** The local registry (`localhost:5000`) is
+**Why not per-bake-target skipping?** The local registry (`127.0.0.1:5000`) is
 ephemeral — created fresh each run. All four images must be present for e2e to
 run, so skipping a specific bake target would leave the registry incomplete.
 The GHA layer cache (`type=gha,mode=max`) already makes cache-hit builds fast
@@ -422,13 +422,15 @@ transfer cost.
 Adopted the "kind-with-registry" pattern documented at
 <https://kind.sigs.k8s.io/docs/user/local-registry/>: a `registry:2` container
 runs alongside the kind cluster on the kind docker network; each node's
-containerd is configured to mirror `localhost:5000` → `kind-registry:5000`;
-buildx pushes directly to the registry; pods pull on demand.
+containerd is configured to mirror `127.0.0.1:5000` → `kind-registry:5000`;
+buildx pushes directly to the registry; pods pull on demand. (The host ref is
+the literal IPv4 loopback, not `localhost`: the registry is published IPv4-only,
+so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently.)
 
 [scripts/kind-with-registry.sh](../../scripts/kind-with-registry.sh) handles the
 whole setup idempotently. `make e2e-cluster` invokes it; the legacy `kind
 load` flow was removed entirely (replaced rather than gated). Image tags now
-include `localhost:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache
+include `127.0.0.1:5000/<name>:e2e-<sha>` so kubelet's `IfNotPresent` cache
 can't serve a stale image across cluster reuse.
 
 ### Files

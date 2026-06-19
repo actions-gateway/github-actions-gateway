@@ -10,9 +10,12 @@ YEAR           ?= $(shell date +%Y)
 # e2e image defaults reference the local registry that scripts/kind-with-registry.sh
 # stands up alongside the kind cluster. Override with registry-prefixed, SHA-suffixed
 # tags for e2e runs (the root Makefile sets these automatically via GMC_IMG/AGC_IMG/PROXY_IMG).
-GMC_IMG     ?= localhost:5000/gmc:e2e
-AGC_IMG     ?= localhost:5000/agc:e2e
-PROXY_IMG   ?= localhost:5000/proxy:e2e
+# 127.0.0.1 (not localhost): the registry is published IPv4-only, so pushing/
+# resolving via localhost can hit IPv6 [::1] and fail. Matches the containerd
+# mirror key in scripts/kind-with-registry.sh.
+GMC_IMG     ?= 127.0.0.1:5000/gmc:e2e
+AGC_IMG     ?= 127.0.0.1:5000/agc:e2e
+PROXY_IMG   ?= 127.0.0.1:5000/proxy:e2e
 
 ENVTEST_K8S_VERSION ?= 1.35
 
@@ -103,7 +106,7 @@ CHART_DIR    := $(REPO_ROOT)/charts/actions-gateway
 
 # Deploy the GMC via the Helm chart for dev/CI iteration.
 # allowFloatingImageTags=true relaxes the GMC's digest-pin requirement so the
-# locally-built, tag-only images (localhost:5000/*:e2e-<sha>) are accepted; it is
+# locally-built, tag-only images (127.0.0.1:5000/*:e2e-<sha>) are accepted; it is
 # the documented DEV/TEST opt-out, never a production default. The {gmc,agc,proxy}
 # image refs are split into repository + tag for the chart's image values (the
 # refs always carry a tag in dev/CI). CRDs ship with the chart, so no separate
