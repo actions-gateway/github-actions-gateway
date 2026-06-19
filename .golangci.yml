@@ -6,7 +6,14 @@ version: "2"
 # items 38-41. Tightenings (e.g. modernize/any, predeclared shadowing,
 # errcheck on ignored returns) land alongside those items.
 run:
-  timeout: 5m
+  # Upstream v2 default is 0 (no timeout); we keep a deadline as a canary for a
+  # genuinely wedged analysis. 10m (not the former 5m) tolerates a run that is
+  # slow because it is contending for CPU with a concurrent build — the local
+  # heavy-build lock (scripts/lib/common.sh: serialize_heavy_build) already
+  # serializes sibling `make check` runs on a dev machine, but a run can still
+  # queue behind one, and that wait counts against this budget. CI is
+  # uncontended and never approaches it.
+  timeout: 10m
   allow-parallel-runners: true
 linters:
   default: none
