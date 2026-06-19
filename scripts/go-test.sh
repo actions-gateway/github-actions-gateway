@@ -28,6 +28,11 @@ cd "$REPO_ROOT"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
 
+# Serialize against a concurrent heavy build on this machine (no-op on
+# CI/headless) so sibling runs queue instead of saturating the cores; re-execs
+# self under a machine-wide lock. Passes "$@" so the re-exec keeps --race.
+serialize_heavy_build "$@"
+
 race_flag="" timeout=2m
 case "${1:-}" in
 	--race) race_flag="-race"; timeout=5m ;;

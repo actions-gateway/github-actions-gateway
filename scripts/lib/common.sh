@@ -42,6 +42,49 @@ init_throttle() {
 	THROTTLE_PREFIX="$("$REPO_ROOT/scripts/local-throttle.sh" prefix)"
 }
 
+# serialize_heavy_build — serialize the calling script's heavy work across
+# concurrent worktrees/sessions on one dev machine, so two `make check` runs
+# don't collectively saturate a small core count and blow the linter/test
+# timeouts. The parallelism cap (init_throttle) bounds ONE run's fan-out but is
+# blind to siblings; this holds a machine-wide lock so sibling runs queue and
+# each runs at full throttle in turn. Idle servers and CI are NOT serialized
+# (local-throttle.sh reports no lock there) — those SHOULD run fully parallel.
+#
+# It re-execs the calling script once under an exclusive advisory lock held for
+# the script's whole lifetime, then proceeds normally in the re-exec'd child.
+# Call it AFTER `cd "$REPO_ROOT"` and sourcing this file, passing the script's
+# own "$@":
+#
+#   serialize_heavy_build "$@"
+#
+# No-op when there is no lock file (CI/headless/SSH/non-GUI), when perl is
+# absent, or when the lock is already held (the sentinel env var), so a locked
+# script may invoke other locked scripts without deadlocking on itself.
+#
+# Implemented with perl's flock: a true blocking advisory lock available on both
+# macOS (which ships no flock(1)) and Linux, and — crucially — released
+# automatically when the holding process dies, so a Ctrl-C'd or killed build
+# never strands a stale lock that wedges every later run.
+serialize_heavy_build() {
+	[[ -n "${GAG_HEAVY_BUILD_LOCK_HELD:-}" ]] && return 0
+	local lock
+	lock="$("$REPO_ROOT/scripts/local-throttle.sh" lockfile)"
+	[[ -z "$lock" ]] && return 0
+	command -v perl >/dev/null 2>&1 || return 0
+	export GAG_HEAVY_BUILD_LOCK_HELD=1
+	# perl takes the lock, runs the script as a child, and exits with its status;
+	# the lock fd lives in perl and releases when perl exits. A lock that cannot
+	# be opened degrades to running unserialized rather than failing the build.
+	exec perl -MFcntl=:flock -e '
+		my $path = shift @ARGV;
+		open(my $fh, ">", $path) or exec @ARGV;
+		flock($fh, LOCK_EX);
+		my $rc = system @ARGV;
+		exit 255 if $rc == -1;
+		exit($rc & 127 ? 128 + ($rc & 127) : $rc >> 8);
+	' "$lock" bash "$0" "$@"
+}
+
 # release_identity_regexp — print the cosign --certificate-identity-regexp that
 # a legitimate release signature must match. Releases are cut by pushing a v*
 # tag, so the keyless Fulcio cert records publish.yml running from

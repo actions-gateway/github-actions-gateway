@@ -52,6 +52,16 @@
 # Usage (consumed by the root Makefile):
 #   scripts/local-throttle.sh jobs     # parallelism cap, or empty when off
 #   scripts/local-throttle.sh prefix   # command priority wrapper, or empty when off
+#   scripts/local-throttle.sh lockfile # shared cross-session lock path, or empty when off
+#
+# Capping parallelism (jobs) bounds ONE run's fan-out, but nothing stops three
+# concurrent worktree/session `make check` runs from each launching that many
+# workers and collectively saturating a small core count — at which point every
+# phase stretches and golangci-lint blows its deadline (it counts the wait for
+# its own parallel-runner lock against that budget too). `lockfile` names a
+# shared advisory lock the heavy phases hold (see serialize_heavy_build in
+# scripts/lib/common.sh) so sibling runs queue and each runs at full throttle in
+# turn instead of trampling each other.
 set -euo pipefail
 
 # Physical cores left for the GUI/foreground apps when throttling.
@@ -140,6 +150,26 @@ qos_prefix() {
 	esac
 }
 
+# lock_file prints the path of the shared advisory lock that serializes the
+# heavy local build phases across concurrent worktrees/sessions on one machine.
+# It lives in the per-user cache dir — OUTSIDE any worktree — so every checkout
+# of this repo (the main tree and each .claude/worktrees/* clone) coordinates on
+# the SAME file. Printed only when throttling is active (the same GUI-dev-shell
+# gate as jobs/prefix); empty on CI/headless so those runs stay fully parallel.
+lock_file() {
+	local base
+	case "$(os_kind)" in
+		darwin) base="$HOME/Library/Caches" ;;
+		linux) base="${XDG_CACHE_HOME:-$HOME/.cache}" ;;
+		*) return 0 ;;
+	esac
+	local dir="$base/github-actions-gateway"
+	# A missing cache dir or unwritable home should never break a build — fall
+	# back to no lock (unserialized) rather than failing.
+	mkdir -p "$dir" 2>/dev/null || return 0
+	printf '%s\n' "$dir/local-heavy-build.lock"
+}
+
 main() {
 	local want="${1:-}"
 
@@ -151,8 +181,9 @@ main() {
 	case "$want" in
 		jobs) compute_jobs ;;
 		prefix) qos_prefix ;;
+		lockfile) lock_file ;;
 		*)
-			printf 'usage: %s {jobs|prefix}\n' "$0" >&2
+			printf 'usage: %s {jobs|prefix|lockfile}\n' "$0" >&2
 			return 2
 			;;
 	esac

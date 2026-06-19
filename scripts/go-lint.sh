@@ -19,6 +19,11 @@ cd "$REPO_ROOT"
 # shellcheck source=scripts/lib/common.sh
 source "$REPO_ROOT/scripts/lib/common.sh"
 
+# Serialize against a concurrent heavy build on this machine (no-op on
+# CI/headless) so two sessions don't saturate the cores and push golangci-lint
+# past its deadline; re-execs self under a machine-wide lock.
+serialize_heavy_build "$@"
+
 GOLANGCI_LINT="${GOLANGCI_LINT:-$REPO_ROOT/.build/golangci-lint}"
 if [[ ! -x "$GOLANGCI_LINT" ]]; then
 	echo "golangci-lint not found at $GOLANGCI_LINT — build it with: make golangci-lint" >&2
