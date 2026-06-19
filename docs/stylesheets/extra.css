@@ -327,6 +327,23 @@ html.gag-reveal-ready .gag-reveal.is-visible {
   white-space: nowrap;
 }
 
+/* Row pills are progressively enhanced into buttons that select the chip. */
+button.persona-pill {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s var(--gag-ease);
+}
+
+button.persona-pill:hover {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
+}
+
+button.persona-pill:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 1px;
+}
+
 /* Per-doc audience pills, just under the page title. */
 .persona-pills-top {
   display: flex;

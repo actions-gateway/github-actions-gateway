@@ -67,7 +67,7 @@ github.com, so they must degrade to readable content without JS:
 
 | Feature | Source markdown it enhances |
 |---|---|
-| Persona filter chips + per-row pills | the `Personas` column of the table in `docs/operations/README.md` |
+| Persona filter chips + per-row pills (clicking a row pill selects its chip) | the `Personas` column of the table in `docs/operations/README.md` |
 | Per-doc audience pills | the `> **Audience:** …` blockquote under each operations doc's title |
 | Reading-path role chips | the bold role leads (`**Architect**`, …) in `docs/design/README.md` § Reading Paths by Role |
 | Scroll reveals | landing + `why-gag` pages only (skipped for `prefers-reduced-motion` / no-JS) |

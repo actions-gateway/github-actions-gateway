@@ -83,7 +83,8 @@
       var tags = cell.textContent.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
       row.setAttribute("data-personas", tags.join("|"));
       cell.innerHTML = tags.map(function (t) {
-        return '<span class="persona-pill">' + t + "</span>";
+        return '<button type="button" class="persona-pill" data-persona="' +
+          t.replace(/"/g, "&quot;") + '">' + t + "</button>";
       }).join(" ");
       tags.forEach(function (t) {
         if (t !== "All" && personas.indexOf(t) < 0) personas.push(t);
@@ -100,6 +101,15 @@
     });
     var anchor = table.closest(".md-typeset__scrollwrap") || table;
     anchor.parentNode.insertBefore(bar, anchor);
+
+    // Clicking a pill in a row selects the matching chip (and filters).
+    table.addEventListener("click", function (e) {
+      var pill = e.target.closest(".persona-pill");
+      if (!pill || !pill.dataset.persona) return;
+      var chip = bar.querySelector('.persona-chip[data-persona="' +
+        (window.CSS && CSS.escape ? CSS.escape(pill.dataset.persona) : pill.dataset.persona) + '"]');
+      if (chip) chip.click();
+    });
 
     // Honor ?persona=... (e.g. arriving from a doc's audience pill).
     var want = new URLSearchParams(location.search).get("persona");
