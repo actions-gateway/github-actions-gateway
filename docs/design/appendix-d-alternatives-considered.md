@@ -103,4 +103,38 @@ A common production pattern layers [KEDA](https://keda.sh/) on top of ARC, using
 
 ---
 
+Sections D.1–D.4 cover ways of running the runners themselves. The two sections below cover *adjacent* Kubernetes tooling that is frequently raised alongside this design — a job-queue / quota manager and an infrastructure cost optimizer. Neither is a self-hosted runner controller, so neither is a drop-in substitute; both are included because each overlaps part of the problem space (priority/quota arbitration; GPU/compute cost) and the boundary between "what this design does" and "what these tools do" is a common point of confusion.
+
+## D.5. Kueue and Kubernetes Job-Queue / Quota Managers
+
+[Kueue](https://kueue.sigs.k8s.io/) is the Kubernetes-native job queueing and quota manager maintained under the Kubernetes Special Interest Group (SIG) for scheduling. It is the natural off-the-shelf tool to reach for when someone asks "why not just put a priority queue in front of the runners?", so the boundary between it and this design is worth stating explicitly.
+
+**What it does.** Kueue arbitrates workloads against declarative quota. Its core objects are `ClusterQueue` and `LocalQueue` (the quota and submission surfaces), `ResourceFlavor` (heterogeneous resource pools, e.g. GPU vs CPU), `Cohort` (quota borrowing between queues), and `WorkloadPriorityClass` (priority-ordered preemption). Per its own documentation, Kueue "decides when a job should wait, when a job should be admitted to start (as in pods can be created), and when a job should be preempted." It installs as Custom Resource Definitions (CRDs), a cluster-wide controller, and admission webhooks, and therefore requires cluster-admin to deploy.
+
+**Where it overlaps.** Kueue's quota-and-priority model overlaps the same need this design addresses with a shared `ResourceQuota` ceiling plus per-`RunnerGroup` `priorityTiers`: keeping a high-priority runner type from being starved by a flood of lower-priority work, and expressing a shared budget across heterogeneous pools. A cluster that already runs Kueue has a credible answer to the priority/quota half of the problem at the pod layer.
+
+**The differentiator.** Kueue gates the *pod* layer; this design's admission decision has to happen one layer above it, at the GitHub broker. A worker pod only exists *after* the Actions Gateway Controller (AGC) has already claimed the job from GitHub (`acquirejob`), at which point GitHub considers the job owned by that session and the job lock is ticking. Kueue has no visibility into the broker and cannot defer a job that is not yet a Kubernetes workload; if it defers the *pod* after the claim, the work is queued while the lock the design must renew counts down — the exact failure the broker-layer admission gate exists to prevent. So Kueue **augments** rather than **replaces** the design's gate: in a cluster that already runs Kueue, this design's worker pods can still participate in a `ClusterQueue` for cluster-wide quota and preemption at the pod layer, while the broker-layer decision of *whether to claim the job at all* stays upstream of anything Kueue can act on. Kueue also requires cluster-admin to install, which is in tension with this design's self-service-without-cluster-admin requirement, so making it a hard dependency would regress that goal.
+
+The full argument — why admission is gated before `acquirejob` rather than delegated to an in-cluster queue, and why a durable internal queue was also rejected — is developed in the pre-acquisition admission-control plan ([Q59](../STATUS.md#Q59); see [Relationship to Kueue](../plan/acquire-admission-control.md#relationship-to-kueue-why-an-off-the-shelf-k8s-queue-isnt-the-admission-layer)) and is not duplicated here.
+
+**Verdict:** Kueue is a strong fit for cluster-wide batch quota and priority arbitration at the pod layer, and composes with this design rather than competing with it. It is not a substitute for runner-control-plane admission, because the decision that matters for GitHub Actions jobs — whether to claim a job from the broker — happens before any Kubernetes workload exists for Kueue to manage.
+
+---
+
+## D.6. Exostellar and Infrastructure / GPU Cost Optimizers
+
+[Exostellar](https://exostellar.io/) is representative of a class of infrastructure cost-optimization tooling that is sometimes mentioned in the same breath as runner autoscaling because it targets the cost of expensive (especially GPU) compute. It is included here to draw the layer boundary, not because it manages runners.
+
+**What it does.** Per Exostellar's public materials, it offers two main capabilities. The Exostellar Infrastructure Optimizer runs workloads inside virtual machines (VMs) on cloud instances and predicts spot-instance reclamation, live-migrating a VM to another spot or on-demand instance to keep the workload alive while capturing spot pricing. Its Software Defined GPU offering provides vendor-agnostic, fractional GPU slicing through Kubernetes Dynamic Resource Allocation (DRA), partitioning GPUs beyond fixed Multi-Instance GPU (MIG) boundaries to raise utilization. Both are aimed at lowering the unit cost of the underlying compute.
+
+**Where it overlaps.** Only at the framing level of "make expensive GPU compute cheaper." This design reduces GPU cost by holding *zero* idle GPU allocation between jobs — worker pods are provisioned when a job is acquired and release their compute on completion — so the comparison is real for anyone evaluating "how do I stop paying for idle GPUs."
+
+**The differentiator.** Exostellar operates at the node / VM / GPU *infrastructure* layer: it optimizes the cost and packing of compute that has already been requested. This design operates at the runner *control-plane* layer: it decides whether a worker pod needs to exist at all (goroutine-multiplexed virtual sessions with no per-runner pod at rest), provides per-tenant egress IP isolation, and offers multi-tenant self-service provisioning — none of which an infrastructure optimizer addresses. The two are orthogonal and could compose: an infrastructure optimizer could pack the nodes that this design's ephemeral worker pods land on.
+
+> **Unverified — treat as a hypothesis, not a claim.** Working notes for this analysis speculated that vendors such as Exostellar layer a queue manager (e.g. Kueue) beneath ARC for GPU/quota management. Public materials reviewed for this appendix describe Exostellar as an infrastructure / GPU optimizer (spot-VM migration and GPU slicing) and do **not** describe a GitHub Actions runner, ARC integration, or a runner-queue product. The "layered under ARC" pattern is therefore not asserted here. What can be stated with confidence is the layer distinction above: infrastructure optimizers and this design address different layers and are not substitutes.
+
+**Verdict:** Infrastructure and GPU cost optimizers are complementary to this design, not alternatives. They lower the cost of compute that is running; this design lowers cost primarily by ensuring compute is not running when no job needs it, and adds the runner-control-plane properties (multiplexing, egress isolation, multi-tenant self-service) that sit entirely outside an infrastructure optimizer's scope.
+
+---
+
 ← [Appendix C](appendix-c-ai-implementation.md) | [Back to index](README.md)
