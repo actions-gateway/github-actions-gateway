@@ -215,6 +215,23 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   served by the proxy. We mount only tls.crt (not tls.key) and pass it
 		//   to curl via --proxy-cacert so the CONNECT handshake to the proxy is
 		//   TLS-verified end-to-end.
+		// Retry (Q139):
+		//   The CONNECT tunnel terminates at the *live* api.github.com, whose edge
+		//   occasionally returns a transient 504 Gateway Timeout — observed on main
+		//   run 27661005022 (fast ~8s fail, HTTP_CODE=504) and corroborated in the
+		//   same run by the GMC IPRangeReconciler's independent direct fetch of
+		//   api.github.com/meta also returning 504. The proxy cannot be the source:
+		//   it emits 502 on dial failure and never 504 (see cmd/proxy:
+		//   TestProxy_DialFailure), and curl exited 22 (HTTP error from the target
+		//   URL, not a proxy/connect error), so the 504 is GitHub's own response
+		//   carried end-to-end through an already-established tunnel. We use plain
+		//   --retry (which retries transient HTTP 5xx and timeouts) and deliberately
+		//   NOT --retry-all-errors: a genuine proxy/NP/TLS bug surfaces as a TLS
+		//   cert error (exit 60, not retried → fails fast) or a persistent
+		//   connect/timeout (retried but never recovers → still fails), so the
+		//   test's PR-#59 bug-catching power is preserved while a flaky-upstream 504
+		//   self-heals. --retry-max-time caps total retrying so a real persistent
+		//   failure still terminates well inside the 2-minute pod-phase wait.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
@@ -234,6 +251,7 @@ spec:
       set -eu
       curl --silent --show-error --fail-with-body \
            --max-time 30 \
+           --retry 5 --retry-delay 2 --retry-max-time 60 \
            --proxy %s \
            --proxy-cacert /etc/proxy-ca/tls.crt \
            --output /tmp/body \

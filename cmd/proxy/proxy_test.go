@@ -139,7 +139,14 @@ func TestProxy_DialFailure(t *testing.T) {
 
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	require.NoError(t, err)
+	// An upstream dial failure is a 502 Bad Gateway — never a 504. This is the
+	// invariant the Q139 diagnosis rests on: the proxy cannot manufacture a 504,
+	// so a 504 observed at a CONNECT client (e.g. the ProxyConnectWorks e2e) is
+	// necessarily the upstream's own response carried through the tunnel, not a
+	// proxy artifact. If this ever regresses to 504, that diagnosis breaks.
 	assert.Equal(t, http.StatusBadGateway, resp.StatusCode)
+	assert.NotEqual(t, http.StatusGatewayTimeout, resp.StatusCode,
+		"proxy must never emit 504; a 504 at a CONNECT client is an upstream response (Q139)")
 }
 
 func TestProxy_HalfClose(t *testing.T) {
