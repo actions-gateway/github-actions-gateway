@@ -61,6 +61,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | Verified 2026-06-01: not deletable. Operator-doc for the `--agent-key-type=ed25519` opt-in; RSA-3072 stays the default regardless. Needs probe flag extensions + manual run with real credentials. Low priority: not a 1.0-gate. |
 | <a id="Q147"></a>Q147 | Align grandfathered label/annotation values to no-boolean convention | `infra` `docs` | 🔲 | M | Align grandfathered `tenant`/`allow-profile-downgrade` `"true"` values to the no-boolean [convention](development/kubernetes-conventions.md); breaking (VAPs, onboarding, live namespaces) — needs a dual-read migration. Low priority. |
 | <a id="Q150"></a>Q150 | Pin + cache e2e metrics-server image | `speed` `tests` `infra` | 🔲 | S | metrics-server installs from a floating `latest` URL (`e2e_suite_test.go`): non-reproducible + an uncached node-side registry.k8s.io pull. Pin a version, then pre-pull + kind-load it like cert-manager (Q119 caching follow-up). |
+| <a id="Q151"></a>Q151 | Fan out updatecli to remaining manual CI version pins | `infra` | 🔲 | S | Extend the updatecli version+checksum pattern [dependency-updates.md](development/dependency-updates.md) to the manual pins: CALICO_VERSION (de-dupes the Makefile copy), POLARIS_VERSION+SHA, SHELLCHECK_VERSION+SHA, BUILDKIT_IMAGE. |
 
 ---
 
