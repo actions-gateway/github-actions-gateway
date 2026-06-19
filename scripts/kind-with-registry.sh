@@ -56,11 +56,38 @@ install_calico() {
     exit 1
   fi
   echo "==> installing Calico ${CALICO_VERSION}"
-  kubectl --context "${ctx}" apply -f \
+
+  # Fetch the manifest to a temp file (retried) rather than applying straight
+  # from the URL, so we can both preload its images onto the nodes below and
+  # avoid a second network fetch. The RETURN trap cleans it up on normal exit.
+  local manifest
+  manifest="$(mktemp)"
+  # shellcheck disable=SC2064  # intentional: capture this call's manifest path now
+  trap "rm -f '${manifest}'" RETURN
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "${manifest}" \
     "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
+
+  # Preload any Calico images already present in the local Docker daemon onto the
+  # kind nodes so the rollout below pulls nothing from quay.io — the dominant
+  # flake/latency source on this CNI's bring-up, and one the local registry
+  # cannot cover (it is wired only after Calico is up). CI pre-pulls and caches
+  # the images (see .github/workflows/e2e-reusable.yml); a plain local run has
+  # none cached and the nodes pull from quay as before. The loaded refs match
+  # the manifest's tagged refs, so kubelet's IfNotPresent policy finds them.
+  local img
+  while read -r img; do
+    [[ -z "${img}" ]] && continue
+    if docker image inspect "${img}" >/dev/null 2>&1; then
+      echo "==> preloading ${img} onto kind nodes"
+      kind load docker-image --name "${KIND_CLUSTER}" "${img}"
+    fi
+  done < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "${manifest}" | sort -u)
+
+  kubectl --context "${ctx}" apply -f "${manifest}"
   echo "==> waiting for calico-node DaemonSet rollout"
-  # 600s: a cold quay.io pull of the calico/cni + calico/node images on every
-  # node takes well over the kubectl default; 300s was observed too tight.
+  # 600s headroom: when images are not preloaded a cold quay.io pull of the
+  # calico images on every node takes well over the kubectl default; 300s was
+  # observed too tight.
   kubectl --context "${ctx}" rollout status daemonset/calico-node -n kube-system --timeout=600s
   echo "==> waiting for all nodes to be Ready"
   kubectl --context "${ctx}" wait --for=condition=Ready nodes --all --timeout=300s

@@ -1,0 +1,74 @@
+# e2e on the Calico (egress-enforcing) CNI profile — Q119.
+#
+# kindnet (the per-PR e2e CNI in e2e-test.yml) accepts NetworkPolicy objects but
+# its bundled kube-network-policies enforcer does not drop egress, so the
+# NetworkPolicy-enforcement specs cannot be validated there and self-skip. Q7b
+# confirmed they enforce on Calico v3.31.5 locally; this lane makes that a
+# standing CI gate. On Calico the full suite runs and these specs activate:
+#   - E2E_GMC_TenantProvisioning_ProxyConnectWorks       (runs on both CNIs)
+#   - E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod  (calico-only)
+#   - E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI            (calico-only)
+#   - E2E_GMC_ManagerMetricsNP_DeniesUnlabeledNamespace            (calico-only, Q83)
+#   - E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace             (calico-only, Q83)
+#
+# Triggered per-PR (and on push to main) only when the diff touches code that can
+# affect NetworkPolicy enforcement — the GMC (which generates the tenant + manager
+# policies), the egress proxy, the chart's policy templates, or the cluster/CNI
+# plumbing itself — so the vast majority of PRs that cannot regress enforcement
+# stay on the fast kindnet leg and pay no Calico cost. The path filter is the
+# sole automatic gate (there is no nightly catch-all), so it errs toward the
+# components that produce or police the enforced traffic; a manual run is always
+# available via workflow_dispatch. The Calico images are pre-pulled + cached
+# (see e2e-reusable.yml) so the per-PR cost is bounded and quay.io is off the
+# critical path.
+#
+# This lane is NOT a required status check: with on.<event>.paths, the workflow
+# simply does not trigger on unrelated PRs (no skipped check is reported), which
+# is correct only because it does not gate merge. If it is ever made required,
+# switch to the always-runs-then-skips dorny/paths-filter pattern e2e-test.yml
+# uses so a non-matching PR still reports a green check.
+name: e2e (calico)
+
+# NetworkPolicy/proxy-affecting paths. The pull_request and push filters must be
+# kept identical (GitHub Actions does not reliably support YAML anchors, so the
+# list is duplicated rather than shared).
+on:
+  pull_request:
+    paths:
+      - 'cmd/gmc/**'           # generates tenant + manager NetworkPolicies, IPRangeReconciler, e2e specs
+      - 'cmd/proxy/**'         # the egress proxy (ProxyConnectWorks)
+      - 'charts/actions-gateway/**'  # manager NetworkPolicy templates (ManagerMetricsNP)
+      - 'scripts/kind-with-registry.sh'  # CNI/cluster bring-up incl. Calico install
+      - 'Makefile'             # e2e targets + CALICO_VERSION
+      - '.github/workflows/e2e-calico.yml'
+      - '.github/workflows/e2e-reusable.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/gmc/**'
+      - 'cmd/proxy/**'
+      - 'charts/actions-gateway/**'
+      - 'scripts/kind-with-registry.sh'
+      - 'Makefile'
+      - '.github/workflows/e2e-calico.yml'
+      - '.github/workflows/e2e-reusable.yml'
+  workflow_dispatch:
+
+# Cancel a superseded in-progress run on the same PR (a newer push moots it);
+# pushes to main are a distinct ref and are never cancelled. Same keying rationale
+# as e2e-test.yml (github.ref, not head_ref).
+concurrency:
+  group: e2e-calico-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e-calico:
+    uses: ./.github/workflows/e2e-reusable.yml
+    permissions:
+      contents: read
+    with:
+      kind_cni: calico
+      # Extra headroom over the kindnet leg's 45m: Calico adds the calico-node
+      # rollout to cluster bring-up, and the egress-negative specs that self-skip
+      # on kindnet actually run here. Image pre-pull keeps this comfortable.
+      timeout_minutes: 60
