@@ -1,8 +1,11 @@
 # Reusable e2e job, parameterized by CNI. Two callers drive it:
 #   - e2e-test.yml   — per-PR / push-to-main, KIND_CNI=kindnet (the default).
-#   - e2e-calico.yml — nightly + manual, KIND_CNI=calico (egress-enforcing
-#                      profile; activates the NetworkPolicy-enforcement specs
-#                      that self-skip on kindnet — Q119).
+#   - e2e-calico.yml — KIND_CNI=calico (egress-enforcing profile; activates the
+#                      NetworkPolicy-enforcement specs that self-skip on kindnet).
+#                      Runs per-PR on NetworkPolicy/proxy-affecting paths, on
+#                      push to main for the same paths, and on manual dispatch
+#                      (Q119). The calico path additionally pre-pulls + caches the
+#                      Calico images (see the steps below).
 # Keeping the cluster/image/test plumbing here means a kind bump, image-tag
 # change, or flake mitigation is made once and both lanes inherit it (no drift
 # between two near-identical ~300-line workflows).
@@ -33,6 +36,12 @@ jobs:
       # scripts/kind-with-registry.sh; surfaced as an env var rather than
       # interpolated into a run: script directly (no script-injection surface).
       KIND_CNI: ${{ inputs.kind_cni }}
+      # Calico release for the egress-enforcing profile (KIND_CNI=calico). Keep
+      # in sync with CALICO_VERSION in the root Makefile. Used to (a) key the
+      # Calico image cache and pre-pull below and (b) pin the version passed to
+      # `make e2e-cluster`, so the pre-pulled images match what the manifest
+      # references. Ignored on the kindnet caller.
+      CALICO_VERSION: v3.31.5
       # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
       # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
       # the cluster's K8s version is deterministic and the image is cacheable by
@@ -180,6 +189,52 @@ jobs:
           docker tag "${E2E_CURL_UPSTREAM}" "${E2E_CURL_IMAGE}"
           docker push "${E2E_CURL_IMAGE}"
 
+      - name: Cache Calico images
+        # Calico-only. Keyed on CALICO_VERSION so a Calico bump invalidates it.
+        if: inputs.kind_cni == 'calico'
+        id: calico-image-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/calico-images
+          key: calico-images-${{ env.CALICO_VERSION }}
+
+      - name: Pre-pull Calico images
+        # Calico-only. The Calico manifest pulls calico/node, calico/cni, and
+        # calico/kube-controllers from quay.io/docker.io on every node during
+        # install — the dominant flake/latency source on this CNI's bring-up.
+        # Those pulls happen *before* the local registry is wired into the nodes,
+        # so they cannot be mirrored like the curl image. Instead pre-pull the
+        # exact image refs the pinned manifest references into the runner's Docker
+        # daemon here (cached + retried); scripts/kind-with-registry.sh then
+        # kind-loads whatever is present onto the nodes, so the rollout never
+        # touches quay.io. The image list is extracted from the same manifest the
+        # script applies, so the two always agree.
+        if: inputs.kind_cni == 'calico'
+        run: |
+          set -euo pipefail
+          tar=/tmp/calico-images/calico.tar
+          manifest="$(mktemp)"
+          trap 'rm -f "$manifest"' EXIT
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
+            "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
+          mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
+          if [[ "${#images[@]}" -eq 0 ]]; then
+            echo "no images found in Calico manifest for ${CALICO_VERSION}" >&2
+            exit 1
+          fi
+          echo "Calico images: ${images[*]}"
+          if [[ -f "$tar" ]]; then
+            echo "==> loading Calico images from cache"
+            docker load -i "$tar"
+          else
+            for img in "${images[@]}"; do
+              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+                scripts/pull-image-with-retry.sh "$img"
+            done
+            mkdir -p /tmp/calico-images
+            docker save -o "$tar" "${images[@]}"
+          fi
+
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
         # only on the registry (already up), not the cluster, so run it in the
@@ -206,8 +261,12 @@ jobs:
           # e2e-cluster target creates the cluster with disableDefaultCNI, applies
           # the pinned Calico manifest, and blocks on calico-node rollout + all
           # nodes Ready before returning, so the tests below never race CNI
-          # startup (scripts/kind-with-registry.sh install_calico).
-          make e2e-cluster KIND_CLUSTER=actions-gateway-e2e KIND_NODE_IMAGE="${KIND_NODE_IMAGE%@*}" KIND_CNI="${KIND_CNI}"
+          # startup (scripts/kind-with-registry.sh install_calico). When the
+          # Calico images were pre-pulled into the runner's Docker daemon (the
+          # step above, calico path only), install_calico kind-loads them onto the
+          # nodes so the rollout never touches quay.io. CALICO_VERSION is passed
+          # so those pre-pulled images match the manifest the script applies.
+          make e2e-cluster KIND_CLUSTER=actions-gateway-e2e KIND_NODE_IMAGE="${KIND_NODE_IMAGE%@*}" KIND_CNI="${KIND_CNI}" CALICO_VERSION="${CALICO_VERSION}"
           make apply-cert-manager
 
           echo "==> waiting for image build (bake) to finish"
