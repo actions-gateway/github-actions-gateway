@@ -31,6 +31,26 @@ func ApplyManifest(yaml string) error {
 	return err
 }
 
+// ApplyManifestOutput applies a raw YAML manifest like ApplyManifest but returns
+// kubectl's combined output (stdout+stderr) alongside the error, so callers can
+// assert on an admission-webhook rejection message — e.g. to prove the webhook
+// ran (its validation text appears) rather than being unreachable (a transport
+// error appears). On apply failure Run wraps the output into the error, but the
+// returned string carries the raw output verbatim for substring assertions.
+func ApplyManifestOutput(yaml string) (string, error) {
+	f, err := os.CreateTemp("", "e2e-manifest-*.yaml")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.WriteString(yaml); err != nil {
+		return "", err
+	}
+	f.Close()
+	cmd := exec.Command("kubectl", "apply", "-f", f.Name())
+	return Run(cmd)
+}
+
 // CreateNamespace creates a namespace and applies the given labels.
 //
 // Every namespace created here is a GMC-managed tenant namespace, so it is
