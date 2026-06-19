@@ -1,0 +1,76 @@
+# Keep the kind binary version and its linux/amd64 checksum in
+# .github/workflows/e2e-reusable.yml current. updatecli resolves the latest kind
+# release, fetches the matching upstream checksum, and opens a PR bumping both
+# KIND_VERSION and KIND_BINARY_SHA256 together — the version+checksum pair that
+# Dependabot cannot track because the pins are workflow env vars, not a
+# package-manifest entry. Run by .github/workflows/updatecli.yml.
+#
+# The kind *node* image (KIND_NODE_IMAGE) is deliberately NOT auto-bumped here:
+# the node image a kind release recommends is published in the release notes, not
+# a clean datasource, and bumping it changes the tested Kubernetes version — a
+# deliberate choice. Review and bump it (and CALICO_VERSION compatibility) by
+# hand in the same PR when the Kubernetes version should move.
+name: 'Bump kind (e2e) version + linux-amd64 checksum'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      # No auto-merge: a kind bump can change the tested Kubernetes version, so a
+      # human reviews (and, per the manifest header, decides on the node-image
+      # bump) before merge.
+      labels:
+        - dependencies
+
+sources:
+  kindVersion:
+    name: 'Latest kind release tag'
+    kind: githubrelease
+    spec:
+      owner: kubernetes-sigs
+      repository: kind
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+  kindChecksum:
+    name: 'Upstream kind linux-amd64 sha256 for the resolved version'
+    kind: shell
+    dependson:
+      - kindVersion
+    spec:
+      command: 'scripts/updatecli/kind-linux-amd64-sha256.sh {{ source "kindVersion" }}'
+      environments:
+        - name: PATH
+
+targets:
+  version:
+    name: 'KIND_VERSION in e2e-reusable.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/e2e-reusable.yml
+      matchpattern: '(KIND_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "kindVersion" }}'
+  checksum:
+    name: 'KIND_BINARY_SHA256 in e2e-reusable.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/e2e-reusable.yml
+      matchpattern: '(KIND_BINARY_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "kindChecksum" }}'
