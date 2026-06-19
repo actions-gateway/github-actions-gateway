@@ -1,0 +1,61 @@
+name: updatecli
+
+# Bump version+checksum pins that Dependabot cannot see, because they live as
+# workflow env vars rather than in a package manifest. Currently scoped to kind
+# (updatecli.d/kind.yaml): KIND_VERSION + KIND_BINARY_SHA256 in e2e-reusable.yml,
+# bumped together with the upstream-published checksum. See
+# docs/development/dependency-updates.md for the rationale, the planned fan-out
+# to the other manual pins (Calico, polaris, shellcheck, buildkit, the kind node
+# image), and the one-time repo setting this needs.
+on:
+  schedule:
+    # Mondays 06:17 UTC — after Dependabot's weekly wave, so a maintainer triages
+    # every dependency PR (Dependabot + updatecli) in a single pass.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run `updatecli diff` only — print changes, open no PR.'
+        type: boolean
+        default: false
+
+# Read-only by default; the job elevates to exactly the writes it needs.
+permissions:
+  contents: read
+
+# Never run two appliers at once: a second run would branch off a tree the first
+# is mid-bump. Do not cancel an in-flight apply — let it finish cleanly.
+concurrency:
+  group: updatecli
+  cancel-in-progress: false
+
+jobs:
+  updatecli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write       # push the update branch
+      pull-requests: write  # open the bump PR
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: updatecli/updatecli-action@5bda7da77bf4d181bce5f807d73d832b62062acf # v3.3.0
+        with:
+          version: v0.118.0
+      - name: updatecli apply (or diff on dispatch)
+        env:
+          # updatecli.d/kind.yaml reads these via requiredEnv. Owner/repo are
+          # split from GITHUB_REPOSITORY ("owner/repo") so this works on the
+          # schedule event too, whose payload omits github.event.repository.
+          UPDATECLI_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPDATECLI_ACTOR: 'github-actions[bot]'
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          export UPDATECLI_OWNER="${GITHUB_REPOSITORY%/*}"
+          export UPDATECLI_REPO="${GITHUB_REPOSITORY#*/}"
+          # Scheduled runs apply; manual dispatch can request a dry-run diff.
+          cmd=apply
+          if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            cmd=diff
+          fi
+          updatecli "${cmd}" --config updatecli.d/

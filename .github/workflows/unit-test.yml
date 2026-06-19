@@ -147,7 +147,9 @@ jobs:
       SHELLCHECK_VERSION: v0.11.0
       # SHA256 of shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz (Q127).
       # GitHub release assets are mutable for an existing tag, so verify the
-      # bytes before trusting the binary; bump this digest alongside the version.
+      # bytes before trusting the binary. Bumped in lockstep with the version by
+      # updatecli (updatecli.d/shellcheck.yaml; shellcheck publishes no checksum
+      # file, so it hashes the tarball directly).
       SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

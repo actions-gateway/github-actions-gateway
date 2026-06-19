@@ -36,8 +36,10 @@ jobs:
       # scripts/kind-with-registry.sh; surfaced as an env var rather than
       # interpolated into a run: script directly (no script-injection surface).
       KIND_CNI: ${{ inputs.kind_cni }}
-      # Calico release for the egress-enforcing profile (KIND_CNI=calico). Keep
-      # in sync with CALICO_VERSION in the root Makefile. Used to (a) key the
+      # Calico release for the egress-enforcing profile (KIND_CNI=calico).
+      # Auto-bumped in lockstep with the root Makefile's CALICO_VERSION by
+      # updatecli (updatecli.d/calico.yaml), so the two copies cannot drift. Used
+      # to (a) key the
       # Calico image cache and pre-pull below and (b) pin the version passed to
       # `make e2e-cluster`, so the pre-pulled images match what the manifest
       # references. Ignored on the kindnet caller.
@@ -50,7 +52,10 @@ jobs:
       # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
       # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
       # the cluster's K8s version is deterministic and the image is cacheable by
-      # a stable key. Bump all three together when upgrading kind.
+      # a stable key. KIND_VERSION + KIND_BINARY_SHA256 are bumped together
+      # automatically by updatecli (updatecli.d/kind.yaml); KIND_NODE_IMAGE is
+      # reviewed and bumped by hand in that PR when the tested Kubernetes version
+      # should move (see docs/development/dependency-updates.md).
       KIND_VERSION: v0.31.0
       KIND_BINARY_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
       KIND_NODE_IMAGE: kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
