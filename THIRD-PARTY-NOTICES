@@ -3522,7 +3522,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/onsi/ginkgo/v2 (v2.29.0)
+Module: github.com/onsi/ginkgo/v2 (v2.31.0)
 License file: github.com/onsi/ginkgo/v2/LICENSE
 ================================================================================
 
@@ -3548,7 +3548,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-Module: github.com/onsi/gomega (v1.41.0)
+Module: github.com/onsi/gomega (v1.42.0)
 License file: github.com/onsi/gomega/LICENSE
 ================================================================================
 
