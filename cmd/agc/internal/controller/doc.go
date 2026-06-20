@@ -6,4 +6,7 @@
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// resourcequotas read-only: the RunnerGroup reconciler reads the namespace
+// ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82).
+// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
 package controller

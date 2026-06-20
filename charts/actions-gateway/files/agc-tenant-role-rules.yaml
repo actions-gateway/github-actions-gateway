@@ -4,6 +4,14 @@
 - apiGroups: [""]
   resources: ["pods/status"]
   verbs: ["get"]
+# resourcequotas (read-only): the RunnerGroup reconciler reads the namespace
+# ResourceQuota to compute the WorkerQuota{Pressure,Exceeded} conditions (Q82) —
+# correlating the worker pool's footprint against the quota's hard/used. The
+# quota is platform-owned (Q130); the AGC never creates or mutates it, so this
+# grant is strictly get/list/watch.
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list", "watch"]
 # events: the RunnerGroup reconciler emits Kubernetes Events on credential,
 # agent-pool, listener, and deregistration failures plus Ready transitions
 # and worker-pod reaps. Both groups are required: the AGC's new-style
