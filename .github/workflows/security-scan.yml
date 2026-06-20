@@ -110,7 +110,11 @@ jobs:
     env:
       # Buildkit image docker/setup-buildx-action boots its builder from; named
       # here so the pre-pull step and the builder pin reference one source.
-      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1
+      # DIGEST-PINNED (Q151): the buildx-stable-1 tag floats, so an unpinned
+      # reference would let the builder that assembles the scanned images change
+      # underfoot between runs. Pin by digest, kept in step with the e2e and
+      # publish workflows by updatecli.d/buildkit.yaml.
+      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
     strategy:
       fail-fast: false
       matrix:
@@ -217,19 +221,24 @@ jobs:
     env:
       # Pin the polaris release scanned. Bump deliberately (new checks can change
       # the verdict); keep in step with the version `make polaris-scan` expects.
-      POLARIS_VERSION: 9.6.0
-      # SHA256 of polaris_linux_amd64.tar.gz for POLARIS_VERSION (Q127). Release
-      # assets are mutable for an existing tag; verify before trusting. Bump this
-      # digest alongside POLARIS_VERSION.
-      POLARIS_SHA256: d424a12e27eadbe2e8a92957dad09e30cee919212b06f2e93c465f7b7703d9fe
+      # Auto-bumped by updatecli.d/polaris.yaml (version + matching SHA256).
+      POLARIS_VERSION: v10.2.0
+      # SHA256 of the polaris linux/amd64 tarball for POLARIS_VERSION, taken from
+      # the release's published checksums.txt (Q127). Release assets are mutable
+      # for an existing tag; verify before trusting. Bump alongside POLARIS_VERSION.
+      POLARIS_SHA256: c264fc682fe612732e8a97680451d6e5f6b6fb920936215d6bb9ef387c7eadce
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       - name: install polaris
         run: |
           set -euo pipefail
+          # v10+ embeds the version (without the leading "v") in the asset name:
+          # tag v10.2.0 -> polaris_10.2.0_linux_amd64.tar.gz. Strip the "v" to
+          # build the asset filename from the tag.
+          asset="polaris_${POLARIS_VERSION#v}_linux_amd64.tar.gz"
           curl -sSLf --retry 3 --retry-delay 2 -o "${RUNNER_TEMP}/polaris.tar.gz" \
-            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/polaris_linux_amd64.tar.gz"
+            "https://github.com/FairwindsOps/polaris/releases/download/${POLARIS_VERSION}/${asset}"
           echo "${POLARIS_SHA256}  ${RUNNER_TEMP}/polaris.tar.gz" | sha256sum -c -
           tar -xzf "${RUNNER_TEMP}/polaris.tar.gz" -C "${RUNNER_TEMP}" polaris
           sudo install "${RUNNER_TEMP}/polaris" /usr/local/bin/polaris

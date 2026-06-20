@@ -16,9 +16,9 @@ is automated, by what, and where the manual edges are.
 | kind version + binary checksum | `KIND_VERSION` / `KIND_BINARY_SHA256` in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) | **updatecli** ([`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml), weekly) |
 | Calico version (2 files) | `CALICO_VERSION` in `e2e-reusable.yml` **and** the root `Makefile` | **updatecli** ([`updatecli.d/calico.yaml`](../../updatecli.d/calico.yaml), weekly — rewrites both, so they can't drift) |
 | shellcheck version + checksum | `SHELLCHECK_VERSION` / `SHELLCHECK_SHA256` in [`unit-test.yml`](../../.github/workflows/unit-test.yml) | **updatecli** ([`updatecli.d/shellcheck.yaml`](../../updatecli.d/shellcheck.yaml), weekly) |
+| polaris version + checksum | `POLARIS_VERSION` / `POLARIS_SHA256` in [`security-scan.yml`](../../.github/workflows/security-scan.yml) | **updatecli** ([`updatecli.d/polaris.yaml`](../../updatecli.d/polaris.yaml), weekly) |
+| buildkit builder image digest (3 files) | `BUILDKIT_IMAGE` in `e2e-reusable.yml`, `security-scan.yml` **and** `publish.yml` | **updatecli** ([`updatecli.d/buildkit.yaml`](../../updatecli.d/buildkit.yaml), weekly — rewrites all three, so they can't drift) |
 | kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice) |
-| polaris version + checksum | `POLARIS_VERSION` / `POLARIS_SHA256` in [`security-scan.yml`](../../.github/workflows/security-scan.yml) | **manual** (needs a deliberate v10 migration — see [below](#deliberately-manual-pins)) |
-| buildkit builder image | `BUILDKIT_IMAGE` in `e2e-reusable.yml` | **manual** (intentionally a floating tag — see [below](#deliberately-manual-pins)) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -58,14 +58,22 @@ one run, opening a separate PR per manifest. They share a shape:
      publish no checksum file.
 3. **File targets** — regex-replace each pin in place and open one PR.
 
+The one exception is [`buildkit.yaml`](../../updatecli.d/buildkit.yaml): it pins a
+Docker image *digest*, not a release tarball, so its source is a `dockerdigest`
+(resolving the current digest of the floating `buildx-stable-1` tag) rather than a
+`githubrelease` + checksum pair. It still ends in file targets — rewriting the
+`@sha256:…` suffix across all three workflows that boot a buildx builder.
+
 | Manifest | Pins | Checksum strategy |
 |---|---|---|
 | [`kind.yaml`](../../updatecli.d/kind.yaml) | `KIND_VERSION` + `KIND_BINARY_SHA256` | published `.sha256sum` |
 | [`calico.yaml`](../../updatecli.d/calico.yaml) | `CALICO_VERSION` in two files | none (version-only) |
 | [`shellcheck.yaml`](../../updatecli.d/shellcheck.yaml) | `SHELLCHECK_VERSION` + `SHELLCHECK_SHA256` | hash the tarball |
+| [`polaris.yaml`](../../updatecli.d/polaris.yaml) | `POLARIS_VERSION` + `POLARIS_SHA256` | published `checksums.txt` line |
+| [`buildkit.yaml`](../../updatecli.d/buildkit.yaml) | `BUILDKIT_IMAGE` digest in three files | none (`dockerdigest` resolves the digest directly) |
 
-**Gate tools open PRs that may go red.** shellcheck (and, when migrated, polaris)
-are lint/scan gates: a new release can add findings. The bump PR running CI is
+**Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan
+gates: a new release can add findings. The bump PR running CI is
 exactly the point — a human adopts the new version (fixing or justifying the new
 findings) or holds it, instead of the pin silently rotting.
 
@@ -107,22 +115,9 @@ with `dry_run: true` runs `diff`.
 
 ## Deliberately manual pins
 
-These are pinned but **not** on the updatecli cadence, each for a concrete reason
-rather than because automation is missing (tracked under **Q151** in
-[docs/STATUS.md](../STATUS.md)):
+This is pinned but **not** on the updatecli cadence, for a concrete reason rather
+than because automation is missing:
 
-- **`POLARIS_VERSION` + `POLARIS_SHA256`** — between the pinned `9.6.0` and the
-  current major, upstream changed *both* the tag scheme (`9.6.0` → `v10.x`) and
-  the asset name (`polaris_linux_amd64.tar.gz` → `polaris_<version>_linux_amd64.tar.gz`),
-  so a blind bump would write a broken download URL. It is also a security gate
-  whose verdict shifts across a major. Adopting v10 means migrating the
-  [`security-scan.yml`](../../.github/workflows/security-scan.yml) install step to
-  the new naming and vetting the new findings — a deliberate change, then a
-  manifest like the others.
-- **`BUILDKIT_IMAGE`** — `moby/buildkit:buildx-stable-1` is an *intentionally
-  floating* stable tag, not a stale pin. "Tracking" it means converting to a
-  version/digest pin — a reproducibility/posture change to decide on its own
-  merits, not a freshness fix.
 - **`KIND_NODE_IMAGE`** — the node image a kind release recommends lives in its
   release notes, not a clean datasource, and bumping it changes the tested
   Kubernetes version (and the Calico compatibility window). Review and bump it by
