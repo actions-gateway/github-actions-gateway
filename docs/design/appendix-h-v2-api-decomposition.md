@@ -338,7 +338,51 @@ which no conversion webhook can express. Therefore:
 - Deprecate `v1alpha1` after a release or two. The cutover is deliberate, not
   silent, because the migration is fan-out-on-create.
 
-## H.12. What adopting this changes
+## H.12. Folding in the grandfathered label-value alignment (Q147)
+
+Two shipped keys still carry boolean-looking `"true"` values that predate the
+[no-boolean label convention](../development/kubernetes-conventions.md) and are
+grandfathered only because changing them is breaking:
+
+- `actions-gateway.github.com/tenant: "true"` — the managed-tenant marker, matched
+  as `== 'true'` by the `namespace-psa-guard` and `tenant-resource-guard`
+  `ValidatingAdmissionPolicy` objects, the onboarding scripts, and operator runbooks.
+- `actions-gateway.github.com/allow-profile-downgrade: "true"` — the downgrade
+  opt-in annotation, matched by the GMC validating webhook.
+
+Aligning them (→ `tenant: managed`, `allow-profile-downgrade: allowed`, following the
+existing `privileged-profile: allowed` precedent) is a breaking change to deployed
+clusters: it touches VAP CEL, onboarding, runbooks, and the label/annotation on every
+live tenant namespace. The convention doc therefore defers it to "a separate,
+deliberate migration." **The v2 cutover is that migration** — it is already breaking,
+already ships a migration tool ([§H.11](#h11-migration-v2-tool-assisted)), and already
+reworks the same VAPs and onboarding for multi-gateway-per-namespace. Folding Q147 in
+here costs almost nothing extra and avoids a second, standalone breaking migration
+later.
+
+Both keys survive into v2 unchanged in *meaning* — the `tenant` marker still confines
+the GMC's namespace writes under multi-gateway-per-namespace, and
+`allow-profile-downgrade` still guards `ActionsGateway` PSA downgrades — so the cutover
+changes only their *values*, not their role.
+
+**Dual-read window (coincident with the v1/v2 coexistence window).** Q147 needs a
+dual-read migration so live namespaces are not broken mid-cutover:
+
+1. While `v1alpha1` and `v2alpha1` are served side by side, every consumer of these
+   values — both VAPs and the downgrade webhook — accepts **either** `"true"` (legacy)
+   **or** the new keyword. Reads are dual; writes prefer the new keyword.
+2. The migration tool ([§H.11](#h11-migration-v2-tool-assisted)) relabels the namespace
+   marker and rewrites the annotation to the new keyword as part of the same one-shot
+   pass that emits the v2 object set, so no separate operator action is required.
+3. When `v1alpha1` is deprecated and removed, drop the `"true"` arm from the VAPs and
+   webhook. The dual-read window closes exactly when `v1alpha1` serving does.
+
+This stays **fail-closed** throughout: the CEL/webhook checks already treat any
+non-sentinel value as "not granted", so accepting a second sentinel during the window
+never widens a grant — at worst a namespace is briefly un-aligned and the
+already-applied `"true"` keeps working until the tool relabels it.
+
+## H.13. What adopting this changes
 
 This proposal, if accepted, touches more than the API types. Non-exhaustive
 impact list, to be turned into plan-doc scope when scheduled:
@@ -355,8 +399,12 @@ impact list, to be turned into plan-doc scope when scheduled:
   operator-facing docs per the
   [doc-update matrix](../development/doc-update-matrix.md).
 - **Migration tool** + its tests.
+- **Label values (Q147):** the grandfathered `tenant`/`allow-profile-downgrade`
+  `"true"` values align to enum keywords during the cutover ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)) — VAP CEL,
+  onboarding scripts, runbooks, and the convention doc's "grandfathered" note all
+  update, and the dual-read window rides the v1alpha1 serving window.
 
-## H.13. Open questions / sign-off needed
+## H.14. Open questions / sign-off needed
 
 1. **Multi-gateway-per-namespace** resource naming and RBAC rework — biggest GMC
    change; review before committing to the API shape.
@@ -367,3 +415,7 @@ impact list, to be turned into plan-doc scope when scheduled:
 4. **Sharing model** — inline `allowedNamespaces` vs. Gateway-API `ReferenceGrant`.
 5. **Deletion semantics** — degrade-not-block (§H.8); confirm no operators rely
    on hard deletion protection.
+6. **Q147 label-value keywords** — confirm `tenant: managed` and
+   `allow-profile-downgrade: allowed` as the aligned values (§H.12), and that
+   closing the dual-read window only at `v1alpha1` removal (not earlier) is
+   acceptable.
