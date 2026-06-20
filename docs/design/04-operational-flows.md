@@ -50,6 +50,7 @@ sequenceDiagram
     Note over A,GH: all GitHub traffic routes through the per-tenant proxy pool
     A->>GH: 1. GetMessage (long-poll)
     GH-->>A: 2. RunnerJobRequest (run_service_url, runner_request_id)
+    Note over A: 2a. Admission gate — skip acquire if at worker ceiling (job stays queued)
     A->>GH: 3. AcquireJob (claim within the delivery window)
     GH-->>A: 4. planId + job instructions
     A->>GH: 5. RenewJob loop starts (every 60s, holds the lock)
@@ -65,6 +66,7 @@ sequenceDiagram
 
 1. **Poll:** A dedicated AGC goroutine fires a `GetMessage` request via the proxy pool. GitHub holds the connection for up to 50 seconds; returns `202 Accepted` if no job is queued.
 2. **Intercept:** GitHub responds with a `RunnerJobRequest` message containing `run_service_url`, `runner_request_id`, and `billing_owner_id` in the decoded body.
+2a. **Admit (Q59):** Before claiming the job, the goroutine consults the pre-acquisition admission gate — an in-memory, per-RunnerGroup reservation counter mirroring the worker ceiling (`maxWorkers` / the maximum `priorityTiers` threshold). If the group is already at its ceiling the goroutine **skips `acquirejob`**, increments `actions_gateway_jobs_admission_rejected_total`, and resumes polling at step 1 — the job stays queued at GitHub and is redelivered to a sibling session with capacity, rather than acquired-then-dropped. When the gate admits, it reserves a slot held until the job completes (step 11), then proceeds to step 3. The reservation is fail-safe soft state (reset on AGC restart); the provisioner's post-acquire ceiling check (step 6) remains the authoritative backstop.
 3. **Lock:** The AGC immediately calls `POST {run_service_url}/acquirejob` via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.
 4. **Payload:** `acquirejob` returns the full job instructions and `planId`. The AGC decrypts the payload and extracts the single-use `ACTIONS_RUNTIME_TOKEN`.
 5. **Renew:** A per-job background goroutine starts calling `POST {run_service_url}/renewjob` every 60 seconds. Each renewal extends the job lock by ~10 minutes. Pod startup time is no longer a race — the lock is already held.

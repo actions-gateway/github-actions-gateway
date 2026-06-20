@@ -33,6 +33,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
+- [Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)](#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
 - [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
@@ -925,6 +926,36 @@ kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceed
 - If quota is consistently full: increase the namespace `ResourceQuota` limits or reduce `maxWorkers` / `priorityTiers` thresholds so the AGC holds fewer concurrent pods.
 - If quota clears quickly but the retry window is too short: increase `maxQuotaRetries` or `quotaRetryDelay` on the RunnerGroup spec (defaults: 5 retries / 30s delay).
 - If quota retry is causing unwanted job-lock hold time: set `maxQuotaRetries: 0` to fail immediately on quota exhaustion — the job lock is dropped and GitHub redelivers the job.
+
+---
+
+## Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)
+
+**Symptoms.** Workflow jobs sit queued in GitHub while `actions_gateway_jobs_admission_rejected_total{namespace, runner_group}` climbs and `actions_gateway_jobs_acquired_total` plateaus for the same group. `kubectl get pods` shows the group already running its full complement of worker pods. The AGC is healthy — this is throttling, not a fault.
+
+**Cause.** This is the pre-acquisition admission gate working as designed (Q59). When a RunnerGroup is already at its worker ceiling (`maxWorkers`, or the maximum `priorityTiers` threshold), the AGC **deliberately skips `acquirejob`** for newly delivered jobs and leaves them queued at GitHub, so they are redelivered to a session with capacity rather than claimed-then-dropped (which would get the run cancelled). A rising rejection counter therefore means *demand exceeds the configured ceiling*, not that anything is broken. The gate's reservation count is in-memory and resets on AGC restart, so a brief post-restart burst of acquisitions is normal.
+
+**Diagnostics.**
+
+```sh
+# Compare admission rejections against successful acquisitions for the group.
+# A sustained gap with rejections rising = the ceiling is the bottleneck.
+#   actions_gateway_jobs_admission_rejected_total{namespace, runner_group}
+#   actions_gateway_jobs_acquired_total{namespace, runner_group}
+
+# Confirm the group is at its ceiling.
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<group> \
+  --field-selector status.phase=Running
+
+# Read the configured ceiling.
+kubectl get runnergroup <group> -n <namespace> \
+  -o jsonpath='{.spec.maxWorkers}{"\n"}{.spec.priorityTiers}{"\n"}'
+```
+
+**Resolution.**
+- If the ceiling is intentionally protective (e.g. it sits below the namespace `ResourceQuota` to leave headroom): no action — jobs drain as in-flight work completes, and GitHub redelivers within its delivery window.
+- If the group should run more concurrent jobs: raise `maxWorkers` (or the top `priorityTiers` threshold) on the RunnerGroup spec, and ensure the namespace `ResourceQuota` has matching headroom — otherwise the [ResourceQuota path](#jobs-failing-due-to-namespace-resourcequota-exhaustion) becomes the new bottleneck.
+- If rejections appear with worker pods **below** the ceiling, suspect leaked reservations from pods that never reached a terminal phase — check for [stuck-Pending pods](#worker-pod-reaped-while-pending-workerpodstuckpending); the gate's slot is released when the job completes or its pod is reaped. An AGC restart clears any stale in-memory reservation.
 
 ---
 

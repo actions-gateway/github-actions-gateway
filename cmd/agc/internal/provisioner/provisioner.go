@@ -263,6 +263,12 @@ type Provisioner struct {
 	// now returns the current time. nil means time.Now; tests override it to
 	// drive the eviction-counter TTL sweep deterministically.
 	now func() time.Time
+
+	// admission is the in-memory reservation counter that gates job acquisition
+	// on worker capacity before AcquireJob claims the job from GitHub (Q59). Its
+	// zero value is ready to use, so a struct-literal Provisioner (tests) gets a
+	// working gate without explicit initialization. See admission.go.
+	admission admissionGate
 }
 
 // evictionEntry is the value stored in evictionCounts. count is the number of

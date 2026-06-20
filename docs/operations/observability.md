@@ -300,6 +300,7 @@ remove the files when finished.)
 | --- | --- | --- | --- |
 | `actions_gateway_active_sessions` | Gauge | `namespace`, `runner_group` | Currently open long-poll sessions. One per RunnerGroup at steady state; rises toward `maxListeners` during bursts. |
 | `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired from the broker. |
+| `actions_gateway_jobs_admission_rejected_total` | Counter | `namespace`, `runner_group` | Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped because the group is at its worker ceiling). Expected to rise under sustained saturation; a persistent gap vs. `jobs_acquired_total` means demand exceeds the group's `maxWorkers` / `priorityTiers` ceiling — raise the ceiling or namespace `ResourceQuota`. |
 | `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures. Reason values: `already_claimed` (benign race), `delivery_window_expired` (job redelivered), `version_too_old`, `other`. |
 | `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from `acquirejob` success to worker pod terminal phase. |
 | `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see [Appendix A](../design/appendix-a-capacity-slos.md). |

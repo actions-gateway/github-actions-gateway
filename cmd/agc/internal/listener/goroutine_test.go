@@ -990,6 +990,9 @@ func newTestMetrics() *listener.Metrics {
 		JobAcquisitionErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_job_acquisition_errors_total",
 		}, []string{"namespace", "reason"}),
+		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_jobs_admission_rejected_total",
+		}, []string{"namespace", "runner_group"}),
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_token_refreshes_total",
 		}, []string{"namespace"}),
@@ -1041,6 +1044,112 @@ func TestListener_AcquireJobError(t *testing.T) {
 	cancel()
 	<-done
 
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// ── Q59: pre-acquisition admission gate ──────────────────────────────────────
+
+// TestListener_AdmissionRejected verifies that when the admission gate returns
+// ok=false the listener skips AcquireJob entirely (leaving the job queued at
+// GitHub) and increments the rejection counter.
+func TestListener_AdmissionRejected(t *testing.T) {
+	oauthSrv := oauthStub()
+	var acquireCalled atomic.Bool
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	var delivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		acquireCalled.Store(true)
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+
+	m := newTestMetrics()
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Metrics = m
+	cfg.IsLastPoller = func() bool { return true }
+	// Gate is full: every delivered job is rejected.
+	cfg.Admit = func(_ context.Context) (func(), bool) { return nil, false }
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsAdmissionRejectedTotal.WithLabelValues("default", "test-rg")) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "admission rejection counter should be incremented")
+	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called when admission is rejected")
+
+	cancel()
+	<-done
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_AdmissionReleasedOnCompletion verifies that an admitted job's
+// reservation is released after the job handler completes, so the slot is
+// returned to the gate.
+func TestListener_AdmissionReleasedOnCompletion(t *testing.T) {
+	oauthSrv := oauthStub()
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	var delivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"plan": map[string]string{"planId": "p1"}})
+	})
+
+	var admitCalls, releaseCalls atomic.Int32
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Metrics = newTestMetrics()
+	cfg.IsLastPoller = func() bool { return true }
+	cfg.Admit = func(_ context.Context) (func(), bool) {
+		admitCalls.Add(1)
+		return func() { releaseCalls.Add(1) }, true
+	}
+	handlerDone := make(chan struct{}, 1)
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		handlerDone <- struct{}{}
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	select {
+	case <-handlerDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job handler was never invoked")
+	}
+
+	// The reservation must be released once the job completes.
+	assert.Eventually(t, func() bool {
+		return admitCalls.Load() == 1 && releaseCalls.Load() == 1
+	}, 2*time.Second, 10*time.Millisecond, "admission reservation should be released after job completion")
+
+	cancel()
+	<-done
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)
