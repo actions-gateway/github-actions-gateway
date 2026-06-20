@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-18
+Last touched: 2026-06-20
 
 ---
 
@@ -51,8 +51,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q148"></a>Q148 | Flake: e2e E2E_AGC_SingleUseSelfHeal — 240s timeout (one job never acquired) | `tests` `bug` `infra` | 🔲 | M | Root cause: fakegithub returned 202 instantly vs the broker's ~50s long-poll, so a replacement listener idle-exited, collapsing the pool to 1 while the baseline ran a job — stranding the next job. Fix: fakegithub long-poll. Pending multi-run e2e. |
-| <a id="Q139"></a>Q139 | Flake: e2e E2E_GMC_TenantProvisioning_ProxyConnectWorks — curl through proxy fails (upstream 502/504) | `tests` `bug` `infra` | 🔲 | M | 2 transient modes: (a) 504 thru tunnel (exit22, retried since PR300); (b) 502-on-CONNECT dial-fail (exit56/HTTP000) NOT retried by plain --retry. PR adds --retry-all-errors (verified curl retries CONNECT-502 only w/ it). Open pending multi-run e2e. |
 | <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
 | <a id="Q59"></a>Q59 | [Pre-acquisition admission control (capacity-gated `acquirejob`)](plan/acquire-admission-control.md) | `infra` `speed` | 🔲 | L | AGC acquires jobs before checking pod capacity, so ceiling-held jobs are claimed-then-dropped under pressure. Add a capacity gate before `acquirejob` (not a durable queue — GitHub is the queue). |
 | <a id="Q82"></a>Q82 | Per-cluster proxy HPA-max guard (admission webhook + quota) | `infra` `security` | 🔲 | L | From Q34/E8. Proxy HPA `maxReplicas` allows up to 100/tenant, no per-cluster guard. Add a validating webhook correlating it with the namespace ResourceQuota — chosen over a lower CRD max (would reject existing tenants on re-apply). |
