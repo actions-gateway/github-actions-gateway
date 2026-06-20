@@ -34,6 +34,7 @@ Other helpers:
 | [probe-live-run.sh](probe-live-run.sh) | End-to-end setup and execution of the Milestone 1 wire-protocol probe against a real GitHub App installation. |
 | [probe-investigations-cd.sh](probe-investigations-cd.sh) | Runs Milestone 1 Investigations C and D against real GitHub. |
 | [pull-image-with-retry.sh](pull-image-with-retry.sh) | `docker pull <image-ref>` with bounded retries (`PULL_RETRY_ATTEMPTS`/`PULL_RETRY_DELAY` env, default 5×5s). Absorbs transient registry timeouts/429s in-step. Used by the e2e and security-scan workflows to pre-pull the buildkit builder and mirror the curl test image. |
+| [prepull-manifest-images.sh](prepull-manifest-images.sh) | `<name> <manifest-url> <cache-dir>`: extract the image refs a pinned Kubernetes manifest names, pre-pull them into the runner's Docker daemon (retried) and cache as a tarball + `images.txt`; on a warm cache `docker load`s the tar without touching the network. The shared pre-pull half of the e2e Calico/cert-manager/metrics-server caching pattern. |
 | [retry.sh](retry.sh) | Run an arbitrary command with bounded retries and linear backoff. Used by the publish workflow to absorb transient GHCR errors on idempotent push/sign steps. |
 | [claude-go-throttle-hook.sh](claude-go-throttle-hook.sh) | Claude Code `PreToolUse` hook that rewrites a bare `go build`/`go test` to carry the local-throttle prefix (Q92). Wired in `.claude/settings.json`. |
 
