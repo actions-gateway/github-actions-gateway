@@ -274,9 +274,9 @@ type TracingConfig struct {
 type ActionsGatewayStatus struct {
     // Conditions contains the current observed conditions of the gateway.
     // Known condition types: Ready, ProxyAvailable, AGCAvailable,
-    // CredentialUnavailable, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded.
-    // The type and reason strings are exported as consts from the GMC api package
-    // (cmd/gmc/api/v1alpha1/conditions.go).
+    // CredentialUnavailable, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded,
+    // RunnerGroupsDegraded. The type and reason strings are exported as consts from
+    // the GMC api package (cmd/gmc/api/v1alpha1/conditions.go).
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ProxyReadyReplicas is the number of proxy pods currently Ready.
@@ -310,6 +310,15 @@ type ActionsGatewayStatus struct {
 //   ProxyQuotaExceeded — advisory ERROR (Q82); true when proxy replica creates
 //                        are being rejected by the namespace ResourceQuota now
 //                        (Deployment ReplicaFailure). Supersedes the warning.
+//   RunnerGroupsDegraded — advisory (Q158); true when one or more owned
+//                        RunnerGroups report an impairing condition (Credential-
+//                        Unavailable / Degraded / RunnerVersionTooOld — see
+//                        agcv1alpha1.ImpairingConditionTypes). Rolls child health
+//                        up to the gateway's single pane; the impaired groups are
+//                        named in the message (reason RunnerGroupsImpaired). Does
+//                        NOT gate Ready — the gateway infra can be healthy while a
+//                        single tenant group is impaired. Exported as the gauge
+//                        actions_gateway_runnergroups_degraded.
 // ProxyQuota{Pressure,Exceeded} are mutually exclusive and do NOT gate Ready —
 // the pool keeps serving at its current scale. See the two-tier convention in
 // docs/development/kubernetes-conventions.md.

@@ -34,8 +34,56 @@ func NewMetrics(reader client.Reader) *Metrics {
 			Help: "NetworkPolicy egress-rule refreshes applied from the GitHub meta API, per tenant namespace.",
 		}, []string{"namespace"}),
 	}
-	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader), newProxyQuotaCollector(reader))
+	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader),
+		newProxyQuotaCollector(reader), newRunnerGroupsDegradedCollector(reader))
 	return m
+}
+
+// runnerGroupsDegradedCollector exports the RunnerGroupsDegraded rollup condition
+// (Q158) as a gauge so operators can alert on impaired tenant RunnerGroups from
+// the gateway's single pane without kube-state-metrics. Like the other collectors
+// it reads at scrape time from the cached reader: a deleted ActionsGateway simply
+// stops being listed. The gauge mirrors the condition the reconciler already wrote
+// to .status.conditions (1 when True, 0 otherwise).
+type runnerGroupsDegradedCollector struct {
+	reader   client.Reader
+	degraded *prometheus.Desc
+}
+
+func newRunnerGroupsDegradedCollector(reader client.Reader) *runnerGroupsDegradedCollector {
+	return &runnerGroupsDegradedCollector{
+		reader: reader,
+		degraded: prometheus.NewDesc(
+			"actions_gateway_runnergroups_degraded",
+			"1 when the ActionsGateway RunnerGroupsDegraded condition is True (one or more owned RunnerGroups report an impairing condition), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+	}
+}
+
+// Describe implements prometheus.Collector.
+func (c *runnerGroupsDegradedCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.degraded
+}
+
+// Collect implements prometheus.Collector. On a read failure it emits nothing
+// rather than a misleading value.
+func (c *runnerGroupsDegradedCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var list gmcv1alpha1.ActionsGatewayList
+	if err := c.reader.List(ctx, &list); err != nil {
+		return
+	}
+	for i := range list.Items {
+		ag := &list.Items[i]
+		if !ag.DeletionTimestamp.IsZero() {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(c.degraded, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionRunnerGroupsDegraded), ag.Namespace, ag.Name)
+	}
 }
 
 // proxyQuotaCollector exports the proxy ResourceQuota conditions (Q82) as

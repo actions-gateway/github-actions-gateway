@@ -42,3 +42,22 @@ const (
 	ReasonTokenUnavailable    = "TokenUnavailable"    //nolint:gosec // G101: a condition reason name, not a credential
 	ReasonCredentialAvailable = "CredentialAvailable" //nolint:gosec // G101: a condition reason name, not a credential
 )
+
+// ImpairingConditionTypes returns the RunnerGroup condition types that, when
+// True, mean the group cannot serve jobs — a credential failure, an unhealthy
+// session, or a too-old runner version. Consumers that aggregate per-group health
+// (the GMC's ActionsGateway RunnerGroupsDegraded rollup, Q158) iterate this set
+// rather than hard-coding the list, so extending it here automatically widens the
+// rollup. Q157 appends WorkersUnschedulable.
+//
+// The capacity-ladder conditions (WorkerQuotaPressure/Exceeded) and RateLimited
+// are deliberately excluded: they are advisory/transient throughput signals with
+// their own gauges, not "the group is broken" — including them would make the
+// rollup flap on normal load.
+func ImpairingConditionTypes() []string {
+	return []string{
+		ConditionDegraded,
+		ConditionCredentialUnavailable,
+		ConditionRunnerVersionTooOld,
+	}
+}

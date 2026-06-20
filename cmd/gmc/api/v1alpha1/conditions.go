@@ -29,6 +29,12 @@ const (
 	// (Q82). See docs/development/kubernetes-conventions.md.
 	ConditionProxyQuotaPressure = "ProxyQuotaPressure"
 	ConditionProxyQuotaExceeded = "ProxyQuotaExceeded"
+	// ConditionRunnerGroupsDegraded is True when one or more of the gateway's owned
+	// RunnerGroups reports an impairing condition (Q158), rolling child health up to
+	// the ActionsGateway — the operator's single pane. Abnormal-is-True; advisory,
+	// it does NOT gate Ready (the gateway infrastructure can be healthy while a
+	// single tenant group is impaired). See agcv1alpha1.ImpairingConditionTypes.
+	ConditionRunnerGroupsDegraded = "RunnerGroupsDegraded"
 )
 
 // Condition reasons reported alongside the condition types above. Reasons are
@@ -52,4 +58,10 @@ const (
 	// attribute the not-ready state to a credential or provisioning failure.
 	ReasonCredentialUnavailable = "CredentialUnavailable" //nolint:gosec // G101: a condition reason name, not a credential
 	ReasonDegraded              = "Degraded"
+	// ReasonRunnerGroupsImpaired is the RunnerGroupsDegraded=True reason (one or
+	// more owned RunnerGroups report an impairing condition); the impaired groups
+	// are named in the message. ReasonAllRunnerGroupsHealthy clears it
+	// (RunnerGroupsDegraded=False), including when the gateway owns no RunnerGroups.
+	ReasonRunnerGroupsImpaired   = "RunnerGroupsImpaired"
+	ReasonAllRunnerGroupsHealthy = "AllRunnerGroupsHealthy"
 )

@@ -532,6 +532,11 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	qc := r.evalProxyQuota(ctx, ag, &proxyDep)
 	setCondition(gmcv1alpha1.ConditionProxyQuotaPressure, qc.pressure, qc.pressureReason, qc.pressureMessage)
 	setCondition(gmcv1alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
+	// RunnerGroupsDegraded rolls owned-RunnerGroup health up to the gateway's single
+	// pane (Q158). Advisory like the quota conditions — it does NOT gate Ready, since
+	// the gateway infrastructure can be healthy while one tenant group is impaired.
+	rg := r.evalRunnerGroupHealth(ctx, ag)
+	setCondition(gmcv1alpha1.ConditionRunnerGroupsDegraded, rg.degraded, rg.reason, rg.message)
 	setCondition(gmcv1alpha1.ConditionReady, proxyAvailable && agcAvailable, gmcv1alpha1.ReasonAllAvailable, "all components are available")
 
 	ag.Status.ProxyReadyReplicas = proxyReady
@@ -845,6 +850,60 @@ func (r *ActionsGatewayReconciler) setDegraded(ctx context.Context, ag *gmcv1alp
 	return ctrl.Result{}, cause
 }
 
+// runnerGroupHealth carries the computed RunnerGroupsDegraded rollup (Q158).
+type runnerGroupHealth struct {
+	degraded bool
+	reason   string
+	message  string
+}
+
+// evalRunnerGroupHealth aggregates the health of the RunnerGroups owned by this
+// ActionsGateway into the RunnerGroupsDegraded rollup condition (Q158). A group is
+// "impaired" when any of agcv1alpha1.ImpairingConditionTypes() is True on it. The
+// rollup is True when at least one owned group is impaired, naming the impaired
+// groups and their tripped conditions in the message so the operator can act from
+// the gateway's single pane without inspecting each child. A read failure or zero
+// owned groups yields a healthy (False) rollup — the absence of evidence is not an
+// alarm, and other conditions already cover a broken gateway.
+//
+// The owner-label selector mirrors pruneRunnerGroups/reconcileDelete, so it never
+// counts a RunnerGroup belonging to another ActionsGateway in the same namespace.
+func (r *ActionsGatewayReconciler) evalRunnerGroupHealth(ctx context.Context, ag *gmcv1alpha1.ActionsGateway) runnerGroupHealth {
+	var rgList agcv1alpha1.RunnerGroupList
+	sel := labels.SelectorFromSet(map[string]string{"actions-gateway/owner-name": ag.Name, "actions-gateway/owner-ns": ag.Namespace})
+	if err := r.List(ctx, &rgList, &client.ListOptions{Namespace: ag.Namespace, LabelSelector: sel}); err != nil {
+		return runnerGroupHealth{
+			reason:  gmcv1alpha1.ReasonAllRunnerGroupsHealthy,
+			message: fmt.Sprintf("could not read owned RunnerGroups: %v", err),
+		}
+	}
+	impairing := agcv1alpha1.ImpairingConditionTypes()
+	var impaired []string
+	for i := range rgList.Items {
+		rg := &rgList.Items[i]
+		var tripped []string
+		for _, t := range impairing {
+			if meta.IsStatusConditionTrue(rg.Status.Conditions, t) {
+				tripped = append(tripped, t)
+			}
+		}
+		if len(tripped) > 0 {
+			impaired = append(impaired, fmt.Sprintf("%s (%s)", rg.Name, strings.Join(tripped, ", ")))
+		}
+	}
+	if len(impaired) == 0 {
+		return runnerGroupHealth{
+			reason:  gmcv1alpha1.ReasonAllRunnerGroupsHealthy,
+			message: fmt.Sprintf("all %d RunnerGroup(s) healthy", len(rgList.Items)),
+		}
+	}
+	return runnerGroupHealth{
+		degraded: true,
+		reason:   gmcv1alpha1.ReasonRunnerGroupsImpaired,
+		message:  fmt.Sprintf("%d of %d RunnerGroup(s) impaired: %s", len(impaired), len(rgList.Items), strings.Join(impaired, "; ")),
+	}
+}
+
 // secretToActionsGateway maps a Secret event to any ActionsGateway in the same
 // namespace that references the Secret by name. Used by WatchesMetadata so that
 // creating or deleting a referenced credential Secret triggers reconciliation.
@@ -887,6 +946,58 @@ func (r *ActionsGatewayReconciler) quotaToActionsGateways(ctx context.Context, o
 	return reqs
 }
 
+// runnerGroupToActionsGateway maps a RunnerGroup event to its owning
+// ActionsGateway via the owner labels the GMC stamps when it creates the group
+// (the same labels pruneRunnerGroups selects on), so a child's health change
+// refreshes the parent's RunnerGroupsDegraded rollup promptly (Q158). A group
+// without the owner labels maps to no request.
+func (r *ActionsGatewayReconciler) runnerGroupToActionsGateway(_ context.Context, obj client.Object) []ctrl.Request {
+	l := obj.GetLabels()
+	name := l["actions-gateway/owner-name"]
+	ns := l["actions-gateway/owner-ns"]
+	if name == "" || ns == "" {
+		return nil
+	}
+	return []ctrl.Request{{NamespacedName: types.NamespacedName{Namespace: ns, Name: name}}}
+}
+
+// runnerGroupImpairingConditionsChanged restricts the RunnerGroup watch to the
+// events that can move the RunnerGroupsDegraded rollup (Q158): create, delete, and
+// updates that flip an impairing condition's True/False state. RunnerGroup status
+// is written on nearly every AGC reconcile (activeSessions), so without this the
+// GMC would reconcile on high-frequency churn that cannot change the rollup.
+func runnerGroupImpairingConditionsChanged() predicate.Predicate {
+	impairedSet := func(obj client.Object) map[string]bool {
+		rg, ok := obj.(*agcv1alpha1.RunnerGroup)
+		if !ok {
+			return nil
+		}
+		out := make(map[string]bool)
+		for _, t := range agcv1alpha1.ImpairingConditionTypes() {
+			out[t] = meta.IsStatusConditionTrue(rg.Status.Conditions, t)
+		}
+		return out
+	}
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return true },
+		DeleteFunc:  func(event.DeleteEvent) bool { return true },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldSet := impairedSet(e.ObjectOld)
+			newSet := impairedSet(e.ObjectNew)
+			if oldSet == nil || newSet == nil {
+				return true
+			}
+			for t, v := range newSet {
+				if oldSet[t] != v {
+					return true
+				}
+			}
+			return false
+		},
+	}
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard, but
@@ -924,6 +1035,15 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.ResourceQuota{},
 			handler.EnqueueRequestsFromMapFunc(r.quotaToActionsGateways),
 			builder.WithPredicates(quotaHardChanged),
+		).
+		// Watch owned RunnerGroups so a child's impairing-condition change refreshes
+		// the parent's RunnerGroupsDegraded rollup (Q158). The predicate drops the
+		// high-frequency status churn (activeSessions) that cannot move the rollup.
+		// RunnerGroup status carries no secret material, so caching it is cheap.
+		Watches(
+			&agcv1alpha1.RunnerGroup{},
+			handler.EnqueueRequestsFromMapFunc(r.runnerGroupToActionsGateway),
+			builder.WithPredicates(runnerGroupImpairingConditionsChanged()),
 		).
 		Named("actionsgateway").
 		Complete(r)
