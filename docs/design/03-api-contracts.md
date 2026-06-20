@@ -273,7 +273,8 @@ type TracingConfig struct {
 // with kubectl wait, Argo CD health checks, and kstatus.
 type ActionsGatewayStatus struct {
     // Conditions contains the current observed conditions of the gateway.
-    // Known condition types: Ready, ProxyAvailable, AGCAvailable.
+    // Known condition types: Ready, ProxyAvailable, AGCAvailable,
+    // ProxyQuotaPressure, ProxyQuotaExceeded.
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ProxyReadyReplicas is the number of proxy pods currently Ready.
@@ -290,9 +291,18 @@ type ActionsGatewayStatus struct {
 }
 
 // Condition types for ActionsGateway:
-//   Ready          — true when both proxy pool and AGC are healthy.
-//   ProxyAvailable — true when proxy pool has >= minReplicas pods Ready.
-//   AGCAvailable   — true when the AGC Deployment has >= 1 pod Ready.
+//   Ready              — true when both proxy pool and AGC are healthy.
+//   ProxyAvailable     — true when proxy pool has >= minReplicas pods Ready.
+//   AGCAvailable       — true when the AGC Deployment has >= 1 pod Ready.
+//   ProxyQuotaPressure — advisory WARNING (Q82); true when the proxy pool cannot
+//                        scale to maxReplicas within the namespace ResourceQuota
+//                        headroom (hard − used). Predictive and load-dependent.
+//   ProxyQuotaExceeded — advisory ERROR (Q82); true when proxy replica creates
+//                        are being rejected by the namespace ResourceQuota now
+//                        (Deployment ReplicaFailure). Supersedes the warning.
+// ProxyQuota{Pressure,Exceeded} are mutually exclusive and do NOT gate Ready —
+// the pool keeps serving at its current scale. See the two-tier convention in
+// docs/development/kubernetes-conventions.md.
 
 // PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
 // threshold. The AGC assigns the PriorityClass of the first tier whose
@@ -612,7 +622,18 @@ type WorkerPodTemplate = corev1.PodTemplateSpec
 
 type RunnerGroupStatus struct {
     // Conditions contains the current observed conditions of the runner group.
-    // Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld.
+    // Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld,
+    // WorkerQuotaPressure, WorkerQuotaExceeded.
+    //   WorkerQuotaPressure — advisory WARNING (Q82); true when worker pods
+    //                         cannot scale to the configured ceiling (maxWorkers /
+    //                         max priorityTier threshold) within the namespace
+    //                         ResourceQuota headroom (hard − used).
+    //   WorkerQuotaExceeded — advisory ERROR (Q82); true when the namespace
+    //                         ResourceQuota cannot admit even one more worker pod
+    //                         (the next acquired job's pod will be rejected).
+    //                         Supersedes the warning. Distinct from Q59's
+    //                         configured-ceiling admission backpressure
+    //                         (jobs_admission_rejected_total), which is normal.
     // The listType=map / listMapKey=type markers let server-side apply merge
     // conditions by type instead of treating the slice as atomic.
     //

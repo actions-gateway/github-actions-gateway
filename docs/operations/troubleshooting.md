@@ -489,6 +489,24 @@ proxy:
 
 After updating the spec, patch the proxy Deployment or trigger a rollout; the HPA will start computing utilization on the next metrics scrape cycle (~30s).
 
+**Second likely cause: the namespace `ResourceQuota` won't admit the replicas the HPA wants.** The HPA computes utilization correctly but the proxy Deployment cannot create more pods because the platform-owned namespace `ResourceQuota` is the hard cap. Under load the pool wedges below its target and the Deployment/ReplicaSet logs `FailedCreate ... exceeded quota` events instead of scaling out.
+
+The GMC surfaces this as two non-blocking conditions on the `ActionsGateway` (neither gates `Ready` — the pool keeps serving at its current scale), each also exported as a gauge for alerting:
+
+| Condition / metric | Meaning | Action |
+|---|---|---|
+| `ProxyQuotaPressure` (warning) — `actions_gateway_proxy_quota_pressure` | The pool can't grow to `maxReplicas` within the quota's remaining headroom (`hard − used`). Load-dependent. | Raise the quota or lower `maxReplicas` before the next spike. |
+| `ProxyQuotaExceeded` (error) — `actions_gateway_proxy_quota_exceeded` | Replica creates are being **rejected now** (Deployment `ReplicaFailure` with `exceeded quota`). | Raise the quota now; the pool is degraded below the HPA's target. |
+
+```sh
+# Read both conditions (Exceeded supersedes Pressure when firing).
+kubectl get actionsgateway -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="ProxyQuotaPressure")]}{.type}={.status} {.reason}: {.message}{"\n"}{end}'
+kubectl describe actionsgateway -n <namespace> <name>
+```
+
+Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering `spec.proxy.maxReplicas` to fit. Editing the quota's `.spec.hard` re-triggers reconciliation immediately; the conditions clear on the next reconcile.
+
 ---
 
 ## Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap
@@ -901,7 +919,19 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i evict
 
 ## Jobs Failing Due to Namespace ResourceQuota Exhaustion
 
-**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled.
+**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled. The `RunnerGroup` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`).
+
+The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics. They are distinct from Q59's configured-ceiling backpressure (`actions_gateway_jobs_admission_rejected_total`), which is normal load-shedding to a sibling, not a quota problem:
+
+| Condition / metric | Meaning | Severity |
+|---|---|---|
+| `WorkerQuotaPressure` — `actions_gateway_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
+| `WorkerQuotaExceeded` — `actions_gateway_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
+
+```sh
+kubectl get runnergroup -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="WorkerQuotaExceeded")]}{.status} {.reason}: {.message}{"\n"}{end}'
+```
 
 **Likely causes.**
 - The namespace ResourceQuota `pods` or `requests.cpu`/`requests.memory` limit is too low for the burst of concurrent jobs arriving.

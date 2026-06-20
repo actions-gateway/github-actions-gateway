@@ -65,3 +65,53 @@ its sentinel value, if any) as an exported `const` in the relevant
 `api/v1alpha1` package with godoc, and reference that const from controllers,
 webhooks, and tests — never re-type the literal string, so a rename can't drift
 between the producer and the consumers.
+
+## Status conditions & alertable condition metrics
+
+The CRDs report observed state with standard Kubernetes conditions
+(`metav1.Condition`, keyed by `type`, surfaced via `kubectl describe`). Two
+conventions keep them consistent and alertable.
+
+### Two-tier "pressure / exceeded" ladder for capacity signals
+
+When a controller surfaces pressure against a finite resource (e.g. the
+namespace `ResourceQuota`), model it as a **two-tier ladder** rather than one
+boolean, so operators can route a *warning* and a *page* differently:
+
+- **`<Subject>QuotaPressure`** — *warning*. Predictive: the subject cannot grow
+  to its configured ceiling within the **remaining** headroom (`hard − used`).
+  This is load-dependent and may flap; alert on it with an `for:` debounce and
+  do **not** page.
+- **`<Subject>QuotaExceeded`** — *error*. Observed/imminent: creates are being
+  rejected now, or no headroom remains for even one more unit. Page-worthy
+  (still use `for:` to debounce).
+
+Rules:
+
+- **Polarity is abnormal-is-`True`** (matching `CredentialUnavailable`,
+  `RateLimited`) — `True` means there is a problem.
+- **The tiers are mutually exclusive**: when the error fires, force the warning
+  to `False` (reason `Superseded`). Each condition then maps to exactly one
+  alert severity with a plain `== True` rule and no Alertmanager inhibition.
+- **Advisory unless stated**: a capacity condition does not gate `Ready` unless
+  the subject is actually unavailable — surfacing a latent problem must not flip
+  a healthy workload to not-ready.
+- Shipped examples: `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the
+  `ActionsGateway` (GMC) and `WorkerQuotaPressure`/`WorkerQuotaExceeded` on the
+  `RunnerGroup` (AGC). See [Q82](../plan/quota-pressure-conditions.md).
+
+### Mirror alertable conditions as a controller-exported gauge
+
+Every condition an operator should alert on is **also** exported as a Prometheus
+gauge by the owning controller (`1` when the condition is `True`, `0`
+otherwise), labelled by namespace + object name. This lets clusters alert
+directly on the controller's `/metrics` endpoint **without depending on
+kube-state-metrics** to scrape CRD conditions.
+
+Implement it as a **scrape-time collector** that lists the CRs from the cached
+reader and reads `.status.conditions` (see `proxyQuotaCollector` in `cmd/gmc`
+and `workerQuotaCollector` in `cmd/agc`), not a reconcile-path gauge: a deleted
+object simply stops being listed, so its series disappears with no stale-series
+cleanup and no reconcile cost. Metric names mirror the condition
+(`actions_gateway_proxy_quota_pressure`, `actions_gateway_worker_quota_exceeded`,
+…).
