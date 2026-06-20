@@ -88,3 +88,34 @@ resvg --sans-serif-family "Helvetica Neue" --monospace-family "Menlo" \
 ```
 
 Verify the result has no clipped text and a crisp logomark.
+
+## Animated logomark
+
+A looping animation of the gateway ring as a literal Stargate-style wormhole —
+for social posts, the docs site, or a README banner. Like the static mark it is
+**generated, not hand-authored**: `generate-wormhole-animation.py` emits the
+per-frame SVGs and `render-wormhole-animation.sh` rasters and packs them.
+
+One ~2.6 s loop: a closed metallic iris opens, the wormhole ignites and erupts a
+water/plasma "kawoosh" along the gate's normal, the plume retracts into a
+shimmering event horizon, and the iris closes again — seamless at the loop
+boundary. The ring geometry, palette, timing, and iris are tunable constants at
+the top of the Python file.
+
+The rendered GIF/WebP/MP4 are **not committed** (multi-megabyte binaries) —
+regenerate on demand:
+
+```sh
+# needs resvg, ImageMagick 7 (magick), ffmpeg, python3
+#   brew install resvg imagemagick ffmpeg
+./render-wormhole-animation.sh [OUTDIR]   # OUTDIR defaults to ./wormhole-out
+```
+
+| Output | Format | Used for |
+| --- | --- | --- |
+| `wormhole-animation.gif` | 800 px, 1.91:1, opaque | README / inline embeds (plays everywhere) |
+| `wormhole-animation.webp` | 1200 px, 1.91:1, transparent | docs site / overlays (smooth alpha) |
+| `wormhole-animation.mp4` | 1080×808, ~4:3, opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
+
+The MP4 is cropped tighter than the 1.91:1 GIF/WebP to drop the side margins for
+a feed video — adjust the `crop=`/`scale=` in the script if the layout changes.

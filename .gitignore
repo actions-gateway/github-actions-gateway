@@ -48,3 +48,6 @@ cover.out
 # Transient load-harness report from `make load-test-full` (Q13). The committed
 # sample under cmd/agc/test/load/results/sample-run.md is the tracked artifact.
 /cmd/agc/test/load/results/latest.md
+
+# wormhole-animation render output (binaries are generated, not committed)
+wormhole-out/

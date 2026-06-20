@@ -58,7 +58,10 @@ GitHub-only. Published: `docs/design/`, `docs/operations/`, the landing page
 The logomark and icon set are **generated, not hand-edited**. Edit
 `docs/assets/generate-logomark.py` (the parametric faceted-ring mark) and
 re-render the rasters with resvg — full procedure in
-[`docs/assets/README.md`](../assets/README.md).
+[`docs/assets/README.md`](../assets/README.md). The same README also covers the
+animated wormhole logomark (`generate-wormhole-animation.py` +
+`render-wormhole-animation.sh`); its GIF/WebP/MP4 outputs are generated on
+demand, not committed.
 
 ## Progressive enhancement (`docs/javascripts/extra.js`)
 
