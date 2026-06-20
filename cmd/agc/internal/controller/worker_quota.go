@@ -29,9 +29,12 @@ import (
 // silent failure mode Q59's configured-ceiling admission gate does not cover
 // (when the quota is tighter than maxWorkers, the gate never fires but worker
 // pod creates are quota-rejected).
+// The condition types are defined as exported consts in the api package so the
+// reconciler, metrics collector, and tests share one source of truth (Q156).
+// These package-local aliases keep the existing call sites terse.
 const (
-	conditionWorkerQuotaPressure = "WorkerQuotaPressure"
-	conditionWorkerQuotaExceeded = "WorkerQuotaExceeded"
+	conditionWorkerQuotaPressure = v1alpha1.ConditionWorkerQuotaPressure
+	conditionWorkerQuotaExceeded = v1alpha1.ConditionWorkerQuotaExceeded
 )
 
 // quotaCheck maps a worker-footprint resource to the ResourceQuota hard key that

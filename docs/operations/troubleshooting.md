@@ -142,15 +142,33 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=100 | grep -i er
 # Check events on the ActionsGateway CR
 kubectl describe actionsgateway -n <namespace> <name>
 
-# Check the Ready condition
+# Check the conditions — Degraded names the failing provisioning step
 kubectl get actionsgateway -n <namespace> <name> -o jsonpath='{.status.conditions}' | jq .
+```
+
+**Reading the `Degraded` condition.** When a reconcile fails partway through
+provisioning, the GMC sets `Degraded=True` (reason `ProvisioningFailed`) on the
+`ActionsGateway` and names the failing step in the message — e.g. `provisioning
+failed at step "proxy Deployment + Service": ...`. The reconcile returns
+immediately on that error, so the other conditions (`ProxyAvailable`,
+`AGCAvailable`) may be stale; `Degraded` is the authoritative signal of which step
+is stuck. It clears (`Degraded=False`, reason `ReconcileSucceeded`) automatically
+once a reconcile completes all steps. Read it directly:
+
+```sh
+kubectl get actionsgateway -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="Degraded")]}{.status} {.reason}: {.message}{"\n"}{end}'
 ```
 
 **Resolution.**
 - If the GMC pod is not running, restore it from its Deployment.
 - If RBAC is missing, re-run `helm upgrade --install` of the chart (RBAC ships with it).
 - If the admission webhook is rejecting the CR, fix the CR spec and re-apply.
-- If a reconcile error is logged (e.g. `failed to create Deployment`), check the `controller_runtime_reconcile_errors_total` metric and read the full error from the GMC logs. Fix the underlying permissions or quota issue and the GMC's reconciler will retry.
+- If `Degraded=True`, fix the underlying problem named by the failing step (e.g. a
+  conflicting hand-created resource, missing permission, or exhausted quota) — also
+  cross-check the `controller_runtime_reconcile_errors_total` metric and the full
+  error in the GMC logs. The GMC's reconciler retries with backoff and clears
+  `Degraded` on the next successful reconcile.
 
 ---
 
@@ -622,7 +640,12 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].spec.maxListeners
 
 ## GitHub App Secret Misconfiguration
 
-**Symptoms.** AGC logs show errors like `failed to create installation token`, `private key: RSA key parse error`, or `401 Unauthorized`. The `ActionsGateway` condition `AGCAvailable=False` with reason `CredentialError`.
+**Symptoms.** AGC logs show errors like `failed to create installation token`, `private key: RSA key parse error`, or `401 Unauthorized`. The `ActionsGateway` condition `AGCAvailable=False` with reason `CredentialError`. When the AGC cannot obtain an installation token while reconciling a RunnerGroup, that group also reports `CredentialUnavailable=True` (reason `TokenUnavailable`) in its status — surfacing the failure in `kubectl get runnergroup`/`describe`, not only as a `TokenUnavailable` Event. The condition clears (`CredentialUnavailable=False`, reason `CredentialAvailable`) on the next reconcile once a token is obtained. Read it with:
+
+```sh
+kubectl get runnergroup -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="CredentialUnavailable")]}{.status} {.reason}: {.message}{"\n"}{end}'
+```
 
 **Common misconfigurations.**
 

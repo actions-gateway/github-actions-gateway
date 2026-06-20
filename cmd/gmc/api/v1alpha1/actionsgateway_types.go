@@ -233,6 +233,10 @@ type ActionsGatewaySpec struct {
 
 // ActionsGatewayStatus is the observed state of an ActionsGateway.
 type ActionsGatewayStatus struct {
+	// Conditions contains the current observed conditions of the gateway.
+	// Known types: Ready, ProxyAvailable, AGCAvailable, CredentialUnavailable,
+	// Degraded, ProxyQuotaPressure, ProxyQuotaExceeded. The type and reason string
+	// constants are exported from this package (see conditions.go).
 	// +optional
 	// +listType=map
 	// +listMapKey=type

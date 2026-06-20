@@ -9012,6 +9012,11 @@ spec:
                 format: int32
                 type: integer
               conditions:
+                description: |-
+                  Conditions contains the current observed conditions of the gateway.
+                  Known types: Ready, ProxyAvailable, AGCAvailable, CredentialUnavailable,
+                  Degraded, ProxyQuotaPressure, ProxyQuotaExceeded. The type and reason string
+                  constants are exported from this package (see conditions.go).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

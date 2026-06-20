@@ -165,19 +165,47 @@ func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	proxyAddr := buildProxyServiceAddr(&ag)
 
 	if err := r.reconcileResources(ctx, &ag, githubCIDRs, proxyAddr); err != nil {
-		return ctrl.Result{}, err
+		// Reconcile returns here before updateStatus, so without this the object's
+		// conditions would go stale and never reflect the failure. Record a Degraded
+		// condition naming the failing step before the early return (Q156).
+		return r.setDegraded(ctx, &ag, err)
 	}
 
 	return r.updateStatus(ctx, &ag)
 }
 
-func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet, proxyAddr string) error {
+// provisioningError wraps a reconcileResources failure with the named step that
+// was in progress when it failed, so Reconcile can surface that step in the
+// Degraded condition before returning early (Q156). It Unwraps to the underlying
+// error so errors.Is/As and IsConflict-style checks still see the cause.
+type provisioningError struct {
+	step string
+	err  error
+}
+
+func (e *provisioningError) Error() string { return fmt.Sprintf("%s: %v", e.step, e.err) }
+func (e *provisioningError) Unwrap() error { return e.err }
+
+func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet, proxyAddr string) (retErr error) {
 	// Debug step markers: this method applies ~12 child resources and on failure
 	// returns a single wrapped error, so a tenant stalled on one step (e.g. a
 	// quota-blocked Deployment) gives no signal about which step is stuck. The
 	// markers stay at V(1) (Debug) so steady-state reconciles add no Info volume.
+	//
+	// step() also records the in-progress step name; the deferred wrap tags any
+	// returned error with it so Reconcile can name the failing step in the
+	// Degraded condition without parsing error strings (Q156).
 	log := logf.FromContext(ctx)
-	step := func(name string) { log.V(1).Info("reconcileResources step", "step", name) }
+	var current string
+	step := func(name string) {
+		current = name
+		log.V(1).Info("reconcileResources step", "step", name)
+	}
+	defer func() {
+		if retErr != nil {
+			retErr = &provisioningError{step: current, err: retErr}
+		}
+	}()
 
 	// 0. Stamp Pod Security Admission labels on the tenant namespace.
 	step("namespace PSA labels")
@@ -489,19 +517,22 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 		})
 	}
 
-	// Credential is present (checked before entering reconcileResources).
-	setCondition("CredentialUnavailable", false, "SecretFound", "referenced Secret exists")
-	setCondition("ProxyAvailable", proxyAvailable, "ProxyReady", fmt.Sprintf("%d/%d proxy pods ready", proxyReady, minReplicas))
-	setCondition("AGCAvailable", agcAvailable, "AGCReady", "AGC deployment status")
+	// Reaching updateStatus means reconcileResources succeeded, so clear any
+	// Degraded condition a prior failed reconcile left set (Q156). Credential is
+	// present (checked before entering reconcileResources).
+	setCondition(gmcv1alpha1.ConditionDegraded, false, gmcv1alpha1.ReasonReconcileSucceeded, "all child resources reconciled")
+	setCondition(gmcv1alpha1.ConditionCredentialUnavailable, false, gmcv1alpha1.ReasonSecretFound, "referenced Secret exists")
+	setCondition(gmcv1alpha1.ConditionProxyAvailable, proxyAvailable, gmcv1alpha1.ReasonProxyReady, fmt.Sprintf("%d/%d proxy pods ready", proxyReady, minReplicas))
+	setCondition(gmcv1alpha1.ConditionAGCAvailable, agcAvailable, gmcv1alpha1.ReasonAGCReady, "AGC deployment status")
 	// ProxyQuota{Pressure,Exceeded} are advisory (Q82) and do NOT gate Ready — the
 	// pool keeps serving at its current scale. Pressure (warning) is predictive:
 	// the pool can't grow to maxReplicas within current quota headroom. Exceeded
 	// (error) is observed: replica creates are being rejected by quota now. They
 	// are mutually exclusive (error supersedes warning).
 	qc := r.evalProxyQuota(ctx, ag, &proxyDep)
-	setCondition("ProxyQuotaPressure", qc.pressure, qc.pressureReason, qc.pressureMessage)
-	setCondition("ProxyQuotaExceeded", qc.exceeded, qc.exceededReason, qc.exceededMessage)
-	setCondition("Ready", proxyAvailable && agcAvailable, "AllAvailable", "all components are available")
+	setCondition(gmcv1alpha1.ConditionProxyQuotaPressure, qc.pressure, qc.pressureReason, qc.pressureMessage)
+	setCondition(gmcv1alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
+	setCondition(gmcv1alpha1.ConditionReady, proxyAvailable && agcAvailable, gmcv1alpha1.ReasonAllAvailable, "all components are available")
 
 	ag.Status.ProxyReadyReplicas = proxyReady
 	ag.Status.ObservedGeneration = gen
@@ -751,17 +782,17 @@ func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context,
 	now := metav1.Now()
 	gen := ag.Generation
 	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-		Type:               "CredentialUnavailable",
+		Type:               gmcv1alpha1.ConditionCredentialUnavailable,
 		Status:             metav1.ConditionTrue,
-		Reason:             "SecretNotFound",
+		Reason:             gmcv1alpha1.ReasonSecretNotFound,
 		Message:            msg,
 		LastTransitionTime: now,
 		ObservedGeneration: gen,
 	})
 	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               gmcv1alpha1.ConditionReady,
 		Status:             metav1.ConditionFalse,
-		Reason:             "CredentialUnavailable",
+		Reason:             gmcv1alpha1.ReasonCredentialUnavailable,
 		Message:            msg,
 		LastTransitionTime: now,
 		ObservedGeneration: gen,
@@ -773,6 +804,45 @@ func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context,
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+}
+
+// setDegraded records a Degraded=True condition (and Ready=False) naming the
+// provisioning step that failed, then returns the original error so the reconcile
+// still requeues with backoff. It is called on the reconcileResources error path,
+// which returns before updateStatus — without it the object's conditions would go
+// stale and never reflect the failure (Q156). The failing step is read from the
+// provisioningError wrap; an unwrapped error falls back to a generic step label.
+func (r *ActionsGatewayReconciler) setDegraded(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, cause error) (ctrl.Result, error) {
+	step := "reconcile"
+	var pe *provisioningError
+	if errors.As(cause, &pe) && pe.step != "" {
+		step = pe.step
+	}
+	now := metav1.Now()
+	gen := ag.Generation
+	msg := fmt.Sprintf("provisioning failed at step %q: %v", step, cause)
+	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
+		Type:               gmcv1alpha1.ConditionDegraded,
+		Status:             metav1.ConditionTrue,
+		Reason:             gmcv1alpha1.ReasonProvisioningFailed,
+		Message:            msg,
+		LastTransitionTime: now,
+		ObservedGeneration: gen,
+	})
+	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
+		Type:               gmcv1alpha1.ConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             gmcv1alpha1.ReasonDegraded,
+		Message:            msg,
+		LastTransitionTime: now,
+		ObservedGeneration: gen,
+	})
+	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
+		logf.FromContext(ctx).Error(err, "failed to write Degraded condition")
+	}
+	// Return the original provisioning error so controller-runtime requeues with
+	// backoff (the status write above is best-effort observability, not the retry).
+	return ctrl.Result{}, cause
 }
 
 // secretToActionsGateway maps a Secret event to any ActionsGateway in the same
