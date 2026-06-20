@@ -79,6 +79,79 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(clusterIP).NotTo(BeEmpty())
 
+		targetURL := fmt.Sprintf("http://%s:8080/healthz", clusterIP)
+
+		// Gate on dataplane enforcement before the single asserting curl below.
+		// nsB's proxy-ingress NetworkPolicy is programmed asynchronously by the CNI.
+		// calico programs it synchronously enough that the first connection is already
+		// blocked, but kindnet (the default lane) has programming latency — a lone
+		// connection can race ahead of enforcement and succeed, which used to flake the
+		// asserting curl. So first drive a probe pod that loops curl against the nsB
+		// proxy and exits 0 only after it observes the connection blocked on several
+		// consecutive attempts: a deterministic "policy is enforced now" signal. If
+		// enforcement never appears within the loop budget the probe exits non-zero and
+		// the pod ends Failed, surfacing a real isolation regression rather than a flake.
+		const probePodName = "cross-tenant-gate"
+
+		By("deploying a probe pod in nsA that polls until the nsB proxy is blocked in the dataplane")
+		probeManifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  restartPolicy: Never
+  containers:
+  - name: probe
+    image: %s
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      set -u
+      blocks=0
+      for i in $(seq 1 60); do
+        if curl --silent --show-error --max-time 5 --connect-timeout 5 --output /dev/null "%s"; then
+          blocks=0
+          echo "attempt $i: connected — NetworkPolicy not yet enforced"
+        else
+          blocks=$((blocks + 1))
+          echo "attempt $i: blocked ($blocks consecutive)"
+          if [ "$blocks" -ge 3 ]; then
+            echo "ENFORCED: cross-tenant connection blocked on $blocks consecutive attempts"
+            exit 0
+          fi
+        fi
+        sleep 2
+      done
+      echo "TIMEOUT: never observed a sustained cross-tenant block"
+      exit 1
+`, probePodName, nsA, curlImage, targetURL)
+
+		Expect(utils.ApplyManifest(probeManifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", probePodName,
+				"-n", nsA, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the probe to confirm enforcement is live (probe pod Succeeded)")
+		var probePhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", probePodName,
+				"-n", nsA, "-o", "jsonpath={.status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"probe pod still in phase %q", out)
+			probePhase = out
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+
+		probeLogs, _ := utils.Run(exec.Command("kubectl", "logs", probePodName, "-n", nsA))
+		Expect(probePhase).To(Equal("Succeeded"),
+			"probe never observed the cross-tenant connection blocked, so the NetworkPolicy is not "+
+				"enforced in the dataplane; got phase=%s logs:\n%s", probePhase, probeLogs)
+
 		const curlPodName = "cross-tenant-probe"
 
 		By("deploying a one-shot curl pod in nsA that targets the nsB proxy service")
