@@ -516,59 +516,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 				Namespace: rg.Namespace,
 			}
 		}
-		// Use the per-agent broker URL from the JIT config (.runner serverUrl).
-		// Fall back to the static BrokerConfig URL for non-JIT registrars (stubs).
-		agentBrokerURL := agent.BrokerURL
-		if agentBrokerURL == "" {
-			agentBrokerURL = brokerCfg.BrokerURL
-		}
-		bc := &broker.Client{
-			BrokerURL:     agentBrokerURL,
-			RunnerVersion: brokerCfg.RunnerVersion,
-			RunnerOS:      brokerCfg.RunnerOS,
-			RunnerArch:    brokerCfg.RunnerArch,
-			UseV2Flow:     brokerCfg.UseV2Flow,
-			HTTPClient:    brokerCfg.HTTPClient,
-		}
-		jobHandler := listener.JobHandlerFunc(nil)
-		admit := listener.AdmitFunc(nil)
-		if r.Provisioner != nil {
-			jobHandler = r.Provisioner.HandlerFor(rg)
-			// Gate job acquisition on worker capacity before AcquireJob claims the
-			// job from GitHub (Q59), so a job we cannot place is left queued for
-			// redelivery instead of acquired-then-dropped.
-			admit = r.Provisioner.AdmitFor(rg)
-		}
-		return listener.Config{
-			Group:         rg.Name,
-			Namespace:     rg.Namespace,
-			Agent:         agent,
-			Broker:        bc,
-			Conditions:    condUpdater,
-			Metrics:       r.Metrics,
-			RunnerOS:      brokerCfg.RunnerOS,
-			JobHandler:    jobHandler,
-			Admit:         admit,
-			IdleThreshold: brokerCfg.IdleThreshold,
-			RenewInterval: brokerCfg.RenewJobInterval,
-			// Return the claimed agent to the pool on goroutine exit so the pool is
-			// not exhausted after maxListeners total spawns (which would block the
-			// permanent baseline from restarting).
-			ReleaseAgent: func() { pool.ReleaseAgent(agent) },
-			// Single-use JIT agent lifecycle (Q114): mark the agent's runner
-			// record spent at job acquisition, and re-register it under the same
-			// name when the goroutine self-heals. Both key on the stable agent
-			// index, so the captured pointer staying behind a later recycle is
-			// fine.
-			MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
-			RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
-				tok, err := r.TokenManager.Token(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("installation token for agent recycle: %w", err)
-				}
-				return pool.Recycle(ctx, agent, tok)
-			},
-		}
+		return r.newListenerConfig(rg, pool, brokerCfg, condUpdater, agent)
 	}
 
 	// Give the Multiplexer a logger scoped to this RunnerGroup so its
@@ -581,6 +529,72 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 	}
 	r.multiplexers[key] = mux
 	return mux
+}
+
+// newListenerConfig assembles the listener.Config for a single goroutine bound
+// to the given already-claimed pool agent. Split out from the multiplexer
+// factory so it can be unit-tested directly.
+func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater listener.ConditionUpdater, agent *agentpool.Agent) listener.Config {
+	// Use the per-agent broker URL from the JIT config (.runner serverUrl).
+	// Fall back to the static BrokerConfig URL for non-JIT registrars (stubs).
+	agentBrokerURL := agent.BrokerURL
+	if agentBrokerURL == "" {
+		agentBrokerURL = brokerCfg.BrokerURL
+	}
+	bc := &broker.Client{
+		BrokerURL:     agentBrokerURL,
+		RunnerVersion: brokerCfg.RunnerVersion,
+		RunnerOS:      brokerCfg.RunnerOS,
+		RunnerArch:    brokerCfg.RunnerArch,
+		UseV2Flow:     brokerCfg.UseV2Flow,
+		HTTPClient:    brokerCfg.HTTPClient,
+	}
+	jobHandler := listener.JobHandlerFunc(nil)
+	admit := listener.AdmitFunc(nil)
+	if r.Provisioner != nil {
+		jobHandler = r.Provisioner.HandlerFor(rg)
+		// Gate job acquisition on worker capacity before AcquireJob claims the
+		// job from GitHub (Q59), so a job we cannot place is left queued for
+		// redelivery instead of acquired-then-dropped.
+		admit = r.Provisioner.AdmitFor(rg)
+	}
+	return listener.Config{
+		Group:     rg.Name,
+		Namespace: rg.Namespace,
+		Agent:     agent,
+		Broker:    bc,
+		// Reuse the broker's already-configured HTTP client for the OAuth token
+		// fetch so it shares the connection pool / keep-alives instead of dialing
+		// a fresh connection per session — and again per job recycle for
+		// single-use JIT agents (Q153, surfaced by the Q13 load harness). Nil
+		// only when BrokerConfig leaves it unset (tests), where
+		// FetchRunnerOAuthToken falls back to a bounded httpx.NewClient().
+		HTTPClient:    brokerCfg.HTTPClient,
+		Conditions:    condUpdater,
+		Metrics:       r.Metrics,
+		RunnerOS:      brokerCfg.RunnerOS,
+		JobHandler:    jobHandler,
+		Admit:         admit,
+		IdleThreshold: brokerCfg.IdleThreshold,
+		RenewInterval: brokerCfg.RenewJobInterval,
+		// Return the claimed agent to the pool on goroutine exit so the pool is
+		// not exhausted after maxListeners total spawns (which would block the
+		// permanent baseline from restarting).
+		ReleaseAgent: func() { pool.ReleaseAgent(agent) },
+		// Single-use JIT agent lifecycle (Q114): mark the agent's runner
+		// record spent at job acquisition, and re-register it under the same
+		// name when the goroutine self-heals. Both key on the stable agent
+		// index, so the captured pointer staying behind a later recycle is
+		// fine.
+		MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
+		RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
+			tok, err := r.TokenManager.Token(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("installation token for agent recycle: %w", err)
+			}
+			return pool.Recycle(ctx, agent, tok)
+		},
+	}
 }
 
 // drainConditions reads pending condition updates and merges them into rg.Status.
