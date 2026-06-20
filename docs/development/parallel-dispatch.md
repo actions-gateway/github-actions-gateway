@@ -34,9 +34,12 @@ run-specific knobs. A ready-to-paste template:
 > **`/goal`** Act as the **dispatcher** for a parallel-dispatch run, following
 > `docs/development/parallel-dispatch.md`. Clear **[BATCH — e.g. "the remaining
 > `1.0-gate` Queue items in `docs/STATUS.md`"]**: one worker session (task chip)
-> and one PR per task, **max [3] concurrent**. Give every worker the self-healing
-> contract from task one (watch own CI, fix real failures, `git merge origin/main`
-> on conflict, never self-merge, escalate after 5 tries). **You own assignment,
+> and one PR per task, **max [3] concurrent**. Each worker must be a **full,
+> independent Claude Code session (a task chip), never a sub-agent**. Give every
+> worker the self-healing contract from task one (enable Auto-fix via `/autofix-pr`
+> for CI + review comments, run a **background** conflict-watcher that
+> `git merge origin/main`, keep the main thread free, never self-merge, escalate
+> after 5 tries). **You own assignment,
 > merge ordering, and scope** — hand each worker exactly one item so none collide;
 > each worker removes its own `docs/STATUS.md` Queue row in its PR (isolated
 > commit). Stream tasks by shared files and land foundational changes first. Verify each PR's
@@ -90,13 +93,34 @@ Two practical notes:
 
 ## Spawn mechanism: task chips
 
-Spawn each worker as a **task chip** (a real, separate session that starts in its
-own fresh worktree on a `claude/*` branch when started). This is the mechanism to
-use. Reasons:
+Spawn each worker as a **task chip** (a real, separate Claude Code session that
+starts in its own fresh worktree on a `claude/*` branch when started). This is the
+mechanism to use.
 
-- It runs under the normal permission gates — no blanket permission bypass.
+**A worker must be a full, independent Claude Code session — not a sub-agent of
+the dispatcher.** Do **not** spawn workers with the Agent/Task tool or any other
+in-process sub-agent: a sub-agent shares the dispatcher's session and context, has
+no worktree or branch of its own, cannot open and self-heal its own PR, and dies
+when the dispatcher's turn ends. A task chip is a *peer* session — its own
+worktree, branch, context, permission gates, and entry in the session list — and
+that independence is what the whole model (one session + one PR per task,
+background self-healing, the dispatcher merging across sessions) depends on. If
+you find yourself reaching for the Agent tool to "parallelize" the work, that is
+the wrong mechanism here — use chips.
+
+Reasons chips are the right call:
+
+- They run under the normal permission gates — no blanket permission bypass.
 - Each session is isolated (own worktree, own context, visible in the session
   list).
+
+A `PreToolUse` hook (`scripts/claude-no-subagent-workers-hook.sh`, wired in
+`.claude/settings.json`) backs this up: when an `Agent`/`Task` spawn looks like a
+worker — it requests its own worktree, or its prompt carries PR-producing verbs
+(`gh pr create`, `git push`/`commit`, "open a PR", self-heal, `implement Q<NN>`)
+— it asks for confirmation and points back here. It is a soft nudge (`ask`, not a
+block) tuned for low false positives: read-only agent types (`Explore`, `Plan`)
+pass untouched, so legitimate research/build agents are unaffected.
 
 Do **not** try to auto-start headless worker sessions with a "skip all
 permissions" flag. The safety classifier blocks it, and it is the less-secure
@@ -116,23 +140,40 @@ Bake this into **every** worker prompt from the first task. It is the single
 biggest reducer of dispatcher toil — added late the first time, it should be the
 default.
 
-After opening its PR, a worker does **not** stop. It loops until the PR is green
-**and** mergeable:
+After opening its PR, a worker does **not** stop, and it does **not** sit in an
+active CI-polling loop. It offloads both kinds of post-PR work — CI/review fixes
+and conflict resolution — to background mechanisms, so its **main thread stays
+free** (you can ask it follow-up questions or iterate on the change while its PR
+churns toward green in the background). The background loop continues until the PR
+is green **and** mergeable:
 
-1. Block on its own CI (`gh pr checks <pr> --watch`).
-2. On a **failed** check: read the failing log, fix the **real** cause (never
-   disable a gate to go green), commit, push, re-watch.
-3. On a **conflict** with `main` (a sibling merged): `git fetch origin main` then
-   `git merge origin/main` — **merge, not rebase**, so the push stays
-   fast-forward and never needs `--force`. Resolve, re-run the local gate, push,
-   re-watch.
-4. When green and mergeable: **stop** (do not self-merge — the dispatcher
-   merges).
-5. Safety valve: after ~5 unsuccessful attempts, post a PR comment summarizing
-   the blocker and stop, so the dispatcher can intervene.
+1. **Enable Auto-fix for CI and review comments.** Run `/autofix-pr` on the PR's
+   branch (Claude Code detects the open PR and spawns a cloud session with
+   auto-fix enabled). Auto-fix subscribes to the PR's GitHub webhooks and, on a
+   **failed check** or a **review comment**, investigates and pushes the **real**
+   fix — never disabling a gate to go green — with no `gh pr checks --watch`
+   polling. Because it runs in a separate cloud session, the worker's main thread
+   is not tied up.
+   - *Requirement / fallback:* Auto-fix needs the Claude GitHub App installed on
+     the repo and runs in Claude Code on the web. If it is unavailable, fall back
+     to the active `gh pr checks <pr> --watch` loop (read the failing log, fix the
+     real cause, commit, push, re-watch).
+2. **Run a background conflict-watcher for merges.** Auto-fix **cannot** react to
+   merge conflicts — GitHub emits no webhook when the base branch advances — so a
+   sibling merging will silently leave the PR conflicting. Cover that gap with a
+   **background agent** that periodically `git fetch origin main` then
+   `git merge origin/main` (**merge, not rebase**, so the push stays fast-forward
+   and never needs `--force`), resolves, re-runs the local gate, and pushes. Run
+   it in the background so it does not block the main thread either.
+3. When green and mergeable: **stop** the background work (do not self-merge — the
+   dispatcher merges).
+4. Safety valve: if Auto-fix or the conflict-watcher cannot get the PR green after
+   ~5 attempts, post a PR comment summarizing the blocker and stop, so the
+   dispatcher can intervene.
 
 Self-healing also makes the contention problem mostly disappear: when one PR
-merges, every other open PR notices it is now conflicting and rebases itself.
+merges, every other open PR's conflict-watcher notices it is now conflicting and
+merges `main` back in.
 
 ### Standard worker prompt skeleton
 
@@ -193,9 +234,10 @@ auditable and resumable.
 
 This is the key design decision; get it right up front.
 
-- **Auto-*fix* is delegated to each session.** Pushing fixes/rebases is scoped to
-  one PR and reversible, so it is safe to hand to the worker. (This is the
-  self-healing loop.)
+- **Auto-*fix* is delegated to each session.** Pushing CI/review fixes (via the
+  Auto-fix feature) and conflict merges (via the background conflict-watcher) is
+  scoped to one PR and reversible, so it is safe to hand to the worker. (This is
+  the self-healing loop.)
 - **Auto-*merge* stays dispatcher-gated.** Merge is a global, irreversible write
   to `main`. Keep it behind one gate because the dispatcher's merge step is where
   **scope review** and **merge ordering** happen, and it is the single
@@ -267,9 +309,9 @@ build](#what-we-deliberately-dont-build-and-why)):
 - **PR + PR comments = worker → dispatcher results and escalation.** A
   green+mergeable PR is the "done" signal; the safety-valve PR comment is the
   "stuck" signal.
-- **Self-healing is the spine.** Workers watch their own CI, fix real failures,
-  and `git merge origin/main` on conflict, so the dispatcher rarely needs to
-  touch a running worker.
+- **Self-healing is the spine.** Workers enable Auto-fix (CI + review comments)
+  and run a background conflict-watcher (`git merge origin/main`), so the
+  dispatcher rarely needs to touch a running worker.
 - **`send_message` = rare, reactive nudge only.** Best-effort and
   unattended-gated, so never the control path. In practice it has been used only
   to relay a specific CI-failure fix to a worker that failed to self-heal. The
@@ -335,7 +377,12 @@ production credentials) — exclude them explicitly and hand them to a human.
 - [ ] Concurrency cap chosen.
 - [ ] Model chosen per task (mechanical → faster/cheaper; judgment-heavy →
       strongest), set in each spawn prompt.
-- [ ] Worker prompt template ready (rules + boundaries + self-healing loop).
+- [ ] Workers spawned as full Claude Code sessions (task chips), **never**
+      sub-agents of the dispatcher.
+- [ ] Worker prompt template ready (rules + boundaries + self-healing loop:
+      Auto-fix for CI/review + background conflict-watcher).
+- [ ] Claude GitHub App installed so Auto-fix can receive PR webhooks; active
+      `gh pr checks --watch` fallback noted for repos where it is unavailable.
 - [ ] Dispatcher owns assignment + merge ordering + scope; each worker removes
       its own Queue row in an isolated commit (not the dispatcher).
 - [ ] Coordination via built-ins (spawn prompt, `list_sessions`, PR/comments,
@@ -363,4 +410,12 @@ production credentials) — exclude them explicitly and hand them to a human.
   re-emit on transitions.
 - **Chasing the headless-CLI auto-start path.** It is blocked by the safety
   classifier and is the less-secure option. Use chips.
+- **Spawning workers as sub-agents of the dispatcher.** An Agent/Task sub-agent
+  has no worktree or branch, cannot self-heal its own PR, and dies with the
+  dispatcher's turn. Workers must be full, independent Claude Code sessions
+  (chips).
+- **Burning a session in an active `gh pr checks --watch` loop.** It pins the
+  main thread so you cannot iterate while CI runs. Enable Auto-fix for CI/review
+  and put conflict handling in a background agent instead; reserve active polling
+  for the fallback case where Auto-fix is unavailable.
 - **Conflating auto-fix with auto-merge.** Delegate fixes; gate merges.
