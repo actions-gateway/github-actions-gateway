@@ -114,6 +114,14 @@ Reasons chips are the right call:
 - Each session is isolated (own worktree, own context, visible in the session
   list).
 
+A `PreToolUse` hook (`scripts/claude-no-subagent-workers-hook.sh`, wired in
+`.claude/settings.json`) backs this up: when an `Agent`/`Task` spawn looks like a
+worker — it requests its own worktree, or its prompt carries PR-producing verbs
+(`gh pr create`, `git push`/`commit`, "open a PR", self-heal, `implement Q<NN>`)
+— it asks for confirmation and points back here. It is a soft nudge (`ask`, not a
+block) tuned for low false positives: read-only agent types (`Explore`, `Plan`)
+pass untouched, so legitimate research/build agents are unaffected.
+
 Do **not** try to auto-start headless worker sessions with a "skip all
 permissions" flag. The safety classifier blocks it, and it is the less-secure
 path regardless. The small cost of chips — one click to start each — is the
