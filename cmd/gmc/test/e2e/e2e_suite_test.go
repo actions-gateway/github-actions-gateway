@@ -358,6 +358,15 @@ spec:
       - name: fakegithub
         image: %s
         imagePullPolicy: IfNotPresent
+        env:
+        # Model the real GitHub broker's long-poll so an idle GET /message holds
+        # the connection instead of spinning at network speed. Without it a
+        # replacement listener hits its 50-empty-poll idle-shutdown within
+        # milliseconds and the pool collapses to one listener mid-job, stranding
+        # the next job (Q148). 30s keeps 50 empty polls (~25min) well clear of any
+        # spec runtime while sitting safely under the AGC's 55s poll header timeout.
+        - name: MESSAGE_LONGPOLL_HOLD
+          value: "30s"
         ports:
         - containerPort: 8080
           name: http

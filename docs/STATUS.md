@@ -51,7 +51,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q148"></a>Q148 | Flake: e2e E2E_AGC_SingleUseSelfHeal — 240s timeout (one job never acquired) | `tests` `bug` `infra` | 🔲 | M | Webhook-timeout NOT the cause. Real fail: 1 job never acquired (N−1 worker pods, 2× repro). Now diagnosable: fixed logLevel=debug not surfacing AGC hot-path logs (slog→zap V4 gap); root still unconfirmed. OPEN pending debug-trail repro. |
+| <a id="Q148"></a>Q148 | Flake: e2e E2E_AGC_SingleUseSelfHeal — 240s timeout (one job never acquired) | `tests` `bug` `infra` | 🔲 | M | Root cause: fakegithub returned 202 instantly vs the broker's ~50s long-poll, so a replacement listener idle-exited, collapsing the pool to 1 while the baseline ran a job — stranding the next job. Fix: fakegithub long-poll. Pending multi-run e2e. |
 | <a id="Q139"></a>Q139 | Flake: e2e E2E_GMC_TenantProvisioning_ProxyConnectWorks — curl through proxy fails (upstream 502/504) | `tests` `bug` `infra` | 🔲 | M | 2 transient modes: (a) 504 thru tunnel (exit22, retried since PR300); (b) 502-on-CONNECT dial-fail (exit56/HTTP000) NOT retried by plain --retry. PR adds --retry-all-errors (verified curl retries CONNECT-502 only w/ it). Open pending multi-run e2e. |
 | <a id="Q13"></a>Q13 | [M5 load test harness](plan/milestone-5.md) | `milestone` `tests` | 🔲 | L | Unblocked 2026-06-12 (Q12 done). **Highest "right thing" risk — pitch is thousands of virtual sessions per AGC and nothing pins that claim.** Single-use JIT agents (Q114, fixed) cost one re-registration per job; the harness must model it. |
 | <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | 🚫 | S | needs a cluster with gVisor installed |
@@ -61,6 +61,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | Verified 2026-06-01: not deletable. Operator-doc for the `--agent-key-type=ed25519` opt-in; RSA-3072 stays the default regardless. Needs probe flag extensions + manual run with real credentials. Low priority: not a 1.0-gate. |
 | <a id="Q150"></a>Q150 | Pin + cache e2e metrics-server image | `speed` `tests` `infra` | 🔲 | S | metrics-server installs from a floating `latest` URL (`e2e_suite_test.go`): non-reproducible + an uncached node-side registry.k8s.io pull. Pin a version, then pre-pull + kind-load it like cert-manager (Q119 caching follow-up). |
 | <a id="Q151"></a>Q151 | updatecli tail: polaris v10 migration + buildkit pin decision | `infra` | 🔲 | S | Remaining after updatecli lane (kind/Calico/shellcheck done): POLARIS 9.x→v10 changed tag+asset naming + major gate verdict — migrate security-scan.yml install step then add manifest; BUILDKIT_IMAGE — decide pin vs intentional float. |
+| <a id="Q152"></a>Q152 | Make idle-shutdown poller-aware (don't count busy listeners as pollers) | `infra` `bug` | 🔲 | S | From Q148: `IsLastListener` (ActiveCount≤1) counts a listener busy in JobHandler as a poller, so the last real poller can idle-exit while another listener runs a job → tenant stops acquiring until it ends. Track pollers, not goroutines. |
 
 ---
 
