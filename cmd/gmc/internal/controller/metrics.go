@@ -6,6 +6,8 @@ import (
 
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -32,8 +34,75 @@ func NewMetrics(reader client.Reader) *Metrics {
 			Help: "NetworkPolicy egress-rule refreshes applied from the GitHub meta API, per tenant namespace.",
 		}, []string{"namespace"}),
 	}
-	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader))
+	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader), newProxyQuotaCollector(reader))
 	return m
+}
+
+// proxyQuotaCollector exports the proxy ResourceQuota conditions (Q82) as
+// gauges, so operators can alert on them directly without kube-state-metrics
+// scraping CRD conditions. Like managedGatewaysCollector it reads at scrape time
+// from the cached reader: a deleted ActionsGateway simply stops being listed, so
+// its series disappears with no reconcile-path cost and no stale-series cleanup.
+// The gauge value mirrors the condition the reconciler already wrote to
+// .status.conditions (1 when True, 0 otherwise).
+type proxyQuotaCollector struct {
+	reader   client.Reader
+	pressure *prometheus.Desc
+	exceeded *prometheus.Desc
+}
+
+func newProxyQuotaCollector(reader client.Reader) *proxyQuotaCollector {
+	return &proxyQuotaCollector{
+		reader: reader,
+		pressure: prometheus.NewDesc(
+			"actions_gateway_proxy_quota_pressure",
+			"1 when the ActionsGateway ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+		exceeded: prometheus.NewDesc(
+			"actions_gateway_proxy_quota_exceeded",
+			"1 when the ActionsGateway ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+	}
+}
+
+// Describe implements prometheus.Collector.
+func (c *proxyQuotaCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.pressure
+	ch <- c.exceeded
+}
+
+// Collect implements prometheus.Collector. On a read failure it emits nothing
+// rather than a misleading value.
+func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var list gmcv1alpha1.ActionsGatewayList
+	if err := c.reader.List(ctx, &list); err != nil {
+		return
+	}
+	for i := range list.Items {
+		ag := &list.Items[i]
+		if !ag.DeletionTimestamp.IsZero() {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, "ProxyQuotaPressure"), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, "ProxyQuotaExceeded"), ag.Namespace, ag.Name)
+	}
+}
+
+// conditionGaugeValue maps a status condition to a gauge value: 1 when the
+// condition is present and True, 0 otherwise. This is the project convention for
+// exporting an alertable CRD condition as a controller-owned metric.
+func conditionGaugeValue(conds []metav1.Condition, condType string) float64 {
+	if meta.IsStatusConditionTrue(conds, condType) {
+		return 1
+	}
+	return 0
 }
 
 // managedGatewaysCollector reports actions_gateway_managed_gateways by listing

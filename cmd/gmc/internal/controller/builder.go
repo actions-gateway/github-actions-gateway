@@ -451,12 +451,12 @@ func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, apiServerCIDRs []stri
 	}
 }
 
-func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *appsv1.Deployment {
-	replicas := int32(2)
-	if ag.Spec.Proxy.MinReplicas != nil {
-		replicas = *ag.Spec.Proxy.MinReplicas
-	}
-
+// proxyResources returns the proxy container's resource requirements: the
+// secure defaults overlaid with any per-tenant spec.proxy.resources overrides.
+// buildProxyDeployment stamps these onto the container; updateStatus reuses them
+// to size the pool's worst-case footprint against the platform-owned namespace
+// ResourceQuota for the ProxyQuotaPressure condition (Q82).
+func proxyResources(ag *gmcv1alpha1.ActionsGateway) corev1.ResourceRequirements {
 	res := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("10m"),
@@ -476,6 +476,16 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 	for k, v := range ag.Spec.Proxy.Resources.Limits {
 		res.Limits[k] = v
 	}
+	return res
+}
+
+func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *appsv1.Deployment {
+	replicas := int32(2)
+	if ag.Spec.Proxy.MinReplicas != nil {
+		replicas = *ag.Spec.Proxy.MinReplicas
+	}
+
+	res := proxyResources(ag)
 
 	// The proxy container image is gcr.io/distroless/static:nonroot which runs
 	// as UID 65532. Mode 0o440 (rw-r-----) plus fsGroup 65532 (nonrootPodSecurityContext)
