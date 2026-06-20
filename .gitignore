@@ -44,3 +44,7 @@ __pycache__/
 *.cover.out
 coverage.out
 cover.out
+
+# Transient load-harness report from `make load-test-full` (Q13). The committed
+# sample under cmd/agc/test/load/results/sample-run.md is the tracked artifact.
+/cmd/agc/test/load/results/latest.md
