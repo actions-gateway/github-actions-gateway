@@ -308,7 +308,11 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error("failed to get installation token", "error", err)
 		r.recordEvent(&rg, corev1.EventTypeWarning, "TokenUnavailable", "GetToken",
 			"failed to obtain GitHub App installation token: %v", err)
-		return ctrl.Result{}, err
+		// Reconcile returns here before the normal status update, so surface the
+		// failure as a CredentialUnavailable condition (not only the Event above)
+		// before the early return (Q156). The error is returned so the reconcile
+		// still requeues with backoff.
+		return r.setCredentialUnavailable(ctx, &rg, err)
 	}
 
 	// 6. Ensure agent pool Secrets.
@@ -345,6 +349,16 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	rg.Status.ActiveSessions = mux.ActiveCount()
 	rg.Status.ObservedGeneration = rg.Generation
 	r.setReadyCondition(&rg, mux.ActiveCount() > 0)
+
+	// Reaching here means the installation token was obtained, so clear any
+	// CredentialUnavailable condition a prior token failure left set (Q156).
+	r.mergeCondition(&rg, metav1.Condition{
+		Type:               v1alpha1.ConditionCredentialUnavailable,
+		Status:             metav1.ConditionFalse,
+		Reason:             v1alpha1.ReasonCredentialAvailable,
+		Message:            "GitHub App installation token obtained",
+		ObservedGeneration: rg.Generation,
+	})
 
 	// Worker ResourceQuota conditions (Q82), advisory — they do not gate Ready.
 	wq := r.evalWorkerQuota(ctx, &rg)
@@ -619,16 +633,16 @@ func (r *RunnerGroupReconciler) mergeCondition(rg *v1alpha1.RunnerGroup, cond me
 
 func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, ready bool) {
 	status := metav1.ConditionFalse
-	reason := "NoActiveSessions"
+	reason := v1alpha1.ReasonNoActiveSessions
 	msg := "No listener goroutines are running."
 	if ready {
 		status = metav1.ConditionTrue
-		reason = "ListenerActive"
+		reason = v1alpha1.ReasonListenerActive
 		msg = "At least one listener goroutine is running."
 	}
-	prev := meta.FindStatusCondition(rg.Status.Conditions, "Ready")
+	prev := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionReady)
 	r.mergeCondition(rg, metav1.Condition{
-		Type:               "Ready",
+		Type:               v1alpha1.ConditionReady,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -643,6 +657,30 @@ func (r *RunnerGroupReconciler) setReadyCondition(rg *v1alpha1.RunnerGroup, read
 		}
 		r.recordEvent(rg, etype, reason, "Reconcile", msg)
 	}
+}
+
+// setCredentialUnavailable records a CredentialUnavailable=True condition on the
+// RunnerGroup when the AGC cannot obtain a GitHub App installation token, then
+// returns the original error so the reconcile still requeues with backoff. It is
+// called on the token-fetch error path, which returns before the normal status
+// update — without it the failure would surface only as a Kubernetes Event and
+// not in status (Q156).
+//
+// The cause is the token-fetch error (which describes *why* the fetch failed, not
+// any token material — no credential is logged or stored). On a status write
+// conflict the original error is still returned so the reconcile retries.
+func (r *RunnerGroupReconciler) setCredentialUnavailable(ctx context.Context, rg *v1alpha1.RunnerGroup, cause error) (ctrl.Result, error) {
+	r.mergeCondition(rg, metav1.Condition{
+		Type:               v1alpha1.ConditionCredentialUnavailable,
+		Status:             metav1.ConditionTrue,
+		Reason:             v1alpha1.ReasonTokenUnavailable,
+		Message:            fmt.Sprintf("failed to obtain GitHub App installation token: %v", cause),
+		ObservedGeneration: rg.Generation,
+	})
+	if err := r.Status().Update(ctx, rg); err != nil && !apierrors.IsConflict(err) {
+		r.Log.Error("failed to write CredentialUnavailable condition", "error", err)
+	}
+	return ctrl.Result{}, cause
 }
 
 // SetConditionForTest enqueues a condition update as if it came from a listener

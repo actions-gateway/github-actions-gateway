@@ -274,7 +274,9 @@ type TracingConfig struct {
 type ActionsGatewayStatus struct {
     // Conditions contains the current observed conditions of the gateway.
     // Known condition types: Ready, ProxyAvailable, AGCAvailable,
-    // ProxyQuotaPressure, ProxyQuotaExceeded.
+    // CredentialUnavailable, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded.
+    // The type and reason strings are exported as consts from the GMC api package
+    // (cmd/gmc/api/v1alpha1/conditions.go).
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ProxyReadyReplicas is the number of proxy pods currently Ready.
@@ -294,6 +296,14 @@ type ActionsGatewayStatus struct {
 //   Ready              — true when both proxy pool and AGC are healthy.
 //   ProxyAvailable     — true when proxy pool has >= minReplicas pods Ready.
 //   AGCAvailable       — true when the AGC Deployment has >= 1 pod Ready.
+//   CredentialUnavailable — abnormal-is-true; the referenced GitHub App Secret is
+//                        missing or unusable (Q156). Gates Ready=False.
+//   Degraded           — abnormal-is-true (Q156); a reconcile could not provision
+//                        the tenant's child resources. The failing step is named
+//                        in the message (reason ProvisioningFailed). Set before
+//                        the reconcile's early return so it is never stale; cleared
+//                        (reason ReconcileSucceeded) on a fully successful
+//                        reconcile. Gates Ready=False.
 //   ProxyQuotaPressure — advisory WARNING (Q82); true when the proxy pool cannot
 //                        scale to maxReplicas within the namespace ResourceQuota
 //                        headroom (hard − used). Predictive and load-dependent.
@@ -623,7 +633,15 @@ type WorkerPodTemplate = corev1.PodTemplateSpec
 type RunnerGroupStatus struct {
     // Conditions contains the current observed conditions of the runner group.
     // Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld,
-    // WorkerQuotaPressure, WorkerQuotaExceeded.
+    // CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded. The type and
+    // reason strings are exported as consts from the AGC api package
+    // (cmd/agc/api/v1alpha1/conditions.go).
+    //   CredentialUnavailable — abnormal-is-true (Q156); true when the AGC cannot
+    //                         obtain a GitHub App installation token to manage the
+    //                         group's agents (reason TokenUnavailable). Set before
+    //                         the reconcile's early return so it is never stale, in
+    //                         addition to the TokenUnavailable Event; cleared
+    //                         (reason CredentialAvailable) once a token is obtained.
     //   WorkerQuotaPressure — advisory WARNING (Q82); true when worker pods
     //                         cannot scale to the configured ceiling (maxWorkers /
     //                         max priorityTier threshold) within the namespace
