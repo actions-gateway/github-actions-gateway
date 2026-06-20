@@ -282,7 +282,15 @@ func setupMetricsServer() {
 	}
 	By("installing metrics-server")
 	// Use the official release with --kubelet-insecure-tls for kind.
-	const msURL = "https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+	//
+	// Pinned (not /latest/) for reproducibility and so the CI e2e workflow can
+	// pre-pull + kind-load the exact metrics-server image onto the nodes,
+	// keeping kubelet off registry.k8s.io at test time (Q150). Bump deliberately
+	// and keep in sync with METRICSSERVER_VERSION in
+	// .github/workflows/e2e-reusable.yml.
+	const metricsServerVersion = "v0.8.1"
+	const msURL = "https://github.com/kubernetes-sigs/metrics-server/releases/download/" +
+		metricsServerVersion + "/components.yaml"
 	cmd := exec.Command("kubectl", "apply", "-f", msURL)
 	if _, err := utils.Run(cmd); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "warning: metrics-server install: %v\n", err)
