@@ -120,7 +120,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Building binaries | `docs/development/building.md` |
 | Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — run `gh pr list` first and skip any Queue item already covered by an open PR |
-| Clearing a batch of backlog items via parallel agent sessions (dispatcher + one session/PR per task) | `docs/development/parallel-dispatch.md` |
+| **Spawning, creating, or making any worker/agent session(s)** — including a single one — or dispatching/parallelizing work across sessions, or clearing a batch of backlog items (dispatcher + one session/PR per task). Read this **before** spawning: workers must be full Claude Code sessions (task chips), **never** Agent/Task sub-agents, and carry the Auto-fix + background conflict-watch self-healing contract. | `docs/development/parallel-dispatch.md` |
 | Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes have a **hard 250-char cap** (lint-enforced; a markdown link counts its full source length). Count before committing. |
 | Security-relevant changes | `docs/design/05-security.md` + the operator half per `docs/development/doc-update-matrix.md` |
 | Cutting a release, or editing the image publish/sign/SBOM pipeline (`publish.yml`) | `docs/operations/release.md` |
