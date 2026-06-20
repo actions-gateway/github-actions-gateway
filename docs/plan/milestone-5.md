@@ -55,8 +55,8 @@ load-testing, and the posture audit.
 | Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
 | Production Helm chart (`charts/actions-gateway/`) | ⚠️ Partial | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12): GMC core (CRDs, RBAC, webhook, VAP, NetworkPolicies) — `helm lint` + `helm template` + `kubeconform` clean offline, both cert modes. Live `helm install`→working-tenant validation pending (track A, needs creds + kind); polaris posture scan landed (Q14 — §3.2), CI drift check folds into Q66. `cmd/*/config/` kustomize bases stay the dev source-of-truth |
-| `test/load/` multi-tenant load harness | ❌ Open | Directory does not exist |
-| 1,000 concurrent sessions × 10 tenants — load test | ❌ Open | Blocked on harness |
+| `cmd/agc/test/load/` load harness | ✅ Done | Q13 — in-process listener-core harness (§2); `make load-test-quick`/`load-test-full`, single-use re-registration modelled (Q114) |
+| 1,000 concurrent sessions × 10 tenants — load test | ✅ Done (in-process) | Q13 — 1,000 sustained sessions across 10 tenants pinned in-process (§2.2); real-pod/cross-tenant-network scale stays the staging-cluster item (§2.6) |
 | Proxy HPA verified under burst | ⚠️ Partial | Unit/integration coverage and e2e §7.3 spec for 50-job burst exist; 1,000-session scale not run |
 | gVisor / Kata `RuntimeClass` opt-in | ⚠️ Documented | [Appendix B](../design/appendix-b-worker-isolation.md) documents the per-`RunnerGroup` opt-in pattern; not exercised on a real cluster |
 | `kube-bench` or `polaris` scan with zero critical findings | ✅ Done | polaris audits the rendered chart in CI (Q14), gating on `danger` findings — score 100, zero danger; `make polaris-scan` mirrors it. kube-bench is a live-cluster CIS scan → documented as a pre-production runbook in [security-operations.md](../operations/security-operations.md#cis-benchmark-posture--kube-bench-manual-pre-production) |
@@ -174,64 +174,130 @@ not published.
 
 ---
 
-## 2. Load testing harness (`test/load/`)
+## 2. Load testing harness (`cmd/agc/test/load/`) — IMPLEMENTED (Q13)
+
+### 2.0 What the headline claim actually is, and which tier pins it
+
+The pitch is **thousands of virtual runner sessions per AGC**: the AGC
+multiplexes each runner session as a goroutine that long-polls the
+broker, and spawns an ephemeral worker pod *only* when a job is
+acquired. The capacity risk in that claim is entirely inside one AGC
+process — goroutine, memory, connection, and per-job re-registration
+scaling — **not** in the cluster's ability to schedule pods (that is a
+node-count question, separate from the AGC). So the tier that observes
+the claim is an **in-process Go load test** that drives the AGC's real
+listener-multiplexing core (`listener.Multiplexer` + `agentpool.Pool` +
+a per-goroutine `broker.Client`) at scale against an in-process broker,
+**not** a kind e2e standing up 1,000 real worker pods. A pod-per-session
+e2e would mostly measure kind/kubelet, would not run on a dev box, and
+would not isolate the AGC's own scaling — the property under test.
+
+The harness therefore lives under `cmd/agc/test/load/` (it must, to
+import the `agc/internal/...` listener and agentpool packages) behind a
+`//go:build load` tag — the same tier-isolation pattern the envtest
+suites use with `//go:build integration`. It needs **no cluster and no
+real GitHub credentials**: agent Secrets go through a controller-runtime
+fake client, registration through an in-memory registrar, and the broker
+through an in-process stub.
 
 ### 2.1 Architecture
 
-The harness needs to drive load *into* the system, not just measure
-it. Two layers:
+The harness reconstructs, per tenant, exactly what
+`RunnerGroupReconciler.getOrCreateMultiplexer` wires in production —
+same factory shape, same `ClaimAgent`/`ReleaseAgent`/`MarkConsumed`/
+`Recycle` callbacks — then drives it under load. Three pieces:
 
-- **Tenant generator** — applies N `ActionsGateway` CRs (default 10)
-  with distinct namespaces and RunnerGroups, waits for them to reach
-  `Ready`.
-- **Job generator** — for each tenant, drives M concurrent virtual
-  jobs (default 100, total 1,000) through the fakegithub broker used
-  by existing e2e tests. Each "job" is a session that the AGC
-  acquires, holds for a configurable duration, and releases.
+- **Tenant generator** — builds N independent RunnerGroups (default 10),
+  each with its own `agentpool.Pool` (fake-client Secrets, in-memory
+  registrar) and `listener.Multiplexer` sized to M listeners.
+- **In-process broker stub** (`broker_stub.go`) — implements the broker
+  v2 wire protocol (`/token`, `/session`, `/message`, `/acquirejob`,
+  `/renewjob`) with two production-faithful behaviours the load model
+  depends on: a **long-poll hold** on `GET /message` (so idle sessions
+  don't busy-spin to idle-shutdown, mirroring the real ~50s broker hold
+  — Q148) and the **single-use JIT lifecycle** (Q114): acquiring a job
+  consumes the delivering session's agent, so the goroutine must
+  re-register before it can poll again.
+- **Job driver** — keeps every session saturated so the pool ramps to M
+  listeners per tenant and stays there; each delivered job costs one
+  `AcquireJob` + one agent **re-registration** (the Q114 per-job cost
+  this harness exists to measure — it never assumes a long-lived
+  runner). `LOAD_JOB_DURATION` sets how long a session "holds" a job
+  (the simulated worker-pod runtime) before recycling, which tunes the
+  blend between concurrency-holding and re-registration churn.
 
-Reusing `fakegithub` (per [e2e_suite_test.go](../../cmd/gmc/test/e2e/e2e_suite_test.go))
-avoids real GitHub API quota and keeps the test deterministic.
+A virtual runner session **is** a listener goroutine; sustained
+concurrent sessions = the sum of `Multiplexer.ActiveCount()` across
+tenants (cross-checked against `actions_gateway_active_sessions` and
+`runtime.NumGoroutine`).
 
 ### 2.2 What it measures
 
-| Metric | How to assert |
+| Metric | How |
 |---|---|
-| Sessions concurrently held | Sum `actions_gateway_active_sessions` across all RunnerGroups; assert ≥ 1,000 sustained ≥ 60s |
-| Dropped messages | Count `actions_gateway_message_poll_errors_total` minus expected (rate-limit) errors; assert 0 unexpected |
-| Cross-tenant resource visibility | After load, walk each tenant namespace and assert no pods/secrets carry labels from another tenant |
-| Goroutine deadlocks | `pprof` goroutine dump at peak; assert no goroutine has been blocked > 5 min on a channel |
-| Proxy HPA scale-up | `actions_gateway_proxy_replicas` _(planned — not yet emitted; use HPA/Deployment status until proxy autoscaling lands)_ ≥ `minReplicas + 1` during burst |
-| Proxy HPA scale-down | Within 5 min of load drop, replicas return to `minReplicas` |
-| Job acquisition latency p95 | Histogram percentile from `actions_gateway_pod_creation_latency_seconds`; compare against Appendix A SLO |
+| Concurrent virtual sessions sustained | min/avg/max of Σ `Multiplexer.ActiveCount()` sampled across the steady-state window; assert avg ≥ target (default 1,000) |
+| Throughput | `AcquireJob` count over the steady window → jobs/sec |
+| Per-job re-registration cost (Q114) | recycles/job (asserted ≈ 1.0) and recycle-latency p50/p95/p99, timed around the `RecycleAgent` callback (deregister + register + Secret write + token + CreateSession) |
+| Session-establishment latency | p50/p95/p99 of `CreateSession` round-trip under load (Q134 territory) |
+| Memory per session | `runtime.MemStats` HeapInuse/Sys at peak ÷ concurrent sessions |
+| Goroutine cost & leak check | peak `runtime.NumGoroutine`; after teardown, assert it returns to within slack of the pre-test baseline (catches Risk-1 leaks) |
+| Unexpected poll errors | Σ `actions_gateway_message_poll_errors_total` for non-rate-limit reasons; assert 0 |
 
 ### 2.3 Run modes
 
-- `make load-test-quick` — 10 tenants × 10 jobs = 100 concurrent
-  (smoke; ~2 min)
-- `make load-test-full` — 10 tenants × 100 jobs = 1,000 concurrent
-  (acceptance; ~10 min on a 3-node kind cluster, longer on staging)
+- `make load-test-quick` — 10 tenants × 100 listeners = 1,000 concurrent
+  sessions, short steady window (smoke; ~1 min). Also the compile/lint
+  smoke for the `load`-tagged code.
+- `make load-test-full` — 10 tenants × 100 listeners = 1,000 concurrent,
+  longer window with a realistic job hold (acceptance; ~3–5 min).
+
+Every knob is an env var (`LOAD_TENANTS`, `LOAD_LISTENERS_PER_TENANT`,
+`LOAD_DURATION`, `LOAD_JOB_DURATION`, `LOAD_REPORT`, …) so the same
+target scales up on a bigger box without code edits.
 
 ### 2.4 Output
 
-- JUnit XML for CI integration
-- Markdown report committed to `test/load/results/<date>.md` capturing
-  cluster size, observed metrics, SLO comparisons
-- Optional flame graph from `pprof` for any hot spots
+- Key metrics printed to the test log and asserted as pass/fail SLOs.
+- A Markdown report (path from `LOAD_REPORT`) capturing host shape,
+  knobs, observed metrics, and SLO comparisons; a sample committed under
+  `cmd/agc/test/load/results/`.
+- `go test -json | go-junit-report` yields JUnit XML for CI (documented
+  in the README rather than hand-rolled).
 
 ### 2.5 Files
 
 ```
-test/load/
-├── README.md                  # how to run, what it measures, expected results
-├── harness/
-│   ├── tenants.go             # spawns ActionsGateway CRs
-│   ├── jobs.go                # drives fakegithub job dispatch
-│   └── assertions.go          # SLO + leak checks
-├── cmd/
-│   └── load-driver/main.go    # CLI entry point
+cmd/agc/test/load/
+├── README.md            # how to run, what it measures, how to read results
+├── doc.go               # package doc (untagged stub so the dir always has a home)
+├── broker_stub.go       # in-process broker v2 stub + in-memory registrar (//go:build load)
+├── harness.go           # per-tenant wiring, job driver, metric sampling (//go:build load)
+├── report.go            # SLO eval + Markdown/log report (//go:build load)
+├── load_test.go         # TestAGCLoad entrypoint, reads env knobs (//go:build load)
 └── results/
-    └── .gitkeep
+    └── <date>.md        # committed sample run
 ```
+
+### 2.6 Fidelity boundaries (what this tier does *not* measure)
+
+Documented in the README so results are not over-read:
+
+- **Apiserver Secret-write cost.** Recycle writes an agent Secret; the
+  fake client makes that near-instant, so the harness counts
+  re-registrations and times the in-process recycle but **understates**
+  the real per-job apiserver write load. The recycle *rate* it reports
+  is the figure to carry into apiserver capacity planning.
+- **Real worker pods, CNI, image pulls, cross-tenant network isolation.**
+  Out of scope here; those belong to the Tier-A kind e2e (§5.1) and the
+  staging run below.
+- **Proxy HPA under burst** (§2.2 rows in the original plan) — an
+  HPA/Deployment-status behaviour that needs a real cluster; tracked
+  with the staging run, not this harness.
+
+These are the multi-tenant-on-a-real-cluster items the original plan
+sketched; they remain the **staging-cluster** half of M5 (DoD bullets 3
+and 4) and are not regressed by landing the in-process harness — which
+pins the part of the headline claim that lives inside the AGC.
 
 ---
 

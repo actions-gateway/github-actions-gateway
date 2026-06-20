@@ -36,6 +36,30 @@ test-integration: manifests $(SETUP_ENVTEST) ## Run envtest-backed integration t
 	KUBEBUILDER_ASSETS="$(shell "$(SETUP_ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
 		go test -race -timeout 5m -tags integration ./...
 
+##@ Load test
+
+# The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster
+# and no real credentials — it drives the real listener-multiplexing core
+# against an in-process broker stub + fake k8s client. LOAD_THROTTLE is the
+# desktop-safety QoS prefix from scripts/local-throttle.sh (a no-op on
+# CI/headless): a run holds ~1,000 goroutines, so on a GUI dev machine it is
+# demoted to keep the UI responsive (Q92). Tune any run via the LOAD_* env vars
+# documented in test/load/load_test.go. NOT run under -race by default: -race on
+# ~1,000 goroutines is heavy and distorts the throughput/memory numbers; add it
+# for a smaller leak hunt (LOAD_LISTENERS_PER_TENANT=10 ... go test -race).
+LOAD_THROTTLE := $(shell $(REPO_ROOT)/scripts/local-throttle.sh prefix)
+
+.PHONY: load-test-quick
+load-test-quick: ## Load smoke: 10 tenants × 100 sessions = 1,000, short window (~1 min)
+	LOAD_DURATION=$(or $(LOAD_DURATION),20s) LOAD_JOB_DURATION=$(or $(LOAD_JOB_DURATION),100ms) \
+		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestAGCLoad -v ./test/load/...
+
+.PHONY: load-test-full
+load-test-full: ## Load acceptance: 10 tenants × 100 sessions = 1,000, realistic hold (~3-5 min)
+	LOAD_DURATION=$(or $(LOAD_DURATION),60s) LOAD_JOB_DURATION=$(or $(LOAD_JOB_DURATION),1s) \
+	LOAD_REPORT=$(or $(LOAD_REPORT),results/latest.md) \
+		$(LOAD_THROTTLE) go test -tags load -timeout 10m -run TestAGCLoad -v ./test/load/...
+
 .PHONY: generate
 generate: manifests ## Alias for `manifests`
 

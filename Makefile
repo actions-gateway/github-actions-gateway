@@ -199,6 +199,17 @@ test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gm
 	$(MAKE) -C cmd/agc test-integration
 	$(MAKE) -C cmd/gmc test-integration
 
+# The in-process AGC load harness (Q13) pins the headline capacity claim —
+# thousands of virtual runner sessions per AGC, each costing one re-registration
+# per job (Q114). It needs no cluster or credentials; see cmd/agc/test/load.
+.PHONY: load-test-quick
+load-test-quick: ## Load smoke: 1,000 concurrent virtual sessions, short window (~1 min)
+	$(MAKE) -C cmd/agc load-test-quick
+
+.PHONY: load-test-full
+load-test-full: ## Load acceptance: 1,000 concurrent virtual sessions, realistic hold, writes a report
+	$(MAKE) -C cmd/agc load-test-full
+
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh

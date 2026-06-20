@@ -115,6 +115,7 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
 - **Unit (fake client)** — pure logic and field-level behavior. The fake client (`sigs.k8s.io/controller-runtime/pkg/client/fake`) reproduces none of the real-apiserver semantics below, so a fake-client test cannot prove claims that depend on them.
 - **envtest (integration)** — any claim that depends on real-apiserver semantics: schema/admission defaulting, server-side no-op-write dedup (the apiserver skips the `resourceVersion` bump when a patch's defaulted result is unchanged), admission/validation webhooks and CEL, and `IsConflict` handling. Both `cmd/agc` and `cmd/gmc` already have envtest suites at `internal/controller/integration/` (build tag `integration`, see [Integration tests](#integration-tests)) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing. Example: PR #143 (Q65) migrated the GMC `apply*` helpers to `CreateOrPatch`; a fake-client test could verify field-level behavior, but only `apply_nochurn_test.go` (envtest, asserting `resourceVersion` stability across periodic reconciles) could prove the whole-`Spec` helpers don't churn.
 - **Tier-A kind e2e** — behaviors that emerge from real CNI, kube-proxy DNAT, kubelet image-pull policy, or TLS-over-tunnel. When a feature crosses one of those boundaries, the Tier-A test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works. Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented Tier-A test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
+- **Load (in-process)** — scaling claims about the AGC's own goroutine/memory/throughput footprint, not a functional bug class. The load harness (build tag `load`, see [Load tests](#load-tests)) drives the real listener-multiplexing core at thousands of concurrent virtual sessions without a cluster. Use it to pin a capacity claim or guard against a concurrency-core regression (goroutine leak, sustained-session collapse); it cannot speak to anything downstream of the AGC process (real pods, apiserver/GitHub latency).
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, the test setup, or the code itself — the intent of the test must match the implementation.
 
@@ -147,6 +148,19 @@ Two rules keep a new test deterministic:
 
 - **Scope every session assertion and enqueue to your RunnerGroup's owner.** Use `ActiveSessionsForOwner("<rg-name>")` and `enqueueJobOnOwnerSession(...)` instead of the global accessors. A RunnerGroup name is unique to one test, so owner-scoping returns exactly the sessions you created — never a sibling's. `enqueueJobOnOwnerSession` also retries until an owner session is present, so it is immune to the picked session having just idle-shut.
 - **Wait on the condition, not the clock.** Prefer the stub's channel-based waiters (`WaitForFirstPoll`, `WaitForSessionDelete`) over wall-clock sleeps; they return the instant the event happens. The timeout you pass is only a safety ceiling, not the expected latency — size it generously for a CPU-starved 2-vCPU CI runner (seconds of headroom, well inside the package's 5m test timeout), since raising a too-tight ceiling alone just moves a flake rather than fixing it.
+
+## Load tests
+
+The load harness (Q13) pins the design's headline capacity claim — thousands of virtual runner sessions multiplexed per AGC, each costing one re-registration per job (the single-use JIT lifecycle, Q114). It is gated by the `//go:build load` tag and lives under [`cmd/agc/test/load/`](../../cmd/agc/test/load/); its [README](../../cmd/agc/test/load/README.md) documents every knob and how to read the output, and [milestone-5.md §2](../plan/milestone-5.md) the design rationale.
+
+It needs **no cluster and no GitHub credentials**: it drives the real `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring against an in-process broker stub (single-use JIT + long-poll), a controller-runtime fake client for agent Secrets, and an in-memory registrar.
+
+```bash
+make load-test-quick   # 10 tenants × 100 listeners = 1,000 sessions, short window (~1 min)
+make load-test-full    # same scale, realistic job hold; writes results/latest.md (~3-5 min)
+```
+
+Both run under the same desktop-safety throttle as the rest of the suite (a no-op on CI). The SLOs it asserts — sustained concurrent sessions, ≈1 re-registration per job, no goroutine leak — are the faithful results; absolute throughput and recycle latency are bounded by the in-process control-plane stand-ins and are reported for trend, not as production figures (see the README's fidelity boundaries). It is **not** wired into `make check` or per-PR CI — run it when changing the concurrency core (listener/multiplexer/agentpool) or validating a capacity claim.
 
 ## End-to-end tests
 
