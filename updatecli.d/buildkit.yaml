@@ -1,0 +1,72 @@
+# Keep the digest-pinned buildkit builder image current in the three workflows
+# that boot a docker-container buildx builder from it: the e2e lane
+# (e2e-reusable.yml), the image-scan lane (security-scan.yml), and the signed
+# release publish (publish.yml). All three pin
+# moby/buildkit:buildx-stable-1@sha256:<digest> so the builder cannot change
+# underfoot; updatecli resolves the current digest of the floating buildx-stable-1
+# tag and rewrites all three together in one PR, so they can never drift by hand.
+# Run by .github/workflows/updatecli.yml.
+#
+# No architecture is set, so the source returns the multi-arch *index* digest
+# (the value `docker buildx imagetools inspect moby/buildkit:buildx-stable-1`
+# prints) — the same form the pins were originally resolved to. The dockerdigest
+# source emits "buildx-stable-1@sha256:<digest>", so each target rewrites the
+# tag@digest suffix after the literal "moby/buildkit:" prefix.
+name: 'Bump buildkit builder image digest (buildx-stable-1)'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  buildkitDigest:
+    name: 'Current digest of moby/buildkit:buildx-stable-1'
+    kind: dockerdigest
+    spec:
+      image: moby/buildkit
+      tag: buildx-stable-1
+
+targets:
+  e2e:
+    name: 'BUILDKIT_IMAGE digest in e2e-reusable.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/e2e-reusable.yml
+      matchpattern: '(BUILDKIT_IMAGE: moby/buildkit:)buildx-stable-1@sha256:[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "buildkitDigest" }}'
+  scan:
+    name: 'BUILDKIT_IMAGE digest in security-scan.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/security-scan.yml
+      matchpattern: '(BUILDKIT_IMAGE: moby/buildkit:)buildx-stable-1@sha256:[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "buildkitDigest" }}'
+  publish:
+    name: 'BUILDKIT_IMAGE digest in publish.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/publish.yml
+      matchpattern: '(BUILDKIT_IMAGE: moby/buildkit:)buildx-stable-1@sha256:[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "buildkitDigest" }}'

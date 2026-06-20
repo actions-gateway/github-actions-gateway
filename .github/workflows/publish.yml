@@ -49,9 +49,9 @@ env:
   # with retry below so the buildx boot never touches Docker Hub uncached.
   # DIGEST-PINNED (Q127): the `buildx-stable-1` tag floats, so an unpinned
   # reference would let the builder that assembles signed release images change
-  # underfoot. Pin it by digest; bump the digest deliberately alongside the
-  # trailing tag comment. (Resolve a new digest with
-  # `docker buildx imagetools inspect moby/buildkit:buildx-stable-1`.)
+  # underfoot. Pin it by digest; updatecli.d/buildkit.yaml (Q151) resolves the
+  # tag's current digest and auto-bumps it here and in the e2e/security-scan
+  # workflows together so the three pins can't drift.
   BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
 
 jobs:

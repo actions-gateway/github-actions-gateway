@@ -1,0 +1,74 @@
+# Keep the polaris version + its linux/amd64 checksum in
+# .github/workflows/security-scan.yml current. polaris publishes a combined
+# checksums.txt per release, so the checksum source pulls our asset's line from
+# it (scripts/updatecli/polaris-linux-amd64-sha256.sh). updatecli bumps
+# POLARIS_VERSION and POLARIS_SHA256 together in one PR — the version+checksum
+# pair Dependabot cannot track because the pins are workflow env vars, not a
+# package-manifest entry. Run by .github/workflows/updatecli.yml.
+#
+# polaris is a security gate: a new release can add checks that change the
+# danger-findings verdict, so the bump PR may go red. That is the intended
+# signal — a human adopts the new version (vetting/justifying the new findings in
+# charts/actions-gateway/polaris.yaml) or holds it. See
+# docs/development/dependency-updates.md.
+name: 'Bump polaris (CI) version + linux-amd64 checksum'
+
+scms:
+  workflow:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: workflow
+    spec:
+      labels:
+        - dependencies
+
+sources:
+  polarisVersion:
+    name: 'Latest polaris release tag'
+    kind: githubrelease
+    spec:
+      owner: FairwindsOps
+      repository: polaris
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      versionfilter:
+        kind: semver
+  polarisChecksum:
+    name: 'Upstream polaris linux-amd64 sha256 for the resolved version'
+    kind: shell
+    dependson:
+      - polarisVersion
+    spec:
+      command: 'scripts/updatecli/polaris-linux-amd64-sha256.sh {{ source "polarisVersion" }}'
+      environments:
+        - name: PATH
+
+targets:
+  version:
+    name: 'POLARIS_VERSION in security-scan.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/security-scan.yml
+      matchpattern: '(POLARIS_VERSION: )v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "polarisVersion" }}'
+  checksum:
+    name: 'POLARIS_SHA256 in security-scan.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: .github/workflows/security-scan.yml
+      matchpattern: '(POLARIS_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "polarisChecksum" }}'

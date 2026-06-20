@@ -92,10 +92,12 @@ jobs:
       E2E_CURL_UPSTREAM: curlimages/curl:8.10.1
       E2E_CURL_IMAGE: 127.0.0.1:5000/curlimages/curl:8.10.1
       # The buildkit image docker/setup-buildx-action boots its docker-container
-      # builder from. Default floating tag the action would otherwise pull
-      # implicitly; named here so the pre-pull step and the builder pin below
-      # reference one source. Bump together with the action major if it changes.
-      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1
+      # builder from. Named here so the pre-pull step and the builder pin below
+      # reference one source. DIGEST-PINNED (Q151): the buildx-stable-1 tag
+      # floats, so an unpinned reference would let the builder change underfoot
+      # between runs. Pin by digest, kept in step with the security-scan and
+      # publish workflows by updatecli.d/buildkit.yaml.
+      BUILDKIT_IMAGE: moby/buildkit:buildx-stable-1@sha256:0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
