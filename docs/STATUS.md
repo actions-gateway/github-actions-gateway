@@ -60,7 +60,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q146"></a>Q146 | Refuse non-HTTPS GITHUB_API_BASE_URL outside dev mode | `security` | 🔲 | S | Q127 item 8 carve-out: reject non-HTTPS `GITHUB_API_BASE_URL` (`githubapp/auth.go`). Low value — prod blocks the env via `--allow-agc-extra-env` (default-off); a clean fix needs a dev escape plumbed through the e2e fakegithub `http` svc-DNS URL. |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | 🔲 | S | Verified 2026-06-01: not deletable. Operator-doc for the `--agent-key-type=ed25519` opt-in; RSA-3072 stays the default regardless. Needs probe flag extensions + manual run with real credentials. Low priority: not a 1.0-gate. |
 | <a id="Q151"></a>Q151 | updatecli tail: polaris v10 migration + buildkit pin decision | `infra` | 🔲 | S | Remaining after updatecli lane (kind/Calico/shellcheck done): POLARIS 9.x→v10 changed tag+asset naming + major gate verdict — migrate security-scan.yml install step then add manifest; BUILDKIT_IMAGE — decide pin vs intentional float. |
-| <a id="Q152"></a>Q152 | Make idle-shutdown poller-aware (don't count busy listeners as pollers) | `infra` `bug` | 🔲 | S | From Q148: `IsLastListener` (ActiveCount≤1) counts a listener busy in JobHandler as a poller, so the last real poller can idle-exit while another listener runs a job → tenant stops acquiring until it ends. Track pollers, not goroutines. |
 
 ---
 

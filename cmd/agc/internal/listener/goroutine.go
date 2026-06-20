@@ -87,12 +87,20 @@ type Config struct {
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
 
-	// IsLastListener returns true if this goroutine is the only running listener
-	// for its RunnerGroup. When true, idle shutdown is suppressed.
-	IsLastListener func() bool
+	// IsLastPoller returns true if this goroutine is the only one still
+	// long-polling for its RunnerGroup — siblings busy inside JobHandler do not
+	// count. When true, idle shutdown is suppressed, so the group never drops to
+	// zero pollers while a job is running and stops acquiring work (Q152).
+	IsLastPoller func() bool
 	// SpawnReplacement requests the Multiplexer to spawn an additional listener
 	// after this goroutine acquires a job.
 	SpawnReplacement func(ctx context.Context)
+	// SetPolling reports this goroutine's poller status to the Multiplexer: false
+	// while it executes a job (inside JobHandler and the post-job recycle), true
+	// while it long-polls for work. The Multiplexer counts only polling goroutines
+	// for the last-poller decision (IsLastPoller), so a busy goroutine is not
+	// mistaken for available polling capacity. Nil disables the bookkeeping.
+	SetPolling func(polling bool)
 	// ReleaseAgent returns this goroutine's claimed pool agent to the available
 	// pool when the goroutine exits. The Multiplexer invokes it exactly once after
 	// Run returns. Without it a pool agent is leaked on every goroutine exit (idle
@@ -327,7 +335,7 @@ func Run(ctx context.Context, cfg Config) error {
 			// 202 — no job queued.
 			consecutiveEmpty++
 			if consecutiveEmpty >= cfg.IdleThreshold {
-				if cfg.IsLastListener == nil || !cfg.IsLastListener() {
+				if cfg.IsLastPoller == nil || !cfg.IsLastPoller() {
 					// One per idle listener exit — high-cardinality per-session noise,
 					// so Debug (Q87, Theme D).
 					log.Debug("idle shutdown: consecutive empty polls reached threshold", "count", consecutiveEmpty)
@@ -347,6 +355,14 @@ func Run(ctx context.Context, cfg Config) error {
 
 		// One per delivered job — dominates volume at scale, so Debug (Q87, Theme D).
 		log.Debug("job message received", "messageId", msg.MessageID)
+
+		// Leaving the poll loop to run a job: stop counting as a poller so a
+		// sibling that is the genuine last poller is not allowed to idle-exit
+		// while this goroutine is busy (Q152). Re-counted as a poller at the
+		// bottom of the loop once the job (and any recycle) completes.
+		if cfg.SetPolling != nil {
+			cfg.SetPolling(false)
+		}
 
 		acquired, jobErr := handleJob(ctx, cfg, log, aesKey, msg)
 		if jobErr != nil {
@@ -378,6 +394,13 @@ func Run(ctx context.Context, cfg Config) error {
 			aesKey = newSess.aesKey
 			log = baseLog.With("sessionId", sessionID)
 			staleEOFs = 0
+		}
+
+		// Back in the poll loop: count as a poller again. Any path above that
+		// could not return to polling (recycle error) already returned from Run,
+		// and the Multiplexer reconciles the poller count on goroutine exit.
+		if cfg.SetPolling != nil {
+			cfg.SetPolling(true)
 		}
 	}
 }

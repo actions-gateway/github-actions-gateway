@@ -266,7 +266,7 @@ func makeCfg(t *testing.T, oauthSrv, brokerSrv *httptest.Server) listener.Config
 		Broker:           bc,
 		HTTPClient:       oauthSrv.Client(),
 		Clock:            listener.RealClock,
-		IsLastListener:   func() bool { return false },
+		IsLastPoller:     func() bool { return false },
 		SpawnReplacement: func(_ context.Context) {},
 	}
 }
@@ -424,7 +424,7 @@ func TestListener_GetMessage202Loop(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IdleThreshold = 50
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -464,7 +464,7 @@ func TestListener_GetMessageStallDoesNotWedge(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	// Short ResponseHeaderTimeout stands in for the production value so the test
 	// observes several bounded polls quickly instead of waiting 55s each.
 	transport := brokerSrv.Client().Transport.(*http.Transport).Clone()
@@ -506,7 +506,7 @@ func TestListener_IdleShutdownAt50(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IdleThreshold = 5
-	cfg.IsLastListener = func() bool { return false }
+	cfg.IsLastPoller = func() bool { return false }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -542,7 +542,7 @@ func TestListener_IdleNotShutdownIfLast(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IdleThreshold = idleThreshold
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -583,7 +583,7 @@ func TestListener_RateLimitBackoff(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -611,7 +611,7 @@ func TestListener_RateLimitedConditionAfter10Min(t *testing.T) {
 	conds := &condRecorder{}
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Conditions = conds
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.Clock = clk
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -653,7 +653,7 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 	})
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -708,7 +708,7 @@ func TestListener_AcquireJobStallDoesNotWedge(t *testing.T) {
 	})
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.ControlPlaneTimeout = 200 * time.Millisecond
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 
@@ -745,7 +745,7 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	})
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.SpawnReplacement = func(_ context.Context) { spawnCalls.Add(1) }
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 
@@ -784,7 +784,7 @@ func TestListener_SessionExpiredRecreates(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1026,7 +1026,7 @@ func TestListener_AcquireJobError(t *testing.T) {
 	m := newTestMetrics()
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Metrics = m
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1061,7 +1061,7 @@ func TestListener_PollErrorBackoff(t *testing.T) {
 	clk := newFakeClock(time.Now())
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Clock = clk
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1242,13 +1242,13 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 
 	var handlerCalled atomic.Bool
 	cfg := listener.Config{
-		Group:          "grp",
-		Namespace:      "ns",
-		Agent:          agent,
-		Broker:         bc,
-		Clock:          clk,
-		RunnerOS:       "Linux",
-		IsLastListener: func() bool { return true },
+		Group:        "grp",
+		Namespace:    "ns",
+		Agent:        agent,
+		Broker:       bc,
+		Clock:        clk,
+		RunnerOS:     "Linux",
+		IsLastPoller: func() bool { return true },
 		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
@@ -1395,13 +1395,13 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 
 	var handlerCalled atomic.Bool
 	cfg := listener.Config{
-		Group:          "grp",
-		Namespace:      "ns",
-		Agent:          agent,
-		Broker:         bc,
-		Clock:          clk,
-		RunnerOS:       "Linux",
-		IsLastListener: func() bool { return true },
+		Group:        "grp",
+		Namespace:    "ns",
+		Agent:        agent,
+		Broker:       bc,
+		Clock:        clk,
+		RunnerOS:     "Linux",
+		IsLastPoller: func() bool { return true },
 		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
@@ -1513,12 +1513,12 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 
 	var handlerCalled atomic.Bool
 	cfg := listener.Config{
-		Group:          "grp",
-		Namespace:      "ns",
-		Agent:          agent,
-		Broker:         bc,
-		Clock:          clk,
-		IsLastListener: func() bool { return true },
+		Group:        "grp",
+		Namespace:    "ns",
+		Agent:        agent,
+		Broker:       bc,
+		Clock:        clk,
+		IsLastPoller: func() bool { return true },
 		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			handlerCalled.Store(true)
 			cancel()
@@ -1622,12 +1622,12 @@ func TestListener_PlaintextSessionKey(t *testing.T) {
 	}
 
 	cfg := listener.Config{
-		Group:          "grp",
-		Namespace:      "ns",
-		Agent:          agent,
-		Broker:         bc,
-		Clock:          clk,
-		IsLastListener: func() bool { return true },
+		Group:        "grp",
+		Namespace:    "ns",
+		Agent:        agent,
+		Broker:       bc,
+		Clock:        clk,
+		IsLastPoller: func() bool { return true },
 		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			cancel()
 			return nil
@@ -1720,12 +1720,12 @@ func TestListener_NoSessionKey(t *testing.T) {
 	}
 
 	cfg := listener.Config{
-		Group:          "grp",
-		Namespace:      "ns",
-		Agent:          agent,
-		Broker:         bc,
-		Clock:          clk,
-		IsLastListener: func() bool { return true },
+		Group:        "grp",
+		Namespace:    "ns",
+		Agent:        agent,
+		Broker:       bc,
+		Clock:        clk,
+		IsLastPoller: func() bool { return true },
 		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
 			cancel()
 			return nil

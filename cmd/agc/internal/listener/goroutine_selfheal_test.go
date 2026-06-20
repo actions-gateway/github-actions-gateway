@@ -68,7 +68,7 @@ func TestListener_PostJobRecyclesAgent(t *testing.T) {
 	})
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.MarkAgentConsumed = func() { consumedMarks.Add(1) }
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
 		assert.Equal(t, int32(1), consumedMarks.Load(),
@@ -117,7 +117,7 @@ func TestListener_Poll401TokenRefreshWithoutRecycle(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		recycles.Add(1)
 		return makeAgent(t, oauthSrv.URL), nil
@@ -168,7 +168,7 @@ func TestListener_Poll401DeadAgentRecycles(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		recycles.Add(1)
 		fresh := makeAgent(t, oauthSrv.URL)
@@ -218,7 +218,7 @@ func TestListener_EOFHealsAfterThreshold(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.Clock = clk
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -274,7 +274,7 @@ func TestListener_StartupStaleAgentRecyclesOnce(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		recycles.Add(1)
 		fresh := makeAgent(t, oauthSrv.URL)
@@ -313,7 +313,7 @@ func TestListener_PostJobRecycleFailureExitsRetriable(t *testing.T) {
 	})
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
-	cfg.IsLastListener = func() bool { return true }
+	cfg.IsLastPoller = func() bool { return true }
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		return nil, errors.New("github registration API down")
