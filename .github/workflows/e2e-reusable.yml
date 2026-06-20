@@ -49,6 +49,14 @@ jobs:
       # and pin the manifest the pre-pull step reads, so the images kind-loaded
       # onto the nodes match what `make apply-cert-manager` applies.
       CERTMANAGER_VERSION: v1.20.2
+      # metrics-server release applied on every e2e run (both CNIs) to back the
+      # HPA specs. Keep in sync with metricsServerVersion in
+      # cmd/gmc/test/e2e/e2e_suite_test.go (the suite applies the pinned
+      # components.yaml from this tag). Used to key the image cache and pin the
+      # manifest the pre-pull step reads, so the metrics-server image kind-loaded
+      # onto the nodes matches what the suite applies — kubelet never pulls it
+      # from registry.k8s.io at test time (Q150).
+      METRICSSERVER_VERSION: v0.8.1
       # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
       # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
       # the cluster's K8s version is deterministic and the image is cacheable by
@@ -297,6 +305,56 @@ jobs:
             printf '%s\n' "${images[@]}" > "$list"
           fi
 
+      - name: Cache metrics-server image
+        # Both CNIs: the e2e suite installs metrics-server on every run to back
+        # the HPA specs. Keyed on METRICSSERVER_VERSION so a bump invalidates it.
+        # The cached dir holds the image tar and the image list, so a hit needs
+        # no manifest fetch.
+        id: metrics-server-image-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/metrics-server-images
+          key: metrics-server-images-${{ env.METRICSSERVER_VERSION }}
+
+      - name: Pre-pull metrics-server image
+        # Both CNIs. The e2e suite applies the pinned metrics-server
+        # components.yaml itself (setupMetricsServer), which makes kubelet pull
+        # the metrics-server image from registry.k8s.io on the nodes — an
+        # uncached pull squarely on the test critical path. Pre-pull the exact
+        # ref the pinned manifest references into the runner's Docker daemon here
+        # (cached + retried); the preload step below kind-loads it onto the nodes
+        # so the suite's apply never makes kubelet touch registry.k8s.io. The
+        # image list is persisted alongside the tar so the load step needs
+        # neither a manifest fetch nor a re-extract. Keep METRICSSERVER_VERSION in
+        # sync with metricsServerVersion in cmd/gmc/test/e2e/e2e_suite_test.go.
+        run: |
+          set -euo pipefail
+          dir=/tmp/metrics-server-images
+          tar="$dir/metrics-server.tar"
+          list="$dir/images.txt"
+          if [[ -f "$tar" && -f "$list" ]]; then
+            echo "==> loading metrics-server image from cache"
+            docker load -i "$tar"
+          else
+            manifest="$(mktemp)"
+            trap 'rm -f "$manifest"' EXIT
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
+              "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICSSERVER_VERSION}/components.yaml"
+            mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
+            if [[ "${#images[@]}" -eq 0 ]]; then
+              echo "no images found in metrics-server manifest for ${METRICSSERVER_VERSION}" >&2
+              exit 1
+            fi
+            echo "metrics-server images: ${images[*]}"
+            for img in "${images[@]}"; do
+              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+                scripts/pull-image-with-retry.sh "$img"
+            done
+            mkdir -p "$dir"
+            docker save -o "$tar" "${images[@]}"
+            printf '%s\n' "${images[@]}" > "$list"
+          fi
+
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
         # only on the registry (already up), not the cluster, so run it in the
@@ -358,6 +416,21 @@ jobs:
         # cert-manager pods have been starting since the cluster step; by the
         # time the image build finishes they are typically already Available.
         run: make wait-cert-manager
+
+      - name: Preload metrics-server image onto kind nodes
+        # The e2e suite applies metrics-server itself (setupMetricsServer), so —
+        # unlike cert-manager, whose apply is a workflow step — its load can't
+        # ride the build step. Kind-load the pre-pulled image onto the nodes here
+        # (the cluster is up), before the suite runs. IfNotPresent on the
+        # manifest's pinned tag makes the suite's apply a cache hit, so kubelet
+        # never pulls from registry.k8s.io at test time (Q150).
+        run: |
+          set -euo pipefail
+          while read -r img; do
+            [[ -z "$img" ]] && continue
+            echo "==> preloading $img onto kind nodes"
+            kind load docker-image --name actions-gateway-e2e "$img"
+          done < /tmp/metrics-server-images/images.txt
 
       - name: Run e2e tests
         # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive
