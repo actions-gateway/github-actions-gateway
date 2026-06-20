@@ -14,11 +14,16 @@ type listenerState struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	isPerm bool // permanent baseline goroutine; always restarted on exit
+	// polling is true while this goroutine is long-polling for work and false
+	// while it is executing a job (inside JobHandler). It is the per-goroutine
+	// bit the Multiplexer reconciles into pollerCount; the goroutine flips it via
+	// the SetPolling closure, and the exit handler clears it exactly once.
+	polling atomic.Bool
 }
 
 // ConfigFactory creates a Config for a new listener goroutine at the given
-// index. The Multiplexer passes IsLastListener and SpawnReplacement closures
-// before handing the Config to Run.
+// index. The Multiplexer passes IsLastPoller, SpawnReplacement, and SetPolling
+// closures before handing the Config to Run.
 type ConfigFactory func(index int) Config
 
 // Multiplexer manages the adaptive pool of listener goroutines for one RunnerGroup.
@@ -28,6 +33,12 @@ type Multiplexer struct {
 	mu          sync.Mutex
 	active      map[int]*listenerState
 	activeCount atomic.Int32 // maintained in sync with active; allows lock-free reads
+	// pollerCount is the number of running goroutines currently long-polling for
+	// work — a subset of activeCount that excludes goroutines busy inside
+	// JobHandler. The last-poller decision (IsLastPoller) is based on this, not
+	// activeCount, so a single real poller is not allowed to idle-exit just
+	// because a sibling goroutine is mid-job (Q152). Lock-free atomic read.
+	pollerCount atomic.Int32
 	// restarting holds permanent-baseline states waiting out RestartDelay after
 	// a recoverable crash. They are out of active (ActiveCount excludes them)
 	// but Stop must still cancel and wait for them.
@@ -106,6 +117,28 @@ func (m *Multiplexer) ActiveCount() int32 {
 	return m.activeCount.Load()
 }
 
+// PollerCount returns the current number of running goroutines that are
+// long-polling for work, excluding any busy executing a job. Lock-free read.
+func (m *Multiplexer) PollerCount() int32 {
+	return m.pollerCount.Load()
+}
+
+// setPolling reconciles a goroutine's poller status into the shared pollerCount.
+// A goroutine counts as a poller while long-polling and stops counting while it
+// executes a job. The atomic Swap makes this idempotent per state — only a real
+// transition adjusts the counter — and races safely with the exit handler's
+// final Swap(false): whichever runs first wins, so the counter stays consistent.
+func (m *Multiplexer) setPolling(state *listenerState, polling bool) {
+	if state.polling.Swap(polling) == polling {
+		return // no transition
+	}
+	if polling {
+		m.pollerCount.Add(1)
+	} else {
+		m.pollerCount.Add(-1)
+	}
+}
+
 // Stop cancels all listener goroutines — including any permanent baseline
 // waiting out its restart backoff — and waits for them to exit cleanly. The
 // Multiplexer is retired afterwards: Start and SpawnReplacement become no-ops.
@@ -142,12 +175,17 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		done:   make(chan struct{}),
 		isPerm: isPerm,
 	}
+	// A freshly spawned goroutine starts in the poll loop, so it counts as a
+	// poller until it enters JobHandler (SetPolling(false)) or exits.
+	state.polling.Store(true)
 	m.active[idx] = state
 	m.activeCount.Add(1)
+	m.pollerCount.Add(1)
 
 	cfg := m.factory(idx)
-	cfg.IsLastListener = func() bool { return m.ActiveCount() <= 1 }
+	cfg.IsLastPoller = func() bool { return m.PollerCount() <= 1 }
 	cfg.SpawnReplacement = func(ctx context.Context) { m.SpawnReplacement(ctx) }
+	cfg.SetPolling = func(polling bool) { m.setPolling(state, polling) }
 
 	go func() {
 		defer close(state.done)
@@ -171,6 +209,12 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 		m.mu.Lock()
 		delete(m.active, idx)
 		m.activeCount.Add(-1)
+		// Reconcile the poller count: decrement only if this goroutine was still
+		// counted as a poller (it exited from the poll loop, not mid-job). Run has
+		// returned, so no SetPolling call can race this final Swap.
+		if state.polling.Swap(false) {
+			m.pollerCount.Add(-1)
+		}
 		var nre *NonRetriableError
 		// Only restart the permanent baseline for recoverable exits. A
 		// NonRetriableError (VersionTooOld, unauthorized) means the goroutine

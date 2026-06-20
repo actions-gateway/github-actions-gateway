@@ -527,3 +527,106 @@ func newMuxWithServersWithThreshold(t *testing.T, maxListeners int32, mux *broke
 	m.RestartDelay = time.Millisecond
 	return m, oauthSrv, brokerSrv
 }
+
+// TestMultiplexer_BusyListenerNotCountedAsPoller is the Q152 regression: a
+// goroutine executing a job (blocked inside JobHandler) must not count toward
+// the last-poller decision. With one goroutine busy on a job and a single
+// replacement long-polling, the replacement is the last *poller* and must
+// suppress idle-exit — even though ActiveCount is 2. Under the pre-Q152 bug the
+// replacement saw ActiveCount==2, decided it was not the last listener, and
+// idle-exited, collapsing the RunnerGroup to a single busy goroutine with zero
+// pollers that stopped acquiring jobs until the busy one finished.
+func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
+	const idleThreshold = 3
+
+	// Deliver exactly one job (to whichever goroutine polls first); every
+	// subsequent poll is an empty 202 that drives the idle counter.
+	var delivered atomic.Bool
+	var emptyPolls atomic.Int32
+	mux := &brokerMux{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        `{}`, // empty runServiceURL: handleJob skips AcquireJob, still runs JobHandler
+			})
+			return
+		}
+		emptyPolls.Add(1)
+		w.WriteHeader(http.StatusAccepted)
+	})
+
+	oauthSrv := oauthStub()
+	brokerSrv := httptest.NewServer(mux)
+
+	// jobBlock pins the job-running goroutine inside JobHandler until the test
+	// releases it, so it stays reliably "busy" for the whole assertion window.
+	jobBlock := make(chan struct{})
+	jobStarted := make(chan struct{})
+	var jobStartedOnce sync.Once
+
+	factory := func(_ int) listener.Config {
+		agent := makeAgent(t, oauthSrv.URL)
+		bc := &broker.Client{
+			BrokerURL:  brokerSrv.URL,
+			UseV2Flow:  true,
+			HTTPClient: brokerSrv.Client(),
+		}
+		return listener.Config{
+			Group:         "test-rg",
+			Namespace:     "default",
+			Agent:         agent,
+			Broker:        bc,
+			HTTPClient:    oauthSrv.Client(),
+			IdleThreshold: idleThreshold,
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+				jobStartedOnce.Do(func() { close(jobStarted) })
+				select {
+				case <-jobBlock:
+				case <-ctx.Done():
+				}
+				return nil
+			},
+		}
+	}
+
+	// maxListeners=2: when the first poller acquires the job it spawns exactly
+	// one replacement, yielding the target state — one busy + one polling.
+	m := listener.NewMultiplexer(factory, 2, nil)
+	m.RestartDelay = time.Millisecond
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	require.NoError(t, m.Start(ctx))
+
+	// A goroutine is now blocked in JobHandler (busy, not polling); the
+	// replacement has taken over long-polling.
+	select {
+	case <-jobStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("job handler did not start within 5s")
+	}
+
+	// Let the replacement poller poll well past the idle threshold. If it were
+	// counted by ActiveCount alone it would have idle-exited several times over
+	// by now.
+	require.Eventually(t, func() bool { return emptyPolls.Load() > idleThreshold*3 }, 5*time.Second, 10*time.Millisecond,
+		"replacement poller should keep polling past the idle threshold")
+
+	// The replacement is the last poller, so idle-exit stays suppressed: the
+	// busy and the polling goroutine both remain alive.
+	assert.Equal(t, int32(1), m.PollerCount(), "exactly one poller (the replacement) should remain")
+	assert.Equal(t, int32(2), m.ActiveCount(), "busy + polling goroutines should both stay alive")
+	// And it must keep that state — never collapsing to zero pollers.
+	assert.Never(t, func() bool { return m.PollerCount() == 0 }, 200*time.Millisecond, 10*time.Millisecond,
+		"the last poller must not idle-exit while a sibling is busy")
+
+	close(jobBlock)
+	cancel()
+	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
