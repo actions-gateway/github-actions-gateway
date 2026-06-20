@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // jitRegister calls generate-jitconfig and returns the runner ID, the decoded
@@ -434,5 +435,70 @@ func TestSessionVersionCapture(t *testing.T) {
 	}
 	if got != wantVersion {
 		t.Fatalf("agent.version = %q, want %q", got, wantVersion)
+	}
+}
+
+// TestLongPollHoldsIdlePollAndDeliversPromptly verifies the broker long-poll
+// (Q148): an empty GET /message holds the connection for ~longPollHold instead
+// of returning 202 at network speed, while a job enqueued mid-hold is delivered
+// promptly rather than after the full hold. The fast spin is what let a
+// replacement listener idle-shut-down within milliseconds and collapse the pool.
+func TestLongPollHoldsIdlePollAndDeliversPromptly(t *testing.T) {
+	s := newServer()
+	s.longPollHold = 400 * time.Millisecond
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	sessID, st := createSession(t, main.URL, 5, "bearer-lp")
+	if st != http.StatusOK {
+		t.Fatalf("create session: %d", st)
+	}
+
+	// 1. An idle poll holds for ~longPollHold before answering 202, rather than
+	// returning immediately (which is what flaked the self-heal pool).
+	start := time.Now()
+	status, _ := getMessage(t, main.URL, sessID)
+	held := time.Since(start)
+	if status != http.StatusAccepted {
+		t.Fatalf("idle poll: status %d, want 202", status)
+	}
+	if held < s.longPollHold/2 {
+		t.Fatalf("idle poll returned after %v; expected to hold ~%v", held, s.longPollHold)
+	}
+
+	// 2. A job enqueued while a poll is in flight is delivered promptly — well
+	// before the full hold elapses — and the poll returns 200 with the job body.
+	type result struct {
+		status int
+		body   []byte
+		took   time.Duration
+	}
+	resCh := make(chan result, 1)
+	go func() {
+		t0 := time.Now()
+		st, body := getMessage(t, main.URL, sessID)
+		resCh <- result{st, body, time.Since(t0)}
+	}()
+	// Let the poll begin its hold, then enqueue.
+	time.Sleep(longPollTick * 2)
+	if st := enqueueJob(t, control.URL, sessID, "lp-job"); st != http.StatusOK {
+		t.Fatalf("enqueue: %d", st)
+	}
+
+	select {
+	case r := <-resCh:
+		if r.status != http.StatusOK {
+			t.Fatalf("job poll: status %d, want 200", r.status)
+		}
+		if !strings.Contains(string(r.body), "lp-job") {
+			t.Fatalf("job poll body = %q, want it to contain the job id", r.body)
+		}
+		if r.took >= s.longPollHold {
+			t.Fatalf("job delivered after %v; expected prompt delivery well under the %v hold", r.took, s.longPollHold)
+		}
+	case <-time.After(s.longPollHold + 2*time.Second):
+		t.Fatal("job poll did not return after enqueue")
 	}
 }

@@ -73,6 +73,16 @@ func main() {
 	if os.Getenv("SINGLE_USE_RUNNERS") == "true" {
 		s.singleUse.Store(true)
 	}
+	// MESSAGE_LONGPOLL_HOLD enables the broker long-poll on GET /message (e.g.
+	// "30s"). Empty or unparseable leaves it at zero (immediate 202). See the
+	// server.longPollHold field doc (Q148).
+	if v := os.Getenv("MESSAGE_LONGPOLL_HOLD"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			s.longPollHold = d
+		} else {
+			log.Printf("ignoring invalid MESSAGE_LONGPOLL_HOLD %q: %v", v, err)
+		}
+	}
 
 	go func() {
 		log.Printf("control API listening on %s", controlAddr)
@@ -132,7 +142,24 @@ type server struct {
 	sessionVersions      map[string]string       // sessionID → agent.version (runnerVersion)
 	deadPolls            map[string]int          // dead sessionID → GET /message count since death
 	requestSessions      map[string]string       // runnerRequestId → delivering sessionID
+
+	// longPollHold is how long GET /message holds an idle connection open before
+	// returning 202, mirroring the real GitHub broker's long-poll window. Zero
+	// (the default) returns 202 immediately, which keeps the unit tests fast.
+	// The e2e deployment sets it to a realistic value: without the hold the AGC's
+	// empty-poll loop spins at network speed and a replacement listener reaches
+	// its 50-empty-poll idle-shutdown threshold within milliseconds, collapsing a
+	// RunnerGroup's pool back to one listener while the busy listener's worker pod
+	// runs — which stranded the next job and flaked E2E_AGC_SingleUseSelfHeal
+	// (Q148). The real broker holds ~50s, so in production those 50 empty polls
+	// span ~40min and never fire mid-job. Set once at startup; read without mu.
+	longPollHold time.Duration
 }
+
+// longPollTick is how often a held GET /message rechecks for a freshly enqueued
+// job, bounding job-delivery latency under the long-poll to one tick. Cheap at
+// the handful of concurrent idle pollers a test cluster holds.
+const longPollTick = 50 * time.Millisecond
 
 type message struct {
 	MessageID   int64  `json:"messageId"`
@@ -515,47 +542,72 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 // A session whose agent was consumed mimics the live-observed GitHub
 // signature: 200 with an empty body on the first poll after death, 401 from
 // then on (M4 §12).
+//
+// Like the real broker it long-polls: a live session with no queued job holds
+// the connection open for up to s.longPollHold (returning the moment a job is
+// enqueued) before answering 202. The consumed-session signature is never
+// held — the AGC detects a dead single-use session by the prompt
+// 200-empty-then-401 sequence. See the longPollHold field doc for why the hold
+// matters (Q148).
 func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	id := r.URL.Query().Get("sessionId")
-	s.mu.Lock()
-	if polls, dead := s.deadPolls[id]; dead {
-		s.deadPolls[id] = polls + 1
-		s.mu.Unlock()
-		if polls == 0 {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK) // empty body → "decode response: EOF"
+	deadline := time.Now().Add(s.longPollHold)
+	for {
+		s.mu.Lock()
+		if polls, dead := s.deadPolls[id]; dead {
+			s.deadPolls[id] = polls + 1
+			s.mu.Unlock()
+			if polls == 0 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK) // empty body → "decode response: EOF"
+				return
+			}
+			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-	// Deliver from the session's own queue first, then fall back to the owner's
-	// pending pool (a job whose original session was recycled away). Returning
-	// the message under the lock keeps the dequeue atomic.
-	var msg *message
-	if q := s.jobQueues[id]; len(q) > 0 {
-		m := q[0]
-		s.jobQueues[id] = q[1:]
-		msg = &m
-	} else if owner := s.sessionOwners[id]; owner != "" {
-		if p := s.ownerPending[owner]; len(p) > 0 {
-			m := p[0]
-			s.ownerPending[owner] = p[1:]
+		// Deliver from the session's own queue first, then fall back to the owner's
+		// pending pool (a job whose original session was recycled away). Returning
+		// the message under the lock keeps the dequeue atomic.
+		var msg *message
+		if q := s.jobQueues[id]; len(q) > 0 {
+			m := q[0]
+			s.jobQueues[id] = q[1:]
 			msg = &m
+		} else if owner := s.sessionOwners[id]; owner != "" {
+			if p := s.ownerPending[owner]; len(p) > 0 {
+				m := p[0]
+				s.ownerPending[owner] = p[1:]
+				msg = &m
+			}
+		}
+		s.mu.Unlock()
+		if msg != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(*msg)
+			return
+		}
+		// No job queued. Hold the connection until one arrives or the hold expires,
+		// rechecking every tick. Honour client disconnect so a recycling listener
+		// (or suite teardown) is never blocked by an in-flight long-poll.
+		wait := longPollTick
+		if remaining := time.Until(deadline); remaining < wait {
+			if remaining <= 0 {
+				w.WriteHeader(http.StatusAccepted)
+				return
+			}
+			wait = remaining
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(wait):
 		}
 	}
-	s.mu.Unlock()
-	if msg != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(*msg)
-		return
-	}
-	w.WriteHeader(http.StatusAccepted)
 }
 
 // handleAcquireJob serves POST /acquirejob. In single-use mode a successful
