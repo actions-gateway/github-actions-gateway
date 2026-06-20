@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -270,7 +271,7 @@ func Run(ctx context.Context, cfg Config) error {
 				if firstRateLimitAt.IsZero() {
 					firstRateLimitAt = cfg.Clock.Now()
 				} else if cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
-					setCondition(cfg, "RateLimited", metav1.ConditionTrue,
+					setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionTrue,
 						"SustainedRateLimit", "GetMessage returning 429 for >10 minutes")
 				}
 				wait := rlErr.RetryAfter
@@ -461,12 +462,12 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 	if err != nil {
 		var vtooOld *broker.VersionTooOldError
 		if errors.As(err, &vtooOld) {
-			setCondition(cfg, "RunnerVersionTooOld", metav1.ConditionTrue,
+			setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
 				"VersionTooOld", vtooOld.Message)
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
-			setCondition(cfg, "Degraded", metav1.ConditionTrue,
+			setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionTrue,
 				"Unauthorized", err.Error())
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
@@ -674,7 +675,7 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 		// The heal recovered from a credential rejection that may have set
 		// Degraded=True (createSession does so on unauthorized). Clear it so the
 		// RunnerGroup does not carry a stale alarm after self-healing.
-		setCondition(*cfg, "Degraded", metav1.ConditionFalse,
+		setCondition(*cfg, v1alpha1.ConditionDegraded, metav1.ConditionFalse,
 			"AgentRecycled", "Re-registered single-use JIT agent after credential rejection")
 	}
 	return sess, err

@@ -110,6 +110,14 @@ func TestReconcile_Create(t *testing.T) {
 		client.MatchingLabels{"actions-gateway/runner-group": "my-rg"},
 	))
 	assert.Len(t, secrets.Items, 3)
+
+	// Q156: a successful reconcile (token obtained) records CredentialUnavailable=False.
+	var fetched v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(context.Background(), key, &fetched))
+	cond := apimeta.FindStatusCondition(fetched.Status.Conditions, v1alpha1.ConditionCredentialUnavailable)
+	require.NotNil(t, cond, "CredentialUnavailable must be recorded (=False) on a healthy reconcile")
+	assert.Equal(t, metav1.ConditionFalse, cond.Status)
+	assert.Equal(t, v1alpha1.ReasonCredentialAvailable, cond.Reason)
 }
 
 func TestReconcile_ScaleUp(t *testing.T) {
@@ -487,6 +495,15 @@ func TestReconcile_TokenManagerError(t *testing.T) {
 		client.MatchingLabels{"actions-gateway/runner-group": "tokenerr-rg"},
 	))
 	assert.Empty(t, secrets.Items, "no Secrets should be created when token manager errors")
+
+	// Q156: the credential failure must surface as a CredentialUnavailable=True
+	// condition (written before the early return), not only as a Kubernetes Event.
+	var fetched v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(context.Background(), key, &fetched))
+	cond := apimeta.FindStatusCondition(fetched.Status.Conditions, v1alpha1.ConditionCredentialUnavailable)
+	require.NotNil(t, cond, "CredentialUnavailable condition must be set on token failure")
+	assert.Equal(t, metav1.ConditionTrue, cond.Status)
+	assert.Equal(t, v1alpha1.ReasonTokenUnavailable, cond.Reason)
 }
 
 func TestReconcile_DeleteWithBrokenTokenManager(t *testing.T) {

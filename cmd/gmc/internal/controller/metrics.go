@@ -89,9 +89,9 @@ func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, "ProxyQuotaPressure"), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaPressure), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, "ProxyQuotaExceeded"), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaExceeded), ag.Namespace, ag.Name)
 	}
 }
 
