@@ -23,7 +23,7 @@ Environment:
 Outputs (all under claude-usage/data/):
     token_metrics.csv   daily input/output/cache tokens + message counts (merge-preserved)
     model_daily.csv     daily per-model headline tokens (merge-preserved)
-    git_metrics.csv     daily cumulative commits, test count, Go code LOC (recomputed)
+    git_metrics.csv     daily commits, test count, Go/Markdown/YAML LOC (recomputed)
     summary.json        headline totals, per-model split, HEAD snapshot, provenance
 """
 
@@ -54,6 +54,15 @@ PRO_TO_MAX = "2026-05-23"
 # every total (cache_read especially). Message records are deduped on their uuid.
 GO_PATHS = ["*.go", ":!vendor/**", ":!**/vendor/**"]
 TEST_PATHS = ["*_test.go", ":!vendor/**", ":!**/vendor/**"]
+MD_PATHS = ["*.md", ":!vendor/**", ":!**/vendor/**"]
+YAML_PATHS = ["*.yaml", "*.yml", ":!vendor/**", ":!**/vendor/**"]
+# Other hand-authored source: shell, Python, website (CSS/JS/HTML), and build files
+# (Makefile/Dockerfile). Excludes vendor, binaries, generated, and lockfiles.
+SCRIPT_PATHS = [
+    "*.sh", "*.py", "*.css", "*.js", "*.mjs", "*.html", "*.tpl",
+    "Makefile", "**/Makefile", "*.mk", "Dockerfile*", "**/Dockerfile*",
+    ":!vendor/**", ":!**/vendor/**",
+]
 
 
 def model_family(m):
@@ -187,8 +196,35 @@ def grep_count(rev, pattern, paths):
     return total
 
 
+def grep_lines_per_file(rev, pattern, paths):
+    """``git grep -c`` line counts as a ``{path: count}`` map at a revision."""
+    out = git("grep", "-c", "-E", pattern, rev, "--", *paths)
+    counts = {}
+    for ln in out.splitlines():
+        parts = ln.split(":")  # rev:path:count (paths here never contain ':')
+        if len(parts) < 3:
+            continue
+        try:
+            counts[":".join(parts[1:-1])] = int(parts[-1])
+        except ValueError:
+            pass
+    return counts
+
+
+def grep_files_matching(rev, pattern, paths):
+    """Set of file paths whose contents match ``pattern`` (case-insensitive) at a revision."""
+    out = git("grep", "-l", "-i", "-E", pattern, rev, "--", *paths)
+    return {ln.split(":", 1)[1] for ln in out.splitlines() if ":" in ln}
+
+
 def git_series():
-    """Per-day cumulative commits, test count, and Go code LOC at each day's last commit."""
+    """Per-day cumulative commits, test count, and authored LOC at each day's last commit.
+
+    ``go_code`` is Go (code + tests, block comments counted as code); ``md`` is
+    non-blank Markdown; ``yaml`` is non-blank *hand-written* YAML — generated YAML
+    (CRDs and other controller-gen output) is excluded with the same heuristic the
+    HEAD snapshot uses, so it isn't credited as authored output.
+    """
     rows = {}
     log = git("log", "--reverse", "--format=%H|%ad", "--date=short").splitlines()
     day_commits = defaultdict(int)
@@ -206,11 +242,22 @@ def git_series():
         rev = last_hash[d]
         nonblank = grep_count(rev, "[^[:space:]]", GO_PATHS)
         line_comments = grep_count(rev, "^[[:space:]]*//", GO_PATHS)
+        test_nonblank = grep_count(rev, "[^[:space:]]", TEST_PATHS)
+        test_comments = grep_count(rev, "^[[:space:]]*//", TEST_PATHS)
+        md = sum(grep_lines_per_file(rev, "[^[:space:]]", MD_PATHS).values())
+        yaml_counts = grep_lines_per_file(rev, "[^[:space:]]", YAML_PATHS)
+        generated = grep_files_matching(rev, "code generated|controller-gen", YAML_PATHS)
+        yaml_hand = sum(c for p, c in yaml_counts.items()
+                        if p not in generated and "/crd/" not in p)
         rows[d] = {
             "date": d,
             "commits": cum,
             "tests": grep_count(rev, "^func Test", TEST_PATHS),
-            "go_code": nonblank - line_comments,
+            "go_code": nonblank - line_comments,           # all Go: non-test + test
+            "go_test": test_nonblank - test_comments,      # the test subset of go_code
+            "md": md,
+            "yaml": yaml_hand,
+            "scripts": grep_count(rev, "[^[:space:]]", SCRIPT_PATHS),  # shell/python/web/build
         }
     return rows
 
@@ -354,7 +401,7 @@ def main():
     git_csv = os.path.join(DATA, "git_metrics.csv")
 
     git_rows = git_series()
-    write_csv(git_csv, ["date", "commits", "tests", "go_code"],
+    write_csv(git_csv, ["date", "commits", "tests", "go_code", "go_test", "md", "yaml", "scripts"],
               [git_rows[d] for d in sorted(git_rows)])
     deltas = commit_deltas(git_rows)
 
