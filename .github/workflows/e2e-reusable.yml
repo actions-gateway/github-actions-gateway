@@ -234,29 +234,9 @@ jobs:
         # script applies, so the two always agree.
         if: inputs.kind_cni == 'calico'
         run: |
-          set -euo pipefail
-          tar=/tmp/calico-images/calico.tar
-          manifest="$(mktemp)"
-          trap 'rm -f "$manifest"' EXIT
-          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
-            "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
-          mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
-          if [[ "${#images[@]}" -eq 0 ]]; then
-            echo "no images found in Calico manifest for ${CALICO_VERSION}" >&2
-            exit 1
-          fi
-          echo "Calico images: ${images[*]}"
-          if [[ -f "$tar" ]]; then
-            echo "==> loading Calico images from cache"
-            docker load -i "$tar"
-          else
-            for img in "${images[@]}"; do
-              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
-                scripts/pull-image-with-retry.sh "$img"
-            done
-            mkdir -p /tmp/calico-images
-            docker save -o "$tar" "${images[@]}"
-          fi
+          scripts/prepull-manifest-images.sh calico \
+            "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml" \
+            /tmp/calico-images
 
       - name: Cache cert-manager images
         # Both CNIs: cert-manager is applied on every e2e run. Keyed on
@@ -278,32 +258,9 @@ jobs:
         # touches quay.io. The image list is persisted alongside the tar so the
         # load step needs neither a manifest fetch nor a re-extract.
         run: |
-          set -euo pipefail
-          dir=/tmp/cert-manager-images
-          tar="$dir/cert-manager.tar"
-          list="$dir/images.txt"
-          if [[ -f "$tar" && -f "$list" ]]; then
-            echo "==> loading cert-manager images from cache"
-            docker load -i "$tar"
-          else
-            manifest="$(mktemp)"
-            trap 'rm -f "$manifest"' EXIT
-            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
-              "https://github.com/cert-manager/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.yaml"
-            mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
-            if [[ "${#images[@]}" -eq 0 ]]; then
-              echo "no images found in cert-manager manifest for ${CERTMANAGER_VERSION}" >&2
-              exit 1
-            fi
-            echo "cert-manager images: ${images[*]}"
-            for img in "${images[@]}"; do
-              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
-                scripts/pull-image-with-retry.sh "$img"
-            done
-            mkdir -p "$dir"
-            docker save -o "$tar" "${images[@]}"
-            printf '%s\n' "${images[@]}" > "$list"
-          fi
+          scripts/prepull-manifest-images.sh cert-manager \
+            "https://github.com/cert-manager/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.yaml" \
+            /tmp/cert-manager-images
 
       - name: Cache metrics-server image
         # Both CNIs: the e2e suite installs metrics-server on every run to back
@@ -328,32 +285,9 @@ jobs:
         # neither a manifest fetch nor a re-extract. Keep METRICSSERVER_VERSION in
         # sync with metricsServerVersion in cmd/gmc/test/e2e/e2e_suite_test.go.
         run: |
-          set -euo pipefail
-          dir=/tmp/metrics-server-images
-          tar="$dir/metrics-server.tar"
-          list="$dir/images.txt"
-          if [[ -f "$tar" && -f "$list" ]]; then
-            echo "==> loading metrics-server image from cache"
-            docker load -i "$tar"
-          else
-            manifest="$(mktemp)"
-            trap 'rm -f "$manifest"' EXIT
-            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "$manifest" \
-              "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICSSERVER_VERSION}/components.yaml"
-            mapfile -t images < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "$manifest" | sort -u)
-            if [[ "${#images[@]}" -eq 0 ]]; then
-              echo "no images found in metrics-server manifest for ${METRICSSERVER_VERSION}" >&2
-              exit 1
-            fi
-            echo "metrics-server images: ${images[*]}"
-            for img in "${images[@]}"; do
-              PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
-                scripts/pull-image-with-retry.sh "$img"
-            done
-            mkdir -p "$dir"
-            docker save -o "$tar" "${images[@]}"
-            printf '%s\n' "${images[@]}" > "$list"
-          fi
+          scripts/prepull-manifest-images.sh metrics-server \
+            "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICSSERVER_VERSION}/components.yaml" \
+            /tmp/metrics-server-images
 
       - name: Build images while the kind cluster and cert-manager come up
         # The image build is the long pole on a cold cache (~8 min). It depends
