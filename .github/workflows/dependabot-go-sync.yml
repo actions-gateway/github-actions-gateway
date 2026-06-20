@@ -32,14 +32,17 @@ concurrency:
 jobs:
   sync:
     # Gate strictly: only Dependabot-authored, same-repo PRs whose branch is a
-    # Go-module update (dependabot/gomod/...). github_actions / docker bumps and
-    # every human PR are skipped. The same-repo head check holds for this repo —
-    # Dependabot pushes its branches here, not from a fork — and a fork-head PR
-    # could not be pushed to via GITHUB_TOKEN anyway.
+    # Go-module update (dependabot/go_modules/...). NOTE: the branch slug is
+    # 'go_modules', NOT the 'gomod' package-ecosystem key from dependabot.yml —
+    # Dependabot derives the branch prefix from the ecosystem's internal name, so
+    # gomod bumps land on dependabot/go_modules/* branches. github_actions /
+    # docker bumps and every human PR are skipped. The same-repo head check holds
+    # for this repo — Dependabot pushes its branches here, not from a fork — and
+    # a fork-head PR could not be pushed to via GITHUB_TOKEN anyway.
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.head_ref, 'dependabot/gomod/')
+      startsWith(github.head_ref, 'dependabot/go_modules/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
