@@ -101,6 +101,8 @@ If you already provision namespaces and quotas through a GitOps pipeline or a
 tenant operator (Capsule, HNC, vCluster, kiosk), set the quota there instead — the
 gateway will not fight it.
 
+**Size the quota for both pools at full scale.** The quota must leave room for the proxy pool at `spec.proxy.maxReplicas` *and* worker pods up to `maxWorkers` (each × its per-pod requests/limits, plus pod count). When the remaining headroom can't cover scaling to those ceilings, the gateway flags it without blocking provisioning: the GMC raises `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the `ActionsGateway` and the AGC raises `WorkerQuotaPressure`/`WorkerQuotaExceeded` on each `RunnerGroup` (each also exported as a gauge for alerting). See [troubleshooting: Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling) and [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion).
+
 ---
 
 ## Step 2: Create the ActionsGateway Resource
@@ -231,6 +233,8 @@ kubectl get actionsgateway -n <tenant-namespace> <name> \
 #   Ready=True
 #   AGCAvailable=True
 #   ProxyAvailable=True
+#   ProxyQuotaPressure=False  (True warns the proxy can't scale to maxReplicas within the ResourceQuota)
+#   ProxyQuotaExceeded=False  (True means proxy replica creates are being rejected by the ResourceQuota)
 ```
 
 ```sh
@@ -344,6 +348,7 @@ Onboarding is complete when:
 | `RunnerGroup` condition `VersionTooOld` | Worker image contains a runner version below GitHub's minimum | Update `workerImage` in the RunnerGroup spec |
 | Test job stays queued in GitHub for >2 minutes | `active_sessions = 0` — listener goroutines are not running | Check AGC logs for credential or proxy errors |
 | HPA present but proxy doesn't scale up | `maxReplicas` too low or HPA metric is `<unknown>` | Check both the HPA spec and that `requests.cpu` is set |
+| Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | `proxy.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |
 | Jobs acquired but pods not appearing | `priorityClassName` referenced in `priorityTiers` does not exist | `kubectl get priorityclass <name>` — create it if missing |
 | `ActionsGateway` apply rejected: `priorityClassName … is not in the platform allowlist` | The named `PriorityClass` is not on the GMC `--allowed-priority-classes` flag (the allowlist is empty by default) | Have the platform admin create the `PriorityClass` and add its name to `--allowed-priority-classes`; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist) |
 

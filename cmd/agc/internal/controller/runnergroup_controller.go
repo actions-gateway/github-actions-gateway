@@ -136,8 +136,21 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.conditionCh = make(chan conditionUpdate, 256)
 	}
 
+	// Export the worker ResourceQuota conditions (Q82) as gauges from the cached
+	// client, so they can be alerted on without kube-state-metrics.
+	registerWorkerQuotaMetrics(mgr.GetClient())
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RunnerGroup{}).
+		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so
+		// the WorkerQuota{Pressure,Exceeded} conditions refresh promptly (Q82). The
+		// predicate ignores .status.used churn; transient used drift from other
+		// workloads is picked up by the worker-pod watch and the baseline recheck.
+		Watches(
+			&corev1.ResourceQuota{},
+			handler.EnqueueRequestsFromMapFunc(r.quotaToRunnerGroups),
+			builder.WithPredicates(quotaHardChangedPredicate()),
+		).
 		// Watch the worker pods this RunnerGroup's provisioner creates so that
 		// pod lifecycle events — a job being acquired (pod created), a pod
 		// reaching a terminal phase, eviction (phase → Failed), and deletion —
@@ -332,6 +345,17 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	rg.Status.ActiveSessions = mux.ActiveCount()
 	rg.Status.ObservedGeneration = rg.Generation
 	r.setReadyCondition(&rg, mux.ActiveCount() > 0)
+
+	// Worker ResourceQuota conditions (Q82), advisory — they do not gate Ready.
+	wq := r.evalWorkerQuota(ctx, &rg)
+	r.mergeCondition(&rg, metav1.Condition{
+		Type: conditionWorkerQuotaPressure, Status: boolConditionStatus(wq.pressure),
+		Reason: wq.pressureReason, Message: wq.pressureMessage, ObservedGeneration: rg.Generation,
+	})
+	r.mergeCondition(&rg, metav1.Condition{
+		Type: conditionWorkerQuotaExceeded, Status: boolConditionStatus(wq.exceeded),
+		Reason: wq.exceededReason, Message: wq.exceededMessage, ObservedGeneration: rg.Generation,
+	})
 
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err

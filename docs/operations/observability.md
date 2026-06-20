@@ -313,9 +313,13 @@ remove the files when finished.)
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace`, `reason` | `GetMessage` errors (excludes empty polls and session expiry — those are normal). `reason="rate_limited"` is a 429; `reason="timeout"` is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see [Listener Stalls After a Black-Holed Broker Connection](troubleshooting.md#listener-stalls-for-minutes-after-a-black-holed-broker-connection)); `reason="other"` is any remaining transport/decode error. |
 | `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered. `trigger="post_job"` is routine (one per completed job); `stale_session`/`startup` mean a dead agent was detected and healed after the fact; `reconcile_repair` means a parked agent was repaired by the reconciler. |
 | `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero). |
+| `actions_gateway_worker_quota_pressure` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaPressure=True` (Q82): workers can't scale to the configured ceiling within the namespace `ResourceQuota` headroom. Warning — load-dependent; alert with `for:`, don't page. |
+| `actions_gateway_worker_quota_exceeded` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaExceeded=True` (Q82): the `ResourceQuota` can't admit another worker pod — the next acquired job's pod will be rejected. Error — page. |
 | `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors. Emitted by controller-runtime (no `actions_gateway_` prefix); the `controller` label distinguishes `actionsgateway`, `runnergroup`, etc. Non-zero values deserve investigation. |
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC. |
+| `actions_gateway_proxy_quota_pressure` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaPressure=True` (Q82): the proxy pool can't scale to `maxReplicas` within the namespace `ResourceQuota` headroom. Warning — alert with `for:`, don't page. |
+| `actions_gateway_proxy_quota_exceeded` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaExceeded=True` (Q82): proxy replica creates are being rejected by the `ResourceQuota` now. Error — page. |
 
 ### Proxy metrics
 
@@ -432,6 +436,39 @@ groups:
         annotations:
           summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
           description: "A job's eviction retry budget has been exhausted. Manual re-run required."
+
+      # Page: the namespace ResourceQuota is rejecting worker pods now (Q82)
+      - alert: ActionsGatewayWorkerQuotaExceeded
+        expr: |
+          actions_gateway_worker_quota_exceeded == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker pods being rejected by ResourceQuota for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "The namespace ResourceQuota cannot admit another worker pod; acquired jobs will fail to schedule. Raise the quota or reduce maxWorkers."
+
+      # Page: the ResourceQuota is rejecting proxy replicas now (Q82)
+      - alert: ActionsGatewayProxyQuotaExceeded
+        expr: |
+          actions_gateway_proxy_quota_exceeded == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxy replica creation rejected by ResourceQuota for {{ $labels.name }} in {{ $labels.namespace }}"
+          description: "The proxy pool is being held below the HPA's target by the namespace ResourceQuota. Raise the quota or lower proxy.maxReplicas."
+
+      # Ticket: capacity can't reach the configured ceiling within quota headroom (Q82)
+      - alert: ActionsGatewayQuotaPressure
+        expr: |
+          actions_gateway_worker_quota_pressure == 1 or actions_gateway_proxy_quota_pressure == 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Quota headroom too low to reach configured ceiling in {{ $labels.namespace }}"
+          description: "A proxy or worker pool cannot scale to its configured maximum within the namespace ResourceQuota headroom. Plan a quota increase or lower the ceiling before the next load spike."
 
       # Ticket: reconcile errors need investigation
       - alert: ActionsGatewayReconcileErrors

@@ -84,6 +84,16 @@ func (g *admissionGate) reservedCount(key string) int32 {
 // validation; with the validated strictly-ascending order the maximum is the
 // last tier, matching ceilingCheck.
 func admissionCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
+	return WorkerCeiling(rg)
+}
+
+// WorkerCeiling returns the maximum concurrent worker pods rg may run, mirroring
+// the admission gate / ceilingCheck hold decision: the maximum priority-tier
+// threshold when tiers are set, else maxWorkers, else unbounded (bounded=false).
+// Exported so the RunnerGroup reconciler can size the worker pool's quota
+// footprint for the WorkerQuota{Pressure,Exceeded} conditions (Q82) against the
+// same ceiling the gate enforces — one source of truth.
+func WorkerCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
 	if len(rg.Spec.PriorityTiers) > 0 {
 		var max int32
 		for _, tier := range rg.Spec.PriorityTiers {
