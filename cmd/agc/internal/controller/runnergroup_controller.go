@@ -493,8 +493,13 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			HTTPClient:    brokerCfg.HTTPClient,
 		}
 		jobHandler := listener.JobHandlerFunc(nil)
+		admit := listener.AdmitFunc(nil)
 		if r.Provisioner != nil {
 			jobHandler = r.Provisioner.HandlerFor(rg)
+			// Gate job acquisition on worker capacity before AcquireJob claims the
+			// job from GitHub (Q59), so a job we cannot place is left queued for
+			// redelivery instead of acquired-then-dropped.
+			admit = r.Provisioner.AdmitFor(rg)
 		}
 		return listener.Config{
 			Group:         rg.Name,
@@ -505,6 +510,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 			Metrics:       r.Metrics,
 			RunnerOS:      brokerCfg.RunnerOS,
 			JobHandler:    jobHandler,
+			Admit:         admit,
 			IdleThreshold: brokerCfg.IdleThreshold,
 			RenewInterval: brokerCfg.RenewJobInterval,
 			// Return the claimed agent to the pool on goroutine exit so the pool is

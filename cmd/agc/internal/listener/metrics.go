@@ -8,13 +8,16 @@ import (
 
 // Metrics holds all Prometheus metrics emitted by the listener and provisioner packages.
 type Metrics struct {
-	ActiveSessions          *prometheus.GaugeVec
-	JobsAcquiredTotal       *prometheus.CounterVec
-	JobAcquisitionErrors    *prometheus.CounterVec
-	TokenRefreshesTotal     *prometheus.CounterVec
-	TokenRefreshErrorsTotal *prometheus.CounterVec
-	RenewJobErrorsTotal     *prometheus.CounterVec
-	MessagePollErrorsTotal  *prometheus.CounterVec
+	ActiveSessions       *prometheus.GaugeVec
+	JobsAcquiredTotal    *prometheus.CounterVec
+	JobAcquisitionErrors *prometheus.CounterVec
+	// Q59: pre-acquisition admission control. Incremented when the capacity gate
+	// rejects a delivered job (acquire skipped, job left queued for redelivery).
+	JobsAdmissionRejectedTotal *prometheus.CounterVec
+	TokenRefreshesTotal        *prometheus.CounterVec
+	TokenRefreshErrorsTotal    *prometheus.CounterVec
+	RenewJobErrorsTotal        *prometheus.CounterVec
+	MessagePollErrorsTotal     *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
 	PodCreationLatency       *prometheus.HistogramVec
 	JobDuration              *prometheus.HistogramVec
@@ -49,6 +52,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_job_acquisition_errors_total",
 			Help: "Total number of AcquireJob failures.",
 		}, []string{"namespace", "reason"}),
+
+		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_jobs_admission_rejected_total",
+			Help: "Jobs left queued at GitHub because the pre-acquisition capacity gate was full (acquire skipped for redelivery).",
+		}, []string{"namespace", "runner_group"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_token_refreshes_total",
@@ -124,6 +132,7 @@ func NewMetrics() *Metrics {
 		m.ActiveSessions,
 		m.JobsAcquiredTotal,
 		m.JobAcquisitionErrors,
+		m.JobsAdmissionRejectedTotal,
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,

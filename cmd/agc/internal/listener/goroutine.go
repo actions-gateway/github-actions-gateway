@@ -51,6 +51,16 @@ type ConditionUpdater interface {
 // registrar that does not produce a JIT blob (e.g. stub-only tests).
 type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error
 
+// AdmitFunc gates job acquisition on available worker capacity (Q59). It is
+// called after a job is delivered but before AcquireJob claims it from GitHub.
+// ok=false means there is no capacity: the listener skips the acquire, leaving
+// the job queued at GitHub for redelivery to a sibling session — rather than
+// claiming a job whose worker pod it cannot place, which would be cancelled when
+// the unrenewed lock lapses. ok=true returns release, which the listener calls
+// exactly once when the reserved slot is freed (acquire failure or job
+// completion) so the gate's in-flight count tracks only live jobs.
+type AdmitFunc func(ctx context.Context) (release func(), ok bool)
+
 // Config holds the dependencies injected into a listener goroutine.
 type Config struct {
 	Group     string // RunnerGroup name
@@ -81,8 +91,15 @@ type Config struct {
 	// open for the broker's poll interval by design.
 	ControlPlaneTimeout time.Duration
 	JobHandler          JobHandlerFunc
-	Clock               Clock
-	Log                 *slog.Logger
+	// Admit gates job acquisition on worker capacity (Q59). Called once per
+	// delivered job, before AcquireJob: when it returns ok=false the listener
+	// skips the acquire and the job stays queued at GitHub for redelivery. On
+	// ok=true the returned release func is called when the reserved slot is freed
+	// (acquire failure or job completion). Nil disables the gate, leaving the
+	// provisioner's post-acquire ceilingCheck as the only (backstop) limit.
+	Admit AdmitFunc
+	Clock Clock
+	Log   *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -503,6 +520,29 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	var jobBody broker.RunnerJobRequestBody
 	if err := json.Unmarshal(bodyBytes, &jobBody); err != nil {
 		log.Warn("could not parse job body; skipping AcquireJob", "error", err)
+	}
+
+	// Admission gate (Q59): reserve worker capacity BEFORE AcquireJob claims the
+	// job from GitHub. If the gate is full, skip the acquire so the job stays
+	// queued at GitHub and is redelivered to a sibling session with capacity —
+	// rather than claiming a job whose worker pod we cannot place, which would be
+	// cancelled when its unrenewed lock lapses (failure shape 1 in the Q59 plan).
+	if cfg.Admit != nil {
+		release, ok := cfg.Admit(ctx)
+		if !ok {
+			if cfg.Metrics != nil {
+				cfg.Metrics.JobsAdmissionRejectedTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+			}
+			// Per-delivery line that can be high-volume under sustained capacity
+			// pressure; Debug, with the metric as the operator-facing signal (Q87, Theme D).
+			log.Debug("job admission rejected: worker capacity full; leaving job queued for redelivery", "messageId", msg.MessageID)
+			return false, nil
+		}
+		// Hold the reservation until handleJob returns. On the acquire path that is
+		// pod terminal (JobHandler has returned by then); on any earlier return it
+		// fires immediately. Either way the gate's in-flight count tracks only live
+		// jobs. Released exactly once via the AdmitFunc's idempotent closure.
+		defer release()
 	}
 
 	var (
