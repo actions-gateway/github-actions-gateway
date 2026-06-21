@@ -39,6 +39,29 @@ egress proxy to the tenant 1:1, and assumes one gateway per namespace.**
    runner sets against a single namespace `ResourceQuota`, cannot do so without
    spreading across namespaces.
 
+### Non-goals
+
+- **Not a behavior change.** v2 re-shapes the API; the runtime semantics (job
+  acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are
+  preserved. `v2alpha1` tracks v1 behavior wherever a field is unchanged.
+- **Not an in-place conversion.** The v1→v2 split is a fan-out handled by a
+  migration tool ([§H.11](#h11-migration-v2-tool-assisted)), not a conversion webhook.
+- **Not the admin policy layer.** Tiered admin policy (singleton/class) is
+  explicitly deferred ([§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real)).
+- **Not cross-namespace sharing on day one.** Same-namespace `EgressProxy` sharing
+  ships first; cross-namespace consent + CA distribution follow on demand ([§H.9](#h9-cross-namespace-proxy-sharing)).
+
+### Risks
+
+- **Two APIs in flight.** Serving `v1alpha1` + `v2alpha1` means dual maintenance
+  until v1 removal — bounded by the coexistence window and the behavior-parity
+  non-goal above.
+- **Migration is fan-out-on-create.** Operators run a deliberate one-shot tool,
+  not a silent upgrade — mitigated by dry-run-by-default and a documented runbook.
+- **Multi-gateway naming collisions.** Per-gateway derived names under a 52-char
+  cap ([§H.6](#h6-naming-and-length-budgets)); the webhook-enforced `maxLength`
+  makes the limit discoverable, not a runtime surprise.
+
 ## H.2. Design principles
 
 - **Split *data* objects from *controller* objects.** Two kinds are reconciled
@@ -160,6 +183,55 @@ type RunnerSetSpec struct {
 }
 ```
 
+### Worked example — minimal proxy-less onboarding (three objects)
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata: { name: acme, namespace: team-a }
+spec:
+  gitHubAppRef: { name: acme-github-app }   # LocalSecretReference, same namespace
+  gitHubURL: https://github.com/acme
+  securityProfile: baseline
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata: { name: default, namespace: team-a }
+spec:
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+          resources: { requests: { cpu: "1", memory: 2Gi } }
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata: { name: linux, namespace: team-a }
+spec:
+  gatewayRef:  { name: acme }
+  templateRef: { name: default }   # kind defaults to RunnerTemplate; set kind: ClusterRunnerTemplate for a platform golden template
+  runnerLabels: [self-hosted, linux]
+  maxListeners: 10
+  maxWorkers: 50
+  # no proxyRef and no ActionsGateway.spec.defaultProxyRef ⇒ direct egress
+  # (RunnerSet status reports proxyMode: Direct + an EgressUnattributed condition)
+```
+
+Adding a shared egress proxy is one more object plus a `defaultProxyRef`:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata: { name: shared, namespace: team-a }
+spec: { minReplicas: 2, maxReplicas: 10 }
+# then set on the gateway:  spec.defaultProxyRef: { name: shared }
+# every RunnerSet under that gateway inherits it unless it sets its own proxyRef
+```
+
+This shows the renamed group, the noun/verb split, and that proxy-less is the
+minimal path — the `EgressProxy` and `RunnerTemplate` reuse only appear when a
+tenant actually needs a shared proxy or a second runner shape.
+
 ## H.5. How each pressure is resolved
 
 - **Object size.** The large `PodTemplateSpec` lives only in
@@ -204,6 +276,21 @@ Service-name path is tightest:
   (leaves 11 for any derived suffix, stays well under 63 as a label value) and
   document it in the CRD field comment so it is discoverable, not a runtime
   surprise.
+
+### Field naming freezes at GA — do the pass now
+
+JSON field names are part of the API contract and become permanent at `v2`. Do
+the naming pass during M1 while names are still cheap to change under `v2alpha1`:
+
+- **Acronym/brand casing must be consistent.** v1 carries `gitHubURL` /
+  `gitHubAppRef` (brand `gitHub` + initialism `URL`). Pick one rule — k8s leans
+  toward lowercase initialisms inside a camelCase name (`gitHubURL` → `githubURL`,
+  `gitHubAppRef` → `githubAppRef`) — apply it across every field, and freeze it
+  deliberately rather than inheriting v1's casing by accident.
+- **References are uniform.** `gatewayRef` / `templateRef` / `proxyRef` /
+  `githubAppRef` share one `…Ref` suffix and the `ObjectRef` /
+  `LocalSecretReference` shapes.
+- **List fields are plural** (`runnerLabels`, `priorityTiers`).
 
 Field movement, v1alpha1 → v2alpha1:
 
@@ -254,6 +341,19 @@ non-blocking **warning** (admission responses carry `warnings[]` without denying
 when a reference looks dangling at apply time. The operator sees
 `Warning: RunnerTemplate 'dind-large' not found` immediately, the object is still
 admitted, and the runtime condition remains authoritative.
+
+**Make `gatewayRef` a CRD field selector.** Under multi-gateway, each AGC must
+list/watch only the `RunnerSet`s whose `gatewayRef` targets its gateway. Declaring
+`spec.gatewayRef.name` a `selectableField` (CRD field selectors, KEP-4358) runs
+that filter server-side instead of fetching every `RunnerSet` and filtering
+in-process. Additive, but the watch should be designed around it from the start.
+
+**Status & condition contract — uniform across all five kinds.** Every kind
+carries `status.conditions` (`listType=map` keyed on `type`),
+`status.observedGeneration`, and a `Ready` condition with the same polarity and a
+shared reason vocabulary; messages name the specific blocker
+(`RunnerTemplate 'dind-large' not found`), never a generic string. Pin this as the
+contract in M1 rather than letting each reconciler invent its own.
 
 ## H.8. Ownership, GC, and deletion
 
@@ -370,6 +470,12 @@ which no conversion webhook can express. Therefore:
 - Deprecate `v1alpha1` after a release or two. The cutover is deliberate, not
   silent, because the migration is fan-out-on-create.
 
+The v1→v2 fan-out is one-time. Once on `v2alpha1`, the API graduates **in place**
+`v2alpha1 → v2beta1 → v2` via a conversion webhook (a thing a conversion webhook
+*can* do, since the kinds no longer change shape) — see the
+[graduation path](../plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2)
+in the implementation plan for the per-hop mechanics.
+
 ## H.12. Folding in the grandfathered label-value alignment (Q147)
 
 Two shipped keys still carry boolean-looking `"true"` values that predate the
@@ -391,6 +497,17 @@ already ships a migration tool ([§H.11](#h11-migration-v2-tool-assisted)), and 
 reworks the same VAPs and onboarding for multi-gateway-per-namespace. Folding Q147 in
 here costs almost nothing extra and avoids a second, standalone breaking migration
 later.
+
+**The key *prefixes* migrate too, not just the values.** The v2
+[API group rename](#h15-other-breaking-changes-worth-batching) moves these keys off
+the `actions-gateway.github.com/` domain to `actions-gateway.com/` (e.g.
+`actions-gateway.com/tenant`), together with the other domain-prefixed identifiers
+— `privileged-profile`, `agentpool-cleanup`, `gmc-cleanup`, the version label, and
+the finalizer names. This is the same class of breaking change as the value
+alignment and rides the **same dual-read window**: every consumer accepts either
+domain *and* either value until `v1alpha1` removal, and the migration tool
+relabels in one pass. Renaming the API group but leaving the labels on the old
+domain would be a permanent inconsistency, so the prefixes move *with* the group.
 
 Both keys survive into v2 unchanged in *meaning* — the `tenant` marker still confines
 the GMC's namespace writes under multi-gateway-per-namespace, and
@@ -419,7 +536,9 @@ already-applied `"true"` keeps working until the tool relabels it.
 This proposal, if accepted, touches more than the API types. Non-exhaustive
 impact list, to be turned into plan-doc scope when scheduled:
 
-- **API:** new `v2alpha1` group with four kinds + generated CRDs/deepcopy/RBAC.
+- **API:** new `v2alpha1` group `actions-gateway.com` with five CRD kinds
+  (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`,
+  `EgressProxy`) + generated CRDs/deepcopy/RBAC.
 - **GMC:** multi-gateway-per-namespace requires every derived resource to be
   keyed by gateway name (not the namespace-singleton assumption today); the
   `gmc-tenant-resource-guard` policy must still confine writes; new
@@ -431,10 +550,13 @@ impact list, to be turned into plan-doc scope when scheduled:
   operator-facing docs per the
   [doc-update matrix](../development/doc-update-matrix.md).
 - **Migration tool** + its tests.
-- **Label values (Q147):** the grandfathered `tenant`/`allow-profile-downgrade`
-  `"true"` values align to enum keywords during the cutover ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)) — VAP CEL,
-  onboarding scripts, runbooks, and the convention doc's "grandfathered" note all
-  update, and the dual-read window rides the v1alpha1 serving window.
+- **Label keys + values (Q147 + group rename):** both the domain *prefix*
+  (`actions-gateway.github.com/*` → `actions-gateway.com/*`, plus finalizer names)
+  and the grandfathered `tenant`/`allow-profile-downgrade` `"true"` *values* migrate
+  during the cutover ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147))
+  — VAP CEL, onboarding scripts, runbooks, and the convention doc's "grandfathered"
+  note all update, and one dual-read window covers both, riding the v1alpha1 serving
+  window.
 
 ## H.14. Admin policy layer — deferred until tiering is real
 
@@ -555,7 +677,10 @@ only the ones that fix a problem we have today.
   owns `actions-gateway.com`, so v2 renames the group to it. Changing the group
   touches every CRD (and every CR, RBAC rule, VAP, and manifest that names it),
   so it can only happen at a major break — it rides the v2 cutover and its
-  migration tool.
+  migration tool. The **label/annotation key prefixes, the version label, and
+  finalizer names** carry the same domain and rename with it
+  (`actions-gateway.github.com/*` → `actions-gateway.com/*`), on the Q147 dual-read
+  window so live namespaces are not broken mid-cutover ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
 - **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
   profile, active sessions), resource `categories`, and the short names from
   [§H.6](#h6-naming-and-length-budgets).
