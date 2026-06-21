@@ -196,5 +196,5 @@ in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
 
 <p align="center">
   <img src="docs/assets/wormhole-animation.webp" width="480"
-       alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma kawoosh, then shutters closed">
+       alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma burst, then shutters closed">
 </p>
