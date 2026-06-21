@@ -67,6 +67,23 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
+### Non-breaking: `v2alpha1` CRDs installed but inert
+
+The chart now ships five additional CRDs in the new `actions-gateway.com` group —
+`actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, and the
+cluster-scoped `clusterrunnertemplates` (the v2 API decomposition). On upgrade they
+appear in `kubectl get crds` alongside the existing `actions-gateway.github.com`
+CRDs, and `helm uninstall` preserves them (`resource-policy: keep`), exactly like
+the v1 CRDs. **No action is required and nothing changes for running tenants:** the
+v2 types are validated by the API server but **no controller reconciles them yet**,
+so creating a v2 object provisions nothing. Continue using the `v1alpha1`
+(`actions-gateway.github.com`) API; v2 onboarding and a migration tool arrive in
+later releases. See the [v2 API plan](../plan/v2-api.md). The short names `ag`/`rs`/
+`rt`/`crt`/`ep` are claimed by the v2 CRDs; because v2's `ActionsGateway` reuses the
+`ag` short name, `kubectl get ag` is ambiguous while both groups are installed —
+qualify it as `kubectl get actionsgateways.actions-gateway.github.com` (or `.com`)
+to disambiguate.
+
 ### BREAKING: `spec.namespaceQuota` removed — the ResourceQuota is now platform-owned
 
 **This is a breaking CRD change, made pre-1.0 while the API can still break.** The

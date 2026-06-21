@@ -16,6 +16,8 @@
 
 Two Custom Resource Definitions are introduced. `ActionsGateway` is namespace-scoped and owned by the GMC. `RunnerGroup` is namespace-scoped and owned by the AGC. Both live in the tenant's namespace. The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
 
+> **v2 API (`v2alpha1`, group `actions-gateway.com`).** A decomposed v2 API is being built incrementally alongside this `v1alpha1` (`actions-gateway.github.com`) surface; the two groups are served side by side during the coexistence window. As of milestone M1 the v2 **types** are defined and their CRDs install and round-trip, but **no controller reconciles them yet** — the schemas are inert until the M2/M3a reconcilers land. v2 splits the `ActionsGateway` + `RunnerGroup` monolith into five kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`), renames the group to the project-owned domain, and freezes the field-naming/immutability decisions. The full v2 shape and rationale are the design source of truth in [Appendix H — v2 API Decomposition](appendix-h-v2-api-decomposition.md); the milestone sequencing is in the [v2 API plan](../plan/v2-api.md). The schemas below remain authoritative for the running `v1alpha1` API.
+
 ```go
 // SecretReference is a pointer to a Kubernetes Secret, with an optional
 // namespace override. Because ActionsGateway is namespace-scoped, Namespace

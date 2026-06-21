@@ -132,16 +132,16 @@ a milestone is done when every box is checked and its exit criterion holds.
 
 ### M1 — API foundation (Q149)
 
-- [ ] Scaffold `cmd/agc/api/v2alpha1/` and `cmd/gmc/api/v2alpha1/` (group `actions-gateway.com`, `groupversion_info.go`).
-- [ ] Define the five kinds + shared subtypes (`ObjectRef`, `LocalSecretReference`, `PriorityTier`, `TracingConfig`).
-- [ ] Field-naming pass — `githubURL`/`githubAppRef`, uniform `…Ref`, plural list fields.
-- [ ] CEL/structural validation — name `maxLength` 52; `githubURL` immutable (`oldSelf`); `maxListeners` default 10; `maxWorkers == priorityTiers[last].threshold`; reserved-pod-field rules on `RunnerTemplate`.
-- [ ] `selectableFields: spec.gatewayRef.name` on `RunnerSet`.
-- [ ] Uniform status/condition contract across all five kinds (`Ready` + `observedGeneration`, `listType=map`, specific messages).
-- [ ] `additionalPrinterColumns`, `categories`, short names (`ag`/`rs`/`rt`/`crt`/`ep`).
-- [ ] Labels/annotations/finalizers on the `actions-gateway.com/*` domain.
-- [ ] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside `v1alpha1`.
-- [ ] (Opportunistic) move webhook-only checks to CEL where the k8s floor allows.
+- [x] Scaffold `cmd/agc/api/v2alpha1/` and `cmd/gmc/api/v2alpha1/` (group `actions-gateway.com`, `groupversion_info.go`).
+- [x] Define the five kinds + shared subtypes (`ObjectRef`, `LocalSecretReference`, `PriorityTier`, `TracingConfig`).
+- [x] Field-naming pass — `githubURL`/`githubAppRef`, uniform `…Ref`, plural list fields.
+- [x] CEL/structural validation — name `maxLength` 52; `githubURL` immutable (`oldSelf`); `maxListeners` default 10; `maxWorkers == priorityTiers[last].threshold`; reserved-pod-field rules on `RunnerTemplate`.
+- [x] `selectableFields: spec.gatewayRef.name` on `RunnerSet`.
+- [x] Uniform status/condition contract across all five kinds (`Ready` + `observedGeneration`, `listType=map`, specific messages).
+- [x] `additionalPrinterColumns`, `categories`, short names (`ag`/`rs`/`rt`/`crt`/`ep`).
+- [x] Labels/annotations/finalizers on the `actions-gateway.com/*` domain.
+- [x] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside `v1alpha1`.
+- [x] Reserved-pod-field CEL covers the cheap, scalar pod-level fields (`serviceAccountName`, `host{PID,Network,IPC}`, `automountServiceAccountToken`); the per-container checks (privileged containers, proxy env vars) need an unbounded-array walk that exceeds the CEL cost budget, so they stay for the M2 `RunnerTemplate` webhook.
 
 ### M2 — Data kinds (Q163)
 
