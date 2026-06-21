@@ -117,6 +117,82 @@ var _ = Describe("Manager NetworkPolicy", Ordered, func() {
 		utils.CreateNamespace(metricsNPLabeledNS, map[string]string{"metrics": "enabled"})
 		DeferCleanup(func() { utils.DeleteNamespace(metricsNPLabeledNS) })
 
+		// Gate on NetworkPolicy enforcement being live and ADMITTING the labeled
+		// namespace before the single asserting scrape below. The manager's
+		// allow-metrics-traffic NP is programmed asynchronously by the CNI; under
+		// Calico the default-deny half can already be in effect while the
+		// namespaceSelector allow rule for `metrics: enabled` is still propagating,
+		// so a lone scrape can race ahead of the allow and be dropped — which used
+		// to flake this positive assertion (Q159: seen on main + PR #330). Mirror
+		// the deterministic gate Q155 added for the cross-tenant block
+		// (isolation_test.go), inverted: drive a probe pod in the labeled namespace
+		// that loops a scrape against :8443 and exits 0 only after the connection
+		// SUCCEEDS on several consecutive attempts — a "policy is live and allowing
+		// now" signal. If the allow never settles within the loop budget the probe
+		// exits non-zero and ends Failed, surfacing a real NP regression (the allow
+		// rule never took effect) rather than a propagation flake.
+		const gatePodName = "metrics-allow-gate"
+
+		By("deploying a probe pod in the labeled namespace that polls until the metrics scrape is consistently allowed")
+		gateManifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  restartPolicy: Never
+  containers:
+  - name: probe
+    image: %s
+    imagePullPolicy: IfNotPresent
+    command: ["/bin/sh", "-c"]
+    args:
+    - |
+      set -u
+      allows=0
+      for i in $(seq 1 60); do
+        if curl --silent --show-error --max-time 5 --connect-timeout 5 --output /dev/null %s; then
+          allows=$((allows + 1))
+          echo "attempt $i: scrape allowed ($allows consecutive)"
+          if [ "$allows" -ge 3 ]; then
+            echo "ENFORCED: metrics scrape allowed on $allows consecutive attempts"
+            exit 0
+          fi
+        else
+          allows=0
+          echo "attempt $i: scrape blocked — NetworkPolicy allow not yet propagated"
+        fi
+        sleep 2
+      done
+      echo "TIMEOUT: never observed a sustained allowed scrape"
+      exit 1
+`, gatePodName, metricsNPLabeledNS, curlImage, metricsURL)
+
+		Expect(utils.ApplyManifest(gateManifest)).To(Succeed())
+		DeferCleanup(func() {
+			cmd := exec.Command("kubectl", "delete", "pod", gatePodName,
+				"-n", metricsNPLabeledNS, "--ignore-not-found", "--wait=false")
+			_, _ = utils.Run(cmd)
+		})
+
+		By("waiting for the probe to confirm the allow is live in the dataplane (probe pod Succeeded)")
+		var gatePhase string
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "pod", gatePodName,
+				"-n", metricsNPLabeledNS, "-o", "jsonpath={.status.phase}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
+				"gate pod still in phase %q", out)
+			gatePhase = out
+		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+
+		gateLogs, _ := utils.Run(exec.Command("kubectl", "logs", gatePodName, "-n", metricsNPLabeledNS))
+		Expect(gatePhase).To(Equal("Succeeded"),
+			"probe never observed the labeled-namespace metrics scrape consistently allowed, so the "+
+				"NetworkPolicy allow rule for `metrics: enabled` is not live in the dataplane; got phase=%s logs:\n%s",
+			gatePhase, gateLogs)
+
 		// Positive control: proves the endpoint is reachable when the NP admits
 		// it, so the negative above is attributable to NP enforcement and not a
 		// dead endpoint. A non-000 HTTP code (even 401/403 from the metrics
