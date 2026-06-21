@@ -5,6 +5,7 @@ REPO_ROOT      := $(shell git rev-parse --show-toplevel)
 CONTROLLER_GEN := $(REPO_ROOT)/.build/controller-gen
 SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 LOCALBIN       := $(REPO_ROOT)/.build
+YEAR           ?= $(shell date +%Y)
 
 ENVTEST_K8S_VERSION ?= 1.35
 
@@ -61,13 +62,17 @@ load-test-full: ## Load acceptance: 10 tenants × 100 sessions = 1,000, realisti
 		$(LOAD_THROTTLE) go test -tags load -timeout 10m -run TestAGCLoad -v ./test/load/...
 
 .PHONY: generate
-generate: manifests ## Alias for `manifests`
+generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
 	GOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) crd rbac:roleName=agc-role paths="./..." \
 		output:crd:artifacts:config=config/crd \
 		output:rbac:artifacts:config=config/rbac
+
+.PHONY: deepcopy
+deepcopy: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder markers
+	GOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
 
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(REPO_ROOT) tools

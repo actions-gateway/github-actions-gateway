@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
@@ -306,6 +307,12 @@ func run() error {
 		return err
 	}
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		return err
+	}
+	// Register the v2alpha1 (actions-gateway.com) kinds so they are first-class in
+	// the AGC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
+	// the RunnerSet reconciler that consumes them lands in M3a.
+	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
 		return err
 	}
 
