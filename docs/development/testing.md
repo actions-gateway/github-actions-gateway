@@ -200,6 +200,23 @@ For a faster local inner loop on a 1-worker cluster, `make e2e SUITE=single-node
 
 CI must use the same per-module commands as [Running tests](#running-tests) above — never `go test ./...` from the repo root, which does not work with the Go workspace layout.
 
+### Path-gated workflows: verify the heavy gates actually ran
+
+Most code-exercising workflows are **path-gated** so unrelated PRs stay cheap. The build/lint/test/security gates (`integration-test.yml`, `e2e-test.yml`, `e2e-calico.yml`, `security-scan.yml` — trivy + govulncheck, `manifest-validate.yml`, `license-notices.yml`) trigger on `pull_request` with `paths-ignore: ['**.md','docs/**']`, so a docs-only PR correctly skips them. `unit-test.yml` is the exception — it adds `'!docs/STATUS.md'` so it still runs on a `docs/STATUS.md`-only change.
+
+**The gotcha — a PR can be green/`CLEAN` without ever testing its code.** If a PR is **opened while it only touches `docs/**`** (e.g. a `docs/STATUS.md` Queue row) and code is **added in a later push**, GitHub may leave those path-gated workflows **skipped** — the follow-up `synchronize` does not reliably re-trigger them. A skipped-by-path workflow reports **no check at all** (not a red X), so the PR shows all-green and `mergeStateStatus: CLEAN` even though build, lint, integration, e2e, and the security scans **never ran against the code**. They are not required checks, so nothing blocks the merge. Merging such a PR ships untested code to `main` — a direct cause of broken builds and new flakes. (GitHub's path filtering on `pull_request` is documented to use the full base→head diff, but in practice we have seen it skip; treat it as unreliable. Long-standing upstream report: [actions/runner#2324](https://github.com/actions/runner/issues/2324).)
+
+**Avoid it:** do not open a PR while it is docs-only if code will follow. Put the code in the **first** push (or make the branch tip a code commit), so the path filters see it from the start. A genuinely docs-only PR skipping the heavy gates is correct and fine — the failure mode is *code* riding in on a PR that opened docs-only.
+
+**Verify before declaring a PR review-ready and before merging it:** confirm the gates that exercise the change actually executed on the PR head — green is not enough if a gate was skipped. For any Go / CRD / chart change you should see runs for `build`, `lint`, `integration-test`, `e2e`, `security-scan` (trivy + govulncheck), and `manifest-validate`:
+
+```bash
+gh pr checks <n>                         # are the heavy gates present and passing — or absent?
+gh run list --branch <branch> --limit 30 # cross-check which workflows actually ran on the head commit
+```
+
+**Fix it if they were skipped:** `gh pr close <n> && gh pr reopen <n>`. The `reopened` event re-evaluates the path filters against the full PR diff and triggers the skipped workflows. Re-watch them to completion before treating the PR as tested.
+
 ### The e2e workflows: kindnet and Calico
 
 The cluster/image/test plumbing for the e2e suite lives in one reusable workflow, [`.github/workflows/e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) (`workflow_call`, parameterized by a `kind_cni` input). Two callers drive it so a kind bump, image-tag change, or flake mitigation is made once and both lanes inherit it:

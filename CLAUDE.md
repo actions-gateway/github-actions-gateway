@@ -38,6 +38,8 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
    If any answer is no, finish the work first — don't open a PR to "get feedback" on something you know is incomplete. If the task is too ambiguous to judge review-readiness, say so and ask.
 
+   **Then, once CI has attached, confirm the code-exercising gates actually RAN — green is not enough.** Heavy gates (`integration-test`, `e2e`, `e2e-calico`, `security-scan`, `manifest-validate`) are path-gated; a PR opened docs-only (e.g. a `docs/STATUS.md` row) that later has code pushed can leave them **skipped** while still showing all-green and `mergeStateStatus: CLEAN`, so the code was never tested. Verify with `gh pr checks <n>` / `gh run list --branch <branch>`; if a relevant gate is absent, `gh pr close <n> && gh pr reopen <n>` to force a full-diff re-evaluation, then re-watch. **Never treat a PR as ready/mergeable on green alone if its code wasn't actually tested** — that breaks `main` and breeds flakes. Avoid it entirely by putting code in the PR's first push. Full detail: [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+
 ## Code standards
 
 ### Go

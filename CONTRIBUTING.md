@@ -82,6 +82,8 @@ make check   # gofmt + golangci-lint + STATUS.md lint + unit tests
 
 `make check` runs exactly what `.github/workflows/unit-test.yml` runs, so a green `make check` means a green unit-test workflow — run it locally to avoid burning CI. The slower security gates (`make vulncheck`, `make trivy-scan`) and the integration/e2e tiers are kept separate so this loop stays fast; run them when your change warrants it.
 
+**Before merging, confirm CI actually tested the code.** Most heavy gates (integration, e2e, security scans, manifest-validate) are path-gated; a PR that was **opened as docs-only and later had code pushed** can leave those workflows *skipped* while still showing all-green and mergeable — shipping untested code to `main`. Avoid it by putting code in the PR's first push, and verify with `gh pr checks <n>` / `gh run list` that the relevant gates ran (close+reopen the PR to force them if they were skipped). See [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+
 ## Linting
 
 `make lint` runs `gofmt -s` and `golangci-lint` across every workspace module. `golangci-lint` runs `govet` internally (enabled in [`.golangci.yml`](.golangci.yml)), so it is not invoked separately. `golangci-lint` is vendored in `tools/` and built into `.build/golangci-lint`. CI runs the same gates in `.github/workflows/unit-test.yml`.
