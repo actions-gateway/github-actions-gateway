@@ -215,6 +215,21 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   served by the proxy. We mount only tls.crt (not tls.key) and pass it
 		//   to curl via --proxy-cacert so the CONNECT handshake to the proxy is
 		//   TLS-verified end-to-end.
+		// 403-tolerance (Q160):
+		//   We deliberately do NOT pass curl --fail-with-body. The property under
+		//   test is "egress traversed the proxy and reached GitHub", not "GitHub
+		//   authorized the request". api.github.com rate-limits unauthenticated
+		//   requests from the shared CI runner IP with HTTP 403 (observed PR #336
+		//   run 27889017317) — a transient external-reputation flake unrelated to
+		//   the proxy path. Without --fail-with-body, an HTTP 403 (or 200) is a
+		//   *successful* curl transfer (exit 0): the body downloaded only because
+		//   the CONNECT tunnel through the proxy was established and GitHub
+		//   answered. So a 403 still proves egress, and the pod ends Succeeded. A
+		//   real proxy/NP/TLS regression fails *tunnel establishment* (curl exits
+		//   56 tunnel/recv, 60 wrong SAN, 28 NP-drop timeout) → pod Failed → test
+		//   fails; the egress assertion is preserved, not weakened. The HTTP code
+		//   itself is asserted as 200-or-403 below, so a persistent non-{200,403}
+		//   response (e.g. a stuck 5xx after retries) still fails the test.
 		// Retry (Q139):
 		//   This CONNECT can fail transiently in two distinct ways, and the retry
 		//   must cover BOTH:
@@ -223,8 +238,9 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//       returns a transient 504 — observed on main run 27661005022 (fast
 		//       ~8s fail, HTTP_CODE=504), corroborated in the same run by the GMC
 		//       IPRangeReconciler's independent direct /meta fetch also getting 504.
-		//       curl exits 22 (HTTP error from the target URL); plain --retry
-		//       already retries this.
+		//       HTTP 5xx is in curl's transient-retry set (408/429/500/502/503/504),
+		//       independent of --fail, so plain --retry already retries this; the
+		//       403 rate-limit is NOT transient and is intentionally not retried.
 		//   (b) Upstream *dial* failure at CONNECT-establishment time. The proxy
 		//       emits 502 (never 504; see cmd/proxy: TestProxy_DialFailure) only
 		//       when its net.DialTimeout to api.github.com:443 fails — a transient
@@ -262,7 +278,7 @@ spec:
     args:
     - |
       set -eu
-      curl --silent --show-error --fail-with-body \
+      curl --silent --show-error \
            --max-time 30 \
            --retry 5 --retry-delay 2 --retry-max-time 60 --retry-all-errors \
            --proxy %s \
@@ -311,12 +327,20 @@ spec:
 		logs, logsErr := utils.Run(logsCmd)
 		Expect(logsErr).NotTo(HaveOccurred(), "fetch curl pod logs")
 
+		// Pod Succeeded IS the proxy-egress assertion: curl exits 0 only after the
+		// CONNECT tunnel is established through the proxy (proxy up, egress NP
+		// permits the GitHub ipBlock, --proxy-cacert verifies the proxy TLS SAN)
+		// AND GitHub returns an HTTP response. A real proxy/NP/TLS regression fails
+		// tunnel establishment, curl exits non-zero, and the pod ends Failed here.
 		Expect(finalPhase).To(Equal("Succeeded"),
 			"curl pod ended in phase %s; logs:\n%s", finalPhase, logs)
-		Expect(logs).To(ContainSubstring("HTTP_CODE=200"),
-			"expected HTTP 200 from api.github.com via proxy; logs:\n%s", logs)
+		// Accept 200 or a rate-limit 403 (see "403-tolerance (Q160)" above): both
+		// prove the request reached GitHub through the tunnel. The HTTP status code
+		// is GitHub's authorization decision, not the egress property under test.
+		Expect(logs).To(MatchRegexp(`HTTP_CODE=(200|403)`),
+			"expected HTTP 200 (or rate-limit 403) from api.github.com via proxy; logs:\n%s", logs)
 		Expect(logs).To(MatchRegexp(`BODY_BYTES=([1-9][0-9]*)`),
-			"expected non-empty response body from api.github.com/zen; logs:\n%s", logs)
+			"expected non-empty response body from api.github.com via proxy; logs:\n%s", logs)
 	})
 
 	// E2E_GMC_TenantProvisioning_WorkloadNPSpec validates the *spec* of the
