@@ -42,6 +42,24 @@ See `PrivilegedProfileLabel` / `PrivilegedProfileAllowed` in
 [`cmd/gmc/api/v1alpha1/actionsgateway_types.go`](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)
 and [§5.3 of the security design](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 
+**v2 operator-set label — namespace security profile.** v2 relocates the Pod
+Security Admission level off the per-gateway `ActionsGateway.spec.securityProfile`
+(v1) onto the **tenant namespace** (Q175 / appendix-h §H.16 #7): the operator sets
+
+```yaml
+metadata:
+  labels:
+    actions-gateway.com/security-profile: restricted   # baseline | restricted | privileged
+```
+
+on the namespace, and the GMC `NamespacePSAReconciler` stamps the
+`pod-security.kubernetes.io/*` labels from it. The value follows the enum-keyword
+convention above (not a boolean), and the `gmc-namespace-security-profile-guard`
+ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a
+`privileged` selection without the `actions-gateway.com/privileged-profile=allowed`
+eligibility label. See `SecurityProfileLabel` in
+[`cmd/gmc/api/v2alpha1/shared_types.go`](../../cmd/gmc/api/v2alpha1/shared_types.go).
+
 ### Pre-existing `"true"` values are grandfathered
 
 Two shipped keys predate this convention and still use `"true"`:

@@ -151,13 +151,55 @@ a milestone is done when every box is checked and its exit criterion holds.
 - [x] envtest for both kinds (reconcile + owner-refs + defaulting + status; webhook accept/reject).
 - Metrics-mTLS listener + ServiceMonitor on the standalone proxy are **deferred to M3a** (the metrics CA is jointly owned with the AGC). M2 stamps the identity label so the metric series carry the proxy identity once the M3a scrape is wired; the proxy boots fine without the metrics listener.
 
-### M3a — Single-gateway parity (Q164)
+### M3a — Single-gateway parity (Q164) + securityProfile relocation (Q175)
 
-- [ ] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/Role, namespace PSA labels, credential mount, NetworkPolicy; one gateway/ns.
-- [ ] `RunnerSet` reconciler (AGC): port `RunnerGroup` behavior; resolve `templateRef`/`proxyRef` via watch + enqueue; `TemplateNotFound`/`ProxyNotFound` conditions; fail-closed wiring.
+- [x] **securityProfile → namespace (Q175, §H.16 #7).** `SecurityProfile` removed from
+  the v2 `ActionsGatewaySpec`; the namespace `actions-gateway.com/security-profile`
+  label is the new selector. `NamespacePSAReconciler` (GMC) stamps the six PSA labels
+  from it; the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy guards
+  enum / no-silent-downgrade / privileged-eligibility (none weaker than the v1 webhook,
+  now a VAP because the checks no longer cross objects). The `namespace-psa-guard` and
+  `tenant-resource-guard` VAPs dual-read the v1/v2 tenant markers so the GMC can stamp
+  and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.
+- [ ] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount,
+  AGC + workload NetworkPolicy, metrics certs; proxy egress wired from
+  `defaultProxyRef` → resolved `EgressProxy`; one gateway/ns. (PSA stamping is now the
+  `NamespacePSAReconciler`'s job; proxy pool / HPA / PDB are the `EgressProxy`
+  reconciler's — both removed from the gateway's responsibility vs. v1.)
+- [ ] `RunnerSet` reconciler (AGC): resolve `gatewayRef`/`templateRef`/`proxyRef` via
+  watch + enqueue; `GatewayNotFound`/`TemplateNotFound`/`ProxyNotFound` conditions +
+  `observedGeneration`; fail-closed (no worker wiring until refs resolve). Driving the
+  live worker-provisioning runtime requires a **provisioner owner-ref seam**: the
+  `provisioner`/`listener`/`multiplexer` stack is pervasively typed to
+  `*v1alpha1.RunnerGroup`, and worker pods/Secrets carry an OwnerReference to it — a
+  synthesized in-memory RunnerGroup cannot be used (its dangling owner-ref would make the
+  apiserver immediately GC every worker pod), so the provisioner must be refactored to
+  own-ref the real `RunnerSet`. Tracked as the runtime half of M3a.
 - [ ] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
-- [ ] Per-field/-condition **parity checklist** vs. `RunnerGroup` (gates exit).
 - [ ] envtest + a kind e2e parity run (job → worker pod → proxied egress).
+
+#### Per-field / -condition parity checklist (gates M3a exit)
+
+The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and where
+each lands in v2. **✓** = implemented + tested this milestone; **▶** = in this PR's
+reconcilers; **◻** = remaining M3a slice (runtime half).
+
+| v1 behavior | v2 home | Status |
+|---|---|---|
+| `securityProfile` → namespace PSA enforce/warn/audit labels | `NamespacePSAReconciler` ← `security-profile` label | ✓ |
+| PSA downgrade protection (`allow-profile-downgrade`) | `namespace-security-profile-guard` VAP | ✓ |
+| `privileged` eligibility (`privileged-profile=allowed`) | same VAP | ✓ |
+| GMC confinement to tenant namespaces (PSA + provisioning) | dual-marker `namespace-psa-guard` / `tenant-resource-guard` VAPs | ✓ |
+| AGC Deployment / SA / RoleBinding (control plane) | `ActionsGateway` reconciler (GMC) | ▶ |
+| GitHub App credential mount + `CredentialUnavailable` | `ActionsGateway` reconciler | ▶ |
+| AGC + workload NetworkPolicy (egress lockdown) | `ActionsGateway` reconciler | ▶ |
+| metrics mTLS certs (jointly owned w/ AGC) | `ActionsGateway` reconciler | ▶ |
+| proxy egress wiring (`HTTP(S)_PROXY` + CA mount) | `ActionsGateway` ← `defaultProxyRef` → `EgressProxy` | ▶ |
+| `Ready` + `observedGeneration` uniform contract | both reconcilers | ▶ |
+| `templateRef`/`proxyRef`/`gatewayRef` resolution + NotFound conditions | `RunnerSet` reconciler (AGC) | ▶ |
+| job acquired → worker pod (provisioner/listener/multiplexer) | `RunnerSet` reconciler + provisioner owner-ref seam | ◻ |
+| reaper / unschedulable / quota lifecycle tunables | provisioner (RunnerSet-typed) | ◻ |
+| proxied egress proven end-to-end (job → pod → proxy → GitHub) | kind e2e | ◻ (defer to M3b per task) |
 
 ### M3b — Multi-gateway (Q167)
 

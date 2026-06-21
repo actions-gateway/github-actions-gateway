@@ -878,6 +878,32 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    rather than building per-gateway logic that M3b would rip out. Migration is
    unaffected (one v1 namespace → one gateway → one profile).
 
+   **Implemented mechanism (M3a, Q175).** The namespace-side selector is the label
+   `actions-gateway.com/security-profile: baseline|restricted|privileged`
+   (`SecurityProfileLabel`); absent on a managed tenant namespace ⇒ `baseline` (secure
+   default). Two GMC-side pieces realize the guarantee, and crucially the relocation
+   makes the guard *simpler* than v1, not just relocated:
+   - **`NamespacePSAReconciler`** (GMC) watches managed v2 tenant namespaces and stamps
+     the six `pod-security.kubernetes.io/*` labels from the profile label via
+     Server-Side Apply (the v1 `applyNamespacePSA` stamping logic, now keyed once per
+     namespace and decoupled from any gateway's lifecycle). The PSA labels exist as
+     soon as the namespace is a managed tenant, with or without a gateway.
+   - **`gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy** reproduces the
+     v1 webhook's three guarantees — enum, no-silent-downgrade (requires the
+     `allow-profile-downgrade` annotation), and `privileged` eligibility (requires the
+     platform `privileged-profile=allowed` label) — *none weaker than v1*. v1 needed a
+     Go validating **webhook** because the downgrade/eligibility checks read a *different*
+     object (the namespace) than the one admitted (the `ActionsGateway`). Now that the
+     profile lives **on the namespace**, both checks act on the same object the admission
+     is about, so they collapse into a **VAP** — in-process, no webhook-pod availability
+     dependency, fail-closed (`failurePolicy: Fail`, `validationActions: [Deny]`), and
+     consistent with the existing `namespace-psa-guard`/`tenant-resource-guard` pattern.
+     The downgrade check is skipped on CREATE (no prior state), so a namespace may be
+     created directly at any eligible profile. Both guard policies, plus the two existing
+     ones, dual-read the v1 (`actions-gateway.github.com/tenant=true`) and v2
+     (`actions-gateway.com/tenant=managed`) markers during coexistence ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)),
+     so the GMC can stamp PSA and provision in v2 tenant namespaces.
+
    **Fallback — only if a concrete need for co-located *differing* profiles
    emerges:** keep `securityProfile` per-gateway and resolve the namespace label by
    **most-restrictive-wins** — runtime composition (max `securityProfileRank` across
