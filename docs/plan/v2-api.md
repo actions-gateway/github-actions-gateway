@@ -172,6 +172,7 @@ a milestone is done when every box is checked and its exit criterion holds.
 - [ ] Operator migration guide; `v1alpha1` deprecation notice + named removal release.
 - [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation.
 - [ ] Coexistence test (v1 keeps working while v2 served) + migration golden tests.
+- [ ] **Behavior-preservation acceptance checks** ([§H.17](../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants)): proxied→proxied (never silent `proxyMode: Direct`); `maxListeners` default decision encoded; emitted objects pass v2 CEL under envtest; K identical templates → one `RunnerTemplate`; standalone-vs-inline group precedence defined. Validatable pre-M5 as a fixtures→asserted-output mapping that fuzzes the M1 schema for completeness/ambiguity.
 
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
 
