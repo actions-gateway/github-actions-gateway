@@ -168,13 +168,23 @@ a milestone is done when every box is checked and its exit criterion holds.
   reconciler's — both removed from the gateway's responsibility vs. v1.)
 - [ ] `RunnerSet` reconciler (AGC): resolve `gatewayRef`/`templateRef`/`proxyRef` via
   watch + enqueue; `GatewayNotFound`/`TemplateNotFound`/`ProxyNotFound` conditions +
-  `observedGeneration`; fail-closed (no worker wiring until refs resolve). Driving the
-  live worker-provisioning runtime requires a **provisioner owner-ref seam**: the
-  `provisioner`/`listener`/`multiplexer` stack is pervasively typed to
-  `*v1alpha1.RunnerGroup`, and worker pods/Secrets carry an OwnerReference to it — a
-  synthesized in-memory RunnerGroup cannot be used (its dangling owner-ref would make the
-  apiserver immediately GC every worker pod), so the provisioner must be refactored to
-  own-ref the real `RunnerSet`. Tracked as the runtime half of M3a.
+  `observedGeneration`; fail-closed (no worker wiring until refs resolve). Two obstacles
+  surfaced during M3a that reshape the AGC half and must be resolved first:
+  - **Module dependency cycle.** `gatewayRef` resolves to a GMC-group `ActionsGateway`
+    and `proxyRef` to a GMC-group `EgressProxy`, so the AGC must read those kinds — but
+    the **GMC module already depends on the AGC module** (`cmd/gmc/go.mod` requires
+    `…/agc` to build `RunnerSet` CRs), and importing the GMC types into the AGC closes a
+    module cycle. Resolve by either (a) extracting the shared v2 kinds into a neutral
+    `api/` module both import, or (b) the AGC resolving these refs via the
+    dynamic/unstructured client (existence + a few fields only — no type import). Option
+    (b) is the lighter touch and fits "resolution is existence-checking, not full typed
+    reconciliation"; decide and record before building the reconciler.
+  - **Provisioner owner-ref seam.** The `provisioner`/`listener`/`multiplexer` stack is
+    pervasively typed to `*v1alpha1.RunnerGroup`, and worker pods/Secrets carry an
+    OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its
+    dangling owner-ref would make the apiserver immediately GC every worker pod), so the
+    provisioner must be refactored to own-ref the real `RunnerSet`. Tracked as the
+    runtime half of M3a.
 - [ ] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
 - [ ] envtest + a kind e2e parity run (job → worker pod → proxied egress).
 
