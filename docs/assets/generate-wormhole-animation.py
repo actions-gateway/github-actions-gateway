@@ -4,7 +4,7 @@
 The faceted gateway ring (a true-3D, ridge-cross-section take on the mark in
 generate-logomark.py) sits at a 3/4 angle in a wide social-card frame. One loop:
 
-    closed metallic iris -> iris opens -> wormhole ignites -> a water/plasma
+    closed crystalline spiral iris opens -> wormhole ignites -> a water/plasma
     "kawoosh" erupts along the gate normal, expands and retracts -> the event
     horizon settles and fades -> iris closes -> back to the start (seamless).
 
@@ -261,44 +261,50 @@ def ring_svg(ang, glow):
         for _depth, path, col in faces)
 
 
-# ---- metallic iris diaphragm -----------------------------------------------
-IRIS_BLADES = 10                  # matches the gate's 10-fold symmetry
-IRIS_ROUT = 30.0                  # outer radius (covers the star), gate-plane
-IRIS_AMAX = 27.0                  # central opening radius when fully open
-
-
-def _circle_path(cx, cy, r):
-    """A full circle as an SVG path (two arcs), so it can join an even-odd path."""
-    return ("M%.2f %.2f a%.2f %.2f 0 1 0 %.2f 0 a%.2f %.2f 0 1 0 %.2f 0 Z"
-            % (cx - r, cy, r, r, 2 * r, r, r, -2 * r))
+# ---- crystalline spiral iris diaphragm -------------------------------------
+# Stargate-style overlapping spiral blades, restyled as our faceted blue-steel
+# shards (not smooth grey trinium): they wind to a spiky pinwheel when shut.
+IRIS_BLADES = 20                  # = the inner star's 20 vertices; a fine spiral
+IRIS_ROUT = 30.0                  # rim radius (covers the star), gate-plane
+IRIS_WIND = math.radians(92)      # angular sweep of each blade, rim -> tip
+IRIS_TIPMIN = 0.9                 # tip radius when shut (small spiky centre)
+IRIS_STEEL = (104, 124, 156)      # base blue-steel
+_IRIS_LA = math.atan2(LIGHT[1], LIGHT[0])   # light direction (top-left)
 
 
 def iris_svg(ang, o):
-    """Metallic iris filling the gate aperture: o=0 shut, o=1 fully open. Drawn
-    in the gate plane (clipped to the hole) so it tilts with the ring; blades
-    spiral as it closes."""
+    """Stylised crystalline spiral iris filling the gate aperture (o=0 shut,
+    o=1 open): overlapping blue-steel shards winding to a spiky pinwheel centre.
+    Drawn in the gate plane (clipped to the hole) so it tilts and dials."""
     if o >= 0.985:
         return ""
-    a = o * IRIS_AMAX
+    a = IRIS_TIPMIN + o * (IRIS_ROUT - IRIS_TIPMIN)   # tip radius (centre -> rim)
+    step = 2 * math.pi / IRIS_BLADES
+    span = step * 2.3                                  # rim width -> blades overlap
     out = ['<g clip-path="url(#hole)"><g transform="%s">' % GATE_MATRIX]
-    # metal body: outer disc minus the central opening (even-odd ring)
-    d = _circle_path(CX, CY, IRIS_ROUT)
-    if a > 0.6:
-        d += _circle_path(CX, CY, a)
-    out.append('<path fill-rule="evenodd" fill="url(#iris)" d="%s"/>' % d)
-    # blade seams, spiralling in as the iris closes (dial with the gate ring)
-    tw = (1.0 - o) * 0.36
     for k in range(IRIS_BLADES):
-        ak = -math.pi / 2 + 2 * math.pi * k / IRIS_BLADES + ang
-        ix, iy = CX + a * math.cos(ak + tw), CY + a * math.sin(ak + tw)
-        ox, oy = CX + IRIS_ROUT * math.cos(ak), CY + IRIS_ROUT * math.sin(ak)
-        out.append('<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" '
-                   'stroke="#222a38" stroke-width="0.7"/>' % (ix, iy, ox, oy))
-    # bright machined edge around the opening
-    if a > 0.6:
-        out.append('<circle cx="%.2f" cy="%.2f" r="%.2f" fill="none" '
-                   'stroke="#b4c2d6" stroke-width="0.5" opacity="0.7"/>'
-                   % (CX, CY, a))
+        b = -math.pi / 2 + k * step + ang
+        r1 = (CX + IRIS_ROUT * math.cos(b), CY + IRIS_ROUT * math.sin(b))
+        r2 = (CX + IRIS_ROUT * math.cos(b + span),
+              CY + IRIS_ROUT * math.sin(b + span))
+        t = (CX + a * math.cos(b + IRIS_WIND), CY + a * math.sin(b + IRIS_WIND))
+        # bezier controls bow both edges into the spiral
+        c1 = (CX + IRIS_ROUT * 0.50 * math.cos(b + IRIS_WIND * 0.42),
+              CY + IRIS_ROUT * 0.50 * math.sin(b + IRIS_WIND * 0.42))
+        c2 = (CX + IRIS_ROUT * 0.62 * math.cos(b + span * 0.75 + IRIS_WIND * 0.1),
+              CY + IRIS_ROUT * 0.62 * math.sin(b + span * 0.75 + IRIS_WIND * 0.1))
+        d = ("M%.2f %.2f Q%.2f %.2f %.2f %.2f Q%.2f %.2f %.2f %.2f L%.2f %.2f Z"
+             % (r1[0], r1[1], c1[0], c1[1], t[0], t[1],
+                c2[0], c2[1], r2[0], r2[1], r1[0], r1[1]))
+        # crystalline blue-steel, lit from the top-left like the ring facets
+        f = 0.5 + 0.6 * max(0.0, math.cos(b - _IRIS_LA))
+        out.append('<path d="%s" fill="%s" stroke="#161d29" stroke-width="0.35" '
+                   'stroke-linejoin="round"/>'
+                   % (d, _hex(tuple(c * f for c in IRIS_STEEL))))
+        # bright lit edge along the leading (spiral) curve -> crystalline sheen
+        out.append('<path d="M%.2f %.2f Q%.2f %.2f %.2f %.2f" fill="none" '
+                   'stroke="#d4e3f4" stroke-width="0.45" opacity="0.55"/>'
+                   % (r1[0], r1[1], c1[0], c1[1], t[0], t[1]))
     out.append('</g></g>')
     return "\n".join(out)
 
@@ -527,7 +533,7 @@ def frame_svg(i):
                  'opacity="%.2f"/>' % (CX, CY, 12 * e["eh"], 0.5 * e["eh"]))
         p.append('</g></g>')
 
-    # metallic iris over the aperture (covers the wormhole when shut)
+    # crystalline spiral iris over the aperture (covers the wormhole when shut)
     p.append(iris_svg(ang, e["iris"]))
 
     # ignition shock ring (a gate-plane circle -> tilts with the ring)

@@ -96,7 +96,7 @@ Like the static mark it is **generated, not hand-authored**:
 `generate-wormhole-animation.py` emits the per-frame SVGs and
 `render-wormhole-animation.sh` rasters and packs them.
 
-One ~2.6 s loop: a closed metallic iris opens, the wormhole ignites and erupts a
+One ~2.6 s loop: a closed crystalline spiral iris opens, the wormhole ignites and erupts a
 water/plasma "kawoosh" along the gate's normal, the plume expands and retracts
 into a shimmering event horizon, and the iris closes again — seamless at the loop
 boundary. The ring geometry, palette, timing, and iris are tunable constants at
@@ -110,7 +110,7 @@ the top of the Python file.
 
 | Artefact | Committed? | Format | Used for |
 | --- | --- | --- | --- |
-| `wormhole-animation.webp` | **yes** (~320 KB) | 480 px, opaque, looping | README footer + the docs **404** page (`overrides/404.html`) |
+| `wormhole-animation.webp` | **yes** (~325 KB) | 480 px, opaque, looping | README footer + the docs **404** page (`overrides/404.html`) |
 | `wormhole-animation.mp4` | no — written to `OUTDIR` | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
 
 The committed WebP is **opaque** (it carries the dark navy backdrop) on purpose:
