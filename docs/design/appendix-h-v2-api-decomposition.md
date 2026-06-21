@@ -122,10 +122,10 @@ from pod shape, rather than introducing a novel structure.
 // ActionsGateway — GitHub identity + AGC control plane only.
 // Now permitted 1..N per namespace.
 type ActionsGatewaySpec struct {
-    GitHubAppRef    SecretReference // unchanged
-    GitHubURL       string          // unchanged
-    SecurityProfile string          // unchanged; still PSA-labels the namespace
-    Tracing         TracingConfig   // unchanged
+    GitHubAppRef    LocalSecretReference `json:"githubAppRef"` // was SecretReference; namespace field dropped
+    GitHubURL       string               `json:"githubURL"`    // immutable (CEL oldSelf)
+    SecurityProfile string               `json:"securityProfile"` // unchanged; still PSA-labels the namespace
+    Tracing         TracingConfig         `json:"tracing"`        // unchanged
 
     // DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
     // inherited by RunnerSets that do not set their own proxyRef. Optional:
@@ -190,8 +190,8 @@ apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
-  gitHubAppRef: { name: acme-github-app }   # LocalSecretReference, same namespace
-  gitHubURL: https://github.com/acme
+  githubAppRef: { name: acme-github-app }   # LocalSecretReference, same namespace
+  githubURL: https://github.com/acme
   securityProfile: baseline
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -282,11 +282,10 @@ Service-name path is tightest:
 JSON field names are part of the API contract and become permanent at `v2`. Do
 the naming pass during M1 while names are still cheap to change under `v2alpha1`:
 
-- **Acronym/brand casing must be consistent.** v1 carries `gitHubURL` /
-  `gitHubAppRef` (brand `gitHub` + initialism `URL`). Pick one rule — k8s leans
-  toward lowercase initialisms inside a camelCase name (`gitHubURL` → `githubURL`,
-  `gitHubAppRef` → `githubAppRef`) — apply it across every field, and freeze it
-  deliberately rather than inheriting v1's casing by accident.
+- **Acronym/brand casing — decided.** `github` is one lowercased word; trailing
+  initialisms stay uppercase: **`githubURL`, `githubAppRef`** (k8s-consistent with
+  `clusterIP`, `targetCPUUtilizationPercentage`). v1's `gitHubURL` / `gitHubAppRef`
+  casing is *not* carried over. Apply the rule to every field and freeze it.
 - **References are uniform.** `gatewayRef` / `templateRef` / `proxyRef` /
   `githubAppRef` share one `…Ref` suffix and the `ObjectRef` /
   `LocalSecretReference` shapes.
@@ -667,9 +666,9 @@ only the ones that fix a problem we have today.
 - **Drop the `SecretReference.namespace` footgun.** It is reserved-but-validated-
   empty and reads like a cross-namespace reference that does not exist. Replace
   with a name-only `LocalSecretReference`. Removing a field is break-only.
-- **Per-field immutability** via CEL `XValidation` (`oldSelf`): **`gitHubURL`
+- **Per-field immutability** via CEL `XValidation` (`oldSelf`): **`githubURL`
   immutable** — rebinding a running gateway's GitHub org is a footgun;
-  **`gitHubAppRef.name` mutable** — it is the credential-rotation path. Adding
+  **`githubAppRef.name` mutable** — it is the credential-rotation path. Adding
   immutability later is itself breaking, so it is fixed at v2.
 - **API group rename → `actions-gateway.com`.** The group is
   `actions-gateway.github.com`, which suffixes a domain the project does not
@@ -700,7 +699,7 @@ only the ones that fix a problem we have today.
 
 - **Webhook → CEL migration.** v2 targets a newer k8s floor, so checks that are
   webhook-only today *because* CEL could not express them on k8s ≤1.30 (singleton,
-  GitHub-URL structure, `gitHubAppRef.namespace` empty, cross-field rules) can
+  GitHub-URL structure, cross-field rules) can
   become structural/CEL. Every check moved out of the fail-closed validating
   webhook is one fewer thing whose outage blocks all admission — an availability
   and operability win, best taken during the schema rewrite.
@@ -714,7 +713,7 @@ only the ones that fix a problem we have today.
   field for it now.
 - **Credentials as a discriminated union.** OIDC / workload-identity federation
   is the foreseeable successor to long-lived GitHub App keys, but a bare
-  `gitHubAppRef` today does not block it: a future `workloadIdentityRef` sibling
+  `githubAppRef` today does not block it: a future `workloadIdentityRef` sibling
   field (optional, with a CEL "exactly one of") is *additive*, not breaking. So
   do not introduce a tagged union now — keep the single field.
 
@@ -776,8 +775,8 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
 9. **API group rename** (§H.15) — ✅ **Yes, rename to `actions-gateway.com`.**
    The project owns the domain; the change rides the v2 cutover and its migration
    tool. Break-only, so it happens here or never.
-10. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
-    `gitHubAppRef.name` mutable.**
+10. **Per-field immutability** (§H.15) — ✅ **`githubURL` immutable,
+    `githubAppRef.name` mutable.**
 11. **`maxListeners` default** (§H.15) — ✅ **`10`** (was `1` in code). Verified
     against the AGC listener source: `maxListeners` is a concurrency ceiling with
     a baseline-of-1 + demand-spawn + idle-shutdown, so a higher default is free

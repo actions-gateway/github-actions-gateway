@@ -44,7 +44,7 @@ one-shot migration tool last. The group rename folds in for free: `v2alpha1`
 All settled in [§H.16](../design/appendix-h-v2-api-decomposition.md#h16-open-questions--sign-off-needed):
 
 - **Admin policy → keep controller flags** (singleton/class deferred behind triggers, [§H.14](../design/appendix-h-v2-api-decomposition.md#h14-admin-policy-layer--deferred-until-tiering-is-real)).
-- **API group → `actions-gateway.com`**; **`gitHubURL` immutable**, `gitHubAppRef.name` mutable; **`maxListeners` default → `10`**; drop `SecretReference.namespace`.
+- **API group → `actions-gateway.com`**; **`githubURL` immutable**, `githubAppRef.name` mutable; **`maxListeners` default → `10`**; drop `SecretReference.namespace`. Field casing: `github` lowercased, initialisms uppercase (`githubURL`, `githubAppRef`).
 - **Cross-namespace proxy CA → ConfigMap, not secret** (trust-manager pattern).
 - **Sharing → inline `allowedNamespaces` only** for v2; `ReferenceGrant` additive later; consent always provider-side.
 - **Deletion → degrade-not-block, no finalizer**; `referencedBy` from the watch.
@@ -194,7 +194,7 @@ Tracked in [STATUS.md Deferred](../STATUS.md#deferred).
 
 - **Admin policy singleton/class** — keep flags; promote on the documented triggers ([§H.14](../design/appendix-h-v2-api-decomposition.md#h14-admin-policy-layer--deferred-until-tiering-is-real)).
 - **Worker-image registry allowlist** — lands with the admin policy layer, not as a standalone tenant field ([§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)).
-- **Credentials discriminated union** — a future `workloadIdentityRef` sibling field is additive; keep the single `gitHubAppRef` now.
+- **Credentials discriminated union** — a future `workloadIdentityRef` sibling field is additive; keep the single `githubAppRef` now.
 - **Webhook → CEL migration** — opportunistic during M1's schema rewrite, not a gate.
 
 ## Testing
