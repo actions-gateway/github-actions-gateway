@@ -17,6 +17,7 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
@@ -65,6 +66,7 @@ func TestMain(m *testing.M) {
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = agcv1alpha1.AddToScheme(testScheme)
 	_ = gmcv1alpha1.AddToScheme(testScheme)
+	_ = gmcv2alpha1.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{

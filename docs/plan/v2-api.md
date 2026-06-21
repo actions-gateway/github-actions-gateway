@@ -132,16 +132,16 @@ a milestone is done when every box is checked and its exit criterion holds.
 
 ### M1 — API foundation (Q149)
 
-- [ ] Scaffold `cmd/agc/api/v2alpha1/` and `cmd/gmc/api/v2alpha1/` (group `actions-gateway.com`, `groupversion_info.go`).
-- [ ] Define the five kinds + shared subtypes (`ObjectRef`, `LocalSecretReference`, `PriorityTier`, `TracingConfig`).
-- [ ] Field-naming pass — `githubURL`/`githubAppRef`, uniform `…Ref`, plural list fields.
-- [ ] CEL/structural validation — name `maxLength` 52; `githubURL` immutable (`oldSelf`); `maxListeners` default 10; `maxWorkers == priorityTiers[last].threshold`; reserved-pod-field rules on `RunnerTemplate`.
-- [ ] `selectableFields: spec.gatewayRef.name` on `RunnerSet`.
-- [ ] Uniform status/condition contract across all five kinds (`Ready` + `observedGeneration`, `listType=map`, specific messages).
-- [ ] `additionalPrinterColumns`, `categories`, short names (`ag`/`rs`/`rt`/`crt`/`ep`).
-- [ ] Labels/annotations/finalizers on the `actions-gateway.com/*` domain.
-- [ ] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside `v1alpha1`.
-- [ ] (Opportunistic) move webhook-only checks to CEL where the k8s floor allows.
+- [x] Scaffold `cmd/agc/api/v2alpha1/` and `cmd/gmc/api/v2alpha1/` (group `actions-gateway.com`, `groupversion_info.go`).
+- [x] Define the five kinds + shared subtypes (`ObjectRef`, `LocalSecretReference`, `PriorityTier`, `TracingConfig`).
+- [x] Field-naming pass — `githubURL`/`githubAppRef`, uniform `…Ref`, plural list fields.
+- [x] CEL/structural validation — name `maxLength` 52; `githubURL` immutable (`oldSelf`); `maxListeners` default 10; `maxWorkers == priorityTiers[last].threshold`; reserved-pod-field rules on `RunnerTemplate`.
+- [x] `selectableFields: spec.gatewayRef.name` on `RunnerSet`.
+- [x] Uniform status/condition contract across all five kinds (`Ready` + `observedGeneration`, `listType=map`, specific messages).
+- [x] `additionalPrinterColumns`, `categories`, short names (`ag`/`rs`/`rt`/`crt`/`ep`).
+- [x] Labels/annotations/finalizers on the `actions-gateway.com/*` domain.
+- [x] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside `v1alpha1`.
+- [x] Reserved-pod-field CEL covers the cheap, scalar pod-level fields (`serviceAccountName`, `host{PID,Network,IPC}`, `automountServiceAccountToken`); the per-container checks (privileged containers, proxy env vars) need an unbounded-array walk that exceeds the CEL cost budget, so they stay for the M2 `RunnerTemplate` webhook.
 
 ### M2 — Data kinds (Q163)
 
@@ -161,7 +161,14 @@ a milestone is done when every box is checked and its exit criterion holds.
 ### M3b — Multi-gateway (Q167)
 
 - [ ] Per-gateway derived naming across every GMC-created resource (52-char cap).
-- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side).
+- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side). **Requires
+  k8s ≥ 1.31** — CRD field selectors (KEP-4358) are alpha-off in 1.30, where a query
+  by `spec.gatewayRef.name` fails `field label not supported`. The selectable-field
+  *declaration* is harmless on 1.30 (M1 ships it), but the runtime scoping and its
+  test coverage need 1.31+. The integration-test CI tier currently pins envtest
+  **1.30.x** (`.github/workflows/integration-test.yml`); bump it to ≥ 1.31 as part of
+  M3b, or the field-selector path cannot be exercised in CI (M1's
+  `TestV2_RunnerSet_GatewayRefSelectableField` skips below 1.31).
 - [ ] Per-gateway ownership refs for clean cascade GC.
 - [ ] envtest + kind e2e: two gateways with their own runner sets concurrent in one namespace.
 
@@ -175,6 +182,19 @@ a milestone is done when every box is checked and its exit criterion holds.
 - [ ] **Behavior-preservation acceptance checks** ([§H.17](../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants)): proxied→proxied (never silent `proxyMode: Direct`); `maxListeners` default decision encoded; emitted objects pass v2 CEL under envtest; K identical templates → one `RunnerTemplate`; standalone-vs-inline group precedence defined. Validatable pre-M5 as a fixtures→asserted-output mapping that fuzzes the M1 schema for completeness/ambiguity.
 
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
+
+**Why `v2alpha1` and not `v1alpha1` in the new group?** Nothing technical forces
+the version bump: a CRD is identified by **group + kind**, and the version is
+orthogonal, so `actionsgateways.actions-gateway.com` would coexist with
+`actionsgateways.actions-gateway.github.com` just as cleanly at `v1alpha1`. The
+breaking-ness comes entirely from the group rename and the decomposition (the
+fan-out the migration tool handles), not from the version number. `v2alpha1` is a
+**deliberate communication choice**: this whole effort is named "v2" throughout the
+docs, the migration is "v1→v2", and the graduation ladder targets `v2` — so serving
+it as `v1alpha1` would leave the API surface contradicting how everyone refers to
+it. It also keeps the in-module Go layout unambiguous (`api/v1alpha1` +
+`api/v2alpha1`, rather than two `api/v1alpha1` packages). The minor cost — a fresh
+group whose first GA is `v2`, skipping `v1` — is accepted. (Confirmed 2026-06-21.)
 
 The milestones above ship `v2alpha1`. Reaching the stable `v2` group involves two
 *different* kinds of transition — do not conflate them:

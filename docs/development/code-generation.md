@@ -21,7 +21,12 @@ Both steps are required. Skipping `manifests` leaves the CRD YAML out of sync wi
 
 ## Sync the Helm chart CRDs (after any CRD change)
 
-The Helm chart ships the two CRDs under `charts/actions-gateway/templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd`. The chart copies are *generated* from those sources — do not hand-edit them. After regenerating manifests, re-sync the chart:
+The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd`. The chart copies are *generated* from those sources — do not hand-edit them. The split:
+
+- **`charts/actions-gateway/templates/crds/`** — the two **v1alpha1** (`actions-gateway.github.com`) CRDs: `ActionsGateway`, `RunnerGroup`.
+- **`charts/actions-gateway-crds-v2/templates/crds/`** — the five **v2alpha1** (`actions-gateway.com`) CRDs: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`. They live in a **separate, opt-in chart** because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard **1 MiB** limit (Helm stores the rendered manifest *plus* a copy of the chart source, gzipped, in one Secret). A separate release keeps each chart within budget and makes v2 opt-in ([Q149](../STATUS.md)).
+
+`scripts/sync-chart-crds.sh` writes both charts in one pass. After regenerating manifests, re-sync:
 
 ```bash
 make chart-crds   # scripts/sync-chart-crds.sh — regenerates the chart CRD templates from the sources

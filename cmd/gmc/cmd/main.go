@@ -30,6 +30,7 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	"github.com/go-logr/logr"
@@ -46,6 +47,10 @@ func init() {
 
 	utilruntime.Must(actionsgatewaygithubcomv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(agcv1alpha1.AddToScheme(scheme))
+	// Register the v2alpha1 (actions-gateway.com) GMC kinds so they are first-class
+	// in the GMC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
+	// the ActionsGateway/EgressProxy reconcilers that consume them land in M2/M3a.
+	utilruntime.Must(gmcv2alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

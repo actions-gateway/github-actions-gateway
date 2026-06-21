@@ -57,6 +57,8 @@ for img in gmc agc proxy worker; do
 done
 printf '==> %-7s %s ... ' "chart" "$chart_ver"
 verify "$repo/charts/actions-gateway:$chart_ver" || rc=1
+printf '==> %-7s %s ... ' "crds-v2" "$chart_ver"
+verify "$repo/charts/actions-gateway-crds-v2:$chart_ver" || rc=1
 
 if [[ "$rc" -ne 0 ]]; then
 	echo "signature verification FAILED (if local docker creds are misconfigured, retry with DOCKER_CONFIG=\$(mktemp -d))" >&2

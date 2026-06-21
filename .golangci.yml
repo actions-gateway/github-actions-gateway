@@ -115,8 +115,9 @@ linters:
         linters:
           - forbidigo
       # Kubebuilder-generated GroupVersion scaffolding still uses
-      # scheme.Builder; not under our control until kubebuilder updates.
-      - path: api/v1alpha1/groupversion_info\.go
+      # scheme.Builder; not under our control until kubebuilder updates. Matches
+      # every API version dir (v1alpha1, v2alpha1, …).
+      - path: api/v[0-9a-z]+/groupversion_info\.go
         linters:
           - staticcheck
         text: "SA1019.*scheme\\.Builder"

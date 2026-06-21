@@ -4,12 +4,16 @@
 
 ---
 
-> **Status: proposal, not committed.** This appendix describes a proposed
-> `v2alpha1` API shape that would replace the current monolithic
-> `ActionsGateway` + `RunnerGroup` model. It is recorded here for review.
-> Nothing in the shipped `v1alpha1` API changes until this is accepted and
-> scheduled. Adopting it is a multi-session effort with a deliberate cutover
-> (see [§H.11](#h11-migration-v2-tool-assisted)).
+> **Status: accepted; being built incrementally.** This appendix is the design
+> source of truth for the `v2alpha1` API that replaces the monolithic
+> `ActionsGateway` + `RunnerGroup` model. Milestone **M1 (the `v2alpha1` types +
+> codegen) has landed**: the five kinds are defined, their CRDs install and
+> round-trip beside `v1alpha1`, and the field-naming/immutability/length decisions
+> below are frozen in the schema — but **no controller reconciles them yet**
+> (reconcilers arrive in M2/M3a). Nothing in the shipped `v1alpha1` API changes;
+> the two groups are served side by side. Remaining milestones and their order are
+> in the [v2 API plan](../plan/v2-api.md); the cutover is a deliberate,
+> tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
 
 ---
 

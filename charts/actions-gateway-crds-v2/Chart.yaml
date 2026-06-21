@@ -1,0 +1,36 @@
+apiVersion: v2
+name: actions-gateway-crds-v2
+description: |-
+  Opt-in CustomResourceDefinitions for the v2alpha1 (actions-gateway.com) API:
+  ActionsGateway, EgressProxy, RunnerSet, RunnerTemplate, and the cluster-scoped
+  ClusterRunnerTemplate. Ship separately from the main actions-gateway chart so
+  the large pod-template CRDs do not push the main chart's Helm release Secret
+  past its 1 MiB limit, and so v2 is installed only when a cluster opts into it.
+  Install this alongside the main chart to make the v2 API available; the v2
+  controllers are added in a later release. Once v1alpha1 is removed these CRDs
+  can fold back into the main chart.
+type: application
+# Chart version: bump on every change to the v2 CRD set.
+version: 0.1.0
+# appVersion tracks the v2 API maturity, not an image (this chart ships no images).
+appVersion: "v2alpha1"
+# selectableFields on RunnerSet (KEP-4358) are queryable only on k8s >= 1.31, but
+# the CRDs install and validate from 1.30; match the main chart's floor.
+kubeVersion: ">=1.30.0-0"
+keywords:
+  - github-actions
+  - self-hosted-runners
+  - crds
+  - operator
+home: https://github.com/actions-gateway/github-actions-gateway
+sources:
+  - https://github.com/actions-gateway/github-actions-gateway
+maintainers:
+  - name: actions-gateway maintainers
+annotations:
+  # Prerelease cut: Artifact Hub must flag the listing as a prerelease while the
+  # v2 API is alpha. Flip to "false" only when v2 graduates. Mirrors the main
+  # chart's policy (see docs/operations/release.md).
+  artifacthub.io/prerelease: "true"
+  # CRD-only chart — no controllers, no images.
+  artifacthub.io/operator: "false"
