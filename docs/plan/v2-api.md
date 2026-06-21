@@ -89,6 +89,45 @@ milestone is independently reviewable and leaves the tree green.
 - **Exit:** the tool migrates a representative v1 namespace to a working v2 object
   set in dry-run and `--apply`; dual-read verified; docs updated.
 
+## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
+
+The milestones above ship `v2alpha1`. Reaching the stable `v2` group involves two
+*different* kinds of transition — do not conflate them:
+
+- **`v1alpha1` → `v2alpha1` is a fan-out, done once.** One v1 object becomes
+  several v2 objects, which a conversion webhook cannot express — hence the M5
+  migration tool ([§H.11](../design/appendix-h-v2-api-decomposition.md#h11-migration-v2-tool-assisted)).
+  This is the only expensive transition.
+- **`v2alpha1` → `v2beta1` → `v2` are in-place graduations of the same kinds.**
+  Field changes are refinements within the same object shape, so a conversion
+  webhook round-trips served versions automatically — no tenant re-apply, no
+  migration tool.
+
+We graduate **through beta**, not `alpha → GA` directly: GA's contract is
+permanent backward compatibility, and `v2`'s large surface (five kinds,
+multi-gateway, cross-references) needs a beta soak — where operators can rely on
+it in production while shape problems can still be fixed *with* a migration path —
+before that contract is signed.
+
+| Level | Contract |
+|---|---|
+| `v2alpha1` | may change incompatibly or be dropped without notice; early adopters only |
+| `v2beta1` | won't be removed; changes carry a migration path; production-relyable |
+| `v2` (GA) | backward-compatible, effectively frozen |
+
+Each graduation hop is cheap but not free:
+
+1. Add the new version to each CRD; mark it the **storage version**.
+2. **Conversion webhook** round-trips served versions — [Q74](../STATUS.md#deferred)
+   (`Hub`/`Convertible` scaffolding) lands at the first graduation, and is
+   distinct from the M5 fan-out tool a conversion webhook cannot replace.
+3. **Storage migration** — rewrite stored objects to the new version, then drop
+   the superseded served version.
+
+`v1alpha1` is deprecated and removed on its own track once v2 adoption is
+sufficient — which is also when the Q147 dual-read window closes (M5,
+[§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+
 ## Deferred (out of the critical path)
 
 ### M4 — Cross-namespace `EgressProxy` sharing
