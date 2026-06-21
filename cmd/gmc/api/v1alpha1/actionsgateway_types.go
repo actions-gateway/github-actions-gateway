@@ -235,8 +235,9 @@ type ActionsGatewaySpec struct {
 type ActionsGatewayStatus struct {
 	// Conditions contains the current observed conditions of the gateway.
 	// Known types: Ready, ProxyAvailable, AGCAvailable, CredentialUnavailable,
-	// Degraded, ProxyQuotaPressure, ProxyQuotaExceeded. The type and reason string
-	// constants are exported from this package (see conditions.go).
+	// Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, RunnerGroupsDegraded. The
+	// type and reason string constants are exported from this package (see
+	// conditions.go).
 	// +optional
 	// +listType=map
 	// +listMapKey=type

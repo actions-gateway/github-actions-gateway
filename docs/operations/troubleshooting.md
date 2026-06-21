@@ -11,6 +11,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [How to Validate a Fresh Deployment](#how-to-validate-a-fresh-deployment)
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
+- [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
@@ -169,6 +170,41 @@ kubectl get actionsgateway -n <namespace> <name> \
   cross-check the `controller_runtime_reconcile_errors_total` metric and the full
   error in the GMC logs. The GMC's reconciler retries with backoff and clears
   `Degraded` on the next successful reconcile.
+
+---
+
+## ActionsGateway Reports RunnerGroupsDegraded
+
+**Symptoms.** `kubectl get actionsgateway` shows a `RunnerGroupsDegraded=True`
+condition, or the `actions_gateway_runnergroups_degraded` gauge is `1`. The gateway
+infrastructure itself (proxy, AGC) may still be `Ready=True` — this condition rolls
+**child RunnerGroup** health up to the gateway so you don't have to inspect each
+group individually.
+
+**Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing*
+condition — `CredentialUnavailable` (the AGC can't obtain an installation token),
+`Degraded` (an unhealthy/unauthorized listener session), or `RunnerVersionTooOld`
+(GitHub rejects the configured runner version). Advisory capacity/throughput
+conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are
+deliberately **not** rolled up here — they have their own signals. `RunnerGroupsDegraded`
+does **not** gate `Ready`: the gateway can keep serving healthy groups while one is
+impaired.
+
+**Diagnostics.**
+
+```sh
+# Read the rollup — its message names the impaired groups and their tripped conditions.
+kubectl get actionsgateway -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="RunnerGroupsDegraded")]}{.status} {.reason}: {.message}{"\n"}{end}'
+
+# Drill into a named RunnerGroup's own conditions.
+kubectl get runnergroup -n <namespace> <runner-group> -o jsonpath='{.status.conditions}' | jq .
+```
+
+**Resolution.** Resolve the underlying per-group condition, then the rollup clears
+automatically on the next reconcile (the GMC watches the owned RunnerGroups):
+- `CredentialUnavailable` → see [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration).
+- `Degraded` / `RunnerVersionTooOld` → see [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs).
 
 ---
 
