@@ -54,6 +54,14 @@ egress proxy to the tenant 1:1, and assumes one gateway per namespace.**
 - **Secure by default, optional by layering.** The egress proxy becomes optional
   to lower onboarding cost, but the egress *restriction* it sat on top of stays
   mandatory. Cross-namespace sharing requires explicit provider consent.
+- **Simplest shape that solves a problem we have today; forward-compatible for
+  the rest.** Build only the abstraction a *current* pressure forces. Where a
+  future need is foreseeable, shape the schema so the abstraction is *additive*
+  when its trigger fires — a new kind, or a new optional field with a default —
+  never a second breaking migration. Deferred abstractions are recorded with the
+  concrete trigger that would revive them (the admin policy layer in
+  [§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real) is the worked
+  example).
 
 ## H.3. The CRD set
 
@@ -404,7 +412,131 @@ impact list, to be turned into plan-doc scope when scheduled:
   onboarding scripts, runbooks, and the convention doc's "grandfathered" note all
   update, and the dual-read window rides the v1alpha1 serving window.
 
-## H.14. Open questions / sign-off needed
+## H.14. Admin policy layer — deferred until tiering is real
+
+The decomposition above mirrors Gateway API's `Gateway → route attachment` but
+stops one level short: there is no cluster-scoped, **admin-owned** object — no
+`GatewayClass` equivalent. Today the admin/tenant boundary is real but lives
+*outside the API*, scattered across mechanisms that cannot be RBAC'd, audited, or
+GitOps'd as objects:
+
+| Policy | Where it lives today |
+|---|---|
+| Which PriorityClasses a tenant may name | `--allowed-priority-classes` GMC flag |
+| Whether `privileged` profile is allowed | namespace label `…/privileged-profile=allowed` |
+| Default worker image | `--worker-image` GMC flag |
+| Reserved namespaces | Go constant + `POD_NAMESPACE` |
+| Namespace ResourceQuota | platform-stamped, out-of-band |
+
+Promoting this into a first-class API object turns the boundary into a clean RBAC
+split (admin writes the policy kind; tenants cannot) and makes "what is this
+tenant allowed to do?" a `kubectl get` away. **But it is not a problem we have
+today, and the abstraction is addable without a second breaking change** — so v2
+does *not* ship it. This section records the capability ladder and the exact
+trigger, so the decision is captured rather than rediscovered.
+
+### The capability ladder
+
+| Layer | Expresses | Breaks when |
+|---|---|---|
+| **Flags (today)** | one global policy, cluster-wide | can't vary per tenant at all (except the one bolted-on privileged namespace-label gate) |
+| **Singleton policy object** | one global policy, but declarative / auditable / RBAC'd | still *uniform* — every tenant gets the same rules |
+| **Singleton + namespace labels** | one global policy plus a *few independent* per-tenant dials ("privileged iff namespace has label X") | the per-tenant variation becomes *multi-dimensional and correlated* |
+| **Class** (`ActionsGatewayClass`) | named bundles of correlated policy, tenant-selectable, RBAC-gated on which class may be referenced | — |
+
+A *single* per-tenant escape hatch (like privileged-allowed) does **not** need a
+class — a namespace label the admin controls handles it, which is already how
+v1 works. The singleton + the occasional label dial gets you a long way.
+
+### The trigger for the class
+
+Introduce `ActionsGatewayClass` only when **both** hold:
+
+1. **≥2 distinct policy *bundles* must coexist** in one cluster — e.g. an
+   "internal/trusted" tier (DinD allowed, broad registries, proxy optional) vs an
+   "external/untrusted" tier (restricted-only, platform registry only, proxy
+   mandatory): multiple policy dimensions that *travel together* as a tier; **and**
+2. **either** those tiers are spread across enough namespaces that encoding each
+   as a *combination* of namespace labels becomes an audit/maintenance liability
+   (N namespaces × M labels that should just say "tier = A"), **or** you want
+   tenants to **self-select** a tier with RBAC deciding which they may pick —
+   which labels cannot express, because tenants do not control namespace labels.
+
+Smell signs the trigger has arrived: the onboarding runbook grows a "pick your
+tier, then apply these K labels" step (that step *is* a class waiting to be
+born); a request like "team X gets privileged + registries A&B, team Y neither";
+or a self-service "request the privileged tier" flow.
+
+### Why deferring costs nothing
+
+Singleton → class is itself **non-breaking**: adding the `ActionsGatewayClass`
+kind is additive; adding `ActionsGateway.spec.gatewayClassName` as an *optional*
+field whose unset value means "the default class / the old singleton" is
+additive; the singleton simply *becomes* the default class. So deferring the
+class does **not** buy a future breaking migration.
+
+The one constraint to honor now: **whatever policy lands in v2 — flags or a
+singleton — must be shaped so a future class could carry the identical schema
+field-for-field.** Don't paint the policy into a corner a class couldn't inherit.
+
+### v2 decision
+
+Ship **at most a cluster-singleton `ActionsGatewayPolicy`** (fixed name; the
+controller reads it; no tenant-facing reference field) if declarative,
+auditable, RBAC'd admin policy is wanted now — otherwise keep the flags. Design
+that policy schema as the exact schema a class would later carry. **Do not ship
+the class.** Revive it when the two-part trigger above fires.
+
+## H.15. Other breaking changes worth batching
+
+v2 is the one window where breaking changes are cheap (we are already rewriting
+the schema and shipping a migration tool). A few small changes are only
+*possible* at a major break, or are awkward to add later — batch them in, but
+only the ones that fix a problem we have today.
+
+**Fix now (today's problem, break-only or break-cheapest):**
+
+- **Drop the `SecretReference.namespace` footgun.** It is reserved-but-validated-
+  empty and reads like a cross-namespace reference that does not exist. Replace
+  with a name-only `LocalSecretReference`. Removing a field is break-only.
+- **Set per-field immutability deliberately** via CEL `XValidation`
+  (`oldSelf`): `gitHubURL` immutable — rebinding a running gateway's GitHub org
+  is a footgun; `gitHubAppRef.name` stays mutable — it is the credential-rotation
+  path. Adding immutability later is itself breaking, so decide it at v2.
+- **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
+  profile, active sessions), resource `categories`, and the short names from
+  [§H.6](#h6-naming-and-length-budgets); fix the `maxListeners` default mismatch
+  (code `1` vs design `10`) and document the chosen value.
+
+**Decide (only fixable at a major break):**
+
+- **API group rename.** The group is `actions-gateway.github.com`, which suffixes
+  a domain the project does not control — against the k8s convention of using a
+  domain you own. Changing the group touches every CRD, so it can only happen at
+  a major break. Needs a target-domain decision; listed in
+  [§H.16](#h16-open-questions--sign-off-needed).
+- **Webhook → CEL migration.** v2 targets a newer k8s floor, so checks that are
+  webhook-only today *because* CEL could not express them on k8s ≤1.30 (singleton,
+  GitHub-URL structure, `gitHubAppRef.namespace` empty, cross-field rules) can
+  become structural/CEL. Every check moved out of the fail-closed validating
+  webhook is one fewer thing whose outage blocks all admission — an availability
+  and operability win, best taken during the schema rewrite. Opportunistic, not
+  required.
+
+**Explicitly NOT now (shape for additive later, do not build):**
+
+- **Admin policy class** — [§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real).
+- **Worker-image registry allowlist** — a real security control, but only needed
+  once there are untrusted tenants to restrict. It belongs in the admin policy
+  schema and is enforced when that layer arrives; do not add a standalone tenant
+  field for it now.
+- **Credentials as a discriminated union.** OIDC / workload-identity federation
+  is the foreseeable successor to long-lived GitHub App keys, but a bare
+  `gitHubAppRef` today does not block it: a future `workloadIdentityRef` sibling
+  field (optional, with a CEL "exactly one of") is *additive*, not breaking. So
+  do not introduce a tagged union now — keep the single field.
+
+## H.16. Open questions / sign-off needed
 
 1. **Multi-gateway-per-namespace** resource naming and RBAC rework — biggest GMC
    change; review before committing to the API shape.
@@ -419,3 +551,11 @@ impact list, to be turned into plan-doc scope when scheduled:
    `allow-profile-downgrade: allowed` as the aligned values (§H.12), and that
    closing the dual-read window only at `v1alpha1` removal (not earlier) is
    acceptable.
+7. **Admin policy layer** (§H.14) — decide whether v2 ships a cluster-singleton
+   `ActionsGatewayPolicy` or keeps the controller flags. The selectable
+   `ActionsGatewayClass` is deferred behind a documented trigger either way;
+   confirm the trigger and that the chosen policy schema is class-reusable.
+8. **API group rename** (§H.15) — keep `actions-gateway.github.com`, or move to a
+   domain the project controls? Break-only, so decide here or never.
+9. **Per-field immutability** (§H.15) — confirm `gitHubURL` immutable and
+   `gitHubAppRef.name` mutable.
