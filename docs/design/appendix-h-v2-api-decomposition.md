@@ -211,6 +211,20 @@ type RunnerSetSpec struct {
 }
 ```
 
+**Why `templateRef` is required but `proxyRef` is optional.** They look parallel
+but are not. An unset `proxyRef` has a well-defined *behavior* — direct egress,
+still NetworkPolicy-restricted — so the dependency can simply be dropped. A
+`RunnerSet` with no template has no such fallback: the AGC cannot synthesize a
+worker pod without a pod shape. So `templateRef` stays **required at GA**. It can
+later be relaxed to optional-with-a-default without a breaking change (required →
+optional is backward-compatible) — see the deferred
+[optional default template](../STATUS.md#deferred) item, which resolves an unset
+ref via `ActionsGateway.defaultTemplateRef` → a default-marked
+`ClusterRunnerTemplate` (the `StorageClass` pattern: at most one default,
+fail-closed `TemplateNotFound` if none resolves — never a flag-synthesized phantom
+pod). This keeps `templateRef`/`proxyRef` symmetric: both required at GA, each with
+a deferred, additive "optional" form.
+
 ### Worked example — minimal proxy-less onboarding (three objects)
 
 ```yaml

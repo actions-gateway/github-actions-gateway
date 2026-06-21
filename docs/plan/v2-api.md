@@ -232,6 +232,16 @@ and an `EgressUnattributed` condition — is additive on M3a and **not** require
 for GA, since proxy-required is v1 parity ([§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional)).
 Ship it as a fast-follow when a proxy-less deployment is actually wanted.
 
+### Optional default RunnerTemplate (Q172)
+
+The parallel relaxation for `templateRef`. At GA it is required (v1 parity; a
+worker pod needs a pod shape). Relaxing required → optional is non-breaking, so it
+waits for onboarding friction: omit `templateRef` and resolve via
+`ActionsGateway.defaultTemplateRef` → a default-marked `ClusterRunnerTemplate`
+(the `StorageClass` pattern — at most one default, **fail-closed** `TemplateNotFound`
+if none resolves, never a flag-synthesized phantom pod). Collapses minimal
+onboarding to two objects. See [§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
+
 ### M4 — Cross-namespace `EgressProxy` sharing
 
 Additive on M3, gated on a **concrete operator ask** for cross-namespace sharing
