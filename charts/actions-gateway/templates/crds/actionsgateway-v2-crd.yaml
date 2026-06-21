@@ -1,0 +1,276 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
+    # Sourced from the controller-gen output under cmd/*/config/crd (do not
+    # hand-edit). Shipped under templates/crds/ with resource-policy: keep so
+    # day-2 `helm upgrade` carries CRD field changes and `helm uninstall`
+    # preserves every tenant's v2 (actions-gateway.com) objects.
+    helm.sh/resource-policy: keep
+  name: actionsgateways.actions-gateway.com
+spec:
+  group: actions-gateway.com
+  names:
+    categories:
+    - actions-gateway
+    kind: ActionsGateway
+    listKind: ActionsGatewayList
+    plural: actionsgateways
+    shortNames:
+    - ag
+    singular: actionsgateway
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.githubURL
+      name: URL
+      type: string
+    - jsonPath: .spec.securityProfile
+      name: Profile
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .status.observedGeneration
+      name: ObservedGen
+      priority: 1
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v2alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ActionsGateway is a namespace-scoped CRD reconciled by the GMC: it binds a GitHub
+          identity and provisions the per-tenant AGC control plane. v2 permits multiple per
+          namespace (multi-gateway support lands in M3b).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              ActionsGatewaySpec is the desired state of a v2 ActionsGateway: the GitHub
+              identity plus the AGC control plane only. v2 decomposes the v1alpha1 monolith —
+              the inline proxy moves to a standalone EgressProxy and the bootstrap runner
+              groups become explicit RunnerSet objects, both removed from this spec (§H.4).
+              Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
+              dropped); the multi-gateway controller behavior lands in M3b.
+            properties:
+              defaultProxyRef:
+                description: |-
+                  DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
+                  inherited by RunnerSets under this gateway that do not set their own proxyRef.
+                  Optional: unset means the control plane egresses directly (subject to
+                  NetworkPolicy). Same-namespace unless the target EgressProxy grants
+                  cross-namespace use (§H.4, §H.9).
+                properties:
+                  name:
+                    description: Name of the referenced object. Bounded by the v2
+                      52-char name budget (§H.6).
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              githubAppRef:
+                description: |-
+                  GitHubAppRef names the Secret holding this gateway's GitHub App credentials,
+                  in the gateway's own namespace (LocalSecretReference — v1's namespace field is
+                  dropped, §H.15). githubAppRef.name is deliberately mutable: changing it is the
+                  supported credential-rotation path.
+                properties:
+                  name:
+                    description: Name of the referenced Secret in the same namespace.
+                    maxLength: 253
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              githubURL:
+                description: |-
+                  GitHubURL is the GitHub organization, enterprise, or repository URL this
+                  gateway's runners register against (e.g. "https://github.com/my-org"). It is
+                  immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes
+                  it via a CEL transition rule (§H.15). Casing follows the v2 convention —
+                  "github" is one lowercased word, the trailing initialism stays uppercase.
+                maxLength: 2048
+                minLength: 1
+                pattern: ^https://
+                type: string
+                x-kubernetes-validations:
+                - message: githubURL is immutable; create a new ActionsGateway to
+                    bind a different GitHub org/enterprise/repo
+                  rule: self == oldSelf
+              logLevel:
+                default: info
+                description: |-
+                  LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
+                  (default), debug. Changing it is a rolling restart of the AGC, not a hot
+                  reload. Use debug only for a bug repro.
+                enum:
+                - info
+                - debug
+                type: string
+              securityProfile:
+                default: baseline
+                description: |-
+                  SecurityProfile controls the Pod Security Admission enforcement level applied
+                  to the tenant namespace. Allowed values: baseline (default), restricted,
+                  privileged. Use privileged only for workloads that run Docker-in-Docker or
+                  require host-level capabilities.
+                enum:
+                - baseline
+                - restricted
+                - privileged
+                type: string
+              tracing:
+                description: |-
+                  Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
+                  AGC. Tracing stays off unless tracing.endpoint is set.
+                properties:
+                  endpoint:
+                    description: |-
+                      Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the
+                      AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+                    type: string
+                  insecure:
+                    description: |-
+                      Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS
+                      required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+                    type: boolean
+                  resourceAttributes:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ResourceAttributes are extra OpenTelemetry resource attributes merged onto
+                      every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES.
+                    type: object
+                  sampler:
+                    description: |-
+                      Sampler selects the trace sampler. When empty the SDK default applies. Maps to
+                      OTEL_TRACES_SAMPLER.
+                    enum:
+                    - always_on
+                    - always_off
+                    - traceidratio
+                    - parentbased_always_on
+                    - parentbased_always_off
+                    - parentbased_traceidratio
+                    type: string
+                  samplerArg:
+                    description: |-
+                      SamplerArg is the argument for the chosen Sampler — for ratio-based samplers
+                      the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG.
+                    type: string
+                type: object
+            required:
+            - githubAppRef
+            - githubURL
+            type: object
+          status:
+            description: |-
+              ActionsGatewayStatus is the observed state of an ActionsGateway, following the
+              uniform v2 status/condition contract (§H.7).
+            properties:
+              conditions:
+                description: |-
+                  Conditions are the observed conditions of the gateway. Known types: Ready,
+                  AGCAvailable, CredentialUnavailable, Degraded.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the .metadata.generation the most
+                  recent reconcile acted on.
+                format: int64
+                type: integer
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: 'metadata.name must be at most 52 characters: the GMC derives child
+            resource names as <name>-<suffix> and reserves the remainder of the 63-char
+            label/Service-name budget'
+          rule: self.metadata.name.size() <= 52
+    served: true
+    storage: true
+    subresources:
+      status: {}
