@@ -17,6 +17,28 @@ one-shot migration tool last. The group rename folds in for free: `v2alpha1`
 *is* `actions-gateway.com` from birth; `v1alpha1` keeps the old
 `actions-gateway.github.com` group until it is removed.
 
+## Non-goals
+
+- **No behavior change.** v2 re-shapes the API; runtime semantics (job
+  acquisition, worker provisioning, quota/PSA enforcement, egress restriction) are
+  preserved. `v2alpha1` tracks v1 behavior wherever a field is unchanged.
+- **No in-place v1→v2 conversion** — the split is a tooled fan-out (M5), not a
+  conversion webhook.
+- **Not the admin policy layer, worker-image allowlist, credentials union, or
+  cross-namespace sharing** — all deferred (see below and Appendix H §H.14/§H.15).
+
+## Coexistence, rollback & parity
+
+- **Dual-serve.** `v1alpha1` and `v2alpha1` are served simultaneously until v1
+  removal; tenants migrate on their own schedule via the M5 tool. v1 bug-fixes are
+  ported to v2 throughout coexistence.
+- **Rollback = stay on v1.** Nothing forces a tenant onto v2 until they run the
+  migration, and no milestone removes v1 capability — so a regressed milestone
+  degrades to "keep using `v1alpha1`", not an outage.
+- **Parity gate.** `v2alpha1` must reach v1 feature parity (M3a) before
+  multi-gateway / optional-proxy features build on it; a per-field/-condition
+  parity checklist gates M3a exit.
+
 ## Resolved design decisions
 
 All settled in [§H.16](../design/appendix-h-v2-api-decomposition.md#h16-open-questions--sign-off-needed):
@@ -43,6 +65,14 @@ milestone is independently reviewable and leaves the tree green.
   `maxLength` 52 ([§H.6](../design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets)),
   `maxListeners` default `10`, removal of `SecretReference.namespace`,
   `additionalPrinterColumns` + `categories` + short names.
+- **Field-naming pass** — freeze acronym/brand casing while still cheap
+  (`githubURL`/`githubAppRef`), uniform `…Ref` shapes ([§H.6](../design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets)).
+- **Uniform status/condition contract** across all five kinds — `Ready` +
+  `observedGeneration`, `listType=map` conditions, specific messages ([§H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
+- **`selectableFields: spec.gatewayRef`** on `RunnerSet` so M3b's AGC scoping runs
+  server-side ([§H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)).
+- Labels, annotations, and finalizers use the new `actions-gateway.com/*` domain
+  from birth.
 - **Exit:** CRDs install and round-trip via the API server alongside `v1alpha1`;
   `make check` green; no reconciler references the new kinds yet.
 
@@ -55,26 +85,27 @@ milestone is independently reviewable and leaves the tree green.
 - **Exit:** a standalone `EgressProxy` reconciles a working proxy pool; a
   `RunnerTemplate` validates and is readable by name; envtest coverage for both.
 
-### M3 — Control kinds (verbs) + multi-gateway *(the core build)*
+### M3a — Control kinds (verbs), single-gateway parity *(the core build)*
 
-- `ActionsGateway` + `RunnerSet` reconcilers.
-- **Multi-gateway per namespace** ([§H.16 #1](../design/appendix-h-v2-api-decomposition.md#h16-open-questions--sign-off-needed)):
-  per-gateway resource naming under the 52-char cap; **AGC scoping** so each AGC
-  reconciles only the `RunnerSet`s whose `gatewayRef` targets it; per-gateway
-  ownership for clean GC. The `gmc-tenant-resource-guard` VAP is unchanged (it
-  keys on the namespace marker, not names).
+- `ActionsGateway` + `RunnerSet` reconcilers; **one gateway per namespace** —
+  v1 feature parity on the new shape.
 - **Reference resolution at runtime** ([§H.7](../design/appendix-h-v2-api-decomposition.md#h7-reference-integrity--runtime-conditions-not-admission)):
   resolve `templateRef`/`proxyRef` via watch + enqueue; surface
   `TemplateNotFound`/`ProxyNotFound` conditions; fail-closed (no wiring until refs
   resolve).
-- **Optional proxy** ([§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional), absorbs Q144):
-  unset `proxyRef` ⇒ direct egress with an explicit `proxyMode: Direct` status and
-  an `EgressUnattributed` advisory condition; the default-deny egress
-  NetworkPolicy stays mandatory; the managed GitHub-IP refresh loop relocates to
-  the gateway/runner-set level.
+- Proxy **required** (same-namespace `EgressProxy` via `proxyRef`/`defaultProxyRef`),
+  matching v1; direct egress is a separate, deferred slice (below).
+- **Exit:** a v1-equivalent setup runs end-to-end on `v2alpha1` (job acquired →
+  worker pod → proxied egress); the parity checklist passes; envtest coverage.
+
+### M3b — Multi-gateway per namespace
+
+- Per-gateway resource naming under the 52-char cap; **AGC scoping** via the
+  `gatewayRef` field selector so each AGC reconciles only its gateway's
+  `RunnerSet`s; per-gateway ownership for clean GC. The `gmc-tenant-resource-guard`
+  VAP is unchanged — it keys on the namespace marker, not names ([§H.16 #1](../design/appendix-h-v2-api-decomposition.md#h16-open-questions--sign-off-needed)).
 - **Exit:** two `ActionsGateway`s with their own `RunnerSet`s run concurrently in
-  one namespace, one proxied and one direct-egress; envtest + a kind e2e prove
-  per-gateway isolation and reference-resolution conditions.
+  one namespace; envtest + a kind e2e prove per-gateway isolation.
 
 ### M5 — Migration tool + v1/v2 cutover
 
@@ -82,9 +113,11 @@ milestone is independently reviewable and leaves the tree green.
   reads `v1alpha1` CRs, emits the `v2alpha1` object set (extract inline
   `podTemplate` → `RunnerTemplate`, inline `proxy` → `EgressProxy`, rewrite
   references). Dry-run to manifests by default; `--apply` to apply. Plus tests.
-- **Q147 dual-read window** ([§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)):
-  VAPs + downgrade webhook accept either `"true"` (legacy) or the new keyword;
-  the tool rewrites markers/annotations during the pass.
+- **Dual-read window — group domain + Q147 values** ([§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)):
+  VAPs + downgrade webhook accept either domain (`actions-gateway.github.com/*` or
+  `actions-gateway.com/*`) **and** either value (`"true"` or the new keyword) until
+  v1 removal; the tool relabels keys and rewrites values (plus finalizer names) in
+  one pass.
 - Operator migration guide; `v1alpha1` deprecation notice.
 - **Exit:** the tool migrates a representative v1 namespace to a working v2 object
   set in dry-run and `--apply`; dual-read verified; docs updated.
@@ -128,7 +161,25 @@ Each graduation hop is cheap but not free:
 sufficient — which is also when the Q147 dual-read window closes (M5,
 [§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
 
+## Definition of done (v2 GA)
+
+v2 is GA when **all** hold: M1, M2, M3a, M3b, and M5 have shipped; the API has
+graduated `v2alpha1 → v2beta1 → v2` (conversion webhook + storage migration per
+hop); at least one representative tenant has migrated v1→v2 with the tool for
+real; `v1alpha1` is deprecated with a named removal release; and the
+operator-facing docs (onboarding, migration guide, CRD reference) are updated.
+Cross-namespace sharing (M4) and direct egress are **not** GA gates.
+
 ## Deferred (out of the critical path)
+
+### Direct egress (optional-proxy behavior)
+
+The `proxyRef`-optional *schema* lands in M1, but the direct-egress *behavior* —
+unset ref ⇒ `proxyMode: Direct`, a default-deny egress NetworkPolicy with no
+proxy, the managed GitHub-IP refresh relocated to the gateway/runner-set level,
+and an `EgressUnattributed` condition — is additive on M3a and **not** required
+for GA, since proxy-required is v1 parity ([§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional)).
+Ship it as a fast-follow when a proxy-less deployment is actually wanted.
 
 ### M4 — Cross-namespace `EgressProxy` sharing
 
@@ -149,6 +200,11 @@ Tracked in [STATUS.md Deferred](../STATUS.md#deferred).
 ## Testing
 
 Each milestone adds to the existing tiers (see [testing.md](../development/testing.md)):
-M1 unit + CRD install; M2/M3 envtest integration (real apiserver: defaulting,
-CEL, watch-driven conditions); M3 a kind e2e for per-gateway isolation and
-direct-vs-proxied egress; M5 migration-tool unit + a round-trip integration test.
+M1 unit + CRD install; M2/M3a envtest integration (real apiserver: defaulting,
+CEL, watch-driven conditions); M3b a kind e2e for per-gateway isolation; M5
+migration-tool unit + a round-trip integration test.
+
+Two cross-cutting checks: a **coexistence test** asserting `v1alpha1` keeps
+working while `v2alpha1` is served (the no-behavior-change non-goal), and — because
+the migration tool targets the latest *served* v2 version — its golden output is
+regenerated and re-validated at each graduation (alpha→beta→GA).
