@@ -1,0 +1,84 @@
+name: Bug report
+description: Report something that isn't working as designed.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        **Security issue?** Do **not** file it here. Report vulnerabilities
+        privately via GitHub's [Private Vulnerability Reporting](https://github.com/actions-gateway/github-actions-gateway/security/advisories/new) —
+        see [`SECURITY.md`](https://github.com/actions-gateway/github-actions-gateway/blob/main/SECURITY.md).
+
+        Before filing, please search [existing issues](https://github.com/actions-gateway/github-actions-gateway/issues?q=is%3Aissue)
+        to avoid duplicates.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug and what you expected instead.
+      placeholder: |
+        When a job is acquired, the worker pod ... but I expected ...
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the system is affected? Pick the closest match.
+      options:
+        - "Unsure / multiple"
+        - "Gateway Manager Controller (GMC)"
+        - "Actions Gateway Controller (AGC)"
+        - "Broker"
+        - "GitHub App integration (githubapp)"
+        - "Egress proxy"
+        - "Worker pods"
+        - "Probe"
+        - "Helm chart"
+        - "Documentation"
+        - "CI / build / release"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, ordered steps. Include the `ActionsGateway` CR (redacted) and any relevant commands.
+      placeholder: |
+        1. Apply this ActionsGateway CR: ...
+        2. Trigger a workflow run that ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs and output
+      description: Controller logs, `kubectl describe`, events, etc. Redact secrets, tokens, and tenant identifiers.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Version/commit, Kubernetes distribution and version, CNI, and how the gateway is deployed.
+      value: |
+        - Version / commit:
+        - Kubernetes distribution + version:
+        - CNI:
+        - Install method (Helm chart version, raw manifests, ...):
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: This is not a security vulnerability (those go through private reporting).
+          required: true
