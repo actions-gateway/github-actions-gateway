@@ -448,6 +448,21 @@ A *single* per-tenant escape hatch (like privileged-allowed) does **not** need a
 class — a namespace label the admin controls handles it, which is already how
 v1 works. The singleton + the occasional label dial gets you a long way.
 
+### Promote flags → singleton when
+
+The singleton carries the *same* policy as the flags — one uniform policy, no
+tiers — so it buys only the rung-2 wins, not tiering. Promote when **any** of:
+
+- **GitOps** — policy must be managed declaratively / changed without a
+  controller redeploy.
+- **RBAC separation** — the people who set policy must be distinct from the
+  people who own the controller Deployment (a platform-policy team vs. the SRE
+  who deploys the GMC).
+- **Audit/compliance** — "show me, as a cluster object, exactly what tenants are
+  allowed" is an actual requirement.
+
+If none of those bite, flags are simpler and equally forward-compatible.
+
 ### The trigger for the class
 
 Introduce `ActionsGatewayClass` only when **both** hold:
@@ -469,23 +484,30 @@ or a self-service "request the privileged tier" flow.
 
 ### Why deferring costs nothing
 
-Singleton → class is itself **non-breaking**: adding the `ActionsGatewayClass`
-kind is additive; adding `ActionsGateway.spec.gatewayClassName` as an *optional*
-field whose unset value means "the default class / the old singleton" is
-additive; the singleton simply *becomes* the default class. So deferring the
-class does **not** buy a future breaking migration.
+**Every rung of the ladder is an additive transition** — none is a breaking
+migration:
 
-The one constraint to honor now: **whatever policy lands in v2 — flags or a
-singleton — must be shaped so a future class could carry the identical schema
-field-for-field.** Don't paint the policy into a corner a class couldn't inherit.
+- *flags → singleton*: add the `ActionsGatewayPolicy` kind; the controller
+  prefers it when present and the flags remain as fallback/defaults.
+- *singleton → class*: add the `ActionsGatewayClass` kind, and add
+  `ActionsGateway.spec.gatewayClassName` as an *optional* field whose unset value
+  means "the default class / the old singleton"; the singleton simply *becomes*
+  the default class.
+
+So deferring either step buys no future breaking migration. The one constraint to
+honor now: **whatever policy lands in v2 — flags or a singleton — must be shaped
+so a future singleton/class could carry the identical schema field-for-field.**
+Don't paint the policy into a corner a later rung couldn't inherit.
 
 ### v2 decision
 
-Ship **at most a cluster-singleton `ActionsGatewayPolicy`** (fixed name; the
-controller reads it; no tenant-facing reference field) if declarative,
-auditable, RBAC'd admin policy is wanted now — otherwise keep the flags. Design
-that policy schema as the exact schema a class would later carry. **Do not ship
-the class.** Revive it when the two-part trigger above fires.
+**v2 keeps the controller flags.** A singleton/class earns its keep only at the
+triggers above, none of which is a problem we have today, and every rung is
+additive — so promoting later costs nothing, while building now would be
+abstraction ahead of need. The single obligation v2 carries is to shape the
+flag-backed policy so a future singleton/class inherits its schema field-for-
+field. **Ship neither the singleton nor the class.** Promote to the singleton at
+the flags→singleton trigger; introduce the class at the two-part class trigger.
 
 ## H.15. Other breaking changes worth batching
 
@@ -494,37 +516,35 @@ the schema and shipping a migration tool). A few small changes are only
 *possible* at a major break, or are awkward to add later — batch them in, but
 only the ones that fix a problem we have today.
 
-**Fix now (today's problem, break-only or break-cheapest):**
+**Decided for v2 (today's problem, break-only or break-cheapest):**
 
 - **Drop the `SecretReference.namespace` footgun.** It is reserved-but-validated-
   empty and reads like a cross-namespace reference that does not exist. Replace
   with a name-only `LocalSecretReference`. Removing a field is break-only.
-- **Set per-field immutability deliberately** via CEL `XValidation`
-  (`oldSelf`): `gitHubURL` immutable — rebinding a running gateway's GitHub org
-  is a footgun; `gitHubAppRef.name` stays mutable — it is the credential-rotation
-  path. Adding immutability later is itself breaking, so decide it at v2.
+- **Per-field immutability** via CEL `XValidation` (`oldSelf`): **`gitHubURL`
+  immutable** — rebinding a running gateway's GitHub org is a footgun;
+  **`gitHubAppRef.name` mutable** — it is the credential-rotation path. Adding
+  immutability later is itself breaking, so it is fixed at v2.
+- **API group rename → `actions-gateway.com`.** The group is
+  `actions-gateway.github.com`, which suffixes a domain the project does not
+  control — against the k8s convention of using a domain you own. The project
+  owns `actions-gateway.com`, so v2 renames the group to it. Changing the group
+  touches every CRD (and every CR, RBAC rule, VAP, and manifest that names it),
+  so it can only happen at a major break — it rides the v2 cutover and its
+  migration tool.
 - **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
   profile, active sessions), resource `categories`, and the short names from
   [§H.6](#h6-naming-and-length-budgets); fix the `maxListeners` default mismatch
   (code `1` vs design `10`) and document the chosen value.
 
-**Decide (only fixable at a major break):**
+**Opportunistic (take if it falls out of the rewrite; not a sign-off item):**
 
-- **API group rename → `actions-gateway.com`.** The group is
-  `actions-gateway.github.com`, which suffixes a domain the project does not
-  control — against the k8s convention of using a domain you own. The project
-  *does* own `actions-gateway.com`, so v2 renames the group to it. Changing the
-  group touches every CRD (and every CR, RBAC rule, VAP, and manifest that names
-  it), so it can only happen at a major break — which is why it rides the v2
-  cutover and its migration tool. Remaining call is go/no-go, not target; see
-  [§H.16](#h16-open-questions--sign-off-needed).
 - **Webhook → CEL migration.** v2 targets a newer k8s floor, so checks that are
   webhook-only today *because* CEL could not express them on k8s ≤1.30 (singleton,
   GitHub-URL structure, `gitHubAppRef.namespace` empty, cross-field rules) can
   become structural/CEL. Every check moved out of the fail-closed validating
   webhook is one fewer thing whose outage blocks all admission — an availability
-  and operability win, best taken during the schema rewrite. Opportunistic, not
-  required.
+  and operability win, best taken during the schema rewrite.
 
 **Explicitly NOT now (shape for additive later, do not build):**
 
@@ -554,12 +574,16 @@ only the ones that fix a problem we have today.
    `allow-profile-downgrade: allowed` as the aligned values (§H.12), and that
    closing the dual-read window only at `v1alpha1` removal (not earlier) is
    acceptable.
-7. **Admin policy layer** (§H.14) — decide whether v2 ships a cluster-singleton
-   `ActionsGatewayPolicy` or keeps the controller flags. The selectable
-   `ActionsGatewayClass` is deferred behind a documented trigger either way;
-   confirm the trigger and that the chosen policy schema is class-reusable.
-8. **API group rename** (§H.15) — go/no-go on renaming the group from
-   `actions-gateway.github.com` to the project-owned `actions-gateway.com`.
-   Break-only, so decide here or never; target domain is settled.
-9. **Per-field immutability** (§H.15) — confirm `gitHubURL` immutable and
-   `gitHubAppRef.name` mutable.
+### Resolved
+
+7. **Admin policy layer** (§H.14) — ✅ **v2 keeps the controller flags.** Neither
+   the singleton nor the class ships in v2; each is deferred behind a documented
+   trigger (flags→singleton, then the two-part class trigger), and every rung is
+   an additive, non-breaking transition. v2's only obligation is to shape the
+   flag-backed policy so a future singleton/class inherits its schema
+   field-for-field.
+8. **API group rename** (§H.15) — ✅ **Yes, rename to `actions-gateway.com`.**
+   The project owns the domain; the change rides the v2 cutover and its migration
+   tool. Break-only, so it happens here or never.
+9. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
+   `gitHubAppRef.name` mutable.**
