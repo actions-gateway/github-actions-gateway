@@ -824,6 +824,15 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    `allow-profile-downgrade: allowed` (symmetric with `privileged-profile:
    allowed`), with the dual-read window closing only at `v1alpha1` removal
    ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+7. **Multi-gateway `securityProfile` composition — open.** `securityProfile`
+   PSA-labels the *namespace* ([§H.4](#h4-spec-sketches)), which was unambiguous
+   under one-gateway-per-namespace. Under multi-gateway (#1) two `ActionsGateway`s
+   in one namespace can carry *different* profiles that contend for the single
+   namespace PSA label. v2 must pick a rule — most-restrictive-wins, all-must-agree
+   (CEL/webhook reject on conflict), or move enforcement off the namespace label —
+   before M3b ([Q175](../STATUS.md#queue)); the choice may touch M1 CEL. Migration
+   does **not** trigger it (one v1 namespace → one gateway), which is exactly why
+   modeling the fan-out surfaces it and a single-namespace migration test would not.
 
 ### Resolved
 
@@ -843,3 +852,65 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
     a baseline-of-1 + demand-spawn + idle-shutdown, so a higher default is free
     at idle and `1` needlessly serializes job pickup; `maxWorkers`/quota remain
     the binding resource guards. (Closed Q162.)
+
+## H.17. Migration correctness — the fan-out's untested invariants
+
+The migration ([§H.11](#h11-migration-v2-tool-assisted)) is the first and only
+place two invariants this design *asserts* are tested against real v1 data. Both
+are stated confidently above; neither has been exercised. They are acceptance
+criteria the M5 tool ([Q165](../STATUS.md#queue)) must meet — and, because they are
+pure data-shape questions, they can be validated **before** M5 by a mapping over
+representative v1 fixtures, surfacing any v2 schema gap at alpha-rewrite cost
+instead of post-adoption cost. (The `v2alpha1` types do not exist yet, so this is a
+fixtures-and-asserted-output exercise, not runnable tool code, until M1 lands.)
+
+### Invariant 1 — "no behavior change" (the non-goal most at risk)
+
+The fan-out changes field *defaults* and *optionality*, so "v2 tracks v1 behavior"
+is false unless the mapping actively compensates:
+
+- **Proxy must not silently become direct egress.** v1 always routes through the
+  proxy; in v2 an unset `proxyRef` *and* unset `defaultProxyRef` ⇒ direct egress
+  ([§H.10](#h10-the-egress-proxy-becomes-optional)). The mapping **must** set
+  `defaultProxyRef` on every migrated gateway, or migration regresses both behavior
+  *and* the secure-by-default egress identity. Acceptance: a proxied v1 tenant
+  migrates to a proxied v2 tenant, never to `proxyMode: Direct`.
+- **`maxListeners` 1 → 10.** v1 unset = 1; v2 unset = 10
+  ([§H.15](#h15-other-breaking-changes-worth-batching)). The mapping must either pin
+  `maxListeners: 1` to preserve the v1 concurrency ceiling or consciously accept the
+  change — not inherit the new default by omission. Decide and encode it.
+- **v1 data must be admissible under v2 CEL.** The cross-field rule
+  `maxWorkers == priorityTiers[last].threshold` and the reserved-pod-field rejection
+  (now on `RunnerTemplate`,
+  [§H.7](#h7-reference-integrity--runtime-conditions-not-admission)) must accept
+  every object the mapping emits. Real-apiserver defaulting applied to a
+  round-tripped `PodTemplateSpec` can introduce a field the source lacked, so this
+  is an **envtest** check, not a pure-Go transform check.
+
+### Invariant 2 — "reuse" (the object-size justification)
+
+v2's headline benefit is "one template exists once, referenced N times"
+([§H.5](#h5-how-each-pressure-is-resolved)). That benefit is realized **only if the
+migration detects reuse:** K `RunnerGroup`s sharing an identical `podTemplate` must
+collapse to **one** `RunnerTemplate`, not K copies. Template equality is non-trivial
+(deep-equal over a defaulted `PodTemplateSpec`; whether the separate `workerImage`
+dedups with the template or independently). Acceptance: a tenant with K
+identical-template groups migrates to one `RunnerTemplate` + K `RunnerSet`s. If the
+mapping emits K templates, **v2 delivers zero object-size win for migrated tenants**
+— the benefit evaporates for the exact population it targets.
+
+### Latent v1 ambiguities the fan-out forces to a decision
+
+- **Standalone vs. inline runner groups.** v1 has both a standalone `RunnerGroup`
+  CRD *and* inline `ActionsGateway.spec.runnerGroups[]` bootstrap copies. The mapping
+  must define which is authoritative when both name the same group, and whether they
+  merge or collide. v1 never reconciled the two representations; v2 forces the choice.
+- **Naming the extracted objects.** The `EgressProxy` pulled from `spec.proxy` and
+  each `RunnerTemplate` pulled from a group need *generated* names under the
+  [§H.6](#h6-naming-and-length-budgets) 52-char cap — a naming scheme distinct from
+  the runtime per-gateway derivation, and one that can collide.
+
+These criteria turn the migration from "does it run" into "does it preserve what the
+design promised." The proxy-default regression and the `securityProfile` composition
+gap ([§H.16 #7](#h16-open-questions--sign-off-needed)) are the two worth finding now,
+at alpha cost, rather than from an adopter.
