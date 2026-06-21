@@ -156,8 +156,12 @@ Multiple `ActionsGateway`s may share one namespace; each AGC reconciles only the
 type ActionsGatewaySpec struct {
     GitHubAppRef    LocalSecretReference `json:"githubAppRef"` // was SecretReference; namespace field dropped
     GitHubURL       string               `json:"githubURL"`    // immutable (CEL oldSelf)
-    SecurityProfile string               `json:"securityProfile"` // unchanged; still PSA-labels the namespace
     Tracing         TracingConfig         `json:"tracing"`        // unchanged
+
+    // REMOVED vs v1alpha1: SecurityProfile string → PSA is namespace-scoped, so it
+    // is owned at the namespace (GMC-guarded), not per gateway. See §H.16 #7.
+    // (Fallback if co-located differing profiles are ever needed: keep it here and
+    // resolve by most-restrictive-wins.)
 
     // DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
     // inherited by RunnerSets that do not set their own proxyRef. Optional:
@@ -238,7 +242,7 @@ metadata: { name: acme, namespace: team-a }
 spec:
   githubAppRef: { name: acme-github-app }   # LocalSecretReference, same namespace
   githubURL: https://github.com/acme
-  securityProfile: baseline
+  # Pod Security level is owned at the namespace (GMC-guarded), not here — see §H.16 #7.
 ---
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerTemplate
@@ -375,9 +379,10 @@ failed sync. So responsibilities split by what admission is actually good at:
   cannot create cluster-scoped objects) and exists precisely to hold golden
   privileged templates (DinD/sysbox, §H.6). A `RunnerTemplate` carries no
   `securityProfile`, so a v1-style *profile-aware* privileged decision is
-  impossible at the template layer; Pod Security Admission, stamped per the
-  gateway's `securityProfile`, stays the runtime backstop for both kinds, so
-  allowing privileged on the cluster-scoped kind is no weaker than v1.
+  impossible at the template layer; Pod Security Admission — which stamps the
+  namespace's enforcement level from the effective `securityProfile` (§H.16 #7) —
+  stays the runtime backstop for both kinds, so allowing privileged on the
+  cluster-scoped kind is no weaker than v1.
 - **Runtime condition (existence/referential):** does the template exist, does
   the proxy exist, does the cross-namespace grant exist. The controller watches
   referents and re-reconciles when they appear:
@@ -853,15 +858,42 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    `allow-profile-downgrade: allowed` (symmetric with `privileged-profile:
    allowed`), with the dual-read window closing only at `v1alpha1` removal
    ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
-7. **Multi-gateway `securityProfile` composition — open.** `securityProfile`
-   PSA-labels the *namespace* ([§H.4](#h4-spec-sketches)), which was unambiguous
-   under one-gateway-per-namespace. Under multi-gateway (#1) two `ActionsGateway`s
-   in one namespace can carry *different* profiles that contend for the single
-   namespace PSA label. v2 must pick a rule — most-restrictive-wins, all-must-agree
-   (CEL/webhook reject on conflict), or move enforcement off the namespace label —
-   before M3b ([Q175](../STATUS.md#queue)); the choice may touch M1 CEL. Migration
-   does **not** trigger it (one v1 namespace → one gateway), which is exactly why
-   modeling the fan-out surfaces it and a single-namespace migration test would not.
+7. **Multi-gateway `securityProfile` composition — ✅ move it off the gateway.**
+   The contention is self-inflicted. Pod Security Admission is a **namespace-scoped**
+   control in Kubernetes, and v1 hung it on a *sub-namespace* object
+   (`ActionsGateway.spec.securityProfile`) — so under multi-gateway (#1) two
+   `ActionsGateway`s in one namespace fight over the single namespace PSA label.
+   The fix **deletes the question instead of answering it: `securityProfile`
+   becomes a namespace-scoped concern, not a per-gateway field.** Drop
+   `SecurityProfile` from `ActionsGatewaySpec` (a cheap follow-up to the just-merged
+   M1 `v2alpha1` types — alpha, no compatibility guarantee) and let the namespace
+   own its Pod Security level, GMC-guarded exactly as today: the downgrade-protection
+   and `privileged`-eligibility machinery (`securityProfileRank`,
+   `validateSecurityProfileTransition`, the `allow-profile-downgrade` keyword) stays,
+   now keyed **once per namespace** instead of per gateway. Co-located gateways
+   therefore always share one posture; tenants that need *different* postures use
+   *different* namespaces — the natural PSA isolation boundary anyway. Land the
+   field-home change no later than **M3a ([Q164](../STATUS.md#queue))**, where
+   `ActionsGateway` is first reconciled, so M3a reads the profile from its new home
+   rather than building per-gateway logic that M3b would rip out. Migration is
+   unaffected (one v1 namespace → one gateway → one profile).
+
+   **Fallback — only if a concrete need for co-located *differing* profiles
+   emerges:** keep `securityProfile` per-gateway and resolve the namespace label by
+   **most-restrictive-wins** — runtime composition (max `securityProfileRank` across
+   the namespace's gateways), surfaced via a per-gateway `EffectiveSecurityProfile`
+   condition reporting the resolved profile and whether a sibling raised it. It is
+   secure-by-default (the label only ever rises) and fits
+   [§H.7](#h7-reference-integrity--runtime-conditions-not-admission)'s "runtime
+   conditions, not admission" stance. Reject the other two rules: **all-must-agree /
+   reject-on-conflict** needs cross-object admission (inspect sibling gateways —
+   exactly what §H.7 avoids, and awkward in single-object CEL); **off-label** drops
+   namespace PSA enforcement entirely, a secure-by-default regression. Edge for the
+   fallback only: deleting the gateway that forced `restricted` drops the label to
+   the next-highest — a *downgrade-by-deletion* that interacts with
+   `validateSecurityProfileTransition` / `allow-profile-downgrade`; decide whether
+   that auto-downgrade needs the guard or is acceptable (no remaining gateway
+   requested the stricter level).
 
 ### Resolved
 

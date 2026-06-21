@@ -1311,7 +1311,7 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 
 **Resolution.**
 - Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
-- For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`. Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped per the gateway's `securityProfile`), which remains the runtime backstop.
+- For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`. Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the effective `securityProfile`), which remains the runtime backstop.
 
 ---
 
