@@ -42,6 +42,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
 - [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
+- [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
@@ -1278,6 +1279,39 @@ runnerGroups[0]: privileged containers are not permitted in worker pods
 - If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template; the secure-by-default profiles reject it on purpose.
 
 > Note: this webhook check only covers the GMC-managed `ActionsGateway` path. A directly-applied `RunnerGroup` CR bypasses the webhook entirely — Pod Security Admission (stamped per the namespace's profile) is the real enforcement backstop for both paths.
+
+---
+
+## `RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only. The `v1alpha1` path uses the `ActionsGateway`/`RunnerGroup` checks above.
+
+**Symptoms.** Creating or updating a `RunnerTemplate` (or `ClusterRunnerTemplate`) is rejected by the GMC validating webhook with one of:
+
+```
+admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+podTemplate.spec.containers["runner"]: env "HTTP_PROXY" is reserved: the AGC
+injects the egress-proxy variables (HTTP_PROXY/HTTPS_PROXY/NO_PROXY/PROXY_CA_CERT_PATH)
+into worker containers; setting it in a template is overridden and not permitted
+```
+
+```
+admission webhook "vrunnertemplate-v2alpha1.kb.io" denied the request:
+podTemplate.spec.containers["runner"]: privileged containers are not permitted
+in a namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate for
+privileged (DinD/sysbox) worker shapes
+```
+
+**Likely cause.** A worker pod's identity and egress wiring are controller-enforced invariants. In `v1alpha1` the AGC silently overwrote these fields when it built the pod; `v2alpha1` makes them an author-time rejection so a template fails closed instead of being rewritten behind your back.
+
+- **Reserved proxy env vars** (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, matched case-insensitively) are injected by the AGC and may not be set in a template — on either kind.
+- **Privileged containers** are rejected on the namespaced `RunnerTemplate` (a tenant must not self-author a privileged worker shape) but **allowed** on the cluster-scoped `ClusterRunnerTemplate`, which only a platform administrator can create.
+
+The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IPC}`, `automountServiceAccountToken`) are rejected by the CRD's own validation rules with a similar "is reserved" message.
+
+**Resolution.**
+- Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
+- For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`. Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped per the gateway's `securityProfile`), which remains the runtime backstop.
 
 ---
 
