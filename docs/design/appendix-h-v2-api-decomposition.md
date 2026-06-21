@@ -510,10 +510,13 @@ only the ones that fix a problem we have today.
 
 **Decide (only fixable at a major break):**
 
-- **API group rename.** The group is `actions-gateway.github.com`, which suffixes
-  a domain the project does not control — against the k8s convention of using a
-  domain you own. Changing the group touches every CRD, so it can only happen at
-  a major break. Needs a target-domain decision; listed in
+- **API group rename → `actions-gateway.com`.** The group is
+  `actions-gateway.github.com`, which suffixes a domain the project does not
+  control — against the k8s convention of using a domain you own. The project
+  *does* own `actions-gateway.com`, so v2 renames the group to it. Changing the
+  group touches every CRD (and every CR, RBAC rule, VAP, and manifest that names
+  it), so it can only happen at a major break — which is why it rides the v2
+  cutover and its migration tool. Remaining call is go/no-go, not target; see
   [§H.16](#h16-open-questions--sign-off-needed).
 - **Webhook → CEL migration.** v2 targets a newer k8s floor, so checks that are
   webhook-only today *because* CEL could not express them on k8s ≤1.30 (singleton,
@@ -555,7 +558,8 @@ only the ones that fix a problem we have today.
    `ActionsGatewayPolicy` or keeps the controller flags. The selectable
    `ActionsGatewayClass` is deferred behind a documented trigger either way;
    confirm the trigger and that the chosen policy schema is class-reusable.
-8. **API group rename** (§H.15) — keep `actions-gateway.github.com`, or move to a
-   domain the project controls? Break-only, so decide here or never.
+8. **API group rename** (§H.15) — go/no-go on renaming the group from
+   `actions-gateway.github.com` to the project-owned `actions-gateway.com`.
+   Break-only, so decide here or never; target domain is settled.
 9. **Per-field immutability** (§H.15) — confirm `gitHubURL` immutable and
    `gitHubAppRef.name` mutable.
