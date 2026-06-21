@@ -38,6 +38,8 @@ Before introducing a new pattern or abstraction, check whether the codebase alre
 
    If any answer is no, finish the work first — don't open a PR to "get feedback" on something you know is incomplete. If the task is too ambiguous to judge review-readiness, say so and ask.
 
+   **Once CI attaches, confirm the path-gated heavy gates actually RAN — green is not enough.** A PR opened docs-only then given code can show all-green/`CLEAN` while integration/e2e/security never tested it; never treat such a PR as ready or merge it. Put code in the PR's first push to avoid it; if a gate is missing, `gh pr close <n> && gh pr reopen <n>` to force it. Verify/fix: [`docs/development/testing.md`](docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
+
 ## Code standards
 
 ### Go

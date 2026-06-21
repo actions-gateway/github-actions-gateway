@@ -166,7 +166,15 @@ is green **and** mergeable:
    and never needs `--force`), resolves, re-runs the local gate, and pushes. Run
    it in the background so it does not block the main thread either.
 3. When green and mergeable: **stop** the background work (do not self-merge — the
-   dispatcher merges).
+   dispatcher merges). "Green" here means the code-exercising gates **actually
+   ran** — not merely that no check is red. A path-gated workflow that was skipped
+   reports *no* check, so a PR that opened docs-only (e.g. a `docs/STATUS.md` row)
+   and later had code pushed can show all-green/`CLEAN` while build, lint,
+   integration, e2e, and the security scans never tested the code. Before
+   declaring the PR ready, verify the relevant gates ran (`gh pr checks <n>`,
+   `gh run list --branch <branch>`) and `gh pr close <n> && gh pr reopen <n>` to
+   force them if they were skipped. See
+   [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran).
 4. Safety valve: if Auto-fix or the conflict-watcher cannot get the PR green after
    ~5 attempts, post a PR comment summarizing the blocker and stop, so the
    dispatcher can intervene.
@@ -220,9 +228,16 @@ dispatcher toil than the model delta. Record the per-task model choice in the
 For each task, in priority order and respecting the concurrency cap:
 
 1. Spawn the worker chip with a self-contained prompt.
-2. When its PR reaches **green + mergeable**, **review the diff for scope** — is
-   it doing exactly the task, with no stray changes, no weakened gate, no
-   security default regressed? Green CI does not prove this.
+2. When its PR reaches **green + mergeable**, first **confirm the code-exercising
+   gates actually ran** — green/`CLEAN` is not enough if a path-gated workflow was
+   skipped (a PR opened docs-only then given code can show all-green while build /
+   lint / integration / e2e / security-scan never tested it; `gh pr checks <n>` +
+   `gh run list --branch <branch>`, and close→reopen to force them — see
+   [testing.md § Path-gated workflows](testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran)).
+   Then **review the diff for scope** — is it doing exactly the task, with no stray
+   changes, no weakened gate, no security default regressed? Green CI does not
+   prove this. **Never merge a PR whose code was not actually tested by CI** — that
+   is how `main` breaks and flakes accumulate.
 3. Merge (`gh pr merge <n> --squash --delete-branch`).
 4. Advance: spawn the next task in that stream.
 
