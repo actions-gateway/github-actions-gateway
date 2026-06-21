@@ -539,6 +539,9 @@ func egressEnforcingCNI() bool {
 // always exits 0 and reports the outcome as CURL_RC=<n> and HTTP_CODE=<code>
 // lines — callers assert on those, so a non-Succeeded phase means an
 // infrastructure problem (image pull, scheduling), not a blocked connection.
+// curl exit 6 (could not resolve host) is retried up to 5× to ride out
+// transient CoreDNS readiness on a freshly scheduled pod; every other exit
+// code (0, 7, 28) breaks immediately so the real signal is never masked.
 // workloadLabeled selects whether the pod carries the
 // actions-gateway/component=workload label that the tenant NetworkPolicies
 // match on.
@@ -565,10 +568,18 @@ spec:
     - |
       set -u
       rc=0
-      curl --silent --show-error --output /dev/null \
-           --connect-timeout 10 --max-time 20 \
-           --write-out 'HTTP_CODE=%%{http_code}\n' \
-           %s || rc=$?
+      for attempt in 1 2 3 4 5; do
+        rc=0
+        curl --silent --show-error --output /dev/null \
+             --connect-timeout 10 --max-time 20 \
+             --write-out 'HTTP_CODE=%%{http_code}\n' \
+             %s || rc=$?
+        # curl 6 = could not resolve host: transient CoreDNS readiness on a
+        # freshly scheduled pod. Retry only this; 0/7/28 are real signals —
+        # surface them at once so assertions see the true outcome unmasked.
+        if [ "$rc" -ne 6 ]; then break; fi
+        sleep 2
+      done
       echo "CURL_RC=${rc}"
 `, name, ns, labels, curlImage, curlArgs)
 
