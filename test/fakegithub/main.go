@@ -40,6 +40,32 @@
 // live session of that owner, mirroring GitHub's pool-wide delivery (M1
 // Investigation C/D). This keeps the post-job re-registration of single-use
 // agents (Q114) from stranding jobs that race a session's recycle window.
+//
+// # Lease / acquire-vs-redeliver fidelity (Q154)
+//
+// Opt-in via /control/redelivery?enabled=true. When on for an in-scope owner,
+// GET /message no longer drops a delivered job: it *leases* it, holding it out
+// of circulation until one of two things happens, which models the GitHub
+// broker contract the Q59 admission gate rests on:
+//
+//   - AcquireJob claims the job → it is consumed and never delivered again,
+//     even though the runner may then abandon it at the worker pod-capacity
+//     ceiling. This is GitHub keeping an *acquired* job (the runner owns it; an
+//     unrenewed lock is cancelled, not handed to a sibling) — the assumption
+//     Q59's pre-acquire gate is designed around.
+//   - the lease expires unclaimed → the job returns to the owner pool and is
+//     redelivered. This is GitHub returning a *delivered-but-not-acquired* job
+//     (the gate skipped it for lack of capacity) to the queue, so a skipped job
+//     is not lost.
+//
+// Control endpoints (only meaningful with redelivery enabled):
+//
+//	POST /control/redelivery?enabled=true[&owner=<prefix>][&leaseMs=<n>]
+//	GET  /control/jobstats?requestId=<runner_request_id>  — {deliveries,leased,acquired}
+//
+// Off by default; the immediate-dequeue model the other specs rely on is
+// unchanged. Owner-scoped like the single-use simulation so it does not disturb
+// specs running in parallel against the shared instance.
 package main
 
 import (
@@ -143,6 +169,19 @@ type server struct {
 	deadPolls            map[string]int          // dead sessionID → GET /message count since death
 	requestSessions      map[string]string       // runnerRequestId → delivering sessionID
 
+	// Lease / acquire-vs-redeliver fidelity (Q154). Opt-in, owner-scoped. When
+	// enabled, a delivered job is leased rather than dropped: AcquireJob consumes
+	// it permanently (an acquired job is never redelivered), while an unclaimed
+	// lease expiry returns it for redelivery (a skipped job is not lost). See the
+	// package doc. The four maps/fields are guarded by mu; redelivery is an atomic
+	// so the hot GET /message and AcquireJob paths can check it without the lock.
+	redelivery            atomic.Bool
+	redeliveryOwnerPrefix string                // "" = all owners
+	redeliveryLease       time.Duration         // unclaimed-lease window
+	leased                map[string]*leasedJob // runnerRequestId → in-flight delivery
+	acquiredReqs          map[string]bool       // runnerRequestId → claimed (terminal)
+	deliveryCount         map[string]int        // runnerRequestId → times delivered
+
 	// longPollHold is how long GET /message holds an idle connection open before
 	// returning 202, mirroring the real GitHub broker's long-poll window. Zero
 	// (the default) returns 202 immediately, which keeps the unit tests fast.
@@ -161,10 +200,30 @@ type server struct {
 // the handful of concurrent idle pollers a test cluster holds.
 const longPollTick = 50 * time.Millisecond
 
+// defaultRedeliveryLease is the unclaimed-lease window used when redelivery mode
+// is enabled without an explicit leaseMs. Short so a skipped job is redelivered
+// promptly in a test, but comfortably longer than the gap between a delivery and
+// the AcquireJob the admission gate issues when it admits.
+const defaultRedeliveryLease = 2 * time.Second
+
+// leasedJob is a job delivered under the Q154 redelivery model but not yet
+// acquired: it is held out of circulation until AcquireJob claims it (terminal)
+// or its lease expires and it is redelivered.
+type leasedJob struct {
+	owner       string
+	msg         message
+	deliveredAt time.Time
+}
+
 type message struct {
 	MessageID   int64  `json:"messageId"`
 	MessageType string `json:"messageType"`
 	Body        string `json:"body"`
+	// reqID is the job's runner_request_id, captured at enqueue so the Q154 lease
+	// model can correlate a delivered message with the later AcquireJob (which
+	// references the job by jobMessageId == runner_request_id). Unexported, so it
+	// is never serialised to the broker client.
+	reqID string
 }
 
 func newServer() *server {
@@ -182,6 +241,9 @@ func newServer() *server {
 		sessionVersions: make(map[string]string),
 		deadPolls:       make(map[string]int),
 		requestSessions: make(map[string]string),
+		leased:          make(map[string]*leasedJob),
+		acquiredReqs:    make(map[string]bool),
+		deliveryCount:   make(map[string]int),
 	}
 }
 
@@ -207,6 +269,8 @@ func (s *server) controlMux() http.Handler {
 	mux.HandleFunc("/control/session-versions", s.handleSessionVersions)
 	mux.HandleFunc("/control/acquirejob", s.handleSetAcquireJob)
 	mux.HandleFunc("/control/singleuse", s.handleSetSingleUse)
+	mux.HandleFunc("/control/redelivery", s.handleSetRedelivery)
+	mux.HandleFunc("/control/jobstats", s.handleJobStats)
 	return mux
 }
 
@@ -569,20 +633,34 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
+		// Under the Q154 redelivery model, first return any of this owner's leases
+		// that expired unclaimed to the deliverable pool, so a skipped job becomes
+		// redeliverable on this very poll.
+		owner := s.sessionOwners[id]
+		inRedeliver := s.redelivery.Load() && s.inRedeliveryScopeLocked(owner)
+		if inRedeliver {
+			s.expireLeasesLocked(owner)
+		}
 		// Deliver from the session's own queue first, then fall back to the owner's
-		// pending pool (a job whose original session was recycled away). Returning
-		// the message under the lock keeps the dequeue atomic.
+		// pending pool (a job whose original session was recycled away, or one
+		// redelivered after an expired lease). Returning the message under the lock
+		// keeps the dequeue atomic.
 		var msg *message
 		if q := s.jobQueues[id]; len(q) > 0 {
 			m := q[0]
 			s.jobQueues[id] = q[1:]
 			msg = &m
-		} else if owner := s.sessionOwners[id]; owner != "" {
+		} else if owner != "" {
 			if p := s.ownerPending[owner]; len(p) > 0 {
 				m := p[0]
 				s.ownerPending[owner] = p[1:]
 				msg = &m
 			}
+		}
+		// Lease the delivered job: it is now invisible to further polls until it is
+		// either acquired (consumed) or its lease expires (redelivered).
+		if msg != nil && inRedeliver {
+			s.leaseDeliveredLocked(owner, *msg)
 		}
 		s.mu.Unlock()
 		if msg != nil {
@@ -633,6 +711,17 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 				s.consumeSessionLocked(sid)
 			}
 		}
+		s.mu.Unlock()
+	}
+
+	// Q154: an acquired job is terminal — drop its lease and record the claim so
+	// it is never redelivered. This is the GitHub behaviour the admission gate
+	// assumes: once acquired, the runner owns the job (an unrenewed lock is
+	// cancelled, not handed back), so a ceiling-held acquired job does not return
+	// to the queue as a duplicate.
+	if s.redelivery.Load() && reqBody.JobMessageID != "" {
+		s.mu.Lock()
+		s.recordAcquireLocked(reqBody.JobMessageID)
 		s.mu.Unlock()
 	}
 
@@ -733,6 +822,7 @@ func (s *server) handleEnqueue(w http.ResponseWriter, r *http.Request) {
 		MessageID:   msgID,
 		MessageType: "RunnerJobRequest",
 		Body:        string(bodyBytes),
+		reqID:       reqID,
 	}
 
 	s.mu.Lock()
@@ -843,4 +933,120 @@ func (s *server) handleSetSingleUse(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	s.singleUse.Store(enabled)
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleSetRedelivery is the control API:
+//
+//	POST /control/redelivery?enabled=true|false[&owner=<prefix>][&leaseMs=<n>]
+//
+// Toggles the Q154 lease / acquire-vs-redeliver model. The owner prefix scopes
+// it (so parallel specs are unaffected) and leaseMs sets the unclaimed-lease
+// window (default 2s). See the package doc.
+func (s *server) handleSetRedelivery(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	enabled, err := strconv.ParseBool(r.URL.Query().Get("enabled"))
+	if err != nil {
+		http.Error(w, "enabled=true|false required", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	s.redeliveryOwnerPrefix = r.URL.Query().Get("owner")
+	s.redeliveryLease = defaultRedeliveryLease
+	if ms := r.URL.Query().Get("leaseMs"); ms != "" {
+		if n, perr := strconv.Atoi(ms); perr == nil && n > 0 {
+			s.redeliveryLease = time.Duration(n) * time.Millisecond
+		}
+	}
+	s.mu.Unlock()
+	s.redelivery.Store(enabled)
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleJobStats is the control API: GET /control/jobstats?requestId=<id>
+// Returns the Q154 lease state for a job, keyed by its runner_request_id:
+// {"deliveries": <count>, "leased": <bool>, "acquired": <bool>}. A test asserts
+// `acquired` with `deliveries` staying flat (acquired job not redelivered) or
+// `deliveries` climbing while `acquired` is false (skipped job redelivered).
+func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	req := r.URL.Query().Get("requestId")
+	if req == "" {
+		http.Error(w, "requestId required", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	_, leased := s.leased[req]
+	stats := map[string]any{
+		"deliveries": s.deliveryCount[req],
+		"leased":     leased,
+		"acquired":   s.acquiredReqs[req],
+	}
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(stats)
+}
+
+// inRedeliveryScopeLocked reports whether ownerName is within the configured
+// redelivery scope (empty prefix = all owners). Caller must hold s.mu.
+func (s *server) inRedeliveryScopeLocked(ownerName string) bool {
+	return s.redeliveryOwnerPrefix == "" || strings.HasPrefix(ownerName, s.redeliveryOwnerPrefix)
+}
+
+// leaseDeliveredLocked records a just-delivered job as leased to owner and counts
+// the delivery. An already-acquired job is never re-leased (defensive: an
+// acquired job is removed from the deliverable queues). Caller must hold s.mu.
+func (s *server) leaseDeliveredLocked(owner string, msg message) {
+	if s.acquiredReqs[msg.reqID] {
+		return
+	}
+	s.deliveryCount[msg.reqID]++
+	s.leased[msg.reqID] = &leasedJob{owner: owner, msg: msg, deliveredAt: time.Now()}
+}
+
+// expireLeasesLocked returns owner's leases that have aged past the lease window
+// without being acquired to the owner pending pool, where the next poll
+// redelivers them. Already-acquired leases are simply dropped. Caller must hold
+// s.mu.
+func (s *server) expireLeasesLocked(owner string) {
+	lease := s.redeliveryLease
+	if lease <= 0 {
+		lease = defaultRedeliveryLease
+	}
+	now := time.Now()
+	for req, lj := range s.leased {
+		if lj.owner != owner {
+			continue
+		}
+		if s.acquiredReqs[req] {
+			delete(s.leased, req)
+			continue
+		}
+		if now.Sub(lj.deliveredAt) >= lease {
+			s.ownerPending[owner] = append(s.ownerPending[owner], lj.msg)
+			delete(s.leased, req)
+		}
+	}
+}
+
+// recordAcquireLocked marks an in-scope job as acquired (terminal) and drops any
+// outstanding lease, so it is never redelivered. The owner is resolved from the
+// lease if present, else from the delivering session. Caller must hold s.mu.
+func (s *server) recordAcquireLocked(req string) {
+	owner := ""
+	if lj, ok := s.leased[req]; ok {
+		owner = lj.owner
+	} else if sid, ok := s.requestSessions[req]; ok {
+		owner = s.sessionOwners[sid]
+	}
+	if !s.inRedeliveryScopeLocked(owner) {
+		return
+	}
+	delete(s.leased, req)
+	s.acquiredReqs[req] = true
 }

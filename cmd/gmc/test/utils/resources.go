@@ -214,6 +214,54 @@ spec:
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with lifecycle runner group", ns, name)
 }
 
+// ApplyActionsGatewayCRWithWorkerCeiling applies an ActionsGateway CR whose
+// RunnerGroup sets maxWorkers (the worker pod-capacity ceiling the Q59 admission
+// gate enforces) and pins every worker pod Pending via an unsatisfiable
+// nodeSelector. A Pending pod counts toward the ceiling (activePodCount counts
+// Pending) and holds its reservation — the listener's job handler blocks in
+// waitForCompletion until the pod reaches a terminal phase — so the test can
+// hold capacity busy deterministically and free it on demand by deleting the
+// pod (the InformerPodWaiter treats deletion as completion). This is the seam
+// the Q154 e2e uses to drive the gate to its full state without depending on a
+// runner image actually running.
+func ApplyActionsGatewayCRWithWorkerCeiling(ns, name, secretName, workerImage string, maxWorkers int) {
+	yaml := fmt.Sprintf(`apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  gitHubAppRef:
+    name: %s
+  gitHubURL: https://github.com/e2e-org
+  # Debug so a "job never acquired" / "ceiling never held" timeout is diagnosable
+  # from the per-session lifecycle trail (demoted to Debug in Q87, Theme D).
+  logLevel: debug
+  proxy:
+    minReplicas: 1
+    maxReplicas: 3
+    noProxyCIDRs:
+    - svc.cluster.local
+  runnerGroups:
+  - runnerLabels: ["e2e"]
+    maxListeners: 2
+    maxWorkers: %d
+    workerImage: %s
+    podTemplate:
+      spec:
+        # Unschedulable: every worker pod stays Pending, holding its ceiling slot
+        # and reservation until the test deletes it. The runner image is never
+        # pulled, so the test does not depend on a runnable worker.
+        nodeSelector:
+          q154.actions-gateway/never-schedules: "true"
+        containers:
+        - name: runner
+          image: %s
+`, name, ns, secretName, maxWorkers, workerImage, workerImage)
+
+	Expect(ApplyManifest(yaml)).To(Succeed(), "apply ActionsGateway %s/%s with worker ceiling", ns, name)
+}
+
 // ApplyFakegithubEgressNetworkPolicy stamps an additive NetworkPolicy that lets
 // workload-labeled pods in `ns` reach the fakegithub Service in the e2e-infra
 // namespace on port 8080.
