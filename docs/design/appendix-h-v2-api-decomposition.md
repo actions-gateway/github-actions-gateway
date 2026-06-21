@@ -600,14 +600,26 @@ only the ones that fix a problem we have today.
 Each carries a recommendation grounded in precedent (Gateway API, ARC,
 cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
 
-1. **Multi-gateway-per-namespace naming & RBAC.** Derive every resource from the
-   owning CR name (`<ag>-agc`, `<ep>-proxy`, worker `generateName=<rs>-`) under the
-   [§H.6](#h6-naming-and-length-budgets) 52-char cap, and **rewrite the
-   tenant-resource-guard VAP to confine by namespace-tenancy + a GMC `managed-by`
-   label rather than by enumerated fixed names** — name-allowlisting does not
-   scale to N gateways. Require *both* the tenant marker and the managed-by label
-   to match. (Precedent: ARC runs multiple scale sets per namespace, names = CR
-   prefix + fixed suffix.) Biggest GMC change; the core build of v2.
+1. **Multi-gateway-per-namespace — naming, AGC scoping, ownership.** Verified
+   against `gmc-tenant-resource-guard` (`cmd/gmc/config/admission-policy/tenant-resource-guard.yaml`):
+   the GMC-confinement VAP keys on the namespace `tenant=true` marker, **not on
+   resource names**, so it already scales to N gateways per namespace and needs no
+   change. The real work is three controller-side changes:
+   - **(a) Per-gateway naming** — every derived resource becomes `<ag>-<suffix>`
+     (`<ag>-agc`, `<ep>-proxy`, worker `generateName=<rs>-`) under the
+     [§H.6](#h6-naming-and-length-budgets) 52-char cap, so two gateways in one
+     namespace never collide on a fixed name.
+   - **(b) Per-gateway AGC scoping** — N gateways ⇒ N AGC Deployments in one
+     namespace, so each AGC must reconcile **only the `RunnerSet`s whose
+     `gatewayRef` targets it** — the one genuinely new controller behavior, without
+     which N controllers fight over the same objects.
+   - **(c) Per-gateway ownership** — each `ActionsGateway` owner-refs its own
+     children so deleting one gateway GCs only its resources, not a neighbor's.
+
+   (Optional defense-in-depth: also require a GMC `managed-by` label on writes; not
+   needed for correctness since the VAP already confines by namespace.) Precedent:
+   ARC runs multiple scale sets per namespace, names = CR prefix + fixed suffix.
+   The core build of v2 — naming + watch-scoping + ownership, not a policy rewrite.
 2. **Cross-namespace proxy CA distribution → ConfigMap, not secret.** The CA is a
    public certificate, so the GMC distributes it as a **ConfigMap** into only the
    granted consumer namespaces (trust-manager pattern; [§H.9](#h9-cross-namespace-proxy-sharing)).
