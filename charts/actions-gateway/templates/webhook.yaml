@@ -41,3 +41,51 @@ webhooks:
     resources:
     - actionsgateways
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-actions-gateway-com-v2alpha1-clusterrunnertemplate
+    {{- if not .Values.certManager.enabled }}
+    {{- include "actions-gateway.webhookCerts" . }}
+    caBundle: {{ b64enc $.agWebhookCerts.caCert }}
+    {{- end }}
+  failurePolicy: Fail
+  name: vclusterrunnertemplate-v2alpha1.kb.io
+  rules:
+  - apiGroups:
+    - actions-gateway.com
+    apiVersions:
+    - v2alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusterrunnertemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: {{ .Release.Namespace }}
+      path: /validate-actions-gateway-com-v2alpha1-runnertemplate
+    {{- if not .Values.certManager.enabled }}
+    {{- include "actions-gateway.webhookCerts" . }}
+    caBundle: {{ b64enc $.agWebhookCerts.caCert }}
+    {{- end }}
+  failurePolicy: Fail
+  name: vrunnertemplate-v2alpha1.kb.io
+  rules:
+  - apiGroups:
+    - actions-gateway.com
+    apiVersions:
+    - v2alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - runnertemplates
+  sideEffects: None

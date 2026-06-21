@@ -15,11 +15,13 @@ import (
 	"time"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
+	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -65,6 +67,7 @@ func TestMain(m *testing.M) {
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = agcv1alpha1.AddToScheme(testScheme)
+	_ = agcv2alpha1.AddToScheme(testScheme)
 	_ = gmcv1alpha1.AddToScheme(testScheme)
 	_ = gmcv2alpha1.AddToScheme(testScheme)
 
@@ -145,6 +148,13 @@ func startValidatingWebhook() error {
 	}
 	if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, nil); err != nil {
 		return fmt.Errorf("register validating webhook: %w", err)
+	}
+	// The envtest WebhookInstallOptions install the whole ValidatingWebhookConfiguration
+	// (failurePolicy=Fail), including the v2 RunnerTemplate/ClusterRunnerTemplate
+	// webhooks, so the same server must serve their paths or every runnertemplate
+	// create in the suite would fail with a connection error.
+	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
+		return fmt.Errorf("register RunnerTemplate webhooks: %w", err)
 	}
 
 	var mgrCtx context.Context
@@ -323,6 +333,42 @@ func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
 		return err
 	}
 	return nil
+}
+
+// startEgressProxyReconciler starts an EgressProxyReconciler for the duration of a
+// test against the envtest apiserver. The optional ipCache is shared so a test can
+// stamp GitHub CIDRs the proxy NetworkPolicy should pick up; a nil cache allocates a
+// fresh (empty) one, which the reconciler tolerates.
+func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) {
+	t.Helper()
+	mgrCtx, mgrCancel := context.WithCancel(ctx)
+	t.Cleanup(mgrCancel)
+
+	skipNameValidation := true
+	syncPeriod := 2 * time.Second
+	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
+		Scheme:                 testScheme,
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "0",
+		LeaderElection:         false,
+		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
+		Cache:                  cache.Options{SyncPeriod: &syncPeriod},
+	})
+	require.NoError(t, err)
+
+	if ipCache == nil {
+		ipCache = &controller.IPRangeCache{}
+	}
+
+	err = (&controller.EgressProxyReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		IPCache:    ipCache,
+		ProxyImage: "proxy:test",
+	}).SetupWithManager(mgr)
+	require.NoError(t, err)
+
+	go func() { _ = mgr.Start(mgrCtx) }()
 }
 
 type stubIPFetcher struct {

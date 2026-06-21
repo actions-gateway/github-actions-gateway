@@ -365,6 +365,24 @@ failed sync. So responsibilities split by what admission is actually good at:
   reserved-pod-field rejection on `RunnerTemplate`, name `maxLength`, reference
   *well-formedness*, and whether a cross-namespace reference is *permitted by
   operator policy* at all.
+
+  *Reserved-pod-field split (M2, implemented).* The scalar pod-level reserved
+  fields (`serviceAccountName`, `host{PID,Network,IPC}`,
+  `automountServiceAccountToken`) are CRD CEL rules (M1). The per-container checks
+  that exceed the CEL cost budget — an unbounded containers-array walk — are the
+  GMC-hosted validating webhook (M2): it rejects the AGC-injected egress-proxy env
+  vars (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, the variables v1
+  silently overwrote at pod-build time) on every container of **both** template
+  kinds. **Privileged containers** are rejected on the namespaced `RunnerTemplate`
+  (a tenant must not self-author a privileged worker shape) but **allowed** on the
+  cluster-scoped `ClusterRunnerTemplate` — that kind is platform-authored (tenants
+  cannot create cluster-scoped objects) and exists precisely to hold golden
+  privileged templates (DinD/sysbox, §H.6). A `RunnerTemplate` carries no
+  `securityProfile`, so a v1-style *profile-aware* privileged decision is
+  impossible at the template layer; Pod Security Admission — which stamps the
+  namespace's enforcement level from the effective `securityProfile` (§H.16 #7) —
+  stays the runtime backstop for both kinds, so allowing privileged on the
+  cluster-scoped kind is no weaker than v1.
 - **Runtime condition (existence/referential):** does the template exist, does
   the proxy exist, does the cross-namespace grant exist. The controller watches
   referents and re-reconciles when they appear:
@@ -409,8 +427,16 @@ contract in M1 rather than letting each reconciler invent its own.
 Shared objects must not be owner-referenced by their referrers:
 
 - **`EgressProxy`** is standalone and owns its *own* children (the proxy
-  Deployment/Service/HPA/PDB, reconciled by the GMC). Nothing owns the
-  `EgressProxy`.
+  Deployment/Service/HPA/PDB/NetworkPolicy and a self-signed proxy TLS Secret,
+  reconciled by the GMC). Nothing owns the `EgressProxy`. Each child is derived as
+  `<ep>-proxy` (the TLS Secret as `<ep>-proxy-tls`) and carries the per-`EgressProxy`
+  identity label `actions-gateway.com/egress-proxy: <name>`; every Deployment /
+  Service / PDB / HPA / NetworkPolicy selector and the pod anti-affinity key on that
+  label. This is load-bearing twice: it keeps multiple proxy pools in one namespace
+  selector-isolated (v1 could assume one proxy per namespace), and because each pool
+  is now its own Deployment, proxy metrics carry the proxy identity automatically
+  (M2's free observability win). Same-namespace only at M2; cross-namespace sharing
+  is M4.
 - **`RunnerTemplate`** is pure data — no children, nothing owns it.
 - **Deletion degrades, it does not block — and uses no finalizer at all.**
   Hard-blocking deletion of a still-referenced shared object via finalizer would

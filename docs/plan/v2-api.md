@@ -145,10 +145,11 @@ a milestone is done when every box is checked and its exit criterion holds.
 
 ### M2 — Data kinds (Q163)
 
-- [ ] `EgressProxy` reconciler (GMC): own Deployment/Service/HPA/PDB; per-gateway name `<ep>-proxy`; cert/CA wiring; same-namespace only.
-- [ ] Per-tenant proxy metrics carry the gateway label (free win from per-gateway proxies).
-- [ ] `RunnerTemplate` / `ClusterRunnerTemplate`: data only; move the reserved-pod-field rejection webhook here.
-- [ ] envtest for both kinds.
+- [x] `EgressProxy` reconciler (GMC): owns Deployment/Service/HPA/PDB/NetworkPolicy + self-signed proxy TLS Secret via controller owner refs; per-`EgressProxy` name `<ep>-proxy`; same-namespace only.
+- [x] Per-`EgressProxy` identity label (`actions-gateway.com/egress-proxy: <name>`) on pods + children, so proxy metrics carry the proxy identity (free win) **and** multiple proxy pools in one namespace stay selector-isolated.
+- [x] `RunnerTemplate` / `ClusterRunnerTemplate`: data only; reserved-pod-field rejection webhook (GMC-hosted) — per-container proxy env vars on both kinds; privileged rejected on namespaced `RunnerTemplate`, allowed on platform-authored `ClusterRunnerTemplate`. Scalar reserved fields stay on M1 CEL.
+- [x] envtest for both kinds (reconcile + owner-refs + defaulting + status; webhook accept/reject).
+- Metrics-mTLS listener + ServiceMonitor on the standalone proxy are **deferred to M3a** (the metrics CA is jointly owned with the AGC). M2 stamps the identity label so the metric series carry the proxy identity once the M3a scrape is wired; the proxy boots fine without the metrics listener.
 
 ### M3a — Single-gateway parity (Q164)
 
