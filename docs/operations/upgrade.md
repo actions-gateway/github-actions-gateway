@@ -67,22 +67,31 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
-### Non-breaking: `v2alpha1` CRDs installed but inert
+### Non-breaking: `v2alpha1` CRDs ship in a separate, opt-in chart
 
-The chart now ships five additional CRDs in the new `actions-gateway.com` group —
+The v2 (`actions-gateway.com`) API is introduced as a decomposed set of five CRDs —
 `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, and the
-cluster-scoped `clusterrunnertemplates` (the v2 API decomposition). On upgrade they
-appear in `kubectl get crds` alongside the existing `actions-gateway.github.com`
-CRDs, and `helm uninstall` preserves them (`resource-policy: keep`), exactly like
-the v1 CRDs. **No action is required and nothing changes for running tenants:** the
-v2 types are validated by the API server but **no controller reconciles them yet**,
-so creating a v2 object provisions nothing. Continue using the `v1alpha1`
-(`actions-gateway.github.com`) API; v2 onboarding and a migration tool arrive in
-later releases. See the [v2 API plan](../plan/v2-api.md). The short names `ag`/`rs`/
-`rt`/`crt`/`ep` are claimed by the v2 CRDs; because v2's `ActionsGateway` reuses the
-`ag` short name, `kubectl get ag` is ambiguous while both groups are installed —
-qualify it as `kubectl get actionsgateways.actions-gateway.github.com` (or `.com`)
-to disambiguate.
+cluster-scoped `clusterrunnertemplates`. **The main `actions-gateway` chart upgrade
+is unchanged: it does not install these.** They ship in a separate, opt-in chart,
+`actions-gateway-crds-v2`, because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs
+each embed a full pod template (~600 KB) and would otherwise push the main chart's
+Helm release Secret past its hard 1 MiB limit.
+
+**No action is required for existing tenants.** Install the v2 chart only when you
+want the v2 API available:
+
+```bash
+helm install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+```
+
+Even once installed the v2 types are inert — they are validated by the API server
+but **no controller reconciles them yet**, so creating a v2 object provisions
+nothing. Continue using the `v1alpha1` (`actions-gateway.github.com`) API; v2
+controllers, onboarding, and a migration tool arrive in later releases. See the
+[v2 API plan](../plan/v2-api.md). Note: v2's `ActionsGateway` reuses the `ag` short
+name, so once both groups are installed `kubectl get ag` is ambiguous — qualify it
+as `kubectl get actionsgateways.actions-gateway.github.com` (or `.com`) to
+disambiguate.
 
 ### BREAKING: `spec.namespaceQuota` removed — the ResourceQuota is now platform-owned
 

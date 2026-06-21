@@ -45,6 +45,13 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   the chart reuses the images' registry, login, and keyless-signing path; Artifact
   Hub (see [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) annotations)
   indexes the OCI ref for discoverability.
+- The **opt-in v2 CRD chart**, packaged and pushed alongside the main chart to
+  `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same
+  version derivation and keyless signature. It ships only the v2alpha1
+  (`actions-gateway.com`) CRDs — separated from the main chart because the large
+  pod-template CRDs would otherwise push the main chart's Helm release Secret past
+  its 1 MiB limit (Q149). Operators install it only when adopting the v2 API. Both
+  chart packages are produced by the same `chart-publish` job.
 
 Both the image and chart work are automated by the
 [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on

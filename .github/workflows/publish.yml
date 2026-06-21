@@ -370,9 +370,36 @@ jobs:
           # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
           scripts/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+      - name: Package, push, and sign the v2 CRD chart (keyless)
+        id: chart_crds_v2
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # The opt-in actions-gateway-crds-v2 chart (v2alpha1 CRDs), published
+          # separately so the large pod-template CRDs do not bloat the main chart's
+          # Helm release (Q149). Same versioning/sign path as the main chart.
+          version="${TAG#v}"
+          repo="oci://${REGISTRY}/${OWNER}/charts"
+          helm package charts/actions-gateway-crds-v2 \
+            --version "${version}" --app-version "${version}" \
+            --destination "${RUNNER_TEMP}"
+          pkg="${RUNNER_TEMP}/actions-gateway-crds-v2-${version}.tgz"
+          scripts/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push-crds-v2.log" 2>&1
+          cat "${RUNNER_TEMP}/push-crds-v2.log"
+          digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push-crds-v2.log")"
+          if [[ -z "${digest}" ]]; then
+            echo "could not parse pushed v2 CRD chart digest from helm push output" >&2
+            exit 1
+          fi
+          ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
+          scripts/retry.sh cosign sign --yes "${ref}"
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Record published chart in the run summary
         env:
           REF: ${{ steps.chart.outputs.ref }}
+          REF_CRDS_V2: ${{ steps.chart_crds_v2.outputs.ref }}
           TAG: ${{ steps.tag.outputs.tag }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -380,5 +407,8 @@ jobs:
           {
             printf -- '- **chart** — `%s`\n' "${REF}"
             printf -- '  install: `helm install actions-gateway oci://%s/%s/charts/actions-gateway --version %s`\n' \
+              "${REGISTRY}" "${OWNER}" "${TAG#v}"
+            printf -- '- **chart (v2 CRDs, opt-in)** — `%s`\n' "${REF_CRDS_V2}"
+            printf -- '  install: `helm install actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
           } >> "${GITHUB_STEP_SUMMARY}"

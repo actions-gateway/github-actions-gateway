@@ -91,18 +91,25 @@ add_crd "cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yam
 add_crd "$SRC_RUNNERGROUP" \
 	"charts/actions-gateway/templates/crds/runnergroup-crd.yaml" "$RUNNERGROUP_BLOCK"
 
-# v2alpha1 — actions-gateway.com (Q149). GMC owns ActionsGateway + EgressProxy;
-# AGC owns RunnerSet + RunnerTemplate + ClusterRunnerTemplate.
+# v2alpha1 — actions-gateway.com (Q149). Shipped by the SEPARATE, opt-in
+# actions-gateway-crds-v2 chart, not the main chart: the RunnerTemplate /
+# ClusterRunnerTemplate CRDs each embed a full PodTemplateSpec (~600 KB), and
+# adding them to the main chart pushed its Helm release Secret past the hard 1 MiB
+# limit (Helm stores the rendered manifest + a copy of the chart source, gzipped,
+# in one Secret). A separate release keeps each chart within budget and makes v2
+# opt-in. GMC owns ActionsGateway + EgressProxy; AGC owns RunnerSet +
+# RunnerTemplate + ClusterRunnerTemplate.
+V2_CHART="charts/actions-gateway-crds-v2/templates/crds"
 add_crd "cmd/gmc/config/crd/bases/actions-gateway.com_actionsgateways.yaml" \
-	"charts/actions-gateway/templates/crds/actionsgateway-v2-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK"
 add_crd "cmd/gmc/config/crd/bases/actions-gateway.com_egressproxies.yaml" \
-	"charts/actions-gateway/templates/crds/egressproxy-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK"
 add_crd "cmd/agc/config/crd/actions-gateway.com_runnersets.yaml" \
-	"charts/actions-gateway/templates/crds/runnerset-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK"
 add_crd "cmd/agc/config/crd/actions-gateway.com_runnertemplates.yaml" \
-	"charts/actions-gateway/templates/crds/runnertemplate-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK"
 add_crd "cmd/agc/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
-	"charts/actions-gateway/templates/crds/clusterrunnertemplate-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK"
 
 # render SRC DST BLOCK — copy SRC to DST, inserting BLOCK right after the
 # `controller-gen.kubebuilder.io/version:` annotation line. BLOCK is passed
@@ -110,6 +117,7 @@ add_crd "cmd/agc/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
 # rejected by BSD awk (macOS), while ENVIRON is portable across BSD awk and gawk.
 render() {
 	local src="$1" dst="$2" block="$3"
+	mkdir -p "$(dirname "$dst")"
 	BLOCK="$block" awk '
 		{ print }
 		!injected && /^    controller-gen\.kubebuilder\.io\/version:/ {

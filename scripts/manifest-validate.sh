@@ -39,6 +39,10 @@ MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-1.30.0}"
 KUBECONFORM_CACHE="${KUBECONFORM_CACHE:-}"
 
 chart="$REPO_ROOT/charts/actions-gateway"
+# The opt-in v2alpha1 (actions-gateway.com) CRD chart, shipped separately so its
+# large pod-template CRDs do not push the main chart's Helm release past the 1 MiB
+# limit (Q149). CRD-only: no images, no digest pinning.
+crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"
 
 # kubeconform flags: -strict rejects unknown fields; -ignore-missing-schemas
 # skips resources whose schema is not in the upstream Kubernetes set —
@@ -49,7 +53,7 @@ chart="$REPO_ROOT/charts/actions-gateway"
 kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -ignore-missing-schemas"
 [[ -n "$KUBECONFORM_CACHE" ]] && kubeconform_flags+=" -cache $KUBECONFORM_CACHE"
 
-yamllint_paths="charts/actions-gateway cmd/agc/config cmd/gmc/config"
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config"
 
 # The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
 # (CRDs, manager RBAC role, webhook config) that are the codegen substrate and
@@ -59,10 +63,15 @@ yamllint_paths="charts/actions-gateway cmd/agc/config cmd/gmc/config"
 # renders them.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
 cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
+cmd/agc/config/crd/actions-gateway.com_runnersets.yaml
+cmd/agc/config/crd/actions-gateway.com_runnertemplates.yaml
+cmd/agc/config/crd/actions-gateway.com_clusterrunnertemplates.yaml
 cmd/gmc/config/rbac/role.yaml
 cmd/gmc/config/webhook/manifests.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
+cmd/gmc/config/crd/bases/actions-gateway.com_actionsgateways.yaml
+cmd/gmc/config/crd/bases/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml"
 
@@ -73,6 +82,11 @@ yamllint --strict -c "$REPO_ROOT/.yamllint.yaml" $yamllint_paths
 echo "==> kubeconform: controller-gen manifests (codegen substrate; k8s $MANIFEST_K8S_VERSION)"
 # shellcheck disable=SC2086
 kubeconform $kubeconform_flags $standalone_manifests
+
+echo "==> helm lint + kubeconform: actions-gateway-crds-v2 (opt-in v2 CRD chart)"
+helm lint "$crds_v2_chart"
+# shellcheck disable=SC2086
+helm template ag-crds-v2 "$crds_v2_chart" | kubeconform $kubeconform_flags
 
 echo "==> helm lint (digest-pinned: default values must not render — checked next)"
 helm lint "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST"
