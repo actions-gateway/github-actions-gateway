@@ -10,9 +10,9 @@ Status: ✅ Implemented (in-memory reservation-counter gate). Tracked as [Q59](.
 > the ceiling from the freshly cached RunnerGroup each call (honours spec edits,
 > Q117). Rejections increment `actions_gateway_jobs_admission_rejected_total`.
 > The post-acquire `ceilingCheck` and quota retry are unchanged — they remain
-> the backstop. **Still open (does not gate the change):** the live
-> ceiling-held-→-cancelled-vs-redelivered confirmation below is Tier-A e2e
-> territory and was not run as part of the unit-tested implementation.
+> the backstop. **Verified end-to-end (Q154):** the
+> ceiling-held-→-cancelled-vs-redelivered assumption below has now been
+> confirmed on a real cluster — see "End-to-end verification (Q154)".
 
 ## The problem in one sentence
 
@@ -58,10 +58,9 @@ Only in step 5 does capacity get evaluated. In
    have handed this to another session in ~2 min" into "the run is cancelled
    and needs a manual re-run."
 
-   > ⚠️ End-to-end verification needed (do not trust this source-read). The
-   > exact GitHub outcome for *acquired → never renewed → no rerun called* must
-   > be confirmed on a real broker session before treating cancellation as
-   > certain. This is precisely the source-read-vs-exec gap CLAUDE.md calls out.
+   > ✅ Verified end-to-end (Q154). The acquired-then-held outcome — *not
+   > redelivered* — is now confirmed on a real cluster, not just source-read.
+   > See "End-to-end verification (Q154)" below.
 
 2. **Quota-rejected job blocks a goroutine holding the lock.** The acquire
    committed the claim, so the provisioner cannot cheaply hand the job back —
@@ -254,11 +253,43 @@ cluster quota. The point is that Kueue **augments** the pod layer; it cannot
   envtest. This is the same class of bug PR #59's planned
   `E2E_GMC_TenantProvisioning_*` test exists to catch.
 
+## End-to-end verification (Q154)
+
+The load-bearing assumption — *a ceiling-held, already-acquired job is cancelled
+(owned by the runner; the unrenewed lock lapses), not redelivered* — was, until
+Q154, only unit-tested and source-read. Per CLAUDE.md's PR #59 lesson (✅
+source-read findings are unverified until run), it is now confirmed by a Tier-A
+kind e2e: `E2E_AGC_AcquireAdmissionControl` in
+[`cmd/gmc/test/e2e/acquire_admission_test.go`](../../cmd/gmc/test/e2e/acquire_admission_test.go).
+
+The spec proves both halves of the contract the gate rests on, observing
+GitHub's behaviour through fakegithub (extended with an opt-in, owner-scoped
+**lease / acquire-vs-redeliver** model so the two paths have distinct,
+observable outcomes — `test/fakegithub/main.go`, `/control/redelivery` +
+`/control/jobstats`):
+
+- **Acquired-then-held ⇒ not redelivered.** A Pending decoy pod manufactures the
+  gate/ceiling divergence the post-acquire backstop exists for (a pod the
+  in-memory counter doesn't know about — e.g. after an AGC restart, or a sibling
+  AGC): the gate *admits*, `AcquireJob` claims the job, and only then does
+  `ceilingCheck` hold it. fakegithub records the job acquired and **never
+  redelivers it** (`deliveries` stays 1) — confirming an acquired job is the
+  runner's to lose, exactly as the design assumes.
+- **Skipped ⇒ redelivered after capacity frees.** With the single worker slot
+  busy (a Pending pod holding the reservation), a second job is *skipped* by the
+  gate — never acquired — yet GitHub keeps **redelivering** it (`deliveries`
+  climbs while `acquired` stays false). Deleting the busy pod frees the slot and
+  the redelivered job is finally acquired — confirming a skipped job is not lost.
+
+**Result: the assumption holds.** The gate's design — decide capacity *before*
+`AcquireJob` — is correct: skipping is safe (redelivery) and a too-late
+post-acquire rejection is not (cancellation, no redelivery).
+
 ## Open questions
 
-- Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs.
-  redelivered. The whole priority of this work hinges on the answer. **Still
-  open** — Tier-A e2e, not covered by the shipped unit-tested gate.
+- ~~Confirm (live) whether a ceiling-held, already-acquired job is cancelled vs.
+  redelivered.~~ **Resolved (Q154): cancelled, not redelivered.** See
+  "End-to-end verification (Q154)" above.
 - ~~Decide reservation-counter vs. informer-cache for the gate's count source.~~
   **Resolved: reservation counter** (the leading candidate), shipped as a pure
   in-memory per-RunnerGroup counter independent of the provisioner's

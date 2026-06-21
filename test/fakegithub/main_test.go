@@ -388,6 +388,163 @@ func TestOpportunisticRedelivery(t *testing.T) {
 	})
 }
 
+// setRedelivery toggles the Q154 lease/redelivery model via the control API.
+func setRedelivery(t *testing.T, controlURL, query string) {
+	t.Helper()
+	resp, err := http.Post(controlURL+"/control/redelivery?"+query, "", nil)
+	if err != nil {
+		t.Fatalf("set redelivery: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("set redelivery: status %d", resp.StatusCode)
+	}
+}
+
+// enqueueReq enqueues a job with an explicit runner_request_id so the test can
+// address it by request id in /control/jobstats.
+func enqueueReq(t *testing.T, controlURL, sessionID, reqID string) int {
+	t.Helper()
+	body := fmt.Sprintf(`{"runner_request_id":%q,"run_service_url":"http://x"}`, reqID)
+	resp, err := http.Post(controlURL+"/control/enqueue?sessionId="+sessionID,
+		"application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("enqueue %s: %v", reqID, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode
+}
+
+// acquire posts /acquirejob for a runner_request_id.
+func acquire(t *testing.T, baseURL, reqID string) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"jobMessageId": reqID})
+	resp, err := http.Post(baseURL+"/acquirejob", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("acquire %s: %v", reqID, err)
+	}
+	_ = resp.Body.Close()
+}
+
+type jobStats struct {
+	Deliveries int  `json:"deliveries"`
+	Leased     bool `json:"leased"`
+	Acquired   bool `json:"acquired"`
+}
+
+func getJobStats(t *testing.T, controlURL, reqID string) jobStats {
+	t.Helper()
+	resp, err := http.Get(controlURL + "/control/jobstats?requestId=" + reqID)
+	if err != nil {
+		t.Fatalf("jobstats %s: %v", reqID, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var js jobStats
+	if err := json.NewDecoder(resp.Body).Decode(&js); err != nil {
+		t.Fatalf("decode jobstats: %v", err)
+	}
+	return js
+}
+
+// TestRedeliveryLeaseModel is the Q154 fidelity test: with the lease model on,
+// an *acquired* job is consumed and never redelivered (the GitHub contract the
+// Q59 admission gate assumes — a ceiling-held acquired job is cancelled, not
+// handed back), while a *delivered-but-not-acquired* job is redelivered once its
+// lease expires (so a job the gate skips for lack of capacity is not lost).
+func TestRedeliveryLeaseModel(t *testing.T) {
+	s := newServer() // single-use off; redelivery is independent of it
+	main := httptest.NewServer(s.mainMux())
+	defer main.Close()
+	control := httptest.NewServer(s.controlMux())
+	defer control.Close()
+
+	setRedelivery(t, control.URL, "enabled=true&leaseMs=120")
+
+	sess, st := createSession(t, main.URL, 11, "bearer-r")
+	if st != http.StatusOK {
+		t.Fatalf("create session: %d", st)
+	}
+
+	t.Run("acquired job is not redelivered", func(t *testing.T) {
+		if st := enqueueReq(t, control.URL, sess, "req-acq"); st != http.StatusOK {
+			t.Fatalf("enqueue: %d", st)
+		}
+		if status, body := getMessage(t, main.URL, sess); status != http.StatusOK || len(body) == 0 {
+			t.Fatalf("delivery: want 200+body, got %d %q", status, body)
+		}
+		acquire(t, main.URL, "req-acq")
+
+		js := getJobStats(t, control.URL, "req-acq")
+		if !js.Acquired || js.Leased || js.Deliveries != 1 {
+			t.Fatalf("post-acquire stats = %+v, want {Deliveries:1 Leased:false Acquired:true}", js)
+		}
+		// Poll well past several lease windows: an acquired job must never come
+		// back, so deliveries stays at 1.
+		for i := 0; i < 6; i++ {
+			if status, _ := getMessage(t, main.URL, sess); status != http.StatusAccepted {
+				t.Fatalf("poll %d after acquire: want 202 (no redelivery), got %d", i, status)
+			}
+			time.Sleep(40 * time.Millisecond)
+		}
+		if js := getJobStats(t, control.URL, "req-acq"); js.Deliveries != 1 {
+			t.Fatalf("acquired job was redelivered: deliveries=%d, want 1", js.Deliveries)
+		}
+	})
+
+	t.Run("skipped job is redelivered after its lease expires", func(t *testing.T) {
+		if st := enqueueReq(t, control.URL, sess, "req-skip"); st != http.StatusOK {
+			t.Fatalf("enqueue: %d", st)
+		}
+		// Deliver once, then *skip* it (no acquire), as the admission gate does
+		// when it is full.
+		if status, body := getMessage(t, main.URL, sess); status != http.StatusOK || len(body) == 0 {
+			t.Fatalf("first delivery: want 200+body, got %d %q", status, body)
+		}
+		if js := getJobStats(t, control.URL, "req-skip"); js.Deliveries != 1 || !js.Leased || js.Acquired {
+			t.Fatalf("after skip stats = %+v, want {Deliveries:1 Leased:true Acquired:false}", js)
+		}
+		// Within the lease window the job stays invisible.
+		if status, _ := getMessage(t, main.URL, sess); status != http.StatusAccepted {
+			t.Fatalf("poll within lease: want 202, got %d", status)
+		}
+		// After the lease expires, the next poll redelivers it.
+		var redelivered bool
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			time.Sleep(40 * time.Millisecond)
+			if status, _ := getMessage(t, main.URL, sess); status == http.StatusOK {
+				redelivered = true
+				break
+			}
+		}
+		if !redelivered {
+			t.Fatal("skipped job was never redelivered after its lease expired")
+		}
+		if js := getJobStats(t, control.URL, "req-skip"); js.Deliveries < 2 || js.Acquired {
+			t.Fatalf("redelivered stats = %+v, want Deliveries>=2 Acquired:false", js)
+		}
+	})
+
+	t.Run("out-of-scope owner keeps the immediate-dequeue model", func(t *testing.T) {
+		// Scope redelivery to a prefix this session's owner ("agent-11") lacks.
+		setRedelivery(t, control.URL, "enabled=true&owner=scoped-&leaseMs=120")
+		if st := enqueueReq(t, control.URL, sess, "req-oos"); st != http.StatusOK {
+			t.Fatalf("enqueue: %d", st)
+		}
+		if status, _ := getMessage(t, main.URL, sess); status != http.StatusOK {
+			t.Fatalf("delivery: want 200, got %d", status)
+		}
+		// Out of scope: no lease is tracked, so jobstats stays empty and a second
+		// poll returns 202 (the job was dequeued immediately, not leased).
+		if js := getJobStats(t, control.URL, "req-oos"); js.Deliveries != 0 || js.Leased {
+			t.Fatalf("out-of-scope stats = %+v, want untracked", js)
+		}
+		if status, _ := getMessage(t, main.URL, sess); status != http.StatusAccepted {
+			t.Fatalf("second poll out of scope: want 202, got %d", status)
+		}
+	})
+}
+
 // TestSessionVersionCapture verifies fakegithub records the agent.version
 // (runnerVersion) from POST /session and exposes it via the control API, so a
 // spec can assert the AGC sent a non-empty, correct version (the Q71/Q118
