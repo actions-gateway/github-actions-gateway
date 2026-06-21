@@ -260,6 +260,16 @@ so an operator can target it with KEDA, VPA, or a custom HPA. Additive (`*bool`)
 deferred until an operator needs it — and distinct from improving the *managed*
 metric (CPU → connection-based), which is the Q19 proxy-features work.
 
+### Bring-your-own proxy TLS certificate (Q174)
+
+The proxy CA/cert is GMC-generated (self-signed) by default. Same pattern: add an
+operator-supplied `certificateSecretRef` on `EgressProxy` — when set, GMC uses that
+TLS Secret instead of generating one, letting operators source proxy certs from an
+external PKI/Vault (different algorithm, lifetime, or HSM-backed issuance). **Security
+invariant:** the referenced Secret must be a same-namespace TLS Secret — no
+cross-tenant reuse. Additive optional field, deferred until an operator with managed
+PKI asks. Instantiates [design goal 6](../design/01-executive-summary.md#design-goals).
+
 ### M4 — Cross-namespace `EgressProxy` sharing
 
 Additive on M3, gated on a **concrete operator ask** for cross-namespace sharing
