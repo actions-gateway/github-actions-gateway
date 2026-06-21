@@ -196,7 +196,7 @@ func TestEgressIPVariance_Live(t *testing.T) {
 		PrivateKeyPEM:  []byte(os.Getenv("GITHUB_APP_PRIVATE_KEY")),
 		InstallationID: instID,
 	}
-	provider, err := githubapp.NewInstallationTokenProvider(creds, nil)
+	provider, err := githubapp.NewInstallationTokenProvider(creds, nil, false)
 	require.NoError(t, err, "failed to create installation token provider")
 	ctx := context.Background()
 	token, err := provider.Token(ctx)
