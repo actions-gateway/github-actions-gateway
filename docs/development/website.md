@@ -60,8 +60,9 @@ The logomark and icon set are **generated, not hand-edited**. Edit
 re-render the rasters with resvg — full procedure in
 [`docs/assets/README.md`](../assets/README.md). The same README also covers the
 animated wormhole logomark (`generate-wormhole-animation.py` +
-`render-wormhole-animation.sh`); its GIF/WebP/MP4 outputs are generated on
-demand, not committed.
+`render-wormhole-animation.sh`); the light looping WebP is committed (README
+footer + 404 page) and the full-fidelity MP4 is generated on demand into the
+gitignored `tmp/`.
 
 ## Progressive enhancement (`docs/javascripts/extra.js`)
 

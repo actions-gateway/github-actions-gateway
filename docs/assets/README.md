@@ -105,13 +105,13 @@ the top of the Python file.
 ```sh
 # needs resvg, ImageMagick 7 (magick), ffmpeg, python3
 #   brew install resvg imagemagick ffmpeg
-./render-wormhole-animation.sh [OUTDIR]   # OUTDIR defaults to ./wormhole-out
+./render-wormhole-animation.sh [OUTDIR]   # MP4 OUTDIR defaults to <repo>/tmp/wormhole/
 ```
 
 | Artefact | Committed? | Format | Used for |
 | --- | --- | --- | --- |
 | `wormhole-animation.webp` | **yes** (~325 KB) | 480 px, opaque, looping | README footer + the docs **404** page (`overrides/404.html`) |
-| `wormhole-animation.mp4` | no — written to `OUTDIR` | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
+| `wormhole-animation.mp4` | no — written to `OUTDIR` (default `tmp/wormhole/`, gitignored) | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
 
 The committed WebP is **opaque** (it carries the dark navy backdrop) on purpose:
 the plume and glow are white, and both the README and the docs site default to

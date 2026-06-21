@@ -16,7 +16,7 @@
 # Deps: python3, resvg, ImageMagick 7 (`magick`), ffmpeg.
 #       brew install resvg imagemagick ffmpeg
 #
-# Usage: ./render-wormhole-animation.sh [OUTDIR]   # OUTDIR defaults to ./wormhole-out
+# Usage: ./render-wormhole-animation.sh [OUTDIR]   # MP4 OUTDIR defaults to <repo>/tmp/wormhole/ (gitignored)
 #
 set -euo pipefail
 
@@ -24,7 +24,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly GEN="${SCRIPT_DIR}/generate-wormhole-animation.py"
 readonly WEBP="${SCRIPT_DIR}/wormhole-animation.webp"   # committed, light, opaque
-readonly OUTDIR="${1:-${PWD}/wormhole-out}"
+# The MP4 isn't committed, so it defaults into the repo's gitignored tmp/; pass
+# an explicit OUTDIR to override. Falls back to $PWD outside a git checkout.
+repo_root="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || echo "${PWD}")"
+readonly OUTDIR="${1:-${repo_root}/tmp/wormhole}"
 readonly ASPECT="190.5"        # frame width:height is ASPECT:100 (1.91:1)
 
 work=""                        # scratch dir; cleaned up on exit
