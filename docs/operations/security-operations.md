@@ -46,6 +46,7 @@ Two detection substrates are used:
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
 - [Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist](#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist)
+- [GitHub API base URL must be HTTPS](#github-api-base-url-must-be-https)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
 - [License attribution in images](#license-attribution-in-images)
 - [Image provenance: signature & SBOM verification](#image-provenance-signature--sbom-verification)
@@ -673,6 +674,48 @@ Leave `apiServerCIDRs` unset unless you have a confirmed, stable apiserver CIDR 
 the any-destination default is bounded by the §5.2 compensating controls (key
 mounted read-only, never an env var; workers carry no apiserver egress at all;
 digest-pinned non-root AGC; all GitHub-bound traffic still through the proxy).
+
+---
+
+## GitHub API base URL must be HTTPS
+
+The AGC mints GitHub App installation access tokens by POSTing a signed App-JWT
+to the GitHub REST API and reading back a short-lived installation token. Both
+the JWT (signed with the tenant's private key) and the returned token are
+credential material, so this exchange must never traverse a plaintext channel.
+
+The endpoint host is taken from the **`GITHUB_API_BASE_URL`** environment
+variable, defaulting to `https://api.github.com` when unset. The token provider
+**rejects a non-HTTPS `GITHUB_API_BASE_URL` at startup** — the AGC (and the
+`probe`) will refuse to start with a clear error rather than leak credentials on
+the first token mint:
+
+```
+githubapp: refusing non-HTTPS GITHUB_API_BASE_URL "http://…":
+GitHub App token exchange must use HTTPS to protect credentials in transit;
+plaintext is permitted only under an explicit dev/test opt-in
+```
+
+This is **secure-by-default**: HTTPS is required with no configuration, an
+HTTPS value (including a GitHub Enterprise Server base such as
+`https://ghe.example.com/api/v3`) and the unset default both work, and the error
+names the offending URL but never any token or JWT material.
+
+**Operator action:** if you set `GITHUB_API_BASE_URL` (e.g. for GitHub
+Enterprise Server), it must begin with `https://`. A plaintext value will block
+startup. Do not work around this by editing the deployment to inject a stub
+signal — the plaintext path exists only for the project's own in-cluster test
+fixtures.
+
+**Documented dev/test trade-off.** The e2e suite points the AGC at an in-cluster
+`fakegithub` over plaintext (`http://<svc>.<ns>.svc.cluster.local:<port>`). That
+path is permitted only by an explicit opt-in that production never carries: the
+AGC allows a plaintext base URL **only when the stub env `STUB_AUTH_URL` is
+set**, which a GMC-provisioned AGC receives solely via `AGC_EXTRA_*` under the
+testing-only `--allow-agc-extra-env` GMC flag. When the opt-in is active the AGC
+logs `dev/test mode: allowing non-HTTPS GITHUB_API_BASE_URL for token exchange`
+at startup, so the relaxation is visible in the logs. A production AGC has no
+stub env and therefore always enforces HTTPS.
 
 ---
 

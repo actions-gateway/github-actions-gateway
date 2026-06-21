@@ -70,7 +70,7 @@ func TestToken_HappyPath(t *testing.T) {
 	// Point the provider at the test server by rewriting the URL via a custom
 	// transport that redirects api.github.com to our httptest server.
 	client := testClientRedirectingTo(srv.URL)
-	provider, err := githubapp.NewInstallationTokenProvider(creds, client)
+	provider, err := githubapp.NewInstallationTokenProvider(creds, client, false)
 	require.NoError(t, err)
 
 	tok, err := provider.Token(context.Background())
@@ -85,7 +85,7 @@ func TestToken_BadPrivateKey(t *testing.T) {
 		PrivateKeyPEM:  []byte("not a valid pem"),
 		InstallationID: 1,
 	}
-	_, err := githubapp.NewInstallationTokenProvider(creds, nil)
+	_, err := githubapp.NewInstallationTokenProvider(creds, nil, false)
 	require.Error(t, err)
 	// Must not panic — the error is returned, not propagated as a panic.
 }
@@ -100,7 +100,7 @@ func TestToken_NonOKResponse(t *testing.T) {
 	defer srv.Close()
 
 	creds := githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1}
-	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL))
+	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL), false)
 	require.NoError(t, err)
 
 	_, err = provider.Token(context.Background())
@@ -135,7 +135,7 @@ func TestToken_ClockSkewBuffer(t *testing.T) {
 	defer srv.Close()
 
 	creds := githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1}
-	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL))
+	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL), false)
 	require.NoError(t, err)
 
 	before := time.Now()
@@ -162,7 +162,7 @@ func TestToken_ExpiresAtParsed(t *testing.T) {
 	defer srv.Close()
 
 	creds := githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1}
-	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL))
+	provider, err := githubapp.NewInstallationTokenProvider(creds, testClientRedirectingTo(srv.URL), false)
 	require.NoError(t, err)
 
 	// Call the extended interface to inspect the expiry.
@@ -220,6 +220,7 @@ func TestToken_PKCS8Key(t *testing.T) {
 	provider, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		testClientRedirectingTo(srv.URL),
+		false,
 	)
 	require.NoError(t, err)
 
@@ -240,6 +241,7 @@ func TestToken_PKCS8NonRSAKey(t *testing.T) {
 	provider, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		nil,
+		false,
 	)
 	require.NoError(t, err)
 	_, err = provider.Token(context.Background())
@@ -267,6 +269,7 @@ func TestToken_Ed25519Key(t *testing.T) {
 	provider, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		testClientRedirectingTo(srv.URL),
+		false,
 	)
 	require.NoError(t, err)
 	tok, err := provider.Token(context.Background())
@@ -292,6 +295,7 @@ func TestToken_JTIIsUniquePerCall(t *testing.T) {
 	provider, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		testClientRedirectingTo(srv.URL),
+		false,
 	)
 	require.NoError(t, err)
 
@@ -319,7 +323,70 @@ func TestToken_UnsupportedPEMType(t *testing.T) {
 	_, err := githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		nil,
+		false,
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported PEM block type")
+}
+
+// ── GITHUB_API_BASE_URL scheme validation (Q146) ─────────────────────────────
+
+// TestBaseURL_HTTPSAccepted confirms an explicit HTTPS GITHUB_API_BASE_URL is
+// accepted with no dev/test opt-in (the production-default path).
+func TestBaseURL_HTTPSAccepted(t *testing.T) {
+	_, pemBytes := generateTestKey(t)
+	t.Setenv("GITHUB_API_BASE_URL", "https://ghe.example.com/api/v3")
+
+	_, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+		false,
+	)
+	require.NoError(t, err)
+}
+
+// TestBaseURL_DefaultHTTPSAccepted confirms the unset → https://api.github.com
+// default is accepted without the dev/test opt-in.
+func TestBaseURL_DefaultHTTPSAccepted(t *testing.T) {
+	_, pemBytes := generateTestKey(t)
+	t.Setenv("GITHUB_API_BASE_URL", "") // explicitly unset
+
+	_, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+		false,
+	)
+	require.NoError(t, err)
+}
+
+// TestBaseURL_HTTPRejectedWithoutOptIn confirms a plaintext GITHUB_API_BASE_URL
+// is rejected by default — the secure-by-default behavior. The error must name
+// the URL but carry no token material.
+func TestBaseURL_HTTPRejectedWithoutOptIn(t *testing.T) {
+	_, pemBytes := generateTestKey(t)
+	t.Setenv("GITHUB_API_BASE_URL", "http://fakegithub.infra.svc.cluster.local:8080")
+
+	_, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+		false, // no dev/test signal
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "non-HTTPS")
+	assert.Contains(t, err.Error(), "http://fakegithub.infra.svc.cluster.local:8080")
+}
+
+// TestBaseURL_HTTPAcceptedWithOptIn confirms a plaintext GITHUB_API_BASE_URL is
+// accepted when the explicit dev/test opt-in is set — the carve-out that keeps
+// the in-cluster fakegithub e2e path working.
+func TestBaseURL_HTTPAcceptedWithOptIn(t *testing.T) {
+	_, pemBytes := generateTestKey(t)
+	t.Setenv("GITHUB_API_BASE_URL", "http://fakegithub.infra.svc.cluster.local:8080")
+
+	_, err := githubapp.NewInstallationTokenProvider(
+		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
+		nil,
+		true, // explicit dev/test opt-in
+	)
+	require.NoError(t, err)
 }

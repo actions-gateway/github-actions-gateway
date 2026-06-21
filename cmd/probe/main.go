@@ -123,7 +123,9 @@ func run(logger *slog.Logger) error {
 		PrivateKeyPEM:  pemBytes,
 		InstallationID: installID,
 	}
-	provider, err := githubapp.NewInstallationTokenProvider(creds, nil)
+	// The probe talks to real GitHub, so token exchange must use HTTPS; a
+	// non-HTTPS GITHUB_API_BASE_URL is rejected (no dev/test opt-in here).
+	provider, err := githubapp.NewInstallationTokenProvider(creds, nil, false)
 	if err != nil {
 		return fmt.Errorf("create token provider: %w", err)
 	}

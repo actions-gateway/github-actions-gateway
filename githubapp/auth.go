@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -51,26 +52,48 @@ type InstallationToken struct {
 	ExpiresAt time.Time
 }
 
+// defaultAPIBaseURL is the production GitHub REST API base used for token
+// exchange when GITHUB_API_BASE_URL is unset.
+const defaultAPIBaseURL = "https://api.github.com"
+
 // installationTokenProvider implements TokenProvider by minting a fresh
 // installation access token on every call.
 type installationTokenProvider struct {
 	creds      Credentials
 	privateKey crypto.Signer // *rsa.PrivateKey (RS256) or ed25519.PrivateKey (EdDSA)
 	httpClient *http.Client
+	apiBaseURL string // validated at construction; HTTPS unless dev/test opt-in
 }
 
 // NewInstallationTokenProvider returns a TokenProvider that mints a fresh
 // installation access token on each call by signing a JWT and exchanging it
 // with the GitHub Apps API.
 //
-// An error is returned immediately if creds.PrivateKeyPEM cannot be parsed,
-// so callers surface bad-credential failures at startup rather than on the
-// first call.
-func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client) (TokenProvider, error) {
+// The token-exchange endpoint is GITHUB_API_BASE_URL (defaulting to
+// https://api.github.com). Because that exchange carries App-JWT and
+// installation-token material, a non-HTTPS base URL would expose credentials
+// on the wire and is REJECTED by default. allowInsecureBaseURL is the explicit
+// dev/test opt-in that permits a plaintext (http://) base URL — callers must
+// gate it on a signal that production never carries (e.g. the AGC's stub env);
+// see docs/design/05-security.md.
+//
+// An error is returned immediately if creds.PrivateKeyPEM cannot be parsed or
+// if GITHUB_API_BASE_URL is non-HTTPS without the opt-in, so callers surface
+// these failures at startup rather than on the first token mint.
+func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client, allowInsecureBaseURL bool) (TokenProvider, error) {
 	key, err := parsePrivateKey(creds.PrivateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: parse private key: %w", err)
 	}
+
+	apiBase := os.Getenv("GITHUB_API_BASE_URL")
+	if apiBase == "" {
+		apiBase = defaultAPIBaseURL
+	}
+	if err := validateAPIBaseURL(apiBase, allowInsecureBaseURL); err != nil {
+		return nil, err
+	}
+
 	if httpClient == nil {
 		httpClient = httpx.NewClient()
 	}
@@ -78,7 +101,28 @@ func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client) (T
 		creds:      creds,
 		privateKey: key,
 		httpClient: httpClient,
+		apiBaseURL: apiBase,
 	}, nil
+}
+
+// validateAPIBaseURL enforces HTTPS for the token-exchange base URL. A plaintext
+// (http://) URL is rejected unless allowInsecure is set — the explicit dev/test
+// opt-in. The error names the offending URL (a non-secret) but never any token
+// material.
+func validateAPIBaseURL(apiBase string, allowInsecure bool) error {
+	u, err := url.Parse(apiBase)
+	if err != nil {
+		return fmt.Errorf("githubapp: invalid GITHUB_API_BASE_URL %q: %w", apiBase, err)
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	if allowInsecure {
+		return nil
+	}
+	return fmt.Errorf("githubapp: refusing non-HTTPS GITHUB_API_BASE_URL %q: "+
+		"GitHub App token exchange must use HTTPS to protect credentials in transit; "+
+		"plaintext is permitted only under an explicit dev/test opt-in", apiBase)
 }
 
 // Token mints a new installation access token. It signs a short-lived JWT,
@@ -126,13 +170,10 @@ func (p *installationTokenProvider) fetchToken(ctx context.Context) (*Installati
 		return nil, fmt.Errorf("githubapp: sign JWT: %w", err)
 	}
 
-	// GITHUB_API_BASE_URL lets tests redirect token exchange to a fake server.
-	apiBase := os.Getenv("GITHUB_API_BASE_URL")
-	if apiBase == "" {
-		apiBase = "https://api.github.com"
-	}
-	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", apiBase, p.creds.InstallationID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	// apiBaseURL was resolved from GITHUB_API_BASE_URL and validated (HTTPS, or
+	// an explicit dev/test opt-in for plaintext) at construction time.
+	endpoint := fmt.Sprintf("%s/app/installations/%d/access_tokens", p.apiBaseURL, p.creds.InstallationID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: build request: %w", err)
 	}

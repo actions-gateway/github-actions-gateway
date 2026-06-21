@@ -276,7 +276,17 @@ func run() error {
 		PrivateKeyPEM:  pemBytes,
 		InstallationID: installID,
 	}
-	rawProvider, err := githubapp.NewInstallationTokenProvider(creds, nil)
+	// Allow a plaintext GITHUB_API_BASE_URL only in dev/test, signalled by the
+	// stub env (STUB_AUTH_URL). Production AGCs never carry it — it only reaches
+	// a GMC-provisioned AGC via AGC_EXTRA_* under the testing-only
+	// --allow-agc-extra-env flag (see the registrar selection below and the e2e
+	// suite, which points the AGC at an in-cluster fakegithub over plaintext).
+	// With no signal, a non-HTTPS base URL is rejected (defense in depth).
+	allowInsecureAPIBaseURL := os.Getenv("STUB_AUTH_URL") != ""
+	if allowInsecureAPIBaseURL {
+		ctrl.Log.Info("dev/test mode: allowing non-HTTPS GITHUB_API_BASE_URL for token exchange (STUB_AUTH_URL set)")
+	}
+	rawProvider, err := githubapp.NewInstallationTokenProvider(creds, nil, allowInsecureAPIBaseURL)
 	if err != nil {
 		return fmt.Errorf("create token provider: %w", err)
 	}
