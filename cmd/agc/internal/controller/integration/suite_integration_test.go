@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -49,6 +50,7 @@ func TestMain(m *testing.M) {
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = v1alpha1.AddToScheme(testScheme)
+	_ = agcv2alpha1.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
