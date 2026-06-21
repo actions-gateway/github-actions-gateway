@@ -221,6 +221,14 @@ real; `v1alpha1` is deprecated with a named removal release; and the
 operator-facing docs (onboarding, migration guide, CRD reference) are updated.
 Cross-namespace sharing (M4) and direct egress are **not** GA gates.
 
+**Website per capability.** Any milestone that lands a user-facing capability —
+notably **M2** (reusable `RunnerTemplate`/`ClusterRunnerTemplate` golden images)
+and **M3b** (multiple gateways per namespace) — updates the positioning pages
+([why-gag.md](../why-gag.md), [index.md](../index.md)) in the same PR, so the
+competitive story vs ARC tracks what actually ships. Per the
+[doc-update matrix](../development/doc-update-matrix.md). Internal-only milestones
+(M1 types, M5 tooling) need no website change.
+
 ## Deferred (out of the critical path)
 
 ### Direct egress (optional-proxy behavior)
