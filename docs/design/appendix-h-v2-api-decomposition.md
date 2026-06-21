@@ -263,22 +263,30 @@ Shared objects must not be owner-referenced by their referrers:
   Deployment/Service/HPA/PDB, reconciled by the GMC). Nothing owns the
   `EgressProxy`.
 - **`RunnerTemplate`** is pure data — no children, nothing owns it.
-- **Deletion degrades, it does not block.** Hard-blocking deletion of a
-  still-referenced shared object via finalizer would fight GitOps prune the same
-  way an ordering webhook does. Instead, allow the delete and flip referrers to
-  `Ready=False, Reason=TemplateDeleted` (same fail-closed behavior — no template
-  ⇒ no new pods). Keep a finalizer only to record `.status.referencedBy` for
-  visibility, not to prevent deletion.
+- **Deletion degrades, it does not block — and uses no finalizer at all.**
+  Hard-blocking deletion of a still-referenced shared object via finalizer would
+  fight GitOps prune the same way an ordering webhook does; Kubernetes' own
+  finalizer guidance also warns that finalizers on shared/referenced objects are
+  a common cause of stuck-`Terminating` resources. So allow the delete and flip
+  referrers to `Ready=False, Reason=TemplateDeleted` (same fail-closed behavior —
+  no template ⇒ no new pods) via the referent→referrer watch. Do **not** keep a
+  finalizer even for bookkeeping: `.status.referencedBy` is computable from the
+  same informer/watch without taking on a finalizer that can block deletion.
 
 ## H.9. Cross-namespace proxy sharing
 
 Default is same-namespace. Cross-namespace sharing uses **provider consent**: the
 owner of the `EgressProxy` publishes that it is shareable (via
 `spec.sharing.allowedNamespaces` or a namespace selector). Naming a
-cross-namespace proxy from the consumer side is not sufficient. The Gateway-API
-`ReferenceGrant` object is the more idiomatic alternative and the right choice if
-the cluster already uses Gateway API; the inline allowlist is preferred here for
-lower onboarding cost.
+cross-namespace proxy from the consumer side is not sufficient. This mirrors the
+consent handshake of Gateway API's `ReferenceGrant` (GA / `v1`), where the grant
+lives in the *target* (provider) namespace and a consumer-side name alone never
+authorizes the reference.
+
+**v2 ships the inline allowlist only.** It needs no Gateway API CRDs installed
+(lower onboarding), and honoring a `ReferenceGrant` when Gateway API *is* present
+can be added later without a breaking change. The load-bearing principle taken
+from the precedent — **consent is always provider-side** — holds for both.
 
 A shared proxy is a **shared egress identity** — it is for *cooperating* tenants
 or a *platform-operated* central pool, not mutually-distrusting tenants, because
@@ -290,10 +298,15 @@ not, and these are the bulk of the implementation cost:
 1. **NetworkPolicy on both sides.** The GMC must add egress (consumer workers →
    provider proxy Service) *and* ingress (provider proxy ← consumer namespaces)
    whenever a grant is active. Today both policies assume the proxy is colocated.
-2. **Proxy TLS CA distribution.** The proxy CA secret is per-tenant today. A
-   cross-namespace consumer needs that CA to validate the tunnel, so the GMC must
-   replicate/mount it into consumer namespaces — a secret-distribution mechanism
-   that does not exist yet.
+2. **Proxy TLS CA distribution — a ConfigMap, not a secret.** A cross-namespace
+   consumer needs the proxy's CA *certificate* (public) to validate the tunnel —
+   never the private key, which stays in the proxy namespace. So this is trust
+   distribution, not secret replication: the GMC writes the CA as a **ConfigMap**
+   into only the granted consumer namespaces, scoped by the same grant that
+   authorizes the reference. This follows the cert-manager **trust-manager**
+   pattern (selector-scoped bundle sync); if trust-manager is installed, the CA
+   may instead be published as a `Bundle`. No new secret-distribution mechanism is
+   required — the earlier framing of this as a "secret" overstated the cost.
 
 ## H.10. The egress proxy becomes optional
 
@@ -324,6 +337,17 @@ identity* — a property a subset of tenants need and can opt into — not the e
 *containment* baseline. Defaulting off the *restriction* would be a security
 regression and is out of scope. See the
 [secure-by-default principle](05-security.md) for the rule this satisfies.
+
+Two refinements keep direct egress **auditable**, not silently inferred:
+
+- **Direct egress is a structurally explicit state.** An unset `proxyRef`
+  resolves to direct egress, and the runner-set status reflects it (e.g.
+  `proxyMode: Direct`) rather than leaving "no proxy" to be inferred from an
+  absent field.
+- **Surface the attribution trade.** Emit an advisory condition (e.g.
+  `EgressUnattributed`) on the proxy-less runner set so an operator can see at a
+  glance that this workload has no per-tenant egress identity — the property they
+  opted out of — without grepping specs.
 
 **Composition bonus.** §H.9 and §H.10 combine: a platform team runs one shared
 `EgressProxy` in a central namespace, grants it to the EMU/allowlist tenants who
@@ -534,8 +558,15 @@ only the ones that fix a problem we have today.
   migration tool.
 - **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
   profile, active sessions), resource `categories`, and the short names from
-  [§H.6](#h6-naming-and-length-budgets); fix the `maxListeners` default mismatch
-  (code `1` vs design `10`) and document the chosen value.
+  [§H.6](#h6-naming-and-length-budgets).
+- **Resolve the `maxListeners` default mismatch** (code `1` vs design `10`). If
+  listeners are demand-spawned and idle-shut-down (so `maxListeners` is a *burst
+  ceiling*, not a steady-state count), a higher default costs nothing at idle and
+  the design's `10` is the better default — fix the code to match. If listeners
+  are always-on, `10` idle long-poll sessions × many runner sets is real
+  connection cost and `1` is correct. The call is gated on confirming the
+  listener lifecycle in the AGC controller (the Q148/Q152 idle-shutdown lineage);
+  tracked as a Queue item.
 
 **Opportunistic (take if it falls out of the rewrite; not a sign-off item):**
 
@@ -561,29 +592,52 @@ only the ones that fix a problem we have today.
 
 ## H.16. Open questions / sign-off needed
 
-1. **Multi-gateway-per-namespace** resource naming and RBAC rework — biggest GMC
-   change; review before committing to the API shape.
-2. **Cross-namespace proxy CA distribution** — confirm the secret-replication
-   mechanism is acceptable (vs. requiring same-namespace proxies only).
-3. **Optional proxy** — confirm the secure-by-default guardrail in §H.10 (egress
-   restriction stays mandatory; managed-IP refresh relocates).
-4. **Sharing model** — inline `allowedNamespaces` vs. Gateway-API `ReferenceGrant`.
-5. **Deletion semantics** — degrade-not-block (§H.8); confirm no operators rely
-   on hard deletion protection.
-6. **Q147 label-value keywords** — confirm `tenant: managed` and
-   `allow-profile-downgrade: allowed` as the aligned values (§H.12), and that
-   closing the dual-read window only at `v1alpha1` removal (not earlier) is
-   acceptable.
+### Recommended (pending ratification)
+
+Each carries a recommendation grounded in precedent (Gateway API, ARC,
+cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
+
+1. **Multi-gateway-per-namespace naming & RBAC.** Derive every resource from the
+   owning CR name (`<ag>-agc`, `<ep>-proxy`, worker `generateName=<rs>-`) under the
+   [§H.6](#h6-naming-and-length-budgets) 52-char cap, and **rewrite the
+   tenant-resource-guard VAP to confine by namespace-tenancy + a GMC `managed-by`
+   label rather than by enumerated fixed names** — name-allowlisting does not
+   scale to N gateways. Require *both* the tenant marker and the managed-by label
+   to match. (Precedent: ARC runs multiple scale sets per namespace, names = CR
+   prefix + fixed suffix.) Biggest GMC change; the core build of v2.
+2. **Cross-namespace proxy CA distribution → ConfigMap, not secret.** The CA is a
+   public certificate, so the GMC distributes it as a **ConfigMap** into only the
+   granted consumer namespaces (trust-manager pattern; [§H.9](#h9-cross-namespace-proxy-sharing)).
+   No secret-replication subsystem is needed — recommend dropping that as a
+   blocker.
+3. **Optional proxy** — ✅ guardrail as in [§H.10](#h10-the-egress-proxy-becomes-optional):
+   egress restriction stays mandatory, managed-IP refresh relocates, plus an
+   explicit `proxyMode: Direct` status and an `EgressUnattributed` advisory
+   condition so the attribution trade is auditable.
+4. **Sharing model** — ship the **inline `allowedNamespaces` allowlist only** for
+   v2; `ReferenceGrant` support is additive later. Consent stays provider-side
+   either way ([§H.9](#h9-cross-namespace-proxy-sharing)).
+5. **Deletion semantics** — degrade-not-block with **no finalizer at all**
+   ([§H.8](#h8-ownership-gc-and-deletion)); `referencedBy` is computed from the
+   watch. Confirm no operator relies on hard deletion protection.
+6. **Q147 label-value keywords** — ratify `tenant: managed` and
+   `allow-profile-downgrade: allowed` (symmetric with `privileged-profile:
+   allowed`), with the dual-read window closing only at `v1alpha1` removal
+   ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+7. **`maxListeners` default** — recommend `10` (match design) if listeners are
+   demand-spawned + idle-shut-down; gated on confirming the listener lifecycle.
+   Tracked as a Queue item ([§H.15](#h15-other-breaking-changes-worth-batching)).
+
 ### Resolved
 
-7. **Admin policy layer** (§H.14) — ✅ **v2 keeps the controller flags.** Neither
+8. **Admin policy layer** (§H.14) — ✅ **v2 keeps the controller flags.** Neither
    the singleton nor the class ships in v2; each is deferred behind a documented
    trigger (flags→singleton, then the two-part class trigger), and every rung is
    an additive, non-breaking transition. v2's only obligation is to shape the
    flag-backed policy so a future singleton/class inherits its schema
    field-for-field.
-8. **API group rename** (§H.15) — ✅ **Yes, rename to `actions-gateway.com`.**
+9. **API group rename** (§H.15) — ✅ **Yes, rename to `actions-gateway.com`.**
    The project owns the domain; the change rides the v2 cutover and its migration
    tool. Break-only, so it happens here or never.
-9. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
-   `gitHubAppRef.name` mutable.**
+10. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
+    `gitHubAppRef.name` mutable.**
