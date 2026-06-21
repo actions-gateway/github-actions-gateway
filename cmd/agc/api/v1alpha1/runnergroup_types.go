@@ -124,8 +124,9 @@ type RunnerGroupSpec struct {
 type RunnerGroupStatus struct {
 	// Conditions contains the current observed conditions of the runner group.
 	// Known types: Ready, Degraded, RateLimited, RunnerVersionTooOld,
-	// CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded. The type and
-	// reason string constants are exported from this package (see conditions.go).
+	// CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded,
+	// WorkersUnschedulable. The type and reason string constants are exported from
+	// this package (see conditions.go).
 	// +optional
 	// +listType=map
 	// +listMapKey=type

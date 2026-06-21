@@ -28,6 +28,16 @@ const (
 	// pods (Q82). See docs/development/kubernetes-conventions.md.
 	ConditionWorkerQuotaPressure = "WorkerQuotaPressure"
 	ConditionWorkerQuotaExceeded = "WorkerQuotaExceeded"
+	// ConditionWorkersUnschedulable is True when one or more of the group's worker
+	// pods have sat Pending past a scheduling grace for a non-quota reason — the
+	// scheduler reports PodScheduled=False/Unschedulable (no node matches the pod's
+	// resource requests, nodeSelector, affinity, or tolerations). It is distinct
+	// from the WorkerQuota ladder: a ResourceQuota rejection blocks pod *admission*
+	// (the pod is never created), so an unschedulable Pending pod can only reflect a
+	// scheduler verdict, never quota exhaustion — the two never double-report (Q157,
+	// abnormal-is-True). Impairing: capacity is not materializing, so it is rolled
+	// up into the gateway's RunnerGroupsDegraded summary (see ImpairingConditionTypes).
+	ConditionWorkersUnschedulable = "WorkersUnschedulable"
 )
 
 // Condition reasons reported alongside the condition types above. Reasons are
@@ -41,6 +51,11 @@ const (
 	// ReasonCredentialAvailable clears it (CredentialUnavailable=False).
 	ReasonTokenUnavailable    = "TokenUnavailable"    //nolint:gosec // G101: a condition reason name, not a credential
 	ReasonCredentialAvailable = "CredentialAvailable" //nolint:gosec // G101: a condition reason name, not a credential
+	// ReasonPodsUnschedulable is the WorkersUnschedulable=True reason; the stuck
+	// pods and the scheduler's verdict are named in the condition message.
+	// ReasonWorkersSchedulable clears it (WorkersUnschedulable=False).
+	ReasonPodsUnschedulable  = "PodsUnschedulable"
+	ReasonWorkersSchedulable = "WorkersSchedulable"
 )
 
 // ImpairingConditionTypes returns the RunnerGroup condition types that, when
@@ -48,7 +63,8 @@ const (
 // session, or a too-old runner version. Consumers that aggregate per-group health
 // (the GMC's ActionsGateway RunnerGroupsDegraded rollup, Q158) iterate this set
 // rather than hard-coding the list, so extending it here automatically widens the
-// rollup. Q157 appends WorkersUnschedulable.
+// rollup. WorkersUnschedulable (Q157) is included: a group whose worker pods
+// cannot be scheduled is not serving jobs.
 //
 // The capacity-ladder conditions (WorkerQuotaPressure/Exceeded) and RateLimited
 // are deliberately excluded: they are advisory/transient throughput signals with
@@ -59,5 +75,6 @@ func ImpairingConditionTypes() []string {
 		ConditionDegraded,
 		ConditionCredentialUnavailable,
 		ConditionRunnerVersionTooOld,
+		ConditionWorkersUnschedulable,
 	}
 }

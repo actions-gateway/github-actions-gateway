@@ -117,10 +117,22 @@ type ActionsGatewayReconciler struct {
 	// any-destination behavior required where the post-DNAT apiserver IP is not
 	// predictable. See buildAGCNetworkPolicy.
 	APIServerCIDRs []string
+	// EgressStaleThreshold is the age past which the GitHub egress IP-range
+	// allowlist is reported stale via the EgressRulesStale condition (Q157). Zero
+	// selects DefaultEgressStaleThreshold. main.go sets it to just over twice the
+	// IP-range refresh interval so a single missed/slow refresh does not trip it.
+	EgressStaleThreshold time.Duration
 	// Recorder emits Kubernetes Events on the reconciled ActionsGateway.
 	// May be nil in unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
 }
+
+// DefaultEgressStaleThreshold is the EgressRulesStale age threshold when
+// ActionsGatewayReconciler.EgressStaleThreshold is unset. It is just over twice
+// the 24h IP-range refresh interval, so a single entirely-missed refresh (age
+// peaks at ~2 intervals before the next success) does not trip the condition;
+// only a genuinely stalled loop does (Q157).
+const DefaultEgressStaleThreshold = 49 * time.Hour
 
 // Reconcile reconciles an ActionsGateway CR.
 func (r *ActionsGatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -537,6 +549,12 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	// the gateway infrastructure can be healthy while one tenant group is impaired.
 	rg := r.evalRunnerGroupHealth(ctx, ag)
 	setCondition(gmcv1alpha1.ConditionRunnerGroupsDegraded, rg.degraded, rg.reason, rg.message)
+	// EgressRulesStale (Q157), advisory — it does NOT gate Ready. True when the
+	// shared GitHub IP-range refresh loop has not succeeded within the staleness
+	// window, so the proxy NetworkPolicy allowlist may have drifted from GitHub's
+	// published ranges.
+	es := r.evalEgressRulesStale(ag, now.Time)
+	setCondition(gmcv1alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
 	setCondition(gmcv1alpha1.ConditionReady, proxyAvailable && agcAvailable, gmcv1alpha1.ReasonAllAvailable, "all components are available")
 
 	ag.Status.ProxyReadyReplicas = proxyReady
@@ -555,6 +573,12 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 	// Deployment status changes, but this requeue guards against missed events.
 	if !proxyAvailable || !agcAvailable {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+	// Re-check EgressRulesStale on a bounded cadence: nothing watches the IP-range
+	// refresh loop, so when it stalls no event reaches this controller and the
+	// condition would never flip without a periodic requeue (Q157).
+	if d := r.egressRecheckRequeue(ag); d > 0 {
+		return ctrl.Result{RequeueAfter: d}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -902,6 +926,80 @@ func (r *ActionsGatewayReconciler) evalRunnerGroupHealth(ctx context.Context, ag
 		reason:   gmcv1alpha1.ReasonRunnerGroupsImpaired,
 		message:  fmt.Sprintf("%d of %d RunnerGroup(s) impaired: %s", len(impaired), len(rgList.Items), strings.Join(impaired, "; ")),
 	}
+}
+
+// egressStale carries the computed EgressRulesStale condition (Q157).
+type egressStale struct {
+	stale   bool
+	reason  string
+	message string
+}
+
+// evalEgressRulesStale computes the EgressRulesStale condition (Q157) for a
+// gateway: True when the shared GitHub IP-range refresh loop's last success is
+// older than the staleness threshold, so the proxy NetworkPolicy egress allowlist
+// may have drifted from GitHub's published ranges and traffic to rotated ranges is
+// silently dropped.
+//
+// It is False (not an alarm) in two "no evidence yet" cases: when the gateway's
+// proxy NetworkPolicy is unmanaged (its egress rules are operator-maintained, not
+// refreshed by this loop) and before the first refresh has completed (startup,
+// which reconcileInitial repairs on a sub-interval cadence).
+func (r *ActionsGatewayReconciler) evalEgressRulesStale(ag *gmcv1alpha1.ActionsGateway, now time.Time) egressStale {
+	if ag.Spec.Proxy.ManagedNetworkPolicy != nil && !*ag.Spec.Proxy.ManagedNetworkPolicy {
+		return egressStale{reason: gmcv1alpha1.ReasonRefreshPending,
+			message: "proxy NetworkPolicy is unmanaged; egress rules are operator-maintained"}
+	}
+	if r.IPCache == nil {
+		return egressStale{reason: gmcv1alpha1.ReasonRefreshPending,
+			message: "GitHub IP-range refresh has not run yet"}
+	}
+	last, ok := r.IPCache.LastRefresh()
+	if !ok {
+		return egressStale{reason: gmcv1alpha1.ReasonRefreshPending,
+			message: "awaiting first GitHub IP-range refresh"}
+	}
+	threshold := r.egressStaleThreshold()
+	age := now.Sub(last)
+	if age > threshold {
+		return egressStale{
+			stale:  true,
+			reason: gmcv1alpha1.ReasonRefreshStalled,
+			message: fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window; "+
+				"egress to rotated GitHub ranges may be silently dropped", age.Round(time.Minute), threshold),
+		}
+	}
+	return egressStale{reason: gmcv1alpha1.ReasonRefreshCurrent,
+		message: fmt.Sprintf("GitHub egress IP-range allowlist refreshed %s ago", age.Round(time.Minute))}
+}
+
+// egressStaleThreshold returns the configured EgressRulesStale threshold,
+// defaulting when unset.
+func (r *ActionsGatewayReconciler) egressStaleThreshold() time.Duration {
+	if r.EgressStaleThreshold > 0 {
+		return r.EgressStaleThreshold
+	}
+	return DefaultEgressStaleThreshold
+}
+
+// egressRecheckRequeue returns the cadence at which the gateway should be
+// re-reconciled purely to keep EgressRulesStale fresh, or 0 when staleness is not
+// evaluated (unmanaged NetworkPolicy, or no IP cache). A stalled refresh loop
+// produces no event for this controller, so without a periodic requeue the
+// condition would never flip on or off. A fraction of the staleness window bounds
+// both detection and recovery latency (Q157).
+func (r *ActionsGatewayReconciler) egressRecheckRequeue(ag *gmcv1alpha1.ActionsGateway) time.Duration {
+	if ag.Spec.Proxy.ManagedNetworkPolicy != nil && !*ag.Spec.Proxy.ManagedNetworkPolicy {
+		return 0
+	}
+	if r.IPCache == nil {
+		return 0
+	}
+	d := r.egressStaleThreshold() / 8
+	if d < time.Minute {
+		d = time.Minute
+	}
+	return d
 }
 
 // secretToActionsGateway maps a Secret event to any ActionsGateway in the same

@@ -208,9 +208,28 @@ func waitForWebhookReady(opts envtest.WebhookInstallOptions) error {
 	return nil
 }
 
+// gmcReconcilerOptions tunes startGMCReconcilerWithOptions for tests that need a
+// shared IP-range cache they can manipulate (egress-staleness, Q157) or a custom
+// EgressRulesStale threshold. The zero value reproduces startGMCReconciler.
+type gmcReconcilerOptions struct {
+	// ipCache, when non-nil, is shared with the reconciler so the test can stamp
+	// LastRefresh directly. Nil allocates a fresh cache.
+	ipCache *controller.IPRangeCache
+	// egressThreshold overrides ActionsGatewayReconciler.EgressStaleThreshold; 0
+	// leaves the reconciler's package default.
+	egressThreshold time.Duration
+}
+
 // startGMCReconciler starts an ActionsGatewayReconciler for the duration of a test.
 // Returns the IPRangeReconciler so tests that need to trigger manual reconciles can do so.
 func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher) *controller.IPRangeReconciler {
+	t.Helper()
+	return startGMCReconcilerWithOptions(t, ipFetcher, gmcReconcilerOptions{})
+}
+
+// startGMCReconcilerWithOptions is startGMCReconciler with explicit knobs (see
+// gmcReconcilerOptions).
+func startGMCReconcilerWithOptions(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher, opts gmcReconcilerOptions) *controller.IPRangeReconciler {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -239,17 +258,21 @@ func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher)
 	// proxy-NetworkPolicy CIDRs see them immediately on the very first
 	// reconcile, mirroring the steady-state production behavior where
 	// IPRangeReconciler's startup fetch has already run.
-	ipCache := &controller.IPRangeCache{}
+	ipCache := opts.ipCache
+	if ipCache == nil {
+		ipCache = &controller.IPRangeCache{}
+	}
 	if cidrs, fetchErr := ipFetcher.FetchIPRanges(ctx); fetchErr == nil {
 		ipCache.Set(cidrs)
 	}
 
 	err = (&controller.ActionsGatewayReconciler{
-		Client:     mgr.GetClient(),
-		Scheme:     mgr.GetScheme(),
-		IPCache:    ipCache,
-		AGCImage:   "agc:test",
-		ProxyImage: "proxy:test",
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		IPCache:              ipCache,
+		AGCImage:             "agc:test",
+		ProxyImage:           "proxy:test",
+		EgressStaleThreshold: opts.egressThreshold,
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 

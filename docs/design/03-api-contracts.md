@@ -275,8 +275,9 @@ type ActionsGatewayStatus struct {
     // Conditions contains the current observed conditions of the gateway.
     // Known condition types: Ready, ProxyAvailable, AGCAvailable,
     // CredentialUnavailable, Degraded, ProxyQuotaPressure, ProxyQuotaExceeded,
-    // RunnerGroupsDegraded. The type and reason strings are exported as consts from
-    // the GMC api package (cmd/gmc/api/v1alpha1/conditions.go).
+    // RunnerGroupsDegraded, EgressRulesStale. The type and reason strings are
+    // exported as consts from the GMC api package
+    // (cmd/gmc/api/v1alpha1/conditions.go).
     Conditions []metav1.Condition `json:"conditions,omitempty"`
 
     // ProxyReadyReplicas is the number of proxy pods currently Ready.
@@ -312,13 +313,23 @@ type ActionsGatewayStatus struct {
 //                        (Deployment ReplicaFailure). Supersedes the warning.
 //   RunnerGroupsDegraded — advisory (Q158); true when one or more owned
 //                        RunnerGroups report an impairing condition (Credential-
-//                        Unavailable / Degraded / RunnerVersionTooOld — see
+//                        Unavailable / Degraded / RunnerVersionTooOld /
+//                        WorkersUnschedulable — see
 //                        agcv1alpha1.ImpairingConditionTypes). Rolls child health
 //                        up to the gateway's single pane; the impaired groups are
 //                        named in the message (reason RunnerGroupsImpaired). Does
 //                        NOT gate Ready — the gateway infra can be healthy while a
 //                        single tenant group is impaired. Exported as the gauge
 //                        actions_gateway_runnergroups_degraded.
+//   EgressRulesStale   — advisory (Q157); true when the GitHub egress IP-range
+//                        allowlist has not been refreshed within the staleness
+//                        window (just over two of the ~24h refresh cycles), so a
+//                        stalled refresh loop may have let the proxy NetworkPolicy
+//                        drift from GitHub's published ranges (reason
+//                        RefreshStalled; RefreshCurrent clears it, RefreshPending
+//                        before the first refresh or for an unmanaged NP). Does NOT
+//                        gate Ready. Only evaluated for managed proxy NetworkPolicy.
+//                        Exported as the gauge actions_gateway_egress_rules_stale.
 // ProxyQuota{Pressure,Exceeded} are mutually exclusive and do NOT gate Ready —
 // the pool keeps serving at its current scale. See the two-tier convention in
 // docs/development/kubernetes-conventions.md.
@@ -642,9 +653,9 @@ type WorkerPodTemplate = corev1.PodTemplateSpec
 type RunnerGroupStatus struct {
     // Conditions contains the current observed conditions of the runner group.
     // Known condition types: Ready, Degraded, RateLimited, RunnerVersionTooOld,
-    // CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded. The type and
-    // reason strings are exported as consts from the AGC api package
-    // (cmd/agc/api/v1alpha1/conditions.go).
+    // CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded,
+    // WorkersUnschedulable. The type and reason strings are exported as consts from
+    // the AGC api package (cmd/agc/api/v1alpha1/conditions.go).
     //   CredentialUnavailable — abnormal-is-true (Q156); true when the AGC cannot
     //                         obtain a GitHub App installation token to manage the
     //                         group's agents (reason TokenUnavailable). Set before
@@ -661,6 +672,16 @@ type RunnerGroupStatus struct {
     //                         Supersedes the warning. Distinct from Q59's
     //                         configured-ceiling admission backpressure
     //                         (jobs_admission_rejected_total), which is normal.
+    //   WorkersUnschedulable — abnormal-is-true, impairing (Q157); true when worker
+    //                         pods sit Pending past the scheduling grace (half
+    //                         pendingPodDeadline) because the scheduler cannot place
+    //                         them — PodScheduled=False/Unschedulable: no matching
+    //                         node, affinity, or untolerated taints. Distinct from
+    //                         the WorkerQuota ladder: a quota rejection blocks pod
+    //                         admission so no pod exists, so the two never both fire
+    //                         for one cause. Rolls up into the gateway's
+    //                         RunnerGroupsDegraded; exported as the gauge
+    //                         actions_gateway_workers_unschedulable.
     // The listType=map / listMapKey=type markers let server-side apply merge
     // conditions by type instead of treating the slice as atomic.
     //

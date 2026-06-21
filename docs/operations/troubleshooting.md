@@ -12,6 +12,8 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
+- [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
+- [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
@@ -183,11 +185,12 @@ group individually.
 
 **Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing*
 condition — `CredentialUnavailable` (the AGC can't obtain an installation token),
-`Degraded` (an unhealthy/unauthorized listener session), or `RunnerVersionTooOld`
-(GitHub rejects the configured runner version). Advisory capacity/throughput
-conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are
-deliberately **not** rolled up here — they have their own signals. `RunnerGroupsDegraded`
-does **not** gate `Ready`: the gateway can keep serving healthy groups while one is
+`Degraded` (an unhealthy/unauthorized listener session), `RunnerVersionTooOld`
+(GitHub rejects the configured runner version), or `WorkersUnschedulable` (worker
+pods can't be scheduled). Advisory capacity/throughput conditions
+(`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are deliberately
+**not** rolled up here — they have their own signals. `RunnerGroupsDegraded` does
+**not** gate `Ready`: the gateway can keep serving healthy groups while one is
 impaired.
 
 **Diagnostics.**
@@ -205,6 +208,91 @@ kubectl get runnergroup -n <namespace> <runner-group> -o jsonpath='{.status.cond
 automatically on the next reconcile (the GMC watches the owned RunnerGroups):
 - `CredentialUnavailable` → see [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration).
 - `Degraded` / `RunnerVersionTooOld` → see [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs).
+- `WorkersUnschedulable` → see [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable).
+
+---
+
+## RunnerGroup Reports WorkersUnschedulable
+
+**Symptoms.** `kubectl get runnergroup` shows a `WorkersUnschedulable=True`
+condition, or the `actions_gateway_workers_unschedulable` gauge is `1`. Jobs are
+acquired but never start; worker pods sit `Pending`. Each pod the reaper eventually
+gives up on also emits a `WorkersUnschedulable` Warning event and a
+`WorkerPodStuckPending` event on the RunnerGroup.
+
+**Cause.** The Kubernetes scheduler cannot place the group's worker pods on any
+node — `PodScheduled=False` with reason `Unschedulable`. Typical reasons: no node
+has enough allocatable CPU/memory for the pod's requests, the pod's `nodeSelector`
+/ affinity matches no node, or every candidate node carries a taint the pod does
+not tolerate. The condition trips once a pod has been Pending+Unschedulable for
+longer than the scheduling grace (half the group's `pendingPodDeadline`), giving an
+early warning before the reaper deletes the pod at the full deadline.
+
+This is **not** a quota problem: a `ResourceQuota` rejection blocks pod *admission*
+so the pod is never created — that path is the separate `WorkerQuotaExceeded`
+condition. The two never both fire for the same cause.
+
+**Diagnostics.**
+
+```sh
+# Read the condition — its message names the stuck pods and the scheduler verdict.
+kubectl get runnergroup -n <namespace> <runner-group> \
+  -o jsonpath='{range .status.conditions[?(@.type=="WorkersUnschedulable")]}{.status} {.reason}: {.message}{"\n"}{end}'
+
+# Inspect a stuck worker pod's scheduler events for the exact reason.
+kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
+```
+
+**Resolution.** Match the scheduler verdict to the fix:
+- *Insufficient cpu/memory* → add nodes / scale the cluster autoscaler, or lower the
+  worker pod's resource requests in the group's `podTemplate`.
+- *node(s) didn't match nodeSelector / affinity* → correct the `podTemplate`'s
+  `nodeSelector`/affinity, or label the intended nodes.
+- *node(s) had untolerated taint* → add the matching toleration to the `podTemplate`,
+  or remove the taint from the target nodes.
+
+The condition clears automatically on the next reconcile once a worker pod
+schedules successfully.
+
+---
+
+## ActionsGateway Reports EgressRulesStale
+
+**Symptoms.** `kubectl get actionsgateway` shows an `EgressRulesStale=True`
+condition, or the `actions_gateway_egress_rules_stale` gauge is `1`. Optionally,
+jobs intermittently fail to reach newly-rotated GitHub endpoints.
+
+**Cause.** The GMC refreshes each managed proxy `NetworkPolicy`'s egress allowlist
+from `api.github.com/meta` on a ~24h cycle. If that refresh loop stalls (GitHub
+meta API unreachable, persistent fetch errors), the allowlist freezes. GitHub
+periodically rotates its published IP ranges, so a frozen allowlist eventually
+drops egress to the new ranges silently. The condition trips when the last
+successful refresh is older than the staleness window (just over two refresh
+cycles), so a single missed/slow refresh does not false-trip it. It is advisory and
+does **not** gate `Ready` — existing egress keeps working until GitHub rotates.
+It is only evaluated for gateways whose proxy `NetworkPolicy` is gateway-managed
+(`spec.proxy.managedNetworkPolicy` unset or `true`).
+
+**Diagnostics.**
+
+```sh
+# Read the condition — its message reports how long ago the last refresh succeeded.
+kubectl get actionsgateway -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="EgressRulesStale")]}{.status} {.reason}: {.message}{"\n"}{end}'
+
+# Inspect the GMC log for the refresh loop's errors.
+kubectl logs -n <gmc-namespace> deploy/<gmc> | grep -i "ip range"
+
+# Confirm the GMC can reach the GitHub meta API from its pod.
+kubectl exec -n <gmc-namespace> deploy/<gmc> -- wget -qO- https://api.github.com/meta >/dev/null && echo ok
+```
+
+**Resolution.** Restore the GMC's reachability to `api.github.com` (egress policy,
+DNS, proxy). The `actions_gateway_ip_range_updates_total` counter resumes
+incrementing on the next successful refresh, and the condition clears automatically
+within the re-check cadence (a fraction of the staleness window). If GitHub's meta
+API is down, no action is needed beyond waiting — the allowlist is still valid until
+GitHub rotates.
 
 ---
 

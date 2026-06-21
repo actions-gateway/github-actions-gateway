@@ -35,6 +35,15 @@ const (
 	// it does NOT gate Ready (the gateway infrastructure can be healthy while a
 	// single tenant group is impaired). See agcv1alpha1.ImpairingConditionTypes.
 	ConditionRunnerGroupsDegraded = "RunnerGroupsDegraded"
+	// ConditionEgressRulesStale is True when the gateway's GitHub egress IP-range
+	// allowlist has not been refreshed within the expected window (Q157). The proxy
+	// NetworkPolicy egress rules are refreshed on a ~24h cycle from
+	// api.github.com/meta; if that loop stalls, GitHub can rotate its published
+	// ranges out from under a frozen allowlist and egress to the new ranges is
+	// silently dropped. Abnormal-is-True; advisory, it does NOT gate Ready (existing
+	// egress keeps working until GitHub actually rotates). Evaluated only for
+	// gateways whose proxy NetworkPolicy is gateway-managed.
+	ConditionEgressRulesStale = "EgressRulesStale"
 )
 
 // Condition reasons reported alongside the condition types above. Reasons are
@@ -64,4 +73,12 @@ const (
 	// (RunnerGroupsDegraded=False), including when the gateway owns no RunnerGroups.
 	ReasonRunnerGroupsImpaired   = "RunnerGroupsImpaired"
 	ReasonAllRunnerGroupsHealthy = "AllRunnerGroupsHealthy"
+	// ReasonRefreshStalled is the EgressRulesStale=True reason (the last successful
+	// GitHub IP-range refresh is older than the staleness window). ReasonRefreshCurrent
+	// clears it (EgressRulesStale=False). ReasonRefreshPending is the False reason
+	// before the first refresh has completed (startup) or when the gateway's proxy
+	// NetworkPolicy is unmanaged — in both cases no staleness can yet be asserted.
+	ReasonRefreshStalled = "RefreshStalled"
+	ReasonRefreshCurrent = "RefreshCurrent"
+	ReasonRefreshPending = "RefreshPending"
 )
