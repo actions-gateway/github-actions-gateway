@@ -33,6 +33,9 @@ const (
 	ReasonAGCReady = "AGCReady"
 	// ReasonProxyReady is the EgressProxy Ready=True reason.
 	ReasonProxyReady = "ProxyReady"
+	// ReasonProxyNotReady is the EgressProxy Ready=False reason while the proxy
+	// pool is provisioned but has fewer than minReplicas ready pods.
+	ReasonProxyNotReady = "ProxyNotReady"
 	// ReasonSecretNotFound is the CredentialUnavailable=True reason.
 	ReasonSecretNotFound = "SecretNotFound"
 	// ReasonProvisioningFailed is the Degraded=True reason; the failing step is named

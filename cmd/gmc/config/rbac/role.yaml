@@ -54,6 +54,24 @@ rules:
   - create
   - patch
 - apiGroups:
+  - actions-gateway.com
+  resources:
+  - egressproxies
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions-gateway.com
+  resources:
+  - egressproxies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - actions-gateway.github.com
   resources:
   - actionsgateways

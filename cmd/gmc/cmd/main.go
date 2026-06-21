@@ -28,11 +28,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
+	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
 	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
@@ -48,9 +50,12 @@ func init() {
 	utilruntime.Must(actionsgatewaygithubcomv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(agcv1alpha1.AddToScheme(scheme))
 	// Register the v2alpha1 (actions-gateway.com) GMC kinds so they are first-class
-	// in the GMC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
-	// the ActionsGateway/EgressProxy reconcilers that consume them land in M2/M3a.
+	// in the GMC's client scheme alongside v1alpha1. M2 reconciles EgressProxy; the
+	// ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
 	utilruntime.Must(gmcv2alpha1.AddToScheme(scheme))
+	// The v2alpha1 RunnerTemplate kinds live in the AGC api module; register them so
+	// the GMC can serve their validating admission webhook (M2).
+	utilruntime.Must(agcv2alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -355,6 +360,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// EgressProxy reconciler (v2 M2): reconciles a standalone EgressProxy into a
+	// proxy pool it owns (Deployment/Service/HPA/PDB/NetworkPolicy + self-signed
+	// proxy TLS Secret). Shares the GitHub IP-range cache with the ActionsGateway
+	// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
+	// current. Same-namespace only at this milestone.
+	if err := (&controller.EgressProxyReconciler{
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		IPCache:    ipCache,
+		ProxyImage: proxyImage,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
+		os.Exit(1)
+	}
+
 	if err := mgr.Add(&controller.IPRangeReconciler{
 		Client:   mgr.GetClient(),
 		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
@@ -370,6 +390,12 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, parseAllowedPriorityClasses(allowedPriorityClasses)); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
+			os.Exit(1)
+		}
+		// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
+		// kinds (the rejection v1 did by silent override at pod-build time).
+		if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerTemplate")
 			os.Exit(1)
 		}
 	}
