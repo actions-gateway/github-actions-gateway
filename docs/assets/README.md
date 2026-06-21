@@ -91,13 +91,13 @@ Verify the result has no clipped text and a crisp logomark.
 
 ## Animated logomark
 
-A looping animation of the gateway ring as a literal Stargate-style wormhole.
+A looping animation of the gateway ring opening into a glowing wormhole portal.
 Like the static mark it is **generated, not hand-authored**:
 `generate-wormhole-animation.py` emits the per-frame SVGs and
 `render-wormhole-animation.sh` rasters and packs them.
 
 One ~2.6 s loop: a closed crystalline spiral iris opens, the wormhole ignites and erupts a
-water/plasma "kawoosh" along the gate's normal, the plume expands and retracts
+water/plasma burst along the gate's normal, the plume expands and retracts
 into a shimmering event horizon, and the iris closes again — seamless at the loop
 boundary. The ring geometry, palette, timing, and iris are tunable constants at
 the top of the Python file.

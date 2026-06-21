@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generate the per-frame SVGs for the animated "stargate wormhole" logomark.
+"""Generate the per-frame SVGs for the animated wormhole logomark.
 
 The faceted gateway ring (a true-3D, ridge-cross-section take on the mark in
 generate-logomark.py) sits at a 3/4 angle in a wide social-card frame. One loop:
 
     closed crystalline spiral iris opens -> wormhole ignites -> a water/plasma
-    "kawoosh" erupts along the gate normal, expands and retracts -> the event
+    "burst" erupts along the gate normal, expands and retracts -> the event
     horizon settles and fades -> iris closes -> back to the start (seamless).
 
 This script only emits the frame SVGs. The raster/video pipeline (resvg +
@@ -29,7 +29,7 @@ TRANSPARENT = "--transparent" in sys.argv
 # ---- ring geometry (ported from docs/assets/generate-logomark.py) ----------
 M = 10
 # Gate sits left of frame-centre, positioned so the full gate+plume content is
-# horizontally centred (equal left/right padding) when the kawoosh is at peak.
+# horizontally centred (equal left/right padding) when the burst is at peak.
 CX, CY = 74.0, 48.0
 GATE_SCALE = 0.82                 # gate size (shrunk to fit the frame with margin)
 RO_TIP, RO_BASE = 47.0 * GATE_SCALE, 36.0 * GATE_SCALE
@@ -90,7 +90,7 @@ def normal_z_edge(g0, g1):
     return -ny * _sP - nx * _sY * _cP         # rotated z of (nx,-ny,0)
 
 
-# Wormhole/kawoosh centre = the gate centre on the z=0 plane (the inner edge).
+# Wormhole/burst centre = the gate centre on the z=0 plane (the inner edge).
 MCX, MCY, _ = project3d(CX, CY, 0.0)
 
 # blast direction: the gate's face normal projected to screen (down-right).
@@ -262,7 +262,7 @@ def ring_svg(ang, glow):
 
 
 # ---- crystalline spiral iris diaphragm -------------------------------------
-# Stargate-style overlapping spiral blades, restyled as our faceted blue-steel
+# Overlapping spiral iris blades, restyled as our faceted blue-steel
 # shards (not smooth grey trinium): they wind to a spiky pinwheel when shut.
 IRIS_BLADES = 20                  # = the inner star's 20 vertices; a fine spiral
 IRIS_ROUT = 30.0                  # rim radius (covers the star), gate-plane
@@ -328,17 +328,17 @@ def envelopes(t):
     # before the wormhole ignites; closes after the plume has retracted + faded.
     iris = smoothstep(0.05, 0.15, t) * (1 - smoothstep(0.74, 0.85, t))
     ig = smoothstep(0.14, 0.21, t) * (1 - smoothstep(0.22, 0.30, t))
-    # kawoosh: a violent punch-out (fast rise) that overshoots, then collapses
+    # burst: a violent punch-out (fast rise) that overshoots, then collapses
     rise = smoothstep(0.16, 0.25, t)
     fall = smoothstep(0.30, 0.50, t)
-    kaw = (rise * (1 - fall)) ** 0.7
+    burst = (rise * (1 - fall)) ** 0.7
     eh = smoothstep(0.17, 0.32, t) * (1 - smoothstep(0.64, 0.76, t))
     charge = smoothstep(0.10, 0.17, t) * (1 - smoothstep(0.17, 0.24, t))
-    glow = max(ig, eh * 0.6, charge * 0.4, kaw * 0.9)
-    return dict(iris=iris, ig=ig, kaw=kaw, eh=eh, charge=charge, glow=glow)
+    glow = max(ig, eh * 0.6, charge * 0.4, burst * 0.9)
+    return dict(iris=iris, ig=ig, burst=burst, eh=eh, charge=charge, glow=glow)
 
 
-# ---- the horizontal kawoosh (billowing cloud blasting out the front) --------
+# ---- the horizontal burst (billowing cloud blasting out the front) --------
 # radius profile along the blast axis: (u, radius). Narrow at the gate mouth,
 # billowing to a bulbous head near the far end, rounding off at the tip.
 # narrow neck at the gate -> billowing bulbous mushroom head (like the film)
@@ -350,7 +350,7 @@ CLOUD_PROFILE = [(0.0, 18.0), (0.25, 19.5), (0.50, 21.0), (0.72, 22.5),
                  (0.88, 24.0), (1.0, 20.0)]
 # No centerline lift: the plume travels straight along the gate normal and the
 # round blobs expand symmetrically about that axis (top rises == bottom drops).
-KAW_RISE = 0.0
+BURST_RISE = 0.0
 
 
 def _profile(u):
@@ -363,9 +363,9 @@ def _profile(u):
     return pts[-1][1]
 
 
-def cloud_blobs(kaw):
+def cloud_blobs(burst):
     """Overlapping blobs along the blast axis -> a billowing cloud silhouette."""
-    L = 52 * kaw                       # blast reach (violent punch-out)
+    L = 52 * burst                       # blast reach (violent punch-out)
     n = 20
     blobs = []
     for i in range(n):
@@ -378,7 +378,7 @@ def cloud_blobs(kaw):
         ramp = smoothstep(0.0, 0.32, u)
         x = MCX + d * BDX
         y = MCY + d * BDY * ramp
-        r = _profile(u) * (0.45 + 0.55 * kaw)
+        r = _profile(u) * (0.45 + 0.55 * burst)
         # base blob is foreshortened (KXR) to match the event-horizon ellipse it
         # emerges from, easing to round as the plume pulls toward the viewer
         fx = KXR + (1.0 - KXR) * smoothstep(0.0, 0.4, u)
@@ -392,19 +392,19 @@ DROPS = [(random.uniform(0.12, 1.0), random.uniform(-1.0, 1.0),
           random.uniform(0.8, 2.3)) for _ in range(26)]
 
 
-def droplets(kaw):
+def droplets(burst):
     """Spray flung off the top/leading edge of the erupting vortex."""
     out = []
-    L = 52 * kaw
+    L = 52 * burst
     for (u, jit, sz) in DROPS:
         d = L * u + jit * 4
-        rad = _profile(u) * (0.45 + 0.55 * kaw)     # cloud radius here
+        rad = _profile(u) * (0.45 + 0.55 * burst)     # cloud radius here
         off = rad * (0.82 + 0.28 * jit)             # sit on / just past top edge
-        lift = KAW_RISE * kaw * u                    # follow the plume's rise
+        lift = BURST_RISE * burst * u                    # follow the plume's rise
         x = MCX + d * BDX - (off + lift) * PDX
         y = MCY + d * BDY - (off + lift) * PDY
-        r = sz * (0.4 + 0.6 * kaw)
-        op = max(0.0, kaw - 0.3)
+        r = sz * (0.4 + 0.6 * burst)
+        op = max(0.0, burst - 0.3)
         out.append('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f" '
                    'fill="url(#cloud)" opacity="%.2f"/>' % (x, y, r, r, op))
     return "\n".join(out)
@@ -447,7 +447,7 @@ def defs(seed, eh, hole):
     <!-- plasma/water surface: gently warp the body, then layer flowing caustic
          highlights (bright cyan-white) and deep-blue troughs from the same
          noise so the surface varies in colour + value without splashing -->
-    <filter id="kawoosh" x="-45%" y="-90%" width="190%" height="290%">
+    <filter id="burst" x="-45%" y="-90%" width="190%" height="290%">
       <feTurbulence type="turbulence" baseFrequency="0.05 0.08"
         numOctaves="4" seed="{seed+13}" result="n"/>
       <feDisplacementMap in="SourceGraphic" in2="n" scale="3.5"
@@ -543,22 +543,22 @@ def frame_svg(i):
                  'stroke="#cdfbff" stroke-width="%.2f" opacity="%.2f"/></g>'
                  % (GATE_MATRIX, CX, CY, sr, 1.8 * e["ig"], 0.6 * e["ig"]))
 
-    # --- the kawoosh: billowing cloud blasting horizontally out the front ----
-    if e["kaw"] > 0.01:
-        blobs, L = cloud_blobs(e["kaw"])
+    # --- the burst: billowing cloud blasting horizontally out the front ----
+    if e["burst"] > 0.01:
+        blobs, L = cloud_blobs(e["burst"])
         circ = "".join('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f"/>'
                        % (x, y, r * fx, r) for (x, y, r, fx) in blobs)
         # bright highlight blobs along the core (inner, smaller)
         hi = "".join('<ellipse cx="%.2f" cy="%.2f" rx="%.2f" ry="%.2f"/>'
                      % (x, y, r * 0.55 * fx, r * 0.55) for (x, y, r, fx) in blobs)
-        kop = min(1.0, e["kaw"] * 1.1)
+        kop = min(1.0, e["burst"] * 1.1)
         # A spacetime distortion: one contiguous mass with a flowing water/plasma
         # surface (colour + caustic variation), no splashing or droplets.
         # soft volume haze (cohesive body)
         p.append('<g fill="url(#cloud)" opacity="%.2f" filter="url(#soft)">%s</g>'
                  % (0.32 * kop, circ))
         # plasma body: warped + caustic highlights + deep-blue troughs
-        p.append('<g fill="url(#cloud)" opacity="%.2f" filter="url(#kawoosh)">%s</g>'
+        p.append('<g fill="url(#cloud)" opacity="%.2f" filter="url(#burst)">%s</g>'
                  % (0.9 * kop, circ))
         # finer caustic ripples flowing over the surface
         p.append('<g fill="url(#cloud)" opacity="%.2f" filter="url(#ripples)">%s</g>'
@@ -569,7 +569,7 @@ def frame_svg(i):
         # bright mouth where it draws out of the event horizon
         p.append('<ellipse cx="%.2f" cy="%.2f" rx="%.1f" ry="%.1f" fill="url(#glow)" '
                  'opacity="%.2f"/>'
-                 % (MCX, MCY, 15.3 * e["kaw"], 18.0 * e["kaw"], 0.8 * e["kaw"]))
+                 % (MCX, MCY, 15.3 * e["burst"], 18.0 * e["burst"], 0.8 * e["burst"]))
 
     p.append('</svg>')
     return "\n".join(p)
