@@ -51,6 +51,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q149"></a>Q149 | [v2 API M1: `v2alpha1` types + codegen](plan/v2-api.md) | `infra` `security` | 🔲 | M | Foundation: `v2alpha1` group `actions-gateway.com`, 5 kinds + deepcopy/CRDs/RBAC, CEL (immutability, maxLength 52, drop SecretReference.namespace, maxListeners=10, printer cols). No controllers; served beside v1alpha1. |
+| <a id="Q163"></a>Q163 | [v2 API M2: EgressProxy + RunnerTemplate reconcilers](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M1 (Q149). Data/noun kinds: EgressProxy reconciler (owns Deploy/Svc/HPA/PDB), RunnerTemplate/ClusterRunnerTemplate + reserved-field webhook. Same-namespace only. |
+| <a id="Q164"></a>Q164 | [v2 API M3: ActionsGateway + RunnerSet, multi-gateway](plan/v2-api.md) | `infra` `security` | 🚫 | L | Blocked on M2 (Q163). Verb kinds: per-gateway naming (52-char), AGC scoping by gatewayRef, templateRef/proxyRef runtime resolution + conditions, ownership/GC, optional proxy + NetworkPolicy (absorbs Q144). |
+| <a id="Q165"></a>Q165 | [v2 API M5: migration tool + v1/v2 cutover](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M3 (Q164). Fan-out migration tool (v1→N v2 objects) + tests, Q147 dual-read label window (tenant: managed, allow-profile-downgrade: allowed), deprecation + operator migration guide. |
 
 ---
 
@@ -61,11 +65,10 @@ Intentionally parked items. These carry **no priority position** and are **not**
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
 | <a id="Q74"></a>Q74 | [CRD conversion-webhook scaffolding (audit D7)](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | S | Graduating the API from `v1alpha1` to `v1beta1` (need `Hub`/`Convertible` stubs). |
-| <a id="Q149"></a>Q149 | [v2 API decomposition: split into ActionsGateway + RunnerSet + RunnerTemplate + EgressProxy](design/appendix-h-v2-api-decomposition.md) | `infra` `security` | L | Pod templates (DinD/sysbox) near the etcd object-size limit, or tenants want multiple gateways per namespace / shared egress proxies. Absorbs Q144 (proxy optionality), Q74 (tool-assisted migration), Q147 (label-value alignment). Sign-offs in §H.16. |
-| <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | S | Wanted, but parked until after the v2 API (Q149) ships. Also needs a cluster with gVisor installed. |
+| <a id="Q166"></a>Q166 | [v2 API M4: cross-namespace EgressProxy sharing](plan/v2-api.md) | `infra` `security` | M | A concrete operator ask for cross-namespace proxy sharing (same-namespace sharing already works without it). Adds inline allowedNamespaces consent, ConfigMap CA distribution to granted namespaces, dual-side NetworkPolicy, managed-IP refresh relocation. Additive on M3. |
+| <a id="Q15"></a>Q15 | [M5 gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` | S | Wanted, but parked until after the v2 API ([plan](plan/v2-api.md)) ships. Also needs a cluster with gVisor installed. |
 | <a id="Q11"></a>Q11 | [Ed25519 live probe — M-11b](plan/security.md) | `security` `tests` | S | Broker swaps RSA-OAEP session-key delivery for X25519 ECDH (Appendix G §G.6 / Q19), making Ed25519 the *secure* default. Until then Ed25519 is a less-secure performance opt-in (loses the AES session-key encryption layer); RSA-3072 stays the default and the probe gates docs nobody should reach for. |
 | <a id="Q17"></a>Q17 | [Unit/integration test speed improvements](plan/unit-tests-speed.md) | `speed` `tests` | M | CI latency becomes the bottleneck. |
 | <a id="Q18"></a>Q18 | [alerting.md](plan/docs.md) | `docs` | M | A real Prometheus/Alertmanager setup exists to document against. |
 | <a id="Q19"></a>Q19 | [Proxy features: allowlist, rate-limit, audit log, TLS, per-RG pool, X25519](design/appendix-g-future-enhancements.md) | `security` | L | A named trigger fires — these are explicit non-commitments (see [Appendix G](design/appendix-g-future-enhancements.md)). |
-| <a id="Q144"></a>Q144 | [Optional (disable-able) egress proxy](design/appendix-g-future-enhancements.md) | `infra` `security` | M | Operator ask for a single-tenant/dev/cost-sensitive deployment, or one already attributing egress per-tenant at the node/cloud layer. Opt-out only — default stays Required; forfeits per-tenant egress-IP attribution + containment (G.8). |
 | <a id="Q70"></a>Q70 | Flip worker-image trivy leg to blocking | `security` `infra` | S | Upstream `actions-runner` base scans clean (or near-clean). Worker leg is report-only in `security-scan.yml` because the base carries ~36 upstream HIGH/CRITICAL CVEs; the dependabot `docker` ecosystem auto-bumps it. When a bump clears them, set the worker leg's `exit-code` to `1`. |
