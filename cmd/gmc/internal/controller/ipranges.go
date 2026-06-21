@@ -34,6 +34,12 @@ import (
 type IPRangeCache struct {
 	mu    sync.RWMutex
 	cidrs []net.IPNet
+	// lastRefresh is the wall-clock time of the most recent successful IP-range
+	// fetch (zero until the first completes). The ActionsGateway EgressRulesStale
+	// condition (Q157) is derived from it: a refresh loop that has stalled past the
+	// staleness window means GitHub may have rotated ranges out from under a frozen
+	// allowlist. Guarded by mu alongside cidrs.
+	lastRefresh time.Time
 }
 
 // Snapshot returns a copy of the currently cached CIDRs. Safe to call
@@ -54,6 +60,25 @@ func (c *IPRangeCache) Set(cidrs []net.IPNet) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cidrs = out
+}
+
+// MarkRefreshed records the time of a successful IP-range refresh. Called by
+// IPRangeReconciler after each successful fetch so the ActionsGateway reconciler
+// can detect a stalled refresh cycle and report EgressRulesStale (Q157). Kept
+// separate from Set so the timestamp tracks fetch success, not CIDR mutation.
+func (c *IPRangeCache) MarkRefreshed(t time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastRefresh = t
+}
+
+// LastRefresh returns the time of the most recent successful refresh and whether
+// any refresh has completed yet (false, before the first fetch, means staleness
+// cannot be asserted).
+func (c *IPRangeCache) LastRefresh() (time.Time, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastRefresh, !c.lastRefresh.IsZero()
 }
 
 // GitHubIPRangeFetcher fetches the current GitHub IP ranges.
@@ -284,6 +309,9 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	}
 	if r.Cache != nil {
 		r.Cache.Set(cidrs)
+		// Stamp the successful fetch so the ActionsGateway reconciler can report
+		// EgressRulesStale if this loop later stalls (Q157).
+		r.Cache.MarkRefreshed(time.Now())
 	}
 
 	var agList gmcv1alpha1.ActionsGatewayList

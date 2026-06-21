@@ -8690,8 +8690,9 @@ spec:
                 description: |-
                   Conditions contains the current observed conditions of the runner group.
                   Known types: Ready, Degraded, RateLimited, RunnerVersionTooOld,
-                  CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded. The type and
-                  reason string constants are exported from this package (see conditions.go).
+                  CredentialUnavailable, WorkerQuotaPressure, WorkerQuotaExceeded,
+                  WorkersUnschedulable. The type and reason string constants are exported from
+                  this package (see conditions.go).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

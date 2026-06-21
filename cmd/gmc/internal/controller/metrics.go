@@ -35,8 +35,56 @@ func NewMetrics(reader client.Reader) *Metrics {
 		}, []string{"namespace"}),
 	}
 	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader),
-		newProxyQuotaCollector(reader), newRunnerGroupsDegradedCollector(reader))
+		newProxyQuotaCollector(reader), newRunnerGroupsDegradedCollector(reader),
+		newEgressRulesStaleCollector(reader))
 	return m
+}
+
+// egressRulesStaleCollector exports the EgressRulesStale condition (Q157) as a
+// gauge so operators can alert on a stalled GitHub IP-range refresh without
+// kube-state-metrics. Like the other collectors it reads at scrape time from the
+// cached reader: a deleted ActionsGateway simply stops being listed. The gauge
+// mirrors the condition the reconciler wrote to .status.conditions (1 when True,
+// 0 otherwise).
+type egressRulesStaleCollector struct {
+	reader client.Reader
+	stale  *prometheus.Desc
+}
+
+func newEgressRulesStaleCollector(reader client.Reader) *egressRulesStaleCollector {
+	return &egressRulesStaleCollector{
+		reader: reader,
+		stale: prometheus.NewDesc(
+			"actions_gateway_egress_rules_stale",
+			"1 when the ActionsGateway EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+	}
+}
+
+// Describe implements prometheus.Collector.
+func (c *egressRulesStaleCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.stale
+}
+
+// Collect implements prometheus.Collector. On a read failure it emits nothing
+// rather than a misleading value.
+func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var list gmcv1alpha1.ActionsGatewayList
+	if err := c.reader.List(ctx, &list); err != nil {
+		return
+	}
+	for i := range list.Items {
+		ag := &list.Items[i]
+		if !ag.DeletionTimestamp.IsZero() {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
+	}
 }
 
 // runnerGroupsDegradedCollector exports the RunnerGroupsDegraded rollup condition

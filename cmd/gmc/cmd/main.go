@@ -330,6 +330,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// IP-range refresh cadence; EgressRulesStale (Q157) trips when a gateway's
+	// allowlist goes unrefreshed for just over two of these intervals.
+	ipInterval := 24 * time.Hour
+
 	if err := (&controller.ActionsGatewayReconciler{
 		Client:                      mgr.GetClient(),
 		Scheme:                      mgr.GetScheme(),
@@ -339,13 +343,13 @@ func main() {
 		AGCExtraEnv:                 agcExtraEnv,
 		EnableTenantServiceMonitors: enableTenantServiceMonitors,
 		APIServerCIDRs:              parsedAPIServerCIDRs,
+		EgressStaleThreshold:        2*ipInterval + time.Hour,
 		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway")
 		os.Exit(1)
 	}
 
-	ipInterval := 24 * time.Hour
 	if err := mgr.Add(&controller.IPRangeReconciler{
 		Client:   mgr.GetClient(),
 		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},

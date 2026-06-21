@@ -136,9 +136,11 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.conditionCh = make(chan conditionUpdate, 256)
 	}
 
-	// Export the worker ResourceQuota conditions (Q82) as gauges from the cached
-	// client, so they can be alerted on without kube-state-metrics.
+	// Export the worker ResourceQuota conditions (Q82) and the WorkersUnschedulable
+	// condition (Q157) as gauges from the cached client, so they can be alerted on
+	// without kube-state-metrics.
 	registerWorkerQuotaMetrics(mgr.GetClient())
+	registerWorkersUnschedulableMetrics(mgr.GetClient())
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RunnerGroup{}).
@@ -302,6 +304,14 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	// 4c. Diagnose worker pods stuck Pending because the scheduler cannot place
+	// them (non-quota: no matching node / affinity / taints). Surfaced as the
+	// WorkersUnschedulable condition (Q157) and folded into the requeue so it is
+	// re-evaluated when a Pending pod crosses its grace. Computed from pods only, so
+	// like the reaper it keeps working during a GitHub outage; the condition is
+	// written with the rest of status at step 8.
+	unsched := r.evalWorkersUnschedulable(ctx, &rg)
+
 	// 5. Get installation token for agent management.
 	instToken, err := r.TokenManager.Token(ctx)
 	if err != nil {
@@ -371,6 +381,17 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		Reason: wq.exceededReason, Message: wq.exceededMessage, ObservedGeneration: rg.Generation,
 	})
 
+	// WorkersUnschedulable (Q157), impairing — it rolls up to the gateway. Emit a
+	// Warning Event only on a genuine False→True transition, never every reconcile.
+	wasUnsched := meta.IsStatusConditionTrue(rg.Status.Conditions, v1alpha1.ConditionWorkersUnschedulable)
+	r.mergeCondition(&rg, metav1.Condition{
+		Type: v1alpha1.ConditionWorkersUnschedulable, Status: boolConditionStatus(unsched.unschedulable),
+		Reason: unsched.reason, Message: unsched.message, ObservedGeneration: rg.Generation,
+	})
+	if unsched.unschedulable && !wasUnsched {
+		r.recordEvent(&rg, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
+	}
+
 	if err := r.Status().Update(ctx, &rg); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -385,6 +406,12 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// worker-pod watch event or the 10h resync, leaving status.activeSessions and
 	// Ready=True stale against a dead listener (Q137).
 	requeueAfter := reapAfter
+	// Re-check when the earliest still-Pending worker pod crosses its scheduling
+	// grace, so WorkersUnschedulable flips without waiting for a phase-changing Pod
+	// event (Q157).
+	if unsched.requeueAfter > 0 && (requeueAfter <= 0 || unsched.requeueAfter < requeueAfter) {
+		requeueAfter = unsched.requeueAfter
+	}
 	if rg.Spec.MaxListeners > 0 && mux.ActiveCount() < rg.Spec.MaxListeners {
 		if interval := r.baselineRecheckInterval(); requeueAfter <= 0 || interval < requeueAfter {
 			requeueAfter = interval
