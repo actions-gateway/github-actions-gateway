@@ -54,6 +54,14 @@ egress proxy to the tenant 1:1, and assumes one gateway per namespace.**
 - **Secure by default, optional by layering.** The egress proxy becomes optional
   to lower onboarding cost, but the egress *restriction* it sat on top of stays
   mandatory. Cross-namespace sharing requires explicit provider consent.
+- **Simplest shape that solves a problem we have today; forward-compatible for
+  the rest.** Build only the abstraction a *current* pressure forces. Where a
+  future need is foreseeable, shape the schema so the abstraction is *additive*
+  when its trigger fires — a new kind, or a new optional field with a default —
+  never a second breaking migration. Deferred abstractions are recorded with the
+  concrete trigger that would revive them (the admin policy layer in
+  [§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real) is the worked
+  example).
 
 ## H.3. The CRD set
 
@@ -255,22 +263,30 @@ Shared objects must not be owner-referenced by their referrers:
   Deployment/Service/HPA/PDB, reconciled by the GMC). Nothing owns the
   `EgressProxy`.
 - **`RunnerTemplate`** is pure data — no children, nothing owns it.
-- **Deletion degrades, it does not block.** Hard-blocking deletion of a
-  still-referenced shared object via finalizer would fight GitOps prune the same
-  way an ordering webhook does. Instead, allow the delete and flip referrers to
-  `Ready=False, Reason=TemplateDeleted` (same fail-closed behavior — no template
-  ⇒ no new pods). Keep a finalizer only to record `.status.referencedBy` for
-  visibility, not to prevent deletion.
+- **Deletion degrades, it does not block — and uses no finalizer at all.**
+  Hard-blocking deletion of a still-referenced shared object via finalizer would
+  fight GitOps prune the same way an ordering webhook does; Kubernetes' own
+  finalizer guidance also warns that finalizers on shared/referenced objects are
+  a common cause of stuck-`Terminating` resources. So allow the delete and flip
+  referrers to `Ready=False, Reason=TemplateDeleted` (same fail-closed behavior —
+  no template ⇒ no new pods) via the referent→referrer watch. Do **not** keep a
+  finalizer even for bookkeeping: `.status.referencedBy` is computable from the
+  same informer/watch without taking on a finalizer that can block deletion.
 
 ## H.9. Cross-namespace proxy sharing
 
 Default is same-namespace. Cross-namespace sharing uses **provider consent**: the
 owner of the `EgressProxy` publishes that it is shareable (via
 `spec.sharing.allowedNamespaces` or a namespace selector). Naming a
-cross-namespace proxy from the consumer side is not sufficient. The Gateway-API
-`ReferenceGrant` object is the more idiomatic alternative and the right choice if
-the cluster already uses Gateway API; the inline allowlist is preferred here for
-lower onboarding cost.
+cross-namespace proxy from the consumer side is not sufficient. This mirrors the
+consent handshake of Gateway API's `ReferenceGrant` (GA / `v1`), where the grant
+lives in the *target* (provider) namespace and a consumer-side name alone never
+authorizes the reference.
+
+**v2 ships the inline allowlist only.** It needs no Gateway API CRDs installed
+(lower onboarding), and honoring a `ReferenceGrant` when Gateway API *is* present
+can be added later without a breaking change. The load-bearing principle taken
+from the precedent — **consent is always provider-side** — holds for both.
 
 A shared proxy is a **shared egress identity** — it is for *cooperating* tenants
 or a *platform-operated* central pool, not mutually-distrusting tenants, because
@@ -282,10 +298,15 @@ not, and these are the bulk of the implementation cost:
 1. **NetworkPolicy on both sides.** The GMC must add egress (consumer workers →
    provider proxy Service) *and* ingress (provider proxy ← consumer namespaces)
    whenever a grant is active. Today both policies assume the proxy is colocated.
-2. **Proxy TLS CA distribution.** The proxy CA secret is per-tenant today. A
-   cross-namespace consumer needs that CA to validate the tunnel, so the GMC must
-   replicate/mount it into consumer namespaces — a secret-distribution mechanism
-   that does not exist yet.
+2. **Proxy TLS CA distribution — a ConfigMap, not a secret.** A cross-namespace
+   consumer needs the proxy's CA *certificate* (public) to validate the tunnel —
+   never the private key, which stays in the proxy namespace. So this is trust
+   distribution, not secret replication: the GMC writes the CA as a **ConfigMap**
+   into only the granted consumer namespaces, scoped by the same grant that
+   authorizes the reference. This follows the cert-manager **trust-manager**
+   pattern (selector-scoped bundle sync); if trust-manager is installed, the CA
+   may instead be published as a `Bundle`. No new secret-distribution mechanism is
+   required — the earlier framing of this as a "secret" overstated the cost.
 
 ## H.10. The egress proxy becomes optional
 
@@ -316,6 +337,17 @@ identity* — a property a subset of tenants need and can opt into — not the e
 *containment* baseline. Defaulting off the *restriction* would be a security
 regression and is out of scope. See the
 [secure-by-default principle](05-security.md) for the rule this satisfies.
+
+Two refinements keep direct egress **auditable**, not silently inferred:
+
+- **Direct egress is a structurally explicit state.** An unset `proxyRef`
+  resolves to direct egress, and the runner-set status reflects it (e.g.
+  `proxyMode: Direct`) rather than leaving "no proxy" to be inferred from an
+  absent field.
+- **Surface the attribution trade.** Emit an advisory condition (e.g.
+  `EgressUnattributed`) on the proxy-less runner set so an operator can see at a
+  glance that this workload has no per-tenant egress identity — the property they
+  opted out of — without grepping specs.
 
 **Composition bonus.** §H.9 and §H.10 combine: a platform team runs one shared
 `EgressProxy` in a central namespace, grants it to the EMU/allowlist tenants who
@@ -404,18 +436,225 @@ impact list, to be turned into plan-doc scope when scheduled:
   onboarding scripts, runbooks, and the convention doc's "grandfathered" note all
   update, and the dual-read window rides the v1alpha1 serving window.
 
-## H.14. Open questions / sign-off needed
+## H.14. Admin policy layer — deferred until tiering is real
 
-1. **Multi-gateway-per-namespace** resource naming and RBAC rework — biggest GMC
-   change; review before committing to the API shape.
-2. **Cross-namespace proxy CA distribution** — confirm the secret-replication
-   mechanism is acceptable (vs. requiring same-namespace proxies only).
-3. **Optional proxy** — confirm the secure-by-default guardrail in §H.10 (egress
-   restriction stays mandatory; managed-IP refresh relocates).
-4. **Sharing model** — inline `allowedNamespaces` vs. Gateway-API `ReferenceGrant`.
-5. **Deletion semantics** — degrade-not-block (§H.8); confirm no operators rely
-   on hard deletion protection.
-6. **Q147 label-value keywords** — confirm `tenant: managed` and
-   `allow-profile-downgrade: allowed` as the aligned values (§H.12), and that
-   closing the dual-read window only at `v1alpha1` removal (not earlier) is
-   acceptable.
+The decomposition above mirrors Gateway API's `Gateway → route attachment` but
+stops one level short: there is no cluster-scoped, **admin-owned** object — no
+`GatewayClass` equivalent. Today the admin/tenant boundary is real but lives
+*outside the API*, scattered across mechanisms that cannot be RBAC'd, audited, or
+GitOps'd as objects:
+
+| Policy | Where it lives today |
+|---|---|
+| Which PriorityClasses a tenant may name | `--allowed-priority-classes` GMC flag |
+| Whether `privileged` profile is allowed | namespace label `…/privileged-profile=allowed` |
+| Default worker image | `--worker-image` GMC flag |
+| Reserved namespaces | Go constant + `POD_NAMESPACE` |
+| Namespace ResourceQuota | platform-stamped, out-of-band |
+
+Promoting this into a first-class API object turns the boundary into a clean RBAC
+split (admin writes the policy kind; tenants cannot) and makes "what is this
+tenant allowed to do?" a `kubectl get` away. **But it is not a problem we have
+today, and the abstraction is addable without a second breaking change** — so v2
+does *not* ship it. This section records the capability ladder and the exact
+trigger, so the decision is captured rather than rediscovered.
+
+### The capability ladder
+
+| Layer | Expresses | Breaks when |
+|---|---|---|
+| **Flags (today)** | one global policy, cluster-wide | can't vary per tenant at all (except the one bolted-on privileged namespace-label gate) |
+| **Singleton policy object** | one global policy, but declarative / auditable / RBAC'd | still *uniform* — every tenant gets the same rules |
+| **Singleton + namespace labels** | one global policy plus a *few independent* per-tenant dials ("privileged iff namespace has label X") | the per-tenant variation becomes *multi-dimensional and correlated* |
+| **Class** (`ActionsGatewayClass`) | named bundles of correlated policy, tenant-selectable, RBAC-gated on which class may be referenced | — |
+
+A *single* per-tenant escape hatch (like privileged-allowed) does **not** need a
+class — a namespace label the admin controls handles it, which is already how
+v1 works. The singleton + the occasional label dial gets you a long way.
+
+### Promote flags → singleton when
+
+The singleton carries the *same* policy as the flags — one uniform policy, no
+tiers — so it buys only the rung-2 wins, not tiering. Promote when **any** of:
+
+- **GitOps** — policy must be managed declaratively / changed without a
+  controller redeploy.
+- **RBAC separation** — the people who set policy must be distinct from the
+  people who own the controller Deployment (a platform-policy team vs. the SRE
+  who deploys the GMC).
+- **Audit/compliance** — "show me, as a cluster object, exactly what tenants are
+  allowed" is an actual requirement.
+
+If none of those bite, flags are simpler and equally forward-compatible.
+
+### The trigger for the class
+
+Introduce `ActionsGatewayClass` only when **both** hold:
+
+1. **≥2 distinct policy *bundles* must coexist** in one cluster — e.g. an
+   "internal/trusted" tier (DinD allowed, broad registries, proxy optional) vs an
+   "external/untrusted" tier (restricted-only, platform registry only, proxy
+   mandatory): multiple policy dimensions that *travel together* as a tier; **and**
+2. **either** those tiers are spread across enough namespaces that encoding each
+   as a *combination* of namespace labels becomes an audit/maintenance liability
+   (N namespaces × M labels that should just say "tier = A"), **or** you want
+   tenants to **self-select** a tier with RBAC deciding which they may pick —
+   which labels cannot express, because tenants do not control namespace labels.
+
+Smell signs the trigger has arrived: the onboarding runbook grows a "pick your
+tier, then apply these K labels" step (that step *is* a class waiting to be
+born); a request like "team X gets privileged + registries A&B, team Y neither";
+or a self-service "request the privileged tier" flow.
+
+### Why deferring costs nothing
+
+**Every rung of the ladder is an additive transition** — none is a breaking
+migration:
+
+- *flags → singleton*: add the `ActionsGatewayPolicy` kind; the controller
+  prefers it when present and the flags remain as fallback/defaults.
+- *singleton → class*: add the `ActionsGatewayClass` kind, and add
+  `ActionsGateway.spec.gatewayClassName` as an *optional* field whose unset value
+  means "the default class / the old singleton"; the singleton simply *becomes*
+  the default class.
+
+So deferring either step buys no future breaking migration. The one constraint to
+honor now: **whatever policy lands in v2 — flags or a singleton — must be shaped
+so a future singleton/class could carry the identical schema field-for-field.**
+Don't paint the policy into a corner a later rung couldn't inherit.
+
+### v2 decision
+
+**v2 keeps the controller flags.** A singleton/class earns its keep only at the
+triggers above, none of which is a problem we have today, and every rung is
+additive — so promoting later costs nothing, while building now would be
+abstraction ahead of need. The single obligation v2 carries is to shape the
+flag-backed policy so a future singleton/class inherits its schema field-for-
+field. **Ship neither the singleton nor the class.** Promote to the singleton at
+the flags→singleton trigger; introduce the class at the two-part class trigger.
+
+## H.15. Other breaking changes worth batching
+
+v2 is the one window where breaking changes are cheap (we are already rewriting
+the schema and shipping a migration tool). A few small changes are only
+*possible* at a major break, or are awkward to add later — batch them in, but
+only the ones that fix a problem we have today.
+
+**Decided for v2 (today's problem, break-only or break-cheapest):**
+
+- **Drop the `SecretReference.namespace` footgun.** It is reserved-but-validated-
+  empty and reads like a cross-namespace reference that does not exist. Replace
+  with a name-only `LocalSecretReference`. Removing a field is break-only.
+- **Per-field immutability** via CEL `XValidation` (`oldSelf`): **`gitHubURL`
+  immutable** — rebinding a running gateway's GitHub org is a footgun;
+  **`gitHubAppRef.name` mutable** — it is the credential-rotation path. Adding
+  immutability later is itself breaking, so it is fixed at v2.
+- **API group rename → `actions-gateway.com`.** The group is
+  `actions-gateway.github.com`, which suffixes a domain the project does not
+  control — against the k8s convention of using a domain you own. The project
+  owns `actions-gateway.com`, so v2 renames the group to it. Changing the group
+  touches every CRD (and every CR, RBAC rule, VAP, and manifest that names it),
+  so it can only happen at a major break — it rides the v2 cutover and its
+  migration tool.
+- **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
+  profile, active sessions), resource `categories`, and the short names from
+  [§H.6](#h6-naming-and-length-budgets).
+- **`maxListeners` default → `10`** (was `1` in code; matches the design).
+  Confirmed against the AGC listener `Multiplexer`/`Run` source: the pool keeps a
+  permanent baseline of **one** poller and demand-spawns extra pollers only as
+  jobs are acquired (a job-holding goroutine is busy, not polling, for the job's
+  whole duration), with non-baseline pollers idle-exiting after 50 empty polls.
+  So `maxListeners` is a **concurrency ceiling with a baseline of 1**, not a
+  steady-state count: a higher default costs nothing at idle, while `1`
+  serializes job pickup per group (the busy baseline leaves no poller, and
+  `SpawnReplacement` is a no-op at the ceiling). The real resource guards
+  (`maxWorkers` + namespace `ResourceQuota`) still bind, so the higher default
+  regresses no safety property. v2 sets the default to `10`.
+
+**Opportunistic (take if it falls out of the rewrite; not a sign-off item):**
+
+- **Webhook → CEL migration.** v2 targets a newer k8s floor, so checks that are
+  webhook-only today *because* CEL could not express them on k8s ≤1.30 (singleton,
+  GitHub-URL structure, `gitHubAppRef.namespace` empty, cross-field rules) can
+  become structural/CEL. Every check moved out of the fail-closed validating
+  webhook is one fewer thing whose outage blocks all admission — an availability
+  and operability win, best taken during the schema rewrite.
+
+**Explicitly NOT now (shape for additive later, do not build):**
+
+- **Admin policy class** — [§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real).
+- **Worker-image registry allowlist** — a real security control, but only needed
+  once there are untrusted tenants to restrict. It belongs in the admin policy
+  schema and is enforced when that layer arrives; do not add a standalone tenant
+  field for it now.
+- **Credentials as a discriminated union.** OIDC / workload-identity federation
+  is the foreseeable successor to long-lived GitHub App keys, but a bare
+  `gitHubAppRef` today does not block it: a future `workloadIdentityRef` sibling
+  field (optional, with a CEL "exactly one of") is *additive*, not breaking. So
+  do not introduce a tagged union now — keep the single field.
+
+## H.16. Open questions / sign-off needed
+
+### Recommended (pending ratification)
+
+Each carries a recommendation grounded in precedent (Gateway API, ARC,
+cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
+
+1. **Multi-gateway-per-namespace — naming, AGC scoping, ownership.** Verified
+   against `gmc-tenant-resource-guard` (`cmd/gmc/config/admission-policy/tenant-resource-guard.yaml`):
+   the GMC-confinement VAP keys on the namespace `tenant=true` marker, **not on
+   resource names**, so it already scales to N gateways per namespace and needs no
+   change. The real work is three controller-side changes:
+   - **(a) Per-gateway naming** — every derived resource becomes `<ag>-<suffix>`
+     (`<ag>-agc`, `<ep>-proxy`, worker `generateName=<rs>-`) under the
+     [§H.6](#h6-naming-and-length-budgets) 52-char cap, so two gateways in one
+     namespace never collide on a fixed name.
+   - **(b) Per-gateway AGC scoping** — N gateways ⇒ N AGC Deployments in one
+     namespace, so each AGC must reconcile **only the `RunnerSet`s whose
+     `gatewayRef` targets it** — the one genuinely new controller behavior, without
+     which N controllers fight over the same objects.
+   - **(c) Per-gateway ownership** — each `ActionsGateway` owner-refs its own
+     children so deleting one gateway GCs only its resources, not a neighbor's.
+
+   (Optional defense-in-depth: also require a GMC `managed-by` label on writes; not
+   needed for correctness since the VAP already confines by namespace.) Precedent:
+   ARC runs multiple scale sets per namespace, names = CR prefix + fixed suffix.
+   The core build of v2 — naming + watch-scoping + ownership, not a policy rewrite.
+2. **Cross-namespace proxy CA distribution → ConfigMap, not secret.** The CA is a
+   public certificate, so the GMC distributes it as a **ConfigMap** into only the
+   granted consumer namespaces (trust-manager pattern; [§H.9](#h9-cross-namespace-proxy-sharing)).
+   No secret-replication subsystem is needed — recommend dropping that as a
+   blocker.
+3. **Optional proxy** — ✅ guardrail as in [§H.10](#h10-the-egress-proxy-becomes-optional):
+   egress restriction stays mandatory, managed-IP refresh relocates, plus an
+   explicit `proxyMode: Direct` status and an `EgressUnattributed` advisory
+   condition so the attribution trade is auditable.
+4. **Sharing model** — ship the **inline `allowedNamespaces` allowlist only** for
+   v2; `ReferenceGrant` support is additive later. Consent stays provider-side
+   either way ([§H.9](#h9-cross-namespace-proxy-sharing)).
+5. **Deletion semantics** — degrade-not-block with **no finalizer at all**
+   ([§H.8](#h8-ownership-gc-and-deletion)); `referencedBy` is computed from the
+   watch. Confirm no operator relies on hard deletion protection.
+6. **Q147 label-value keywords** — ratify `tenant: managed` and
+   `allow-profile-downgrade: allowed` (symmetric with `privileged-profile:
+   allowed`), with the dual-read window closing only at `v1alpha1` removal
+   ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+
+### Resolved
+
+8. **Admin policy layer** (§H.14) — ✅ **v2 keeps the controller flags.** Neither
+   the singleton nor the class ships in v2; each is deferred behind a documented
+   trigger (flags→singleton, then the two-part class trigger), and every rung is
+   an additive, non-breaking transition. v2's only obligation is to shape the
+   flag-backed policy so a future singleton/class inherits its schema
+   field-for-field.
+9. **API group rename** (§H.15) — ✅ **Yes, rename to `actions-gateway.com`.**
+   The project owns the domain; the change rides the v2 cutover and its migration
+   tool. Break-only, so it happens here or never.
+10. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
+    `gitHubAppRef.name` mutable.**
+11. **`maxListeners` default** (§H.15) — ✅ **`10`** (was `1` in code). Verified
+    against the AGC listener source: `maxListeners` is a concurrency ceiling with
+    a baseline-of-1 + demand-spawn + idle-shutdown, so a higher default is free
+    at idle and `1` needlessly serializes job pickup; `maxWorkers`/quota remain
+    the binding resource guards. (Closed Q162.)
