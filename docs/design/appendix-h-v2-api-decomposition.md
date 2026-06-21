@@ -559,14 +559,17 @@ only the ones that fix a problem we have today.
 - **Cheap usability while regenerating:** `additionalPrinterColumns` (Ready,
   profile, active sessions), resource `categories`, and the short names from
   [§H.6](#h6-naming-and-length-budgets).
-- **Resolve the `maxListeners` default mismatch** (code `1` vs design `10`). If
-  listeners are demand-spawned and idle-shut-down (so `maxListeners` is a *burst
-  ceiling*, not a steady-state count), a higher default costs nothing at idle and
-  the design's `10` is the better default — fix the code to match. If listeners
-  are always-on, `10` idle long-poll sessions × many runner sets is real
-  connection cost and `1` is correct. The call is gated on confirming the
-  listener lifecycle in the AGC controller (the Q148/Q152 idle-shutdown lineage);
-  tracked as a Queue item.
+- **`maxListeners` default → `10`** (was `1` in code; matches the design).
+  Confirmed against the AGC listener `Multiplexer`/`Run` source: the pool keeps a
+  permanent baseline of **one** poller and demand-spawns extra pollers only as
+  jobs are acquired (a job-holding goroutine is busy, not polling, for the job's
+  whole duration), with non-baseline pollers idle-exiting after 50 empty polls.
+  So `maxListeners` is a **concurrency ceiling with a baseline of 1**, not a
+  steady-state count: a higher default costs nothing at idle, while `1`
+  serializes job pickup per group (the busy baseline leaves no poller, and
+  `SpawnReplacement` is a no-op at the ceiling). The real resource guards
+  (`maxWorkers` + namespace `ResourceQuota`) still bind, so the higher default
+  regresses no safety property. v2 sets the default to `10`.
 
 **Opportunistic (take if it falls out of the rewrite; not a sign-off item):**
 
@@ -624,9 +627,6 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    `allow-profile-downgrade: allowed` (symmetric with `privileged-profile:
    allowed`), with the dual-read window closing only at `v1alpha1` removal
    ([§H.12](#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
-7. **`maxListeners` default** — recommend `10` (match design) if listeners are
-   demand-spawned + idle-shut-down; gated on confirming the listener lifecycle.
-   Tracked as a Queue item ([§H.15](#h15-other-breaking-changes-worth-batching)).
 
 ### Resolved
 
@@ -641,3 +641,8 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    tool. Break-only, so it happens here or never.
 10. **Per-field immutability** (§H.15) — ✅ **`gitHubURL` immutable,
     `gitHubAppRef.name` mutable.**
+11. **`maxListeners` default** (§H.15) — ✅ **`10`** (was `1` in code). Verified
+    against the AGC listener source: `maxListeners` is a concurrency ceiling with
+    a baseline-of-1 + demand-spawn + idle-shutdown, so a higher default is free
+    at idle and `1` needlessly serializes job pickup; `maxWorkers`/quota remain
+    the binding resource guards. (Closed Q162.)
