@@ -116,6 +116,34 @@ This mirrors the Gateway API pattern (`GatewayClass` → `Gateway` → route
 attachment by reference) and ARC's split of scheduling (`AutoscalingRunnerSet`)
 from pod shape, rather than introducing a novel structure.
 
+### Runtime view — what the kinds become
+
+The diagram above is the static shape; this is what those kinds reconcile into at
+runtime. The GMC (cluster-scoped) provisions the per-tenant control plane; the AGC
+(one per gateway, in the tenant namespace) provisions worker pods; all GitHub
+traffic egresses through the proxy pool's stable per-tenant IP.
+
+```
+  GMC · cluster controller
+    │  reconciles ActionsGateway → AGC Deployment    ┐ creates
+    │  reconciles EgressProxy    → Proxy pool        ┘ + owns
+    ▼
+  ┌──────────────────────┐  reconciles RunnerSet    ┌──────────────────────┐
+  │ AGC · per-gateway    │ ──── → creates pods ───► │ Worker pods          │
+  │ controller           │       (one per job)      │ ephemeral · per job  │
+  └──────────┬───────────┘                          └──────────┬───────────┘
+             │ control-plane long-poll                         │ job egress
+             └──────────────────────┬──────────────────────────┘
+                                    ▼
+                  ┌────────────────────────────┐  stable    ┌──────────────────┐
+                  │ Proxy pool                 │ per-tenant  │ GitHub           │
+                  │ routes all GitHub egress   │ ─── IP ───► │ broker + API     │
+                  └────────────────────────────┘            └──────────────────┘
+```
+
+Multiple `ActionsGateway`s may share one namespace; each AGC reconciles only the
+`RunnerSet`s whose `gatewayRef` targets it.
+
 ## H.4. Spec sketches
 
 ```go
@@ -468,6 +496,25 @@ which no conversion webhook can express. Therefore:
   references. Dry-run to manifests by default; apply on `--apply`.
 - Deprecate `v1alpha1` after a release or two. The cutover is deliberate, not
   silent, because the migration is fan-out-on-create.
+
+```
+       v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
+  ┌──────────────────────────────┐                       ┌──────────────────────────────┐
+  │ ActionsGateway               │                  ┌──► │ ActionsGateway · identity    │
+  │   ├ githubAppRef · githubURL │                  │    └──────────────────────────────┘
+  │   ├ spec.proxy (inline)      │   ┌───────────┐  │    ┌──────────────────────────────┐
+  │   └ spec.runnerGroups[]      │──►│ migration │──┼──► │ EgressProxy                  │
+  │       (inline podTemplates)  │   │ tool      │  │    └──────────────────────────────┘
+  └──────────────────────────────┘   │ dry-run → │  │    ┌──────────────────────────────┐
+            reads v1                  │ --apply   │  ├──► │ RunnerTemplate × N           │
+                                      └───────────┘  │    └──────────────────────────────┘
+                                     fan-out on create│    ┌──────────────────────────────┐
+                                                       └──► │ RunnerSet × N                │
+                                                            └──────────────────────────────┘
+```
+
+A conversion webhook can't create those sibling objects — which is exactly why the
+migration is a tool, not a webhook.
 
 The v1→v2 fan-out is one-time. Once on `v2alpha1`, the API graduates **in place**
 `v2alpha1 → v2beta1 → v2` via a conversion webhook (a thing a conversion webhook
