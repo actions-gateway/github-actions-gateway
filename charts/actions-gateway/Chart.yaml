@@ -25,8 +25,9 @@ sources:
 maintainers:
   - name: actions-gateway maintainers
 annotations:
-  # Stable GA release: Artifact Hub must not flag the listing as a prerelease.
-  # Keep "true" only while cutting 0.x / -rc tags (see docs/operations/release.md
+  # Prerelease cut (v1.1.0-rc.1): Artifact Hub must flag the listing as a
+  # prerelease. Keep "true" only while cutting 0.x / -rc tags; flip back to
+  # "false" before the next stable GA tag (see docs/operations/release.md
   # § Chart version & metadata). publish.yml packages the chart from this dir as
   # is, so this annotation is baked into the published chart at tag time.
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
