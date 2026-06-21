@@ -73,6 +73,7 @@ cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/crd/bases/actions-gateway.com_actionsgateways.yaml
 cmd/gmc/config/crd/bases/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
+cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml"
 
 echo "==> yamllint (static manifests + chart metadata)"

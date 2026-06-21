@@ -22,9 +22,6 @@ spec:
     - jsonPath: .spec.githubURL
       name: URL
       type: string
-    - jsonPath: .spec.securityProfile
-      name: Profile
-      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -72,6 +69,14 @@ spec:
               groups become explicit RunnerSet objects, both removed from this spec (§H.4).
               Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
               dropped); the multi-gateway controller behavior lands in M3b.
+
+              The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
+              on this per-gateway object, but Pod Security Admission is a namespace-scoped control
+              in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
+              the single namespace PSA label. v2 moves the profile to the namespace itself — the
+              operator sets the actions-gateway.com/security-profile label on the tenant namespace
+              and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+              docs/operations/security-operations.md.
             properties:
               defaultProxyRef:
                 description: |-
@@ -129,18 +134,6 @@ spec:
                 enum:
                 - info
                 - debug
-                type: string
-              securityProfile:
-                default: baseline
-                description: |-
-                  SecurityProfile controls the Pod Security Admission enforcement level applied
-                  to the tenant namespace. Allowed values: baseline (default), restricted,
-                  privileged. Use privileged only for workloads that run Docker-in-Docker or
-                  require host-level capabilities.
-                enum:
-                - baseline
-                - restricted
-                - privileged
                 type: string
               tracing:
                 description: |-

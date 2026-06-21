@@ -52,8 +52,6 @@ spec:
     - name: only-gmc-service-account
       expression: "request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'"
   variables:
-    - name: markerKey
-      expression: "'actions-gateway.github.com/tenant'"
     - name: psaPrefix
       expression: "'pod-security.kubernetes.io/'"
     - name: oldLabels
@@ -64,10 +62,17 @@ spec:
       expression: "has(oldObject.metadata.annotations) ? oldObject.metadata.annotations : {}"
     - name: newAnnotations
       expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    # Dual-marker tenant scope: the v1 actions-gateway.github.com/tenant=true and the
+    # v2 actions-gateway.com/tenant=managed are both accepted during the v1/v2
+    # coexistence window (§H.12), so the GMC can stamp PSA on v2 tenant namespaces.
+    - name: isManagedTenant
+      expression: >-
+        (('actions-gateway.github.com/tenant' in variables.oldLabels && variables.oldLabels['actions-gateway.github.com/tenant'] == 'true')
+        || ('actions-gateway.com/tenant' in variables.oldLabels && variables.oldLabels['actions-gateway.com/tenant'] == 'managed'))
   validations:
     # Constraint 1 — marker scope. The existing namespace must be a managed tenant.
-    - expression: "variables.markerKey in variables.oldLabels && variables.oldLabels[variables.markerKey] == 'true'"
-      messageExpression: "'the GMC service account may only modify namespaces labeled ' + variables.markerKey + '=true; namespace ' + object.metadata.name + ' is not a managed tenant namespace'"
+    - expression: "variables.isManagedTenant"
+      messageExpression: "'the GMC service account may only modify namespaces labeled actions-gateway.com/tenant=managed (or the legacy actions-gateway.github.com/tenant=true); namespace ' + object.metadata.name + ' is not a managed tenant namespace'"
       reason: Forbidden
     # Constraint 2a — only PSA labels may change; every other label is immutable.
     - expression: >-
