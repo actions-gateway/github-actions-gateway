@@ -82,6 +82,9 @@ milestone is independently reviewable and leaves the tree green.
   PDB ([§H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion)). **Same-namespace only** at this stage.
 - `RunnerTemplate` / `ClusterRunnerTemplate`: pure data; the reserved-pod-field
   rejection webhook moves here from `RunnerGroup` ([§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
+- **Free observability win:** because each `EgressProxy` Deployment is now
+  per-gateway, its proxy metrics carry the gateway label automatically — the
+  per-tenant proxy-connection visibility v1's shared-proxy shape could not express.
 - **Exit:** a standalone `EgressProxy` reconciles a working proxy pool; a
   `RunnerTemplate` validates and is readable by name; envtest coverage for both.
 
@@ -121,6 +124,54 @@ milestone is independently reviewable and leaves the tree green.
 - Operator migration guide; `v1alpha1` deprecation notice.
 - **Exit:** the tool migrates a representative v1 namespace to a working v2 object
   set in dry-run and `--apply`; dual-read verified; docs updated.
+
+## Itemized tasks
+
+The actionable breakdown per milestone. Each box is a self-contained unit of work;
+a milestone is done when every box is checked and its exit criterion holds.
+
+### M1 — API foundation (Q149)
+
+- [ ] Scaffold `cmd/agc/api/v2alpha1/` and `cmd/gmc/api/v2alpha1/` (group `actions-gateway.com`, `groupversion_info.go`).
+- [ ] Define the five kinds + shared subtypes (`ObjectRef`, `LocalSecretReference`, `PriorityTier`, `TracingConfig`).
+- [ ] Field-naming pass — `githubURL`/`githubAppRef`, uniform `…Ref`, plural list fields.
+- [ ] CEL/structural validation — name `maxLength` 52; `githubURL` immutable (`oldSelf`); `maxListeners` default 10; `maxWorkers == priorityTiers[last].threshold`; reserved-pod-field rules on `RunnerTemplate`.
+- [ ] `selectableFields: spec.gatewayRef.name` on `RunnerSet`.
+- [ ] Uniform status/condition contract across all five kinds (`Ready` + `observedGeneration`, `listType=map`, specific messages).
+- [ ] `additionalPrinterColumns`, `categories`, short names (`ag`/`rs`/`rt`/`crt`/`ep`).
+- [ ] Labels/annotations/finalizers on the `actions-gateway.com/*` domain.
+- [ ] Codegen: deepcopy, CRD manifests, RBAC markers, chart wiring; both groups served beside `v1alpha1`.
+- [ ] (Opportunistic) move webhook-only checks to CEL where the k8s floor allows.
+
+### M2 — Data kinds (Q163)
+
+- [ ] `EgressProxy` reconciler (GMC): own Deployment/Service/HPA/PDB; per-gateway name `<ep>-proxy`; cert/CA wiring; same-namespace only.
+- [ ] Per-tenant proxy metrics carry the gateway label (free win from per-gateway proxies).
+- [ ] `RunnerTemplate` / `ClusterRunnerTemplate`: data only; move the reserved-pod-field rejection webhook here.
+- [ ] envtest for both kinds.
+
+### M3a — Single-gateway parity (Q164)
+
+- [ ] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/Role, namespace PSA labels, credential mount, NetworkPolicy; one gateway/ns.
+- [ ] `RunnerSet` reconciler (AGC): port `RunnerGroup` behavior; resolve `templateRef`/`proxyRef` via watch + enqueue; `TemplateNotFound`/`ProxyNotFound` conditions; fail-closed wiring.
+- [ ] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
+- [ ] Per-field/-condition **parity checklist** vs. `RunnerGroup` (gates exit).
+- [ ] envtest + a kind e2e parity run (job → worker pod → proxied egress).
+
+### M3b — Multi-gateway (Q167)
+
+- [ ] Per-gateway derived naming across every GMC-created resource (52-char cap).
+- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side).
+- [ ] Per-gateway ownership refs for clean cascade GC.
+- [ ] envtest + kind e2e: two gateways with their own runner sets concurrent in one namespace.
+
+### M5 — Migration + cutover (Q165)
+
+- [ ] Fan-out migration tool (subcommand/`kubectl` plugin): v1 → v2 object set; dry-run default, `--apply`.
+- [ ] Dual-read window: VAPs + downgrade webhook accept both domains *and* both values; tool relabels keys/values/finalizers in one pass.
+- [ ] Operator migration guide; `v1alpha1` deprecation notice + named removal release.
+- [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation.
+- [ ] Coexistence test (v1 keeps working while v2 served) + migration golden tests.
 
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
 
@@ -196,6 +247,16 @@ Tracked in [STATUS.md Deferred](../STATUS.md#deferred).
 - **Worker-image registry allowlist** — lands with the admin policy layer, not as a standalone tenant field ([§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)).
 - **Credentials discriminated union** — a future `workloadIdentityRef` sibling field is additive; keep the single `githubAppRef` now.
 - **Webhook → CEL migration** — opportunistic during M1's schema rewrite, not a gate.
+
+**Architecture review (enhancements evaluated).** A full architecture pass found
+no new *breaking* holes — the breaking surface is fully covered by the milestones
+above. New *additive* enhancements were filed as backlog rather than pulled into
+v2: AGC horizontal-scaling/HA (Q169), Kubernetes Events for job lifecycle (Q170),
+and tenant-tunable AGC resources (Q171). Deliberately **not** pre-added to the v2
+schema: the proxy feature fields (destination allowlist, audit logging, in-cluster
+TLS, per-set dedicated pool — Q19). An optional field added later is non-breaking,
+so per the simplicity principle they wait for their trigger; pre-adding them now
+would be abstraction ahead of need.
 
 ## Testing
 
