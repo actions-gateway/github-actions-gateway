@@ -51,8 +51,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q175"></a>Q175 | [v2: move `securityProfile` to namespace scope](design/appendix-h-v2-api-decomposition.md#h16-open-questions--sign-off-needed) | `infra` `security` | 🚫 | S | Decided (§H.16 #7): securityProfile moves off the gateway to namespace level (drop ActionsGatewaySpec field; namespace-owned, GMC-guarded). Implement in M3a (Q164). Fallback: most-restrictive-wins if co-located differing profiles ever needed. |
-| <a id="Q164"></a>Q164 | [v2 API M3a: ActionsGateway + RunnerSet, single-gateway parity](plan/v2-api.md) | `infra` `security` | 🚫 | L | Blocked on M2 (Q163). Verb kinds, one gateway/ns (v1 parity): templateRef/proxyRef runtime resolution + conditions, proxy required. Parity checklist gates exit. Core build. |
+| <a id="Q164"></a>Q164 | [v2 API M3a: ActionsGateway + RunnerSet, single-gateway parity](plan/v2-api.md) | `infra` `security` | ▶ | L | M2 done. Q175 landed here (securityProfile→namespace VAP+reconciler, tested). Parity checklist in plan. Remaining: GMC AGC reconciler; AGC RunnerSet resolver — AGC↔GMC module-cycle finding (see plan). |
 | <a id="Q167"></a>Q167 | [v2 API M3b: multi-gateway per namespace](plan/v2-api.md) | `infra` `security` | 🚫 | M | Blocked on M3a (Q164). Per-gateway naming (52-char), AGC scoping via gatewayRef field selector, per-gateway ownership/GC. VAP unchanged (keys on namespace marker). |
 | <a id="Q165"></a>Q165 | [v2 API M5: migration tool + v1/v2 cutover](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M3b (Q167). Fan-out migration tool (v1→N v2 objects) + tests, dual-read window (group domain + Q147 values + finalizers), deprecation + operator migration guide. |
 
