@@ -97,6 +97,8 @@ Spell out acronyms on first use: write the full term first, then the acronym in 
 
 Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). This file is the entrypoint for Claude/agents only; humans start at `README.md` and navigate the `docs/` tree. The dependency direction is one-way: `CLAUDE.md` may link out to `docs/`, but nothing under `docs/`, `README.md`, or `CONTRIBUTING.md` may link back to it. Canonical reference content humans need (commands, checklists, rules) lives in the `docs/` tree or `CONTRIBUTING.md`; `CLAUDE.md` keeps its own self-contained copy when it needs one.
 
+**Editing `CLAUDE.md` — protect the context budget.** This file is loaded in full into every session, so every line costs context. Keep it lean: add only load-bearing, must-act-on rules, and put the explanation/how-to in the relevant `docs/` page with a one-line pointer here rather than growing a self-contained copy past a few sentences. When in doubt, write the detail in `docs/` and link it; prefer tightening an existing line over adding a new one.
+
 ## Commits
 
 - Commit after each task is complete and validated — without asking; committing is automatic in this repo. Small, focused commits; Conventional Commits standard; never commit broken code or failing tests.
