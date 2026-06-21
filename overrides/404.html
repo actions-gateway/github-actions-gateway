@@ -1,0 +1,14 @@
+{% extends "main.html" %}
+
+{#- Custom 404: the gateway "swallowed" the page. Reuses the committed
+    animated logomark (assets/wormhole-animation.webp). -#}
+{% block content %}
+<div style="text-align: center; max-width: 40rem; margin: 0 auto; padding: 2.5rem 1rem;">
+  <img src="{{ config.site_url }}assets/wormhole-animation.webp" width="520"
+       style="max-width: 100%; height: auto; border-radius: 8px;"
+       alt="A wormhole opening through the gateway ring">
+  <h1>404 — lost through the gateway</h1>
+  <p>This page slipped through a wormhole and didn't come out the other side.</p>
+  <p><a href="{{ config.site_url }}">&larr; Back to the start</a></p>
+</div>
+{% endblock %}

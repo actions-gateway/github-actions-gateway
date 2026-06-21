@@ -91,19 +91,16 @@ Verify the result has no clipped text and a crisp logomark.
 
 ## Animated logomark
 
-A looping animation of the gateway ring as a literal Stargate-style wormhole —
-for social posts, the docs site, or a README banner. Like the static mark it is
-**generated, not hand-authored**: `generate-wormhole-animation.py` emits the
-per-frame SVGs and `render-wormhole-animation.sh` rasters and packs them.
+A looping animation of the gateway ring as a literal Stargate-style wormhole.
+Like the static mark it is **generated, not hand-authored**:
+`generate-wormhole-animation.py` emits the per-frame SVGs and
+`render-wormhole-animation.sh` rasters and packs them.
 
 One ~2.6 s loop: a closed metallic iris opens, the wormhole ignites and erupts a
-water/plasma "kawoosh" along the gate's normal, the plume retracts into a
-shimmering event horizon, and the iris closes again — seamless at the loop
+water/plasma "kawoosh" along the gate's normal, the plume expands and retracts
+into a shimmering event horizon, and the iris closes again — seamless at the loop
 boundary. The ring geometry, palette, timing, and iris are tunable constants at
 the top of the Python file.
-
-The rendered GIF/WebP/MP4 are **not committed** (multi-megabyte binaries) —
-regenerate on demand:
 
 ```sh
 # needs resvg, ImageMagick 7 (magick), ffmpeg, python3
@@ -111,11 +108,13 @@ regenerate on demand:
 ./render-wormhole-animation.sh [OUTDIR]   # OUTDIR defaults to ./wormhole-out
 ```
 
-| Output | Format | Used for |
-| --- | --- | --- |
-| `wormhole-animation.gif` | 800 px, 1.91:1, opaque | README / inline embeds (plays everywhere) |
-| `wormhole-animation.webp` | 1200 px, 1.91:1, transparent | docs site / overlays (smooth alpha) |
-| `wormhole-animation.mp4` | 1080×808, ~4:3, opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
+| Artefact | Committed? | Format | Used for |
+| --- | --- | --- | --- |
+| `wormhole-animation.webp` | **yes** (~320 KB) | 480 px, opaque, looping | README footer + the docs **404** page (`overrides/404.html`) |
+| `wormhole-animation.mp4` | no — written to `OUTDIR` | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
 
-The MP4 is cropped tighter than the 1.91:1 GIF/WebP to drop the side margins for
-a feed video — adjust the `crop=`/`scale=` in the script if the layout changes.
+The committed WebP is **opaque** (it carries the dark navy backdrop) on purpose:
+the plume and glow are white, and both the README and the docs site default to
+light mode, so a transparent version would wash out. It is kept small (480 px,
+quality 72) so it doesn't weigh down page loads. The MP4 is full-fidelity and
+cropped tighter than the 1.91:1 WebP to drop the side margins for a feed video.

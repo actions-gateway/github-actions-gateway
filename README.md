@@ -191,3 +191,10 @@ GitHub Actions Gateway is licensed under the [Apache License 2.0](LICENSE)
 (SPDX identifier `Apache-2.0`). Each published container image also carries this
 in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
 [NOTICE](NOTICE) file.
+
+---
+
+<p align="center">
+  <img src="docs/assets/wormhole-animation.webp" width="480"
+       alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma kawoosh, then shutters closed">
+</p>
