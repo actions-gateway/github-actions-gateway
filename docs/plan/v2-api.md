@@ -176,6 +176,19 @@ a milestone is done when every box is checked and its exit criterion holds.
 
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
 
+**Why `v2alpha1` and not `v1alpha1` in the new group?** Nothing technical forces
+the version bump: a CRD is identified by **group + kind**, and the version is
+orthogonal, so `actionsgateways.actions-gateway.com` would coexist with
+`actionsgateways.actions-gateway.github.com` just as cleanly at `v1alpha1`. The
+breaking-ness comes entirely from the group rename and the decomposition (the
+fan-out the migration tool handles), not from the version number. `v2alpha1` is a
+**deliberate communication choice**: this whole effort is named "v2" throughout the
+docs, the migration is "v1→v2", and the graduation ladder targets `v2` — so serving
+it as `v1alpha1` would leave the API surface contradicting how everyone refers to
+it. It also keeps the in-module Go layout unambiguous (`api/v1alpha1` +
+`api/v2alpha1`, rather than two `api/v1alpha1` packages). The minor cost — a fresh
+group whose first GA is `v2`, skipping `v1` — is accepted. (Confirmed 2026-06-21.)
+
 The milestones above ship `v2alpha1`. Reaching the stable `v2` group involves two
 *different* kinds of transition — do not conflate them:
 
