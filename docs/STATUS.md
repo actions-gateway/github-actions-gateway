@@ -51,6 +51,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q160"></a>Q160 | Deflake ProxyConnectWorks e2e: tolerate GitHub 403 rate-limit | `tests` `infra` | ▶ | S | **Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first).** `proxy-connect-curl` got HTTP 403 from rate-limited CI runner IP on PR #336 run 27889017317. Fix: drop curl --fail-with-body, accept 200-or-403. |
 | <a id="Q159"></a>Q159 | Deflake metrics-NP allow-labeled-namespace e2e under Calico | `tests` `bug` | 🔲 | S | `E2E_GMC_ManagerMetricsNP_AllowsLabeledNamespace` flakes under Calico (manager_np_test.go): NP denies the allowed `metrics: enabled` scrape — propagation race. Gate on NP enforcement before scraping (cf Q155). Seen on main ed445e54 + PR #330. |
 | <a id="Q157"></a>Q157 | Worker-unschedulable + GitHub egress-rules staleness conditions | `infra` | 🔲 | M | Round out capacity diagnosis: WorkersUnschedulable on RunnerGroup (pods Pending past deadline, non-quota — no nodes/affinity; reaper detects it) + EgressRulesStale on ActionsGateway (24h IP-range refresh stalls → egress silently degrades). |
 | <a id="Q146"></a>Q146 | Refuse non-HTTPS GITHUB_API_BASE_URL outside dev mode | `security` | 🔲 | S | Q127 item 8 carve-out: reject non-HTTPS `GITHUB_API_BASE_URL` (`githubapp/auth.go`). Low value — prod blocks the env via `--allow-agc-extra-env` (default-off); a clean fix needs a dev escape plumbed through the e2e fakegithub `http` svc-DNS URL. |
