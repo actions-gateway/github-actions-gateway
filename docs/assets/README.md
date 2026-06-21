@@ -103,18 +103,20 @@ boundary. The ring geometry, palette, timing, and iris are tunable constants at
 the top of the Python file.
 
 ```sh
-# needs resvg, ImageMagick 7 (magick), ffmpeg, python3
-#   brew install resvg imagemagick ffmpeg
+# needs resvg, ImageMagick 7 (magick), img2webp (libwebp), ffmpeg, python3
+#   brew install resvg imagemagick webp ffmpeg
 ./render-wormhole-animation.sh [OUTDIR]   # MP4 OUTDIR defaults to <repo>/tmp/wormhole/
 ```
 
 | Artefact | Committed? | Format | Used for |
 | --- | --- | --- | --- |
-| `wormhole-animation.webp` | **yes** (~325 KB) | 480 px, opaque, looping | README footer + the docs **404** page (`overrides/404.html`) |
+| `wormhole-animation.webp` | **yes** (~610 KB) | 480 px, transparent, looping | README footer + the docs **404** page (`overrides/404.html`) |
 | `wormhole-animation.mp4` | no — written to `OUTDIR` (default `tmp/wormhole/`, gitignored) | 1080×808 (~4:3), opaque | social upload, e.g. Bluesky/X (animates where an uploaded GIF/WebP would be static) |
 
-The committed WebP is **opaque** (it carries the dark navy backdrop) on purpose:
-the plume and glow are white, and both the README and the docs site default to
-light mode, so a transparent version would wash out. It is kept small (480 px,
-quality 72) so it doesn't weigh down page loads. The MP4 is full-fidelity and
-cropped tighter than the 1.91:1 WebP to drop the side margins for a feed video.
+The committed WebP is **transparent** so a single asset works in both light and
+dark page themes (the cyan plume and blue ring read on either background) — no
+baked-in backdrop, so it floats cleanly on the README and the docs site. Alpha
+costs bytes: it's encoded with `img2webp -m6 -q74` (≈15% smaller than magick at
+matched quality, and q74 is indistinguishable from q80 on the soft plume) to
+keep it reasonable. The MP4 stays opaque (H.264 has no alpha) and is cropped
+tighter than the 1.91:1 WebP to drop the side margins for a feed video.
