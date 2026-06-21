@@ -375,6 +375,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// NamespacePSA reconciler (v2 Q175): stamps the namespace Pod Security Admission
+	// labels from its actions-gateway.com/security-profile label. v2 relocates the
+	// security profile off the per-gateway ActionsGateway.spec onto the namespace
+	// (appendix-h §H.16 #7); the gmc-namespace-security-profile-guard
+	// ValidatingAdmissionPolicy guards operator edits to that label.
+	if err := (&controller.NamespacePSAReconciler{
+		Client:   mgr.GetClient(),
+		Recorder: mgr.GetEventRecorder("namespace-psa-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "namespace-psa")
+		os.Exit(1)
+	}
+
 	if err := mgr.Add(&controller.IPRangeReconciler{
 		Client:   mgr.GetClient(),
 		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},

@@ -19,25 +19,74 @@ const (
 	// the enum keyword "managed" replaces v1's boolean-looking "true").
 	TenantNamespaceMarkerValue = "managed"
 
-	// AllowProfileDowngradeAnnotation, when set to AllowProfileDowngradeAllowed on
-	// an ActionsGateway, permits an update that lowers spec.securityProfile to a
-	// less-restrictive level. Without it the GMC validating webhook rejects such
-	// downgrades so a stray re-apply cannot silently weaken a tenant's Pod Security
-	// Admission isolation. See docs/design/05-security.md §5.3.
+	// AllowProfileDowngradeAnnotation, when set to AllowProfileDowngradeAllowed on a
+	// tenant namespace, permits an update that lowers the namespace
+	// SecurityProfileLabel to a less-restrictive level. v2 relocates the security
+	// profile onto the namespace (§H.16 #7), so the downgrade opt-in moves there too:
+	// the gmc-namespace-security-profile-guard ValidatingAdmissionPolicy rejects such
+	// downgrades without it, so a stray re-apply cannot silently weaken a tenant's Pod
+	// Security Admission isolation. See docs/design/05-security.md §5.3.
 	AllowProfileDowngradeAnnotation = "actions-gateway.com/allow-profile-downgrade"
 	// AllowProfileDowngradeAllowed is the only value of AllowProfileDowngradeAnnotation
 	// that permits a downgrade (Q147: "allowed" replaces v1's "true").
 	AllowProfileDowngradeAllowed = "allowed"
 
-	// PrivilegedProfileLabel is the namespace label that gates eligibility to run
-	// securityProfile: privileged. Only a platform administrator may apply it; a
+	// PrivilegedProfileLabel is the namespace label that gates eligibility to select
+	// the privileged security profile. Only a platform administrator may apply it; a
 	// tenant cannot self-grant it. The gate is fail-closed: an absent label, or any
 	// value other than PrivilegedProfileAllowed, leaves privileged ineligible.
 	PrivilegedProfileLabel = "actions-gateway.com/privileged-profile"
 	// PrivilegedProfileAllowed is the only value of PrivilegedProfileLabel that
 	// grants privileged eligibility (matched exactly; fail-closed otherwise).
 	PrivilegedProfileAllowed = "allowed"
+
+	// SecurityProfileLabel is the namespace label that selects the Pod Security
+	// Admission enforcement level the GMC stamps on the tenant namespace. v2 moves the
+	// security profile off the per-gateway ActionsGateway.spec (where v1 hung it) and
+	// onto the namespace, because Pod Security Admission is a namespace-scoped control
+	// (§H.16 #7): co-located gateways therefore always share one posture, and tenants
+	// that need different postures use different namespaces — the natural PSA isolation
+	// boundary. The operator sets this label; the GMC reconciles it into the six
+	// pod-security.kubernetes.io/* labels (NamespacePSAReconciler), GMC-guarded against
+	// silent downgrades and privileged self-grant by the namespace validating webhook.
+	// Absent on a managed tenant namespace ⇒ SecurityProfileBaseline (secure default).
+	SecurityProfileLabel = "actions-gateway.com/security-profile"
 )
+
+// Pod Security Admission profile values selectable via SecurityProfileLabel. These
+// mirror the upstream Pod Security Standards levels and the v1alpha1
+// ActionsGateway.spec.securityProfile enum exactly, so v2 is no weaker than v1.
+const (
+	// SecurityProfileBaseline is the default: a minimally restrictive policy that
+	// prevents known privilege escalations.
+	SecurityProfileBaseline = "baseline"
+	// SecurityProfileRestricted is the most restrictive policy, following current
+	// pod-hardening best practices.
+	SecurityProfileRestricted = "restricted"
+	// SecurityProfilePrivileged is the least restrictive (unrestricted) policy; it is
+	// gated behind PrivilegedProfileLabel eligibility and is for workloads that run
+	// Docker-in-Docker or require host-level capabilities.
+	SecurityProfilePrivileged = "privileged"
+)
+
+// SecurityProfileRank orders the Pod Security Admission profiles from least to most
+// restrictive. A downgrade is any change that lowers the rank. It is the v2 home of
+// v1's webhook-local securityProfileRank, now keyed once per namespace (§H.16 #7).
+var SecurityProfileRank = map[string]int{
+	SecurityProfilePrivileged: 0,
+	SecurityProfileBaseline:   1,
+	SecurityProfileRestricted: 2,
+}
+
+// EffectiveSecurityProfile returns the profile, substituting the baseline default for
+// an empty value so an absent SecurityProfileLabel maps to what the GMC actually
+// stamps. Matches v1's effectiveProfile semantics.
+func EffectiveSecurityProfile(profile string) string {
+	if profile == "" {
+		return SecurityProfileBaseline
+	}
+	return profile
+}
 
 // ActionsGatewayFinalizer is set by the GMC on an ActionsGateway so its
 // per-gateway children (the AGC Deployment/SA/Role, NetworkPolicies) are cleaned up

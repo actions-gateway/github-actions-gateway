@@ -44,22 +44,31 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["runnergroups"]
+      - apiGroups: ["actions-gateway.com"]
+        apiVersions: ["v2alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["runnersets"]
   matchConditions:
     # Only the GMC ServiceAccount is subject to this policy; every other
     # principal is admitted unchanged.
     - name: only-gmc-service-account
       expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace (include "actions-gateway.serviceAccountName" .) | quote }}
   variables:
-    - name: markerKey
-      expression: "'actions-gateway.github.com/tenant'"
     # namespaceObject reflects the live labels of the target namespace, which a
     # compromised GMC cannot forge (it holds no create on namespaces and the marker
     # is immutable to it under the namespace-psa-guard policy).
     - name: nsLabels
       expression: "(has(namespaceObject.metadata) && has(namespaceObject.metadata.labels)) ? namespaceObject.metadata.labels : {}"
+    # Dual-marker tenant scope: the v1 actions-gateway.github.com/tenant=true and the
+    # v2 actions-gateway.com/tenant=managed are both accepted during the v1/v2
+    # coexistence window (§H.12), so the GMC can provision v2 tenants.
+    - name: isManagedTenant
+      expression: >-
+        (('actions-gateway.github.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.github.com/tenant'] == 'true')
+        || ('actions-gateway.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.com/tenant'] == 'managed'))
   validations:
-    - expression: "variables.markerKey in variables.nsLabels && variables.nsLabels[variables.markerKey] == 'true'"
-      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled ' + variables.markerKey + '=true; namespace ' + request.namespace + ' is not a managed tenant namespace'"
+    - expression: "variables.isManagedTenant"
+      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed (or the legacy actions-gateway.github.com/tenant=true); namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

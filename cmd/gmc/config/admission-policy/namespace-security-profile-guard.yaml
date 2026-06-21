@@ -1,0 +1,105 @@
+# ValidatingAdmissionPolicy that guards the namespace Pod Security Admission level
+# selector — actions-gateway.com/security-profile — on managed tenant namespaces
+# (v2 API; Q175 / appendix-h §H.16 #7).
+#
+# v1alpha1 hung securityProfile on the per-gateway ActionsGateway CR and guarded it
+# in a Go validating webhook (downgrade protection + privileged eligibility), reading
+# the namespace's privileged-profile label across objects. v2 moves the profile onto
+# the namespace itself, so the guard's two checks — both formerly needing a cross-object
+# read — now act on the SAME object the admission is about. That collapses them into a
+# VAP (object + oldObject are both in scope), which is in-process (no webhook-pod
+# availability dependency), fail-closed, and matches the repo's existing namespace-guard
+# pattern (namespace-psa-guard, tenant-resource-guard).
+#
+# Unlike those two policies this one is NOT scoped to the GMC ServiceAccount: the
+# security-profile label is operator-set, so the guard must constrain whoever edits it.
+# It is scoped instead to managed tenant namespaces (dual-marker: the v1
+# actions-gateway.github.com/tenant=true and the v2 actions-gateway.com/tenant=managed
+# are both accepted during the v1/v2 coexistence window, §H.12).
+#
+# Three invariants, none weaker than the v1 webhook:
+#   1. Enum     — security-profile, when set, is one of baseline|restricted|privileged.
+#   2. No silent downgrade — lowering the profile (restricted->baseline->privileged is
+#      most->least restrictive) requires the allow-profile-downgrade annotation, so a
+#      stray re-apply that drops the label cannot weaken isolation unnoticed.
+#   3. Privileged eligibility — selecting privileged requires the platform-applied
+#      privileged-profile=allowed label; a tenant cannot self-grant the least-restrictive
+#      posture (fail-closed: absent/other value => ineligible).
+#
+# Kept OUT of the prefixed config/default kustomize tree (applied separately by
+# `make deploy`, like the sibling guard policies) so its cluster-scoped names stay stable.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: gmc-namespace-security-profile-guard
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["namespaces"]
+  variables:
+    - name: newLabels
+      expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+    - name: oldLabels
+      expression: "(oldObject != null && has(oldObject.metadata.labels)) ? oldObject.metadata.labels : {}"
+    - name: newAnnotations
+      expression: "has(object.metadata.annotations) ? object.metadata.annotations : {}"
+    - name: profileKey
+      expression: "'actions-gateway.com/security-profile'"
+    # Effective profile: an absent label means the baseline default the GMC stamps.
+    - name: newProfile
+      expression: "variables.profileKey in variables.newLabels ? variables.newLabels[variables.profileKey] : 'baseline'"
+    - name: oldProfile
+      expression: "variables.profileKey in variables.oldLabels ? variables.oldLabels[variables.profileKey] : 'baseline'"
+    # Restrictiveness rank (higher == more restrictive); a downgrade lowers it.
+    - name: newRank
+      expression: "variables.newProfile == 'restricted' ? 2 : (variables.newProfile == 'privileged' ? 0 : 1)"
+    - name: oldRank
+      expression: "variables.oldProfile == 'restricted' ? 2 : (variables.oldProfile == 'privileged' ? 0 : 1)"
+    # Privileged eligibility — dual-read the v2 and v1 grant labels.
+    - name: privEligible
+      expression: >-
+        (('actions-gateway.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.com/privileged-profile'] == 'allowed')
+        || ('actions-gateway.github.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.github.com/privileged-profile'] == 'allowed'))
+    # Deliberate-downgrade opt-in — dual-read the v2 ('allowed') and v1 ('true') keywords.
+    - name: downgradeAllowed
+      expression: >-
+        (('actions-gateway.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.com/allow-profile-downgrade'] == 'allowed')
+        || ('actions-gateway.github.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.github.com/allow-profile-downgrade'] == 'true'))
+  matchConditions:
+    # Only managed tenant namespaces are guarded; every other namespace is admitted
+    # unchanged. Dual-marker so v1 and v2 tenants are both covered during coexistence.
+    - name: is-managed-tenant
+      expression: >-
+        (has(object.metadata.labels) && 'actions-gateway.github.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.github.com/tenant'] == 'true')
+        || (has(object.metadata.labels) && 'actions-gateway.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.com/tenant'] == 'managed')
+  validations:
+    # Invariant 1 — enum. An absent label is the valid baseline default.
+    - expression: "!(variables.profileKey in variables.newLabels) || variables.newLabels[variables.profileKey] in ['baseline', 'restricted', 'privileged']"
+      messageExpression: "'security profile ' + (variables.profileKey in variables.newLabels ? variables.newLabels[variables.profileKey] : '') + ' is invalid; ' + variables.profileKey + ' must be one of baseline, restricted, privileged'"
+      reason: Invalid
+    # Invariant 2 — no silent downgrade. Skipped on CREATE: there is no prior state to
+    # downgrade from, so any initial profile is allowed (subject to enum + eligibility).
+    # Without the oldObject==null guard, creating a namespace directly at privileged
+    # (rank 0, the least restrictive) reads as a downgrade from the baseline default.
+    - expression: "oldObject == null || variables.newRank >= variables.oldRank || variables.downgradeAllowed"
+      messageExpression: "'security profile downgrade from ' + variables.oldProfile + ' to ' + variables.newProfile + ' is not permitted without the actions-gateway.com/allow-profile-downgrade=allowed annotation; downgrading relaxes Pod Security Admission isolation and must be deliberate'"
+      reason: Forbidden
+    # Invariant 3 — privileged eligibility.
+    - expression: "variables.newProfile != 'privileged' || variables.privEligible"
+      messageExpression: "'security profile privileged is not eligible in namespace ' + object.metadata.name + ': it requires the platform-applied label actions-gateway.com/privileged-profile=allowed; privileged eligibility is a platform decision and is deliberately not tenant-settable'"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: gmc-namespace-security-profile-guard-binding
+spec:
+  policyName: gmc-namespace-security-profile-guard
+  # Deny is the secure default. For an in-place upgrade of a cluster whose existing
+  # tenant namespaces carry a since-disallowed profile, temporarily set this to [Audit]
+  # (or reconcile the namespaces first) — see docs/operations/upgrade.md.
+  validationActions: [Deny]

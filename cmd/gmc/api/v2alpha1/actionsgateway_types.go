@@ -10,6 +10,14 @@ import (
 // groups become explicit RunnerSet objects, both removed from this spec (§H.4).
 // Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
 // dropped); the multi-gateway controller behavior lands in M3b.
+//
+// The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
+// on this per-gateway object, but Pod Security Admission is a namespace-scoped control
+// in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
+// the single namespace PSA label. v2 moves the profile to the namespace itself — the
+// operator sets the actions-gateway.com/security-profile label on the tenant namespace
+// and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+// docs/operations/security-operations.md.
 type ActionsGatewaySpec struct {
 	// GitHubAppRef names the Secret holding this gateway's GitHub App credentials,
 	// in the gateway's own namespace (LocalSecretReference — v1's namespace field is
@@ -37,16 +45,6 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	DefaultProxyRef *ObjectRef `json:"defaultProxyRef,omitempty"`
-
-	// SecurityProfile controls the Pod Security Admission enforcement level applied
-	// to the tenant namespace. Allowed values: baseline (default), restricted,
-	// privileged. Use privileged only for workloads that run Docker-in-Docker or
-	// require host-level capabilities.
-	//
-	// +optional
-	// +kubebuilder:validation:Enum=baseline;restricted;privileged
-	// +kubebuilder:default=baseline
-	SecurityProfile string `json:"securityProfile,omitempty"`
 
 	// LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
 	// (default), debug. Changing it is a rolling restart of the AGC, not a hot
@@ -89,7 +87,6 @@ type ActionsGatewayStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.githubURL`
-// +kubebuilder:printcolumn:name="Profile",type=string,JSONPath=`.spec.securityProfile`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=`.status.conditions[?(@.type=='Ready')].reason`
 // +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=`.status.observedGeneration`
