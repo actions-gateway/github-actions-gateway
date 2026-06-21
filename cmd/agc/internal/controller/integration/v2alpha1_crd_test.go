@@ -3,6 +3,8 @@
 package integration_test
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
@@ -12,8 +14,25 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// serverMinor returns the apiserver's minor version (e.g. 30, 35). CRD field
+// selectors (KEP-4358) are alpha-off in k8s 1.30 and only queryable on 1.31+;
+// the project's CI integration tier runs envtest 1.30, so the live field-selector
+// assertion below is gated on this.
+func serverMinor(t *testing.T) int {
+	t.Helper()
+	dc, err := discovery.NewDiscoveryClientForConfig(testEnv.Config)
+	require.NoError(t, err)
+	info, err := dc.ServerVersion()
+	require.NoError(t, err)
+	minor := strings.TrimRight(info.Minor, "+")
+	n, err := strconv.Atoi(minor)
+	require.NoError(t, err, "parse server minor %q", info.Minor)
+	return n
+}
 
 // These tests prove the v2alpha1 (actions-gateway.com) AGC kinds install into the
 // real apiserver and round-trip alongside v1alpha1 (Q149, M1 exit criterion), and
@@ -64,6 +83,10 @@ func TestV2_RunnerSet_RoundTripAndDefaulting(t *testing.T) {
 }
 
 func TestV2_RunnerSet_GatewayRefSelectableField(t *testing.T) {
+	if m := serverMinor(t); m < 31 {
+		t.Skipf("CRD field selectors (KEP-4358) are queryable only on k8s >= 1.31; apiserver is 1.%d", m)
+	}
+
 	const ns = "v2-runnerset-field"
 	createNSForAGC(t, ns)
 

@@ -161,7 +161,14 @@ a milestone is done when every box is checked and its exit criterion holds.
 ### M3b — Multi-gateway (Q167)
 
 - [ ] Per-gateway derived naming across every GMC-created resource (52-char cap).
-- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side).
+- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side). **Requires
+  k8s ≥ 1.31** — CRD field selectors (KEP-4358) are alpha-off in 1.30, where a query
+  by `spec.gatewayRef.name` fails `field label not supported`. The selectable-field
+  *declaration* is harmless on 1.30 (M1 ships it), but the runtime scoping and its
+  test coverage need 1.31+. The integration-test CI tier currently pins envtest
+  **1.30.x** (`.github/workflows/integration-test.yml`); bump it to ≥ 1.31 as part of
+  M3b, or the field-selector path cannot be exercised in CI (M1's
+  `TestV2_RunnerSet_GatewayRefSelectableField` skips below 1.31).
 - [ ] Per-gateway ownership refs for clean cascade GC.
 - [ ] envtest + kind e2e: two gateways with their own runner sets concurrent in one namespace.
 
