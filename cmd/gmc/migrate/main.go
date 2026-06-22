@@ -16,6 +16,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -45,8 +46,8 @@ func main() {
 // fprintf/fprintln write to a CLI stream, discarding the write error: a failed
 // write to stdout/stderr is not actionable and must not mask the operation's own
 // result (errcheck would otherwise flag the unchecked fmt.Fprint* returns).
-func fprintf(w *os.File, format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
-func fprintln(w *os.File, a ...any)               { _, _ = fmt.Fprintln(w, a...) }
+func fprintf(w io.Writer, format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
+func fprintln(w io.Writer, a ...any)               { _, _ = fmt.Fprintln(w, a...) }
 
 type options struct {
 	namespace     string
@@ -55,7 +56,21 @@ type options struct {
 	outputDir     string
 }
 
-func run(args []string, stdout, stderr *os.File) error {
+// newScheme builds the client scheme with the v1 (gmc + agc) and v2 (neutral) kinds
+// the migration reads and writes. Shared by the CLI and its tests.
+func newScheme() *runtime.Scheme {
+	scheme := runtime.NewScheme()
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+	utilruntime.Must(gmcv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(agcv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v2alpha1.AddToScheme(scheme))
+	return scheme
+}
+
+// parseOptions parses the CLI flags into options, returning an error for a missing
+// target selector. Split from run so the flag surface is unit-testable without a
+// cluster connection.
+func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs := flag.NewFlagSet("gag-migrate", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var opts options
@@ -70,29 +85,37 @@ func run(args []string, stdout, stderr *os.File) error {
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return err
+		return opts, err
 	}
 	if opts.namespace == "" && !opts.allNamespaces {
 		fs.Usage()
-		return fmt.Errorf("one of --namespace or --all-namespaces is required")
+		return opts, fmt.Errorf("one of --namespace or --all-namespaces is required")
 	}
+	return opts, nil
+}
 
-	scheme := runtime.NewScheme()
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(gmcv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(agcv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(v2alpha1.AddToScheme(scheme))
+func run(args []string, stdout, stderr io.Writer) error {
+	opts, err := parseOptions(args, stderr)
+	if err != nil {
+		return err
+	}
 
 	cfg, err := ctrl.GetConfig()
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)
 	}
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	c, err := client.New(cfg, client.Options{Scheme: newScheme()})
 	if err != nil {
 		return fmt.Errorf("build client: %w", err)
 	}
 
-	ctx := context.Background()
+	return migrateAll(context.Background(), c, opts, stdout, stderr)
+}
+
+// migrateAll resolves the target namespaces and migrates each. Split from run so the
+// whole fan-out flow is unit-testable against a fake client (run only adds the live
+// kubeconfig/client plumbing on top).
+func migrateAll(ctx context.Context, c client.Client, opts options, stdout, stderr io.Writer) error {
 	namespaces, err := targetNamespaces(ctx, c, opts)
 	if err != nil {
 		return err
@@ -101,7 +124,6 @@ func run(args []string, stdout, stderr *os.File) error {
 		fprintln(stderr, "no namespaces with a v1 ActionsGateway found; nothing to migrate")
 		return nil
 	}
-
 	for _, ns := range namespaces {
 		if err := migrateNamespace(ctx, c, ns, opts, stdout, stderr); err != nil {
 			return fmt.Errorf("namespace %q: %w", ns, err)
@@ -139,7 +161,7 @@ func targetNamespaces(ctx context.Context, c client.Client, opts options) ([]str
 // handled safely), each gateway is fanned out independently and the relocated
 // securityProfile is the most-restrictive across them (never weakening any tenant's
 // posture).
-func migrateNamespace(ctx context.Context, c client.Client, ns string, opts options, stdout, stderr *os.File) error {
+func migrateNamespace(ctx context.Context, c client.Client, ns string, opts options, stdout, stderr io.Writer) error {
 	var gateways gmcv1alpha1.ActionsGatewayList
 	if err := c.List(ctx, &gateways, client.InNamespace(ns)); err != nil {
 		return fmt.Errorf("list ActionsGateways: %w", err)
@@ -232,7 +254,7 @@ func groupsForGateway(gw *gmcv1alpha1.ActionsGateway, all *gmcv1alpha1.ActionsGa
 
 // emitDryRun renders the result to YAML, writing to a per-namespace file under
 // outputDir when set, or to stdout otherwise.
-func emitDryRun(res *migrate.Result, ns, gwName, outputDir string, stdout *os.File) error {
+func emitDryRun(res *migrate.Result, ns, gwName, outputDir string, stdout io.Writer) error {
 	manifest, err := migrate.RenderManifests(res)
 	if err != nil {
 		return err
@@ -257,7 +279,7 @@ func emitDryRun(res *migrate.Result, ns, gwName, outputDir string, stdout *os.Fi
 // re-run never clobbers operator edits), and the namespace patch only adds the v2
 // keys (the v1 keys stay for coexistence). Children are applied before referrers for
 // readability; reference integrity is a runtime condition, so order is not required.
-func applyResult(ctx context.Context, c client.Client, res *migrate.Result, stderr *os.File) error {
+func applyResult(ctx context.Context, c client.Client, res *migrate.Result, stderr io.Writer) error {
 	objs := []client.Object{res.Proxy}
 	for _, t := range res.Templates {
 		objs = append(objs, t)
