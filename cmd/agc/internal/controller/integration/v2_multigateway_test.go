@@ -142,6 +142,13 @@ func TestV2_MultiGateway_AGCScopedToItsGateway(t *testing.T) {
 }
 
 func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
+	// A v2 AGC (GatewayName set) registers the cluster-scoped ClusterRunnerTemplate
+	// watch; that watch is gated on GatewayName (a v1 AGC must not establish it — it
+	// lacks the cluster RBAC and would crash). The scoped reconciler needs the
+	// gatewayRef field selector, so gate on apiserver >= 1.31.
+	if m := serverMinor(t); m < 31 {
+		t.Skipf("CRD field selectors (KEP-4358) are queryable only on k8s >= 1.31; apiserver is 1.%d", m)
+	}
 	const ns = "v2-rs-crt"
 	createNSForAGC(t, ns)
 
@@ -169,7 +176,7 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), crt)
 	})
 
-	startRunnerSetReconciler(t)
+	startScopedRunnerSetReconciler(t, "gw")
 
 	// References (gateway + cluster template + proxy) all resolve → Ready/ListenerActive.
 	waitForSetReadyReason(t, ns, "crt-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)

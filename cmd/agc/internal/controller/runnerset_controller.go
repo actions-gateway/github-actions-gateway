@@ -100,7 +100,7 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	r.ensureMaps()
 
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&v2alpha1.RunnerSet{}).
 		// Worker pods carry LabelRunnerSet; re-reconcile on their lifecycle events
 		// so status.activeSessions and the reaper track pod phase transitions.
@@ -122,19 +122,26 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&v2alpha1.RunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.templateToRunnerSets),
-		).
-		// ClusterRunnerTemplate (cluster-scoped): the AGC now holds a ClusterRoleBinding
-		// to the shipped agc-clusterrunnertemplate-reader ClusterRole (created per
-		// gateway by the GMC), so the informer establishes and a RunnerSet referencing
-		// a ClusterRunnerTemplate flips Ready the moment it syncs (§H.7). The
-		// namespace-scoped manager cache serves cluster-scoped kinds from a cluster-wide
-		// informer.
-		Watches(
+		)
+
+	// ClusterRunnerTemplate (cluster-scoped) is watched ONLY by a v2 AGC, gated on
+	// GatewayName. Only a GMC-provisioned v2 AGC (which carries GATEWAY_NAME) holds
+	// the per-gateway ClusterRoleBinding to agc-clusterrunnertemplate-reader; a v1
+	// AGC is bound only to agc-tenant-role, which has no cluster-scoped grant.
+	// Establishing this cluster-scoped informer without that grant fails RBAC and
+	// aborts the shared manager's cache sync — crashing the AGC and taking the v1
+	// RunnerGroup reconciler down with it. So a v1 AGC (no GATEWAY_NAME) never
+	// registers it; a v2 AGC does, and a RunnerSet referencing a ClusterRunnerTemplate
+	// flips Ready the moment it syncs (§H.7). The namespace-scoped manager cache
+	// serves cluster-scoped kinds from a cluster-wide informer.
+	if r.GatewayName != "" {
+		b = b.Watches(
 			&v2alpha1.ClusterRunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.clusterTemplateToRunnerSets),
-		).
-		Named("runnerset").
-		Complete(r)
+		)
+	}
+
+	return b.Named("runnerset").Complete(r)
 }
 
 func (r *RunnerSetReconciler) ensureMaps() {
