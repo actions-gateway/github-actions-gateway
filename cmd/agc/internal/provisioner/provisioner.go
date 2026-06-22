@@ -45,7 +45,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -159,19 +158,13 @@ const (
 // EffectiveCompletedPodTTL returns the group's terminal-pod retention,
 // applying DefaultCompletedPodTTL when the field is omitted.
 func EffectiveCompletedPodTTL(rg *v1alpha1.RunnerGroup) time.Duration {
-	if rg.Spec.CompletedPodTTL != nil {
-		return rg.Spec.CompletedPodTTL.Duration
-	}
-	return DefaultCompletedPodTTL
+	return CompletedPodTTLOrDefault(rg.Spec.CompletedPodTTL)
 }
 
 // EffectivePendingPodDeadline returns the group's stuck-Pending deadline,
 // applying DefaultPendingPodDeadline when the field is omitted.
 func EffectivePendingPodDeadline(rg *v1alpha1.RunnerGroup) time.Duration {
-	if rg.Spec.PendingPodDeadline != nil {
-		return rg.Spec.PendingPodDeadline.Duration
-	}
-	return DefaultPendingPodDeadline
+	return PendingPodDeadlineOrDefault(rg.Spec.PendingPodDeadline)
 }
 
 // defaultWorkerCPU / defaultWorkerMemory are the resource requests *and*
@@ -315,71 +308,28 @@ func NewProvisioner(c client.Client, m *listener.Metrics, log *slog.Logger) *Pro
 	}
 }
 
-// HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup.
-// The returned function is injected into listener.Config.JobHandler.
+// HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup, for the v1
+// RunnerGroup controller. It wraps the RunnerGroup in the v1 Target adapter and
+// delegates to Handle, so v1 and v2 share one provisioning path.
 //
-// The rg passed here is a snapshot captured when the listener started. It is
-// used only for identity (namespace/name) and as a fallback: provision re-reads
-// the current RunnerGroup from the cached client on every acquired job so that
-// podTemplate (and other spec) edits made after listener start take effect on
-// the next job without an AGC restart (Q117). Per-RunnerGroup settings derived
-// from that fresh spec override the provisioner-level defaults.
+// The rg passed here is a snapshot captured when the listener started; the
+// adapter re-reads the current RunnerGroup on every acquired job so podTemplate
+// (and other spec) edits made after listener start take effect on the next job
+// without an AGC restart (Q117).
 func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
+	return p.Handle(p.runnerGroupTarget(rg))
+}
+
+// Handle returns a JobHandlerFunc bound to the given Target, injected into
+// listener.Config.JobHandler. On each acquired job it resolves the target's
+// current provisioning spec and provisions a worker pod; a resolution failure
+// (v2: a missing RunnerTemplate/EgressProxy) fails the job fail-closed without
+// creating a pod. v1 wires it via HandlerFor; the v2 RunnerSet controller wires
+// it directly with a RunnerSet-backed Target.
+func (p *Provisioner) Handle(target Target) listener.JobHandlerFunc {
 	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
-		return p.provision(ctx, rg, planID, payload, jitConfig)
+		return p.provision(ctx, target, planID, payload, jitConfig)
 	}
-}
-
-// rgSettings holds the per-RunnerGroup provisioning knobs derived from spec,
-// falling back to the provisioner-level defaults when a field is unset. They are
-// recomputed from the freshly read RunnerGroup on every job so spec edits are
-// honoured without a listener restart (Q117).
-type rgSettings struct {
-	maxEviction   int
-	evictionDelay time.Duration
-	maxQuota      int
-	quotaDelay    time.Duration
-	completedTTL  time.Duration
-}
-
-// settingsFor derives the per-RunnerGroup provisioning knobs from rg.Spec,
-// applying the provisioner-level defaults where a field is unset.
-func (p *Provisioner) settingsFor(rg *v1alpha1.RunnerGroup) rgSettings {
-	s := rgSettings{
-		maxEviction:   p.MaxEvictionRetries,
-		evictionDelay: p.EvictionRetryDelay,
-		maxQuota:      p.MaxQuotaRetries,
-		quotaDelay:    p.QuotaRetryDelay,
-		completedTTL:  EffectiveCompletedPodTTL(rg),
-	}
-	if rg.Spec.MaxEvictionRetries != nil {
-		s.maxEviction = int(*rg.Spec.MaxEvictionRetries)
-	}
-	if rg.Spec.EvictionRetryDelay != nil && rg.Spec.EvictionRetryDelay.Duration > 0 {
-		s.evictionDelay = rg.Spec.EvictionRetryDelay.Duration
-	}
-	if rg.Spec.MaxQuotaRetries != nil {
-		s.maxQuota = int(*rg.Spec.MaxQuotaRetries)
-	}
-	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
-		s.quotaDelay = rg.Spec.QuotaRetryDelay.Duration
-	}
-	return s
-}
-
-// currentRunnerGroup re-reads the RunnerGroup named by the listener-start
-// snapshot from the (cache-backed) client so each job sees the latest spec.
-// On any read error — including the group having been deleted out from under a
-// listener mid-shutdown — it logs and falls back to the snapshot, preserving the
-// pre-Q117 behaviour rather than failing the job. The read hits the shared
-// informer cache (mgr.GetClient()), not the API server, so it is cheap per job.
-func (p *Provisioner) currentRunnerGroup(ctx context.Context, snapshot *v1alpha1.RunnerGroup) *v1alpha1.RunnerGroup {
-	fresh := &v1alpha1.RunnerGroup{}
-	if err := p.Client.Get(ctx, client.ObjectKeyFromObject(snapshot), fresh); err != nil {
-		p.logFor(snapshot).Warn("could not re-read RunnerGroup for current spec; using listener-start snapshot", "error", err)
-		return snapshot
-	}
-	return fresh
 }
 
 // acquirePayload extracts eviction-retry fields from the raw AcquireJob response.
@@ -417,24 +367,30 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
-func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGroup, planID string, payload []byte, jitConfig string) (err error) {
-	// Re-read the current RunnerGroup so podTemplate (and other spec) edits made
-	// after the listener started are honoured on this job without an AGC restart
-	// (Q117). The listener-start snapshot is used only as a fallback.
-	rg := p.currentRunnerGroup(ctx, snapshot)
-	settings := p.settingsFor(rg)
-	log := p.logFor(rg)
+func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (err error) {
+	key := target.Key()
+	log := p.logForKey(key)
+
+	// Resolve the current provisioning spec for this job. For v1 this re-reads the
+	// fresh RunnerGroup; for v2 it re-resolves the RunnerSet's RunnerTemplate and
+	// EgressProxy. A resolution error fails the job fail-closed — no Secret, no pod
+	// — so no worker wiring is ever created while a reference is unresolved (§H.7).
+	spec, err := target.Resolve(ctx)
+	if err != nil {
+		log.Warn("provisioning spec unresolved; failing job without creating a pod", "error", err)
+		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
+	}
 	start := time.Now()
 
 	safePlanID := safeName(planID)
 	secretName := "job-" + safePlanID
-	podName := fmt.Sprintf("runner-%s-%s", safeName(rg.Name), safePlanID)
+	podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safePlanID)
 	// Keep pod names ≤63 chars (Kubernetes DNS label limit).
 	if len(podName) > 63 {
 		podName = podName[:63]
 	}
-	// Scope every line for this job to its worker pod (atop namespace/runnerGroup
-	// from logFor), so a session→job→pod trail is followable (Q87, Theme F).
+	// Scope every line for this job to its worker pod (atop namespace/owner
+	// from logForKey), so a session→job→pod trail is followable (Q87, Theme F).
 	log = log.With("podName", podName)
 
 	// Root span for the whole job-provisioning path. Child spans below break out
@@ -442,8 +398,8 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	// wait for completion — usually the long pole). The deferred closure stamps
 	// the span's error status from the named return so any early exit is visible.
 	ctx, span := tracer.Start(ctx, "Provisioner.provision", trace.WithAttributes(
-		attribute.String("runnergroup.namespace", rg.Namespace),
-		attribute.String("runnergroup.name", rg.Name),
+		attribute.String("owner.namespace", key.Namespace),
+		attribute.String("owner.name", key.Name),
 		attribute.String("plan.id", planID),
 		attribute.String("pod.name", podName),
 	))
@@ -465,9 +421,11 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	owner, repo, runIDInt := ap.repoInfo()
 	runID := fmt.Sprintf("%d", runIDInt)
 
+	ownerLabels := target.PodOwnerLabels()
+
 	// 1. Stage the job Secret.
 	if err = traceStep(ctx, "stageJobSecret", func(ctx context.Context) error {
-		secret := p.buildSecret(rg, secretName, planID, payload, jitConfig)
+		secret := p.buildSecret(target, secretName, planID, payload, jitConfig)
 		return p.Client.Create(ctx, secret)
 	}); err != nil {
 		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
@@ -480,30 +438,30 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	var count int32
 	if err = traceStep(ctx, "countActivePods", func(ctx context.Context) error {
 		var cErr error
-		count, cErr = p.activePodCount(ctx, rg.Namespace, rg.Name)
+		count, cErr = p.activePodCount(ctx, key.Namespace, ownerLabels)
 		return cErr
 	}); err != nil {
-		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return fmt.Errorf("provisioner: count active pods: %w", err)
 	}
 	span.SetAttributes(attribute.Int("active_pods", int(count)))
 
 	// 3. Ceiling enforcement.
-	priorityClass, held := p.ceilingCheck(rg, count)
+	priorityClass, held := ceilingCheck(spec, count)
 	span.SetAttributes(attribute.Bool("ceiling.held", held), attribute.String("priority_class", priorityClass))
 	if held {
 		log.Info("pod held by concurrency ceiling", "activePods", count)
-		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		err = fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
 		return err
 	}
 
 	// 4. Build and create the pod (with quota retry).
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
-		pod := p.buildPod(rg, podName, secretName, priorityClass)
-		return p.createPodWithQuotaRetry(ctx, rg, pod, settings.maxQuota, settings.quotaDelay, log)
+		pod := p.buildPod(target, spec, podName, secretName, priorityClass)
+		return p.createPodWithQuotaRetry(ctx, key, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
 	}); err != nil {
-		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
 	}
 	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
@@ -514,11 +472,11 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	var reason string
 	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
 		var wErr error
-		phase, reason, wErr = p.waitForCompletion(ctx, rg.Namespace, podName)
+		phase, reason, wErr = p.waitForCompletion(ctx, key.Namespace, podName)
 		return wErr
 	}); err != nil {
 		// Context cancelled or unrecoverable watch error.
-		_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return err
 	}
 
@@ -531,22 +489,22 @@ func (p *Provisioner) provision(ctx context.Context, snapshot *v1alpha1.RunnerGr
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed", "phase", phase, "reason", reason, "duration", duration)
 	if p.Metrics != nil {
-		p.Metrics.JobDuration.WithLabelValues(rg.Namespace, rg.Name).Observe(duration.Seconds())
+		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, rg, owner, repo, runID, log, settings.maxEviction, settings.evictionDelay)
+		p.handleEviction(ctx, key, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay)
 	}
 
 	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
-	// immediately only when the group's completedPodTTL is zero; otherwise the
-	// RunnerGroup reconciler's reaper deletes it once the TTL elapses — the
-	// reaper is also the restart-safe backstop for pods no goroutine watches.
-	if settings.completedTTL == 0 {
-		_ = p.deletePod(ctx, rg.Namespace, podName)
+	// immediately only when the owner's completedPodTTL is zero; otherwise the
+	// owner's reconciler reaper deletes it once the TTL elapses — the reaper is
+	// also the restart-safe backstop for pods no goroutine watches.
+	if spec.CompletedPodTTL == 0 {
+		_ = p.deletePod(ctx, key.Namespace, podName)
 	}
-	_ = p.deleteSecret(ctx, rg.Namespace, secretName)
+	_ = p.deleteSecret(ctx, key.Namespace, secretName)
 	return nil
 }
 
@@ -568,7 +526,7 @@ func traceStep(ctx context.Context, name string, fn func(context.Context) error)
 
 // createPodWithQuotaRetry attempts to create pod, retrying up to maxRetries times
 // when the namespace ResourceQuota is exhausted. Other errors are returned immediately.
-func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, rg *v1alpha1.RunnerGroup, pod *corev1.Pod, maxRetries int, retryDelay time.Duration, log *slog.Logger) error {
+func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, key client.ObjectKey, pod *corev1.Pod, maxRetries int, retryDelay time.Duration, log *slog.Logger) error {
 	for attempt := 0; ; attempt++ {
 		err := p.Client.Create(ctx, pod)
 		if err == nil {
@@ -585,7 +543,7 @@ func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, rg *v1alpha1.
 				log.Warn("quota retry budget exhausted; abandoning pod creation",
 					"pod", pod.Name, "attempts", attempt+1)
 				if p.Metrics != nil {
-					p.Metrics.QuotaRetriesExhausted.WithLabelValues(rg.Namespace, rg.Name).Inc()
+					p.Metrics.QuotaRetriesExhausted.WithLabelValues(key.Namespace, key.Name).Inc()
 				}
 			}
 			return err
@@ -593,7 +551,7 @@ func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, rg *v1alpha1.
 		log.Info("pod creation blocked by namespace quota; retrying",
 			"pod", pod.Name, "attempt", attempt+1, "maxRetries", maxRetries, "delay", retryDelay)
 		if p.Metrics != nil {
-			p.Metrics.QuotaRetries.WithLabelValues(rg.Namespace, rg.Name).Inc()
+			p.Metrics.QuotaRetries.WithLabelValues(key.Namespace, key.Name).Inc()
 		}
 		select {
 		case <-ctx.Done():
@@ -610,7 +568,7 @@ func isQuotaError(err error) bool {
 	return apierrors.IsForbidden(err) && strings.Contains(err.Error(), "exceeded quota")
 }
 
-func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGroup, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
+func (p *Provisioner) handleEviction(ctx context.Context, key client.ObjectKey, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
 	if runID == "0" || runID == "" {
 		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
 		return
@@ -626,14 +584,14 @@ func (p *Provisioner) handleEviction(ctx context.Context, rg *v1alpha1.RunnerGro
 		log.Warn("eviction retry budget exhausted; manual rerun required",
 			"runID", runID, "maxRetries", maxRetries)
 		if p.Metrics != nil {
-			p.Metrics.EvictionRetriesExhausted.WithLabelValues(rg.Namespace, rg.Name).Inc()
+			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name).Inc()
 		}
 		return
 	}
 
 	log.Info("pod evicted; scheduling auto-retry", "runID", runID, "attempt", attempt)
 	if p.Metrics != nil {
-		p.Metrics.EvictionRetries.WithLabelValues(rg.Namespace, rg.Name).Inc()
+		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name).Inc()
 	}
 
 	// Brief delay before calling GitHub so any in-flight state settles.
@@ -750,7 +708,7 @@ func NewEvictionSweeper(p *Provisioner) *EvictionSweeper {
 func (s *EvictionSweeper) Start(ctx context.Context) error {
 	t := time.NewTicker(s.interval)
 	defer t.Stop()
-	log := s.p.logFor(nil)
+	log := s.p.logFor()
 	log.Info("eviction-counter sweeper started", "interval", s.interval, "ttl", s.ttl)
 	for {
 		select {
@@ -831,13 +789,13 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 	return nil
 }
 
-// activePodCount returns the number of Running or Pending worker pods for the given group.
-func (p *Provisioner) activePodCount(ctx context.Context, namespace, groupName string) (int32, error) {
+// activePodCount returns the number of Running or Pending worker pods matching
+// the owner's pod-identity label selector.
+func (p *Provisioner) activePodCount(ctx context.Context, namespace string, selector map[string]string) (int32, error) {
 	var podList corev1.PodList
-	sel := labels.Set{LabelRunnerGroup: groupName}
 	if err := p.Client.List(ctx, &podList,
 		client.InNamespace(namespace),
-		client.MatchingLabels(sel),
+		client.MatchingLabels(selector),
 	); err != nil {
 		return 0, err
 	}
@@ -851,10 +809,10 @@ func (p *Provisioner) activePodCount(ctx context.Context, namespace, groupName s
 }
 
 // ceilingCheck returns the PriorityClassName to assign (may be "") and whether
-// the pod should be held due to a concurrency ceiling.
-func (p *Provisioner) ceilingCheck(rg *v1alpha1.RunnerGroup, activePods int32) (priorityClass string, held bool) {
-	if len(rg.Spec.PriorityTiers) > 0 {
-		for _, tier := range rg.Spec.PriorityTiers {
+// the pod should be held due to a concurrency ceiling, from the resolved spec.
+func ceilingCheck(spec *ResolvedSpec, activePods int32) (priorityClass string, held bool) {
+	if len(spec.PriorityTiers) > 0 {
+		for _, tier := range spec.PriorityTiers {
 			if activePods < tier.Threshold {
 				return tier.PriorityClassName, false
 			}
@@ -862,30 +820,13 @@ func (p *Provisioner) ceilingCheck(rg *v1alpha1.RunnerGroup, activePods int32) (
 		// All tiers exhausted.
 		return "", true
 	}
-	if rg.Spec.MaxWorkers != nil && activePods >= *rg.Spec.MaxWorkers {
+	if spec.MaxWorkers != nil && activePods >= *spec.MaxWorkers {
 		return "", true
 	}
 	return "", false
 }
 
-// ownerRefFor returns a controller OwnerReference to rg, stamped on every
-// worker pod and job Secret so that deleting the RunnerGroup — directly, via
-// ActionsGateway teardown, or via namespace deletion — cascade-deletes them,
-// including any orphaned by an AGC crash. BlockOwnerDeletion is left unset:
-// the RunnerGroup carries its own finalizer for ordered cleanup, and setting
-// it would require `update` on the owner's finalizers under the
-// OwnerReferencesPermissionEnforcement admission plugin.
-func ownerRefFor(rg *v1alpha1.RunnerGroup) metav1.OwnerReference {
-	return metav1.OwnerReference{
-		APIVersion: v1alpha1.GroupVersion.String(),
-		Kind:       "RunnerGroup",
-		Name:       rg.Name,
-		UID:        rg.UID,
-		Controller: ptr.To(true),
-	}
-}
-
-func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string, payload []byte, jitConfig string) *corev1.Secret {
+func (p *Provisioner) buildSecret(target Target, name, planID string, payload []byte, jitConfig string) *corev1.Secret {
 	data := map[string][]byte{
 		payloadKey: payload,
 		planIDKey:  []byte(planID),
@@ -893,25 +834,26 @@ func (p *Provisioner) buildSecret(rg *v1alpha1.RunnerGroup, name, planID string,
 	if jitConfig != "" {
 		data[jitConfigKey] = []byte(jitConfig)
 	}
+	labels := map[string]string{labelManagedBy: managerName}
+	for k, v := range target.PodOwnerLabels() {
+		labels[k] = v
+	}
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: rg.Namespace,
-			Labels: map[string]string{
-				labelManagedBy:   managerName,
-				LabelRunnerGroup: rg.Name,
-			},
-			OwnerReferences: []metav1.OwnerReference{ownerRefFor(rg)},
+			Name:            name,
+			Namespace:       target.Key().Namespace,
+			Labels:          labels,
+			OwnerReferences: []metav1.OwnerReference{target.OwnerRef()},
 		},
 		Data: data,
 	}
 }
 
-func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, priorityClass string) *corev1.Pod {
-	// Start from the tenant's PodTemplate.
-	template := rg.Spec.PodTemplate.DeepCopy()
+func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secretName, priorityClass string) *corev1.Pod {
+	// Start from the resolved PodTemplate.
+	template := spec.PodTemplate.DeepCopy()
 
-	workerImage := rg.Spec.WorkerImage
+	workerImage := spec.WorkerImage
 	if workerImage == "" {
 		if p.DefaultWorkerImage != "" {
 			workerImage = p.DefaultWorkerImage
@@ -962,13 +904,13 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 	// never reaches the worker pod. Mount mode 0o444 + the PodSpec FSGroup keep
 	// the cert world-readable to the runner user (UID 1001 in the actions-runner
 	// base image) without requiring write capability.
-	if p.ProxyTLSSecretName != "" {
+	if spec.ProxyTLSSecretName != "" {
 		caMode := int32(0o444)
 		template.Spec.Volumes = append(template.Spec.Volumes, corev1.Volume{
 			Name: proxyCAVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: p.ProxyTLSSecretName,
+					SecretName: spec.ProxyTLSSecretName,
 					Items: []corev1.KeyToPath{{
 						Key:  corev1.TLSCertKey,
 						Path: proxyCAFileName,
@@ -990,13 +932,13 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 	// the trust-store install and HTTPS_PROXY traffic falls back to whatever
 	// the base image already trusts.
 	proxyCACertPath := ""
-	if p.ProxyTLSSecretName != "" {
+	if spec.ProxyTLSSecretName != "" {
 		proxyCACertPath = proxyCAMountPath + "/" + proxyCAFileName
 	}
 	proxyEnvs := []corev1.EnvVar{
-		{Name: "HTTP_PROXY", Value: p.HTTPProxy},
-		{Name: "HTTPS_PROXY", Value: p.HTTPSProxy},
-		{Name: "NO_PROXY", Value: p.NoProxy},
+		{Name: "HTTP_PROXY", Value: spec.HTTPProxy},
+		{Name: "HTTPS_PROXY", Value: spec.HTTPSProxy},
+		{Name: "NO_PROXY", Value: spec.NoProxy},
 		{Name: "PROXY_CA_CERT_PATH", Value: proxyCACertPath},
 	}
 	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
@@ -1018,27 +960,34 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 	// Secure-by-default pod hardening. Both helpers gap-fill: an explicit value
 	// in the tenant PodTemplate always wins, so a tenant can still opt out of
 	// any individual default (e.g. runAsNonRoot:false for a root-based image).
-	p.applySecurityDefaults(&template.Spec)
+	applySecurityDefaults(&template.Spec, spec.SecurityProfile)
 	p.applyResourceDefaults(&template.Spec)
+
+	key := target.Key()
+	labels := map[string]string{
+		labelManagedBy: managerName,
+		labelPlanID:    safeName(podName), // use pod name fragment as stable label
+		// "actions-gateway/component: workload" matches the workload NetworkPolicy
+		// podSelector so worker egress is restricted to the per-tenant proxy only.
+		"actions-gateway/component": "workload",
+		// Recommended app.kubernetes.io/* labels for tooling interop.
+		labelAppName:      workerAppName,
+		labelAppInstance:  key.Name,
+		labelAppComponent: workerComponent,
+		labelAppPartOf:    partOf,
+	}
+	// Owner-identity label(s): LabelRunnerGroup for v1, LabelRunnerSet for v2 —
+	// the key the owning controller's Pod watch and reaper filter on.
+	for k, v := range target.PodOwnerLabels() {
+		labels[k] = v
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: rg.Namespace,
-			Labels: map[string]string{
-				labelManagedBy:   managerName,
-				LabelRunnerGroup: rg.Name,
-				labelPlanID:      safeName(podName), // use pod name fragment as stable label
-				// "actions-gateway/component: workload" matches the workload NetworkPolicy
-				// podSelector so worker egress is restricted to the per-tenant proxy only.
-				"actions-gateway/component": "workload",
-				// Recommended app.kubernetes.io/* labels for tooling interop.
-				labelAppName:      workerAppName,
-				labelAppInstance:  rg.Name,
-				labelAppComponent: workerComponent,
-				labelAppPartOf:    partOf,
-			},
-			OwnerReferences: []metav1.OwnerReference{ownerRefFor(rg)},
+			Name:            podName,
+			Namespace:       key.Namespace,
+			Labels:          labels,
+			OwnerReferences: []metav1.OwnerReference{target.OwnerRef()},
 		},
 		Spec: template.Spec,
 	}
@@ -1068,8 +1017,8 @@ func (p *Provisioner) buildPod(rg *v1alpha1.RunnerGroup, podName, secretName, pr
 //     (allowPrivilegeEscalation=false + drop ALL capabilities). Without it the
 //     namespace's PodSecurity admission rejects the pod. Blocking sudo/caps is
 //     expected here because the tenant explicitly chose high isolation.
-func (p *Provisioner) applySecurityDefaults(spec *corev1.PodSpec) {
-	profile := strings.ToLower(strings.TrimSpace(p.SecurityProfile))
+func applySecurityDefaults(spec *corev1.PodSpec, securityProfile string) {
+	profile := strings.ToLower(strings.TrimSpace(securityProfile))
 	if profile == securityProfilePrivileged {
 		return
 	}
@@ -1193,7 +1142,7 @@ func (p *Provisioner) waitForPodCompletion(ctx context.Context, namespace, podNa
 func (p *Provisioner) deletePod(ctx context.Context, namespace, name string) error {
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 	if err := p.Client.Delete(ctx, pod); client.IgnoreNotFound(err) != nil {
-		p.logFor(nil).Warn("failed to delete worker pod", "pod", name, "error", err)
+		p.logFor().Warn("failed to delete worker pod", "pod", name, "error", err)
 		return err
 	}
 	return nil
@@ -1202,21 +1151,24 @@ func (p *Provisioner) deletePod(ctx context.Context, namespace, name string) err
 func (p *Provisioner) deleteSecret(ctx context.Context, namespace, name string) error {
 	s := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
 	if err := p.Client.Delete(ctx, s); client.IgnoreNotFound(err) != nil {
-		p.logFor(nil).Warn("failed to delete job Secret", "secret", name, "error", err)
+		p.logFor().Warn("failed to delete job Secret", "secret", name, "error", err)
 		return err
 	}
 	return nil
 }
 
-func (p *Provisioner) logFor(rg *v1alpha1.RunnerGroup) *slog.Logger {
-	log := p.Log
-	if log == nil {
-		log = slog.Default()
+// logFor returns the provisioner's base logger (or slog.Default when unset).
+func (p *Provisioner) logFor() *slog.Logger {
+	if p.Log == nil {
+		return slog.Default()
 	}
-	if rg != nil {
-		return log.With("namespace", rg.Namespace, "runnerGroup", rg.Name)
-	}
-	return log
+	return p.Log
+}
+
+// logForKey returns the base logger scoped to the owning object's namespace/name
+// so a session→job→pod trail is followable (Q87, Theme F).
+func (p *Provisioner) logForKey(key client.ObjectKey) *slog.Logger {
+	return p.logFor().With("namespace", key.Namespace, "owner", key.Name)
 }
 
 // mergeEnvOverride appends or replaces env vars in base with those in overrides.

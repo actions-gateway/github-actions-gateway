@@ -73,54 +73,33 @@ func (g *admissionGate) reservedCount(key string) int32 {
 	return g.reserved[key]
 }
 
-// admissionCeiling returns the worker ceiling the gate enforces for rg, mirroring
-// ceilingCheck's hold decision exactly: a job is held there once the active-pod
-// count reaches *every* priority-tier threshold (i.e. the maximum threshold), or
-// reaches maxWorkers when no tiers are set. bounded is false when the group has
-// neither — an unbounded group, where the gate admits unconditionally.
-//
-// The maximum tier threshold is computed rather than assuming the last tier so
-// the ceiling is correct even if an invalid (non-ascending) spec slips past
-// validation; with the validated strictly-ascending order the maximum is the
-// last tier, matching ceilingCheck.
-func admissionCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
-	return WorkerCeiling(rg)
-}
-
 // WorkerCeiling returns the maximum concurrent worker pods rg may run, mirroring
 // the admission gate / ceilingCheck hold decision: the maximum priority-tier
 // threshold when tiers are set, else maxWorkers, else unbounded (bounded=false).
 // Exported so the RunnerGroup reconciler can size the worker pool's quota
 // footprint for the WorkerQuota{Pressure,Exceeded} conditions (Q82) against the
-// same ceiling the gate enforces — one source of truth.
+// same ceiling the gate enforces — one source of truth. It delegates to the
+// neutral WorkerCeilingFromTiers so v1 and v2 compute the ceiling identically.
 func WorkerCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
-	if len(rg.Spec.PriorityTiers) > 0 {
-		var max int32
-		for _, tier := range rg.Spec.PriorityTiers {
-			if tier.Threshold > max {
-				max = tier.Threshold
-			}
-		}
-		return max, true
-	}
-	if rg.Spec.MaxWorkers != nil {
-		return *rg.Spec.MaxWorkers, true
-	}
-	return 0, false
+	return WorkerCeilingFromTiers(tierThresholds(rg.Spec.PriorityTiers), rg.Spec.MaxWorkers)
 }
 
-// AdmitFor returns an AdmitFunc bound to snapshot that gates job acquisition on
-// the group's worker ceiling via the in-memory reservation counter (Q59).
-//
-// Like HandlerFor, snapshot is the listener-start RunnerGroup used only for
-// identity; the ceiling is read from the freshly cached RunnerGroup on each call
-// so maxWorkers / priorityTiers edits take effect without an AGC restart (Q117).
-// The returned AdmitFunc is safe for concurrent use across the group's listeners.
+// AdmitFor returns an AdmitFunc for the v1 RunnerGroup controller, wrapping the
+// RunnerGroup in the v1 Target adapter and delegating to Admit.
 func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) listener.AdmitFunc {
-	key := snapshot.Namespace + "/" + snapshot.Name
+	return p.Admit(p.runnerGroupTarget(snapshot))
+}
+
+// Admit returns an AdmitFunc bound to the given Target that gates job acquisition
+// on the owner's worker ceiling via the in-memory reservation counter (Q59). The
+// ceiling is re-read from the fresh spec on each call so maxWorkers/priorityTiers
+// edits take effect without an AGC restart (Q117). The returned AdmitFunc is safe
+// for concurrent use across the owner's listeners. v1 wires it via AdmitFor; the
+// v2 RunnerSet controller wires it directly with a RunnerSet-backed Target.
+func (p *Provisioner) Admit(target Target) listener.AdmitFunc {
+	key := target.Key().String()
 	return func(ctx context.Context) (release func(), ok bool) {
-		rg := p.currentRunnerGroup(ctx, snapshot)
-		limit, bounded := admissionCeiling(rg)
+		limit, bounded := target.Ceiling(ctx)
 		return p.admission.admit(key, limit, bounded)
 	}
 }
