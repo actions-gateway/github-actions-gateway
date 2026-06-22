@@ -263,12 +263,12 @@ each lands in v2. **✓** = implemented + tested this milestone; **◻** = remai
 
 ### M5 — Migration + cutover (Q165)
 
-- [ ] Fan-out migration tool (subcommand/`kubectl` plugin): v1 → v2 object set; dry-run default, `--apply`.
-- [ ] Dual-read window: VAPs + downgrade webhook accept both domains *and* both values; tool relabels keys/values/finalizers in one pass.
-- [ ] Operator migration guide; `v1alpha1` deprecation notice + named removal release.
-- [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation.
-- [ ] Coexistence test (v1 keeps working while v2 served) + migration golden tests.
-- [ ] **Behavior-preservation acceptance checks** ([§H.17](../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants)): proxied→proxied (never silent `proxyMode: Direct`); `maxListeners` default decision encoded; emitted objects pass v2 CEL under envtest; K identical templates → one `RunnerTemplate`; standalone-vs-inline group precedence defined. Validatable pre-M5 as a fixtures→asserted-output mapping that fuzzes the M1 schema for completeness/ambiguity.
+- [x] Fan-out migration tool (`gag-migrate`: core `cmd/gmc/internal/migrate`, CLI `cmd/gmc/migrate`): v1 → v2 object set; dry-run default, `--apply`. Never reads Secret contents (rewrites the `githubAppRef` name only); never deletes v1 objects (coexistence/rollback).
+- [x] Dual-read window: the three VAPs (M3a/M3b) **and** the v1 GMC `ActionsGateway` webhook (M5) accept both domains *and* both values; tool relabels keys/values additively (adds v2 keys, keeps v1 keys, so nothing is stranded). Finalizer names migrated as code constants (v2 objects carry v2 finalizers; v1 objects keep theirs until v1 removal).
+- [x] Operator migration guide ([migration-v1-to-v2.md](../operations/migration-v1-to-v2.md)); [`v1alpha1` deprecation notice](../operations/v1alpha1-deprecation.md) (named removal release announced at removal time).
+- [ ] Conversion scaffolding (Q74 `Hub`/`Convertible`) staged for the `v2alpha1`→`v2beta1` graduation. **Deferred — distinct from the M5 fan-out:** a conversion webhook is an in-place graduation mechanism the fan-out tool cannot replace, and it lands at the first graduation hop, not the v1→v2 cutover (see [graduation path](#api-maturity--graduation-v2alpha1--v2beta1--v2)). Tracked as Q74.
+- [x] Coexistence test (v1 keeps working while v2 served) + migration golden tests (golden-manifest unit tests + envtest apply-path/dual-read/coexistence).
+- [x] **Behavior-preservation acceptance checks** ([§H.17](../design/appendix-h-v2-api-decomposition.md#h17-migration-correctness--the-fan-outs-untested-invariants)): proxied→proxied (always wires `defaultProxyRef`, never silent direct egress); `maxListeners` pinned to the v1 effective value; emitted objects pass v2 CEL under envtest; K identical templates → one content-addressed `RunnerTemplate`; standalone-vs-inline precedence (standalone wins) defined.
 
 ## API maturity & graduation (`v2alpha1` → `v2beta1` → `v2`)
 
