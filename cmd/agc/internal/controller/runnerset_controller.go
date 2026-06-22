@@ -13,7 +13,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -24,7 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -380,49 +378,16 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 
 // newListenerConfig assembles the listener.Config for a single goroutine. It is
 // the v2 counterpart of RunnerGroupReconciler.newListenerConfig, wiring the
-// provisioner's owner-agnostic Handle/Admit against the RunnerSet Target.
+// provisioner's owner-agnostic Handle/Admit against the RunnerSet Target and
+// delegating the rest to the shared assembleListenerConfig.
 func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target provisioner.Target, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater listener.ConditionUpdater, agent *agentpool.Agent) listener.Config {
-	agentBrokerURL := agent.BrokerURL
-	if agentBrokerURL == "" {
-		agentBrokerURL = brokerCfg.BrokerURL
-	}
-	bc := &broker.Client{
-		BrokerURL:     agentBrokerURL,
-		RunnerVersion: brokerCfg.RunnerVersion,
-		RunnerOS:      brokerCfg.RunnerOS,
-		RunnerArch:    brokerCfg.RunnerArch,
-		UseV2Flow:     brokerCfg.UseV2Flow,
-		HTTPClient:    brokerCfg.HTTPClient,
-	}
 	jobHandler := listener.JobHandlerFunc(nil)
 	admit := listener.AdmitFunc(nil)
 	if r.Provisioner != nil {
 		jobHandler = r.Provisioner.Handle(target)
 		admit = r.Provisioner.Admit(target)
 	}
-	return listener.Config{
-		Group:         rs.Name,
-		Namespace:     rs.Namespace,
-		Agent:         agent,
-		Broker:        bc,
-		HTTPClient:    brokerCfg.HTTPClient,
-		Conditions:    condUpdater,
-		Metrics:       r.Metrics,
-		RunnerOS:      brokerCfg.RunnerOS,
-		JobHandler:    jobHandler,
-		Admit:         admit,
-		IdleThreshold: brokerCfg.IdleThreshold,
-		RenewInterval: brokerCfg.RenewJobInterval,
-		ReleaseAgent:  func() { pool.ReleaseAgent(agent) },
-		MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
-		RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
-			tok, err := r.TokenManager.Token(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("installation token for agent recycle: %w", err)
-			}
-			return pool.Recycle(ctx, agent, tok)
-		},
-	}
+	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending listener-pushed condition updates and merges those
@@ -487,62 +452,16 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 // reaper but filtering on LabelRunnerSet and reading the RunnerSet's tunables. It
 // returns the time until the earliest retained pod becomes due (0 = none).
 func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, error) {
-	var pods corev1.PodList
-	if err := r.List(ctx, &pods,
-		client.InNamespace(rs.Namespace),
-		client.MatchingLabels{provisioner.LabelRunnerSet: rs.Name},
-	); err != nil {
-		return 0, fmt.Errorf("reaper: list worker pods: %w", err)
-	}
-
-	now := r.nowFunc()()
-	ttl := provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)
-	deadline := provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline)
-
-	var next time.Duration
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if !pod.DeletionTimestamp.IsZero() {
-			continue
-		}
-
-		var due time.Time
-		var reason string
-		switch pod.Status.Phase {
-		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-			due = podTerminalTime(pod).Add(ttl)
-			reason = reapReasonCompletedTTL
-		case corev1.PodPending:
-			due = pod.CreationTimestamp.Add(deadline)
-			reason = reapReasonPendingDeadline
-		default:
-			continue
-		}
-
-		if wait := due.Sub(now); wait > 0 {
-			if next == 0 || wait < next {
-				next = wait
-			}
-			continue
-		}
-
-		if err := r.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				continue
-			}
-			return next, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
-		}
-		log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
-		if r.Metrics != nil {
-			r.Metrics.WorkerPodsReaped.WithLabelValues(rs.Namespace, rs.Name, reason).Inc()
-		}
-		if reason == reapReasonPendingDeadline {
+	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rs.Namespace, rs.Name,
+		provisioner.LabelRunnerSet,
+		provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
+		provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline),
+		log, r.Metrics,
+		func(podName string, deadline time.Duration) {
 			r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
 				"worker pod %s was Pending for more than %s and has been deleted; "+
-					"check the template image and scheduling constraints", pod.Name, deadline)
-		}
-	}
-	return next, nil
+					"check the template image and scheduling constraints", podName, deadline)
+		})
 }
 
 // ReconcileCountForTest returns how many times Reconcile has run (integration tests).
@@ -627,27 +546,8 @@ func (r *RunnerSetReconciler) runnerSetsMatching(ctx context.Context, ns string,
 }
 
 // runnerSetWorkerPodPredicate restricts the Pod watch to v2 worker pods and to
-// events that carry new status information (mirrors workerPodPredicate, keyed on
-// LabelRunnerSet).
+// events that carry new status information (the v2 binding of the shared
+// workerPodPhaseChangePredicate, keyed on LabelRunnerSet).
 func runnerSetWorkerPodPredicate() predicate.Predicate {
-	hasLabel := func(obj client.Object) bool {
-		_, ok := obj.GetLabels()[provisioner.LabelRunnerSet]
-		return ok
-	}
-	return predicate.Funcs{
-		CreateFunc:  func(e event.CreateEvent) bool { return hasLabel(e.Object) },
-		DeleteFunc:  func(e event.DeleteEvent) bool { return hasLabel(e.Object) },
-		GenericFunc: func(event.GenericEvent) bool { return false },
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			if !hasLabel(e.ObjectNew) {
-				return false
-			}
-			oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
-			newPod, ok2 := e.ObjectNew.(*corev1.Pod)
-			if !ok1 || !ok2 {
-				return false
-			}
-			return oldPod.Status.Phase != newPod.Status.Phase
-		},
-	}
+	return workerPodPhaseChangePredicate(provisioner.LabelRunnerSet)
 }

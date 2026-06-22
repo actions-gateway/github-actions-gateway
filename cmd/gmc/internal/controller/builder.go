@@ -420,32 +420,44 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // this, the AGC NP carried no ingress policy type and any pod in the namespace
 // could scrape per-tenant metrics off the controller-runtime metrics server.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
-	apiEgress := networkingv1.NetworkPolicyEgressRule{
+	return buildAGCNetworkPolicyFrom(ag.Namespace, managedLabels(ag), apiServerCIDRs)
+}
+
+// agcAPIServerEgressRule returns the AGC's Kubernetes API-server egress rule
+// (443/6443), optionally scoped to apiServerCIDRs (Q145): an empty list leaves
+// `To` nil — any-destination, the secure default that does not depend on a
+// predictable apiserver IP. Shared by the v1 and v2 AGC NetworkPolicy builders.
+func agcAPIServerEgressRule(apiServerCIDRs []string) networkingv1.NetworkPolicyEgressRule {
+	rule := networkingv1.NetworkPolicyEgressRule{
 		Ports: []networkingv1.NetworkPolicyPort{
 			{Port: ptr(intstr.FromInt32(443))},
 			{Port: ptr(intstr.FromInt32(6443))},
 		},
 	}
-	// Opt-in scoping (Q145): narrow the apiserver-ports rule to the operator's
-	// CIDRs. An empty list leaves `To` nil — any-destination, the secure-default
-	// behavior that does not depend on a predictable apiserver IP.
 	if len(apiServerCIDRs) > 0 {
 		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(apiServerCIDRs))
 		for _, cidr := range apiServerCIDRs {
 			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: cidr}})
 		}
-		apiEgress.To = peers
+		rule.To = peers
 	}
+	return rule
+}
 
+// buildAGCNetworkPolicyFrom assembles the AGC egress policy shared by the v1 and
+// v2 ActionsGateway reconcilers: additive to the workload policy, it permits DNS +
+// Kubernetes API server egress and admits monitoring-namespace metrics scrapes.
+// The callers differ only in the metadata labels.
+func buildAGCNetworkPolicyFrom(namespace string, labels map[string]string, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: namespace, Labels: labels},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
 			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
 				dnsEgressRule(),
-				apiEgress,
+				agcAPIServerEgressRule(apiServerCIDRs),
 			},
 		},
 	}
@@ -894,14 +906,24 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env = append(env, tracingEnv(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
-	secretName := ag.Spec.GitHubAppRef.Name
-	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment
-	// for why 0o400 alone leaves the file unreadable to the non-root AGC user.
+	return buildAGCDeploymentFrom(ag.Namespace, managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env)
+}
+
+// buildAGCDeploymentFrom assembles the AGC Deployment pod spec shared by the v1
+// and v2 ActionsGateway reconcilers: the GitHub App credential file mount (never
+// env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
+// container/pod SecurityContext, and the probes. The callers differ only in the
+// metadata labels, the credential/proxy-CA Secret names, and the env list, which
+// are passed in. metaLabels are the Deployment's metadata labels (the pod-template
+// labels are fixed: they must match the AGC NetworkPolicy and workload selectors).
+func buildAGCDeploymentFrom(namespace string, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar) *appsv1.Deployment {
+	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
+	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
 	credMode := int32(0o440)
 	caMode := int32(0o444)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: namespace, Labels: metaLabels},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr(int32(1)),
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
@@ -911,7 +933,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 					// Record the referenced Secret name so that kubectl rollout history
 					// shows the cause of any credential-rotation rolling update.
 					Annotations: map[string]string{
-						"actions-gateway/github-app-secret": ag.Spec.GitHubAppRef.Name,
+						"actions-gateway/github-app-secret": credSecretName,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -927,7 +949,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 							Name: agcCredsVolumeName,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName:  secretName,
+									SecretName:  credSecretName,
 									DefaultMode: &credMode,
 								},
 							},
@@ -939,7 +961,7 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 							Name: proxyCACertVolumeName,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: proxyTLSSecretName,
+									SecretName: proxyTLSSecret,
 									Items: []corev1.KeyToPath{{
 										Key:  corev1.TLSCertKey,
 										Path: corev1.TLSCertKey,

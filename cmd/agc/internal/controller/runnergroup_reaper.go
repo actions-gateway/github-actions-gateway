@@ -2,14 +2,12 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Reap reasons, used as the `reason` label of
@@ -38,69 +36,17 @@ const (
 // the earliest retained pod becomes due (0 = none) — is propagated as
 // RequeueAfter to cover the purely time-based expiries in between.
 func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rg *v1alpha1.RunnerGroup) (time.Duration, error) {
-	var pods corev1.PodList
-	if err := r.List(ctx, &pods,
-		client.InNamespace(rg.Namespace),
-		client.MatchingLabels{provisioner.LabelRunnerGroup: rg.Name},
-	); err != nil {
-		return 0, fmt.Errorf("reaper: list worker pods: %w", err)
-	}
-
-	now := r.nowFunc()()
-	ttl := provisioner.EffectiveCompletedPodTTL(rg)
-	deadline := provisioner.EffectivePendingPodDeadline(rg)
-
-	var next time.Duration
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if !pod.DeletionTimestamp.IsZero() {
-			continue
-		}
-
-		var due time.Time
-		var reason string
-		switch pod.Status.Phase {
-		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-			due = podTerminalTime(pod).Add(ttl)
-			reason = reapReasonCompletedTTL
-		case corev1.PodPending:
-			due = pod.CreationTimestamp.Add(deadline)
-			reason = reapReasonPendingDeadline
-		default:
-			// Running pods are bounded by GitHub's job-level timeout and the
-			// job-lock renewal contract, not by an AGC-side deadline.
-			continue
-		}
-
-		if wait := due.Sub(now); wait > 0 {
-			if next == 0 || wait < next {
-				next = wait
-			}
-			continue
-		}
-
-		// Precondition on UID so a slow reconcile cannot delete a newer pod
-		// that reused the name after this one was already removed.
-		if err := r.Delete(ctx, pod, client.Preconditions{UID: &pod.UID}); err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				continue // already gone (goroutine cleanup, external delete)
-			}
-			return next, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
-		}
-
-		log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
-		if r.Metrics != nil {
-			r.Metrics.WorkerPodsReaped.WithLabelValues(rg.Namespace, rg.Name, reason).Inc()
-		}
-		if reason == reapReasonPendingDeadline {
+	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rg.Namespace, rg.Name,
+		provisioner.LabelRunnerGroup,
+		provisioner.EffectiveCompletedPodTTL(rg), provisioner.EffectivePendingPodDeadline(rg),
+		log, r.Metrics,
+		func(podName string, deadline time.Duration) {
 			// Operator-visible: a stuck-Pending pod means the job never ran —
 			// usually an unpullable workerImage or unschedulable podTemplate.
 			r.recordEvent(rg, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
 				"worker pod %s was Pending for more than %s and has been deleted; "+
-					"check the pod template image and scheduling constraints", pod.Name, deadline)
-		}
-	}
-	return next, nil
+					"check the pod template image and scheduling constraints", podName, deadline)
+		})
 }
 
 // podTerminalTime returns when pod reached its terminal phase: the latest

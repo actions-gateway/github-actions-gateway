@@ -37,7 +37,7 @@ const (
 
 // egressProxyServiceName / egressProxyTLSSecretName derive an EgressProxy's child
 // Service and TLS-Secret names. See egressProxyResourceSuffix.
-func egressProxyServiceName(name string) string  { return name + egressProxyResourceSuffix }
+func egressProxyServiceName(name string) string   { return name + egressProxyResourceSuffix }
 func egressProxyTLSSecretName(name string) string { return name + egressProxyTLSSuffix }
 
 // runnerSetTarget adapts a v2alpha1.RunnerSet to the provisioner Target seam. It

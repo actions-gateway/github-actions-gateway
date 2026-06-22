@@ -359,6 +359,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
+	// plane (Deployment/SA/RoleBinding/Service, AGC+workload NetworkPolicies,
+	// metrics certs) and wires its egress through the EgressProxy named by
+	// defaultProxyRef. It does not provision the proxy pool (the EgressProxy
+	// reconciler) or stamp PSA labels (the NamespacePSAReconciler). Single-gateway
+	// per namespace at this milestone.
+	if err := (&controller.ActionsGatewayV2Reconciler{
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		AGCImage:       agcImage,
+		AGCExtraEnv:    agcExtraEnv,
+		APIServerCIDRs: parsedAPIServerCIDRs,
+		Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
+		os.Exit(1)
+	}
+
 	// EgressProxy reconciler (v2 M2): reconciles a standalone EgressProxy into a
 	// proxy pool it owns (Deployment/Service/HPA/PDB/NetworkPolicy + self-signed
 	// proxy TLS Secret). Shares the GitHub IP-range cache with the ActionsGateway
