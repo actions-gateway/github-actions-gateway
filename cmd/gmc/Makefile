@@ -41,6 +41,10 @@ all: generate build test ## Generate code/manifests, build the binary, run tests
 build: ## Build the gmc binary into .build/
 	go build -o $(LOCALBIN)/gmc .
 
+.PHONY: build-migrate
+build-migrate: ## Build the gag-migrate one-shot v1->v2 migration tool into .build/
+	go build -o $(LOCALBIN)/gag-migrate ./migrate
+
 .PHONY: test
 test: generate ## Run unit tests (no envtest required)
 	go test -race -timeout 5m ./...

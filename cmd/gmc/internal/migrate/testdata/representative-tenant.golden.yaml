@@ -1,0 +1,121 @@
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata:
+  name: team-a
+  namespace: team-a
+spec:
+  defaultProxyRef:
+    name: team-a-egress
+  githubAppRef:
+    name: github-app
+  githubURL: https://github.com/team-a
+  logLevel: info
+  tracing: {}
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: team-a-egress
+  namespace: team-a
+spec:
+  maxReplicas: 8
+  minReplicas: 2
+  noProxyCIDRs:
+  - 10.0.0.0/8
+  resources: {}
+  targetCPUUtilizationPercentage: 70
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata:
+  name: rt-1f315b26a412
+  namespace: team-a
+spec:
+  podTemplate:
+    metadata:
+      labels:
+        app: runner
+    spec:
+      containers:
+      - image: img:gpu
+        name: runner
+        resources: {}
+  workerImage: worker:gpu
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata:
+  name: rt-35b79d09b380
+  namespace: team-a
+spec:
+  podTemplate:
+    metadata:
+      labels:
+        app: runner
+    spec:
+      containers:
+      - image: img:1
+        name: runner
+        resources: {}
+  workerImage: worker:1
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: team-a-gpu
+  namespace: team-a
+spec:
+  gatewayRef:
+    name: team-a
+  maxListeners: 1
+  maxWorkers: 20
+  priorityTiers:
+  - priorityClassName: high
+    threshold: 20
+  runnerLabels:
+  - gpu
+  - large
+  templateRef:
+    name: rt-1f315b26a412
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: team-a-linux
+  namespace: team-a
+spec:
+  gatewayRef:
+    name: team-a
+  maxListeners: 1
+  runnerLabels:
+  - linux
+  templateRef:
+    name: rt-35b79d09b380
+status: {}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: team-a-linux2
+  namespace: team-a
+spec:
+  gatewayRef:
+    name: team-a
+  maxListeners: 1
+  runnerLabels:
+  - linux2
+  templateRef:
+    name: rt-35b79d09b380
+status: {}
+# ----------------------------------------------------------------------
+# Namespace metadata patch (applied to the existing namespace, additively).
+# Equivalent kubectl commands for namespace "team-a":
+#   kubectl label   namespace team-a actions-gateway.com/security-profile=restricted --overwrite
+#   kubectl label   namespace team-a actions-gateway.com/tenant=managed --overwrite
+#   kubectl annotate namespace team-a actions-gateway.com/allow-profile-downgrade=allowed --overwrite
+# ----------------------------------------------------------------------
