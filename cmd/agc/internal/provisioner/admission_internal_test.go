@@ -165,7 +165,7 @@ func TestAdmissionCeiling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rg := &v1alpha1.RunnerGroup{Spec: tt.spec}
-			limit, bounded := admissionCeiling(rg)
+			limit, bounded := WorkerCeiling(rg)
 			assert.Equal(t, tt.wantBounded, bounded)
 			assert.Equal(t, tt.wantLimit, limit)
 		})

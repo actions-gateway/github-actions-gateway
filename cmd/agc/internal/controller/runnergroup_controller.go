@@ -16,7 +16,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -31,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -195,41 +193,12 @@ func (r *RunnerGroupReconciler) podToRunnerGroup(_ context.Context, obj client.O
 	}}}
 }
 
-// workerPodPredicate restricts the Pod watch to this project's worker pods and
-// to the events that carry new information for the RunnerGroup's status:
-//
-//   - Create — a job was acquired and a worker pod started.
-//   - Delete — a worker pod was removed (reaper, goroutine cleanup, ownerRef
-//     GC, or manual kubectl delete).
-//   - Update — only when the pod's phase changed (e.g. Running → Failed on
-//     eviction, Running → Succeeded on completion). A terminal pod is retained
-//     for the group's completedPodTTL before the reaper deletes it, so
-//     eviction surfaces as a phase update first, then a delete; skipping
-//     non-phase updates avoids reconcile churn from status heartbeats that do
-//     not change the group's observable state.
-//
-// Generic events are ignored.
+// workerPodPredicate restricts the Pod watch to this project's worker pods and to
+// the events that carry new information for the RunnerGroup's status (Create,
+// Delete, phase-changing Update). See workerPodPhaseChangePredicate for the full
+// rationale; this is the v1 binding keyed on LabelRunnerGroup.
 func workerPodPredicate() predicate.Predicate {
-	hasLabel := func(obj client.Object) bool {
-		_, ok := obj.GetLabels()[provisioner.LabelRunnerGroup]
-		return ok
-	}
-	return predicate.Funcs{
-		CreateFunc:  func(e event.CreateEvent) bool { return hasLabel(e.Object) },
-		DeleteFunc:  func(e event.DeleteEvent) bool { return hasLabel(e.Object) },
-		GenericFunc: func(event.GenericEvent) bool { return false },
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			if !hasLabel(e.ObjectNew) {
-				return false
-			}
-			oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
-			newPod, ok2 := e.ObjectNew.(*corev1.Pod)
-			if !ok1 || !ok2 {
-				return false
-			}
-			return oldPod.Status.Phase != newPod.Status.Phase
-		},
-	}
+	return workerPodPhaseChangePredicate(provisioner.LabelRunnerGroup)
 }
 
 // Reconcile is called by controller-runtime on RunnerGroup events.
@@ -562,20 +531,6 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 // to the given already-claimed pool agent. Split out from the multiplexer
 // factory so it can be unit-tested directly.
 func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater listener.ConditionUpdater, agent *agentpool.Agent) listener.Config {
-	// Use the per-agent broker URL from the JIT config (.runner serverUrl).
-	// Fall back to the static BrokerConfig URL for non-JIT registrars (stubs).
-	agentBrokerURL := agent.BrokerURL
-	if agentBrokerURL == "" {
-		agentBrokerURL = brokerCfg.BrokerURL
-	}
-	bc := &broker.Client{
-		BrokerURL:     agentBrokerURL,
-		RunnerVersion: brokerCfg.RunnerVersion,
-		RunnerOS:      brokerCfg.RunnerOS,
-		RunnerArch:    brokerCfg.RunnerArch,
-		UseV2Flow:     brokerCfg.UseV2Flow,
-		HTTPClient:    brokerCfg.HTTPClient,
-	}
 	jobHandler := listener.JobHandlerFunc(nil)
 	admit := listener.AdmitFunc(nil)
 	if r.Provisioner != nil {
@@ -585,43 +540,7 @@ func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool
 		// redelivery instead of acquired-then-dropped.
 		admit = r.Provisioner.AdmitFor(rg)
 	}
-	return listener.Config{
-		Group:     rg.Name,
-		Namespace: rg.Namespace,
-		Agent:     agent,
-		Broker:    bc,
-		// Reuse the broker's already-configured HTTP client for the OAuth token
-		// fetch so it shares the connection pool / keep-alives instead of dialing
-		// a fresh connection per session — and again per job recycle for
-		// single-use JIT agents (Q153, surfaced by the Q13 load harness). Nil
-		// only when BrokerConfig leaves it unset (tests), where
-		// FetchRunnerOAuthToken falls back to a bounded httpx.NewClient().
-		HTTPClient:    brokerCfg.HTTPClient,
-		Conditions:    condUpdater,
-		Metrics:       r.Metrics,
-		RunnerOS:      brokerCfg.RunnerOS,
-		JobHandler:    jobHandler,
-		Admit:         admit,
-		IdleThreshold: brokerCfg.IdleThreshold,
-		RenewInterval: brokerCfg.RenewJobInterval,
-		// Return the claimed agent to the pool on goroutine exit so the pool is
-		// not exhausted after maxListeners total spawns (which would block the
-		// permanent baseline from restarting).
-		ReleaseAgent: func() { pool.ReleaseAgent(agent) },
-		// Single-use JIT agent lifecycle (Q114): mark the agent's runner
-		// record spent at job acquisition, and re-register it under the same
-		// name when the goroutine self-heals. Both key on the stable agent
-		// index, so the captured pointer staying behind a later recycle is
-		// fine.
-		MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
-		RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
-			tok, err := r.TokenManager.Token(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("installation token for agent recycle: %w", err)
-			}
-			return pool.Recycle(ctx, agent, tok)
-		},
-	}
+	return assembleListenerConfig(rg.Name, rg.Namespace, brokerCfg, condUpdater, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending condition updates and merges them into rg.Status.

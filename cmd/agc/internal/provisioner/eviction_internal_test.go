@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TestHandleEviction_ConcurrentSameRunRespectsBudget is the Q106 regression
@@ -71,7 +72,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.handleEviction(context.Background(), rg, "owner", "repo", "12345", log, maxRetries, 0)
+			p.handleEviction(context.Background(), client.ObjectKeyFromObject(rg), "owner", "repo", "12345", log, maxRetries, 0)
 		}()
 	}
 	wg.Wait()
@@ -114,7 +115,7 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		p.handleEviction(context.Background(), rg, "owner", "repo", "999", log, maxRetries, 0)
+		p.handleEviction(context.Background(), client.ObjectKeyFromObject(rg), "owner", "repo", "999", log, maxRetries, 0)
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),

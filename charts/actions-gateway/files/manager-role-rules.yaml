@@ -54,6 +54,7 @@
 - apiGroups:
   - actions-gateway.com
   resources:
+  - actionsgateways
   - egressproxies
   verbs:
   - get
@@ -64,10 +65,18 @@
 - apiGroups:
   - actions-gateway.com
   resources:
+  - actionsgateways/status
   - egressproxies/status
   verbs:
   - get
   - patch
+  - update
+- apiGroups:
+  - actions-gateway.com
+  - actions-gateway.github.com
+  resources:
+  - actionsgateways/finalizers
+  verbs:
   - update
 - apiGroups:
   - actions-gateway.github.com
@@ -79,12 +88,6 @@
   - patch
   - update
   - watch
-- apiGroups:
-  - actions-gateway.github.com
-  resources:
-  - actionsgateways/finalizers
-  verbs:
-  - update
 - apiGroups:
   - actions-gateway.github.com
   resources:

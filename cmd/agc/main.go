@@ -529,6 +529,26 @@ func run() error {
 		return fmt.Errorf("setup reconciler: %w", err)
 	}
 
+	// v2 RunnerSet reconciler (M3a). Runs alongside the v1 RunnerGroup reconciler
+	// during coexistence; in a v2 tenant namespace there are no RunnerGroups and in
+	// a v1 namespace there are no RunnerSets, so the two never act on the same
+	// objects. It shares the process-wide TokenManager, Registrar, Metrics, and
+	// Provisioner (the provisioner Target seam own-refs the real RunnerSet).
+	rsr := &controller.RunnerSetReconciler{
+		Client:       mgr.GetClient(),
+		Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
+		TokenManager: tokenMgr,
+		Registrar:    registrar,
+		Metrics:      m,
+		Provisioner:  prov,
+		AgentKeyType: agentKeyType,
+		Recorder:     mgr.GetEventRecorder("runnerset-controller"),
+		BrokerConfig: r.BrokerConfig,
+	}
+	if err := rsr.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup runnerset reconciler: %w", err)
+	}
+
 	ctrl.Log.Info("starting AGC manager")
 	return mgr.Start(ctx)
 }

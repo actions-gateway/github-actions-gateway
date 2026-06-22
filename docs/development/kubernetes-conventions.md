@@ -84,6 +84,25 @@ its sentinel value, if any) as an exported `const` in the relevant
 webhooks, and tests — never re-type the literal string, so a rename can't drift
 between the producer and the consumers.
 
+**v2 (`actions-gateway.com`) keys use the owned domain from birth** — the v2
+kinds and their controllers prefix labels/annotations with `actions-gateway.com/`
+(the group the project owns), defined as exported consts in the neutral `api/v2alpha1`
+package. Controller-set v2 labels:
+
+- `actions-gateway.com/gateway: <name>` — stamped by the v2 `ActionsGateway`
+  reconciler on every AGC control-plane child (Deployment/SA/RoleBinding/Service/
+  NetworkPolicy/Secret), so M3b's per-gateway naming has an identity to key on and
+  operators can `kubectl get -l actions-gateway.com/gateway=<name>` a gateway's
+  resources.
+- `actions-gateway.com/runner-set: <name>` (`provisioner.LabelRunnerSet`) — stamped
+  on every v2 worker pod and job Secret; the AGC `RunnerSet` controller's Pod watch
+  and reaper filter on it. Distinct from the v1 `actions-gateway/runner-group` key so
+  the v1 and v2 controllers' Pod watches never cross-wire during coexistence.
+
+The shared `actions-gateway/component: workload` selector label is carried by both
+v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
+egress-lockdown posture is identical across the two APIs.
+
 ## Status conditions & alertable condition metrics
 
 The CRDs report observed state with standard Kubernetes conditions

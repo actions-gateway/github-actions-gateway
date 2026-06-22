@@ -37,3 +37,19 @@
 - apiGroups: ["actions-gateway.github.com"]
   resources: ["runnergroups/status", "runnergroups/finalizers"]
   verbs: ["get", "update", "patch"]
+# v2 (actions-gateway.com): the RunnerSet reconciler reconciles RunnerSets and
+# reads their references (gatewayRef → ActionsGateway, proxyRef/defaultProxyRef →
+# EgressProxy, templateRef → RunnerTemplate) at runtime to resolve the worker pod
+# shape and egress proxy (§H.7). All four are namespaced, so the per-tenant
+# RoleBinding to this ClusterRole scopes the grants to the tenant namespace.
+# Cluster-scoped ClusterRunnerTemplate reads need a ClusterRoleBinding and are
+# wired separately (M3b); the namespaced RunnerTemplate gives v1 parity here.
+- apiGroups: ["actions-gateway.com"]
+  resources: ["runnersets"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["actions-gateway.com"]
+  resources: ["runnersets/status", "runnersets/finalizers"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["actions-gateway.com"]
+  resources: ["actionsgateways", "egressproxies", "runnertemplates"]
+  verbs: ["get", "list", "watch"]

@@ -43,6 +43,8 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
+- [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
+- [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
@@ -1312,6 +1314,55 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 **Resolution.**
 - Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
 - For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`. Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the effective `securityProfile`), which remains the runtime backstop.
+
+---
+
+## `RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+
+**Symptoms.** A `RunnerSet` never starts acquiring jobs and `kubectl describe runnerset <name>` shows `Ready=False` with one of:
+
+```
+Reason: GatewayNotFound    Message: ActionsGateway "gw" not found in namespace "team-a"
+Reason: TemplateNotFound   Message: RunnerTemplate "dind-large" not found in namespace "team-a"
+Reason: ProxyNotFound      Message: EgressProxy "shared" not found in namespace "team-a"
+```
+
+**Likely cause — this is by design, not an error.** v2 resolves a `RunnerSet`'s references (`gatewayRef`, `templateRef`, `proxyRef`/the gateway's `defaultProxyRef`) **at runtime**, not at admission, so applying a directory in any order converges (GitOps-friendly). Until every reference resolves the set sits `Ready=False` with the specific `*NotFound` reason and **provisions no worker pods** — fail-closed, so no traffic is ever permitted in the gap. The AGC watches the referents and flips the set to `Ready` the moment the missing object syncs; **no re-apply of the `RunnerSet` is needed**.
+
+A `ProxyNotFound` with the message "RunnerSet … sets no proxyRef and gateway … has no defaultProxyRef" means proxy is unset everywhere — proxy is **required** in this milestone (direct egress is deferred), so add a `proxyRef` or a gateway `defaultProxyRef`.
+
+A `ClusterRunnerTemplate` ref may report `TemplateNotFound` with "not readable by this AGC (cluster-scoped template access lands in M3b)" — cluster-scoped template reads are not yet wired; use a namespaced `RunnerTemplate` for now.
+
+**Resolution.** Apply the missing object (`ActionsGateway`, `RunnerTemplate`/`ClusterRunnerTemplate`, or `EgressProxy`) named in the message; the set self-heals on the next watch event. Confirm the referent's name and namespace match the `*Ref` exactly (references resolve in the `RunnerSet`'s own namespace).
+
+---
+
+## v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only. The v1 `ActionsGateway` provisioning checks are above (["GMC Not Provisioning Tenant Resources"](#gmc-not-provisioning-tenant-resources)).
+
+**Symptoms.** No AGC Deployment appears in the tenant namespace and `kubectl describe actionsgateway <name>` shows `Ready=False` with either:
+
+```
+CredentialUnavailable=True  Reason: SecretNotFound
+  Message: GitHub App Secret "github-app" not found in namespace "team-a"
+```
+or
+```
+Ready=False  Reason: ProxyNotFound
+  Message: EgressProxy "shared" (defaultProxyRef) not found in namespace "team-a"
+```
+
+**Likely cause.** The v2 gateway provisions the AGC control plane only after its two hard dependencies resolve, and **fails closed** otherwise (no AGC Deployment is created):
+
+- **`CredentialUnavailable`** — the Secret named by `spec.githubAppRef.name` does not exist in the gateway's namespace. The AGC mounts the GitHub App credential as files, so without it there is nothing to provision.
+- **`ProxyNotFound`** — `spec.defaultProxyRef` is unset, or names an `EgressProxy` that does not exist. The AGC's control-plane egress is routed through that proxy; proxy is required in this milestone.
+
+Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preconditions; once the Secret or `EgressProxy` appears the gateway reconciles and the AGC Deployment is created (the gateway watches both). Note that the proxy **pool** is reconciled separately by the `EgressProxy` reconciler — the gateway only references it; and the namespace Pod Security Admission labels are stamped by the namespace PSA reconciler from the `actions-gateway.com/security-profile` label, which the gateway *reads* (to thread `SECURITY_PROFILE` to the AGC) but never stamps.
+
+**Resolution.** Create the GitHub App Secret (see ["GitHub App Secret Misconfiguration"](#github-app-secret-misconfiguration) for the required keys) and/or the `EgressProxy` named by `defaultProxyRef`, in the gateway's namespace. The gateway self-heals on the next watch event.
 
 ---
 
