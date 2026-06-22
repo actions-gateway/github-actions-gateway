@@ -373,8 +373,8 @@ func TestGoldenRepresentativeTenant(t *testing.T) {
 
 	goldenPath := filepath.Join("testdata", "representative-tenant.golden.yaml")
 	if *updateGolden {
-		require.NoError(t, os.MkdirAll("testdata", 0o755))
-		require.NoError(t, os.WriteFile(goldenPath, []byte(got), 0o644))
+		require.NoError(t, os.MkdirAll("testdata", 0o750))
+		require.NoError(t, os.WriteFile(goldenPath, []byte(got), 0o600))
 		return
 	}
 	want, err := os.ReadFile(goldenPath)

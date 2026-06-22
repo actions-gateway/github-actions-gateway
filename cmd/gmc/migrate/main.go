@@ -37,10 +37,16 @@ import (
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
+
+// fprintf/fprintln write to a CLI stream, discarding the write error: a failed
+// write to stdout/stderr is not actionable and must not mask the operation's own
+// result (errcheck would otherwise flag the unchecked fmt.Fprint* returns).
+func fprintf(w *os.File, format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
+func fprintln(w *os.File, a ...any)               { _, _ = fmt.Fprintln(w, a...) }
 
 type options struct {
 	namespace     string
@@ -59,8 +65,8 @@ func run(args []string, stdout, stderr *os.File) error {
 	fs.BoolVar(&opts.apply, "apply", false, "Apply the v2 object set and patch the namespace. Default is dry-run (print only).")
 	fs.StringVar(&opts.outputDir, "output-dir", "", "Dry-run: write per-namespace manifests here instead of stdout.")
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "gag-migrate — fan a v1alpha1 tenant out to the v2alpha1 object set.\n\n")
-		fmt.Fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--apply]\n\n")
+		fprintf(stderr, "gag-migrate — fan a v1alpha1 tenant out to the v2alpha1 object set.\n\n")
+		fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--apply]\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -92,7 +98,7 @@ func run(args []string, stdout, stderr *os.File) error {
 		return err
 	}
 	if len(namespaces) == 0 {
-		fmt.Fprintln(stderr, "no namespaces with a v1 ActionsGateway found; nothing to migrate")
+		fprintln(stderr, "no namespaces with a v1 ActionsGateway found; nothing to migrate")
 		return nil
 	}
 
@@ -139,7 +145,7 @@ func migrateNamespace(ctx context.Context, c client.Client, ns string, opts opti
 		return fmt.Errorf("list ActionsGateways: %w", err)
 	}
 	if len(gateways.Items) == 0 {
-		fmt.Fprintf(stderr, "namespace %q has no v1 ActionsGateway; skipping\n", ns)
+		fprintf(stderr, "namespace %q has no v1 ActionsGateway; skipping\n", ns)
 		return nil
 	}
 
@@ -179,14 +185,14 @@ func migrateNamespace(ctx context.Context, c client.Client, ns string, opts opti
 		}
 
 		for _, w := range res.Warnings {
-			fmt.Fprintf(stderr, "warning [%s/%s]: %s\n", ns, gw.Name, w)
+			fprintf(stderr, "warning [%s/%s]: %s\n", ns, gw.Name, w)
 		}
 
 		if opts.apply {
 			if err := applyResult(ctx, c, res, stderr); err != nil {
 				return err
 			}
-			fmt.Fprintf(stderr, "applied v2 object set for gateway %q in namespace %q\n", gw.Name, ns)
+			fprintf(stderr, "applied v2 object set for gateway %q in namespace %q\n", gw.Name, ns)
 			continue
 		}
 		if err := emitDryRun(res, ns, gw.Name, opts.outputDir, stdout); err != nil {
@@ -232,17 +238,17 @@ func emitDryRun(res *migrate.Result, ns, gwName, outputDir string, stdout *os.Fi
 		return err
 	}
 	if outputDir == "" {
-		fmt.Fprintln(stdout, manifest)
+		fprintln(stdout, manifest)
 		return nil
 	}
-	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return fmt.Errorf("create output dir: %w", err)
 	}
 	path := filepath.Join(outputDir, fmt.Sprintf("%s-%s.yaml", ns, gwName))
-	if err := os.WriteFile(path, []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(manifest), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	fmt.Fprintf(stdout, "wrote %s\n", path)
+	fprintf(stdout, "wrote %s\n", path)
 	return nil
 }
 
@@ -266,7 +272,7 @@ func applyResult(ctx context.Context, c client.Client, res *migrate.Result, stde
 		}
 		if err := c.Create(ctx, obj); err != nil {
 			if apierrors.IsAlreadyExists(err) {
-				fmt.Fprintf(stderr, "exists, skipped: %s/%s\n", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
+				fprintf(stderr, "exists, skipped: %s/%s\n", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName())
 				continue
 			}
 			return fmt.Errorf("create %s/%s: %w", obj.GetObjectKind().GroupVersionKind().Kind, obj.GetName(), err)
