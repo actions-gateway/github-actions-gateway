@@ -66,4 +66,13 @@ const (
 	// ReasonProxyShareNotGranted — a cross-namespace EgressProxy has not granted
 	// this namespace (the provider-side consent handshake, §H.9).
 	ReasonProxyShareNotGranted = "ProxyShareNotGranted"
+	// ReasonNoActiveSessions — a RunnerSet's references all resolved but no
+	// listener goroutine is running yet (Ready=False until one comes up).
+	ReasonNoActiveSessions = "NoActiveSessions"
+	// ReasonListenerActive — a RunnerSet's references resolved and at least one
+	// listener goroutine is running (Ready=True).
+	ReasonListenerActive = "ListenerActive"
+	// ReasonTokenUnavailable — the AGC could not obtain a GitHub App installation
+	// token, so the RunnerSet cannot register runners (Ready=False).
+	ReasonTokenUnavailable = "TokenUnavailable" //nolint:gosec // G101: a condition reason, not a credential
 )
