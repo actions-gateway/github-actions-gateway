@@ -53,7 +53,7 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 	It("E2E_GMC_FinalizerRemovedAfterCleanup: ActionsGateway CR is fully gone after deletion", func() {
 		By("confirming the ActionsGateway object itself is gone")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateway", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
 				"-n", tenantNS, "--ignore-not-found",
 			)
 			out, err := utils.Run(cmd)
