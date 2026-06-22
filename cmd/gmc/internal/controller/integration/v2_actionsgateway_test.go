@@ -98,7 +98,9 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}) })
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
 	require.NoError(t, k8sClient.Create(ctx, ag))
@@ -198,7 +200,9 @@ func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
 	const ns = "v2-ag-no-cred"
 	createNamespace(t, ns)
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}) })
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+	})
 
 	ag := newV2GatewayWired("gw", ns, "missing-secret", "shared")
 	require.NoError(t, k8sClient.Create(ctx, ag))
@@ -249,7 +253,9 @@ func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {
 	// Once the EgressProxy appears, the gateway flips to provisioning (the watch
 	// re-enqueues; the AGC Deployment is created).
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("absent", ns)))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "absent", Namespace: ns}}) })
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "absent", Namespace: ns}})
+	})
 	require.Eventually(t, func() bool {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: agcName}, &dep) == nil
 	}, 15*time.Second, 100*time.Millisecond, "AGC Deployment should be created once the proxy resolves")

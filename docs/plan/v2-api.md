@@ -161,15 +161,25 @@ a milestone is done when every box is checked and its exit criterion holds.
   now a VAP because the checks no longer cross objects). The `namespace-psa-guard` and
   `tenant-resource-guard` VAPs dual-read the v1/v2 tenant markers so the GMC can stamp
   and provision in v2 tenant namespaces. envtest covers the VAP and the reconciler.
-- [ ] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount,
+- [x] `ActionsGateway` reconciler (GMC): AGC Deployment/SA/RoleBinding, credential mount,
   AGC + workload NetworkPolicy, metrics certs; proxy egress wired from
   `defaultProxyRef` → resolved `EgressProxy`; one gateway/ns. (PSA stamping is now the
   `NamespacePSAReconciler`'s job; proxy pool / HPA / PDB are the `EgressProxy`
-  reconciler's — both removed from the gateway's responsibility vs. v1.)
-- [ ] `RunnerSet` reconciler (AGC): resolve `gatewayRef`/`templateRef`/`proxyRef` via
+  reconciler's — both removed from the gateway's responsibility vs. v1.) Children are
+  owner-referenced for cascade GC; the AGC Deployment/NetworkPolicy assembly is shared
+  with v1 via `buildAGCDeploymentFrom`/`buildAGCNetworkPolicyFrom`. envtest covers
+  provisioning, owner-refs, egress/security-profile wiring, and the fail-closed
+  `CredentialUnavailable`/`ProxyNotFound` conditions.
+- [x] `RunnerSet` reconciler (AGC): resolve `gatewayRef`/`templateRef`/`proxyRef` via
   watch + enqueue; `GatewayNotFound`/`TemplateNotFound`/`ProxyNotFound` conditions +
-  `observedGeneration`; fail-closed (no worker wiring until refs resolve). Two obstacles
-  surfaced during M3a that reshape the AGC half and must be resolved first:
+  `observedGeneration`; fail-closed (no worker wiring until refs resolve). Drives the
+  same listener/multiplexer/provisioner stack as v1 via the provisioner **Target seam**
+  (`Target`/`ResolvedSpec`): the provisioner own-refs the real `RunnerSet` and
+  re-resolves the template/proxy per job (Q117), with v1 `RunnerGroup` unchanged
+  (HandlerFor/AdmitFor wrap a v1 adapter). Cluster-scoped `ClusterRunnerTemplate` reads
+  need a ClusterRoleBinding and are deferred to M3b (fail closed with a clear condition
+  until then); namespaced `RunnerTemplate` gives v1 parity. Both obstacles below are
+  resolved:
   - **Module dependency cycle — RESOLVED (option (a), neutral `api/` module).**
     `gatewayRef` resolves to a GMC-group `ActionsGateway` and `proxyRef` to a GMC-group
     `EgressProxy`, so the AGC must read those kinds — but the **GMC module already
@@ -191,14 +201,17 @@ a milestone is done when every box is checked and its exit criterion holds.
     dangling owner-ref would make the apiserver immediately GC every worker pod), so the
     provisioner must be refactored to own-ref the real `RunnerSet`. Tracked as the
     runtime half of M3a.
-- [ ] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
-- [ ] envtest + a kind e2e parity run (job → worker pod → proxied egress).
+- [x] Proxy required (`proxyRef`/`defaultProxyRef`, same-namespace).
+- [x] envtest (both suites: GMC provisioning + owner-refs + fail-closed conditions; AGC
+  ref-resolution + fail-closed conditions + end-to-end worker provisioning via the
+  broker stub). **kind e2e** (a live job → worker pod → proxied egress → GitHub run) is
+  deferred to M3b per the task — the M3a minimum is envtest; the worker→pod→proxy path
+  is exercised by the AGC envtest's broker-stub job-delivery test.
 
 #### Per-field / -condition parity checklist (gates M3a exit)
 
 The v1 `RunnerGroup` + `ActionsGateway` behavior the v2 shape must preserve, and where
-each lands in v2. **✓** = implemented + tested this milestone; **▶** = in this PR's
-reconcilers; **◻** = remaining M3a slice (runtime half).
+each lands in v2. **✓** = implemented + tested this milestone; **◻** = remaining.
 
 | v1 behavior | v2 home | Status |
 |---|---|---|
@@ -206,16 +219,16 @@ reconcilers; **◻** = remaining M3a slice (runtime half).
 | PSA downgrade protection (`allow-profile-downgrade`) | `namespace-security-profile-guard` VAP | ✓ |
 | `privileged` eligibility (`privileged-profile=allowed`) | same VAP | ✓ |
 | GMC confinement to tenant namespaces (PSA + provisioning) | dual-marker `namespace-psa-guard` / `tenant-resource-guard` VAPs | ✓ |
-| AGC Deployment / SA / RoleBinding (control plane) | `ActionsGateway` reconciler (GMC) | ▶ |
-| GitHub App credential mount + `CredentialUnavailable` | `ActionsGateway` reconciler | ▶ |
-| AGC + workload NetworkPolicy (egress lockdown) | `ActionsGateway` reconciler | ▶ |
-| metrics mTLS certs (jointly owned w/ AGC) | `ActionsGateway` reconciler | ▶ |
-| proxy egress wiring (`HTTP(S)_PROXY` + CA mount) | `ActionsGateway` ← `defaultProxyRef` → `EgressProxy` | ▶ |
-| `Ready` + `observedGeneration` uniform contract | both reconcilers | ▶ |
-| `templateRef`/`proxyRef`/`gatewayRef` resolution + NotFound conditions | `RunnerSet` reconciler (AGC) | ▶ |
-| job acquired → worker pod (provisioner/listener/multiplexer) | `RunnerSet` reconciler + provisioner owner-ref seam | ◻ |
-| reaper / unschedulable / quota lifecycle tunables | provisioner (RunnerSet-typed) | ◻ |
-| proxied egress proven end-to-end (job → pod → proxy → GitHub) | kind e2e | ◻ (defer to M3b per task) |
+| AGC Deployment / SA / RoleBinding (control plane) | `ActionsGateway` reconciler (GMC) | ✓ |
+| GitHub App credential mount + `CredentialUnavailable` | `ActionsGateway` reconciler | ✓ |
+| AGC + workload NetworkPolicy (egress lockdown) | `ActionsGateway` reconciler | ✓ |
+| metrics mTLS certs (jointly owned w/ AGC) | `ActionsGateway` reconciler (AGC server bundle; proxy-side metrics listener deferred to M3b) | ✓ |
+| proxy egress wiring (`HTTP(S)_PROXY` + CA mount) | `ActionsGateway` ← `defaultProxyRef` → `EgressProxy` | ✓ |
+| `Ready` + `observedGeneration` uniform contract | both reconcilers | ✓ |
+| `templateRef`/`proxyRef`/`gatewayRef` resolution + NotFound conditions | `RunnerSet` reconciler (AGC) | ✓ |
+| job acquired → worker pod (provisioner/listener/multiplexer) | `RunnerSet` reconciler + provisioner Target seam | ✓ |
+| reaper / unschedulable / quota lifecycle tunables | provisioner Target + RunnerSet reaper (unschedulable/quota *conditions* are advisory observability, deferred) | ✓ |
+| proxied egress proven end-to-end (job → pod → proxy → GitHub) | kind e2e | ◻ (defer to M3b per task; worker→pod→proxy covered by AGC envtest) |
 
 ### M3b — Multi-gateway (Q167)
 
