@@ -14,6 +14,13 @@
 # auto-bumped — but, like a kind bump, the PR is NOT auto-merged: moving the tested
 # Kubernetes version is reviewed (and kept on the same minor as the e2e node image)
 # before merge.
+#
+# The review-gated auto-bump is a feature, not a compromise: each weekly PR runs
+# the integration tier against the newest released Kubernetes/envtest, so a green
+# PR is a standing signal that the project still works on the latest version —
+# early warning of a CEL/defaulting/admission regression — while merge stays a
+# deliberate choice (so the integration tier doesn't silently drift off the e2e
+# node image's minor).
 name: 'Bump envtest (integration) Kubernetes version'
 
 scms:
