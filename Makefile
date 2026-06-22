@@ -127,6 +127,7 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods
+	$(MAKE) -C api generate
 	$(MAKE) -C cmd/gmc generate
 	$(MAKE) -C cmd/agc generate
 

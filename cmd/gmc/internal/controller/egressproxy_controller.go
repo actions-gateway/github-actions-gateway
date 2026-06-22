@@ -32,7 +32,7 @@ import (
 	"net"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"

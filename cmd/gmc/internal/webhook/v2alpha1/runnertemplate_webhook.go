@@ -25,7 +25,7 @@ import (
 	"fmt"
 	"strings"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"

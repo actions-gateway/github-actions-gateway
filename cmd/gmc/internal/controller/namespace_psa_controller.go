@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"

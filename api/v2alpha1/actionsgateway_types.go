@@ -44,7 +44,7 @@ type ActionsGatewaySpec struct {
 	// cross-namespace use (§H.4, §H.9).
 	//
 	// +optional
-	DefaultProxyRef *ObjectRef `json:"defaultProxyRef,omitempty"`
+	DefaultProxyRef *LocalObjectRef `json:"defaultProxyRef,omitempty"`
 
 	// LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
 	// (default), debug. Changing it is a rolling restart of the AGC, not a hot

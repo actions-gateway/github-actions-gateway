@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/stretchr/testify/require"
@@ -55,6 +55,8 @@ func TestMain(m *testing.M) {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd",
+			// The five v2 (actions-gateway.com) CRDs live in the neutral api module.
+			"../../../../../api/config/crd",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,

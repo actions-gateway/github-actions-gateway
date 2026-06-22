@@ -1,6 +1,7 @@
 go 1.26.4
 
 use (
+	./api // v2 shared kinds (neutral module imported by agc + gmc)
 	./broker
 	./cmd/agc // Milestone 2
 	./cmd/gmc // Milestone 4

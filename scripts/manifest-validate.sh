@@ -63,15 +63,15 @@ yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/co
 # renders them.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
 cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
-cmd/agc/config/crd/actions-gateway.com_runnersets.yaml
-cmd/agc/config/crd/actions-gateway.com_runnertemplates.yaml
-cmd/agc/config/crd/actions-gateway.com_clusterrunnertemplates.yaml
+api/config/crd/actions-gateway.com_runnersets.yaml
+api/config/crd/actions-gateway.com_runnertemplates.yaml
+api/config/crd/actions-gateway.com_clusterrunnertemplates.yaml
+api/config/crd/actions-gateway.com_actionsgateways.yaml
+api/config/crd/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/rbac/role.yaml
 cmd/gmc/config/webhook/manifests.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
-cmd/gmc/config/crd/bases/actions-gateway.com_actionsgateways.yaml
-cmd/gmc/config/crd/bases/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml"

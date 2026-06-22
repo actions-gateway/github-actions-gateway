@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 // workspace-local
+	github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000 // workspace-local
 	github.com/onsi/ginkgo/v2 v2.31.0
 	github.com/onsi/gomega v1.42.0
 	github.com/stretchr/testify v1.11.1
@@ -111,3 +112,5 @@ replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
 replace github.com/actions-gateway/github-actions-gateway/githubapp => ../../githubapp
 
 replace github.com/actions-gateway/github-actions-gateway/agc => ../../cmd/agc
+
+replace github.com/actions-gateway/github-actions-gateway/api => ../../api

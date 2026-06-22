@@ -7,6 +7,8 @@ cel.dev/expr
 github.com/Masterminds/semver/v3
 # github.com/actions-gateway/github-actions-gateway/agc v0.0.0-00010101000000-000000000000 => ./cmd/agc
 ## explicit; go 1.26.4
+# github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000 => ./api
+## explicit; go 1.26.4
 # github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000 => ./broker
 ## explicit; go 1.26.4
 # github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000 => ./githubapp
