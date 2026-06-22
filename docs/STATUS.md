@@ -51,6 +51,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
 | <a id="Q164"></a>Q164 | [v2 API M3a: ActionsGateway + RunnerSet, single-gateway parity](plan/v2-api.md) | `infra` `security` | ▶ | L | GMC ActionsGateway + AGC RunnerSet reconcilers done (provisioner Target seam; v1 untouched); parity checklist passes; envtest in both suites. **Remaining: kind e2e (job→pod→proxy→GitHub), deferred to M3b per task.** |
 | <a id="Q167"></a>Q167 | [v2 API M3b: multi-gateway per namespace](plan/v2-api.md) | `infra` `security` | 🚫 | M | Blocked on M3a (Q164). Per-gateway naming (52-char), AGC scoping via gatewayRef field selector, per-gateway ownership/GC. VAP unchanged (keys on namespace marker). |
 | <a id="Q165"></a>Q165 | [v2 API M5: migration tool + v1/v2 cutover](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M3b (Q167). Fan-out migration tool (v1→N v2 objects) + tests, dual-read window (group domain + Q147 values + finalizers), deprecation + operator migration guide. |
