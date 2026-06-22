@@ -13,6 +13,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -245,10 +247,22 @@ func setupGMC() {
 // before the GMC so its v2 informers sync on first start.
 func setupV2CRDs() {
 	By("installing the v2 (actions-gateway.com) CRDs")
-	// cmd/gmc/test/e2e → repo root is four levels up.
-	cmd := exec.Command("kubectl", "apply", "-f", "../../../../api/config/crd")
+	// Resolve the CRD directory from this source file's location rather than a
+	// CWD-relative path: the e2e binary's working directory differs between a
+	// local `go test` (package dir) and CI's `ginkgo run` invocation, so a fixed
+	// `../../..` would break in one of them.
+	cmd := exec.Command("kubectl", "apply", "-f", v2CRDDir())
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs")
+}
+
+// v2CRDDir returns the absolute path to api/config/crd (the five v2 CRDs),
+// derived from this file's compile-time location: <root>/cmd/gmc/test/e2e/.
+func v2CRDDir() string {
+	_, thisFile, _, ok := runtime.Caller(0)
+	Expect(ok).To(BeTrue(), "resolve caller for v2 CRD path")
+	root := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
+	return filepath.Join(root, "api", "config", "crd")
 }
 
 func teardownGMC() {
