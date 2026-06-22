@@ -72,9 +72,30 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			_, _ = utils.Run(cmd)
 		})
 
-		// desiredReplicas reflects the HPA's computed target (min-clamped).
-		// currentReplicas requires the pod to actually start; in a resource-
-		// constrained CI cluster the pod may be Pending, making it unreliable.
+		// On failure, dump the HPA so a future flake is diagnosable rather than
+		// a blind timeout — distinguishes "controller never reconciled" from
+		// "scaled but we asserted the wrong field".
+		DeferCleanup(func() {
+			if CurrentSpecReport().Failed() {
+				cmd := exec.Command("kubectl", "describe", "hpa", proxyName, "-n", tenantNS)
+				if out, derr := utils.Run(cmd); derr == nil {
+					_, _ = fmt.Fprintf(GinkgoWriter, "HPA state at failure:\n%s\n", out)
+				}
+			}
+		})
+
+		// minReplicas is a hard floor the HPA enforces via its
+		// currentReplicas<minReplicas branch, independent of metric readings —
+		// so the scale-up is deterministic once the controller reconciles. The
+		// only variable is reconcile latency: kube-controller-manager's HPA
+		// sync loop can lag well past two minutes on a CPU-starved CI runner
+		// (notably under Calico, where it competes with slower pod networking),
+		// which is the historical source of this test's flakiness. Allow the
+		// full suite-default window rather than a tight 2-minute one.
+		//
+		// desiredReplicas reflects the HPA's computed target (min-clamped);
+		// currentReplicas requires the pod to actually start, which is
+		// unreliable on a resource-constrained cluster (pod may stay Pending).
 		By("waiting for HPA desiredReplicas to reach 2")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "hpa", proxyName,
@@ -82,7 +103,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("2"), "HPA desired replicas have not reached 2 yet")
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_PDBPreventsEvictionBelowMinAvailable: PDB blocks eviction when at minimum",
