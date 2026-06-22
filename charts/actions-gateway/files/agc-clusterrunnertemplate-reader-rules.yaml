@@ -1,0 +1,9 @@
+# Cluster-scoped read of ClusterRunnerTemplate, the one AGC dependency a namespaced
+# RoleBinding cannot authorize (the kind is cluster-scoped). The GMC binds this
+# ClusterRole to each gateway's AGC ServiceAccount via a per-gateway
+# ClusterRoleBinding (M3b, §H.16 #1). Strictly read-only on the single
+# cluster-scoped kind — least privilege: the AGC never writes ClusterRunnerTemplate
+# (the kind is platform-authored) and gets no other cluster-scoped access.
+- apiGroups: ["actions-gateway.com"]
+  resources: ["clusterrunnertemplates"]
+  verbs: ["get", "list", "watch"]

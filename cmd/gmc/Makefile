@@ -17,7 +17,7 @@ GMC_IMG     ?= 127.0.0.1:5000/gmc:e2e
 AGC_IMG     ?= 127.0.0.1:5000/agc:e2e
 PROXY_IMG   ?= 127.0.0.1:5000/proxy:e2e
 
-ENVTEST_K8S_VERSION ?= 1.35
+ENVTEST_K8S_VERSION ?= 1.35.x
 
 CERTMANAGER_VERSION ?= v1.20.2
 _CERTMANAGER_URL    := https://github.com/cert-manager/cert-manager/releases/download/$(CERTMANAGER_VERSION)/cert-manager.yaml

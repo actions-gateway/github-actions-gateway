@@ -77,7 +77,7 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		// explicit allow-profile-downgrade annotation. Set it in the same merge
 		// patch; this also exercises the opt-in path end-to-end.
 		By("patching ActionsGateway to privileged securityProfile with the downgrade opt-in annotation")
-		cmd := exec.Command("kubectl", "patch", "actionsgateway", agName,
+		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
 			"-n", ns,
 			"--type=merge",
 			"-p", `{"metadata":{"annotations":{"actions-gateway.github.com/allow-profile-downgrade":"true"}},"spec":{"securityProfile":"privileged"}}`,

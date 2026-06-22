@@ -50,6 +50,16 @@ jobs:
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
+    # tier tests against. Single-sourced here (the cache key + the `use` below both
+    # read it) and kept in lockstep with the same pin in cmd/{gmc,agc}/Makefile by
+    # updatecli (updatecli.d/envtest.yaml, weekly), which rewrites all three. It is
+    # the envtest twin of KIND_NODE_IMAGE — keep the two on the same Kubernetes
+    # minor so the integration and e2e tiers test the same version. Multi-gateway
+    # AGC scoping (KEP-4358 field selectors) needs ≥ 1.31; older fails the field
+    # selector. The ".x" patch wildcard lets setup-envtest pick the newest patch.
+    env:
+      ENVTEST_K8S_VERSION: 1.35.x
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
@@ -60,10 +70,10 @@ jobs:
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: /tmp/envtest-bins
-          key: envtest-${{ runner.os }}-1.30.x
+          key: envtest-${{ runner.os }}-${{ env.ENVTEST_K8S_VERSION }}
       - name: Install envtest binaries
         run: |
-          KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x --bin-dir /tmp/envtest-bins -p path)
+          KUBEBUILDER_ASSETS=$(.build/setup-envtest use "$ENVTEST_K8S_VERSION" --bin-dir /tmp/envtest-bins -p path)
           echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> "$GITHUB_ENV"
       - name: Run GMC integration tests
         run: go test -race -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...

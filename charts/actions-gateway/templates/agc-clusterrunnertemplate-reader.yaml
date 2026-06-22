@@ -1,0 +1,27 @@
+{{- /*
+The agc-clusterrunnertemplate-reader rules are single-sourced in
+files/agc-clusterrunnertemplate-reader-rules.yaml. This template embeds them via
+.Files.Get, and the GMC integration suite (installClusterRunnerTemplateReaderRole
+in suite_integration_test.go) reads the SAME file — so the shipped permission set
+and the RBAC-scope test can never drift. Edit the fragment, not this block.
+*/ -}}
+# agc-clusterrunnertemplate-reader — read-only access to the cluster-scoped
+# ClusterRunnerTemplate kind, the one AGC dependency a namespaced RoleBinding
+# cannot grant. The GMC binds this ClusterRole to each gateway's AGC
+# ServiceAccount via a per-gateway ClusterRoleBinding (M3b, §H.16 #1).
+#
+# The name is intentionally UNPREFIXED and must stay
+# `agc-clusterrunnertemplate-reader`: the GMC manager-role grants `bind` only on
+# this exact resourceName (not create/escalate), so renaming it breaks the
+# per-gateway ClusterRoleBinding the v2 ActionsGateway reconciler creates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agc-clusterrunnertemplate-reader
+  labels:
+    app.kubernetes.io/name: actions-gateway
+    app.kubernetes.io/component: agc-clusterrunnertemplate-reader
+    app.kubernetes.io/part-of: actions-gateway
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+  {{- .Files.Get "files/agc-clusterrunnertemplate-reader-rules.yaml" | trimSuffix "\n" | nindent 0 }}

@@ -221,17 +221,22 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 
 // resolveTemplate resolves a templateRef to a worker pod shape. kind selects the
 // cluster-scoped ClusterRunnerTemplate; the default (empty/RunnerTemplate) is the
-// namespaced RunnerTemplate.
+// namespaced RunnerTemplate. Both fail closed with TemplateNotFound when the
+// referent is absent, so the set waits for the referent→referrer watch (§H.7).
 func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alpha1.ObjectRef) (*v2alpha1.RunnerTemplateSpec, refResolution) {
 	if ref.Kind == "ClusterRunnerTemplate" {
-		// Cluster-scoped ClusterRunnerTemplate reads need a ClusterRoleBinding (not
-		// the per-tenant RoleBinding) and the corresponding cluster-scoped watch;
-		// both land in M3b. In M3a the AGC has neither, so we deliberately do NOT
-		// read or watch the kind here — attempting a cached Get would force an
-		// informer the AGC's RBAC forbids, breaking manager cache sync. Fail closed
-		// with a clear condition instead; namespaced RunnerTemplate gives v1 parity.
-		return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
-			message: fmt.Sprintf("templateRef.kind=ClusterRunnerTemplate (%q) is not supported in this milestone; cluster-scoped template access lands in M3b — use a namespaced RunnerTemplate", ref.Name)}
+		// Cluster-scoped read, authorized by the per-gateway ClusterRoleBinding to
+		// agc-clusterrunnertemplate-reader the GMC creates (M3b). The kind is
+		// platform-authored and holds golden (incl. privileged) templates (§H.7).
+		crt := &v2alpha1.ClusterRunnerTemplate{}
+		if err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, crt); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+					message: fmt.Sprintf("ClusterRunnerTemplate %q not found", ref.Name)}
+			}
+			return nil, refResolution{err: fmt.Errorf("read ClusterRunnerTemplate: %w", err)}
+		}
+		return &crt.Spec, refResolution{}
 	}
 	rt := &v2alpha1.RunnerTemplate{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, rt); err != nil {

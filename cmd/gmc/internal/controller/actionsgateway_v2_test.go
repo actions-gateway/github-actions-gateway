@@ -94,34 +94,51 @@ func TestActionsGatewayV2Reconcile_ProvisionsControlPlane(t *testing.T) {
 
 	ctx := context.Background()
 
-	// AGC Deployment: created, owned, egress + security-profile wired, no creds in env.
+	// AGC Deployment: per-gateway name, created, owned, egress + security-profile
+	// wired, no creds in env. GATEWAY_NAME is threaded so the AGC scopes its
+	// RunnerSet watch to this gateway (§H.16 #1).
 	var dep appsv1.Deployment
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcAppName}, &dep))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
 	require.True(t, isControllerOwnedByGateway(dep.OwnerReferences, "gw"))
 	env := agcEnv(&dep)
 	assert.Equal(t, "https://shared-proxy.team-a.svc.cluster.local:8080", env["HTTPS_PROXY"])
 	assert.Equal(t, "shared-proxy-tls", env["PROXY_TLS_SECRET_NAME"])
 	assert.Equal(t, gmcv2alpha1.SecurityProfileRestricted, env["SECURITY_PROFILE"])
+	assert.Equal(t, "gw", env["GATEWAY_NAME"], "AGC must be scoped to its gateway")
+	assert.Equal(t, workerSANameV2(ag), env["WORKER_SERVICE_ACCOUNT"], "per-gateway worker SA")
 	for _, k := range []string{"appId", "privateKey", "installationId"} {
 		_, present := env[k]
 		assert.False(t, present, "credential %q must never be an env var", k)
 	}
 
-	// Companion children, each owned.
+	// Companion children, each per-gateway-named and owned.
 	var sa corev1.ServiceAccount
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcAppName}, &sa))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &sa))
 	assert.True(t, isControllerOwnedByGateway(sa.OwnerReferences, "gw"))
+	var workerSA corev1.ServiceAccount
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workerSANameV2(ag)}, &workerSA))
+	assert.True(t, isControllerOwnedByGateway(workerSA.OwnerReferences, "gw"))
 	var rb rbacv1.RoleBinding
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcAppName}, &rb))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &rb))
 	assert.Equal(t, agcTenantRoleName, rb.RoleRef.Name)
 	var wnp networkingv1.NetworkPolicy
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: npWorkloadName}, &wnp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
 	assert.Empty(t, wnp.Spec.Ingress, "workload NetworkPolicy default-denies ingress")
-	for _, name := range []string{metricsTLSSecretName, metricsClientSecretName} {
+	for _, name := range []string{metricsTLSSecretNameV2(ag), metricsClientSecretNameV2(ag)} {
 		var sec corev1.Secret
 		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: name}, &sec))
 		assert.True(t, isControllerOwnedByGateway(sec.OwnerReferences, "gw"))
 	}
+
+	// Per-gateway ClusterRoleBinding granting the AGC SA cluster-scoped read of
+	// ClusterRunnerTemplate (M3b). Cluster-scoped, so it carries no owner ref (the
+	// reconciler deletes it explicitly on gateway deletion).
+	var crb rbacv1.ClusterRoleBinding
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterRunnerTemplateReaderBindingName(ag)}, &crb))
+	assert.Equal(t, clusterRunnerTemplateReaderRole, crb.RoleRef.Name)
+	require.Len(t, crb.Subjects, 1)
+	assert.Equal(t, agcNameV2(ag), crb.Subjects[0].Name)
+	assert.Equal(t, "team-a", crb.Subjects[0].Namespace)
 
 	// Status: Ready=False (no kubelet) / Degraded=False / CredentialUnavailable=False.
 	var got gmcv2alpha1.ActionsGateway
@@ -150,7 +167,7 @@ func TestActionsGatewayV2Reconcile_FailsClosedWithoutCredential(t *testing.T) {
 	assert.Equal(t, gmcv2alpha1.ReasonSecretNotFound, cred.Reason)
 	// Fail closed: no AGC Deployment.
 	var dep appsv1.Deployment
-	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcAppName}, &dep))
+	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
 }
 
 func TestActionsGatewayV2Reconcile_FailsClosedWithoutProxy(t *testing.T) {
@@ -184,7 +201,10 @@ func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	ag.Finalizers = []string{gmcv2alpha1.ActionsGatewayFinalizer}
 	ag.DeletionTimestamp = &now
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag).WithStatusSubresource(ag).Build()
+	// The cluster-scoped ClusterRoleBinding is not owner-GC'd, so reconcileDelete
+	// must remove it explicitly; seed it to prove the cleanup.
+	crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRunnerTemplateReaderBindingName(ag)}}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, crb).WithStatusSubresource(ag).Build()
 
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "gw"}})
@@ -192,6 +212,31 @@ func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 	// Finalizer removed ⇒ the object is fully deleted from the fake client.
 	var got gmcv2alpha1.ActionsGateway
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
+	// The per-gateway ClusterRoleBinding is explicitly deleted.
+	var gotCRB rbacv1.ClusterRoleBinding
+	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Name: clusterRunnerTemplateReaderBindingName(ag)}, &gotCRB),
+		"reconcileDelete must delete the cluster-scoped ClusterRoleBinding")
+}
+
+// TestActionsGatewayV2_PerGatewayNaming proves two gateways in one namespace
+// derive disjoint child names so they never collide on a fixed name (§H.16 #1).
+func TestActionsGatewayV2_PerGatewayNaming(t *testing.T) {
+	a := v2Gateway("alpha", "team-a", "github-app", "shared")
+	b := v2Gateway("beta", "team-a", "github-app", "shared")
+
+	assert.NotEqual(t, agcNameV2(a), agcNameV2(b))
+	assert.Equal(t, "alpha-agc", agcNameV2(a))
+	assert.Equal(t, "beta-agc", agcNameV2(b))
+	assert.NotEqual(t, workerSANameV2(a), workerSANameV2(b))
+	assert.NotEqual(t, workloadNPNameV2(a), workloadNPNameV2(b))
+	assert.NotEqual(t, metricsTLSSecretNameV2(a), metricsTLSSecretNameV2(b))
+	assert.NotEqual(t, clusterRunnerTemplateReaderBindingName(a), clusterRunnerTemplateReaderBindingName(b))
+
+	// The AGC pod `app` label value (= agcNameV2) must stay within the 63-char RFC
+	// 1123 label-value ceiling even at the 52-char CR-name cap (§H.6).
+	longest := v2Gateway("a23456789012345678901234567890123456789012345678901", "team-a", "github-app", "shared")
+	require.Len(t, longest.Name, 51)
+	assert.LessOrEqual(t, len(agcNameV2(longest)), 63, "AGC app label value must stay ≤ 63 chars")
 }
 
 // --- builder unit tests ---
@@ -200,7 +245,7 @@ func TestBuildAGCNetworkPolicyV2_ApiserverEgressScoping(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	// Default: any-destination apiserver egress.
 	np := buildAGCNetworkPolicyV2(ag, nil)
-	assert.Equal(t, map[string]string{"app": agcAppName}, np.Spec.PodSelector.MatchLabels)
+	assert.Equal(t, map[string]string{"app": agcNameV2(ag)}, np.Spec.PodSelector.MatchLabels)
 	apiRule := findApiserverEgressRule(np)
 	require.NotNil(t, apiRule)
 	assert.Empty(t, apiRule.To, "empty CIDR list keeps any-destination apiserver egress")
@@ -228,11 +273,13 @@ func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 }
 
 func TestGenerateMetricsCertsV2_ParsesAndCoversAGCService(t *testing.T) {
-	b, err := generateMetricsCertsV2("team-a")
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	b, err := generateMetricsCertsV2("team-a", agcNameV2(ag))
 	require.NoError(t, err)
 	cert, err := parseCertPEM(b.serverCertPEM)
 	require.NoError(t, err)
-	assert.Contains(t, cert.DNSNames, agcAppName+".team-a.svc")
+	// Cert SANs cover this gateway's per-gateway AGC Service name.
+	assert.Contains(t, cert.DNSNames, agcNameV2(ag)+".team-a.svc")
 	// CA + both leaves are present.
 	assert.NotEmpty(t, b.caPEM)
 	assert.NotEmpty(t, b.clientCertPEM)

@@ -839,6 +839,21 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    needed for correctness since the VAP already confines by namespace.) Precedent:
    ARC runs multiple scale sets per namespace, names = CR prefix + fixed suffix.
    The core build of v2 — naming + watch-scoping + ownership, not a policy rewrite.
+
+   **Implemented (M3b, Q167).** All three: (a) every AGC child is named `<ag>-<suffix>`
+   (`<ag>-agc`, `<ag>-worker`, `<ag>-workload`, `<ag>-agc-metrics-{tls,client}`) under
+   the §H.6 52-char cap, `<ag>-agc` doubling as the pod `app` label / NetworkPolicy /
+   Service selector so two AGC Deployments never adopt each other's pods; (b) the GMC
+   stamps `GATEWAY_NAME` on each AGC Deployment and the AGC scopes its `RunnerSet`
+   informer with a server-side `spec.gatewayRef.name` field selector (KEP-4358, k8s ≥
+   1.31) plus a defense-in-depth reconcile guard; (c) per-gateway names + owner refs
+   GC only the deleted gateway's children. The `gmc-tenant-resource-guard` VAP is
+   unchanged. Closing the M3a deferral, the AGC also gains least-privilege
+   cluster-scoped read of `ClusterRunnerTemplate` via a per-gateway `ClusterRoleBinding`
+   (shipped `agc-clusterrunnertemplate-reader` ClusterRole; GMC holds only `bind`),
+   deleted explicitly on teardown since a cluster-scoped object cannot own-ref a
+   namespaced gateway. Envtest (both suites) + a kind e2e (`E2E_V2_MultiGateway`) prove
+   the scoping isolation and per-gateway GC.
 2. **Cross-namespace proxy CA distribution → ConfigMap, not secret.** The CA is a
    public certificate, so the GMC distributes it as a **ConfigMap** into only the
    granted consumer namespaces (trust-manager pattern; [§H.9](#h9-cross-namespace-proxy-sharing)).

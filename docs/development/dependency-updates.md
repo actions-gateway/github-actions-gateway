@@ -18,7 +18,8 @@ is automated, by what, and where the manual edges are.
 | shellcheck version + checksum | `SHELLCHECK_VERSION` / `SHELLCHECK_SHA256` in [`unit-test.yml`](../../.github/workflows/unit-test.yml) | **updatecli** ([`updatecli.d/shellcheck.yaml`](../../updatecli.d/shellcheck.yaml), weekly) |
 | polaris version + checksum | `POLARIS_VERSION` / `POLARIS_SHA256` in [`security-scan.yml`](../../.github/workflows/security-scan.yml) | **updatecli** ([`updatecli.d/polaris.yaml`](../../updatecli.d/polaris.yaml), weekly) |
 | buildkit builder image digest (3 files) | `BUILDKIT_IMAGE` in `e2e-reusable.yml`, `security-scan.yml` **and** `publish.yml` | **updatecli** ([`updatecli.d/buildkit.yaml`](../../updatecli.d/buildkit.yaml), weekly — rewrites all three, so they can't drift) |
-| kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice) |
+| envtest Kubernetes version (3 files) | `ENVTEST_K8S_VERSION` in [`integration-test.yml`](../../.github/workflows/integration-test.yml) **and** `cmd/gmc/Makefile` + `cmd/agc/Makefile` | **updatecli** ([`updatecli.d/envtest.yaml`](../../updatecli.d/envtest.yaml), weekly — rewrites all three, so they can't drift; resolved from controller-tools' `envtest-releases.yaml`, **no auto-merge** since it moves the tested Kubernetes version — keep it on the same minor as `KIND_NODE_IMAGE`. The review-gated PR doubles as a **latest-Kubernetes compatibility canary**: it runs the integration tier against the newest envtest release, so a green PR confirms the project still works on the latest version) |
+| kind node image | `KIND_NODE_IMAGE` in `e2e-reusable.yml` | **manual** (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor) |
 
 Dependabot config: [`.github/dependabot.yml`](../../.github/dependabot.yml). The
 supply-chain gates that catch drift on any of these (`vendor-check`,
@@ -58,11 +59,17 @@ one run, opening a separate PR per manifest. They share a shape:
      publish no checksum file.
 3. **File targets** — regex-replace each pin in place and open one PR.
 
-The one exception is [`buildkit.yaml`](../../updatecli.d/buildkit.yaml): it pins a
-Docker image *digest*, not a release tarball, so its source is a `dockerdigest`
-(resolving the current digest of the floating `buildx-stable-1` tag) rather than a
-`githubrelease` + checksum pair. It still ends in file targets — rewriting the
-`@sha256:…` suffix across all three workflows that boot a buildx builder.
+Two exceptions to the `githubrelease` source. [`buildkit.yaml`](../../updatecli.d/buildkit.yaml)
+pins a Docker image *digest*, not a release tarball, so its source is a
+`dockerdigest` (resolving the current digest of the floating `buildx-stable-1`
+tag); it still ends in file targets — rewriting the `@sha256:…` suffix across all
+three workflows that boot a buildx builder. [`envtest.yaml`](../../updatecli.d/envtest.yaml)
+has no GitHub release to track (envtest binaries are an index, not tagged
+releases), so its source is a `shell` script
+([`scripts/updatecli/latest-envtest-version.sh`](../../scripts/updatecli/latest-envtest-version.sh))
+that reads controller-tools' `envtest-releases.yaml` and prints the latest stable
+`1.<minor>.x` — guaranteeing the chosen minor has published binaries — then
+rewrites `ENVTEST_K8S_VERSION` across the workflow and both controller Makefiles.
 
 | Manifest | Pins | Checksum strategy |
 |---|---|---|
@@ -71,6 +78,7 @@ Docker image *digest*, not a release tarball, so its source is a `dockerdigest`
 | [`shellcheck.yaml`](../../updatecli.d/shellcheck.yaml) | `SHELLCHECK_VERSION` + `SHELLCHECK_SHA256` | hash the tarball |
 | [`polaris.yaml`](../../updatecli.d/polaris.yaml) | `POLARIS_VERSION` + `POLARIS_SHA256` | published `checksums.txt` line |
 | [`buildkit.yaml`](../../updatecli.d/buildkit.yaml) | `BUILDKIT_IMAGE` digest in three files | none (`dockerdigest` resolves the digest directly) |
+| [`envtest.yaml`](../../updatecli.d/envtest.yaml) | `ENVTEST_K8S_VERSION` in three files | none (version-only; `shell` source from the envtest-releases index) |
 
 **Gate tools open PRs that may go red.** shellcheck and polaris are lint/scan
 gates: a new release can add findings. The bump PR running CI is

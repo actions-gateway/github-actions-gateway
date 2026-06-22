@@ -139,7 +139,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real"), func(
 	It("E2E_GitHub_ActionsGatewayReachesReady: CR Ready=True with real GitHub", func() {
 		By("verifying ActionsGateway becomes Ready")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateway", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)

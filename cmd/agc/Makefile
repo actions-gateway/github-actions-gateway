@@ -7,7 +7,7 @@ SETUP_ENVTEST  := $(REPO_ROOT)/.build/setup-envtest
 LOCALBIN       := $(REPO_ROOT)/.build
 YEAR           ?= $(shell date +%Y)
 
-ENVTEST_K8S_VERSION ?= 1.35
+ENVTEST_K8S_VERSION ?= 1.35.x
 
 .DEFAULT_GOAL := help
 

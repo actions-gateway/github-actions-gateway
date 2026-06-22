@@ -306,7 +306,7 @@ spec:
 // DeleteActionsGatewayCR deletes an ActionsGateway CR and waits for the finalizer to clear.
 // A 5-minute timeout prevents hangs if the controller is unavailable.
 func DeleteActionsGatewayCR(ns, name string) {
-	cmd := exec.Command("kubectl", "delete", "actionsgateway", name, "-n", ns, "--ignore-not-found", "--timeout=5m")
+	cmd := exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.github.com", name, "-n", ns, "--ignore-not-found", "--timeout=5m")
 	_, _ = Run(cmd)
 }
 

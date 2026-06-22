@@ -49,7 +49,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	It("E2E_GMC_ReadyConditionTrue: ActionsGateway Ready condition becomes True", func() {
 		By("checking ActionsGateway Ready condition")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateway", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)
@@ -156,7 +156,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 
 	It("E2E_GMC_ReconcileAfterUpdate: changing spec triggers reconcile", func() {
 		By("patching ActionsGateway proxy.minReplicas to 2")
-		cmd := exec.Command("kubectl", "patch", "actionsgateway", agName,
+		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
 			"-n", tenantNS,
 			"--type=merge",
 			"-p", `{"spec":{"proxy":{"minReplicas":2}}}`,

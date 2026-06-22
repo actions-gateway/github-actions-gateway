@@ -228,21 +228,38 @@ each lands in v2. **✓** = implemented + tested this milestone; **◻** = remai
 | `templateRef`/`proxyRef`/`gatewayRef` resolution + NotFound conditions | `RunnerSet` reconciler (AGC) | ✓ |
 | job acquired → worker pod (provisioner/listener/multiplexer) | `RunnerSet` reconciler + provisioner Target seam | ✓ |
 | reaper / unschedulable / quota lifecycle tunables | provisioner Target + RunnerSet reaper (unschedulable/quota *conditions* are advisory observability, deferred) | ✓ |
-| proxied egress proven end-to-end (job → pod → proxy → GitHub) | kind e2e | ◻ (defer to M3b per task; worker→pod→proxy covered by AGC envtest) |
+| proxied egress proven end-to-end (job → pod → proxy → GitHub) | kind e2e | ✓ (M3b `E2E_V2_MultiGateway`: job→worker pod via the broker stub; workload pod→v2 EgressProxy→GitHub via the curl CONNECT spec) |
 
-### M3b — Multi-gateway (Q167)
+### M3b — Multi-gateway (Q167) + the M3a-deferred tail (closes Q164)
 
-- [ ] Per-gateway derived naming across every GMC-created resource (52-char cap).
-- [ ] AGC watch-scoping via the `gatewayRef` field selector (server-side). **Requires
-  k8s ≥ 1.31** — CRD field selectors (KEP-4358) are alpha-off in 1.30, where a query
-  by `spec.gatewayRef.name` fails `field label not supported`. The selectable-field
-  *declaration* is harmless on 1.30 (M1 ships it), but the runtime scoping and its
-  test coverage need 1.31+. The integration-test CI tier currently pins envtest
-  **1.30.x** (`.github/workflows/integration-test.yml`); bump it to ≥ 1.31 as part of
-  M3b, or the field-selector path cannot be exercised in CI (M1's
-  `TestV2_RunnerSet_GatewayRefSelectableField` skips below 1.31).
-- [ ] Per-gateway ownership refs for clean cascade GC.
-- [ ] envtest + kind e2e: two gateways with their own runner sets concurrent in one namespace.
+- [x] Per-gateway derived naming across every GMC-created AGC child (52-char cap):
+  `<ag>-agc` (Deployment/SA/RoleBinding/Service/AGC NetworkPolicy + pod `app` label),
+  `<ag>-worker` (worker SA), `<ag>-workload` (workload NetworkPolicy), and
+  `<ag>-agc-metrics-{tls,client}` (metrics Secrets). `buildAGCDeploymentFrom`/
+  `buildAGCNetworkPolicyFrom` take per-gateway names; v1 passes the fixed singleton
+  names (no behavior change). The `gmc-tenant-resource-guard` VAP is unchanged (it
+  keys on the namespace marker, not names).
+- [x] AGC watch-scoping via the `gatewayRef` field selector (server-side): the GMC
+  stamps `GATEWAY_NAME` on each AGC Deployment; the AGC scopes its RunnerSet informer
+  with `cache.ByObject{Field: spec.gatewayRef.name=<gw>}` (KEP-4358) plus a
+  defense-in-depth guard in `Reconcile`. **Requires k8s ≥ 1.31** (alpha-off in 1.30);
+  the integration-test CI tier was bumped from envtest **1.30.x → 1.35.x**
+  (`.github/workflows/integration-test.yml`) so the scoping test runs in CI. The e2e
+  kind cluster is already v1.35.
+- [x] Per-gateway ownership refs for clean cascade GC: per-gateway names mean deleting
+  one gateway GCs only its own children. The cluster-scoped ClusterRunnerTemplate
+  ClusterRoleBinding cannot carry a cross-scope owner ref, so `reconcileDelete`
+  removes it explicitly.
+- [x] **ClusterRunnerTemplate access (the M3a deferral, closes Q164):** shipped
+  read-only ClusterRole `agc-clusterrunnertemplate-reader`; the GMC creates a
+  per-gateway ClusterRoleBinding (holds only `bind` on that name) so the AGC gains
+  least-privilege cluster-scoped read. `resolveTemplate` resolves ClusterRunnerTemplate
+  live and the RunnerSet watches the kind.
+- [x] envtest (both suites: AGC field-scoped isolation + ClusterRunnerTemplate
+  resolution; GMC per-gateway naming + per-gateway ownership/GC) **and kind e2e**
+  (`E2E_V2_MultiGateway`): two gateways in one namespace, each AGC scoped to its
+  RunnerSet (proven by the worker pod's per-gateway worker ServiceAccount), plus a
+  workload pod reaching GitHub through the v2 EgressProxy (proxy-egress parity).
 
 ### M5 — Migration + cutover (Q165)
 

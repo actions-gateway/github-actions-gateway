@@ -78,7 +78,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 
 		By("verifying ActionsGateway Ready condition is still True")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateway", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)

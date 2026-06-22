@@ -122,17 +122,35 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		assert.Equal(t, "dedicated", refs.proxy.Name)
 	})
 
-	t.Run("cluster template fails closed (deferred to M3b)", func(t *testing.T) {
-		// M3a does not read or watch the cluster-scoped ClusterRunnerTemplate (no
-		// RBAC yet); a templateRef.kind=ClusterRunnerTemplate short-circuits to a
-		// fail-closed condition without attempting a Get.
+	t.Run("cluster template fails closed when absent", func(t *testing.T) {
+		// A templateRef.kind=ClusterRunnerTemplate naming a missing object fails
+		// closed with TemplateNotFound (the cluster-scoped read is authorized by the
+		// per-gateway ClusterRoleBinding in M3b; until the referent exists the set
+		// waits, §H.7).
 		rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
 			rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
 		})
 		c := build(rs, gwObj("gw", ns, "shared"))
 		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
 		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
-		assert.Contains(t, res.message, "M3b")
+		assert.Contains(t, res.message, "ClusterRunnerTemplate")
+	})
+
+	t.Run("cluster template resolves when present (M3b)", func(t *testing.T) {
+		// With the ClusterRunnerTemplate applied, the cluster-scoped read resolves it
+		// and the references are complete (proxy via gateway defaultProxyRef).
+		rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+			rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
+		})
+		crt := &v2alpha1.ClusterRunnerTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "golden"},
+			Spec:       v2alpha1.RunnerTemplateSpec{WorkerImage: "golden:test"},
+		}
+		ep := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
+		c := build(rs, gwObj("gw", ns, "shared"), crt, ep)
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, "golden:test", refs.template.WorkerImage)
 	})
 }
 

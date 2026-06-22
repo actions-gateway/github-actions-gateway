@@ -1,0 +1,85 @@
+# Keep the envtest Kubernetes version (ENVTEST_K8S_VERSION) the integration-test
+# tier runs against current, in lockstep across all three places it appears:
+# .github/workflows/integration-test.yml and the two controller Makefiles
+# (cmd/gmc/Makefile, cmd/agc/Makefile). updatecli resolves the latest stable
+# envtest release from controller-tools' envtest-releases.yaml index (the same
+# index setup-envtest reads, so the chosen minor provably has published binaries)
+# and rewrites all three together — the version is a workflow env var / Makefile
+# variable, not a package-manifest entry, so Dependabot cannot track it. Run by
+# .github/workflows/updatecli.yml.
+#
+# This is the envtest twin of KIND_NODE_IMAGE: both pin the tested Kubernetes
+# version. KIND_NODE_IMAGE is bumped by hand (its version lives in kind's release
+# notes, not a clean datasource); envtest *has* a clean datasource so it is
+# auto-bumped — but, like a kind bump, the PR is NOT auto-merged: moving the tested
+# Kubernetes version is reviewed (and kept on the same minor as the e2e node image)
+# before merge.
+#
+# The review-gated auto-bump is a feature, not a compromise: each weekly PR runs
+# the integration tier against the newest released Kubernetes/envtest, so a green
+# PR is a standing signal that the project still works on the latest version —
+# early warning of a CEL/defaulting/admission regression — while merge stays a
+# deliberate choice (so the integration tier doesn't silently drift off the e2e
+# node image's minor).
+name: 'Bump envtest (integration) Kubernetes version'
+
+scms:
+  repo:
+    kind: github
+    spec:
+      owner: '{{ requiredEnv "UPDATECLI_OWNER" }}'
+      repository: '{{ requiredEnv "UPDATECLI_REPO" }}'
+      branch: main
+      username: '{{ requiredEnv "UPDATECLI_ACTOR" }}'
+      token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
+      user: 'github-actions[bot]'
+      email: '41898282+github-actions[bot]@users.noreply.github.com'
+
+actions:
+  pr:
+    kind: github/pullrequest
+    scmid: repo
+    spec:
+      # No auto-merge: an envtest bump changes the tested Kubernetes version, so a
+      # human reviews (and keeps it on the same minor as the e2e KIND_NODE_IMAGE)
+      # before merge.
+      labels:
+        - dependencies
+
+sources:
+  envtestVersion:
+    name: 'Latest stable envtest Kubernetes version (1.<minor>.x)'
+    kind: shell
+    spec:
+      command: 'scripts/updatecli/latest-envtest-version.sh'
+      environments:
+        - name: PATH
+
+targets:
+  workflow:
+    name: 'ENVTEST_K8S_VERSION in integration-test.yml'
+    kind: file
+    disablesourceinput: true
+    scmid: repo
+    spec:
+      file: .github/workflows/integration-test.yml
+      matchpattern: '(ENVTEST_K8S_VERSION: )1\.\d+\.x'
+      replacepattern: '${1}{{ source "envtestVersion" }}'
+  gmcMakefile:
+    name: 'ENVTEST_K8S_VERSION in cmd/gmc/Makefile'
+    kind: file
+    disablesourceinput: true
+    scmid: repo
+    spec:
+      file: cmd/gmc/Makefile
+      matchpattern: '(ENVTEST_K8S_VERSION \?= )1\.\d+\.x'
+      replacepattern: '${1}{{ source "envtestVersion" }}'
+  agcMakefile:
+    name: 'ENVTEST_K8S_VERSION in cmd/agc/Makefile'
+    kind: file
+    disablesourceinput: true
+    scmid: repo
+    spec:
+      file: cmd/agc/Makefile
+      matchpattern: '(ENVTEST_K8S_VERSION \?= )1\.\d+\.x'
+      replacepattern: '${1}{{ source "envtestVersion" }}'

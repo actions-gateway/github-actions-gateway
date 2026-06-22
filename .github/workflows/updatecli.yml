@@ -1,12 +1,12 @@
 name: updatecli
 
 # Bump version+checksum pins that Dependabot cannot see, because they live as
-# workflow env vars rather than in a package manifest. Currently scoped to kind
-# (updatecli.d/kind.yaml): KIND_VERSION + KIND_BINARY_SHA256 in e2e-reusable.yml,
-# bumped together with the upstream-published checksum. See
-# docs/development/dependency-updates.md for the rationale, the planned fan-out
-# to the other manual pins (Calico, polaris, shellcheck, buildkit, the kind node
-# image), and the one-time repo setting this needs.
+# workflow env vars / Makefile variables rather than in a package manifest. One
+# manifest per pin under updatecli.d/ (kind, Calico, shellcheck, polaris, buildkit,
+# envtest); the run below applies them all and opens a PR per manifest. See
+# docs/development/dependency-updates.md for the rationale, the per-manifest table,
+# and the one-time repo setting this needs. (KIND_NODE_IMAGE stays manual — it has
+# no clean datasource and moves the tested Kubernetes version deliberately.)
 on:
   schedule:
     # Mondays 06:17 UTC — after Dependabot's weekly wave, so a maintainer triages
