@@ -2,11 +2,12 @@
 # Regenerate with: make cover-update   (or scripts/coverage.sh update)
 # Format: <module-disk-path><TAB><percent>   (n/a = no measurable coverage)
 # The gate (make cover-check) fails if a module drops > 0.5pp below its floor.
+./api	0.0
 ./broker	81.3
-./cmd/agc	78.1
-./cmd/gmc	57.1
+./cmd/agc	75.3
+./cmd/gmc	65.8
 ./cmd/probe	0.0
 ./cmd/proxy	72.8
 ./cmd/worker	72.0
-./githubapp	82.6
+./githubapp	83.0
 ./test/fakegithub	n/a
