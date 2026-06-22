@@ -10,17 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func runnerSetTestScheme(t *testing.T) *runtime.Scheme {
@@ -125,20 +122,14 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		assert.Equal(t, "dedicated", refs.proxy.Name)
 	})
 
-	t.Run("cluster template forbidden fails closed", func(t *testing.T) {
+	t.Run("cluster template fails closed (deferred to M3b)", func(t *testing.T) {
+		// M3a does not read or watch the cluster-scoped ClusterRunnerTemplate (no
+		// RBAC yet); a templateRef.kind=ClusterRunnerTemplate short-circuits to a
+		// fail-closed condition without attempting a Get.
 		rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
 			rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
 		})
-		base := build(rs, gwObj("gw", ns, "shared"))
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rs, gwObj("gw", ns, "shared")).
-			WithInterceptorFuncs(interceptor.Funcs{
-				Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-					if _, ok := obj.(*v2alpha1.ClusterRunnerTemplate); ok {
-						return apierrors.NewForbidden(schema.GroupResource{Group: "actions-gateway.com", Resource: "clusterrunnertemplates"}, key.Name, nil)
-					}
-					return base.Get(ctx, key, obj, opts...)
-				},
-			}).Build()
+		c := build(rs, gwObj("gw", ns, "shared"))
 		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
 		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
 		assert.Contains(t, res.message, "M3b")

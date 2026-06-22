@@ -114,10 +114,11 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&v2alpha1.RunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.templateToRunnerSets),
 		).
-		Watches(
-			&v2alpha1.ClusterRunnerTemplate{},
-			handler.EnqueueRequestsFromMapFunc(r.clusterTemplateToRunnerSets),
-		).
+		// ClusterRunnerTemplate is deliberately NOT watched in M3a: the AGC lacks the
+		// cluster-scoped list/watch grant for it (deferred to M3b), and establishing
+		// the informer would fail RBAC and break manager cache sync. A RunnerSet that
+		// references one resolves to a fail-closed TemplateNotFound condition (see
+		// resolveTemplate); the watch is added with the RBAC in M3b.
 		Named("runnerset").
 		Complete(r)
 }
@@ -509,23 +510,6 @@ func (r *RunnerSetReconciler) templateToRunnerSets(ctx context.Context, obj clie
 	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
 		return rs.Spec.TemplateRef.Kind != "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName()
 	})
-}
-
-// clusterTemplateToRunnerSets enqueues every RunnerSet (any namespace) whose
-// templateRef selects this ClusterRunnerTemplate.
-func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list v2alpha1.RunnerSetList
-	if err := r.List(ctx, &list); err != nil {
-		return nil
-	}
-	var reqs []ctrl.Request
-	for i := range list.Items {
-		rs := &list.Items[i]
-		if rs.Spec.TemplateRef.Kind == "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName() {
-			reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}})
-		}
-	}
-	return reqs
 }
 
 // runnerSetsMatching lists RunnerSets in ns and returns reconcile requests for
