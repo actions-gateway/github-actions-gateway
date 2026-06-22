@@ -18,10 +18,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// serverMinor returns the apiserver's minor version (e.g. 30, 35). CRD field
+// serverMinor returns the apiserver's minor version (e.g. 31, 35). CRD field
 // selectors (KEP-4358) are alpha-off in k8s 1.30 and only queryable on 1.31+;
-// the project's CI integration tier runs envtest 1.30, so the live field-selector
-// assertion below is gated on this.
+// the CI integration tier now runs envtest 1.35 (bumped for M3b's field-selector
+// scoping), but the gate stays so the assertion self-skips on an older local
+// apiserver instead of failing spuriously.
 func serverMinor(t *testing.T) int {
 	t.Helper()
 	dc, err := discovery.NewDiscoveryClientForConfig(testEnv.Config)

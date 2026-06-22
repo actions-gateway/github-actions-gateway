@@ -111,6 +111,7 @@ var _ = SynchronizedBeforeSuite(
 		configureKubectlKubeRC()
 		setupCertManager()
 		setupMetricsServer()
+		setupV2CRDs()
 		setupFakegithub()
 		setupGMC()
 
@@ -233,6 +234,21 @@ func setupGMC() {
 		_, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
 	}, 5*time.Minute, 5*time.Second).Should(Succeed())
+}
+
+// setupV2CRDs installs the five v2 (actions-gateway.com) CRDs so the GMC's v2
+// reconcilers and the v2 multi-gateway e2e have their kinds present. The main
+// chart ships only the v1 CRDs; the v2 CRDs live in the actions-gateway-crds-v2
+// chart (operators install it separately). The controller-gen output under
+// api/config/crd is the single source those chart templates are generated from,
+// and it is plain (un-templated) YAML, so kubectl applies it directly. Installed
+// before the GMC so its v2 informers sync on first start.
+func setupV2CRDs() {
+	By("installing the v2 (actions-gateway.com) CRDs")
+	// cmd/gmc/test/e2e → repo root is four levels up.
+	cmd := exec.Command("kubectl", "apply", "-f", "../../../../api/config/crd")
+	_, err := utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs")
 }
 
 func teardownGMC() {

@@ -60,10 +60,10 @@ jobs:
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: /tmp/envtest-bins
-          key: envtest-${{ runner.os }}-1.30.x
+          key: envtest-${{ runner.os }}-1.35.x
       - name: Install envtest binaries
         run: |
-          KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.30.x --bin-dir /tmp/envtest-bins -p path)
+          KUBEBUILDER_ASSETS=$(.build/setup-envtest use 1.35.x --bin-dir /tmp/envtest-bins -p path)
           echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> "$GITHUB_ENV"
       - name: Run GMC integration tests
         run: go test -race -v -tags integration -timeout 5m -count=1 ./internal/controller/integration/...
