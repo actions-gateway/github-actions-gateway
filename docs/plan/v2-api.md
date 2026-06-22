@@ -170,15 +170,21 @@ a milestone is done when every box is checked and its exit criterion holds.
   watch + enqueue; `GatewayNotFound`/`TemplateNotFound`/`ProxyNotFound` conditions +
   `observedGeneration`; fail-closed (no worker wiring until refs resolve). Two obstacles
   surfaced during M3a that reshape the AGC half and must be resolved first:
-  - **Module dependency cycle.** `gatewayRef` resolves to a GMC-group `ActionsGateway`
-    and `proxyRef` to a GMC-group `EgressProxy`, so the AGC must read those kinds — but
-    the **GMC module already depends on the AGC module** (`cmd/gmc/go.mod` requires
-    `…/agc` to build `RunnerSet` CRs), and importing the GMC types into the AGC closes a
-    module cycle. Resolve by either (a) extracting the shared v2 kinds into a neutral
-    `api/` module both import, or (b) the AGC resolving these refs via the
-    dynamic/unstructured client (existence + a few fields only — no type import). Option
-    (b) is the lighter touch and fits "resolution is existence-checking, not full typed
-    reconciliation"; decide and record before building the reconciler.
+  - **Module dependency cycle — RESOLVED (option (a), neutral `api/` module).**
+    `gatewayRef` resolves to a GMC-group `ActionsGateway` and `proxyRef` to a GMC-group
+    `EgressProxy`, so the AGC must read those kinds — but the **GMC module already
+    depends on the AGC module** (`cmd/gmc/go.mod` requires `…/agc` to build `RunnerSet`
+    CRs), and importing the GMC types into the AGC would close a module cycle. Resolved
+    by extracting **all five** v2 `v2alpha1` kinds (the previously GMC-owned
+    `ActionsGateway`/`EgressProxy` and AGC-owned `RunnerSet`/`RunnerTemplate`/
+    `ClusterRunnerTemplate`) into a neutral `api/` module
+    (`github.com/actions-gateway/github-actions-gateway/api`) that both controllers
+    import — chosen over (b) the dynamic/unstructured client because the reconciler
+    wants typed, cached, watch-driven reads, not existence-only probes. Pure relocation:
+    no API shape change, CRD/chart manifests byte-identical, v1 kinds untouched. The
+    `RunnerSet` reconciler can now import the resolved `ActionsGateway`/`EgressProxy`
+    types directly. See `docs/development/go-workspaces.md` (module table) and
+    `docs/development/code-generation.md` (api-module codegen).
   - **Provisioner owner-ref seam.** The `provisioner`/`listener`/`multiplexer` stack is
     pervasively typed to `*v1alpha1.RunnerGroup`, and worker pods/Secrets carry an
     OwnerReference to it — a synthesized in-memory RunnerGroup cannot be used (its

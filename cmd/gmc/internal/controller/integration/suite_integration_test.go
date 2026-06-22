@@ -15,10 +15,9 @@ import (
 	"time"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
@@ -67,14 +66,15 @@ func TestMain(m *testing.M) {
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = agcv1alpha1.AddToScheme(testScheme)
-	_ = agcv2alpha1.AddToScheme(testScheme)
 	_ = gmcv1alpha1.AddToScheme(testScheme)
-	_ = gmcv2alpha1.AddToScheme(testScheme)
+	_ = v2alpha1.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			"../../../config/crd/bases",
 			"../../../../agc/config/crd",
+			// The five v2 (actions-gateway.com) CRDs live in the neutral api module.
+			"../../../../../api/config/crd",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,

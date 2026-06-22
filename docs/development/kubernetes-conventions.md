@@ -58,7 +58,7 @@ convention above (not a boolean), and the `gmc-namespace-security-profile-guard`
 ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a
 `privileged` selection without the `actions-gateway.com/privileged-profile=allowed`
 eligibility label. See `SecurityProfileLabel` in
-[`cmd/gmc/api/v2alpha1/shared_types.go`](../../cmd/gmc/api/v2alpha1/shared_types.go).
+[`api/v2alpha1/shared_types.go`](../../api/v2alpha1/shared_types.go).
 
 ### Pre-existing `"true"` values are grandfathered
 

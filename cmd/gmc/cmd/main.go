@@ -28,10 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v2alpha1"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
@@ -49,13 +48,13 @@ func init() {
 
 	utilruntime.Must(actionsgatewaygithubcomv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(agcv1alpha1.AddToScheme(scheme))
-	// Register the v2alpha1 (actions-gateway.com) GMC kinds so they are first-class
-	// in the GMC's client scheme alongside v1alpha1. M2 reconciles EgressProxy; the
-	// ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
-	utilruntime.Must(gmcv2alpha1.AddToScheme(scheme))
-	// The v2alpha1 RunnerTemplate kinds live in the AGC api module; register them so
-	// the GMC can serve their validating admission webhook (M2).
-	utilruntime.Must(agcv2alpha1.AddToScheme(scheme))
+	// Register the v2alpha1 (actions-gateway.com) kinds so they are first-class in the
+	// GMC's client scheme alongside v1alpha1. All five v2 kinds (the GMC-group
+	// ActionsGateway/EgressProxy and the AGC-group RunnerSet/RunnerTemplate/
+	// ClusterRunnerTemplate the GMC serves the validating webhook for) share one neutral
+	// api module, so a single AddToScheme registers them all. M2 reconciles EgressProxy;
+	// the ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
+	utilruntime.Must(v2alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

@@ -6,14 +6,24 @@ This repo uses a `go.work` workspace with no root-level Go module. The workspace
 
 | Directory | Module path | Internal deps |
 |---|---|---|
+| `api/` | `github.com/actions-gateway/github-actions-gateway/api` | — |
 | `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` | — |
 | `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` | `githubapp` |
 | `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` | `broker`, `githubapp` |
-| `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` | `broker`, `githubapp` |
-| `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `broker`, `githubapp`, `agc` |
+| `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` | `api`, `broker`, `githubapp` |
+| `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `api`, `broker`, `githubapp`, `agc` |
 | `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | — |
 | `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` | — |
 | `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` | — |
+
+The `api/` module holds the v2 (`actions-gateway.com`) `v2alpha1` API kinds shared by
+both controllers. It is a pure API leaf — only `k8s.io/*` and `controller-runtime`
+scheme deps, no internal deps — so both `agc` and `gmc` import it without inverting
+the layering. It exists to break a would-be module cycle: the AGC's `RunnerSet`
+reconciler must read the GMC-group `ActionsGateway`/`EgressProxy`, but `gmc` already
+imports `agc`, so the shared kinds live in this neutral module instead of either
+controller importing the other's API package (Q164). The v1 (`actions-gateway.github.com`)
+kinds stay in `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`.
 
 ### Dependency direction
 
@@ -24,11 +34,12 @@ probe ─┐
 agc ───┼─► broker ─► githubapp
 gmc ───┘
 gmc ─► agc
+agc, gmc ─► api
 
 proxy, worker, fakegithub   (standalone — no internal deps)
 ```
 
-`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances). **Keep edges pointing toward the leaves:** a new import that makes `githubapp` or `broker` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead. Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
+`githubapp` (GitHub App auth/JWT) and `broker` (the GitHub broker client) are the shared libraries; the `cmd/*` binaries depend *on* them, never the reverse. `api` (the shared v2 API kinds) is a third leaf both controllers depend on. The one cross-binary edge is `gmc → agc` (the Gateway Manager Controller imports the Actions Gateway Controller's API types to provision instances); the `api` leaf exists precisely so the AGC can read the GMC-group v2 kinds without an `agc → gmc` back-edge that would close a cycle. **Keep edges pointing toward the leaves:** a new import that makes `githubapp`, `broker`, or `api` depend on a `cmd/*` module, or makes `agc` depend on `gmc`, inverts the layering and should be restructured instead. Go's compiler rejects outright *cycles* for free; this graph captures the intended *direction* so a technically-legal-but-wrong edge is caught in review. `scripts/go-work-tidy.sh` derives this same order at runtime (via `go list -m all`) to tidy modules leaf-first.
 
 All runtime modules share a single `vendor/` at the repo root, produced by `go work vendor` and committed to git. Docker builds and CI rely on this — they invoke `go build` with `-mod=vendor` auto-selected (no proxy.golang.org during build).
 

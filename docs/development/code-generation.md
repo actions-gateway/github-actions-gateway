@@ -2,7 +2,17 @@
 
 ## When to regenerate
 
-Whenever you modify CRD types (`cmd/agc/api/` or `cmd/gmc/api/`), run the corresponding targets. Also run `make manifests` whenever you add or remove RBAC verbs/resources in a controller.
+Whenever you modify CRD types (`api/` for the shared v2 kinds, `cmd/agc/api/` or `cmd/gmc/api/` for the v1 kinds), run the corresponding targets. Also run `make manifests` whenever you add or remove RBAC verbs/resources in a controller.
+
+The v2 (`actions-gateway.com`) `v2alpha1` kinds live in the neutral `api/` module shared by both controllers (Q164); the v1 (`actions-gateway.github.com`) kinds stay split across `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`. `make -C <module> generate` is per-module, so editing a v2 type means regenerating the `api/` module, not the controller modules. The root `make generate` runs all three (`api`, `gmc`, `agc`) in order.
+
+## API module (the shared v2 kinds)
+
+```bash
+make -C api generate   # regenerates zz_generated.deepcopy.go + the five v2 CRD YAMLs under api/config/crd
+```
+
+The `api/` module owns only API artifacts: DeepCopy methods and the five v2 CRD manifests (`ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`). It emits **no** RBAC or webhook manifests — those markers live on the controllers/webhooks in `cmd/gmc` and `cmd/agc` and are generated there.
 
 ## AGC
 
@@ -21,10 +31,10 @@ Both steps are required. Skipping `manifests` leaves the CRD YAML out of sync wi
 
 ## Sync the Helm chart CRDs (after any CRD change)
 
-The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd`. The chart copies are *generated* from those sources — do not hand-edit them. The split:
+The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative** schema is the controller-gen output under `cmd/*/config/crd` (the v1alpha1 CRDs) and `api/config/crd` (the v2alpha1 CRDs). The chart copies are *generated* from those sources — do not hand-edit them. The split:
 
-- **`charts/actions-gateway/templates/crds/`** — the two **v1alpha1** (`actions-gateway.github.com`) CRDs: `ActionsGateway`, `RunnerGroup`.
-- **`charts/actions-gateway-crds-v2/templates/crds/`** — the five **v2alpha1** (`actions-gateway.com`) CRDs: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`. They live in a **separate, opt-in chart** because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard **1 MiB** limit (Helm stores the rendered manifest *plus* a copy of the chart source, gzipped, in one Secret). A separate release keeps each chart within budget and makes v2 opt-in ([Q149](../STATUS.md)).
+- **`charts/actions-gateway/templates/crds/`** — the two **v1alpha1** (`actions-gateway.github.com`) CRDs: `ActionsGateway`, `RunnerGroup` (sourced from `cmd/*/config/crd`).
+- **`charts/actions-gateway-crds-v2/templates/crds/`** — the five **v2alpha1** (`actions-gateway.com`) CRDs: `ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate` (sourced from `api/config/crd`). They live in a **separate, opt-in chart** because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard **1 MiB** limit (Helm stores the rendered manifest *plus* a copy of the chart source, gzipped, in one Secret). A separate release keeps each chart within budget and makes v2 opt-in ([Q149](../STATUS.md)).
 
 `scripts/sync-chart-crds.sh` writes both charts in one pass. After regenerating manifests, re-sync:
 

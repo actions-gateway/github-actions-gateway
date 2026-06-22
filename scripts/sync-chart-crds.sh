@@ -3,7 +3,8 @@
 # Single source of truth for the Helm chart's CRD templates (Q73 / Q142 slice A).
 #
 # The chart ships every CRD under charts/actions-gateway/templates/crds/, but the
-# authoritative schema is the controller-gen output under cmd/*/config/crd.
+# authoritative schema is the controller-gen output under cmd/*/config/crd (the
+# v1alpha1 CRDs) and api/config/crd (the v2alpha1 CRDs, from the neutral api module).
 # Hand-copying invites silent drift: a field added to a CRD type but not
 # propagated to the chart copy is silently pruned at apply time. This script
 # regenerates the chart copies FROM the controller-gen sources, injecting the
@@ -97,18 +98,19 @@ add_crd "$SRC_RUNNERGROUP" \
 # adding them to the main chart pushed its Helm release Secret past the hard 1 MiB
 # limit (Helm stores the rendered manifest + a copy of the chart source, gzipped,
 # in one Secret). A separate release keeps each chart within budget and makes v2
-# opt-in. GMC owns ActionsGateway + EgressProxy; AGC owns RunnerSet +
-# RunnerTemplate + ClusterRunnerTemplate.
+# opt-in. All five v2 kinds (ActionsGateway, EgressProxy, RunnerSet,
+# RunnerTemplate, ClusterRunnerTemplate) live in the neutral api/ module, whose
+# controller-gen output under api/config/crd is the single source.
 V2_CHART="charts/actions-gateway-crds-v2/templates/crds"
-add_crd "cmd/gmc/config/crd/bases/actions-gateway.com_actionsgateways.yaml" \
+add_crd "api/config/crd/actions-gateway.com_actionsgateways.yaml" \
 	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK"
-add_crd "cmd/gmc/config/crd/bases/actions-gateway.com_egressproxies.yaml" \
+add_crd "api/config/crd/actions-gateway.com_egressproxies.yaml" \
 	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK"
-add_crd "cmd/agc/config/crd/actions-gateway.com_runnersets.yaml" \
+add_crd "api/config/crd/actions-gateway.com_runnersets.yaml" \
 	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK"
-add_crd "cmd/agc/config/crd/actions-gateway.com_runnertemplates.yaml" \
+add_crd "api/config/crd/actions-gateway.com_runnertemplates.yaml" \
 	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK"
-add_crd "cmd/agc/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
+add_crd "api/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
 	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK"
 
 # render SRC DST BLOCK — copy SRC to DST, inserting BLOCK right after the
