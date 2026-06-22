@@ -45,6 +45,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
+- [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
@@ -1242,6 +1243,8 @@ per-tenant resources and would flap the namespace's Pod Security Admission label
 
 **Resolution.** Use one `ActionsGateway` per namespace. To run a second logical gateway, give it its own namespace (the guard is per-namespace, so a different namespace's first CR is admitted). To rename or replace an existing CR, delete the old one and wait for teardown to complete before creating the replacement.
 
+> **`v2alpha1` lifts this restriction.** The singleton guard is a `v1alpha1`-only constraint rooted in fixed per-tenant resource names. The `v2alpha1` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend. `securityProfile` also moved off the gateway onto the namespace, so co-located gateways share one Pod Security posture instead of flapping it. See ["Multiple v2 gateways in one namespace"](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) below.
+
 ---
 
 ## `proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub
@@ -1333,7 +1336,7 @@ Reason: ProxyNotFound      Message: EgressProxy "shared" not found in namespace 
 
 A `ProxyNotFound` with the message "RunnerSet … sets no proxyRef and gateway … has no defaultProxyRef" means proxy is unset everywhere — proxy is **required** in this milestone (direct egress is deferred), so add a `proxyRef` or a gateway `defaultProxyRef`.
 
-A `ClusterRunnerTemplate` ref may report `TemplateNotFound` with "not readable by this AGC (cluster-scoped template access lands in M3b)" — cluster-scoped template reads are not yet wired; use a namespaced `RunnerTemplate` for now.
+A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolves the same way: `TemplateNotFound` means the named cluster-scoped template does not exist yet. The AGC reads it through a per-gateway `ClusterRoleBinding` to the shipped `agc-clusterrunnertemplate-reader` ClusterRole that the GMC creates with the gateway — so if every namespaced reference resolves but a `ClusterRunnerTemplate` ref stays `TemplateNotFound`, confirm a platform administrator has created that `ClusterRunnerTemplate` (it is cluster-scoped and platform-authored; tenants cannot create it).
 
 **Resolution.** Apply the missing object (`ActionsGateway`, `RunnerTemplate`/`ClusterRunnerTemplate`, or `EgressProxy`) named in the message; the set self-heals on the next watch event. Confirm the referent's name and namespace match the `*Ref` exactly (references resolve in the `RunnerSet`'s own namespace).
 
@@ -1363,6 +1366,21 @@ Ready=False  Reason: ProxyNotFound
 Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preconditions; once the Secret or `EgressProxy` appears the gateway reconciles and the AGC Deployment is created (the gateway watches both). Note that the proxy **pool** is reconciled separately by the `EgressProxy` reconciler — the gateway only references it; and the namespace Pod Security Admission labels are stamped by the namespace PSA reconciler from the `actions-gateway.com/security-profile` label, which the gateway *reads* (to thread `SECURITY_PROFILE` to the AGC) but never stamps.
 
 **Resolution.** Create the GitHub App Secret (see ["GitHub App Secret Misconfiguration"](#github-app-secret-misconfiguration) for the required keys) and/or the `EgressProxy` named by `defaultProxyRef`, in the gateway's namespace. The gateway self-heals on the next watch event.
+
+---
+
+## Multiple v2 gateways in one namespace: naming, scoping, prerequisites
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+
+The `v2alpha1` API supports **multiple `ActionsGateway`s per namespace** (unlike `v1alpha1` — see ["Second ActionsGateway in a Namespace Rejected"](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)). A few operator-visible facts and failure modes:
+
+- **Per-gateway resource names.** Every resource a gateway derives is prefixed with the gateway name: `<gateway>-agc` (AGC Deployment / ServiceAccount / RoleBinding / Service / AGC NetworkPolicy), `<gateway>-worker` (worker ServiceAccount), `<gateway>-workload` (workload NetworkPolicy), `<gateway>-agc-metrics-tls` / `-agc-metrics-client` (metrics Secrets). To list one gateway's resources: `kubectl get all,networkpolicy,secret -n <ns> -l actions-gateway.com/gateway=<gateway>`.
+- **52-character name cap.** An `ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, or `EgressProxy` whose `metadata.name` exceeds **52 characters** is rejected at admission (`metadata.name must be at most 52 characters`). The cap reserves room for the derived suffixes above so a label value / Service name stays within RFC 1123's 63-character ceiling. Use a shorter name.
+- **Per-gateway scoping needs Kubernetes ≥ 1.31.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, using a server-side CRD field selector (KEP-4358). That selector is **alpha-off in Kubernetes 1.30**: on a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the AGC pod will not become ready. If a v2 AGC `CrashLoopBackOff`s with a `RunnerSet` list/watch error, check the cluster is ≥ 1.31. (Single-gateway-per-namespace v2 still requires ≥ 1.31 once more than one gateway exists; for one gateway the scoping is a no-op but the selector is still applied.)
+- **Per-gateway garbage collection.** Deleting one gateway removes only its own children (owner-referenced, per-gateway-named); a neighbor's gateway, AGC, and `RunnerSet`s are untouched. The one cluster-scoped child — the `agc-clusterrunnertemplate-reader.<ns>.<gateway>` `ClusterRoleBinding` — cannot carry a namespaced owner reference, so the gateway controller deletes it explicitly during teardown. If a gateway's `ClusterRoleBinding` lingers after the gateway is gone (e.g. the GMC was down during the delete), it is harmless (it binds a now-absent ServiceAccount) and safe to `kubectl delete clusterrolebinding agc-clusterrunnertemplate-reader.<ns>.<gateway>`.
+
+**Prerequisite.** The five v2 CRDs ship in the separate `actions-gateway-crds-v2` chart, not the main chart. Install it before creating any v2 object: `helm upgrade --install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`. The shipped `agc-clusterrunnertemplate-reader` ClusterRole is in the main chart.
 
 ---
 

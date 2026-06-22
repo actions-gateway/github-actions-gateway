@@ -105,6 +105,7 @@ letting tenants run their own runners.
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
 | Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [auto lock-cancel + rerun, per-job budget](design/04-operational-flows.md) |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner group](design/02-architecture.md) |
+| Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } [multiple gateways per namespace, each scoped to its own runner sets (v2)](plan/v2-api.md) |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant HTTPS CONNECT proxy pool](design/network-architecture.md) |
 | Listener memory, 10 runner groups at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus, scoped per tenant + runner group](operations/observability.md) |
