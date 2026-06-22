@@ -51,7 +51,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q164"></a>Q164 | [v2 API M3a: ActionsGateway + RunnerSet, single-gateway parity](plan/v2-api.md) | `infra` `security` | ▶ | L | M2 done. Q175 landed here (securityProfile→namespace VAP+reconciler, tested). Parity checklist in plan. Remaining: GMC AGC reconciler; AGC RunnerSet resolver — AGC↔GMC module-cycle finding (see plan). |
+| <a id="Q164"></a>Q164 | [v2 API M3a: ActionsGateway + RunnerSet, single-gateway parity](plan/v2-api.md) | `infra` `security` | ▶ | L | M2 done. Q175 landed (securityProfile→namespace VAP+reconciler). AGC↔GMC module-cycle resolved: 5 v2 kinds extracted to neutral api/ module, byte-identical CRDs. Remaining: GMC AG reconciler + AGC RunnerSet resolver (see plan). |
 | <a id="Q167"></a>Q167 | [v2 API M3b: multi-gateway per namespace](plan/v2-api.md) | `infra` `security` | 🚫 | M | Blocked on M3a (Q164). Per-gateway naming (52-char), AGC scoping via gatewayRef field selector, per-gateway ownership/GC. VAP unchanged (keys on namespace marker). |
 | <a id="Q165"></a>Q165 | [v2 API M5: migration tool + v1/v2 cutover](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M3b (Q167). Fan-out migration tool (v1→N v2 objects) + tests, dual-read window (group domain + Q147 values + finalizers), deprecation + operator migration guide. |
 
