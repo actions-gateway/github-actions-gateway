@@ -42,6 +42,7 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | [Make UX](plan/make.md) | `infra` | ✅ |
 | [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
 | [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
+| [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
 
 ---
 
@@ -52,7 +53,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
-| <a id="Q165"></a>Q165 | [v2 API M5: migration tool + v1/v2 cutover](plan/v2-api.md) | `infra` | 🚫 | M | Blocked on M3b (Q167). Fan-out migration tool (v1→N v2 objects) + tests, dual-read window (group domain + Q147 values + finalizers), deprecation + operator migration guide. |
 
 ---
 
