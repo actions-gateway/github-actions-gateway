@@ -251,7 +251,13 @@ func setupV2CRDs() {
 	// CWD-relative path: the e2e binary's working directory differs between a
 	// local `go test` (package dir) and CI's `ginkgo run` invocation, so a fixed
 	// `../../..` would break in one of them.
-	cmd := exec.Command("kubectl", "apply", "-f", v2CRDDir())
+	//
+	// --server-side: the RunnerTemplate/ClusterRunnerTemplate CRDs embed the full
+	// pod-template OpenAPI schema and exceed the 256KB client-side apply ceiling
+	// (kubectl stores the whole object in the last-applied-configuration annotation
+	// otherwise). Server-side apply has no such annotation, matching how Helm
+	// installs these CRDs in production.
+	cmd := exec.Command("kubectl", "apply", "--server-side", "--force-conflicts", "-f", v2CRDDir())
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs")
 }
