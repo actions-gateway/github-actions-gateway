@@ -23,6 +23,15 @@ limitations under the License.
 // manager-role; the v2 reconciler reuses them. It reads the namespace
 // security-profile label (namespaces get;list;watch already granted) and the
 // referenced EgressProxy (granted above).
+//
+// Multi-gateway (M3b): each gateway's AGC needs cluster-scoped read of the
+// cluster-scoped ClusterRunnerTemplate kind, which a namespaced RoleBinding cannot
+// grant. The GMC creates a per-gateway ClusterRoleBinding to the shipped
+// agc-clusterrunnertemplate-reader ClusterRole; it holds clusterrolebindings CRUD
+// and `bind` only on that exact ClusterRole name, so it never gains the read itself
+// nor can bind AGC SAs into arbitrary ClusterRoles.
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=agc-clusterrunnertemplate-reader
 
 package controller
 
@@ -165,6 +174,11 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 		return fmt.Errorf("AGC RoleBinding: %w", err)
 	}
 
+	step("ClusterRunnerTemplate ClusterRoleBinding")
+	if err := r.applyClusterRunnerTemplateReaderBinding(ctx, ag); err != nil {
+		return fmt.Errorf("ClusterRunnerTemplate ClusterRoleBinding: %w", err)
+	}
+
 	step("metrics TLS certs")
 	if err := r.ensureMetricsCerts(ctx, ag); err != nil {
 		return fmt.Errorf("metrics TLS certs: %w", err)
@@ -208,12 +222,12 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 // client Secret (published for monitoring). Mirrors v1's ensureMetricsCerts.
 func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
 	var serverSec corev1.Secret
-	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsTLSSecretName}, &serverSec)
+	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsTLSSecretNameV2(ag)}, &serverSec)
 	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
 		return serverErr
 	}
 	var clientSec corev1.Secret
-	clientErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsClientSecretName}, &clientSec)
+	clientErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsClientSecretNameV2(ag)}, &clientSec)
 	if clientErr != nil && !apierrors.IsNotFound(clientErr) {
 		return clientErr
 	}
@@ -226,7 +240,7 @@ func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag 
 		}
 	}
 
-	bundle, err := generateMetricsCertsV2(ag.Namespace)
+	bundle, err := generateMetricsCertsV2(ag.Namespace, agcNameV2(ag))
 	if err != nil {
 		return fmt.Errorf("generate metrics certs: %w", err)
 	}
@@ -267,6 +281,33 @@ func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *g
 			return delErr
 		}
 		_ = controllerutil.SetControllerReference(ag, desired, r.Scheme)
+		return r.Create(ctx, desired)
+	}
+	return err
+}
+
+// applyClusterRunnerTemplateReaderBinding creates or patches the per-gateway
+// ClusterRoleBinding granting the AGC SA cluster-scoped read of ClusterRunnerTemplate.
+// No owner reference: a cluster-scoped object cannot be owned by a namespaced
+// ActionsGateway (the apiserver rejects the cross-scope ref and never GCs it), so
+// reconcileDelete removes it explicitly.
+func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+	desired := buildClusterRunnerTemplateReaderBinding(ag)
+	obj := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		// roleRef is immutable; on a roleRef change the binding must be recreated.
+		if obj.ResourceVersion != "" && obj.RoleRef != desired.RoleRef {
+			return errRoleRefImmutable
+		}
+		obj.Labels = desired.Labels
+		obj.RoleRef = desired.RoleRef
+		obj.Subjects = desired.Subjects
+		return nil
+	})
+	if errors.Is(err, errRoleRefImmutable) {
+		if delErr := r.Delete(ctx, obj); delErr != nil && !apierrors.IsNotFound(delErr) {
+			return delErr
+		}
 		return r.Create(ctx, desired)
 	}
 	return err
@@ -323,7 +364,7 @@ func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *g
 func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	agcReady := false
-	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: agcAppName}, &dep); err == nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep); err == nil {
 		agcReady = dep.Status.ReadyReplicas >= 1
 	}
 	now := metav1.Now()
@@ -414,12 +455,21 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 	return ctrl.Result{}, cause
 }
 
-// reconcileDelete removes the finalizer; the AGC control-plane children carry a
-// controller owner reference, so the apiserver garbage-collects them once the CR
-// is gone (§H.8). RunnerSets reference the gateway but are not owned by it, so
-// they are not deleted — they degrade to Ready=False/GatewayNotFound via their
-// own watch.
+// reconcileDelete deletes the cluster-scoped resources the apiserver cannot
+// garbage-collect via owner reference, then removes the finalizer. The namespaced
+// AGC control-plane children carry a controller owner reference, so the apiserver
+// GCs them once the CR is gone — and because every name is per-gateway (§H.16 #1),
+// deleting one gateway GCs only its own children, never a neighbor's. The
+// ClusterRunnerTemplate ClusterRoleBinding is cluster-scoped and cannot carry an
+// owner ref to a namespaced object, so it is deleted explicitly here. RunnerSets
+// reference the gateway but are not owned by it, so they are not deleted — they
+// degrade to Ready=False/GatewayNotFound via their own watch.
 func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
+	crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRunnerTemplateReaderBindingName(ag)}}
+	if err := r.Delete(ctx, crb); err != nil && !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, fmt.Errorf("delete ClusterRunnerTemplate ClusterRoleBinding: %w", err)
+	}
+
 	controllerutil.RemoveFinalizer(ag, gmcv2alpha1.ActionsGatewayFinalizer)
 	if err := r.Update(ctx, ag); err != nil {
 		return ctrl.Result{}, err

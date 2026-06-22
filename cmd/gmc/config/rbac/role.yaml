@@ -172,15 +172,8 @@ rules:
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io
-  resourceNames:
-  - agc-tenant-role
   resources:
-  - clusterroles
-  verbs:
-  - bind
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
+  - clusterrolebindings
   - rolebindings
   verbs:
   - create
@@ -190,6 +183,22 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - agc-clusterrunnertemplate-reader
+  resources:
+  - clusterroles
+  verbs:
+  - bind
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - agc-tenant-role
+  resources:
+  - clusterroles
+  verbs:
+  - bind
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:

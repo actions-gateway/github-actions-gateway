@@ -47,6 +47,7 @@ import (
 	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -326,6 +327,22 @@ func run() error {
 	if namespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{namespace: {}}
 	}
+	// Multi-gateway scoping (§H.16 #1): when GATEWAY_NAME is set (the GMC stamps it
+	// on every v2 AGC Deployment), restrict the RunnerSet informer to the sets this
+	// gateway owns via a server-side field selector on spec.gatewayRef.name (a CRD
+	// selectable field, KEP-4358). This is the isolation boundary: N AGC Deployments
+	// in one namespace each watch and reconcile only their own gateway's RunnerSets,
+	// so they never contend over the same objects. ByObject.Namespaces is left nil so
+	// it inherits DefaultNamespaces (the tenant namespace). Empty GATEWAY_NAME leaves
+	// the informer unscoped (a single AGC reconciles every RunnerSet — pre-M3b).
+	gatewayName := os.Getenv("GATEWAY_NAME")
+	if gatewayName != "" {
+		cacheOpts.ByObject = map[client.Object]cache.ByObject{
+			&agcv2alpha1.RunnerSet{}: {
+				Field: fields.OneTermEqualSelector("spec.gatewayRef.name", gatewayName),
+			},
+		}
+	}
 	metricsOpts, err := buildMetricsOptions(metricsCertDir, ctrl.Log.WithName("metrics"))
 	if err != nil {
 		return fmt.Errorf("configure metrics server: %w", err)
@@ -542,6 +559,7 @@ func run() error {
 		Metrics:      m,
 		Provisioner:  prov,
 		AgentKeyType: agentKeyType,
+		GatewayName:  gatewayName,
 		Recorder:     mgr.GetEventRecorder("runnerset-controller"),
 		BrokerConfig: r.BrokerConfig,
 	}

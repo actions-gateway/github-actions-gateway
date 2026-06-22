@@ -57,6 +57,15 @@ type RunnerSetReconciler struct {
 	Provisioner  *provisioner.Provisioner
 	AgentKeyType agentpool.KeyType
 
+	// GatewayName scopes this AGC to a single ActionsGateway under multi-gateway
+	// (§H.16 #1): it reconciles only the RunnerSets whose spec.gatewayRef.name
+	// equals it. Set from the GATEWAY_NAME env the GMC stamps on the AGC Deployment.
+	// The RunnerSet informer is field-selector-scoped to this value server-side
+	// (cmd/agc/main.go), so a foreign set is normally never delivered; the guard in
+	// Reconcile is defense-in-depth. Empty disables scoping (a single shared AGC
+	// reconciles every RunnerSet — the pre-M3b behavior, still used by tests).
+	GatewayName string
+
 	// Recorder emits Kubernetes Events on the reconciled RunnerSet. May be nil in
 	// unit tests; callers must nil-check before use.
 	Recorder events.EventRecorder
@@ -114,11 +123,16 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&v2alpha1.RunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.templateToRunnerSets),
 		).
-		// ClusterRunnerTemplate is deliberately NOT watched in M3a: the AGC lacks the
-		// cluster-scoped list/watch grant for it (deferred to M3b), and establishing
-		// the informer would fail RBAC and break manager cache sync. A RunnerSet that
-		// references one resolves to a fail-closed TemplateNotFound condition (see
-		// resolveTemplate); the watch is added with the RBAC in M3b.
+		// ClusterRunnerTemplate (cluster-scoped): the AGC now holds a ClusterRoleBinding
+		// to the shipped agc-clusterrunnertemplate-reader ClusterRole (created per
+		// gateway by the GMC), so the informer establishes and a RunnerSet referencing
+		// a ClusterRunnerTemplate flips Ready the moment it syncs (§H.7). The
+		// namespace-scoped manager cache serves cluster-scoped kinds from a cluster-wide
+		// informer.
+		Watches(
+			&v2alpha1.ClusterRunnerTemplate{},
+			handler.EnqueueRequestsFromMapFunc(r.clusterTemplateToRunnerSets),
+		).
 		Named("runnerset").
 		Complete(r)
 }
@@ -152,6 +166,16 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Scoping guard (§H.16 #1): never act on a RunnerSet that targets another
+	// gateway. The informer is already field-scoped to GatewayName server-side, so
+	// this only fires on a stale event (e.g. a gatewayRef edit racing the watch
+	// filter); acting anyway would add this AGC's finalizer to, or drive status on,
+	// a sibling gateway's set — the isolation boundary this milestone establishes.
+	if r.GatewayName != "" && rs.Spec.GatewayRef.Name != r.GatewayName {
+		r.cleanupLocalState(req.NamespacedName)
+		return ctrl.Result{}, nil
 	}
 
 	r.drainConditions(&rs)
@@ -510,6 +534,25 @@ func (r *RunnerSetReconciler) templateToRunnerSets(ctx context.Context, obj clie
 	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
 		return rs.Spec.TemplateRef.Kind != "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName()
 	})
+}
+
+// clusterTemplateToRunnerSets enqueues every RunnerSet whose templateRef is a
+// ClusterRunnerTemplate naming this object. The referent is cluster-scoped (no
+// namespace), so it lists from the manager cache — already scoped to this AGC's
+// namespace and gateway — rather than filtering by the object's (empty) namespace.
+func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
+	var list v2alpha1.RunnerSetList
+	if err := r.List(ctx, &list); err != nil {
+		return nil
+	}
+	var reqs []ctrl.Request
+	for i := range list.Items {
+		rs := &list.Items[i]
+		if rs.Spec.TemplateRef.Kind == "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName() {
+			reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}})
+		}
+	}
+	return reqs
 }
 
 // runnerSetsMatching lists RunnerSets in ns and returns reconcile requests for

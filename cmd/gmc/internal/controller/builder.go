@@ -420,7 +420,7 @@ func buildWorkloadNetworkPolicy(ag *gmcv1alpha1.ActionsGateway) *networkingv1.Ne
 // this, the AGC NP carried no ingress policy type and any pod in the namespace
 // could scrape per-tenant metrics off the controller-runtime metrics server.
 func buildAGCNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
-	return buildAGCNetworkPolicyFrom(ag.Namespace, managedLabels(ag), apiServerCIDRs)
+	return buildAGCNetworkPolicyFrom(ag.Namespace, npAGCName, agcAppName, managedLabels(ag), apiServerCIDRs)
 }
 
 // agcAPIServerEgressRule returns the AGC's Kubernetes API-server egress rule
@@ -447,12 +447,14 @@ func agcAPIServerEgressRule(apiServerCIDRs []string) networkingv1.NetworkPolicyE
 // buildAGCNetworkPolicyFrom assembles the AGC egress policy shared by the v1 and
 // v2 ActionsGateway reconcilers: additive to the workload policy, it permits DNS +
 // Kubernetes API server egress and admits monitoring-namespace metrics scrapes.
-// The callers differ only in the metadata labels.
-func buildAGCNetworkPolicyFrom(namespace string, labels map[string]string, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
+// The callers differ in the metadata labels and, under v2 multi-gateway, in the
+// policy name and the `app` selector value (both per-gateway, so each AGC NP
+// selects exactly its own gateway's AGC pods).
+func buildAGCNetworkPolicyFrom(namespace, name, appLabel string, labels map[string]string, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: npAGCName, Namespace: namespace, Labels: labels},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: labels},
 		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
+			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": appLabel}},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
 			Ingress:     []networkingv1.NetworkPolicyIngressRule{metricsScrapeIngressRule()},
 			Egress: []networkingv1.NetworkPolicyEgressRule{
@@ -906,30 +908,47 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env = append(env, tracingEnv(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
-	return buildAGCDeploymentFrom(ag.Namespace, managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env)
+	return buildAGCDeploymentFrom(ag.Namespace,
+		agcWorkloadNames{app: agcAppName, serviceAccount: agcSAName, metricsTLSSecret: metricsTLSSecretName},
+		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env)
+}
+
+// agcWorkloadNames carries the per-gateway derived names for the AGC
+// control-plane Deployment, ServiceAccount, and metrics Secret. v1 (one gateway
+// per namespace) passes the fixed singleton names; v2 (multi-gateway, M3b)
+// derives them per ActionsGateway so two gateways in one namespace never collide
+// on a fixed name (§H.16 #1). The `app` value is load-bearing three ways — it is
+// the Deployment name, the pod `app` label value, and the AGC NetworkPolicy and
+// Service selector — so all of them select exactly this gateway's AGC pods and
+// two AGC Deployments never adopt each other's pods.
+type agcWorkloadNames struct {
+	app              string
+	serviceAccount   string
+	metricsTLSSecret string
 }
 
 // buildAGCDeploymentFrom assembles the AGC Deployment pod spec shared by the v1
 // and v2 ActionsGateway reconcilers: the GitHub App credential file mount (never
 // env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
 // container/pod SecurityContext, and the probes. The callers differ only in the
-// metadata labels, the credential/proxy-CA Secret names, and the env list, which
-// are passed in. metaLabels are the Deployment's metadata labels (the pod-template
-// labels are fixed: they must match the AGC NetworkPolicy and workload selectors).
-func buildAGCDeploymentFrom(namespace string, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar) *appsv1.Deployment {
+// metadata labels, the derived resource names (v1 fixed, v2 per-gateway), the
+// credential/proxy-CA Secret names, and the env list, which are passed in.
+// metaLabels are the Deployment's metadata labels; the pod-template `app` label is
+// names.app so it matches the AGC NetworkPolicy and Service selectors.
+func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar) *appsv1.Deployment {
 	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
 	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
 	credMode := int32(0o440)
 	caMode := int32(0o444)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: agcAppName, Namespace: namespace, Labels: metaLabels},
+		ObjectMeta: metav1.ObjectMeta{Name: names.app, Namespace: namespace, Labels: metaLabels},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr(int32(1)),
-			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": agcAppName}},
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": names.app}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": agcAppName, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
+					Labels: map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
 					// Record the referenced Secret name so that kubectl rollout history
 					// shows the cause of any credential-rotation rolling update.
 					Annotations: map[string]string{
@@ -937,7 +956,7 @@ func buildAGCDeploymentFrom(namespace string, metaLabels map[string]string, cred
 					},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: agcSAName,
+					ServiceAccountName: names.serviceAccount,
 					SecurityContext:    nonrootPodSecurityContext(),
 					// 60s lets the AGC's signal handler (ctrl.SetupSignalHandler in
 					// cmd/agc/main.go) drain in-flight session work and release its
@@ -978,7 +997,7 @@ func buildAGCDeploymentFrom(namespace string, metaLabels map[string]string, cred
 							Name: metricsTLSVolumeName,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName:  metricsTLSSecretName,
+									SecretName:  names.metricsTLSSecret,
 									DefaultMode: &credMode,
 								},
 							},
