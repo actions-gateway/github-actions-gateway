@@ -19,6 +19,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
@@ -599,6 +600,49 @@ func TestWebhook_UpdateTreatsEmptyProfileAsBaseline(t *testing.T) {
 	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), agWithProfile(""))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "downgrade")
+}
+
+// --- Dual-read window: group domain + Q147 values (M5, §H.12) --------------
+//
+// During v1/v2 coexistence the migration tool relabels a namespace's grants and
+// opt-ins onto the actions-gateway.com domain and the aligned value keywords. A
+// still-running v1 ActionsGateway in that relabeled namespace must keep working, so
+// the v1 webhook dual-reads both the privileged-profile grant and the
+// allow-profile-downgrade opt-in across domains and values. The dual-read only
+// widens accepted spelling — every fail-closed invariant is unchanged.
+
+// The downgrade opt-in is honored when expressed on the v2 domain with the aligned
+// "allowed" keyword (so a relabeled namespace's gateway can still be edited down).
+func TestWebhook_UpdateAllowsDowngradeWithV2AlignedAnnotation(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	newObj := agWithProfile("baseline")
+	newObj.Annotations = map[string]string{
+		v2alpha1.AllowProfileDowngradeAnnotation: v2alpha1.AllowProfileDowngradeAllowed,
+	}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), newObj)
+	require.NoError(t, err, "the v2-domain aligned downgrade annotation must permit the downgrade")
+}
+
+// The dual-read does not relax the invariant: the v2 annotation with a non-keyword
+// value (e.g. the legacy "true") still fails closed on the v2 domain.
+func TestWebhook_UpdateRejectsV2AnnotationWithWrongValue(t *testing.T) {
+	v := NewActionsGatewayCustomValidator("", nil)
+	newObj := agWithProfile("baseline")
+	newObj.Annotations = map[string]string{
+		v2alpha1.AllowProfileDowngradeAnnotation: "true", // not the aligned "allowed" keyword
+	}
+	_, err := v.ValidateUpdate(context.Background(), agWithProfile("restricted"), newObj)
+	require.Error(t, err, "only the aligned 'allowed' keyword opts in on the v2 domain")
+}
+
+// Privileged eligibility is granted when the namespace carries the v2-domain grant
+// label (so the migration's relabel never strands a v1 privileged gateway).
+func TestWebhook_AllowsPrivilegedProfileWithV2GrantLabel(t *testing.T) {
+	v := validatorWithNamespaces(t, namespaceWithLabels("team-a", map[string]string{
+		v2alpha1.PrivilegedProfileLabel: v2alpha1.PrivilegedProfileAllowed,
+	}))
+	_, err := v.ValidateCreate(context.Background(), agWithPrivilegedProfile("team-a"))
+	require.NoError(t, err, "the v2-domain privileged grant must confer eligibility during coexistence")
 }
 
 func TestWebhook_DeleteNoOp(t *testing.T) {
