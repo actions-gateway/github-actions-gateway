@@ -418,6 +418,29 @@ What you trade, and what you do **not**:
 
 To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`). A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
 
+### Optional `templateRef` (a default worker pod shape)
+
+`RunnerSet.spec.templateRef` is **optional**. A `RunnerSet` that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set. The chain (resolved at runtime, fail-closed):
+
+1. `RunnerSet.spec.templateRef` — the explicit reference (unchanged: a set that sets it behaves exactly as before).
+2. else `ActionsGateway.spec.defaultTemplateRef` — a per-gateway default the platform or tenant sets on the gateway; inherited by every `RunnerSet` under it that omits `templateRef`. It may name a namespaced `RunnerTemplate` or a cluster-scoped `ClusterRunnerTemplate` (`kind: ClusterRunnerTemplate`).
+3. else the **single cluster-default `ClusterRunnerTemplate`** — the one a platform admin has marked with the annotation `actions-gateway.com/is-default-template: "true"` (the same pattern as Kubernetes' default `StorageClass`).
+4. else the set fails closed `Ready=False`/`TemplateNotFound` — the controller **never** synthesizes a worker pod without a real pod shape.
+
+Which rung resolved is reported in `status.templateSource` (`TemplateRef` / `GatewayDefault` / `ClusterDefault`), visible as the `-o wide` `Template` print column — so you can audit whether a set runs on an explicit template or a default.
+
+**Marking the cluster-default (platform admin).** Annotate exactly one `ClusterRunnerTemplate`:
+
+```bash
+kubectl annotate clusterrunnertemplate <name> actions-gateway.com/is-default-template=true
+```
+
+- The marker is honored **only** on the cluster-scoped `ClusterRunnerTemplate` (platform-authored). A tenant cannot self-elect a namespaced `RunnerTemplate` as the cluster-wide default.
+- **At most one** may be marked. If two are marked, any `RunnerSet` relying on the cluster-default rung fails closed `Ready=False`/`AmbiguousDefault` (the message names the conflicting templates) rather than silently picking one — demote the extra (`kubectl annotate clusterrunnertemplate <name> actions-gateway.com/is-default-template-`) and the set recovers automatically.
+- A `defaultTemplateRef`/`templateRef` that **names a missing** template still fails closed (`TemplateNotFound`); only an entirely-unset reference falls through to the next rung.
+
+The minimal proxy-less onboarding above can therefore drop `templateRef` from the `RunnerSet` once a `defaultTemplateRef` or a cluster-default exists.
+
 ---
 
 ## Handing Off to the Tenant

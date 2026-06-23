@@ -354,15 +354,17 @@ carry an advisory `EgressUnattributed` condition. A reference that names a *miss
 proxy still fails closed (`ProxyNotFound`). See
 [§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional).
 
-### Optional default RunnerTemplate (Q172)
+### Optional default RunnerTemplate (Q172) — **shipped**
 
-The parallel relaxation for `templateRef`. At GA it is required (v1 parity; a
-worker pod needs a pod shape). Relaxing required → optional is non-breaking, so it
-waits for onboarding friction: omit `templateRef` and resolve via
-`ActionsGateway.defaultTemplateRef` → a default-marked `ClusterRunnerTemplate`
-(the `StorageClass` pattern — at most one default, **fail-closed** `TemplateNotFound`
-if none resolves, never a flag-synthesized phantom pod). Collapses minimal
-onboarding to two objects. See [§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
+The parallel relaxation for `templateRef`, now implemented. `templateRef` is
+optional: omit it and resolve via the chain `rs.templateRef` →
+`ActionsGateway.defaultTemplateRef` → the single default-marked `ClusterRunnerTemplate`
+(annotation `actions-gateway.com/is-default-template: "true"`, the `StorageClass`
+pattern) → **fail-closed** `TemplateNotFound`, never a synthesized phantom pod.
+At-most-one cluster-default is enforced at runtime (`AmbiguousDefault` if two are
+marked, not a silent pick); `status.templateSource` reports which rung resolved.
+Required → optional is backward-compatible. See
+[§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches).
 
 ### Bring-your-own proxy autoscaler (Q173)
 
