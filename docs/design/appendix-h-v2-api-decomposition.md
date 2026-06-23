@@ -550,6 +550,15 @@ not the egress *containment* baseline. Defaulting off the *restriction* would be
 security regression and is out of scope. See the
 [secure-by-default principle](05-security.md) for the rule this satisfies.
 
+**Live enforcement is proven, not just shaped (Q178).** Envtest proves the
+direct-egress NetworkPolicies carry the right shape but has no CNI, so it cannot
+prove the lockdown is enforced. The `E2E_V2_DirectEgress` kind e2e closes that gap:
+a proxy-less worker pod reaches `api.github.com` directly (positive, both CNI legs)
+while a connection from the same workload network context to a non-GitHub
+destination is dropped by the default-deny egress NetworkPolicy (negative,
+Calico-only — kindnet does not enforce egress drops, so the block self-skips there).
+See [§7.3 of the test plan](07-test-plan.md#73-end-to-end-tests).
+
 Two refinements keep direct egress **auditable**, not silently inferred (both
 shipped):
 
