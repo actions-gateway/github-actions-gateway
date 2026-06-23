@@ -53,6 +53,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
+| <a id="Q177"></a>Q177 | v2 operator-doc coverage (getting-started, onboarding, securityProfile) | `docs` | 🔲 | S | v2 (M1–M5) shipped but operator docs lag: add a v2 path to getting-started + the actions-gateway-crds-v2 chart prereq; a multi-gateway onboarding section in tenant-onboarding; and "v2: namespace label" notes where securityProfile appears as a spec field. |
 
 ---
 
