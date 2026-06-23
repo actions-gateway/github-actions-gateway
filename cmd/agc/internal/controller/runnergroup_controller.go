@@ -96,6 +96,10 @@ type RunnerGroupReconciler struct {
 
 	conditionCh chan conditionUpdate
 
+	// eventCh carries owner-scoped Kubernetes Events pushed from listener/provisioner
+	// goroutines; drainEvents records them on the live RunnerGroup each reconcile.
+	eventCh chan eventRecord
+
 	// reconcileCount counts Reconcile invocations. Test-only observability (see
 	// ReconcileCountForTest) — it lets integration tests assert that an external
 	// event such as a worker Pod lifecycle event actually triggered a reconcile.
@@ -132,6 +136,15 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	if r.conditionCh == nil {
 		r.conditionCh = make(chan conditionUpdate, 256)
+	}
+	if r.eventCh == nil {
+		r.eventCh = make(chan eventRecord, 256)
+	}
+	// Route provisioner-side quota/eviction-retry-exhaustion Events for this v1 path
+	// through the same channel the listener path uses (runnerGroupTarget is the only
+	// Target the shared Provisioner constructs, and it is v1-only).
+	if r.Provisioner != nil && r.Provisioner.Events == nil {
+		r.Provisioner.Events = &channelEventRecorder{ch: r.eventCh}
 	}
 
 	// Export the worker ResourceQuota conditions (Q82) and the WorkersUnschedulable
@@ -231,6 +244,9 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if r.conditionCh == nil {
 		r.conditionCh = make(chan conditionUpdate, 256)
 	}
+	if r.eventCh == nil {
+		r.eventCh = make(chan eventRecord, 256)
+	}
 	log := r.Log.With("namespace", req.Namespace, "name", req.Name)
 
 	// 1. Fetch the RunnerGroup.
@@ -247,8 +263,9 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// 2. Drain pending condition updates from listener goroutines.
+	// 2. Drain pending condition updates and Events from listener/provisioner goroutines.
 	r.drainConditions(ctx, &rg)
+	r.drainEvents(&rg)
 
 	// 3. Handle deletion.
 	if !rg.DeletionTimestamp.IsZero() {
@@ -540,7 +557,7 @@ func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool
 		// redelivery instead of acquired-then-dropped.
 		admit = r.Provisioner.AdmitFor(rg)
 	}
-	return assembleListenerConfig(rg.Name, rg.Namespace, brokerCfg, condUpdater, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
+	return assembleListenerConfig(rg.Name, rg.Namespace, brokerCfg, condUpdater, &channelEventRecorder{ch: r.eventCh}, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending condition updates and merges them into rg.Status.
@@ -566,6 +583,34 @@ done:
 		case r.conditionCh <- upd:
 		default:
 			// channel full — condition dropped (best-effort)
+		}
+	}
+}
+
+// drainEvents records pending owner-scoped Events on this RunnerGroup. Events for
+// other RunnerGroups are re-enqueued after the loop (mirroring drainConditions) so
+// they are recorded when their owner reconciles. Each event is consumed once, so
+// this never re-emits the same Event on subsequent reconciles.
+func (r *RunnerGroupReconciler) drainEvents(rg *v1alpha1.RunnerGroup) {
+	var skipped []eventRecord
+	for {
+		select {
+		case ev := <-r.eventCh:
+			if ev.namespace == rg.Namespace && ev.name == rg.Name {
+				r.recordEvent(rg, ev.eventtype, ev.reason, ev.action, ev.note)
+			} else {
+				skipped = append(skipped, ev)
+			}
+		default:
+			goto done
+		}
+	}
+done:
+	for _, ev := range skipped {
+		select {
+		case r.eventCh <- ev:
+		default:
+			// channel full — event dropped (best-effort)
 		}
 	}
 }

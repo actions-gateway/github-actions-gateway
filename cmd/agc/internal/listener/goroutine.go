@@ -18,6 +18,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,6 +40,18 @@ var RealClock Clock = realClock{}
 // Implementations must be non-blocking.
 type ConditionUpdater interface {
 	SetCondition(namespace, name string, cond metav1.Condition)
+}
+
+// EventRecorder records a Kubernetes Event about the owning RunnerGroup/RunnerSet
+// (identified by namespace/name). The reconciler drains these and records them on
+// the live owner object, so job-lifecycle incidents surface in `kubectl describe`
+// and event watchers — complementing the metrics/conditions that already track the
+// same state. Like ConditionUpdater, implementations must be non-blocking (drop on
+// a full channel) so a listener or provisioner goroutine never blocks on event
+// delivery. action and note follow the client-go events API (the "what happened"
+// verb and the human-readable message).
+type EventRecorder interface {
+	Event(namespace, name, eventtype, reason, action, note string)
 }
 
 // JobHandlerFunc is called with the AcquireJob response bytes after a successful
@@ -73,7 +86,11 @@ type Config struct {
 	Broker     *broker.Client
 	HTTPClient *http.Client // used for OAuth token fetch; nil uses a bounded httpx.NewClient()
 
-	Conditions    ConditionUpdater
+	Conditions ConditionUpdater
+	// Events records owner-scoped Kubernetes Events for job-lifecycle incidents that
+	// this goroutine detects (acquisition failure, non-retriable session failure).
+	// Nil disables event recording (the metric/condition remains the signal).
+	Events        EventRecorder
 	Metrics       *Metrics
 	IdleThreshold int // consecutive 202s before idle shutdown; 0 means 50
 	// RenewInterval is the cadence of the per-job RenewJob loop. 0 means 60s.
@@ -464,11 +481,15 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 		if errors.As(err, &vtooOld) {
 			setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
 				"VersionTooOld", vtooOld.Message)
+			recordEvent(cfg, corev1.EventTypeWarning, "RunnerVersionTooOld", "CreateSession",
+				fmt.Sprintf("session creation failed permanently — the runner version is too old for GitHub: %s", vtooOld.Message))
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
 			setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionTrue,
 				"Unauthorized", err.Error())
+			recordEvent(cfg, corev1.EventTypeWarning, "SessionUnauthorized", "CreateSession",
+				fmt.Sprintf("session creation rejected as unauthorized; the agent credentials are invalid or revoked: %v", err))
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		return sessionState{}, err // retriable
@@ -570,6 +591,8 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			if cfg.Metrics != nil {
 				cfg.Metrics.JobAcquisitionErrors.WithLabelValues(cfg.Namespace, "acquirejob_failed").Inc()
 			}
+			recordEvent(cfg, corev1.EventTypeWarning, "JobAcquisitionFailed", "AcquireJob",
+				fmt.Sprintf("failed to acquire a delivered job from GitHub: %v; the job stays queued at GitHub for redelivery to a sibling session", acqErr))
 			log.Error("AcquireJob failed", "error", acqErr)
 			return false, acqErr
 		}
@@ -737,6 +760,15 @@ func setCondition(cfg Config, condType string, status metav1.ConditionStatus, re
 		Message:            msg,
 		LastTransitionTime: metav1.Now(),
 	})
+}
+
+// recordEvent emits an owner-scoped Kubernetes Event via cfg.Events, mirroring
+// setCondition. A no-op when no recorder is wired.
+func recordEvent(cfg Config, eventtype, reason, action, note string) {
+	if cfg.Events == nil {
+		return
+	}
+	cfg.Events.Event(cfg.Namespace, cfg.Group, eventtype, reason, action, note)
 }
 
 func isUnauthorized(err error) bool {

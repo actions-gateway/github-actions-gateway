@@ -22,6 +22,46 @@ import (
 // shape and proxy) differs. Factoring the common pieces here keeps the two
 // reconcilers in lockstep instead of letting copies drift.
 
+// eventRecord is an owner-scoped Kubernetes Event pushed from a listener or
+// provisioner goroutine to its reconciler via a channel. The reconciler records it
+// on the live owner object on its next reconcile (drainEvents). It mirrors
+// conditionUpdate: the goroutine that detects a job-lifecycle incident does not hold
+// the live owner object the EventRecorder needs, so the event is routed back the
+// same way condition updates are.
+type eventRecord struct {
+	namespace string
+	name      string
+	eventtype string
+	reason    string
+	action    string
+	note      string
+}
+
+// channelEventRecorder implements listener.EventRecorder by pushing each event onto
+// a buffered channel the reconciler drains. The send is non-blocking: a full channel
+// drops the event rather than stalling the listener/provisioner goroutine, matching
+// channelConditionUpdater. Events are an incident-visibility complement to the
+// always-present metrics/conditions, so a dropped event under extreme backpressure
+// is acceptable.
+type channelEventRecorder struct {
+	ch chan<- eventRecord
+}
+
+func (e *channelEventRecorder) Event(namespace, name, eventtype, reason, action, note string) {
+	select {
+	case e.ch <- eventRecord{
+		namespace: namespace,
+		name:      name,
+		eventtype: eventtype,
+		reason:    reason,
+		action:    action,
+		note:      note,
+	}:
+	default:
+		// Drop if the channel is full to avoid blocking the caller.
+	}
+}
+
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's
 // worker pods (those carrying labelKey) and to the events that carry new status
 // for the owning CR: Create, Delete, and phase-changing Updates. Generic events
@@ -128,6 +168,7 @@ func assembleListenerConfig(
 	group, namespace string,
 	brokerCfg BrokerConfig,
 	condUpdater listener.ConditionUpdater,
+	eventRecorder listener.EventRecorder,
 	metrics *listener.Metrics,
 	agent *agentpool.Agent,
 	tokenManager *token.Manager,
@@ -154,6 +195,7 @@ func assembleListenerConfig(
 		Broker:            bc,
 		HTTPClient:        brokerCfg.HTTPClient,
 		Conditions:        condUpdater,
+		Events:            eventRecorder,
 		Metrics:           metrics,
 		RunnerOS:          brokerCfg.RunnerOS,
 		JobHandler:        jobHandler,

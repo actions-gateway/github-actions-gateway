@@ -205,6 +205,35 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_ip_range_updates_total` | Counter | `namespace` | NetworkPolicy egress rule refreshes from GitHub meta API |
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs currently managed by the GMC |
 
+### Kubernetes Events for job-lifecycle transitions
+
+Metrics and status conditions are the steady-state observability surface, but an
+operator triaging a single incident usually reaches for `kubectl describe` first. The
+AGC therefore also records **Kubernetes Events** on the owning `RunnerGroup`/`RunnerSet`
+for the job-lifecycle transitions that fail terminally (Q170) — the event-based
+companion to the counters above, surfacing the same incident in `kubectl describe` and
+event watchers without a Prometheus query. Each `Reason` mirrors the corresponding
+metric name so the two correlate:
+
+| Reason | Type | Mirrors metric | Trigger |
+|---|---|---|---|
+| `JobAcquisitionFailed` | Warning | `actions_gateway_job_acquisition_errors_total` | `acquirejob` failed for a delivered job; it stays queued for redelivery |
+| `RunnerVersionTooOld` | Warning | — (also the `RunnerVersionTooOld` condition) | `POST /sessions` rejected: runner version too old |
+| `SessionUnauthorized` | Warning | — (also the `Degraded` condition) | `POST /sessions` rejected as unauthorized (invalid/revoked agent credentials) |
+| `QuotaRetriesExhausted` | Warning | `actions_gateway_quota_retries_exhausted_total` | Pod creation abandoned after the `ResourceQuota` retry budget exhausted |
+| `EvictionRetriesExhausted` | Warning | `actions_gateway_eviction_retries_exhausted_total` | Evicted job's auto-retry budget exhausted; manual re-run required |
+
+These follow the established reaper precedent (`WorkerPodStuckPending`): they record on
+the owner an operator would `kubectl describe`, fire on a transition/terminal outcome
+(never per reconcile, so no spam), and where a status condition already captures the
+state the Event complements it rather than duplicating it. A listener/provisioner
+goroutine that detects the transition does not hold the live owner object, so it routes
+the Event back to the reconciler over a buffered channel — mirroring the existing
+condition-update channel — which records it on the next reconcile. See
+[kubernetes-conventions](../development/kubernetes-conventions.md#kubernetes-events-for-lifecycle-transitions)
+for the convention and [troubleshooting](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset)
+for the operator catalogue.
+
 ### Distributed tracing
 
 Beyond metrics, the AGC emits **OpenTelemetry traces** for the reconcile path (`RunnerGroup.Reconcile`) and the job-to-pod path (`Provisioner.provision`, with child spans for secret staging, pod-count, pod creation, and the wait for completion). Tracing is opt-in and off by default: with no OTLP endpoint configured the global provider stays the no-op default, so the spans cost effectively nothing. It is enabled — and fully configured (endpoint, sampler, resource attributes) — through the standard OpenTelemetry SDK environment variables, with no bespoke flag surface. For GMC-managed tenants the operator does not set those env vars directly: they declare `spec.tracing` on the `ActionsGateway` CR and the GMC translates it into the AGC Deployment's `OTEL_*` env. Auth headers (`OTEL_EXPORTER_OTLP_HEADERS`) are deliberately not exposed on the CR — they can carry credentials, so collector authentication is a network-layer concern. See [observability](../operations/observability.md#distributed-tracing-agc) for the variables and the CR-driven enablement path.

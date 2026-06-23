@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -466,6 +467,31 @@ func TestRunnerSetDrainConditions_MergesOwnSkipsOthers(t *testing.T) {
 	assert.NotNil(t, meta.FindStatusCondition(rs.Status.Conditions, "Degraded"), "own condition merged")
 	// The other set's condition is re-enqueued, not applied here.
 	assert.Len(t, r.conditionCh, 1)
+}
+
+func TestRunnerSetDrainEvents_RecordsOwnSkipsOthers(t *testing.T) {
+	rec := events.NewFakeRecorder(16)
+	r := &RunnerSetReconciler{Log: slog.Default(), Recorder: rec}
+	r.ensureMaps()
+	rs := rsObj("set", "team-a", nil)
+
+	// One event for this set, one for another set.
+	r.eventCh <- eventRecord{namespace: "team-a", name: "set", eventtype: corev1.EventTypeWarning,
+		reason: "QuotaRetriesExhausted", action: "ProvisionWorker", note: "quota exhausted"}
+	r.eventCh <- eventRecord{namespace: "team-a", name: "other", eventtype: corev1.EventTypeWarning,
+		reason: "EvictionRetriesExhausted", action: "RetryEvictedJob", note: "manual re-run"}
+
+	r.drainEvents(rs)
+
+	// Own event is recorded on the live RunnerSet.
+	select {
+	case e := <-rec.Events:
+		assert.Contains(t, e, "QuotaRetriesExhausted")
+	default:
+		t.Fatal("expected an Event for this RunnerSet")
+	}
+	// The other set's event is re-enqueued, not recorded here.
+	assert.Len(t, r.eventCh, 1)
 }
 
 func TestRunnerSetLocalState_PoolLifecycle(t *testing.T) {

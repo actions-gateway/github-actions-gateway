@@ -23,6 +23,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
 - [Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
@@ -426,6 +427,9 @@ kubectl describe runnergroup -n <namespace> <name>
 #   AgentPoolError            — agent Secret provisioning (EnsureAgents) failed.
 #   ListenerStartFailed       — listener goroutines could not be (re)started.
 #   AgentDeregistrationFailed — agent Secret cleanup on scale-down/delete failed.
+#   RunnerVersionTooOld       — session creation rejected: the runner version is too old for GitHub (Q170).
+#   SessionUnauthorized       — session creation rejected as unauthorized: agent credentials invalid/revoked (Q170).
+#   JobAcquisitionFailed      — a delivered job could not be acquired from GitHub; it stays queued for redelivery (Q170).
 #   NoActiveSessions / ListenerActive — Ready condition transitions.
 ```
 
@@ -596,6 +600,43 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 - Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
 - If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
 - Re-run the cancelled workflow from the GitHub UI once the cause is fixed.
+
+---
+
+## Job-Lifecycle Events on a RunnerGroup / RunnerSet
+
+**What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning`
+Kubernetes Events on the owning `RunnerGroup` (`v1alpha1`) or `RunnerSet`
+(`v2alpha1`) when a job-lifecycle transition fails terminally (Q170). They are the
+event-based companion to the always-present metrics and status conditions — surfacing
+the same incident in `kubectl describe`, `kubectl get events`, and any event watcher,
+without a Prometheus query. Each `Reason` mirrors the corresponding metric name so you
+can correlate the two.
+
+Events are recorded **on a transition / terminal outcome**, not on every reconcile
+or every requeue, so they do not spam. (The cluster's event recorder additionally
+aggregates repeats of the same reason+message into one event with a count.) An event
+is recorded on the owner's next reconcile, so it can trail the underlying metric by a
+few seconds; the metric is the real-time signal.
+
+| Reason | Type | Meaning | Where to look next |
+|---|---|---|---|
+| `JobAcquisitionFailed` | Warning | A delivered job could not be acquired from GitHub (`acquirejob` failed); the job stays queued at GitHub for redelivery. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
+| `RunnerVersionTooOld` | Warning | Session creation was rejected permanently because the runner version is too old for GitHub. Also sets the `RunnerVersionTooOld` condition. | [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs) |
+| `SessionUnauthorized` | Warning | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. Also sets the `Degraded` condition. | [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration) |
+| `QuotaRetriesExhausted` | Warning | Worker pod creation was abandoned after exhausting the namespace `ResourceQuota` retry budget (`maxQuotaRetries`). | [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion) |
+| `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
+
+**Diagnostics.**
+
+```sh
+# All AGC-emitted Warning events on one owner, newest last.
+kubectl describe runnergroup -n <namespace> <name>          # v1alpha1
+kubectl describe runnerset   -n <namespace> <name>          # v2alpha1
+
+# Filter the namespace event stream by a specific reason.
+kubectl get events -n <namespace> --field-selector reason=EvictionRetriesExhausted
+```
 
 ---
 
@@ -1036,7 +1077,7 @@ kubectl get secret -n <namespace> actions-gateway-proxy-tls \
 
 ## Evicted Worker Pods Exhausting Retry Budget
 
-**Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries.
+**Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing. Jobs are being cancelled after eviction despite automatic retries. `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 
 **Likely causes.**
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
@@ -1058,6 +1099,9 @@ kubectl describe pod -n <namespace> <evicted-pod-name>
 
 # Check node events around the eviction time
 kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i evict
+
+# See the budget-exhaustion event on the owner (RunnerGroup or RunnerSet)
+kubectl describe runnergroup -n <namespace> <name> | grep -A1 EvictionRetriesExhausted
 ```
 
 **Resolution.**
@@ -1070,7 +1114,7 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep -i evict
 
 ## Jobs Failing Due to Namespace ResourceQuota Exhaustion
 
-**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled. The `RunnerGroup` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`).
+**Symptoms.** `actions_gateway_quota_retries_exhausted_total` is incrementing. Pod creation fails with a `Forbidden` error containing "exceeded quota" in the AGC logs. Jobs are being abandoned before a pod is ever scheduled. The `RunnerGroup` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1`). `kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `QuotaRetriesExhausted` (Q170) each time a job's pod creation is abandoned.
 
 The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics. They are distinct from Q59's configured-ceiling backpressure (`actions_gateway_jobs_admission_rejected_total`), which is normal load-shedding to a sibling, not a quota problem:
 
@@ -1101,6 +1145,9 @@ kubectl describe resourcequota -n <namespace>
 
 # Check AGC logs for quota errors
 kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceeded quota"
+
+# See the abandonment event on the owner (RunnerGroup or RunnerSet)
+kubectl describe runnergroup -n <namespace> <name> | grep -A1 QuotaRetriesExhausted
 ```
 
 **Resolution.**

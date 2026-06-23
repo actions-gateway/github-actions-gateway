@@ -60,6 +60,16 @@ type Target interface {
 	// job fail-closed without creating a worker pod, so no wiring is ever created
 	// in the gap.
 	Resolve(ctx context.Context) (*ResolvedSpec, error)
+
+	// RecordEvent records a Kubernetes Event on the owner object (the RunnerGroup or
+	// RunnerSet) so provisioning-time incidents — namespace ResourceQuota retry
+	// exhaustion, eviction-retry exhaustion — surface in `kubectl describe` and event
+	// watchers, complementing the metrics that already count them. The adapter routes
+	// it to the owning reconciler, which records it on the live object; routing is
+	// per-Target because one Provisioner is shared across the v1 and v2 owners. A
+	// no-op when no recorder is wired (unit tests). action and note follow the
+	// client-go events API.
+	RecordEvent(eventtype, reason, action, note string)
 }
 
 // ResolvedSpec is the fully-resolved, already-defaulted per-job provisioning

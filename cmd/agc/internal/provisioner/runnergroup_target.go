@@ -52,6 +52,17 @@ func (t *runnerGroupTarget) PodOwnerLabels() map[string]string {
 	return map[string]string{LabelRunnerGroup: t.snapshot.Name}
 }
 
+// RecordEvent routes an owner-scoped Event to the RunnerGroup reconciler via the
+// process-wide Provisioner.Events recorder (runnerGroupTarget is the only Target
+// the Provisioner constructs, and it is v1-only). A no-op when no recorder is wired.
+func (t *runnerGroupTarget) RecordEvent(eventtype, reason, action, note string) {
+	if t.p.Events == nil {
+		return
+	}
+	k := t.Key()
+	t.p.Events.Event(k.Namespace, k.Name, eventtype, reason, action, note)
+}
+
 func (t *runnerGroupTarget) Ceiling(ctx context.Context) (int32, bool) {
 	rg := t.current(ctx)
 	return WorkerCeilingFromTiers(tierThresholds(rg.Spec.PriorityTiers), rg.Spec.MaxWorkers)

@@ -26,6 +26,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/stretchr/testify/assert"
@@ -248,6 +249,37 @@ func (r *condRecorder) Has(condType string) bool {
 	return false
 }
 
+// ── eventRecorder ────────────────────────────────────────────────────────────
+
+// recordedEvent captures one listener.EventRecorder.Event call.
+type recordedEvent struct {
+	namespace, name, eventtype, reason, action, note string
+}
+
+// eventRecorder records Event calls and is safe for concurrent use.
+type eventRecorder struct {
+	mu     sync.Mutex
+	events []recordedEvent
+}
+
+func (r *eventRecorder) Event(namespace, name, eventtype, reason, action, note string) {
+	r.mu.Lock()
+	r.events = append(r.events, recordedEvent{namespace, name, eventtype, reason, action, note})
+	r.mu.Unlock()
+}
+
+// find returns the first recorded event with the given reason, or false.
+func (r *eventRecorder) find(reason string) (recordedEvent, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, e := range r.events {
+		if e.reason == reason {
+			return e, true
+		}
+	}
+	return recordedEvent{}, false
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // makeCfg builds a listener.Config backed by the given stub servers.
@@ -315,8 +347,10 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	conds := &condRecorder{}
+	events := &eventRecorder{}
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Conditions = conds
+	cfg.Events = events
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -324,6 +358,13 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	err := listener.Run(ctx, cfg)
 	assert.Error(t, err)
 	assert.True(t, conds.Has("RunnerVersionTooOld"), "expected RunnerVersionTooOld condition")
+
+	// The non-retriable session failure also surfaces as a Warning Event on the
+	// owner, complementing the condition (Q170).
+	ev, ok := events.find("RunnerVersionTooOld")
+	require.True(t, ok, "expected RunnerVersionTooOld Event")
+	assert.Equal(t, corev1.EventTypeWarning, ev.eventtype)
+	assert.Equal(t, "test-rg", ev.name)
 
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
@@ -339,8 +380,10 @@ func TestListener_CreateSessionUnauthorized(t *testing.T) {
 	brokerSrv := httptest.NewServer(mux)
 
 	conds := &condRecorder{}
+	events := &eventRecorder{}
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Conditions = conds
+	cfg.Events = events
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -348,6 +391,12 @@ func TestListener_CreateSessionUnauthorized(t *testing.T) {
 	err := listener.Run(ctx, cfg)
 	assert.Error(t, err)
 	assert.True(t, conds.Has("Degraded"), "expected Degraded condition on 401")
+
+	// The unauthorized session failure also records a Warning Event (Q170).
+	ev, ok := events.find("SessionUnauthorized")
+	require.True(t, ok, "expected SessionUnauthorized Event")
+	assert.Equal(t, corev1.EventTypeWarning, ev.eventtype)
+	assert.Equal(t, "test-rg", ev.name)
 
 	closeHTTP(oauthSrv)
 	closeHTTP(brokerSrv)
@@ -1027,8 +1076,10 @@ func TestListener_AcquireJobError(t *testing.T) {
 	})
 
 	m := newTestMetrics()
+	events := &eventRecorder{}
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Metrics = m
+	cfg.Events = events
 	cfg.IsLastPoller = func() bool { return true }
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1040,6 +1091,12 @@ func TestListener_AcquireJobError(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return testutil.ToFloat64(m.JobAcquisitionErrors.WithLabelValues("default", "acquirejob_failed")) >= 1
 	}, 2*time.Second, 10*time.Millisecond, "JobAcquisitionErrors counter should be incremented")
+
+	// The failed acquisition also records a Warning Event on the owner (Q170).
+	ev, ok := events.find("JobAcquisitionFailed")
+	require.True(t, ok, "expected JobAcquisitionFailed Event")
+	assert.Equal(t, corev1.EventTypeWarning, ev.eventtype)
+	assert.Equal(t, "test-rg", ev.name)
 
 	cancel()
 	<-done
