@@ -1,19 +1,20 @@
-# Appendix H — v2 API Decomposition (Proposal)
+# Appendix H — v2 API Decomposition
 
 ← [Optional Future Enhancements](appendix-g-future-enhancements.md) | [Back to index](README.md)
 
 ---
 
-> **Status: accepted; being built incrementally.** This appendix is the design
-> source of truth for the `v2alpha1` API that replaces the monolithic
-> `ActionsGateway` + `RunnerGroup` model. Milestone **M1 (the `v2alpha1` types +
-> codegen) has landed**: the five kinds are defined, their CRDs install and
-> round-trip beside `v1alpha1`, and the field-naming/immutability/length decisions
-> below are frozen in the schema — but **no controller reconciles them yet**
-> (reconcilers arrive in M2/M3a). Nothing in the shipped `v1alpha1` API changes;
-> the two groups are served side by side. Remaining milestones and their order are
-> in the [v2 API plan](../plan/v2-api.md); the cutover is a deliberate,
-> tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
+> **Status: shipped — `v2alpha1`, served beside `v1alpha1`.** This appendix is the
+> design source of truth for the `v2alpha1` API (`actions-gateway.com` group) that
+> replaces the monolithic `ActionsGateway` + `RunnerGroup` model. **All milestones
+> M1–M5 have landed**: the five kinds, their GMC/AGC reconcilers, multiple gateways
+> per namespace, the namespace-scoped security profile, and the one-shot v1→v2
+> migration tool are all built. `v2alpha1` is an **alpha** API served side by side
+> with `v1alpha1` during the coexistence window — nothing in the shipped
+> `v1alpha1` API changes, and tenants migrate on their own schedule via the
+> migration tool, a deliberate tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
+> Milestone sequencing and the itemized task record are in the
+> [v2 API plan](../plan/v2-api.md).
 
 ---
 
