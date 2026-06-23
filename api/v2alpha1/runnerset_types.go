@@ -35,10 +35,12 @@ type RunnerSetSpec struct {
 
 	// ProxyRef optionally names the EgressProxy this runner set's traffic egresses
 	// through. Unset means inherit the gateway's defaultProxyRef; both unset means
-	// direct egress (still NetworkPolicy-restricted) — a well-defined behavior, so
-	// the dependency is simply droppable, which is why proxyRef is optional where
-	// templateRef is required (§H.4, §H.10). The direct-egress *behavior* is a later
-	// milestone; the optional *schema* lands here.
+	// direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined
+	// behavior, so the dependency is simply droppable, which is why proxyRef is
+	// optional where templateRef is required (§H.4, §H.10). Direct egress is reflected
+	// in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a
+	// proxyRef/defaultProxyRef that names a *missing* proxy still fails closed
+	// (ProxyNotFound), not direct egress (Q168).
 	//
 	// +optional
 	ProxyRef *ObjectRef `json:"proxyRef,omitempty"`
@@ -144,6 +146,17 @@ type RunnerSetStatus struct {
 	// +optional
 	ActiveSessions int32 `json:"activeSessions,omitempty"`
 
+	// ProxyMode records how this runner set's worker egress reaches GitHub:
+	// "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
+	// or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to
+	// GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is
+	// an auditable state, not an inferred absence (§H.10). Paired with the advisory
+	// EgressUnattributed condition when Direct.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Proxied;Direct
+	ProxyMode string `json:"proxyMode,omitempty"`
+
 	// ObservedGeneration is the .metadata.generation the most recent reconcile acted on.
 	//
 	// +optional
@@ -162,6 +175,7 @@ type RunnerSetStatus struct {
 // +kubebuilder:printcolumn:name="Gateway",type=string,JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=`.spec.maxListeners`
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=`.status.activeSessions`
+// +kubebuilder:printcolumn:name="Egress",type=string,JSONPath=`.status.proxyMode`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=`.status.conditions[?(@.type=='Ready')].reason`
 // +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=`.status.observedGeneration`

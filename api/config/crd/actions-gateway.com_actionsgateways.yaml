@@ -22,6 +22,9 @@ spec:
     - jsonPath: .spec.githubURL
       name: URL
       type: string
+    - jsonPath: .status.proxyMode
+      name: Egress
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -251,6 +254,17 @@ spec:
                   recent reconcile acted on.
                 format: int64
                 type: integer
+              proxyMode:
+                description: |-
+                  ProxyMode records how this gateway's AGC control-plane egress reaches GitHub:
+                  "Proxied" (through the EgressProxy named by defaultProxyRef, with stable
+                  per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy-
+                  restricted to GitHub + DNS + kube API but without per-tenant IP attribution).
+                  Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).
+                enum:
+                - Proxied
+                - Direct
+                type: string
             type: object
         type: object
         x-kubernetes-validations:

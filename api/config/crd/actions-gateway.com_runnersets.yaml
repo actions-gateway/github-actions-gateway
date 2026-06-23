@@ -28,6 +28,9 @@ spec:
     - jsonPath: .status.activeSessions
       name: ActiveSessions
       type: integer
+    - jsonPath: .status.proxyMode
+      name: Egress
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -199,10 +202,12 @@ spec:
                 description: |-
                   ProxyRef optionally names the EgressProxy this runner set's traffic egresses
                   through. Unset means inherit the gateway's defaultProxyRef; both unset means
-                  direct egress (still NetworkPolicy-restricted) — a well-defined behavior, so
-                  the dependency is simply droppable, which is why proxyRef is optional where
-                  templateRef is required (§H.4, §H.10). The direct-egress *behavior* is a later
-                  milestone; the optional *schema* lands here.
+                  direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined
+                  behavior, so the dependency is simply droppable, which is why proxyRef is
+                  optional where templateRef is required (§H.4, §H.10). Direct egress is reflected
+                  in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a
+                  proxyRef/defaultProxyRef that names a *missing* proxy still fails closed
+                  (ProxyNotFound), not direct egress (Q168).
                 properties:
                   kind:
                     description: |-
@@ -375,6 +380,18 @@ spec:
                   recent reconcile acted on.
                 format: int64
                 type: integer
+              proxyMode:
+                description: |-
+                  ProxyMode records how this runner set's worker egress reaches GitHub:
+                  "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
+                  or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to
+                  GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is
+                  an auditable state, not an inferred absence (§H.10). Paired with the advisory
+                  EgressUnattributed condition when Direct.
+                enum:
+                - Proxied
+                - Direct
+                type: string
             type: object
         type: object
         x-kubernetes-validations:
