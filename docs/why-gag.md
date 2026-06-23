@@ -106,12 +106,14 @@ letting tenants run their own runners.
 | Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [auto lock-cancel + rerun, per-job budget](design/04-operational-flows.md) |
 | Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner group](design/02-architecture.md) |
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } [multiple gateways per namespace, each scoped to its own runner sets (v2)](plan/v2-api.md) |
-| Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant HTTPS CONNECT proxy pool](design/network-architecture.md) |
+| Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } shared [`RunnerTemplate`](operations/migration-v1-to-v2.md); cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md) for platform-managed standards **(v2)** |
+| Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant HTTPS CONNECT proxy pool](design/network-architecture.md); proxy optional — skip for direct egress **(v2)** |
 | Listener memory, 10 runner groups at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus, scoped per tenant + runner group](operations/observability.md) |
 
 Every capability above is driven by the single `ActionsGateway` resource shown
-below.
+below (v1 API). Rows marked **(v2)** require the `v2alpha1` API — see the
+[v1 → v2 migration guide](operations/migration-v1-to-v2.md).
 
 For limits and Service Level Objectives behind these claims, see
 [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for

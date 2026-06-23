@@ -96,6 +96,7 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
     - Allow-list just your runners on GitHub EMU
     - No cluster-wide allow-list or NAT gateway
     - One flagged tenant can't take others down
+    - v2 API: proxy optional for simpler deployments
 
 -   :material-feather:{ .lg .middle } __Lower listener overhead__
 
@@ -116,6 +117,17 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
     - Teams see their own GPU utilization
     - Data-backed case for quota changes
     - No cluster-wide visibility required
+
+-   :material-file-document-multiple:{ .lg .middle } __Shared runner templates__
+
+    ---
+
+    One template for all your runner sets (v2 API):
+
+    - `RunnerTemplate` shared across runner sets
+    - `ClusterRunnerTemplate` for platform-managed standards
+    - Identical templates collapse — define once, reference by name
+    - Migrate from v1 with `gag-migrate`
 
 </div>
 </div>
