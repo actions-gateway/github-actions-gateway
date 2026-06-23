@@ -294,22 +294,37 @@ func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 	}
 }
 
+// githubCIDREgressRule returns an egress rule permitting TCP/443 to the given GitHub
+// CIDRs, and false when the CIDR set is empty (before the IPRangeReconciler's first
+// fetch) so the caller omits the rule entirely. Omitting it is fail-closed: GitHub
+// egress is denied until the refresh loop patches the policy with the fetched ranges,
+// never opened wide. Shared by the v1 proxy NetworkPolicy and the v2 direct-egress
+// AGC/workload NetworkPolicies (§H.10).
+func githubCIDREgressRule(githubCIDRs []net.IPNet) (networkingv1.NetworkPolicyEgressRule, bool) {
+	if len(githubCIDRs) == 0 {
+		return networkingv1.NetworkPolicyEgressRule{}, false
+	}
+	peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
+	for _, cidr := range githubCIDRs {
+		c := cidr.String()
+		peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
+	}
+	return networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
+		To:    peers,
+	}, true
+}
+
 // buildProxyNetworkPolicy constructs the NetworkPolicy for proxy pods.
 // Proxy pods may reach GitHub CIDRs on 443 (for CONNECT tunneling) and DNS.
 // Only workload pods (AGC and workers) may initiate connections to the proxy.
 func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ag.Spec.Proxy.ManagedNetworkPolicy == nil || *ag.Spec.Proxy.ManagedNetworkPolicy
-	if managed && len(githubCIDRs) > 0 {
-		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
-		for _, cidr := range githubCIDRs {
-			c := cidr.String()
-			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
+	if managed {
+		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
+			egress = append(egress, rule)
 		}
-		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
-			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
-			To:    peers,
-		})
 	}
 
 	// Ingress: only workload pods (AGC and workers) may connect to the proxy on
@@ -941,6 +956,54 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 	credMode := int32(0o440)
 	caMode := int32(0o444)
 
+	volumes := []corev1.Volume{
+		{
+			Name: agcCredsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  credSecretName,
+					DefaultMode: &credMode,
+				},
+			},
+		},
+		{
+			// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key). The AGC's
+			// controller-runtime metrics server serves /metrics over mTLS on metricsPort
+			// and verifies scraper client certs against ca.crt.
+			Name: metricsTLSVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  names.metricsTLSSecret,
+					DefaultMode: &credMode,
+				},
+			},
+		},
+	}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: agcCredsVolumeName, MountPath: agcCredsMountPath, ReadOnly: true},
+		{Name: metricsTLSVolumeName, MountPath: metricsTLSMountPath, ReadOnly: true},
+	}
+	// Proxy CA cert (public part only — private key excluded via Items). The AGC pins
+	// the proxy's TLS cert rather than trusting the cluster CA, preventing MITM even
+	// from a compromised cluster CA. Mounted only when egress is proxied: a v2 gateway
+	// with no defaultProxyRef egresses directly (§H.10), has no proxy TLS Secret, and
+	// mounting a non-existent Secret would wedge the pod at ContainerCreating.
+	if proxyTLSSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: proxyCACertVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  proxyTLSSecret,
+					Items:       []corev1.KeyToPath{{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey}},
+					DefaultMode: &caMode,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name: proxyCACertVolumeName, MountPath: proxyCACertMountPath, ReadOnly: true,
+		})
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: names.app, Namespace: namespace, Labels: metaLabels},
 		Spec: appsv1.DeploymentSpec{
@@ -963,46 +1026,7 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 					// listener-renewal lock cleanly on rollout instead of losing the
 					// lock to a SIGKILL.
 					TerminationGracePeriodSeconds: ptr(int64(60)),
-					Volumes: []corev1.Volume{
-						{
-							Name: agcCredsVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName:  credSecretName,
-									DefaultMode: &credMode,
-								},
-							},
-						},
-						{
-							// Proxy CA cert (public part only — private key excluded via Items).
-							// AGC uses this to pin the proxy's TLS cert rather than trusting
-							// the cluster CA, preventing MITM even from a compromised cluster CA.
-							Name: proxyCACertVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: proxyTLSSecret,
-									Items: []corev1.KeyToPath{{
-										Key:  corev1.TLSCertKey,
-										Path: corev1.TLSCertKey,
-									}},
-									DefaultMode: &caMode,
-								},
-							},
-						},
-						{
-							// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key).
-							// The AGC's controller-runtime metrics server serves
-							// /metrics over mTLS on metricsPort and verifies scraper
-							// client certs against ca.crt.
-							Name: metricsTLSVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName:  names.metricsTLSSecret,
-									DefaultMode: &credMode,
-								},
-							},
-						},
-					},
+					Volumes:                       volumes,
 					Containers: []corev1.Container{{
 						Name:  "agc",
 						Image: agcImage,
@@ -1016,23 +1040,7 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
 							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      agcCredsVolumeName,
-								MountPath: agcCredsMountPath,
-								ReadOnly:  true,
-							},
-							{
-								Name:      proxyCACertVolumeName,
-								MountPath: proxyCACertMountPath,
-								ReadOnly:  true,
-							},
-							{
-								Name:      metricsTLSVolumeName,
-								MountPath: metricsTLSMountPath,
-								ReadOnly:  true,
-							},
-						},
+						VolumeMounts: volumeMounts,
 						// StartupProbe gives the AGC manager's informer cache room to
 						// sync before liveness takes over (30 × 5s = 150s), mirroring
 						// the GMC manager's probe. The AGC binds its health listener
