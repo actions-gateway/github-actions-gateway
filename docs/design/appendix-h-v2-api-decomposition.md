@@ -224,15 +224,17 @@ type RunnerSetSpec struct {
 but are not. An unset `proxyRef` has a well-defined *behavior* — direct egress,
 still NetworkPolicy-restricted — so the dependency can simply be dropped. A
 `RunnerSet` with no template has no such fallback: the AGC cannot synthesize a
-worker pod without a pod shape. So `templateRef` stays **required at GA**. It can
-later be relaxed to optional-with-a-default without a breaking change (required →
-optional is backward-compatible) — see the deferred
+worker pod without a pod shape. `proxyRef`'s optional behavior is **shipped** (Q168):
+both `proxyRef` and `defaultProxyRef` unset resolves to direct egress, with
+`proxyMode: Direct` + an `EgressUnattributed` condition in status. `templateRef`
+stays **required at GA**; it can later be relaxed to optional-with-a-default without
+a breaking change (required → optional is backward-compatible) — see the deferred
 [optional default template](../STATUS.md#deferred) item, which resolves an unset
 ref via `ActionsGateway.defaultTemplateRef` → a default-marked
 `ClusterRunnerTemplate` (the `StorageClass` pattern: at most one default,
 fail-closed `TemplateNotFound` if none resolves — never a flag-synthesized phantom
-pod). This keeps `templateRef`/`proxyRef` symmetric: both required at GA, each with
-a deferred, additive "optional" form.
+pod). A reference that *names a missing* proxy still fails closed (`ProxyNotFound`);
+only an entirely-unset ref means direct egress.
 
 ### Worked example — minimal proxy-less onboarding (three objects)
 
@@ -494,36 +496,40 @@ already acceptable needs none of that.
 
 So `proxyRef`/`defaultProxyRef` are both optional; unset ⇒ **direct egress**.
 Onboarding collapses to three objects — one `ActionsGateway`, one
-`RunnerTemplate`, one `RunnerSet` — with no proxy object at all.
+`RunnerTemplate`, one `RunnerSet` — with no proxy object at all. This is **shipped**
+(Q168): a v2 `ActionsGateway`/`RunnerSet` with no proxy reaches Ready with direct
+egress; the worked example in §H.4 is valid as written.
 
-**Secure-by-default guardrail (requires sign-off).** The proxy today bundles two
-properties: egress *identity* (IP attribution) and egress *restriction* (traffic
-can only reach GitHub). Dropping the proxy may drop *identity*, but it must **not**
-drop *restriction*:
+**Secure-by-default guardrail (signed off).** The proxy bundles two properties:
+egress *identity* (IP attribution) and egress *restriction* (traffic can only reach
+GitHub). Dropping the proxy drops *identity*, but it does **not** drop *restriction*
+— this trade was raised and signed off, and the shipped behavior holds the line:
 
 - The **NetworkPolicy egress lockdown stays mandatory and on by default** even
   with no proxy — default-deny egress, allow only DNS + GitHub CIDRs (+ kube API
-  for the AGC). Direct egress is still IP-restricted egress.
-- The **managed GitHub-IP refresh loop**, which today hangs off the proxy, must
-  move up to the gateway/runner-set level so the direct-egress NetworkPolicy
-  stays current.
+  for the AGC). Direct egress is still IP-restricted egress; there is no proxy-less
+  mode in which a worker or AGC can reach arbitrary internet.
+- The **managed GitHub-IP refresh loop**, which previously hung off the proxy, now
+  runs at the gateway level: the GMC's `IPRangeReconciler` patches each direct-egress
+  gateway's AGC + workload NetworkPolicies (as well as the proxied EgressProxy
+  policies) so the direct-egress allowlist stays current as GitHub rotates ranges.
 
 With those two in place, defaulting the proxy off loses only per-tenant *IP
-identity* — a property a subset of tenants need and can opt into — not the egress
-*containment* baseline. Defaulting off the *restriction* would be a security
-regression and is out of scope. See the
+identity* — a property a subset of tenants need and opt into by attaching a proxy —
+not the egress *containment* baseline. Defaulting off the *restriction* would be a
+security regression and is out of scope. See the
 [secure-by-default principle](05-security.md) for the rule this satisfies.
 
-Two refinements keep direct egress **auditable**, not silently inferred:
+Two refinements keep direct egress **auditable**, not silently inferred (both
+shipped):
 
-- **Direct egress is a structurally explicit state.** An unset `proxyRef`
-  resolves to direct egress, and the runner-set status reflects it (e.g.
-  `proxyMode: Direct`) rather than leaving "no proxy" to be inferred from an
-  absent field.
-- **Surface the attribution trade.** Emit an advisory condition (e.g.
-  `EgressUnattributed`) on the proxy-less runner set so an operator can see at a
-  glance that this workload has no per-tenant egress identity — the property they
-  opted out of — without grepping specs.
+- **Direct egress is a structurally explicit state.** An unset `proxyRef` resolves
+  to direct egress, and the gateway/runner-set status records `proxyMode: Direct`
+  rather than leaving "no proxy" to be inferred from an absent field.
+- **Surface the attribution trade.** The proxy-less gateway and runner set carry an
+  advisory `EgressUnattributed` condition (True), so an operator sees at a glance
+  that this workload has no per-tenant egress identity — the property they opted out
+  of — without grepping specs. It is advisory only and never gates Ready.
 
 **Composition bonus.** §H.9 and §H.10 combine: a platform team runs one shared
 `EgressProxy` in a central namespace, grants it to the EMU/allowlist tenants who

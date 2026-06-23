@@ -96,8 +96,8 @@ milestone is independently reviewable and leaves the tree green.
   resolve `templateRef`/`proxyRef` via watch + enqueue; surface
   `TemplateNotFound`/`ProxyNotFound` conditions; fail-closed (no wiring until refs
   resolve).
-- Proxy **required** (same-namespace `EgressProxy` via `proxyRef`/`defaultProxyRef`),
-  matching v1; direct egress is a separate, deferred slice (below).
+- Proxy optional (same-namespace `EgressProxy` via `proxyRef`/`defaultProxyRef`);
+  no proxy ⇒ direct egress, shipped as a separate slice (Q168, below).
 - **Exit:** a v1-equivalent setup runs end-to-end on `v2alpha1` (job acquired →
   worker pod → proxied egress); the parity checklist passes; envtest coverage.
 
@@ -341,14 +341,18 @@ competitive story vs ARC tracks what actually ships. Per the
 
 ## Deferred (out of the critical path)
 
-### Direct egress (optional-proxy behavior)
+### Direct egress (optional-proxy behavior) — shipped (Q168)
 
-The `proxyRef`-optional *schema* lands in M1, but the direct-egress *behavior* —
-unset ref ⇒ `proxyMode: Direct`, a default-deny egress NetworkPolicy with no
-proxy, the managed GitHub-IP refresh relocated to the gateway/runner-set level,
-and an `EgressUnattributed` condition — is additive on M3a and **not** required
-for GA, since proxy-required is v1 parity ([§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional)).
-Ship it as a fast-follow when a proxy-less deployment is actually wanted.
+The `proxyRef`-optional *schema* landed in M1; the direct-egress *behavior* shipped
+in Q168 as an additive fast-follow on M3a: an unset `proxyRef`/`defaultProxyRef`
+resolves to `proxyMode: Direct`, the AGC + workload NetworkPolicies gain the
+GitHub-CIDR allowlist (default-deny egress, allow only DNS + GitHub + the kube API
+for the AGC — restriction preserved, only per-tenant IP *identity* is lost), the
+managed GitHub-IP refresh was relocated to the gateway level (the `IPRangeReconciler`
+patches each direct gateway's NetworkPolicies), and the proxy-less gateway/runner set
+carry an advisory `EgressUnattributed` condition. A reference that names a *missing*
+proxy still fails closed (`ProxyNotFound`). See
+[§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional).
 
 ### Optional default RunnerTemplate (Q172)
 

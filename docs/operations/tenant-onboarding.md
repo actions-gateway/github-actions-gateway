@@ -375,6 +375,49 @@ The biggest onboarding change in v2 is that a single namespace may hold **multip
 
 For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see [Troubleshooting — Multiple v2 gateways in one namespace](troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) and [Appendix H — v2 API decomposition](../design/appendix-h-v2-api-decomposition.md).
 
+### Proxy-less onboarding (direct egress)
+
+In v2 the egress proxy is **optional**. A gateway with no `spec.defaultProxyRef` and a `RunnerSet` with no `spec.proxyRef` egress **directly** to GitHub, collapsing the minimal onboarding to **three objects** — one `ActionsGateway`, one `RunnerTemplate`, one `RunnerSet`, with no `EgressProxy` at all:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata: { name: acme, namespace: team-a }
+spec:
+  githubAppRef: { name: acme-github-app }
+  githubURL: https://github.com/acme
+  # no defaultProxyRef ⇒ direct egress
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata: { name: default, namespace: team-a }
+spec:
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+          resources: { requests: { cpu: "1", memory: 2Gi } }
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata: { name: linux, namespace: team-a }
+spec:
+  gatewayRef:  { name: acme }
+  templateRef: { name: default }
+  runnerLabels: [self-hosted, linux]
+  maxListeners: 10
+  maxWorkers: 50
+  # no proxyRef and no gateway defaultProxyRef ⇒ direct egress
+```
+
+What you trade, and what you do **not**:
+
+- **Egress is still restricted — this is mandatory and default-on.** Direct egress is **not** open egress. The GMC still provisions the default-deny egress NetworkPolicy; it allows only **DNS (cluster DNS) + the GitHub CIDR allowlist** for workers, plus the **Kubernetes API server** for the AGC. A worker still cannot reach an arbitrary internet destination. The GMC's IP-range refresh keeps the GitHub allowlist current. (As with all egress rules, this is enforced only by a policy-aware CNI — see [Pre-Conditions](#pre-conditions).)
+- **You lose per-tenant egress IP *attribution*.** Without a proxy there is no stable per-tenant source IP, so GitHub IP-allowlisting (common with Enterprise Managed Users), incident attribution by source IP, and avoiding shared-NAT throttling are **not** available. This is the property you opt into by attaching an `EgressProxy`.
+- **The trade is surfaced in status.** A proxy-less gateway and runner set report `status.proxyMode: Direct` (visible as the `Egress` print column) plus an advisory `EgressUnattributed` condition (`True`). The condition is informational — it does **not** make the object `NotReady`. Check it with `kubectl get actionsgateway,runnerset -n <ns>` (the `Egress` column) or `kubectl describe`.
+
+To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`). A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
+
 ---
 
 ## Handing Off to the Tenant
