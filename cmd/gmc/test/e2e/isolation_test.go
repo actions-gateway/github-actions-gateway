@@ -91,6 +91,11 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		// consecutive attempts: a deterministic "policy is enforced now" signal. If
 		// enforcement never appears within the loop budget the probe exits non-zero and
 		// the pod ends Failed, surfacing a real isolation regression rather than a flake.
+		//
+		// Loop budget (150 iters × ~2s connected ≈ 5 min) is sized to span the outer
+		// Eventually window below — kindnet's NP programming latency under a loaded CI
+		// runner has exceeded the old ~2-min (60-iter) budget, ending the probe Failed
+		// before enforcement landed even though calico (synchronous) passed (Q179).
 		const probePodName = "cross-tenant-gate"
 
 		By("deploying a probe pod in nsA that polls until the nsB proxy is blocked in the dataplane")
@@ -110,7 +115,7 @@ spec:
     - |
       set -u
       blocks=0
-      for i in $(seq 1 60); do
+      for i in $(seq 1 150); do
         if curl --silent --show-error --max-time 5 --connect-timeout 5 --output /dev/null "%s"; then
           blocks=0
           echo "attempt $i: connected — NetworkPolicy not yet enforced"
@@ -145,7 +150,7 @@ spec:
 			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
 				"probe pod still in phase %q", out)
 			probePhase = out
-		}, 5*time.Minute, 2*time.Second).Should(Succeed())
+		}, 6*time.Minute, 2*time.Second).Should(Succeed())
 
 		probeLogs, _ := utils.Run(exec.Command("kubectl", "logs", probePodName, "-n", nsA))
 		Expect(probePhase).To(Equal("Succeeded"),
