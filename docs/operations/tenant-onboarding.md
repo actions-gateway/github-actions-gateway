@@ -362,6 +362,21 @@ Onboarding is complete when:
 
 ---
 
+## v2 API (alpha): multiple gateways per namespace
+
+> **Audience:** Platform engineer adopting the **`v2alpha1`** (`actions-gateway.com`) API. This is an **alpha, early-adopter** API served *beside* `v1alpha1` — everything above (the `v1alpha1`, `actions-gateway.github.com` flow) stays fully supported. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Optional: the v2alpha1 API](../getting-started.md#optional-the-v2alpha1-api-alpha).
+
+The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)). What that changes when onboarding a v2 tenant:
+
+- **Per-gateway resource naming.** Every resource a gateway derives is prefixed with the gateway name — `<gateway>-agc` (AGC Deployment / ServiceAccount / RoleBinding / Service), `<gateway>-worker` (worker ServiceAccount), `<gateway>-workload` (workload NetworkPolicy), and so on — so two gateways in one namespace never contend over a fixed name. List one gateway's resources with `kubectl get all,networkpolicy,secret -n <tenant-namespace> -l actions-gateway.com/gateway=<gateway>`.
+- **52-character name cap.** Any v2 CR (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) whose `metadata.name` exceeds **52 characters** is rejected at admission. The cap reserves room for the derived `<name>-<suffix>` so a label value / Service name stays under RFC 1123's 63-character ceiling (appendix-h §H.6). Pick short gateway names.
+- **Kubernetes ≥ 1.31 required.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, via a server-side CRD field selector (KEP-4358) that is alpha-off on 1.30. On a 1.30 cluster a v2 AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the pod never becomes ready. Confirm the cluster is ≥ 1.31 before onboarding any v2 gateway.
+- **Co-located gateways share one namespace security profile.** In v2 the Pod Security level is a property of the **namespace**, not the gateway (see the v2 callout in [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label. Tenants needing different postures (e.g. `baseline` vs `privileged`) still use separate namespaces, exactly as in v1.
+
+For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see [Troubleshooting — Multiple v2 gateways in one namespace](troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) and [Appendix H — v2 API decomposition](../design/appendix-h-v2-api-decomposition.md).
+
+---
+
 ## Handing Off to the Tenant
 
 Once onboarding is complete, share with the tenant team:

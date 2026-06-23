@@ -136,6 +136,27 @@ The GMC will provision the AGC, proxy pool, RBAC, and network policies in `team-
 
 Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation. See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.
 
+## Optional: the v2alpha1 API (alpha)
+
+Everything above uses the **`v1alpha1`** API (`actions-gateway.github.com`), which is fully supported and is the standard path. A second, **alpha** API — **`v2alpha1`** (`actions-gateway.com`) — ships *beside* it for early adopters. It decomposes the single `ActionsGateway` CR into five smaller kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) and adds:
+
+- **multiple `ActionsGateway`s per namespace** (v1 is one-per-namespace);
+- **reusable runner templates** — a `RunnerTemplate` (or cluster-scoped `ClusterRunnerTemplate`) referenced by many runner sets, instead of an inline pod template copied into each group;
+- an **optional shared egress proxy** (`EgressProxy`) any runner set can point at — with direct egress when none is set.
+
+`v2alpha1` is **alpha and may change incompatibly**; `v1alpha1` remains fully supported and v2 is not a drop-in replacement. Adopt it only when you want the new shape.
+
+The v2 CRDs ship in a **separate, opt-in chart** — `actions-gateway-crds-v2` — because they are large enough that bundling them would push the main chart's Helm release Secret past its 1 MiB limit. Install it alongside the main `actions-gateway` chart (any order):
+
+```sh
+helm install actions-gateway-crds-v2 \
+  oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+```
+
+The CRDs install and validate on Kubernetes ≥ 1.30, but per-gateway scoping (the `RunnerSet` `spec.gatewayRef.name` field selector, KEP-4358) requires **Kubernetes ≥ 1.31**. See the [chart README](../charts/actions-gateway-crds-v2/README.md) for details.
+
+For the v2 onboarding flow — the worked three-object example, per-gateway naming and the 52-character name cap, and the namespace-scoped security profile — see [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md), the v2 sections in [Tenant Onboarding](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace), and [Troubleshooting](operations/troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites).
+
 ## Rotating GitHub App Credentials
 
 When your GitHub App private key expires or is compromised, follow these steps to rotate credentials without downtime:
