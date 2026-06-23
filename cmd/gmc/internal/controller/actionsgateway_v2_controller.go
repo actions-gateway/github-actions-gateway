@@ -39,6 +39,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -71,7 +72,14 @@ import (
 // Security Admission labels are stamped by the NamespacePSAReconciler from the
 // namespace security-profile label (Q175) — this reconciler reads that label to
 // thread SECURITY_PROFILE to the AGC but never stamps PSA. Single-gateway per
-// namespace (M3a); proxy is required (no direct egress, §H.10).
+// namespace (M3a).
+//
+// The egress proxy is optional (Q168, §H.10): a gateway with a defaultProxyRef
+// egresses through that EgressProxy (proxyMode Direct→Proxied), with stable
+// per-tenant egress IPs; a gateway with no defaultProxyRef egresses directly
+// (proxyMode Direct), still NetworkPolicy-restricted to DNS + GitHub CIDRs + the
+// kube API server — only the per-tenant IP *identity* is lost, surfaced via the
+// advisory EgressUnattributed condition. Restriction is never dropped.
 type ActionsGatewayV2Reconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -83,8 +91,24 @@ type ActionsGatewayV2Reconciler struct {
 	// APIServerCIDRs optionally scopes the AGC NetworkPolicy's apiserver egress
 	// rule (Q145); empty keeps it any-destination (the secure default).
 	APIServerCIDRs []string
+	// IPCache supplies the current GitHub IP CIDRs for the direct-egress AGC and
+	// workload NetworkPolicies (Q168). Shared with the IPRangeReconciler, which keeps
+	// those policies current as GitHub rotates ranges. nil is tolerated (the direct
+	// NetworkPolicies are created with no GitHub rule and patched on the next refresh).
+	IPCache *IPRangeCache
 	// Recorder emits Kubernetes Events on the ActionsGateway. May be nil in tests.
 	Recorder events.EventRecorder
+}
+
+// githubCIDRs returns the current GitHub IP CIDRs from the shared cache, or nil when
+// no cache is wired or it has not completed its first fetch. A nil/empty result makes
+// the direct-egress NetworkPolicies omit the GitHub rule (fail-closed) until the
+// IPRangeReconciler patches them.
+func (r *ActionsGatewayV2Reconciler) githubCIDRs() []net.IPNet {
+	if r.IPCache == nil {
+		return nil
+	}
+	return r.IPCache.Snapshot()
 }
 
 // Reconcile drives a v2 ActionsGateway toward its desired AGC control plane.
@@ -118,20 +142,23 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 			fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppRef.Name, ag.Namespace))
 	}
 
-	// Resolve the control-plane egress proxy from defaultProxyRef. Proxy is
-	// required in M3a: unset or missing ⇒ fail closed (ProxyNotFound), no AGC.
-	if ag.Spec.DefaultProxyRef == nil {
-		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyNotFound,
-			"ActionsGateway has no defaultProxyRef; an EgressProxy is required for control-plane egress")
-	}
-	var proxy gmcv2alpha1.EgressProxy
-	proxyErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.DefaultProxyRef.Name}, &proxy)
-	if proxyErr != nil && !apierrors.IsNotFound(proxyErr) {
-		return ctrl.Result{}, proxyErr
-	}
-	if apierrors.IsNotFound(proxyErr) {
-		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyNotFound,
-			fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, ag.Namespace))
+	// Resolve the control-plane egress proxy from defaultProxyRef (Q168, §H.10).
+	// Unset ⇒ direct egress: the AGC reaches GitHub directly, still restricted by the
+	// direct-egress NetworkPolicy to DNS + GitHub CIDRs + the kube API server. Set ⇒
+	// proxied: the named EgressProxy must exist; a defaultProxyRef pointing at a
+	// missing proxy is an operator error and still fails closed (ProxyNotFound).
+	var proxy *gmcv2alpha1.EgressProxy
+	if ag.Spec.DefaultProxyRef != nil {
+		var p gmcv2alpha1.EgressProxy
+		proxyErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.DefaultProxyRef.Name}, &p)
+		if proxyErr != nil && !apierrors.IsNotFound(proxyErr) {
+			return ctrl.Result{}, proxyErr
+		}
+		if apierrors.IsNotFound(proxyErr) {
+			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyNotFound,
+				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, ag.Namespace))
+		}
+		proxy = &p
 	}
 
 	// Read the namespace's effective security profile (the source label the
@@ -141,16 +168,17 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileResources(ctx, &ag, &proxy, securityProfile); err != nil {
+	if err := r.reconcileResources(ctx, &ag, proxy, securityProfile); err != nil {
 		return r.setDegraded(ctx, &ag, err)
 	}
 
-	return r.updateStatus(ctx, &ag)
+	return r.updateStatus(ctx, &ag, proxy)
 }
 
 // reconcileResources creates or patches every AGC control-plane child, each
 // owner-referenced to the ActionsGateway. Failures are wrapped with the failing
 // step so setDegraded can name it (Q156).
+// proxy is nil for direct egress (§H.10).
 func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy, securityProfile string) (retErr error) {
 	log := logf.FromContext(ctx)
 	var current string
@@ -189,16 +217,22 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 		return fmt.Errorf("AGC Service: %w", err)
 	}
 
+	// Direct egress (proxy == nil) adds the GitHub-CIDR allowlist to the AGC and
+	// workload NetworkPolicies so the AGC and workers reach GitHub directly; the proxied
+	// path leaves them reaching GitHub through the proxy (§H.10). Restriction is
+	// preserved in both modes — egress is never opened beyond DNS + GitHub (+ kube API).
 	step("NetworkPolicies")
-	if err := r.applyNetworkPolicy(ctx, ag, buildWorkloadNetworkPolicyV2(ag)); err != nil {
+	direct := proxy == nil
+	githubCIDRs := r.githubCIDRs()
+	if err := r.applyNetworkPolicy(ctx, ag, buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct)); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, ag, buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, ag, buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct)); err != nil {
 		return fmt.Errorf("AGC NetworkPolicy: %w", err)
 	}
 
 	step("AGC Deployment")
-	dep := buildAGCDeploymentV2(ag, r.AGCImage, proxy.Name, securityProfile, proxy.Spec.NoProxyCIDRs, r.AGCExtraEnv)
+	dep := buildAGCDeploymentV2(ag, r.AGCImage, proxy, securityProfile, r.AGCExtraEnv)
 	if err := r.applyDeployment(ctx, ag, dep); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}
@@ -360,8 +394,11 @@ func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *g
 
 // updateStatus reads the AGC Deployment readiness and writes the uniform v2
 // status/condition contract: Ready + AGCAvailable, observedGeneration, and a
-// cleared CredentialUnavailable + Degraded (provisioning reached here).
-func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
+// cleared CredentialUnavailable + Degraded (provisioning reached here). It also
+// records the egress mode (proxyMode Proxied/Direct) and the advisory
+// EgressUnattributed condition (True only in direct mode, §H.10). proxy is nil for
+// direct egress.
+func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	agcReady := false
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep); err == nil {
@@ -382,6 +419,21 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// Provisioning succeeded, so clear the abnormal conditions.
 	set(gmcv2alpha1.ConditionCredentialUnavailable, false, gmcv2alpha1.ReasonReconcileSucceeded, "GitHub App Secret present")
 	set(gmcv2alpha1.ConditionDegraded, false, gmcv2alpha1.ReasonReconcileSucceeded, "all AGC control-plane resources reconciled")
+
+	// Egress mode (§H.10). Direct egress is an explicit, auditable status — not an
+	// inferred absent field — paired with the advisory EgressUnattributed condition so
+	// an operator sees at a glance that the AGC control plane has no per-tenant egress
+	// IP identity (the property they opted out of by not setting defaultProxyRef). It
+	// does not gate Ready: direct egress is a supported, NetworkPolicy-restricted mode.
+	if proxy == nil {
+		ag.Status.ProxyMode = gmcv2alpha1.ProxyModeDirect
+		set(gmcv2alpha1.ConditionEgressUnattributed, true, gmcv2alpha1.ReasonDirectEgress,
+			"no defaultProxyRef: AGC control-plane egress is direct (restricted to DNS + GitHub + the kube API) and has no per-tenant egress IP identity")
+	} else {
+		ag.Status.ProxyMode = gmcv2alpha1.ProxyModeProxied
+		set(gmcv2alpha1.ConditionEgressUnattributed, false, gmcv2alpha1.ReasonProxiedEgress,
+			fmt.Sprintf("AGC control-plane egress is attributed to EgressProxy %q", proxy.Name))
+	}
 
 	agcReason := gmcv2alpha1.ReasonAGCReady
 	agcMsg := "AGC Deployment has a ready replica"

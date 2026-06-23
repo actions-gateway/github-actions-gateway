@@ -211,6 +211,12 @@ type IPRangeReconciler struct {
 	// actions_gateway_ip_range_updates_total. Optional so tests can omit it.
 	Metrics *Metrics
 
+	// APIServerCIDRs scopes the rebuilt direct-egress AGC NetworkPolicy's apiserver
+	// rule (Q145), so a refresh preserves the operator's apiserver scoping rather than
+	// resetting it to any-destination. Mirror of ActionsGatewayV2Reconciler.APIServerCIDRs;
+	// empty keeps the rule any-destination (the secure default). Q168.
+	APIServerCIDRs []string
+
 	// InitialBackoff and MaxBackoff bound the capped exponential backoff used
 	// to retry the initial fetch in Start (see reconcileInitial). Zero selects
 	// defaultInitialBackoff / defaultMaxBackoff; tests set small values.
@@ -355,6 +361,64 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		if err := r.patchEgressProxyNetworkPolicy(ctx, ep, cidrs); err != nil {
 			log.Error("failed to patch EgressProxy NetworkPolicy", "namespace", ep.Namespace, "name", ep.Name, "error", err)
 		}
+	}
+
+	// v2 direct egress (Q168, §H.10): a v2 ActionsGateway with no defaultProxyRef
+	// egresses directly, and its AGC + workload NetworkPolicies carry the GitHub-CIDR
+	// allowlist instead of a proxy rule. That allowlist is derived from this same
+	// cache, so — like the proxy NetworkPolicies above — it must be refreshed when
+	// GitHub rotates ranges. Proxied gateways have no GitHub rule on these policies,
+	// so they are skipped. A v2 CRD missing on a v1-only install is tolerated.
+	var v2agList gmcv2alpha1.ActionsGatewayList
+	if err := r.List(ctx, &v2agList); err != nil {
+		log.Error("failed to list v2 ActionsGateways", "error", err)
+		return nil
+	}
+	for i := range v2agList.Items {
+		v2ag := &v2agList.Items[i]
+		if !v2ag.DeletionTimestamp.IsZero() {
+			continue
+		}
+		if v2ag.Spec.DefaultProxyRef != nil {
+			continue // proxied: AGC/workload NetworkPolicies carry no GitHub rule
+		}
+		if err := r.patchDirectEgressNetworkPolicies(ctx, v2ag, cidrs); err != nil {
+			log.Error("failed to patch direct-egress NetworkPolicies", "namespace", v2ag.Namespace, "name", v2ag.Name, "error", err)
+		}
+	}
+	return nil
+}
+
+// patchDirectEgressNetworkPolicies refreshes a direct-egress v2 ActionsGateway's AGC
+// and workload NetworkPolicy egress rules from the current CIDR set, so the
+// direct-egress GitHub allowlist stays current as GitHub rotates ranges (Q168). The
+// v2 direct-mode analogue of patchNetworkPolicy / patchEgressProxyNetworkPolicy. A
+// NetworkPolicy that does not exist yet (or is being removed) is skipped; the per-CR
+// reconcile creates it. The patch is metrics-counted once per gateway.
+func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, cidrs []net.IPNet) error {
+	patched := false
+	patch := func(name string, desired *networkingv1.NetworkPolicy) error {
+		var np networkingv1.NetworkPolicy
+		if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: name}, &np); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		np.Spec.Egress = desired.Spec.Egress
+		np.Spec.Ingress = desired.Spec.Ingress
+		if err := r.Update(ctx, &np); err != nil {
+			return err
+		}
+		patched = true
+		return nil
+	}
+
+	if err := patch(workloadNPNameV2(ag), buildWorkloadNetworkPolicyV2(ag, cidrs, true)); err != nil {
+		return err
+	}
+	if err := patch(agcNameV2(ag), buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, cidrs, true)); err != nil {
+		return err
+	}
+	if patched && r.Metrics != nil {
+		r.Metrics.IPRangeUpdates.WithLabelValues(ag.Namespace).Inc()
 	}
 	return nil
 }

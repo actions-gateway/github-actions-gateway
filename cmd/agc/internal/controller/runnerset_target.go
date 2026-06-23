@@ -107,13 +107,6 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 		return nil, fmt.Errorf("%s: %s", res.reason, res.message)
 	}
 
-	proxyName := refs.proxy.Name
-	noProxy := defaultNoProxy
-	if cidrs := refs.proxy.Spec.NoProxyCIDRs; len(cidrs) > 0 {
-		noProxy = strings.Join(cidrs, ",") + "," + defaultNoProxy
-	}
-	proxyAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", egressProxyServiceName(proxyName), t.key.Namespace, proxyPort)
-
 	spec := &provisioner.ResolvedSpec{
 		PodTemplate:        refs.template.PodTemplate,
 		WorkerImage:        refs.template.WorkerImage,
@@ -124,11 +117,23 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 		MaxQuotaRetries:    t.prov.MaxQuotaRetries,
 		QuotaRetryDelay:    t.prov.QuotaRetryDelay,
 		CompletedPodTTL:    provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
-		HTTPProxy:          proxyAddr,
-		HTTPSProxy:         proxyAddr,
-		NoProxy:            noProxy,
-		ProxyTLSSecretName: egressProxyTLSSecretName(proxyName),
 		SecurityProfile:    t.prov.SecurityProfile,
+	}
+	// Proxied: wire the worker's egress through the resolved EgressProxy. Direct
+	// (refs.proxy == nil, §H.10): leave the proxy fields empty so the worker gets no
+	// HTTP(S)_PROXY env and no proxy-CA mount and reaches GitHub directly — still
+	// restricted by the GMC's direct-egress workload NetworkPolicy to DNS + GitHub.
+	if refs.proxy != nil {
+		proxyName := refs.proxy.Name
+		noProxy := defaultNoProxy
+		if cidrs := refs.proxy.Spec.NoProxyCIDRs; len(cidrs) > 0 {
+			noProxy = strings.Join(cidrs, ",") + "," + defaultNoProxy
+		}
+		proxyAddr := fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", egressProxyServiceName(proxyName), t.key.Namespace, proxyPort)
+		spec.HTTPProxy = proxyAddr
+		spec.HTTPSProxy = proxyAddr
+		spec.NoProxy = noProxy
+		spec.ProxyTLSSecretName = egressProxyTLSSecretName(proxyName)
 	}
 	if rs.Spec.MaxEvictionRetries != nil {
 		spec.MaxEvictionRetries = int(*rs.Spec.MaxEvictionRetries)
@@ -170,9 +175,10 @@ func (r refResolution) resolved() bool { return r.reason == "" && r.err == nil }
 // referents surface as a reason/message (GatewayNotFound / TemplateNotFound /
 // ProxyNotFound) rather than an error, so the reconciler sets the condition and
 // waits for the referent→referrer watch to re-enqueue when it appears — no apply
-// ordering required (§H.7). Proxy is required in M3a (single-gateway parity): a
-// RunnerSet whose proxyRef and gateway.defaultProxyRef are both unset reports
-// ProxyNotFound, never silent direct egress (direct egress is deferred, §H.10).
+// ordering required (§H.7). The proxy is optional (Q168, §H.10): a RunnerSet whose
+// proxyRef and gateway.defaultProxyRef are both unset resolves with refs.proxy == nil
+// (direct egress, still NetworkPolicy-restricted), not ProxyNotFound. A reference to
+// a *named but missing* proxy still fails closed with ProxyNotFound.
 func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.RunnerSet) (*resolvedRefs, refResolution) {
 	ns := rs.Namespace
 	refs := &resolvedRefs{}
@@ -195,7 +201,12 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	}
 	refs.template = tmplSpec
 
-	// proxyRef → EgressProxy, else gateway.defaultProxyRef. Proxy required (M3a).
+	// proxyRef → EgressProxy, else gateway.defaultProxyRef. Both unset ⇒ direct
+	// egress (§H.10): refs.proxy stays nil, the worker reaches GitHub directly
+	// (still NetworkPolicy-restricted), and the set is Ready with proxyMode Direct —
+	// no longer a fail-closed ProxyNotFound. A proxyRef/defaultProxyRef that names a
+	// *missing* proxy is still fail-closed ProxyNotFound: an explicit reference to a
+	// not-yet-applied proxy must not silently fall back to direct egress.
 	proxyName := ""
 	if rs.Spec.ProxyRef != nil {
 		proxyName = rs.Spec.ProxyRef.Name
@@ -203,8 +214,7 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 		proxyName = gw.Spec.DefaultProxyRef.Name
 	}
 	if proxyName == "" {
-		return nil, refResolution{reason: v2alpha1.ReasonProxyNotFound,
-			message: fmt.Sprintf("no proxy: RunnerSet %q sets no proxyRef and gateway %q has no defaultProxyRef", rs.Name, gw.Name)}
+		return refs, refResolution{} // direct egress: refs.proxy == nil
 	}
 	proxy := &v2alpha1.EgressProxy{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyName}, proxy); err != nil {

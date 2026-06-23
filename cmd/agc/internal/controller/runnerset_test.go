@@ -87,14 +87,19 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
 	})
 
-	t.Run("proxy unset everywhere", func(t *testing.T) {
+	t.Run("proxy unset everywhere resolves to direct egress", func(t *testing.T) {
+		// No proxyRef and no gateway defaultProxyRef ⇒ direct egress (Q168): resolved
+		// with refs.proxy == nil, not ProxyNotFound.
 		rs := rsObj("set", ns, nil)
 		c := build(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns))
-		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
-		assert.Equal(t, v2alpha1.ReasonProxyNotFound, res.reason)
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved(), "no proxy ⇒ direct egress, not a failure")
+		assert.Nil(t, refs.proxy, "direct egress: no resolved proxy")
 	})
 
-	t.Run("proxy absent", func(t *testing.T) {
+	t.Run("named but absent proxy still fails closed", func(t *testing.T) {
+		// A gateway defaultProxyRef naming a *missing* proxy must not silently fall
+		// back to direct egress — it fails closed with ProxyNotFound (Q168).
 		rs := rsObj("set", ns, nil)
 		c := build(rs, gwObj("gw", ns, "shared"), tmplObj("tmpl", ns))
 		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
@@ -197,6 +202,27 @@ func TestRunnerSetTarget_ResolveAndCeiling(t *testing.T) {
 	require.NoError(t, c.Delete(context.Background(), ep))
 	_, err = target.Resolve(context.Background())
 	assert.Error(t, err)
+}
+
+// TestRunnerSetTarget_ResolveDirectEgress: with no proxyRef/defaultProxyRef, Resolve
+// returns a spec with empty proxy fields so the worker reaches GitHub directly — no
+// HTTP(S)_PROXY env, no proxy-CA mount (Q168, §H.10).
+func TestRunnerSetTarget_ResolveDirectEgress(t *testing.T) {
+	scheme := runnerSetTestScheme(t)
+	ns := "team-a"
+	rs := rsObj("set", ns, nil)
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns)).Build()
+
+	prov := provisioner.NewProvisioner(c, nil, slog.Default())
+	target := &runnerSetTarget{client: c, prov: prov, key: client.ObjectKey{Namespace: ns, Name: "set"}, uid: "uid-1"}
+
+	spec, err := target.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "runner:test", spec.WorkerImage)
+	assert.Empty(t, spec.HTTPProxy, "direct egress: no HTTP proxy")
+	assert.Empty(t, spec.HTTPSProxy, "direct egress: no HTTPS proxy")
+	assert.Empty(t, spec.ProxyTLSSecretName, "direct egress: no proxy-CA mount")
 }
 
 func TestRunnerSetReconcile_FailsClosedWithGatewayNotFound(t *testing.T) {

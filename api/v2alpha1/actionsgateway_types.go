@@ -73,6 +73,16 @@ type ActionsGatewayStatus struct {
 	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// ProxyMode records how this gateway's AGC control-plane egress reaches GitHub:
+	// "Proxied" (through the EgressProxy named by defaultProxyRef, with stable
+	// per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy-
+	// restricted to GitHub + DNS + kube API but without per-tenant IP attribution).
+	// Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Proxied;Direct
+	ProxyMode string `json:"proxyMode,omitempty"`
+
 	// ObservedGeneration is the .metadata.generation the most recent reconcile acted on.
 	//
 	// +optional
@@ -87,6 +97,7 @@ type ActionsGatewayStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ag,categories=actions-gateway
 // +kubebuilder:printcolumn:name="URL",type=string,JSONPath=`.spec.githubURL`
+// +kubebuilder:printcolumn:name="Egress",type=string,JSONPath=`.status.proxyMode`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=`.status.conditions[?(@.type=='Ready')].reason`
 // +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=`.status.observedGeneration`

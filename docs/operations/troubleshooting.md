@@ -1334,7 +1334,7 @@ Reason: ProxyNotFound      Message: EgressProxy "shared" not found in namespace 
 
 **Likely cause — this is by design, not an error.** v2 resolves a `RunnerSet`'s references (`gatewayRef`, `templateRef`, `proxyRef`/the gateway's `defaultProxyRef`) **at runtime**, not at admission, so applying a directory in any order converges (GitOps-friendly). Until every reference resolves the set sits `Ready=False` with the specific `*NotFound` reason and **provisions no worker pods** — fail-closed, so no traffic is ever permitted in the gap. The AGC watches the referents and flips the set to `Ready` the moment the missing object syncs; **no re-apply of the `RunnerSet` is needed**.
 
-A `ProxyNotFound` with the message "RunnerSet … sets no proxyRef and gateway … has no defaultProxyRef" means proxy is unset everywhere — proxy is **required** in this milestone (direct egress is deferred), so add a `proxyRef` or a gateway `defaultProxyRef`.
+A `ProxyNotFound` here means a `proxyRef`/`defaultProxyRef` **names an `EgressProxy` that does not exist** — a named-but-missing reference fails closed (it does not silently fall back to direct egress). Apply the named `EgressProxy`, or remove the reference if you want direct egress. **Unset everywhere is not an error:** a `RunnerSet` with no `proxyRef` under a gateway with no `defaultProxyRef` resolves to **direct egress** (`Ready=True`, `status.proxyMode: Direct`, advisory `EgressUnattributed` condition), not `ProxyNotFound` — see ["RunnerSet reports `EgressUnattributed`"](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1).
 
 A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolves the same way: `TemplateNotFound` means the named cluster-scoped template does not exist yet. The AGC reads it through a per-gateway `ClusterRoleBinding` to the shipped `agc-clusterrunnertemplate-reader` ClusterRole that the GMC creates with the gateway — so if every namespaced reference resolves but a `ClusterRunnerTemplate` ref stays `TemplateNotFound`, confirm a platform administrator has created that `ClusterRunnerTemplate` (it is cluster-scoped and platform-authored; tenants cannot create it).
 
@@ -1358,12 +1358,28 @@ Ready=False  Reason: ProxyNotFound
   Message: EgressProxy "shared" (defaultProxyRef) not found in namespace "team-a"
 ```
 
-**Likely cause.** The v2 gateway provisions the AGC control plane only after its two hard dependencies resolve, and **fails closed** otherwise (no AGC Deployment is created):
+**Likely cause.** The v2 gateway provisions the AGC control plane only after its preconditions resolve, and **fails closed** otherwise (no AGC Deployment is created):
 
 - **`CredentialUnavailable`** — the Secret named by `spec.githubAppRef.name` does not exist in the gateway's namespace. The AGC mounts the GitHub App credential as files, so without it there is nothing to provision.
-- **`ProxyNotFound`** — `spec.defaultProxyRef` is unset, or names an `EgressProxy` that does not exist. The AGC's control-plane egress is routed through that proxy; proxy is required in this milestone.
+- **`ProxyNotFound`** — `spec.defaultProxyRef` **names an `EgressProxy` that does not exist**. The AGC's control-plane egress is routed through that proxy, so a dangling reference fails closed. Note this fires only for a *named but missing* proxy: an **unset** `defaultProxyRef` is **not** an error — it means **direct egress** (the gateway reaches Ready with `status.proxyMode: Direct` and an advisory `EgressUnattributed` condition; see below). Apply the named `EgressProxy`, or clear `defaultProxyRef` to use direct egress.
 
 Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preconditions; once the Secret or `EgressProxy` appears the gateway reconciles and the AGC Deployment is created (the gateway watches both). Note that the proxy **pool** is reconciled separately by the `EgressProxy` reconciler — the gateway only references it; and the namespace Pod Security Admission labels are stamped by the namespace PSA reconciler from the `actions-gateway.com/security-profile` label, which the gateway *reads* (to thread `SECURITY_PROFILE` to the AGC) but never stamps.
+
+---
+
+## `RunnerSet` or gateway reports `EgressUnattributed` (direct egress) (`v2alpha1`)
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+
+**Symptoms.** `kubectl get actionsgateway,runnerset -n <ns>` shows `Egress: Direct`, and `kubectl describe` shows an `EgressUnattributed=True` condition (`Reason: DirectEgress`). The object is otherwise `Ready`.
+
+**This is not an error — it is informational.** It means the gateway has no `spec.defaultProxyRef` and/or the `RunnerSet` has no `spec.proxyRef`, so egress goes **directly** to GitHub instead of through an `EgressProxy` (appendix-h §H.10). Direct egress is a supported mode and never makes the object `NotReady`; the condition exists only so an operator can see at a glance that the workload has **no per-tenant egress IP identity** — the trade you make by not attaching a proxy.
+
+**What is still guaranteed.** Egress is still **restricted**: the GMC's default-deny egress NetworkPolicy permits only **DNS (cluster DNS) + the GitHub CIDR allowlist** for workers (plus the kube API server for the AGC), and the IP-range refresh keeps that allowlist current. A direct-egress worker cannot reach an arbitrary internet host. What you lose is only the stable per-tenant *source IP* (needed for GitHub IP-allowlisting / EMU, incident attribution, and avoiding shared-NAT throttling).
+
+**If you wanted attribution.** Create an `EgressProxy` in the namespace and set `spec.defaultProxyRef` on the gateway (or `spec.proxyRef` on the specific `RunnerSet`). The object flips to `proxyMode: Proxied` and the condition clears (`EgressUnattributed=False`). See [tenant-onboarding — Proxy-less onboarding](tenant-onboarding.md#proxy-less-onboarding-direct-egress).
+
+**If GitHub egress fails in direct mode.** Confirm (1) the cluster CNI actually enforces egress NetworkPolicy (kindnet does not — see [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions)), and (2) the GMC's GitHub IP-range refresh has run — the direct-egress AGC + workload NetworkPolicies carry the GitHub CIDR allowlist only after the first fetch; `kubectl get networkpolicy <gateway>-workload -o yaml` should show `ipBlock` egress peers on port 443.
 
 **Resolution.** Create the GitHub App Secret (see ["GitHub App Secret Misconfiguration"](#github-app-secret-misconfiguration) for the required keys) and/or the `EgressProxy` named by `defaultProxyRef`, in the gateway's namespace. The gateway self-heals on the next watch event.
 

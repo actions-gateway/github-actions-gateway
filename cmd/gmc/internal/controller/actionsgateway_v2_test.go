@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -147,6 +148,9 @@ func TestActionsGatewayV2Reconcile_ProvisionsControlPlane(t *testing.T) {
 	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionDegraded))
 	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable))
 	assert.Equal(t, got.Generation, got.Status.ObservedGeneration)
+	// Proxied: proxyMode Proxied, EgressUnattributed=False (Q168).
+	assert.Equal(t, gmcv2alpha1.ProxyModeProxied, got.Status.ProxyMode)
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed))
 }
 
 func TestActionsGatewayV2Reconcile_FailsClosedWithoutCredential(t *testing.T) {
@@ -170,29 +174,77 @@ func TestActionsGatewayV2Reconcile_FailsClosedWithoutCredential(t *testing.T) {
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
 }
 
-func TestActionsGatewayV2Reconcile_FailsClosedWithoutProxy(t *testing.T) {
+// TestActionsGatewayV2Reconcile_FailsClosedWithAbsentProxyRef: a defaultProxyRef
+// that names a *missing* EgressProxy is an operator error and still fails closed
+// (ProxyNotFound, no AGC) — it must not silently fall back to direct egress (Q168).
+func TestActionsGatewayV2Reconcile_FailsClosedWithAbsentProxyRef(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
-
-	// (a) defaultProxyRef unset.
-	agNoRef := v2Gateway("gw-noref", "team-a", "github-app", "")
-	// (b) defaultProxyRef names an absent EgressProxy.
 	agAbsent := v2Gateway("gw-absent", "team-a", "github-app", "absent")
 	c := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(ns, secret, agNoRef, agAbsent).
-		WithStatusSubresource(agNoRef, agAbsent).Build()
+		WithObjects(ns, secret, agAbsent).
+		WithStatusSubresource(agAbsent).Build()
 
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
-	for _, name := range []string{"gw-noref", "gw-absent"} {
-		reconcileV2Gateway(t, r, "team-a", name)
-		var got gmcv2alpha1.ActionsGateway
-		require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: name}, &got))
-		ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
-		require.NotNil(t, ready, "%s", name)
-		assert.Equal(t, metav1.ConditionFalse, ready.Status, "%s", name)
-		assert.Equal(t, gmcv2alpha1.ReasonProxyNotFound, ready.Reason, "%s", name)
-	}
+	reconcileV2Gateway(t, r, "team-a", "gw-absent")
+	var got gmcv2alpha1.ActionsGateway
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw-absent"}, &got))
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionFalse, ready.Status)
+	assert.Equal(t, gmcv2alpha1.ReasonProxyNotFound, ready.Reason)
+	// Fail closed: no AGC Deployment.
+	var dep appsv1.Deployment
+	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(agAbsent)}, &dep))
+}
+
+// TestActionsGatewayV2Reconcile_DirectEgressWhenNoProxyRef: a gateway with no
+// defaultProxyRef egresses directly (Q168, §H.10) — it provisions the AGC control
+// plane (no proxy env), reports proxyMode Direct + EgressUnattributed=True, and is
+// NOT Degraded/ProxyNotFound. Its AGC + workload NetworkPolicies carry the GitHub
+// allowlist from the IP cache; restriction is preserved.
+func TestActionsGatewayV2Reconcile_DirectEgressWhenNoProxyRef(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+	ag := v2Gateway("gw", "team-a", "github-app", "") // no defaultProxyRef ⇒ direct
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ns, secret, ag).WithStatusSubresource(ag).Build()
+
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	cache := &IPRangeCache{}
+	cache.Set([]net.IPNet{*cidr})
+
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", IPCache: cache}
+	reconcileV2Gateway(t, r, "team-a", "gw")
+	ctx := context.Background()
+
+	// AGC Deployment provisioned with no proxy env (direct egress).
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
+	env := agcEnv(&dep)
+	assert.NotContains(t, env, "HTTPS_PROXY", "direct egress: AGC has no proxy env")
+	assert.NotContains(t, env, "PROXY_TLS_SECRET_NAME")
+
+	// AGC + workload NetworkPolicies carry the GitHub CIDR allowlist (restriction).
+	var anp, wnp networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
+	assert.True(t, hasGitHubCIDREgress(&anp, "140.82.112.0/20"), "direct AGC NP allows GitHub")
+	assert.True(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"), "direct workload NP allows GitHub")
+	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
+
+	// Status: proxyMode Direct, EgressUnattributed=True, not Degraded.
+	var got gmcv2alpha1.ActionsGateway
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
+	assert.Equal(t, gmcv2alpha1.ProxyModeDirect, got.Status.ProxyMode)
+	unattr := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed)
+	require.NotNil(t, unattr)
+	assert.Equal(t, metav1.ConditionTrue, unattr.Status)
+	assert.Equal(t, gmcv2alpha1.ReasonDirectEgress, unattr.Reason)
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionDegraded))
 }
 
 func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
@@ -243,15 +295,15 @@ func TestActionsGatewayV2_PerGatewayNaming(t *testing.T) {
 
 func TestBuildAGCNetworkPolicyV2_ApiserverEgressScoping(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	// Default: any-destination apiserver egress.
-	np := buildAGCNetworkPolicyV2(ag, nil)
+	// Default: any-destination apiserver egress (proxied mode, no GitHub rule).
+	np := buildAGCNetworkPolicyV2(ag, nil, nil, false)
 	assert.Equal(t, map[string]string{"app": agcNameV2(ag)}, np.Spec.PodSelector.MatchLabels)
 	apiRule := findApiserverEgressRule(np)
 	require.NotNil(t, apiRule)
 	assert.Empty(t, apiRule.To, "empty CIDR list keeps any-destination apiserver egress")
 
 	// Scoped: the rule gains ipBlock peers.
-	scoped := buildAGCNetworkPolicyV2(ag, []string{"10.0.0.0/24"})
+	scoped := buildAGCNetworkPolicyV2(ag, []string{"10.0.0.0/24"}, nil, false)
 	apiRule = findApiserverEgressRule(scoped)
 	require.NotNil(t, apiRule)
 	require.Len(t, apiRule.To, 1)
@@ -259,17 +311,102 @@ func TestBuildAGCNetworkPolicyV2_ApiserverEgressScoping(t *testing.T) {
 	assert.Equal(t, "10.0.0.0/24", apiRule.To[0].IPBlock.CIDR)
 }
 
+// TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule: in direct mode the AGC policy
+// additively permits the GitHub CIDRs on 443 (so the AGC reaches GitHub directly),
+// keeps the apiserver egress, and omits the GitHub rule when the cache is empty
+// (fail-closed) — never opening egress wide (Q168, §H.10).
+func TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+
+	direct := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, true)
+	require.NotNil(t, findApiserverEgressRule(direct), "apiserver egress stays mandatory in direct mode")
+	assert.True(t, hasGitHubCIDREgress(direct, "140.82.112.0/20"), "direct mode permits the GitHub CIDR on 443")
+
+	// Empty cache ⇒ no GitHub rule (fail-closed until the refresh patches it).
+	directEmpty := buildAGCNetworkPolicyV2(ag, nil, nil, true)
+	assert.False(t, hasGitHubCIDREgress(directEmpty, "140.82.112.0/20"))
+
+	// Proxied mode never carries a GitHub rule even if CIDRs are supplied.
+	proxied := buildAGCNetworkPolicyV2(ag, nil, []net.IPNet{*cidr}, false)
+	assert.False(t, hasGitHubCIDREgress(proxied, "140.82.112.0/20"))
+}
+
+// TestBuildWorkloadNetworkPolicyV2_DirectEgress: direct mode keeps the DNS + proxy
+// rules and adds the GitHub-CIDR rule; proxied mode carries no GitHub rule (Q168).
+func TestBuildWorkloadNetworkPolicyV2_DirectEgress(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+
+	direct := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, true)
+	assert.True(t, hasGitHubCIDREgress(direct, "140.82.112.0/20"), "direct mode permits the GitHub CIDR")
+	assert.True(t, hasDNSEgress(direct), "DNS egress is preserved in direct mode")
+
+	proxied := buildWorkloadNetworkPolicyV2(ag, []net.IPNet{*cidr}, false)
+	assert.False(t, hasGitHubCIDREgress(proxied, "140.82.112.0/20"), "proxied mode carries no direct GitHub rule")
+	assert.True(t, hasDNSEgress(proxied))
+}
+
+// hasGitHubCIDREgress reports whether np has an egress rule with an ipBlock peer for
+// cidr on 443.
+func hasGitHubCIDREgress(np *networkingv1.NetworkPolicy, cidr string) bool {
+	for _, e := range np.Spec.Egress {
+		for _, peer := range e.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == cidr {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasDNSEgress reports whether np permits DNS (port 53) egress.
+func hasDNSEgress(np *networkingv1.NetworkPolicy) bool {
+	for _, e := range np.Spec.Egress {
+		for _, p := range e.Ports {
+			if p.Port != nil && p.Port.IntVal == 53 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{Endpoint: "otel:4317", Sampler: "always_on"}
-	proxyNoProxy := []string{"10.20.0.0/16"}
-	dep := buildAGCDeploymentV2(ag, "agc:test", "shared", gmcv2alpha1.SecurityProfileBaseline, proxyNoProxy, nil)
+	proxy := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
+		Spec:       gmcv2alpha1.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16"}},
+	}
+	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2alpha1.SecurityProfileBaseline, nil)
 	env := agcEnv(dep)
 	assert.Equal(t, "otel:4317", env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"])
 	assert.Equal(t, "always_on", env["OTEL_TRACES_SAMPLER"])
 	// NO_PROXY merges the EgressProxy's CIDRs with the cluster-internal exclusions.
 	assert.Contains(t, env["NO_PROXY"], "10.20.0.0/16")
 	assert.Contains(t, env["NO_PROXY"], "svc.cluster.local")
+	// Proxied: the AGC's own egress is wired through the EgressProxy Service.
+	assert.Contains(t, env["HTTPS_PROXY"], "shared-proxy.team-a.svc.cluster.local")
+	assert.Equal(t, "shared-proxy-tls", env["PROXY_TLS_SECRET_NAME"])
+}
+
+// TestBuildAGCDeploymentV2_DirectEgress: with no proxy the AGC Deployment carries no
+// HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME env and mounts no proxy-CA volume, so its own
+// control-plane egress goes directly to GitHub (Q168, §H.10).
+func TestBuildAGCDeploymentV2_DirectEgress(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "")
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	env := agcEnv(dep)
+	assert.NotContains(t, env, "HTTP_PROXY")
+	assert.NotContains(t, env, "HTTPS_PROXY")
+	assert.NotContains(t, env, "PROXY_TLS_SECRET_NAME")
+	// No proxy-CA volume/mount when there is no proxy TLS Secret to mount.
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		assert.NotEqual(t, proxyCACertVolumeName, v.Name, "direct mode must not mount a proxy-CA volume")
+	}
 }
 
 func TestGenerateMetricsCertsV2_ParsesAndCoversAGCService(t *testing.T) {

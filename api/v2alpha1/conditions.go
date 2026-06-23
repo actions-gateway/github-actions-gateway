@@ -26,6 +26,28 @@ const (
 	// ConditionDegraded is True when a reconcile could not provision or update the
 	// object's children; the failing step is named in the message (abnormal-is-True).
 	ConditionDegraded = "Degraded"
+	// ConditionEgressUnattributed is an advisory condition (abnormal-is-True) set True
+	// on a proxy-less object: its egress reaches GitHub directly, so it has no
+	// per-tenant egress IP identity. It does NOT gate Ready — direct egress is a
+	// supported, NetworkPolicy-restricted mode (§H.10); the condition surfaces the
+	// attribution trade-off an operator opted into by not attaching an EgressProxy, so
+	// "no proxy" is an auditable state rather than an inferred one.
+	ConditionEgressUnattributed = "EgressUnattributed"
+)
+
+// Egress proxy mode reported in status.proxyMode (§H.10). It makes "no proxy" an
+// explicit, auditable state instead of an absent field to be inferred. Dropping the
+// proxy drops egress *identity* (per-tenant IP attribution), never egress
+// *restriction*: Direct egress is still default-deny egress allowing only DNS +
+// GitHub CIDRs (+ the kube API server for the AGC control plane).
+const (
+	// ProxyModeProxied means egress flows through a resolved EgressProxy, giving the
+	// workload stable per-tenant egress IPs (attribution).
+	ProxyModeProxied = "Proxied"
+	// ProxyModeDirect means no proxy resolved, so egress reaches GitHub directly —
+	// still NetworkPolicy-restricted to GitHub CIDRs + DNS (+ kube API for the AGC),
+	// but without per-tenant egress IP identity.
+	ProxyModeDirect = "Direct"
 )
 
 // Condition reasons. Reasons are CamelCase per Kubernetes API conventions;
@@ -75,4 +97,11 @@ const (
 	// ReasonTokenUnavailable — the AGC could not obtain a GitHub App installation
 	// token, so the RunnerSet cannot register runners (Ready=False).
 	ReasonTokenUnavailable = "TokenUnavailable" //nolint:gosec // G101: a condition reason, not a credential
+	// ReasonDirectEgress is the EgressUnattributed=True reason (and the proxyMode=Direct
+	// rationale): no proxyRef/defaultProxyRef resolved, so egress is direct and
+	// unattributed (still NetworkPolicy-restricted to GitHub).
+	ReasonDirectEgress = "DirectEgress"
+	// ReasonProxiedEgress is the EgressUnattributed=False reason: a proxy resolved, so
+	// egress is attributed to the proxy's stable per-tenant IPs.
+	ReasonProxiedEgress = "ProxiedEgress"
 )

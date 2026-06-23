@@ -371,6 +371,7 @@ func main() {
 		AGCImage:       agcImage,
 		AGCExtraEnv:    agcExtraEnv,
 		APIServerCIDRs: parsedAPIServerCIDRs,
+		IPCache:        ipCache,
 		Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
@@ -406,12 +407,13 @@ func main() {
 	}
 
 	if err := mgr.Add(&controller.IPRangeReconciler{
-		Client:   mgr.GetClient(),
-		Fetcher:  &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
-		Cache:    ipCache,
-		Interval: ipInterval,
-		Log:      slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
-		Metrics:  gmcMetrics,
+		Client:         mgr.GetClient(),
+		Fetcher:        &controller.HTTPGitHubIPRangeFetcher{Client: httpClient},
+		Cache:          ipCache,
+		Interval:       ipInterval,
+		Log:            slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
+		Metrics:        gmcMetrics,
+		APIServerCIDRs: parsedAPIServerCIDRs,
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")
 		os.Exit(1)

@@ -177,6 +177,100 @@ func TestV2_RunnerSet_FailsClosedUntilRefsResolve(t *testing.T) {
 	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 }
 
+// TestV2_RunnerSet_DirectEgress_ReadyAndUnattributed: a RunnerSet under a gateway
+// with no defaultProxyRef and with no proxyRef of its own resolves to direct egress
+// (Q168, §H.10) — it reaches Ready/ListenerActive (not ProxyNotFound) and reports
+// proxyMode Direct + the advisory EgressUnattributed condition.
+func TestV2_RunnerSet_DirectEgress_ReadyAndUnattributed(t *testing.T) {
+	const ns = "v2-rs-direct"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	// Gateway with NO defaultProxyRef, a template, and a RunnerSet with no proxyRef.
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	// No proxy needed: the set goes Ready/ListenerActive directly.
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	// proxyMode Direct + EgressUnattributed=True/DirectEgress.
+	require.Eventually(t, func() bool {
+		var got v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set"}, &got); err != nil {
+			return false
+		}
+		unattr := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionEgressUnattributed)
+		return got.Status.ProxyMode == v2alpha1.ProxyModeDirect &&
+			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2alpha1.ReasonDirectEgress
+	}, 20*time.Second, 100*time.Millisecond, "direct RunnerSet should report proxyMode Direct + EgressUnattributed=True")
+}
+
+// TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy: a worker pod provisioned for a
+// direct-egress RunnerSet carries no HTTP(S)_PROXY env and no proxy-CA mount, so it
+// reaches GitHub directly (Q168). The worker's egress restriction is enforced by the
+// GMC's direct-egress workload NetworkPolicy (verified in the GMC suite + kind e2e).
+func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
+	const ns = "v2-rs-direct-worker"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, ""))) // no defaultProxyRef
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet("direct-worker-set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+
+	id := enqueueJobOnOwnerSession(15*time.Second, "direct-worker-set", nil, broker.RunnerJobRequestBody{})
+	require.NotEmpty(t, id, "a session for direct-worker-set should register")
+
+	var pod corev1.Pod
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "direct-worker-set"}); err != nil {
+			return false
+		}
+		for _, p := range pods.Items {
+			if strings.HasPrefix(p.Name, "runner-") {
+				pod = p
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "worker Pod should be created for the direct RunnerSet")
+
+	var runner *corev1.Container
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "runner" {
+			runner = &pod.Spec.Containers[i]
+		}
+	}
+	require.NotNil(t, runner)
+	envByName := map[string]string{}
+	for _, e := range runner.Env {
+		envByName[e.Name] = e.Value
+	}
+	assert.Empty(t, envByName["HTTP_PROXY"], "direct egress: worker has no HTTP_PROXY")
+	assert.Empty(t, envByName["HTTPS_PROXY"], "direct egress: worker has no HTTPS_PROXY")
+	for _, v := range pod.Spec.Volumes {
+		if v.Secret != nil {
+			assert.NotContains(t, v.Secret.SecretName, "-proxy-tls", "direct egress: worker mounts no proxy-CA secret")
+		}
+	}
+}
+
 func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 	const ns = "v2-rs-worker"
 	createNSForAGC(t, ns)

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"net"
 	"time"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -155,11 +156,20 @@ func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 }
 
 // buildWorkloadNetworkPolicyV2 is the v2 workload egress lockdown: AGC and worker
-// pods may reach DNS and the proxy on :8080 only; default-deny ingress. Identical
-// in shape to v1's buildWorkloadNetworkPolicy (the proxy podSelector "app: proxy"
-// matches the EgressProxy pods, which carry that label), so worker egress-IP
+// pods may reach DNS and the proxy on :8080; default-deny ingress. In the proxied
+// case it is identical in shape to v1's buildWorkloadNetworkPolicy (the proxy
+// podSelector "app: proxy" matches the EgressProxy pods), so worker egress-IP
 // attribution is no weaker than v1.
-func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway) *networkingv1.NetworkPolicy {
+//
+// When the gateway has no defaultProxyRef (direct egress, §H.10) the policy
+// additionally permits the GitHub CIDRs on 443 so proxy-less workers reach GitHub
+// directly. The proxy rule is retained alongside it (harmless when no proxy pods
+// exist) so a RunnerSet that sets its own proxyRef under a direct gateway still
+// reaches its proxy. Restriction is preserved in every case: egress stays
+// default-deny except DNS + the proxy + (in direct mode) the GitHub allowlist —
+// never arbitrary internet. githubCIDRs comes from the shared IP-range cache; empty
+// (pre-first-fetch) omits the GitHub rule, fail-closed, until the refresh patches it.
+func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []net.IPNet, direct bool) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{
 		dnsEgressRule(),
 		{
@@ -168,6 +178,11 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway) *networkingv1.
 				PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
 			}},
 		},
+	}
+	if direct {
+		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
+			egress = append(egress, rule)
+		}
 	}
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: workloadNPNameV2(ag), Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
@@ -182,11 +197,25 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway) *networkingv1.
 
 // buildAGCNetworkPolicyV2 is the v2 AGC egress policy: additive to the workload
 // policy, it also permits Kubernetes API server egress (443/6443) and admits
-// monitoring-namespace metrics scrapes. Identical in shape to v1's
-// buildAGCNetworkPolicy.
-func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []string) *networkingv1.NetworkPolicy {
+// monitoring-namespace metrics scrapes. In the proxied case it is identical in shape
+// to v1's buildAGCNetworkPolicy (the AGC reaches GitHub through the proxy, admitted
+// by the workload policy's :8080 rule).
+//
+// When the gateway has no defaultProxyRef (direct egress, §H.10) it additionally
+// permits the GitHub CIDRs on 443 so the AGC control plane reaches GitHub directly
+// (token exchange, broker long-poll, runner registration). The kube-API-server rule
+// stays mandatory either way — the AGC must reach the apiserver regardless of egress
+// mode. Restriction is preserved: DNS + kube API + (direct) the GitHub allowlist,
+// never arbitrary internet.
+func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []string, githubCIDRs []net.IPNet, direct bool) *networkingv1.NetworkPolicy {
 	name := agcNameV2(ag)
-	return buildAGCNetworkPolicyFrom(ag.Namespace, name, name, v2GatewayLabels(ag), apiServerCIDRs)
+	np := buildAGCNetworkPolicyFrom(ag.Namespace, name, name, v2GatewayLabels(ag), apiServerCIDRs)
+	if direct {
+		if rule, ok := githubCIDREgressRule(githubCIDRs); ok {
+			np.Spec.Egress = append(np.Spec.Egress, rule)
+		}
+	}
+	return np
 }
 
 // v2ProxyServiceAddr is the in-cluster HTTPS proxy address the AGC egresses
@@ -203,13 +232,16 @@ func v2ProxyTLSSecretName(epName string) string { return epName + egressProxyTLS
 
 // buildAGCDeploymentV2 builds the AGC Deployment for a v2 ActionsGateway. It
 // mirrors v1's buildAGCDeployment (credentials mounted as files never env, proxy
-// CA pinning, metrics mTLS mount, hardened SecurityContext, probes) but wires
-// egress through the resolved EgressProxy and reads the security profile from the
-// namespace (PSA is namespace-scoped in v2). proxyName is the resolved EgressProxy
-// name; securityProfile is the namespace's effective profile.
-func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage, proxyName, securityProfile string, noProxyCIDRs []string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
-	proxyAddr := v2ProxyServiceAddr(ag.Namespace, proxyName)
-	proxyTLSSecret := v2ProxyTLSSecretName(proxyName)
+// CA pinning, metrics mTLS mount, hardened SecurityContext, probes) and reads the
+// security profile from the namespace (PSA is namespace-scoped in v2).
+//
+// proxy is the resolved EgressProxy, or nil for direct egress (§H.10): when nil the
+// AGC gets no HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME env, so its own control-plane HTTP
+// clients reach GitHub directly (governed by the direct-egress AGC NetworkPolicy),
+// and no proxy-CA volume is mounted. securityProfile is the namespace's effective
+// profile.
+func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy *gmcv2alpha1.EgressProxy, securityProfile string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
+	var proxyTLSSecret string
 
 	env := []corev1.EnvVar{
 		{Name: "POD_NAMESPACE", ValueFrom: fieldRef("metadata.namespace")},
@@ -220,16 +252,24 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage, proxyName, s
 		// Deployments in one namespace would all reconcile every RunnerSet and fight.
 		{Name: "GATEWAY_NAME", Value: ag.Name},
 		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
-		{Name: "HTTP_PROXY", Value: proxyAddr},
-		{Name: "HTTPS_PROXY", Value: proxyAddr},
-		{Name: "NO_PROXY", Value: buildNoProxy(noProxyCIDRs)},
-		{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
 		// SECURITY_PROFILE comes from the namespace security-profile label (v2 moved
 		// PSA to the namespace, Q175). The reconciler reads the label; it does not
 		// stamp the PSA labels — that is the NamespacePSAReconciler's job.
 		{Name: "SECURITY_PROFILE", Value: securityProfile},
 		{Name: "LOG_LEVEL", Value: logLevelOrDefault(ag.Spec.LogLevel)},
 		{Name: "GITHUB_RUNNER_VERSION", Value: agcnames.RunnerVersion},
+	}
+	// Proxied: wire the AGC's own egress through the resolved EgressProxy. Direct
+	// (proxy == nil): omit the proxy env entirely so the AGC's HTTP clients go direct.
+	if proxy != nil {
+		proxyAddr := v2ProxyServiceAddr(ag.Namespace, proxy.Name)
+		proxyTLSSecret = v2ProxyTLSSecretName(proxy.Name)
+		env = append(env,
+			corev1.EnvVar{Name: "HTTP_PROXY", Value: proxyAddr},
+			corev1.EnvVar{Name: "HTTPS_PROXY", Value: proxyAddr},
+			corev1.EnvVar{Name: "NO_PROXY", Value: buildNoProxy(proxy.Spec.NoProxyCIDRs)},
+			corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
+		)
 	}
 	env = append(env, tracingEnvV2(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)

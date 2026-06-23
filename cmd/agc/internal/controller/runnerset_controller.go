@@ -203,7 +203,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// RunnerSet sits Ready=False/<Ref>NotFound with no listeners running, so no
 	// worker pod is ever provisioned in the gap (§H.7). The referent watches
 	// re-enqueue when a missing object appears.
-	_, res := resolveRunnerSetRefs(ctx, r.Client, &rs)
+	refs, res := resolveRunnerSetRefs(ctx, r.Client, &rs)
 	if res.err != nil {
 		return ctrl.Result{}, res.err
 	}
@@ -220,6 +220,14 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		return ctrl.Result{}, nil
 	}
+
+	// References resolved: record the egress mode (Q168, §H.10). A nil resolved proxy
+	// means direct egress — proxyMode Direct + the advisory EgressUnattributed
+	// condition (True), so an operator sees the workload has no per-tenant egress IP
+	// identity. It is advisory only and never gates Ready: direct egress is a
+	// supported, NetworkPolicy-restricted mode. Set before any later status write so
+	// every exit below persists it.
+	r.setEgressMode(&rs, refs.proxy != nil)
 
 	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
@@ -469,6 +477,33 @@ func (r *RunnerSetReconciler) setReadyCondition(rs *v2alpha1.RunnerSet, ready bo
 		}
 		r.recordEvent(rs, etype, reason, "Reconcile", msg)
 	}
+}
+
+// setEgressMode records how this RunnerSet's worker egress reaches GitHub (Q168,
+// §H.10): proxyMode Proxied + EgressUnattributed=False when a proxy resolved, or
+// proxyMode Direct + EgressUnattributed=True when none did. The condition is advisory
+// (it surfaces the per-tenant-IP-attribution trade an operator opted out of by not
+// attaching a proxy) and does not gate Ready — direct egress is a supported,
+// NetworkPolicy-restricted mode.
+func (r *RunnerSetReconciler) setEgressMode(rs *v2alpha1.RunnerSet, proxied bool) {
+	status := metav1.ConditionTrue
+	mode := v2alpha1.ProxyModeDirect
+	reason := v2alpha1.ReasonDirectEgress
+	msg := "no proxyRef/defaultProxyRef: worker egress is direct (restricted to DNS + GitHub) and has no per-tenant egress IP identity"
+	if proxied {
+		status = metav1.ConditionFalse
+		mode = v2alpha1.ProxyModeProxied
+		reason = v2alpha1.ReasonProxiedEgress
+		msg = "worker egress is attributed to the resolved EgressProxy's per-tenant IPs"
+	}
+	rs.Status.ProxyMode = mode
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionEgressUnattributed,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: rs.Generation,
+	})
 }
 
 // nowFunc returns the reaper clock: Now when set, time.Now otherwise.
