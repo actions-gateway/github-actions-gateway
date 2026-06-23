@@ -169,7 +169,7 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
 	require.NoError(t, k8sClient.Create(ctx, crt))
 	rs := newRunnerSet("crt-set", ns, "gw")
-	rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: crtName, Kind: "ClusterRunnerTemplate"}
+	rs.Spec.TemplateRef = &v2alpha1.ObjectRef{Name: crtName, Kind: "ClusterRunnerTemplate"}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
@@ -180,4 +180,90 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 
 	// References (gateway + cluster template + proxy) all resolve → Ready/ListenerActive.
 	waitForSetReadyReason(t, ns, "crt-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+}
+
+// defaultCRT builds a cluster-default-marked ClusterRunnerTemplate (Q172).
+func defaultCRT(name string) *v2alpha1.ClusterRunnerTemplate {
+	return &v2alpha1.ClusterRunnerTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Annotations: map[string]string{v2alpha1.IsDefaultTemplateAnnotation: v2alpha1.IsDefaultTemplateValue},
+		},
+		Spec: v2alpha1.RunnerTemplateSpec{
+			WorkerImage: "runner:test",
+			PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}},
+			}},
+		},
+	}
+}
+
+// TestV2_RunnerSet_ResolvesViaClusterDefaultTemplate: a RunnerSet with no templateRef,
+// under a gateway with no defaultTemplateRef, resolves the single cluster-default
+// ClusterRunnerTemplate (Q172, §H.4, rung 3) — Ready + status.templateSource=ClusterDefault.
+func TestV2_RunnerSet_ResolvesViaClusterDefaultTemplate(t *testing.T) {
+	if m := serverMinor(t); m < 31 {
+		t.Skipf("CRD field selectors (KEP-4358) are queryable only on k8s >= 1.31; apiserver is 1.%d", m)
+	}
+	const ns = "v2-rs-cluster-default"
+	createNSForAGC(t, ns)
+
+	crt := defaultCRT("v2-rs-the-cluster-default")
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, ""))) // no defaultTemplateRef, no proxy
+	require.NoError(t, k8sClient.Create(ctx, crt))
+	rs := newRunnerSet("set", ns, "gw")
+	rs.Spec.TemplateRef = nil
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), crt)
+	})
+
+	startScopedRunnerSetReconciler(t, "gw")
+
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceClusterDefault)
+}
+
+// TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed: when two ClusterRunnerTemplates
+// are both marked the cluster default, a RunnerSet falling through to the cluster-default
+// rung fails closed Ready=False/AmbiguousDefault rather than silently picking one (Q172,
+// §H.4, the ≤1-default invariant enforced at runtime). Removing one default lets it
+// resolve, proving the watch-driven recovery.
+func TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed(t *testing.T) {
+	if m := serverMinor(t); m < 31 {
+		t.Skipf("CRD field selectors (KEP-4358) are queryable only on k8s >= 1.31; apiserver is 1.%d", m)
+	}
+	const ns = "v2-rs-ambiguous-default"
+	createNSForAGC(t, ns)
+
+	crtA := defaultCRT("v2-rs-ambiguous-a")
+	crtB := defaultCRT("v2-rs-ambiguous-b")
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, crtA))
+	require.NoError(t, k8sClient.Create(ctx, crtB))
+	rs := newRunnerSet("set", ns, "gw")
+	rs.Spec.TemplateRef = nil
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), crtA)
+		_ = k8sClient.Delete(context.Background(), crtB)
+	})
+
+	startScopedRunnerSetReconciler(t, "gw")
+
+	// Two defaults → fail closed, no silent pick.
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonAmbiguousDefault)
+
+	// Demote one (drop the marker): exactly one default remains → it resolves. The CRT
+	// watch re-enqueues the set on the update.
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: crtB.Name}, crtB))
+	crtB.Annotations = nil
+	require.NoError(t, k8sClient.Update(ctx, crtB))
+
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceClusterDefault)
 }

@@ -33,7 +33,7 @@ func rsObj(name, ns string, mut func(*v2alpha1.RunnerSet)) *v2alpha1.RunnerSet {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:   v2alpha1.ObjectRef{Name: "gw"},
-			TemplateRef:  v2alpha1.ObjectRef{Name: "tmpl"},
+			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
 			MaxListeners: 1,
 			RunnerLabels: []string{"self-hosted"},
 		},
@@ -133,7 +133,7 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		// per-gateway ClusterRoleBinding in M3b; until the referent exists the set
 		// waits, §H.7).
 		rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
-			rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
+			rs.Spec.TemplateRef = &v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
 		})
 		c := build(rs, gwObj("gw", ns, "shared"))
 		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
@@ -145,7 +145,7 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		// With the ClusterRunnerTemplate applied, the cluster-scoped read resolves it
 		// and the references are complete (proxy via gateway defaultProxyRef).
 		rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
-			rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
+			rs.Spec.TemplateRef = &v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
 		})
 		crt := &v2alpha1.ClusterRunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "golden"},
@@ -156,6 +156,124 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
 		require.True(t, res.resolved())
 		assert.Equal(t, "golden:test", refs.template.WorkerImage)
+	})
+}
+
+// crtObj builds a ClusterRunnerTemplate, marking it the cluster default
+// (IsDefaultTemplateAnnotation) when isDefault is set.
+func crtObj(name, workerImage string, isDefault bool) *v2alpha1.ClusterRunnerTemplate {
+	crt := &v2alpha1.ClusterRunnerTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec:       v2alpha1.RunnerTemplateSpec{WorkerImage: workerImage},
+	}
+	if isDefault {
+		crt.Annotations = map[string]string{v2alpha1.IsDefaultTemplateAnnotation: v2alpha1.IsDefaultTemplateValue}
+	}
+	return crt
+}
+
+// TestResolveTemplateChain covers the optional-templateRef fallback chain (Q172, §H.4):
+// rs.templateRef → gateway.defaultTemplateRef → the single cluster-default
+// ClusterRunnerTemplate → fail-closed TemplateNotFound, plus the ≤1-default enforcement.
+func TestResolveTemplateChain(t *testing.T) {
+	scheme := runnerSetTestScheme(t)
+	ns := "team-a"
+	// EgressProxy so resolution reaches Ready when the template resolves (gateway sets
+	// defaultProxyRef "shared" in gwObj when passed; here proxy-less tests use "").
+	build := func(objs ...client.Object) client.Client {
+		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	}
+	// unsetTemplate clears the templateRef the rsObj helper sets by default.
+	unsetTemplate := func(rs *v2alpha1.RunnerSet) { rs.Spec.TemplateRef = nil }
+
+	t.Run("rung 1: explicit templateRef → source TemplateRef", func(t *testing.T) {
+		rs := rsObj("set", ns, nil) // templateRef "tmpl"
+		c := build(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns))
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, v2alpha1.TemplateSourceRef, refs.templateSource)
+		assert.Equal(t, "runner:test", refs.template.WorkerImage)
+	})
+
+	t.Run("rung 2: unset templateRef inherits gateway.defaultTemplateRef (RunnerTemplate)", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		gw := gwObj("gw", ns, "")
+		gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "gw-default"}
+		c := build(rs, gw, tmplObj("gw-default", ns))
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, v2alpha1.TemplateSourceGatewayDefault, refs.templateSource)
+		assert.Equal(t, "runner:test", refs.template.WorkerImage)
+	})
+
+	t.Run("rung 2: gateway.defaultTemplateRef may point at a ClusterRunnerTemplate", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		gw := gwObj("gw", ns, "")
+		gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"}
+		c := build(rs, gw, crtObj("golden", "golden:test", false))
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, v2alpha1.TemplateSourceGatewayDefault, refs.templateSource)
+		assert.Equal(t, "golden:test", refs.template.WorkerImage)
+	})
+
+	t.Run("rung 2: defaultTemplateRef naming a missing template fails closed", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		gw := gwObj("gw", ns, "")
+		gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "absent"}
+		c := build(rs, gw)
+		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
+	})
+
+	t.Run("rung 3: single cluster-default ClusterRunnerTemplate → source ClusterDefault", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		c := build(rs, gwObj("gw", ns, ""), crtObj("platform-default", "default:test", true), crtObj("other", "other:test", false))
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, v2alpha1.TemplateSourceClusterDefault, refs.templateSource)
+		assert.Equal(t, "default:test", refs.template.WorkerImage, "the marked default, not the unmarked one")
+	})
+
+	t.Run("rung 3: no marked cluster-default fails closed TemplateNotFound", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		// A ClusterRunnerTemplate exists but is unmarked; nothing else resolves.
+		c := build(rs, gwObj("gw", ns, ""), crtObj("unmarked", "x:test", false))
+		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
+	})
+
+	t.Run("rung 3: two marked cluster-defaults fail closed AmbiguousDefault", func(t *testing.T) {
+		rs := rsObj("set", ns, unsetTemplate)
+		c := build(rs, gwObj("gw", ns, ""), crtObj("default-a", "a:test", true), crtObj("default-b", "b:test", true))
+		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		assert.Equal(t, v2alpha1.ReasonAmbiguousDefault, res.reason)
+		// Message names the conflicting templates (sorted) so an operator can fix it.
+		assert.Contains(t, res.message, "default-a")
+		assert.Contains(t, res.message, "default-b")
+	})
+
+	t.Run("a namespaced RunnerTemplate cannot be the cluster default", func(t *testing.T) {
+		// The default marker is honored only on the cluster-scoped kind: a tenant must
+		// not self-elect a namespaced template cluster-wide. A namespaced RunnerTemplate
+		// carrying the annotation is ignored by the cluster-default rung.
+		rs := rsObj("set", ns, unsetTemplate)
+		rt := tmplObj("tmpl", ns)
+		rt.Annotations = map[string]string{v2alpha1.IsDefaultTemplateAnnotation: v2alpha1.IsDefaultTemplateValue}
+		c := build(rs, gwObj("gw", ns, ""), rt)
+		_, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		assert.Equal(t, v2alpha1.ReasonTemplateNotFound, res.reason)
+	})
+
+	t.Run("explicit templateRef wins over both defaults", func(t *testing.T) {
+		rs := rsObj("set", ns, nil) // explicit "tmpl"
+		gw := gwObj("gw", ns, "")
+		gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "gw-default"}
+		c := build(rs, gw, tmplObj("tmpl", ns), tmplObj("gw-default", ns), crtObj("platform-default", "d:test", true))
+		refs, res := resolveRunnerSetRefs(context.Background(), c, rs)
+		require.True(t, res.resolved())
+		assert.Equal(t, v2alpha1.TemplateSourceRef, refs.templateSource)
+		assert.Equal(t, "runner:test", refs.template.WorkerImage)
 	})
 }
 
@@ -271,7 +389,7 @@ func TestRunnerSetWatchMappers(t *testing.T) {
 	setA := rsObj("set", ns, nil)
 	setB := rsObj("other", ns, func(rs *v2alpha1.RunnerSet) {
 		rs.Spec.GatewayRef = v2alpha1.ObjectRef{Name: "gw2"}
-		rs.Spec.TemplateRef = v2alpha1.ObjectRef{Name: "tmpl2"}
+		rs.Spec.TemplateRef = &v2alpha1.ObjectRef{Name: "tmpl2"}
 		rs.Spec.ProxyRef = &v2alpha1.ObjectRef{Name: "dedicated"}
 	})
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(setA, setB).Build()

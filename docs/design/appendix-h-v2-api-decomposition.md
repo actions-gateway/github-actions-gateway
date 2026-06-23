@@ -155,9 +155,10 @@ Multiple `ActionsGateway`s may share one namespace; each AGC reconciles only the
 // ActionsGateway — GitHub identity + AGC control plane only.
 // Now permitted 1..N per namespace.
 type ActionsGatewaySpec struct {
-    GitHubAppRef    LocalSecretReference `json:"githubAppRef"` // was SecretReference; namespace field dropped
-    GitHubURL       string               `json:"githubURL"`    // immutable (CEL oldSelf)
-    Tracing         TracingConfig         `json:"tracing"`        // unchanged
+    GitHubAppRef       LocalSecretReference `json:"githubAppRef"`       // was SecretReference; namespace field dropped
+    GitHubURL          string               `json:"githubURL"`          // immutable (CEL oldSelf)
+    DefaultTemplateRef *ObjectRef           `json:"defaultTemplateRef"` // optional (Q172): inherited by RunnerSets with no templateRef
+    Tracing            TracingConfig        `json:"tracing"`            // unchanged
 
     // REMOVED vs v1alpha1: SecurityProfile string → PSA is namespace-scoped, so it
     // is owned at the namespace (GMC-guarded), not per gateway. See §H.16 #7.
@@ -209,7 +210,7 @@ type RunnerTemplateSpec struct {
 // references added). See H.6 for the rename rationale.
 type RunnerSetSpec struct {
     GatewayRef  ObjectRef  // which GitHub connection (was implicit via namespace)
-    TemplateRef ObjectRef  // RunnerTemplate | ClusterRunnerTemplate (replaces inline PodTemplate)
+    TemplateRef *ObjectRef // RunnerTemplate | ClusterRunnerTemplate; optional (Q172): unset ⇒ gateway.defaultTemplateRef ⇒ the single cluster-default ClusterRunnerTemplate ⇒ TemplateNotFound
     ProxyRef    *ObjectRef // EgressProxy; nil ⇒ gateway.defaultProxyRef; both nil ⇒ direct egress
 
     RunnerLabels  []string
@@ -220,21 +221,42 @@ type RunnerSetSpec struct {
 }
 ```
 
-**Why `templateRef` is required but `proxyRef` is optional.** They look parallel
-but are not. An unset `proxyRef` has a well-defined *behavior* — direct egress,
-still NetworkPolicy-restricted — so the dependency can simply be dropped. A
-`RunnerSet` with no template has no such fallback: the AGC cannot synthesize a
-worker pod without a pod shape. `proxyRef`'s optional behavior is **shipped** (Q168):
-both `proxyRef` and `defaultProxyRef` unset resolves to direct egress, with
-`proxyMode: Direct` + an `EgressUnattributed` condition in status. `templateRef`
-stays **required at GA**; it can later be relaxed to optional-with-a-default without
-a breaking change (required → optional is backward-compatible) — see the deferred
-[optional default template](../STATUS.md#deferred) item, which resolves an unset
-ref via `ActionsGateway.defaultTemplateRef` → a default-marked
-`ClusterRunnerTemplate` (the `StorageClass` pattern: at most one default,
-fail-closed `TemplateNotFound` if none resolves — never a flag-synthesized phantom
-pod). A reference that *names a missing* proxy still fails closed (`ProxyNotFound`);
-only an entirely-unset ref means direct egress.
+**Why `templateRef` and `proxyRef` are both optional — but resolve differently.**
+They look parallel but the *fallback* differs. An unset `proxyRef` has a well-defined
+*behavior* — direct egress, still NetworkPolicy-restricted — so the dependency can
+simply be dropped (Q168, **shipped**): both `proxyRef` and `defaultProxyRef` unset
+resolves to direct egress, with `proxyMode: Direct` + an `EgressUnattributed`
+condition in status. A `RunnerSet` with no template has no such drop-the-dependency
+fallback — the AGC cannot synthesize a worker pod without a pod shape — so instead of
+a behavior it resolves a *default template* (Q172, **shipped**). `templateRef` was
+required at GA; it has been relaxed to optional-with-a-default — a backward-compatible
+required → optional change, so a set that sets `templateRef` behaves exactly as before.
+
+The resolution chain for an unset `templateRef` (runtime, fail-closed, §H.7) is:
+
+1. `rs.spec.templateRef` (explicit) — `status.templateSource: TemplateRef`.
+2. else `ActionsGateway.spec.defaultTemplateRef` — per-gateway default (may name a
+   `RunnerTemplate` or a `ClusterRunnerTemplate`); `templateSource: GatewayDefault`.
+3. else the **single** cluster-default `ClusterRunnerTemplate` — the one marked
+   `actions-gateway.com/is-default-template: "true"` (the `StorageClass`
+   default-class pattern); `templateSource: ClusterDefault`.
+4. else `Ready=False`/**`TemplateNotFound`** — fail-closed, no worker wiring, **never
+   a synthesized phantom pod**.
+
+**At most one cluster-default — enforced at runtime, not admission.** The marker lives
+only on the cluster-scoped `ClusterRunnerTemplate` (platform-authored: a tenant cannot
+self-elect a namespaced `RunnerTemplate` cluster-wide). If two are marked, the AGC
+fails closed `Ready=False`/`AmbiguousDefault` (naming the conflicts) rather than
+silently picking one — stricter than upstream StorageClass's newest-wins. The
+≤1 invariant is checked at *resolution time* in the AGC reconciler, not at admission,
+for the same reason all reference integrity is runtime here (§H.7): it is a cross-object
+invariant single-object CEL cannot express, and an admission reject would break GitOps
+apply-ordering. The trade-off — admission would give earlier feedback — is accepted; the
+condition surfaces the moment a `RunnerSet` actually depends on the ambiguous default,
+and clears the moment one default is demoted (the `ClusterRunnerTemplate` watch
+re-enqueues). A `defaultTemplateRef`/`templateRef` that *names a missing* template still
+fails closed (`TemplateNotFound`), exactly like a missing proxy fails closed
+(`ProxyNotFound`); only an entirely-unset reference falls through to the next rung.
 
 ### Worked example — minimal proxy-less onboarding (three objects)
 
@@ -353,7 +375,7 @@ Field movement, v1alpha1 → v2alpha1:
 | `RunnerGroup.spec.{runnerLabels,maxListeners,maxWorkers,priorityTiers, lifecycle}` | `RunnerSet.spec` (unchanged) |
 | `ActionsGateway.spec.proxy` | `EgressProxy` (kind) |
 | `ActionsGateway.spec.runnerGroups` | removed (explicit `RunnerSet` objects) |
-| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.defaultProxyRef` |
+| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef}` |
 
 ## H.7. Reference integrity — runtime conditions, not admission
 

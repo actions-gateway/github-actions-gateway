@@ -25,13 +25,20 @@ type RunnerSetSpec struct {
 	// connection to register against. Resolved at runtime, not admission.
 	GatewayRef ObjectRef `json:"gatewayRef"`
 
-	// TemplateRef names the RunnerTemplate (default) or ClusterRunnerTemplate
-	// (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Required
-	// at GA: the AGC cannot synthesize a worker pod without a pod shape, so unlike
-	// proxyRef there is no well-defined fallback for an unset template (§H.4). The
-	// referent is resolved at runtime; a set pointing at a not-yet-applied template
-	// sits Ready=False/TemplateNotFound until it syncs (§H.7).
-	TemplateRef ObjectRef `json:"templateRef"`
+	// TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate
+	// (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means
+	// inherit the gateway's defaultTemplateRef; both unset means the single cluster-default
+	// ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the
+	// three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never
+	// synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the
+	// GA-era required templateRef to optional-with-a-default (a backward-compatible
+	// required→optional change): a set that sets templateRef behaves exactly as before.
+	// The referent is resolved at runtime; a set pointing at a not-yet-applied template
+	// sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource
+	// reports which rung resolved.
+	//
+	// +optional
+	TemplateRef *ObjectRef `json:"templateRef,omitempty"`
 
 	// ProxyRef optionally names the EgressProxy this runner set's traffic egresses
 	// through. Unset means inherit the gateway's defaultProxyRef; both unset means
@@ -157,6 +164,18 @@ type RunnerSetStatus struct {
 	// +kubebuilder:validation:Enum=Proxied;Direct
 	ProxyMode string `json:"proxyMode,omitempty"`
 
+	// TemplateSource records which rung of the template-resolution chain supplied this
+	// runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef),
+	// "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef
+	// was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate,
+	// resolved because neither was set). Explicit so an operator can audit whether a set
+	// runs on an explicit template or a default without inspecting the gateway and cluster
+	// state. Empty until the references resolve.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=TemplateRef;GatewayDefault;ClusterDefault
+	TemplateSource string `json:"templateSource,omitempty"`
+
 	// ObservedGeneration is the .metadata.generation the most recent reconcile acted on.
 	//
 	// +optional
@@ -176,6 +195,7 @@ type RunnerSetStatus struct {
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=`.spec.maxListeners`
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=`.status.activeSessions`
 // +kubebuilder:printcolumn:name="Egress",type=string,JSONPath=`.status.proxyMode`
+// +kubebuilder:printcolumn:name="Template",type=string,priority=1,JSONPath=`.status.templateSource`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=`.status.conditions[?(@.type=='Ready')].reason`
 // +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=`.status.observedGeneration`

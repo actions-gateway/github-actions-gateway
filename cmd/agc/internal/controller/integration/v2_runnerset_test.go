@@ -92,7 +92,7 @@ func newRunnerSet(name, ns, gateway string) *v2alpha1.RunnerSet {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:   v2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:  v2alpha1.ObjectRef{Name: "tmpl"},
+			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
 			MaxListeners: 1,
 			RunnerLabels: []string{"self-hosted"},
 		},
@@ -269,6 +269,68 @@ func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
 			assert.NotContains(t, v.Secret.SecretName, "-proxy-tls", "direct egress: worker mounts no proxy-CA secret")
 		}
 	}
+}
+
+// waitForSetTemplateSource waits until the RunnerSet reports the expected
+// status.templateSource (Q172): which rung of the template-resolution chain resolved.
+func waitForSetTemplateSource(t *testing.T, ns, name, want string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var rs v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+			return false
+		}
+		return rs.Status.TemplateSource == want
+	}, 20*time.Second, 100*time.Millisecond, "RunnerSet %s should report templateSource=%s", name, want)
+}
+
+// TestV2_RunnerSet_ResolvesViaGatewayDefaultTemplate: a RunnerSet with no templateRef
+// of its own inherits the gateway's defaultTemplateRef (Q172, §H.4, rung 2) — it
+// reaches Ready and reports status.templateSource=GatewayDefault.
+func TestV2_RunnerSet_ResolvesViaGatewayDefaultTemplate(t *testing.T) {
+	const ns = "v2-rs-gw-default-tmpl"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	// Gateway names a defaultTemplateRef; the RunnerSet sets no templateRef.
+	gw := newGatewayForSet("gw", ns, "")
+	gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "gw-default-tmpl"}
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("gw-default-tmpl", ns)))
+	rs := newRunnerSet("set", ns, "gw")
+	rs.Spec.TemplateRef = nil
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), gw)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "gw-default-tmpl", Namespace: ns}})
+	})
+
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceGatewayDefault)
+}
+
+// TestV2_RunnerSet_NoTemplateFailsClosed: a RunnerSet with no templateRef whose gateway
+// names a *missing* defaultTemplateRef fails closed Ready=False/TemplateNotFound (§H.4) —
+// no worker pod is synthesized without a pod shape. (Rung 2 short-circuits before the
+// cluster-default rung, so this is independent of any cluster-scoped template state.)
+func TestV2_RunnerSet_NoTemplateFailsClosed(t *testing.T) {
+	const ns = "v2-rs-no-tmpl"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	gw := newGatewayForSet("gw", ns, "")
+	gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "absent-tmpl"}
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	rs := newRunnerSet("set", ns, "gw")
+	rs.Spec.TemplateRef = nil
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), gw)
+	})
+
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateNotFound)
 }
 
 func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {

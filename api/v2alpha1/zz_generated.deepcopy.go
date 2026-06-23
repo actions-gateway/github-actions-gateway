@@ -77,6 +77,11 @@ func (in *ActionsGatewaySpec) DeepCopyInto(out *ActionsGatewaySpec) {
 		*out = new(LocalObjectRef)
 		**out = **in
 	}
+	if in.DefaultTemplateRef != nil {
+		in, out := &in.DefaultTemplateRef, &out.DefaultTemplateRef
+		*out = new(ObjectRef)
+		**out = **in
+	}
 	in.Tracing.DeepCopyInto(&out.Tracing)
 }
 
@@ -441,7 +446,11 @@ func (in *RunnerSetList) DeepCopyObject() runtime.Object {
 func (in *RunnerSetSpec) DeepCopyInto(out *RunnerSetSpec) {
 	*out = *in
 	out.GatewayRef = in.GatewayRef
-	out.TemplateRef = in.TemplateRef
+	if in.TemplateRef != nil {
+		in, out := &in.TemplateRef, &out.TemplateRef
+		*out = new(ObjectRef)
+		**out = **in
+	}
 	if in.ProxyRef != nil {
 		in, out := &in.ProxyRef, &out.ProxyRef
 		*out = new(ObjectRef)
