@@ -198,6 +198,12 @@ type ActionsGatewaySpec struct {
     // mutable so credential rotation by Secret name keeps working — see the
     // Secret-rotation note later in this document.
     //
+    // v2 note: the v2alpha1 (actions-gateway.com) API REMOVES this field. There,
+    // the Pod Security level is selected by the namespace label
+    // actions-gateway.com/security-profile (GMC-guarded), because PSA is
+    // namespace-scoped and co-located v2 gateways share one posture. This v1
+    // contract is unchanged and accurate for v1alpha1; see appendix-h §H.16 #7.
+    //
     // +optional
     // +kubebuilder:default=baseline
     // +kubebuilder:validation:Enum=baseline;restricted;privileged
