@@ -120,6 +120,8 @@ nav:
       - Overview: operations/README.md
       - Install: operations/install.md
       - Upgrade: operations/upgrade.md
+      - "Migrate v1 → v2": operations/migration-v1-to-v2.md
+      - "v1alpha1 deprecation": operations/v1alpha1-deprecation.md
       - Tenant onboarding: operations/tenant-onboarding.md
       - Observability: operations/observability.md
       - Runbook: operations/runbook.md

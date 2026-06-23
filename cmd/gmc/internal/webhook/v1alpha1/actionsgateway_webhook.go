@@ -15,6 +15,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
 
@@ -293,12 +294,21 @@ func (v *ActionsGatewayCustomValidator) validatePrivilegedEligibility(ctx contex
 				"namespace label %s=%s applied by a platform administrator",
 			ag.Namespace, err, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed)
 	}
-	if ns.Labels[gmcv1alpha1.PrivilegedProfileLabel] != gmcv1alpha1.PrivilegedProfileAllowed {
+	// Dual-read the eligibility grant across both label domains for the v1/v2
+	// coexistence window (§H.12). The M5 migration relabels the namespace's
+	// privileged-profile grant onto the v2 actions-gateway.com domain; a still-running
+	// v1 ActionsGateway in that namespace must still be admitted as privileged, or the
+	// relabel would strand it. This only widens the accepted *spelling* of an existing
+	// platform grant — the value keyword "allowed" is identical on both domains, so no
+	// invariant is relaxed (fail-closed on any other value / absent label is unchanged).
+	if ns.Labels[gmcv1alpha1.PrivilegedProfileLabel] != gmcv1alpha1.PrivilegedProfileAllowed &&
+		ns.Labels[v2alpha1.PrivilegedProfileLabel] != v2alpha1.PrivilegedProfileAllowed {
 		return fmt.Errorf(
-			"securityProfile: privileged is not eligible in namespace %q: it requires the namespace label %s=%s, "+
-				"which only a platform administrator may apply — privileged eligibility is a platform decision and is "+
-				"deliberately not tenant-settable",
-			ag.Namespace, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed)
+			"securityProfile: privileged is not eligible in namespace %q: it requires the namespace label %s=%s "+
+				"(or the aligned %s=%s), which only a platform administrator may apply — privileged eligibility is a "+
+				"platform decision and is deliberately not tenant-settable",
+			ag.Namespace, gmcv1alpha1.PrivilegedProfileLabel, gmcv1alpha1.PrivilegedProfileAllowed,
+			v2alpha1.PrivilegedProfileLabel, v2alpha1.PrivilegedProfileAllowed)
 	}
 	return nil
 }
@@ -526,14 +536,23 @@ func validateSecurityProfileTransition(oldObj, newObj *gmcv1alpha1.ActionsGatewa
 	if newRank >= oldRank {
 		return nil // upgrade or no change
 	}
-	if newObj.Annotations[gmcv1alpha1.AllowProfileDowngradeAnnotation] == "true" {
+	// Dual-read the downgrade opt-in across both domains AND both value keywords for
+	// the v1/v2 coexistence window (§H.12, Q147): the legacy
+	// actions-gateway.github.com/allow-profile-downgrade="true" and the aligned
+	// actions-gateway.com/allow-profile-downgrade="allowed" are both honored. This
+	// widens the accepted *spelling* of an explicit, deliberate opt-in only — the
+	// invariant (a downgrade requires an explicit annotation; fail-closed otherwise)
+	// is unchanged, so the dual-read never weakens the check.
+	if newObj.Annotations[gmcv1alpha1.AllowProfileDowngradeAnnotation] == "true" ||
+		newObj.Annotations[v2alpha1.AllowProfileDowngradeAnnotation] == v2alpha1.AllowProfileDowngradeAllowed {
 		return nil // explicit, deliberate downgrade
 	}
 	return fmt.Errorf(
-		"securityProfile downgrade from %q to %q is not permitted without the %q annotation set to \"true\"; "+
-			"downgrading relaxes Pod Security Admission isolation and must be deliberate",
+		"securityProfile downgrade from %q to %q is not permitted without the %q annotation set to \"true\" "+
+			"(or the aligned %q set to %q); downgrading relaxes Pod Security Admission isolation and must be deliberate",
 		effectiveProfile(oldObj.Spec.SecurityProfile), effectiveProfile(newObj.Spec.SecurityProfile),
-		gmcv1alpha1.AllowProfileDowngradeAnnotation)
+		gmcv1alpha1.AllowProfileDowngradeAnnotation,
+		v2alpha1.AllowProfileDowngradeAnnotation, v2alpha1.AllowProfileDowngradeAllowed)
 }
 
 // proxyResourceWarnings returns a warning when proxy.resources.requests is set

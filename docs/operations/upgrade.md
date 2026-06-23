@@ -84,14 +84,14 @@ want the v2 API available:
 helm install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
 ```
 
-Even once installed the v2 types are inert — they are validated by the API server
-but **no controller reconciles them yet**, so creating a v2 object provisions
-nothing. Continue using the `v1alpha1` (`actions-gateway.github.com`) API; v2
-controllers, onboarding, and a migration tool arrive in later releases. See the
-[v2 API plan](../plan/v2-api.md). Note: v2's `ActionsGateway` reuses the `ag` short
-name, so once both groups are installed `kubectl get ag` is ambiguous — qualify it
-as `kubectl get actionsgateways.actions-gateway.github.com` (or `.com`) to
-disambiguate.
+The v2 controllers now reconcile these kinds, so a v2 object set provisions a working
+tenant. You can stay on the `v1alpha1` (`actions-gateway.github.com`) API
+indefinitely — both groups are served side by side — or migrate a tenant to v2 with
+the one-shot fan-out tool: see [migration-v1-to-v2.md](migration-v1-to-v2.md) and the
+[`v1alpha1` deprecation notice](v1alpha1-deprecation.md). Note: v2's `ActionsGateway`
+reuses the `ag` short name, so once both groups are installed `kubectl get ag` is
+ambiguous — qualify it as `kubectl get actionsgateways.actions-gateway.github.com`
+(or `.com`) to disambiguate.
 
 ### BREAKING: `spec.namespaceQuota` removed — the ResourceQuota is now platform-owned
 

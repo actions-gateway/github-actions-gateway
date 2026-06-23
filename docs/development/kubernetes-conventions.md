@@ -68,12 +68,20 @@ Two shipped keys predate this convention and still use `"true"`:
 - `actions-gateway.github.com/allow-profile-downgrade: "true"` — the
   downgrade opt-in annotation.
 
-These are **not** to be changed casually. The `tenant` marker in particular is
+These were **not** to be changed casually. The `tenant` marker in particular is
 load-bearing: the `namespace-psa-guard` and `gmc-tenant-resource-guard`
 `ValidatingAdmissionPolicy` objects, the onboarding scripts, and operator
 runbooks all match it as `"true"`, so changing the value is a breaking change to
 deployed clusters. The convention above applies to **new** keys; the existing
 two stay as-is unless there is a separate, deliberate migration.
+
+**The v2 API cutover is that deliberate migration.** v2 aligns both values to
+self-documenting keywords (`tenant: managed`, `allow-profile-downgrade: allowed`)
+on the renamed `actions-gateway.com/` domain (see `shared_types.go`). During the
+v1/v2 coexistence window every consumer **dual-reads** both spellings, so deployed
+clusters are not broken mid-cutover; the [M5 migration tool](../operations/migration-v1-to-v2.md)
+relabels live namespaces additively, and the legacy `"true"` arms drop when
+`v1alpha1` is removed (design [§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
 
 ## Label & annotation key conventions
 

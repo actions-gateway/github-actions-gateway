@@ -545,6 +545,17 @@ which no conversion webhook can express. Therefore:
 - Deprecate `v1alpha1` after a release or two. The cutover is deliberate, not
   silent, because the migration is fan-out-on-create.
 
+**Shipped (M5, Q165).** The tool is `gag-migrate` (core in
+`cmd/gmc/internal/migrate`, CLI in `cmd/gmc/migrate`). It resolves the latent
+ambiguities §H.17 flags: reuse is detected by content-addressing the built
+`RunnerTemplateSpec` (`podTemplate` **and** `workerImage`), so K identical templates
+collapse to one object; `maxListeners` is pinned to the v1 effective value (not v2's
+new default); `defaultProxyRef` is always wired so egress never silently goes direct;
+standalone `RunnerGroup` CRs win over inline bootstrap entries; and the
+`securityProfile` relocates onto the namespace label (most-restrictive-wins). The
+operator runbook is [migration-v1-to-v2.md](../operations/migration-v1-to-v2.md) and
+the [`v1alpha1` deprecation notice](../operations/v1alpha1-deprecation.md).
+
 ```
        v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
   ┌──────────────────────────────┐                       ┌──────────────────────────────┐
@@ -624,6 +635,16 @@ This stays **fail-closed** throughout: the CEL/webhook checks already treat any
 non-sentinel value as "not granted", so accepting a second sentinel during the window
 never widens a grant — at worst a namespace is briefly un-aligned and the
 already-applied `"true"` keeps working until the tool relabels it.
+
+**Shipped (M5, Q165).** The dual-read spans all four consumers: the
+`namespace-psa-guard`, `tenant-resource-guard`, and `namespace-security-profile-guard`
+`ValidatingAdmissionPolicy` objects (dual-marked in M3a/M3b), and the v1 GMC
+`ActionsGateway` validating webhook (M5) — whose `validatePrivilegedEligibility` now
+accepts the grant label on either domain and whose `validateSecurityProfileTransition`
+accepts the downgrade opt-in on either domain *and* either value keyword. The
+migration tool relabels the namespace markers additively (it adds the v2 keys and
+keeps the v1 keys), so a still-running v1 gateway in a relabeled namespace is never
+stranded. The window closes when `v1alpha1` is removed.
 
 ## H.13. What adopting this changes
 
