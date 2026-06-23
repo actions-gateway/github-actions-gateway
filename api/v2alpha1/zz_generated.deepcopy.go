@@ -5,7 +5,8 @@
 package v2alpha1
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -82,6 +83,11 @@ func (in *ActionsGatewaySpec) DeepCopyInto(out *ActionsGatewaySpec) {
 		*out = new(ObjectRef)
 		**out = **in
 	}
+	if in.AGCResources != nil {
+		in, out := &in.AGCResources, &out.AGCResources
+		*out = new(v1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
 	in.Tracing.DeepCopyInto(&out.Tracing)
 }
 
@@ -100,7 +106,7 @@ func (in *ActionsGatewayStatus) DeepCopyInto(out *ActionsGatewayStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -286,7 +292,7 @@ func (in *EgressProxyStatus) DeepCopyInto(out *EgressProxyStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -478,7 +484,7 @@ func (in *RunnerSetSpec) DeepCopyInto(out *RunnerSetSpec) {
 	}
 	if in.EvictionRetryDelay != nil {
 		in, out := &in.EvictionRetryDelay, &out.EvictionRetryDelay
-		*out = new(v1.Duration)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	if in.MaxQuotaRetries != nil {
@@ -488,17 +494,17 @@ func (in *RunnerSetSpec) DeepCopyInto(out *RunnerSetSpec) {
 	}
 	if in.QuotaRetryDelay != nil {
 		in, out := &in.QuotaRetryDelay, &out.QuotaRetryDelay
-		*out = new(v1.Duration)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	if in.CompletedPodTTL != nil {
 		in, out := &in.CompletedPodTTL, &out.CompletedPodTTL
-		*out = new(v1.Duration)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	if in.PendingPodDeadline != nil {
 		in, out := &in.PendingPodDeadline, &out.PendingPodDeadline
-		*out = new(v1.Duration)
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 }
@@ -518,7 +524,7 @@ func (in *RunnerSetStatus) DeepCopyInto(out *RunnerSetStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -615,7 +621,7 @@ func (in *RunnerTemplateStatus) DeepCopyInto(out *RunnerTemplateStatus) {
 	*out = *in
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
+		*out = make([]metav1.Condition, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

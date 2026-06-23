@@ -171,6 +171,12 @@ type ActionsGatewaySpec struct {
     // Same-namespace unless the target EgressProxy grants cross-namespace use.
     DefaultProxyRef *ObjectRef `json:"defaultProxyRef,omitempty"`
 
+    // AGCResources optionally tunes the per-gateway AGC container CPU/memory
+    // requests/limits (Q171). Additive, per-key overlay of the platform default
+    // (requests cpu:500m/mem:2Gi, limits cpu:2/mem:4Gi — the Appendix A sizing);
+    // unset ⇒ that default unchanged. See §H.4 note below.
+    AGCResources *corev1.ResourceRequirements `json:"agcResources,omitempty"`
+
     // REMOVED vs v1alpha1: Proxy ProxyConfig         → standalone EgressProxy
     // REMOVED vs v1alpha1: RunnerGroups []RunnerGroupSpec → explicit RunnerSet objects
 }
@@ -257,6 +263,8 @@ and clears the moment one default is demoted (the `ClusterRunnerTemplate` watch
 re-enqueues). A `defaultTemplateRef`/`templateRef` that *names a missing* template still
 fails closed (`TemplateNotFound`), exactly like a missing proxy fails closed
 (`ProxyNotFound`); only an entirely-unset reference falls through to the next rung.
+
+**Per-gateway AGC resources — `agcResources` (Q171, shipped).** The AGC control-plane container is sized by an optional `ActionsGateway.spec.agcResources` of the standard `corev1.ResourceRequirements` shape. It is an additive, per-key overlay of the platform default — the [Appendix A](appendix-a-capacity-slos.md) sizing (`requests {cpu: 500m, memory: 2Gi}`, `limits {cpu: 2, memory: 4Gi}`): the GMC stamps the default and replaces only the request/limit keys the tenant sets, so an unset field reproduces the default unchanged (non-breaking) and a value that sets one knob keeps the default for the rest. There is no admission-time floor on the values — sizing guidance and the recommended floor (don't set a memory limit below the working set; don't request more than a node/quota can schedule) are operator-owned in [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources). v1alpha1 has no equivalent field; its AGC carries no GMC-stamped resources (unchanged).
 
 ### Worked example — minimal proxy-less onboarding (three objects)
 
@@ -375,7 +383,7 @@ Field movement, v1alpha1 → v2alpha1:
 | `RunnerGroup.spec.{runnerLabels,maxListeners,maxWorkers,priorityTiers, lifecycle}` | `RunnerSet.spec` (unchanged) |
 | `ActionsGateway.spec.proxy` | `EgressProxy` (kind) |
 | `ActionsGateway.spec.runnerGroups` | removed (explicit `RunnerSet` objects) |
-| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef}` |
+| — | `RunnerSet.spec.{gatewayRef,templateRef,proxyRef}`; `ActionsGateway.spec.{defaultProxyRef,defaultTemplateRef,agcResources}` |
 
 ## H.7. Reference integrity — runtime conditions, not admission
 

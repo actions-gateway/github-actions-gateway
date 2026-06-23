@@ -1,6 +1,7 @@
 package v2alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -58,6 +59,26 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	DefaultTemplateRef *ObjectRef `json:"defaultTemplateRef,omitempty"`
+
+	// AGCResources tunes the CPU/memory requests and limits stamped on this
+	// gateway's AGC control-plane container (Q171). It is an additive, per-key
+	// override of the platform default — the documented Appendix A sizing of
+	// requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC
+	// starts from that default and overlays only the request/limit keys set
+	// here, so a value that sets just one knob keeps the sensible default for
+	// the others. Unset ⇒ the platform default unchanged. Changing it is a
+	// rolling restart of the AGC, not a hot reload.
+	//
+	// Tune cautiously: the AGC is a single pod holding all listener-goroutine
+	// state in memory. A memory limit below the AGC's working set OOMKills the
+	// control plane, and a request larger than any node (or the namespace
+	// ResourceQuota) leaves the AGC pod unschedulable (Pending). See
+	// docs/operations/tenant-onboarding.md and
+	// docs/design/appendix-e-capacity-planning.md for sizing guidance and the
+	// recommended floor.
+	//
+	// +optional
+	AGCResources *corev1.ResourceRequirements `json:"agcResources,omitempty"`
 
 	// LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
 	// (default), debug. Changing it is a rolling restart of the AGC, not a hot

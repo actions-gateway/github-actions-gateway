@@ -441,6 +441,50 @@ kubectl annotate clusterrunnertemplate <name> actions-gateway.com/is-default-tem
 
 The minimal proxy-less onboarding above can therefore drop `templateRef` from the `RunnerSet` once a `defaultTemplateRef` or a cluster-default exists.
 
+### Tuning AGC control-plane resources
+
+`ActionsGateway.spec.agcResources` is an **optional** per-gateway override for the CPU/memory requests and limits stamped on this gateway's AGC control-plane container. Most tenants never set it — the AGC ships with a sensible platform default sized for the worst-case listener burst.
+
+**The platform default (applied when `agcResources` is omitted):**
+
+| | CPU | Memory |
+| --- | --- | --- |
+| request | `500m` | `2Gi` |
+| limit | `2` | `4Gi` |
+
+This is the [Appendix A](../design/appendix-a-capacity-slos.md) capacity sizing: the `2Gi` memory request is a generous reservation for the ~1,000-goroutine peak burst with headroom for Go runtime overhead; the `4Gi` memory limit sits well above the working set so transient bursts don't trigger an OOMKill; the `2`-core CPU limit absorbs reconcile/token-refresh spikes on an otherwise I/O-bound (long-poll-blocked) workload.
+
+**When to tune.** Override only on real signal:
+
+- **Memory** — raise `requests.memory` and `limits.memory` if you run many RunnerGroups with high `maxListeners` and observe `container OOMKilled` events or high GC pressure (`go_gc_duration_seconds`). Budget roughly `sum(maxListeners) × 60 KiB` of working set plus the default headroom.
+- **CPU** — raise `limits.cpu` only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile churn.
+
+The override is **per key**: set only the request/limit entries you want to change and every other entry keeps its platform default. For example, raising just the memory limit leaves the CPU request/limit and memory request at their defaults:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata:
+  name: my-gateway
+  namespace: my-tenant
+spec:
+  githubAppRef:
+    name: my-tenant-github-app
+  githubURL: https://github.com/my-org
+  agcResources:
+    limits:
+      memory: 8Gi   # CPU request/limit and memory request stay at the platform default
+```
+
+Changing `agcResources` rolls the AGC Deployment (a rolling restart, not a hot reload); in-flight listener sessions deregister and re-register within GitHub's redelivery window.
+
+**Recommended floor / footguns.** The AGC is a single pod holding all listener state in memory — size it generously rather than tight:
+
+- Do **not** set `limits.memory` below ~`512Mi`, and keep it above your observed working set; a limit under the working set OOMKills the control plane (a `CrashLoopBackOff`, not a clear error). The platform default `4Gi` is a safe starting point.
+- Do **not** set `requests` larger than a single node can schedule, or larger than the namespace `ResourceQuota` leaves free — an over-large request leaves the AGC pod `Pending` (unschedulable). Check `kubectl describe pod` for `FailedScheduling` if the AGC never starts after an `agcResources` change.
+
+There is no admission-time floor enforced on the values — the guidance above is operator-owned. When in doubt, leave `agcResources` unset and let the platform default apply.
+
 ---
 
 ## Handing Off to the Tenant
