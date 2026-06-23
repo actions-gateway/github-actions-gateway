@@ -81,6 +81,82 @@ spec:
               and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
               docs/operations/security-operations.md.
             properties:
+              agcResources:
+                description: |-
+                  AGCResources tunes the CPU/memory requests and limits stamped on this
+                  gateway's AGC control-plane container (Q171). It is an additive,
+                  per-key override of the platform default: the GMC starts from the
+                  documented Appendix A sizing — a 2Gi memory *request* and a 2-core CPU
+                  *limit* — and overlays only the request/limit keys set here, so a value
+                  that sets just one knob keeps the sensible default for the others.
+                  Unset ⇒ the platform default unchanged. Changing it is a rolling restart
+                  of the AGC, not a hot reload.
+
+                  The memory entry is a *request* (not a limit) by design: the AGC holds
+                  all listener-goroutine state in memory and must not be OOMKilled by its
+                  own ceiling under a burst. Tune limits cautiously — a memory limit below
+                  the AGC's working set OOMKills the control plane, and a request larger
+                  than any node (or the namespace ResourceQuota) leaves the AGC pod
+                  unschedulable (Pending). See docs/operations/tenant-onboarding.md and
+                  docs/design/appendix-e-capacity-planning.md for sizing guidance and the
+                  recommended floor.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
               defaultProxyRef:
                 description: |-
                   DefaultProxyRef names an EgressProxy used for AGC control-plane egress and

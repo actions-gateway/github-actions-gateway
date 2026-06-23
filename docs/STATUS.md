@@ -55,7 +55,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q179"></a>Q179 | [Deflake two kindnet v1 e2e timing races](../cmd/gmc/test/e2e/isolation_test.go) | `tests` `flake` | ▶ | S | Top per [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first). PR #369 kindnet flake (calico passed): isolation probe budget 60→150 iters + wait 5m→6m; job_lifecycle worker-pod wait 4m→6m. Escalate if recurs. |
 | <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
 | <a id="Q178"></a>Q178 | Proxy-less direct-egress live e2e (CNI enforcement) | `tests` `security` | 🔲 | S | Defense-in-depth for Q168 (direct egress, shipped): envtest proves the direct-egress NetworkPolicy shape but not live CNI enforcement. Add a kind e2e proving a proxy-less worker reaches GitHub but a non-GitHub destination is blocked by the CNI. |
-| <a id="Q171"></a>Q171 | [Tenant-tunable AGC resources (agcResources)](design/appendix-e-capacity-planning.md) | `infra` | 🔲 | S | Additive optional agcResources field on the v2 ActionsGateway spec for per-gateway AGC CPU/memory, behind a sensible default (appendix-e flags it as a future consideration). For tenants needing non-default AGC sizing. |
 ---
 
 ## Deferred

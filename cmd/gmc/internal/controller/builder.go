@@ -923,9 +923,12 @@ func buildAGCDeployment(ag *gmcv1alpha1.ActionsGateway, agcImage, proxyServiceAd
 	env = append(env, tracingEnv(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
+	// v1 stamps no resources on the AGC container (unchanged behavior); only the
+	// v2 ActionsGateway exposes the tunable agcResources field (Q171). The zero
+	// ResourceRequirements is byte-identical to leaving the field unset.
 	return buildAGCDeploymentFrom(ag.Namespace,
 		agcWorkloadNames{app: agcAppName, serviceAccount: agcSAName, metricsTLSSecret: metricsTLSSecretName},
-		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env)
+		managedLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecretName, agcImage, env, corev1.ResourceRequirements{})
 }
 
 // agcWorkloadNames carries the per-gateway derived names for the AGC
@@ -947,10 +950,13 @@ type agcWorkloadNames struct {
 // env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
 // container/pod SecurityContext, and the probes. The callers differ only in the
 // metadata labels, the derived resource names (v1 fixed, v2 per-gateway), the
-// credential/proxy-CA Secret names, and the env list, which are passed in.
-// metaLabels are the Deployment's metadata labels; the pod-template `app` label is
-// names.app so it matches the AGC NetworkPolicy and Service selectors.
-func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar) *appsv1.Deployment {
+// credential/proxy-CA Secret names, the env list, and the container resources,
+// which are passed in. metaLabels are the Deployment's metadata labels; the
+// pod-template `app` label is names.app so it matches the AGC NetworkPolicy and
+// Service selectors. resources is the AGC container's resource requirements — the
+// zero value (v1) leaves the container without requests/limits, unchanged from
+// before; v2 passes the platform default overlaid with spec.agcResources (Q171).
+func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName, proxyTLSSecret, agcImage string, env []corev1.EnvVar, resources corev1.ResourceRequirements) *appsv1.Deployment {
 	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
 	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
 	credMode := int32(0o440)
@@ -1028,9 +1034,10 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 					TerminationGracePeriodSeconds: ptr(int64(60)),
 					Volumes:                       volumes,
 					Containers: []corev1.Container{{
-						Name:  "agc",
-						Image: agcImage,
-						Env:   env,
+						Name:      "agc",
+						Image:     agcImage,
+						Env:       env,
+						Resources: resources,
 						// The AGC pins its controller-runtime metrics server to
 						// metricsPort and its health server to healthMetricsPort
 						// (cmd/agc/main.go); declaring the ports documents the

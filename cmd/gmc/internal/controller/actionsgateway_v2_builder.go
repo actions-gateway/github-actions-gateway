@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -230,6 +231,54 @@ func v2ProxyServiceAddr(namespace, epName string) string {
 // matching the EgressProxy reconciler's egressProxyTLSSecretName (<ep>-proxy-tls).
 func v2ProxyTLSSecretName(epName string) string { return epName + egressProxyTLSSuffix }
 
+// defaultAGCResources is the platform default resource footprint stamped on the
+// v2 AGC control-plane container when spec.agcResources does not override a given
+// request/limit. It encodes the documented Appendix A capacity sizing
+// (docs/design/appendix-a-capacity-slos.md):
+//
+//   - memory request 2Gi  — generous scheduling reservation for the ~1,000-goroutine
+//     peak burst (~60 MiB) with a large safety margin for Go runtime overhead and
+//     heap churn during reconcile storms.
+//   - memory limit 4Gi    — a hard cap set well above the working set, so transient
+//     bursts don't OOMKill the single-pod control plane while a true runaway is
+//     still bounded.
+//   - cpu request 500m     — baseline scheduling weight; the AGC is predominantly
+//     I/O-bound (long-poll blocked), so steady CPU draw is far below this.
+//   - cpu limit 2 (cores)  — burst ceiling that absorbs reconcile churn / token-
+//     refresh contention without throttling steady-state polling.
+func defaultAGCResources() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("4Gi"),
+		},
+	}
+}
+
+// agcResources returns the AGC container resource requirements: the platform
+// defaults (defaultAGCResources) overlaid with any per-gateway spec.agcResources
+// overrides, mirroring proxyResources. The overlay is per request/limit key, so a
+// tenant that sets only one knob (e.g. limits.memory) keeps the sane default for
+// every key it does not set — an unset agcResources reproduces the platform
+// default unchanged.
+func agcResources(override *corev1.ResourceRequirements) corev1.ResourceRequirements {
+	res := defaultAGCResources()
+	if override == nil {
+		return res
+	}
+	for k, v := range override.Requests {
+		res.Requests[k] = v
+	}
+	for k, v := range override.Limits {
+		res.Limits[k] = v
+	}
+	return res
+}
+
 // buildAGCDeploymentV2 builds the AGC Deployment for a v2 ActionsGateway. It
 // mirrors v1's buildAGCDeployment (credentials mounted as files never env, proxy
 // CA pinning, metrics mTLS mount, hardened SecurityContext, probes) and reads the
@@ -283,7 +332,7 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		serviceAccount:   agcNameV2(ag),
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
-	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecret, agcImage, env)
+	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
 }
 
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC

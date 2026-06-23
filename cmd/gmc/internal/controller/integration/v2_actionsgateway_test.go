@@ -16,6 +16,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -223,6 +224,66 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 			cred != nil && cred.Status == metav1.ConditionFalse &&
 			got.Status.ObservedGeneration == got.Generation
 	}, 15*time.Second, 100*time.Millisecond, "status should be Ready=False (no kubelet), Degraded=False, CredentialUnavailable=False, observedGeneration set")
+}
+
+// TestV2_ActionsGateway_AGCResources proves the additive spec.agcResources field
+// (Q171): when set it stamps the tenant's requests/limits on the AGC container
+// (overlaid on the platform default per key); when unset the container carries the
+// documented platform default (2Gi memory request, 2-core CPU limit) unchanged.
+func TestV2_ActionsGateway_AGCResources(t *testing.T) {
+	const ns = "v2-ag-resources"
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+	})
+
+	// Unset gateway ⇒ platform default footprint.
+	agDefault := newV2GatewayWired("gw-default", ns, "github-app", "shared")
+	require.NoError(t, k8sClient.Create(ctx, agDefault))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), agDefault) })
+
+	// Tuned gateway ⇒ tenant override. Sets a memory request + a CPU limit that
+	// differ from the default, plus a memory limit the default omits.
+	agTuned := newV2GatewayWired("gw-tuned", ns, "github-app", "shared")
+	agTuned.Spec.AGCResources = &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: resource.MustParse("4Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("6Gi"),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, agTuned))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), agTuned) })
+
+	startActionsGatewayV2Reconciler(t)
+
+	getAGCContainer := func(gw string) corev1.ResourceRequirements {
+		var dep appsv1.Deployment
+		require.Eventually(t, func() bool {
+			return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gw + "-agc"}, &dep) == nil
+		}, 15*time.Second, 100*time.Millisecond, "AGC Deployment %s-agc should be created", gw)
+		return dep.Spec.Template.Spec.Containers[0].Resources
+	}
+
+	// Unset ⇒ the documented Appendix A platform default, unchanged.
+	def := getAGCContainer("gw-default")
+	assert.Equal(t, "500m", def.Requests.Cpu().String(), "default AGC CPU request")
+	assert.Equal(t, "2Gi", def.Requests.Memory().String(), "default AGC memory request")
+	assert.Equal(t, "2", def.Limits.Cpu().String(), "default AGC CPU limit")
+	assert.Equal(t, "4Gi", def.Limits.Memory().String(), "default AGC memory limit")
+
+	// Set ⇒ tenant values overlaid per key. The memory request, CPU limit, and
+	// memory limit are overridden; the CPU request the tenant did not set keeps the
+	// platform default (proving the overlay is per-key, not wholesale replacement).
+	tuned := getAGCContainer("gw-tuned")
+	assert.Equal(t, "4Gi", tuned.Requests.Memory().String(), "overridden memory request")
+	assert.Equal(t, "4", tuned.Limits.Cpu().String(), "overridden CPU limit")
+	assert.Equal(t, "6Gi", tuned.Limits.Memory().String(), "overridden memory limit")
+	assert.Equal(t, "500m", tuned.Requests.Cpu().String(), "unset CPU request keeps the platform default")
 }
 
 func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
