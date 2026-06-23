@@ -44,7 +44,7 @@ jobs:
     outputs:
       manifests: ${{ steps.filter.outputs.manifests }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         id: filter
         with:
@@ -83,7 +83,7 @@ jobs:
       # does not re-fetch the schema set from GitHub (a rate-limit flake source).
       KUBECONFORM_CACHE: ${{ github.workspace }}/.kubeconform-cache
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       - name: install yamllint
         run: python3 -m pip install --user "yamllint==${YAMLLINT_VERSION}"
