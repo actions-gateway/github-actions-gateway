@@ -53,6 +53,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
+| <a id="Q178"></a>Q178 | Proxy-less direct-egress live e2e (CNI enforcement) | `tests` `security` | 🔲 | S | Defense-in-depth for Q168 (direct egress, shipped): envtest proves the direct-egress NetworkPolicy shape but not live CNI enforcement. Add a kind e2e proving a proxy-less worker reaches GitHub but a non-GitHub destination is blocked by the CNI. |
 ---
 
 ## Deferred
