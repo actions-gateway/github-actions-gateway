@@ -229,6 +229,12 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// every exit below persists it.
 	r.setEgressMode(&rs, refs.proxy != nil)
 
+	// Record which rung of the optional-templateRef chain supplied the pod shape (Q172,
+	// §H.4): the set's own templateRef, the gateway's defaultTemplateRef, or the single
+	// cluster-default ClusterRunnerTemplate. Auditable in status.templateSource so an
+	// operator sees whether a set runs on an explicit template or a default.
+	rs.Status.TemplateSource = refs.templateSource
+
 	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
 	// during a GitHub outage.
@@ -278,7 +284,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	rs.Status.ObservedGeneration = rs.Generation
 	if active > 0 {
 		r.setReadyCondition(&rs, true, v2alpha1.ReasonListenerActive,
-			fmt.Sprintf("references resolved; %d listener goroutine(s) running", active))
+			fmt.Sprintf("references resolved (template via %s); %d listener goroutine(s) running", refs.templateSource, active))
 	} else {
 		r.setReadyCondition(&rs, false, v2alpha1.ReasonNoActiveSessions,
 			"references resolved; no listener goroutines are running")
@@ -570,18 +576,29 @@ func (r *RunnerSetReconciler) proxyToRunnerSets(ctx context.Context, obj client.
 	})
 }
 
-// templateToRunnerSets enqueues every RunnerSet in the template's namespace whose
-// templateRef names it (and is not a ClusterRunnerTemplate ref).
+// templateToRunnerSets enqueues every RunnerSet in the template's namespace that
+// could resolve to this namespaced RunnerTemplate: one whose templateRef names it
+// directly, or — because an unset templateRef inherits the gateway's defaultTemplateRef
+// (Q172) — any set with an unset templateRef in the namespace, which the reconcile
+// re-resolves (mirrors proxyToRunnerSets' generous-enqueue-then-re-resolve, simpler
+// than reading each set's gateway here).
 func (r *RunnerSetReconciler) templateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
 	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
+		if rs.Spec.TemplateRef == nil {
+			return true // may inherit gateway.defaultTemplateRef pointing at this template
+		}
 		return rs.Spec.TemplateRef.Kind != "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName()
 	})
 }
 
-// clusterTemplateToRunnerSets enqueues every RunnerSet whose templateRef is a
-// ClusterRunnerTemplate naming this object. The referent is cluster-scoped (no
+// clusterTemplateToRunnerSets enqueues every RunnerSet that could resolve to this
+// ClusterRunnerTemplate: one whose templateRef is a ClusterRunnerTemplate naming it,
+// or — because an unset templateRef may inherit the gateway's defaultTemplateRef or
+// fall through to the cluster-default ClusterRunnerTemplate (Q172) — any set with an
+// unset templateRef, so a set sitting TemplateNotFound/AmbiguousDefault flips the
+// moment a (default-marked) cluster template syncs. The referent is cluster-scoped (no
 // namespace), so it lists from the manager cache — already scoped to this AGC's
-// namespace and gateway — rather than filtering by the object's (empty) namespace.
+// namespace and gateway — and the reconcile re-resolves the actual rung.
 func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
 	var list v2alpha1.RunnerSetList
 	if err := r.List(ctx, &list); err != nil {
@@ -590,7 +607,9 @@ func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, o
 	var reqs []ctrl.Request
 	for i := range list.Items {
 		rs := &list.Items[i]
-		if rs.Spec.TemplateRef.Kind == "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName() {
+		unset := rs.Spec.TemplateRef == nil
+		named := rs.Spec.TemplateRef != nil && rs.Spec.TemplateRef.Kind == "ClusterRunnerTemplate" && rs.Spec.TemplateRef.Name == obj.GetName()
+		if unset || named {
 			reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}})
 		}
 	}

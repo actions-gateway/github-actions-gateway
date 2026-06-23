@@ -40,6 +40,21 @@ const (
 	// grants privileged eligibility (matched exactly; fail-closed otherwise).
 	PrivilegedProfileAllowed = "allowed"
 
+	// IsDefaultTemplateAnnotation marks a ClusterRunnerTemplate as the single
+	// cluster-default worker pod shape (Q172). A RunnerSet with no spec.templateRef and
+	// whose gateway sets no spec.defaultTemplateRef resolves its template through the
+	// one ClusterRunnerTemplate carrying this annotation set to IsDefaultTemplateValue —
+	// the StorageClass default pattern (storageclass.kubernetes.io/is-default-class), so
+	// it is platform-set and familiar. At most one may be marked: the AGC RunnerSet
+	// reconciler enforces ≤1 at resolution time and fails closed with AmbiguousDefault if
+	// two are marked, never silently picking one (§H.4). The marker lives only on the
+	// cluster-scoped ClusterRunnerTemplate (platform-authored): a tenant cannot self-elect
+	// a namespaced RunnerTemplate as the cluster-wide default.
+	IsDefaultTemplateAnnotation = "actions-gateway.com/is-default-template"
+	// IsDefaultTemplateValue is the only value of IsDefaultTemplateAnnotation that marks
+	// the cluster default (matched exactly; any other value leaves the template unmarked).
+	IsDefaultTemplateValue = "true"
+
 	// SecurityProfileLabel is the namespace label that selects the Pod Security
 	// Admission enforcement level the GMC stamps on the tenant namespace. v2 moves the
 	// security profile off the per-gateway ActionsGateway.spec (where v1 hung it) and

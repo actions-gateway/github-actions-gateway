@@ -60,7 +60,7 @@ func newV2RunnerSet(ns, name, gateway, template string) *agcv2alpha1.RunnerSet {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: agcv2alpha1.RunnerSetSpec{
 			GatewayRef:   agcv2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:  agcv2alpha1.ObjectRef{Name: template},
+			TemplateRef:  &agcv2alpha1.ObjectRef{Name: template},
 			RunnerLabels: []string{"self-hosted", "linux"},
 		},
 	}

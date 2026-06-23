@@ -36,6 +36,10 @@ spec:
     - jsonPath: .status.proxyMode
       name: Egress
       type: string
+    - jsonPath: .status.templateSource
+      name: Template
+      priority: 1
+      type: string
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -255,12 +259,17 @@ spec:
                 type: array
               templateRef:
                 description: |-
-                  TemplateRef names the RunnerTemplate (default) or ClusterRunnerTemplate
-                  (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Required
-                  at GA: the AGC cannot synthesize a worker pod without a pod shape, so unlike
-                  proxyRef there is no well-defined fallback for an unset template (§H.4). The
-                  referent is resolved at runtime; a set pointing at a not-yet-applied template
-                  sits Ready=False/TemplateNotFound until it syncs (§H.7).
+                  TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate
+                  (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means
+                  inherit the gateway's defaultTemplateRef; both unset means the single cluster-default
+                  ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the
+                  three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never
+                  synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the
+                  GA-era required templateRef to optional-with-a-default (a backward-compatible
+                  required→optional change): a set that sets templateRef behaves exactly as before.
+                  The referent is resolved at runtime; a set pointing at a not-yet-applied template
+                  sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource
+                  reports which rung resolved.
                 properties:
                   kind:
                     description: |-
@@ -286,7 +295,6 @@ spec:
             required:
             - gatewayRef
             - runnerLabels
-            - templateRef
             type: object
             x-kubernetes-validations:
             - message: maxWorkers must equal the last priorityTiers threshold when
@@ -396,6 +404,20 @@ spec:
                 enum:
                 - Proxied
                 - Direct
+                type: string
+              templateSource:
+                description: |-
+                  TemplateSource records which rung of the template-resolution chain supplied this
+                  runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef),
+                  "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef
+                  was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate,
+                  resolved because neither was set). Explicit so an operator can audit whether a set
+                  runs on an explicit template or a default without inspecting the gateway and cluster
+                  state. Empty until the references resolve.
+                enum:
+                - TemplateRef
+                - GatewayDefault
+                - ClusterDefault
                 type: string
             type: object
         type: object

@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -156,6 +157,10 @@ type resolvedRefs struct {
 	gateway  *v2alpha1.ActionsGateway
 	template *v2alpha1.RunnerTemplateSpec
 	proxy    *v2alpha1.EgressProxy
+	// templateSource is which rung of the optional-templateRef chain supplied the
+	// template (Q172): one of v2alpha1.TemplateSource{Ref,GatewayDefault,ClusterDefault}.
+	// Set only on full resolution; surfaced in RunnerSet status.templateSource.
+	templateSource string
 }
 
 // refResolution is the outcome of resolving a RunnerSet's references: either a
@@ -173,12 +178,15 @@ func (r refResolution) resolved() bool { return r.reason == "" && r.err == nil }
 // resolveRunnerSetRefs resolves a RunnerSet's gatewayRef, templateRef, and
 // proxyRef (or the gateway's defaultProxyRef) in the set's own namespace. Missing
 // referents surface as a reason/message (GatewayNotFound / TemplateNotFound /
-// ProxyNotFound) rather than an error, so the reconciler sets the condition and
-// waits for the referent→referrer watch to re-enqueue when it appears — no apply
-// ordering required (§H.7). The proxy is optional (Q168, §H.10): a RunnerSet whose
-// proxyRef and gateway.defaultProxyRef are both unset resolves with refs.proxy == nil
-// (direct egress, still NetworkPolicy-restricted), not ProxyNotFound. A reference to
-// a *named but missing* proxy still fails closed with ProxyNotFound.
+// AmbiguousDefault / ProxyNotFound) rather than an error, so the reconciler sets the
+// condition and waits for the referent→referrer watch to re-enqueue when it appears —
+// no apply ordering required (§H.7). The template is optional (Q172, §H.4): an unset
+// templateRef resolves through the gateway's defaultTemplateRef, then the single
+// cluster-default ClusterRunnerTemplate, before failing closed TemplateNotFound — never
+// a phantom pod shape. The proxy is optional (Q168, §H.10): a RunnerSet whose proxyRef
+// and gateway.defaultProxyRef are both unset resolves with refs.proxy == nil (direct
+// egress, still NetworkPolicy-restricted), not ProxyNotFound. A reference to a *named
+// but missing* proxy still fails closed with ProxyNotFound.
 func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.RunnerSet) (*resolvedRefs, refResolution) {
 	ns := rs.Namespace
 	refs := &resolvedRefs{}
@@ -194,12 +202,16 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	}
 	refs.gateway = gw
 
-	// templateRef → RunnerTemplate (namespaced) or ClusterRunnerTemplate (cluster).
-	tmplSpec, res := resolveTemplate(ctx, c, ns, rs.Spec.TemplateRef)
+	// templateRef → RunnerTemplate/ClusterRunnerTemplate via the optional-templateRef
+	// chain (Q172, §H.4): rs.templateRef → gateway.defaultTemplateRef → the single
+	// cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound. Fail-closed
+	// throughout — never a phantom pod shape.
+	tmplSpec, tmplSource, res := resolveTemplateChain(ctx, c, ns, rs, gw)
 	if !res.resolved() {
 		return nil, res
 	}
 	refs.template = tmplSpec
+	refs.templateSource = tmplSource
 
 	// proxyRef → EgressProxy, else gateway.defaultProxyRef. Both unset ⇒ direct
 	// egress (§H.10): refs.proxy stays nil, the worker reaches GitHub directly
@@ -227,6 +239,71 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	refs.proxy = proxy
 
 	return refs, refResolution{}
+}
+
+// resolveTemplateChain resolves a RunnerSet's worker pod shape through the optional-
+// templateRef fallback chain (Q172, §H.4): rs.spec.templateRef → gateway.spec.
+// defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed
+// TemplateNotFound. It returns the resolved spec, which rung supplied it
+// (status.templateSource), and the resolution outcome. Fail-closed throughout: a
+// named-but-missing template yields TemplateNotFound, two cluster-defaults yield
+// AmbiguousDefault, and an exhausted chain yields TemplateNotFound — the AGC never
+// synthesizes a pod shape. A set with an explicit templateRef behaves exactly as
+// before the relaxation (rung 1 only).
+func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*v2alpha1.RunnerTemplateSpec, string, refResolution) {
+	// Rung 1: the set's own explicit templateRef.
+	if rs.Spec.TemplateRef != nil {
+		spec, res := resolveTemplate(ctx, c, ns, *rs.Spec.TemplateRef)
+		return spec, v2alpha1.TemplateSourceRef, res
+	}
+	// Rung 2: the gateway's defaultTemplateRef, inherited because templateRef is unset.
+	if gw.Spec.DefaultTemplateRef != nil {
+		spec, res := resolveTemplate(ctx, c, ns, *gw.Spec.DefaultTemplateRef)
+		return spec, v2alpha1.TemplateSourceGatewayDefault, res
+	}
+	// Rung 3: the single cluster-default ClusterRunnerTemplate.
+	spec, res := resolveClusterDefaultTemplate(ctx, c)
+	return spec, v2alpha1.TemplateSourceClusterDefault, res
+}
+
+// resolveClusterDefaultTemplate resolves the single cluster-default ClusterRunnerTemplate
+// — the one carrying IsDefaultTemplateAnnotation=IsDefaultTemplateValue — the last rung of
+// the template chain, reached only when neither templateRef nor the gateway's
+// defaultTemplateRef is set (Q172, §H.4). At-most-one is enforced here, at runtime: zero
+// marked ⇒ TemplateNotFound, exactly one ⇒ resolved, two or more ⇒ AmbiguousDefault
+// (fail-closed, never silently picks one — stricter than upstream StorageClass). Enforced
+// at resolution rather than admission because the invariant is cross-object (single-object
+// CEL cannot express it) and admission-time rejection would break GitOps apply-ordering
+// (§H.7). The cluster-scoped List is authorized by the per-gateway
+// agc-clusterrunnertemplate-reader ClusterRoleBinding the GMC creates (M3b).
+func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alpha1.RunnerTemplateSpec, refResolution) {
+	var list v2alpha1.ClusterRunnerTemplateList
+	if err := c.List(ctx, &list); err != nil {
+		return nil, refResolution{err: fmt.Errorf("list ClusterRunnerTemplates: %w", err)}
+	}
+	var defaults []*v2alpha1.ClusterRunnerTemplate
+	for i := range list.Items {
+		if list.Items[i].Annotations[v2alpha1.IsDefaultTemplateAnnotation] == v2alpha1.IsDefaultTemplateValue {
+			defaults = append(defaults, &list.Items[i])
+		}
+	}
+	switch len(defaults) {
+	case 0:
+		return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+			message: fmt.Sprintf("no templateRef, no gateway defaultTemplateRef, and no ClusterRunnerTemplate marked %s=%s",
+				v2alpha1.IsDefaultTemplateAnnotation, v2alpha1.IsDefaultTemplateValue)}
+	case 1:
+		return &defaults[0].Spec, refResolution{}
+	default:
+		names := make([]string, len(defaults))
+		for i, d := range defaults {
+			names[i] = d.Name
+		}
+		sort.Strings(names)
+		return nil, refResolution{reason: v2alpha1.ReasonAmbiguousDefault,
+			message: fmt.Sprintf("%d ClusterRunnerTemplates are marked the cluster default (%s); exactly one must be: %s",
+				len(defaults), v2alpha1.IsDefaultTemplateAnnotation, strings.Join(names, ", "))}
+	}
 }
 
 // resolveTemplate resolves a templateRef to a worker pod shape. kind selects the

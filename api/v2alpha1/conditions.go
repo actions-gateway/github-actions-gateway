@@ -50,6 +50,25 @@ const (
 	ProxyModeDirect = "Direct"
 )
 
+// Template-resolution source reported in RunnerSet status.templateSource (Q172, §H.4):
+// which rung of the optional-templateRef fallback chain supplied the worker pod shape.
+// It makes "where did this set's template come from" an auditable status value rather
+// than something an operator has to re-derive from the gateway and cluster state. It
+// mirrors the proxyMode precedent: an explicit field for a fallback an unset reference
+// resolves through.
+const (
+	// TemplateSourceRef means the RunnerSet's own spec.templateRef resolved the
+	// template — the explicit, unchanged-from-required path.
+	TemplateSourceRef = "TemplateRef"
+	// TemplateSourceGatewayDefault means templateRef was unset and the gateway's
+	// spec.defaultTemplateRef resolved the template.
+	TemplateSourceGatewayDefault = "GatewayDefault"
+	// TemplateSourceClusterDefault means neither templateRef nor the gateway's
+	// defaultTemplateRef was set and the single cluster-default ClusterRunnerTemplate
+	// (IsDefaultTemplateAnnotation) resolved the template.
+	TemplateSourceClusterDefault = "ClusterDefault"
+)
+
 // Condition reasons. Reasons are CamelCase per Kubernetes API conventions;
 // contextual detail (the failing step, the missing Secret name) goes in the message.
 const (
@@ -77,8 +96,18 @@ const (
 const (
 	// ReasonGatewayNotFound — the referenced ActionsGateway does not exist.
 	ReasonGatewayNotFound = "GatewayNotFound"
-	// ReasonTemplateNotFound — the referenced RunnerTemplate/ClusterRunnerTemplate does not exist.
+	// ReasonTemplateNotFound — no template resolved: the referenced
+	// RunnerTemplate/ClusterRunnerTemplate does not exist, or (when templateRef and
+	// gateway.defaultTemplateRef are both unset) no cluster-default ClusterRunnerTemplate
+	// is marked. Fail-closed: no worker pod is ever synthesized without a pod shape (§H.4).
 	ReasonTemplateNotFound = "TemplateNotFound"
+	// ReasonAmbiguousDefault — the RunnerSet fell through to the cluster-default rung of
+	// the template-resolution chain (Q172) but more than one ClusterRunnerTemplate is
+	// marked the cluster default (IsDefaultTemplateAnnotation). Fail-closed: rather than
+	// silently picking one, the set sits Ready=False until exactly one default remains.
+	// At-most-one is enforced here, at runtime, not at admission (cross-object, GitOps-
+	// safe; §H.7) — see docs/design/appendix-h-v2-api-decomposition.md §H.4.
+	ReasonAmbiguousDefault = "AmbiguousDefault"
 	// ReasonTemplateDeleted — a previously-resolved template was deleted (degrade-not-block, §H.8).
 	ReasonTemplateDeleted = "TemplateDeleted"
 	// ReasonProxyNotFound — the referenced EgressProxy does not exist.

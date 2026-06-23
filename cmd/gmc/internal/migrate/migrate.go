@@ -377,7 +377,7 @@ func buildRunnerSet(ns, name, gatewayName, templateName string, spec agcv1alpha1
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:         v2alpha1.ObjectRef{Name: gatewayName},
-			TemplateRef:        v2alpha1.ObjectRef{Name: templateName},
+			TemplateRef:        &v2alpha1.ObjectRef{Name: templateName},
 			MaxListeners:       maxListeners,
 			MaxWorkers:         spec.MaxWorkers,
 			RunnerLabels:       spec.RunnerLabels,

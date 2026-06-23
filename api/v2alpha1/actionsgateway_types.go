@@ -46,6 +46,19 @@ type ActionsGatewaySpec struct {
 	// +optional
 	DefaultProxyRef *LocalObjectRef `json:"defaultProxyRef,omitempty"`
 
+	// DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate
+	// (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets
+	// under this gateway that set no spec.templateRef of their own (Q172). Optional: it
+	// is the second rung of the template-resolution chain — an unset RunnerSet templateRef
+	// resolves rs.templateRef → this defaultTemplateRef → the single cluster-default
+	// ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in
+	// the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent
+	// is cluster-scoped. A defaultTemplateRef that names a *missing* template fails the
+	// inheriting set closed (TemplateNotFound), exactly like an explicit templateRef.
+	//
+	// +optional
+	DefaultTemplateRef *ObjectRef `json:"defaultTemplateRef,omitempty"`
+
 	// LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
 	// (default), debug. Changing it is a rolling restart of the AGC, not a hot
 	// reload. Use debug only for a bug repro.
