@@ -178,6 +178,10 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			})
 
 			By(fmt.Sprintf("job %d: waiting for a new worker pod (%d total)", i, i))
+			// 6-min window: a recycled single-use session redelivers pool-wide, so
+			// the worker pod for this job can lag behind the enqueue by a full
+			// re-register + acquire cycle; on a loaded kindnet runner that has
+			// exceeded the old 4-min budget while calico passed (Q179).
 			Eventually(func(g Gomega) {
 				for _, name := range workerPodNames(g, tenantNS) {
 					if !baseline[name] {
@@ -186,7 +190,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 				}
 				g.Expect(len(fresh)).To(BeNumerically(">=", i),
 					"expected >= %d new worker pods, have %d", i, len(fresh))
-			}, 4*time.Minute, 2*time.Second).Should(Succeed())
+			}, 6*time.Minute, 2*time.Second).Should(Succeed())
 		}
 	})
 })
