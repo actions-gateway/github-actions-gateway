@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -56,6 +57,11 @@ type runnerSetTarget struct {
 	prov *provisioner.Provisioner
 	key  client.ObjectKey
 	uid  types.UID
+	// events routes owner-scoped provisioning Events (quota/eviction-retry exhaustion)
+	// to the RunnerSet reconciler's event channel. Distinct from the v1 path's
+	// Provisioner.Events because one Provisioner is shared across both owners. Nil
+	// disables event recording.
+	events listener.EventRecorder
 }
 
 // Key returns the RunnerSet's namespace/name.
@@ -79,6 +85,15 @@ func (t *runnerSetTarget) OwnerRef() metav1.OwnerReference {
 // v1 RunnerGroup's.
 func (t *runnerSetTarget) PodOwnerLabels() map[string]string {
 	return map[string]string{provisioner.LabelRunnerSet: t.key.Name}
+}
+
+// RecordEvent routes an owner-scoped provisioning Event to the RunnerSet reconciler,
+// which records it on the live RunnerSet. A no-op when no recorder is wired.
+func (t *runnerSetTarget) RecordEvent(eventtype, reason, action, note string) {
+	if t.events == nil {
+		return
+	}
+	t.events.Event(t.key.Namespace, t.key.Name, eventtype, reason, action, note)
 }
 
 // Ceiling reads the worker ceiling from the fresh RunnerSet spec.

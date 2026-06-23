@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -77,6 +78,37 @@ func (q *quotaPodCreateClient) Create(ctx context.Context, obj client.Object, op
 		}
 	}
 	return q.Client.Create(ctx, obj, opts...)
+}
+
+// recordedEvent captures a single listener.EventRecorder.Event call.
+type recordedEvent struct {
+	namespace, name, eventtype, reason, action, note string
+}
+
+// fakeEventRecorder implements listener.EventRecorder, capturing events for
+// assertions. Safe for concurrent use (the eviction path emits from goroutines).
+type fakeEventRecorder struct {
+	mu     sync.Mutex
+	events []recordedEvent
+}
+
+func (f *fakeEventRecorder) Event(namespace, name, eventtype, reason, action, note string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, recordedEvent{namespace, name, eventtype, reason, action, note})
+}
+
+// withReason returns the captured events whose Reason matches.
+func (f *fakeEventRecorder) withReason(reason string) []recordedEvent {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []recordedEvent
+	for _, e := range f.events {
+		if e.reason == reason {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func newScheme() *runtime.Scheme {
@@ -759,6 +791,8 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	p := newProvisioner(fc)
 	m := newTestMetrics()
 	p.Metrics = m
+	rec := &fakeEventRecorder{}
+	p.Events = rec
 	p.MaxEvictionRetries = 1
 	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
 	p.GitHubAPIURL = srv.URL
@@ -808,6 +842,15 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup")))
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup")))
 	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
+
+	// Budget exhaustion records a Warning Event on the owner so the operator sees a
+	// manual re-run is required, not just the metric (Q170).
+	evs := rec.withReason("EvictionRetriesExhausted")
+	require.Len(t, evs, 1)
+	assert.Equal(t, corev1.EventTypeWarning, evs[0].eventtype)
+	assert.Equal(t, "ns", evs[0].namespace)
+	assert.Equal(t, "mygroup", evs[0].name)
+	assert.Contains(t, evs[0].note, "manual re-run")
 }
 
 // TestProvisioner_EvictionRerunAPI5xx verifies that a 5xx response from the
@@ -1579,6 +1622,8 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 	p := newProvisioner(qc)
 	m := newTestMetrics()
 	p.Metrics = m
+	rec := &fakeEventRecorder{}
+	p.Events = rec
 	p.MaxQuotaRetries = 2
 	p.QuotaRetryDelay = 1 * time.Millisecond
 
@@ -1594,6 +1639,15 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 	// 2 retries attempted (attempts 1 and 2 after the initial failure), then exhausted.
 	assert.Equal(t, float64(2), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+
+	// A Warning Event is recorded on the owner so quota exhaustion surfaces in
+	// `kubectl describe`, not just the metric (Q170).
+	evs := rec.withReason("QuotaRetriesExhausted")
+	require.Len(t, evs, 1)
+	assert.Equal(t, corev1.EventTypeWarning, evs[0].eventtype)
+	assert.Equal(t, "team-a", evs[0].namespace)
+	assert.Equal(t, "mygroup", evs[0].name)
+	assert.Contains(t, evs[0].note, "ResourceQuota")
 }
 
 // TestProvisioner_QuotaRetryDisabled verifies that maxQuotaRetries:0 causes an
@@ -1608,6 +1662,8 @@ func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
 	p := newProvisioner(qc)
 	m := newTestMetrics()
 	p.Metrics = m
+	rec := &fakeEventRecorder{}
+	p.Events = rec
 
 	zero := int32(0)
 	rg := newRG("mygroup", "team-a")
@@ -1620,6 +1676,8 @@ func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
 	assert.Nil(t, findPod(ctx, t, fc, "team-a"))
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
+	// Retry disabled is a policy choice, not a budget failure: no Event (no spam).
+	assert.Empty(t, rec.withReason("QuotaRetriesExhausted"))
 }
 
 // TestProvisioner_NonQuotaCreateFailureNoRetry verifies that a non-quota pod

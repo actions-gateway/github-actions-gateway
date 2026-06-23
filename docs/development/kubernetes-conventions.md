@@ -160,3 +160,36 @@ object simply stops being listed, so its series disappears with no stale-series
 cleanup and no reconcile cost. Metric names mirror the condition
 (`actions_gateway_proxy_quota_pressure`, `actions_gateway_worker_quota_exceeded`,
 …).
+
+## Kubernetes Events for lifecycle transitions
+
+Controllers emit Kubernetes Events (via a controller-runtime `EventRecorder`) on
+the owning CR for incident-worthy lifecycle transitions, so operators see them in
+`kubectl describe` and event watchers — not only in metrics/conditions. Conventions
+that keep them consistent and non-spammy:
+
+- **`Reason` is PascalCase and stable** — it is a machine-matchable key operators
+  filter on (`kubectl get events --field-selector reason=<X>`), so treat it like an
+  API surface: don't rename it casually. Where an Event corresponds to a Prometheus
+  counter, **mirror the metric name** in the `Reason` (e.g. the
+  `actions_gateway_eviction_retries_exhausted_total` metric ↔ the
+  `EvictionRetriesExhausted` Event) so the two correlate at a glance.
+- **`Warning` vs `Normal` by severity** — `Warning` for a failure/abnormal terminal
+  outcome, `Normal` for a benign transition.
+- **Emit on transitions / terminal outcomes, never every reconcile** — an Event is
+  an incident signal, not a heartbeat. Where a status condition already captures the
+  steady state, the Event *complements* it (records the transition) rather than
+  re-emitting on every requeue.
+- **Record on the most useful object** — the owning CR an operator would
+  `kubectl describe` (the reaper, and the Q170 job-lifecycle Events, record on the
+  `RunnerGroup`/`RunnerSet`; the message names the affected pod/run/job).
+- **Route deep-goroutine events back through the reconciler** — a listener or
+  provisioner goroutine does not hold the live owner object the `EventRecorder`
+  needs, so it pushes the event onto a buffered channel (non-blocking; drop on full)
+  that the reconciler drains and records on the live object — mirroring the existing
+  condition-update channel. The drain consumes each event once, so it is not
+  re-emitted on later reconciles.
+- Shipped examples: `WorkerPodStuckPending` (reaper), and the Q170 job-lifecycle set
+  (`JobAcquisitionFailed`, `RunnerVersionTooOld`, `SessionUnauthorized`,
+  `QuotaRetriesExhausted`, `EvictionRetriesExhausted`). The operator-facing catalogue
+  lives in [troubleshooting.md](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset).

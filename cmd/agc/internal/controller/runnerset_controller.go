@@ -85,6 +85,10 @@ type RunnerSetReconciler struct {
 
 	conditionCh chan conditionUpdate
 
+	// eventCh carries owner-scoped Kubernetes Events pushed from listener/provisioner
+	// goroutines; drainEvents records them on the live RunnerSet each reconcile.
+	eventCh chan eventRecord
+
 	reconcileCount atomic.Int64
 }
 
@@ -154,6 +158,9 @@ func (r *RunnerSetReconciler) ensureMaps() {
 	if r.conditionCh == nil {
 		r.conditionCh = make(chan conditionUpdate, 256)
 	}
+	if r.eventCh == nil {
+		r.eventCh = make(chan eventRecord, 256)
+	}
 }
 
 // Reconcile drives a RunnerSet: resolve references, and once they resolve, ensure
@@ -186,6 +193,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	r.drainConditions(&rs)
+	r.drainEvents(&rs)
 
 	if !rs.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, log, &rs)
@@ -403,6 +411,7 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 		prov:   r.Provisioner,
 		key:    key,
 		uid:    rs.UID,
+		events: &channelEventRecorder{ch: r.eventCh},
 	}
 
 	factory := func(index int) listener.Config {
@@ -433,7 +442,7 @@ func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target p
 		jobHandler = r.Provisioner.Handle(target)
 		admit = r.Provisioner.Admit(target)
 	}
-	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
+	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, &channelEventRecorder{ch: r.eventCh}, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending listener-pushed condition updates and merges those
@@ -456,6 +465,32 @@ done:
 	for _, upd := range skipped {
 		select {
 		case r.conditionCh <- upd:
+		default:
+		}
+	}
+}
+
+// drainEvents records pending owner-scoped Events on this RunnerSet; events for
+// other RunnerSets are re-enqueued (mirroring drainConditions). Each event is
+// consumed once, so it is never re-emitted on subsequent reconciles.
+func (r *RunnerSetReconciler) drainEvents(rs *v2alpha1.RunnerSet) {
+	var skipped []eventRecord
+	for {
+		select {
+		case ev := <-r.eventCh:
+			if ev.namespace == rs.Namespace && ev.name == rs.Name {
+				r.recordEvent(rs, ev.eventtype, ev.reason, ev.action, ev.note)
+			} else {
+				skipped = append(skipped, ev)
+			}
+		default:
+			goto done
+		}
+	}
+done:
+	for _, ev := range skipped {
+		select {
+		case r.eventCh <- ev:
 		default:
 		}
 	}

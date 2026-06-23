@@ -179,8 +179,14 @@ var (
 
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
-	Client             client.Client
-	Metrics            *listener.Metrics
+	Client  client.Client
+	Metrics *listener.Metrics
+	// Events records owner-scoped Kubernetes Events for v1 RunnerGroup provisioning
+	// incidents (quota/eviction-retry exhaustion), routed through the runnerGroupTarget
+	// seam — the only Target the Provisioner itself constructs. The v2 RunnerSet path
+	// carries its own recorder on runnerSetTarget (built by the RunnerSet reconciler),
+	// since one Provisioner is shared across both owners. Nil disables event recording.
+	Events             listener.EventRecorder
 	Log                *slog.Logger
 	MaxEvictionRetries int
 	EvictionRetryDelay time.Duration
@@ -459,7 +465,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// 4. Build and create the pod (with quota retry).
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
 		pod := p.buildPod(target, spec, podName, secretName, priorityClass)
-		return p.createPodWithQuotaRetry(ctx, key, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
+		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
 	}); err != nil {
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
@@ -494,7 +500,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 
 	// 6. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
-		p.handleEviction(ctx, key, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay)
+		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay)
 	}
 
 	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
@@ -526,7 +532,9 @@ func traceStep(ctx context.Context, name string, fn func(context.Context) error)
 
 // createPodWithQuotaRetry attempts to create pod, retrying up to maxRetries times
 // when the namespace ResourceQuota is exhausted. Other errors are returned immediately.
-func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, key client.ObjectKey, pod *corev1.Pod, maxRetries int, retryDelay time.Duration, log *slog.Logger) error {
+// target is used to record an owner-scoped Event when the retry budget is exhausted.
+func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, target Target, pod *corev1.Pod, maxRetries int, retryDelay time.Duration, log *slog.Logger) error {
+	key := target.Key()
 	for attempt := 0; ; attempt++ {
 		err := p.Client.Create(ctx, pod)
 		if err == nil {
@@ -545,6 +553,8 @@ func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, key client.Ob
 				if p.Metrics != nil {
 					p.Metrics.QuotaRetriesExhausted.WithLabelValues(key.Namespace, key.Name).Inc()
 				}
+				target.RecordEvent(corev1.EventTypeWarning, "QuotaRetriesExhausted", "ProvisionWorker",
+					fmt.Sprintf("worker pod creation abandoned after exhausting the namespace ResourceQuota retry budget (%d retries); raise the namespace ResourceQuota or lower the worker concurrency ceiling", maxRetries))
 			}
 			return err
 		}
@@ -568,7 +578,8 @@ func isQuotaError(err error) bool {
 	return apierrors.IsForbidden(err) && strings.Contains(err.Error(), "exceeded quota")
 }
 
-func (p *Provisioner) handleEviction(ctx context.Context, key client.ObjectKey, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
+func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration) {
+	key := target.Key()
 	if runID == "0" || runID == "" {
 		log.Warn("pod evicted but run_id unknown; skipping auto-retry")
 		return
@@ -586,6 +597,8 @@ func (p *Provisioner) handleEviction(ctx context.Context, key client.ObjectKey, 
 		if p.Metrics != nil {
 			p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name).Inc()
 		}
+		target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
+			fmt.Sprintf("worker pod for run %s was evicted and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, maxRetries))
 		return
 	}
 
