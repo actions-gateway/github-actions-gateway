@@ -22,6 +22,10 @@ NAMESPACES = ["team-a", "team-b"]
 
 POD_BUCKETS = [0.5, 1, 2.5, 5, 10, 15, 30, 60, 120, 300]   # +Inf appended
 JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
+# (namespace, gateway-name) for the GMC-exported fleet condition gauges.
+GATEWAYS = [("team-a", "team-a"), ("team-b", "team-b")]
+CONTROLLERS = ["actionsgateway", "runnergroup", "runnerset"]
 
 
 def jitter(seed, amp):
@@ -35,6 +39,7 @@ def hist_lines(name, labels_prefix, buckets, total_rate, center_idx, elapsed):
     computed quantiles land in a realistic place.
     """
     out = []
+    sep = "," if labels_prefix else ""  # avoid a leading comma when unlabelled
     # Per-bucket weights: a rough bell around center_idx.
     weights = [math.exp(-((i - center_idx) ** 2) / 3.0) for i in range(len(buckets))]
     wsum = sum(weights)
@@ -42,8 +47,8 @@ def hist_lines(name, labels_prefix, buckets, total_rate, center_idx, elapsed):
     cumulative = 0.0
     for i, le in enumerate(buckets):
         cumulative += total * weights[i] / wsum
-        out.append(f'{name}_bucket{{{labels_prefix},le="{le}"}} {int(cumulative)}')
-    out.append(f'{name}_bucket{{{labels_prefix},le="+Inf"}} {int(total)}')
+        out.append(f'{name}_bucket{{{labels_prefix}{sep}le="{le}"}} {int(cumulative)}')
+    out.append(f'{name}_bucket{{{labels_prefix}{sep}le="+Inf"}} {int(total)}')
     # _sum: approximate as count * representative center value.
     out.append(f'{name}_sum{{{labels_prefix}}} {int(total * buckets[center_idx])}')
     out.append(f'{name}_count{{{labels_prefix}}} {int(total)}')
@@ -77,18 +82,33 @@ def render():
         L += hist_lines("actions_gateway_job_duration_seconds", f'namespace="{ns}",runner_group="{rg}"', JOB_BUCKETS, 0.3, 6, elapsed)
         L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}"}} {int(0.002 * elapsed)}')
         L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
+        # single-use JIT agent recycling: routine post-job recycles, no errors
+        L.append(f'actions_gateway_agent_recycles_total{{namespace="{ns}",runner_group="{rg}",trigger="post_job"}} {int(0.15 * elapsed)}')
+        L.append(f'actions_gateway_agent_recycle_errors_total{{namespace="{ns}",runner_group="{rg}"}} 0')
+        # tenant health-condition gauges all healthy (0)
+        L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="{rg}"}} 0')
+        L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
+        L.append(f'actions_gateway_workers_unschedulable{{namespace="{ns}",runner_group="{rg}"}} 0')
 
+    # Per-tenant egress proxy (no intrinsic namespace label — one target/tenant).
+    L.append(f'actions_gateway_proxy_connections_active {max(0, int(8 + jitter(3, 4)))}')
+    L.append(f'actions_gateway_proxy_connections_total {int(0.5 * elapsed)}')
+    L.append(f'actions_gateway_proxy_dial_errors_total {int(0.001 * elapsed)}')
+    # tunnel duration: center idx 5 (~60s)
+    L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", "", PROXY_BUCKETS, 0.5, 5, elapsed)
+
+    # GMC fleet rollups.
     L.append("actions_gateway_managed_gateways 4")
-    # quota gauges all healthy (0)
-    for ns in NAMESPACES:
-        L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="cpu-standard"}} 0')
-        L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="cpu-standard"}} 0')
-        L.append(f'actions_gateway_proxy_quota_pressure{{namespace="{ns}",name="{ns}"}} 0')
-        L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{ns}"}} 0')
+    for ns, name in GATEWAYS:
+        L.append(f'actions_gateway_runnergroups_degraded{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_egress_rules_stale{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_proxy_quota_pressure{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{name}"}} 0')
 
-    # controller-runtime reconcile errors ~ 0
-    for c in ["actionsgateway", "runnergroup", "runnerset"]:
+    # controller-runtime built-ins: healthy reconcile throughput, no errors.
+    for c in CONTROLLERS:
         L.append(f'controller_runtime_reconcile_errors_total{{controller="{c}"}} 0')
+        L.append(f'controller_runtime_reconcile_total{{controller="{c}",result="success"}} {int(0.2 * elapsed)}')
 
     return ("\n".join(L) + "\n").encode()
 

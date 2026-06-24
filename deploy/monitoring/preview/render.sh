@@ -4,22 +4,22 @@
 # monitoring artifacts (Q186). Spins up a throwaway kind cluster, installs the
 # public kube-prometheus-stack Helm chart (Prometheus Operator + Prometheus +
 # Grafana + image-renderer + kube-state-metrics), applies the *real* artifacts
-# from the parent directory (../prometheusrule.yaml, ../grafana-dashboard.json),
+# from the parent directory (../prometheusrule.yaml, ../grafana-dashboard-*.json),
 # feeds Prometheus a synthetic actions_gateway_* metrics stream, and renders the
-# dashboard to a PNG via Grafana's image renderer.
+# tenant + platform dashboards to PNGs via Grafana's image renderer.
 #
-# Re-run it whenever the dashboard JSON or the rules change to get a fresh
-# screenshot. Nothing here is applied to a real cluster and nothing is committed
+# Re-run it whenever a dashboard JSON or the rules change to get fresh
+# screenshots. Nothing here is applied to a real cluster and nothing is committed
 # except this harness itself.
 #
 # Usage:
-#   ./render.sh            # create cluster + stack, apply artifacts, render PNG
+#   ./render.sh            # create cluster + stack, apply artifacts, render PNGs
 #   ./render.sh shot       # re-apply artifacts + re-render only (fast iteration)
 #   ./render.sh down       # delete the throwaway cluster
 #
 # Knobs (environment variables, with defaults):
 #   CLUSTER=gag-obs  RELEASE=kps  MON_NS=monitoring
-#   OUT=./actions-gateway-dashboard.png
+#   OUT_DIR=.        # directory the per-dashboard PNGs are written to
 #   WAIT=180         # seconds to let counters/histograms accumulate before render
 #   WIDTH=1500  HEIGHT=2300  FROM=now-20m  TO=now
 #
@@ -34,14 +34,16 @@ readonly SCRIPT_DIR MON_DIR
 CLUSTER="${CLUSTER:-gag-obs}"
 RELEASE="${RELEASE:-kps}"
 MON_NS="${MON_NS:-monitoring}"
-OUT="${OUT:-./actions-gateway-dashboard.png}"
+OUT_DIR="${OUT_DIR:-.}"
 WAIT="${WAIT:-180}"
 WIDTH="${WIDTH:-1500}"
 HEIGHT="${HEIGHT:-2300}"
 FROM="${FROM:-now-20m}"
 TO="${TO:-now}"
 readonly CHART="prometheus-community/kube-prometheus-stack"
-readonly DASH_UID="actions-gateway"
+# Dashboard uid -> output PNG basename. Keep in sync with the uids in the
+# ../grafana-dashboard-*.json files.
+readonly DASH_UIDS=("actions-gateway-tenant" "actions-gateway-platform")
 
 PF_PID=""
 
@@ -119,12 +121,17 @@ apply_artifacts() {
 	# The real PrometheusRule artifact.
 	kubectl apply -n "$MON_NS" -f "$MON_DIR/prometheusrule.yaml"
 
-	# The real dashboard artifact, imported via the Grafana sidecar.
-	kubectl create configmap ag-dashboard -n "$MON_NS" \
-		--from-file=actions-gateway.json="$MON_DIR/grafana-dashboard.json" \
-		--dry-run=client -o yaml |
-		kubectl label --local -f - grafana_dashboard=1 -o yaml |
-		kubectl apply -f -
+	# The real dashboard artifacts, imported via the Grafana sidecar — one
+	# labelled ConfigMap per ../grafana-dashboard-*.json.
+	local dash base
+	for dash in "$MON_DIR"/grafana-dashboard-*.json; do
+		base="$(basename "$dash" .json)"
+		kubectl create configmap "ag-$base" -n "$MON_NS" \
+			--from-file="$base.json=$dash" \
+			--dry-run=client -o yaml |
+			kubectl label --local -f - grafana_dashboard=1 -o yaml |
+			kubectl apply -f -
+	done
 
 	kubectl -n team-a rollout status deploy/ag-metrics-exporter --timeout=120s
 }
@@ -132,14 +139,18 @@ apply_artifacts() {
 render() {
 	log "letting metrics accumulate (${WAIT}s) so rate()/histograms have data"
 	sleep "$WAIT"
-	log "rendering dashboard to $OUT"
+	mkdir -p "$OUT_DIR"
 	port_forward "$RELEASE-grafana" "3000:80"
-	local code
-	code="$(curl -s -u admin:admin -o "$OUT" -w '%{http_code}' \
-		"http://localhost:3000/render/d/$DASH_UID/$DASH_UID?orgId=1&from=$FROM&to=$TO&width=$WIDTH&height=$HEIGHT&theme=dark&kiosk=1")"
+	local uid out code
+	for uid in "${DASH_UIDS[@]}"; do
+		out="$OUT_DIR/$uid.png"
+		log "rendering dashboard '$uid' to $out"
+		code="$(curl -s -u admin:admin -o "$out" -w '%{http_code}' \
+			"http://localhost:3000/render/d/$uid/$uid?orgId=1&from=$FROM&to=$TO&width=$WIDTH&height=$HEIGHT&theme=dark&kiosk=1")"
+		[[ "$code" == "200" ]] || die "Grafana render of '$uid' returned HTTP $code"
+		log "wrote $out ($(wc -c <"$out" | tr -d ' ') bytes)"
+	done
 	cleanup
-	[[ "$code" == "200" ]] || die "Grafana render returned HTTP $code"
-	log "wrote $OUT ($(wc -c <"$OUT" | tr -d ' ') bytes)"
 }
 
 down() {

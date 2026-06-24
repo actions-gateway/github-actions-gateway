@@ -14,7 +14,7 @@
       }
     ]
   },
-  "description": "Reference dashboard for github-actions-gateway (Q186). Health, pod-creation-latency SLO, job throughput, proxy/quota, and GMC overview. Uses the SLO recording rules from deploy/monitoring/prometheusrule.yaml where applicable. See docs/operations/observability.md.",
+  "description": "Per-tenant reference dashboard for github-actions-gateway (Q186). Sourced from a tenant's AGC + egress-proxy metrics (per-tenant mTLS scrape): gateway health, pod-creation-latency SLO, job throughput, tenant health conditions, egress proxy, and kube-state-metrics proxy/quota. Uses the SLO recording rules from deploy/monitoring/prometheusrule.yaml where applicable. For the fleet view see grafana-dashboard-platform.json. See docs/operations/observability.md.",
   "editable": true,
   "graphTooltip": 1,
   "links": [],
@@ -73,8 +73,8 @@
   },
   "time": { "from": "now-6h", "to": "now" },
   "timezone": "",
-  "title": "Actions Gateway",
-  "uid": "actions-gateway",
+  "title": "Actions Gateway — Tenant",
+  "uid": "actions-gateway-tenant",
   "version": 1,
   "weekStart": "",
   "panels": [
@@ -389,9 +389,193 @@
     },
     {
       "type": "row",
-      "title": "Proxy and Quota",
+      "title": "Tenant Health Conditions",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 50,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Worker quota exceeded",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 24 },
+      "id": 51,
+      "description": "1 when WorkerQuotaExceeded=True: the namespace ResourceQuota cannot admit another worker pod.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "EXCEEDED", "color": "red" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max(actions_gateway_worker_quota_exceeded{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "legendFormat": "worker quota exceeded",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Workers unschedulable",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 24 },
+      "id": 52,
+      "description": "1 when WorkersUnschedulable=True: worker pods are stuck Pending because the scheduler cannot place them.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "STUCK", "color": "red" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max(actions_gateway_workers_unschedulable{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "legendFormat": "workers unschedulable",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Worker quota pressure",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 24 },
+      "id": 53,
+      "description": "1 when WorkerQuotaPressure=True: workers cannot scale to the configured ceiling within the ResourceQuota headroom.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" }, "1": { "text": "PRESSURE", "color": "yellow" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "max(actions_gateway_worker_quota_pressure{namespace=~\"$namespace\", runner_group=~\"$runner_group\"})",
+          "legendFormat": "worker quota pressure",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent recycle errors",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 24 },
+      "id": 54,
+      "description": "Failed single-use JIT agent re-registrations. Sustained growth shrinks listener capacity.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group) (rate(actions_gateway_agent_recycle_errors_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Egress Proxy (per tenant)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 60,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Active CONNECT tunnels",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 31 },
+      "id": 61,
+      "description": "Proxy metrics carry no intrinsic namespace label; attach one via the ServiceMonitor for per-tenant attribution.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(actions_gateway_proxy_connections_active)",
+          "legendFormat": "active tunnels",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "CONNECT tunnels opened/s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 31 },
+      "id": 62,
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(rate(actions_gateway_proxy_connections_total[5m]))",
+          "legendFormat": "opened/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Proxy dial errors/s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 31 },
+      "id": 63,
+      "description": "Upstream dial failures (e.g. blocked-destination attempts).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(rate(actions_gateway_proxy_dial_errors_total[5m]))",
+          "legendFormat": "dial errors/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tunnel duration p95",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 31 },
+      "id": 64,
+      "description": "p95 CONNECT tunnel lifetime, observed at close. Buckets reach the 6h absolute lifetime cap.",
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 tunnel duration",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Proxy & Quota (kube-state-metrics)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
       "id": 30,
       "panels": []
     },
@@ -399,7 +583,7 @@
       "type": "timeseries",
       "title": "Proxy replicas ready",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 24 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 39 },
       "id": 31,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -416,7 +600,7 @@
       "type": "timeseries",
       "title": "Proxy HPA desired vs current",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 24 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 39 },
       "id": 32,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -439,7 +623,7 @@
       "type": "bargauge",
       "title": "ResourceQuota usage",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 24 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 39 },
       "id": 33,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
@@ -449,72 +633,6 @@
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "expr": "kube_resourcequota{namespace=~\"$namespace\", type=\"used\"}",
           "legendFormat": "{{namespace}} {{resource}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "row",
-      "title": "GMC Overview",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
-      "id": 40,
-      "panels": []
-    },
-    {
-      "type": "stat",
-      "title": "Managed gateways",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 32 },
-      "id": 41,
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "actions_gateway_managed_gateways",
-          "legendFormat": "managed",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Reconcile errors by controller",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 32 },
-      "id": 42,
-      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (controller) (rate(controller_runtime_reconcile_errors_total[5m]))",
-          "legendFormat": "{{controller}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "stat",
-      "title": "IP range refreshes (24h)",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 32 },
-      "id": 43,
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace) (increase(actions_gateway_ip_range_updates_total{namespace=~\"$namespace\"}[24h]))",
-          "legendFormat": "{{namespace}}",
           "refId": "A"
         }
       ]
