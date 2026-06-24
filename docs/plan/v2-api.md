@@ -401,7 +401,7 @@ Tracked in [STATUS.md Deferred](../STATUS.md#deferred).
 
 - **Admin policy singleton/class** — keep flags; promote on the documented triggers ([§H.14](../design/appendix-h-v2-api-decomposition.md#h14-admin-policy-layer--deferred-until-tiering-is-real)).
 - **Worker-image registry allowlist** — lands with the admin policy layer, not as a standalone tenant field ([§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)).
-- **Credentials discriminated union** — a future `workloadIdentityRef` sibling field is additive; keep the single `githubAppRef` now.
+- **Credentials discriminated union** — ~~a future `workloadIdentityRef` sibling field is additive; keep the single `githubAppRef` now.~~ **Reversed (Q196):** nesting the credential under an explicit-discriminator `spec.credentials` parent is itself break-only, so it ships in `v2alpha1` before the v2beta1 freeze. See [v2beta1.md](v2beta1.md) and [§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching).
 - **Webhook → CEL migration** — opportunistic during M1's schema rewrite, not a gate.
 
 **Architecture review (enhancements evaluated).** A full architecture pass found

@@ -1407,7 +1407,7 @@ Ready=False  Reason: ProxyNotFound
 
 **Likely cause.** The v2 gateway provisions the AGC control plane only after its preconditions resolve, and **fails closed** otherwise (no AGC Deployment is created):
 
-- **`CredentialUnavailable`** — the Secret named by `spec.githubAppRef.name` does not exist in the gateway's namespace. The AGC mounts the GitHub App credential as files, so without it there is nothing to provision.
+- **`CredentialUnavailable`** — the Secret named by `spec.credentials.githubApp.name` does not exist in the gateway's namespace. The AGC mounts the GitHub App credential as files, so without it there is nothing to provision.
 - **`ProxyNotFound`** — `spec.defaultProxyRef` **names an `EgressProxy` that does not exist**. The AGC's control-plane egress is routed through that proxy, so a dangling reference fails closed. Note this fires only for a *named but missing* proxy: an **unset** `defaultProxyRef` is **not** an error — it means **direct egress** (the gateway reaches Ready with `status.proxyMode: Direct` and an advisory `EgressUnattributed` condition; see below). Apply the named `EgressProxy`, or clear `defaultProxyRef` to use direct egress.
 
 Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preconditions; once the Secret or `EgressProxy` appears the gateway reconciles and the AGC Deployment is created (the gateway watches both). Note that the proxy **pool** is reconciled separately by the `EgressProxy` reconciler — the gateway only references it; and the namespace Pod Security Admission labels are stamped by the namespace PSA reconciler from the `actions-gateway.com/security-profile` label, which the gateway *reads* (to thread `SECURITY_PROFILE` to the AGC) but never stamps.

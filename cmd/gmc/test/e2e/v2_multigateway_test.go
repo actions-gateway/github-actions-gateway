@@ -280,8 +280,10 @@ metadata:
   namespace: %[1]s
 spec:
   githubURL: https://github.com/example-org-alpha
-  githubAppRef:
-    name: %[2]s
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: %[2]s
   defaultProxyRef:
     name: shared
   logLevel: debug
@@ -293,8 +295,10 @@ metadata:
   namespace: %[1]s
 spec:
   githubURL: https://github.com/example-org-beta
-  githubAppRef:
-    name: %[2]s
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: %[2]s
   defaultProxyRef:
     name: shared
   logLevel: debug

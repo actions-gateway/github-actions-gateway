@@ -384,7 +384,9 @@ apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
-  githubAppRef: { name: acme-github-app }
+  credentials:
+    type: GitHubApp                       # discriminated union; workload identity is the additive 2nd member
+    githubApp: { name: acme-github-app }   # name-only Secret ref, same namespace
   githubURL: https://github.com/acme
   # no defaultProxyRef ⇒ direct egress
 ---
@@ -468,8 +470,10 @@ metadata:
   name: my-gateway
   namespace: my-tenant
 spec:
-  githubAppRef:
-    name: my-tenant-github-app
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: my-tenant-github-app
   githubURL: https://github.com/my-org
   agcResources:
     limits:

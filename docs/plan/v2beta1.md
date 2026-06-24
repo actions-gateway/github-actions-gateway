@@ -42,11 +42,14 @@ and publish a compat report. If it surfaces a needed field, that field lands in
 the beta shape; if it's clean, we freeze with confidence. Turns the silent-break
 risk into a managed, visible asset.
 
-### 2. Q196 — Credentials discriminated-union shape
+### 2. Q196 — Credentials discriminated-union shape *(shipped in `v2alpha1`)*
 
 Nest the credential reference under a parent with an **explicit discriminator**
 (see [Design decisions](#design-decisions)). This is the one genuinely
-shape-breaking change the last-free-break exists for.
+shape-breaking change the last-free-break exists for. It ships **in `v2alpha1`**:
+alpha carries no stability contract, so the reshape is free now, and the beta cut
+then inherits the correct shape — the conversion webhook (Q74) round-trips the
+credentials block as an identity rather than reshaping it.
 
 ### 3. Q197 — Workload-identity credentials *(the second union member)*
 
@@ -71,10 +74,12 @@ runs in parallel.
 After the above: add `Hub`/`Convertible` conversion-webhook stubs, add `v2beta1`
 as a served version, mark it the storage version, run the storage migration, then
 drop the superseded served version per the
-[graduation ladder](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). The
-conversion webhook maps `v2alpha1` (top-level `githubAppRef`) ↔ `v2beta1`
-(`credentials.githubApp`) — exactly the in-place graduation it exists for, and
-distinct from the M5 fan-out tool (a webhook cannot express a fan-out).
+[graduation ladder](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). Because
+Q196 already shipped `spec.credentials` in `v2alpha1`, the conversion webhook maps the
+credentials block as an **identity** (`v2alpha1.credentials ↔ v2beta1.credentials`) — no
+reshape — and only handles whatever other fields differ between the served versions. It
+is the in-place graduation the webhook exists for, distinct from the M5 fan-out tool (a
+webhook cannot express a fan-out).
 
 ## Design decisions
 
@@ -86,11 +91,11 @@ distinct from the M5 fan-out tool (a webhook cannot express a fan-out).
 "keep the single field" stance.
 
 ```yaml
-# v2alpha1 (today) — required, top-level
+# v1alpha1 — required, top-level (the shape v2 migrates away from)
 spec:
   githubAppRef: { name: acme-github-app }       # Secret: {appId, installationId, privateKey}
 
-# v2beta1 (target) — discriminated union
+# v2alpha1 (shipped, Q196) and v2beta1 (target) — discriminated union
 spec:
   credentials:
     type: GitHubApp                             # +unionDiscriminator: GitHubApp | WorkloadIdentity
@@ -158,7 +163,7 @@ interface as additive follow-ups.
 | Blocker | Tier | How |
 |---|---|---|
 | Q191 broker-compat | live | Expand `cmd/probe`; run the suite against real GitHub; publish the report |
-| Q196 credentials shape | envtest | Defaulting, discriminator CEL ("exactly one of"), conversion-webhook round-trip `v2alpha1 ↔ v2beta1` |
+| Q196 credentials shape | envtest | Discriminator enum (required, known value) + per-member CEL `iff` ("the named member is set, others absent") under real-apiserver semantics; migration golden regenerated. Conversion round-trip lands with Q74 (identity for credentials). |
 | Q197 workload identity | kind e2e | **Vault in-cluster + transit engine + k8s auth**: the AGC pod's projected SA token → Vault authenticates it → Vault transit signs the App JWT. Exercises the whole no-PEM delegation flow with no cloud. Real IRSA/GKE/Azure identity binding stays manual / cloud-CI |
 | Q74 graduation | envtest | Conversion round-trip for all five kinds; storage-migration dry-run |
 

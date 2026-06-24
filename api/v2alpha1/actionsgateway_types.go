@@ -20,11 +20,13 @@ import (
 // and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
 // docs/operations/security-operations.md.
 type ActionsGatewaySpec struct {
-	// GitHubAppRef names the Secret holding this gateway's GitHub App credentials,
-	// in the gateway's own namespace (LocalSecretReference — v1's namespace field is
-	// dropped, §H.15). githubAppRef.name is deliberately mutable: changing it is the
-	// supported credential-rotation path.
-	GitHubAppRef LocalSecretReference `json:"githubAppRef"`
+	// Credentials configures how this gateway authenticates to GitHub. It is a
+	// discriminated union keyed by credentials.type: exactly the member the discriminator
+	// names is set (GitHubApp today; workload identity joins as an additive second member,
+	// Q197). v2 nests the credential under this explicit-discriminator parent before the
+	// v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15,
+	// docs/plan/v2beta1.md).
+	Credentials GitHubCredentials `json:"credentials"`
 
 	// GitHubURL is the GitHub organization, enterprise, or repository URL this
 	// gateway's runners register against (e.g. "https://github.com/my-org"). It is
@@ -94,6 +96,65 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	Tracing TracingConfig `json:"tracing,omitempty"`
+}
+
+// CredentialType is the discriminator of the GitHubCredentials union: it names which
+// authentication method a gateway uses. The member matching this value must be set and
+// every other member absent. GitHubApp is the only method today; WorkloadIdentity is
+// added as a second member (Q197) by extending this enum and the union — a non-breaking
+// addition, which is the whole reason the discriminated-union shape is fixed before the
+// v2beta1 cut (§H.15).
+//
+// +kubebuilder:validation:Enum=GitHubApp
+type CredentialType string
+
+const (
+	// CredentialTypeGitHubApp selects GitHub App authentication (the possession model):
+	// the gateway holds the App's RSA private key in a namespace Secret named by
+	// GitHubCredentials.GitHubApp.
+	CredentialTypeGitHubApp CredentialType = "GitHubApp"
+)
+
+// GitHubCredentials is the discriminated union of the ways a gateway authenticates to
+// GitHub. Type is the explicit discriminator (k8s union convention): exactly the member
+// it names is set. Today the only member is GitHubApp; workload identity joins as a
+// second member without a breaking change (Q197) — the union shape exists so adding an
+// auth method never reshapes the spec again after the v2beta1 freeze (§H.15,
+// docs/plan/v2beta1.md). The "exactly the named member is set" invariant is enforced by
+// CEL (the apiserver does not enforce native union semantics on CRDs): one per-member
+// iff rule that each new member extends, never an N-way "exactly one of" that grows with
+// the union.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.githubApp) == (self.type == 'GitHubApp')",message="githubApp must be set when credentials.type is GitHubApp and unset otherwise"
+type GitHubCredentials struct {
+	// Type selects the active credential member (the union discriminator). The member it
+	// names must be set and all others absent. It is required and explicit — an absent or
+	// implicit discriminator would have to become required later, itself a breaking
+	// change, so v2 fixes it before beta.
+	//
+	// +unionDiscriminator
+	// +kubebuilder:validation:Required
+	Type CredentialType `json:"type"`
+
+	// GitHubApp configures GitHub App authentication: a name-only reference to the Secret
+	// in this gateway's own namespace holding the App credentials ({appId, installationId,
+	// privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable —
+	// changing it is the supported credential-rotation path.
+	//
+	// +optional
+	GitHubApp *LocalSecretReference `json:"githubApp,omitempty"`
+}
+
+// GitHubAppSecretName returns the name of the Secret holding this gateway's GitHub App
+// credentials, or "" when GitHub App authentication is not configured. Controllers use
+// this single accessor so the union's nil-safety lives in one place: admission CEL
+// guarantees githubApp is set whenever credentials.type is GitHubApp, but the in-memory
+// fake clients some unit tests use bypass that, so the guard stays.
+func (s *ActionsGatewaySpec) GitHubAppSecretName() string {
+	if s.Credentials.GitHubApp == nil {
+		return ""
+	}
+	return s.Credentials.GitHubApp.Name
 }
 
 // ActionsGatewayStatus is the observed state of an ActionsGateway, following the
