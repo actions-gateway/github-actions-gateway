@@ -153,6 +153,23 @@ type RunnerSetStatus struct {
 	// +optional
 	ActiveSessions int32 `json:"activeSessions,omitempty"`
 
+	// ActiveJobs is the number of worker pods currently in the Running phase
+	// (a job is actively executing). Derived from the worker pod phase count
+	// during each reconcile; see also PendingJobs.
+	//
+	// +optional
+	ActiveJobs int32 `json:"activeJobs,omitempty"`
+
+	// PendingJobs is the number of worker pods currently in the Pending phase
+	// (a job has been acquired and a pod spawned, but the pod is not yet
+	// running — waiting on scheduling, image pull, or node readiness). Pods
+	// that remain Pending past spec.pendingPodDeadline are deleted by the
+	// controller; a sustained non-zero count warrants checking events and
+	// scheduling constraints.
+	//
+	// +optional
+	PendingJobs int32 `json:"pendingJobs,omitempty"`
+
 	// ProxyMode records how this runner set's worker egress reaches GitHub:
 	// "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
 	// or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to
@@ -194,6 +211,8 @@ type RunnerSetStatus struct {
 // +kubebuilder:printcolumn:name="Gateway",type=string,JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=`.spec.maxListeners`
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=`.status.activeSessions`
+// +kubebuilder:printcolumn:name="ActiveJobs",type=integer,JSONPath=`.status.activeJobs`
+// +kubebuilder:printcolumn:name="PendingJobs",type=integer,JSONPath=`.status.pendingJobs`
 // +kubebuilder:printcolumn:name="Egress",type=string,JSONPath=`.status.proxyMode`
 // +kubebuilder:printcolumn:name="Template",type=string,priority=1,JSONPath=`.status.templateSource`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=='Ready')].status`

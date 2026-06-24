@@ -222,6 +222,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.stopMultiplexer(req.NamespacedName)
 		r.setReadyCondition(&rs, false, res.reason, res.message)
 		rs.Status.ActiveSessions = 0
+		rs.Status.ActiveJobs = 0
+		rs.Status.PendingJobs = 0
 		rs.Status.ObservedGeneration = rs.Generation
 		if err := r.Status().Update(ctx, &rs); err != nil && !apierrors.IsConflict(err) {
 			return ctrl.Result{}, err
@@ -245,8 +247,9 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
-	// during a GitHub outage.
-	reapAfter, err := r.reapWorkerPods(ctx, log, &rs)
+	// during a GitHub outage. podCounts is the pod phase snapshot used to
+	// populate status.activeJobs/pendingJobs.
+	reapAfter, podCounts, err := r.reapWorkerPods(ctx, log, &rs)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -289,6 +292,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// 6. Update status.
 	active := mux.ActiveCount()
 	rs.Status.ActiveSessions = active
+	rs.Status.ActiveJobs = podCounts.active
+	rs.Status.PendingJobs = podCounts.pending
 	rs.Status.ObservedGeneration = rs.Generation
 	if active > 0 {
 		r.setReadyCondition(&rs, true, v2alpha1.ReasonListenerActive,
@@ -558,8 +563,9 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 // reapWorkerPods deletes worker pods this RunnerSet no longer needs (terminal past
 // completedPodTTL, Pending past pendingPodDeadline), mirroring the RunnerGroup
 // reaper but filtering on LabelRunnerSet and reading the RunnerSet's tunables. It
-// returns the time until the earliest retained pod becomes due (0 = none).
-func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, error) {
+// returns the time until the earliest retained pod becomes due (0 = none) and a
+// pod phase count for status.activeJobs/pendingJobs.
+func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (time.Duration, workerPodCounts, error) {
 	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rs.Namespace, rs.Name,
 		provisioner.LabelRunnerSet,
 		provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),

@@ -89,20 +89,19 @@ spec:
               agcResources:
                 description: |-
                   AGCResources tunes the CPU/memory requests and limits stamped on this
-                  gateway's AGC control-plane container (Q171). It is an additive,
-                  per-key override of the platform default: the GMC starts from the
-                  documented Appendix A sizing — a 2Gi memory *request* and a 2-core CPU
-                  *limit* — and overlays only the request/limit keys set here, so a value
-                  that sets just one knob keeps the sensible default for the others.
-                  Unset ⇒ the platform default unchanged. Changing it is a rolling restart
-                  of the AGC, not a hot reload.
+                  gateway's AGC control-plane container (Q171). It is an additive, per-key
+                  override of the platform default — the documented Appendix A sizing of
+                  requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC
+                  starts from that default and overlays only the request/limit keys set
+                  here, so a value that sets just one knob keeps the sensible default for
+                  the others. Unset ⇒ the platform default unchanged. Changing it is a
+                  rolling restart of the AGC, not a hot reload.
 
-                  The memory entry is a *request* (not a limit) by design: the AGC holds
-                  all listener-goroutine state in memory and must not be OOMKilled by its
-                  own ceiling under a burst. Tune limits cautiously — a memory limit below
-                  the AGC's working set OOMKills the control plane, and a request larger
-                  than any node (or the namespace ResourceQuota) leaves the AGC pod
-                  unschedulable (Pending). See docs/operations/tenant-onboarding.md and
+                  Tune cautiously: the AGC is a single pod holding all listener-goroutine
+                  state in memory. A memory limit below the AGC's working set OOMKills the
+                  control plane, and a request larger than any node (or the namespace
+                  ResourceQuota) leaves the AGC pod unschedulable (Pending). See
+                  docs/operations/tenant-onboarding.md and
                   docs/design/appendix-e-capacity-planning.md for sizing guidance and the
                   recommended floor.
                 properties:

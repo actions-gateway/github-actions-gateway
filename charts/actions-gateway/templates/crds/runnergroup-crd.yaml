@@ -30,6 +30,12 @@ spec:
     - jsonPath: .status.activeSessions
       name: ActiveSessions
       type: integer
+    - jsonPath: .status.activeJobs
+      name: ActiveJobs
+      type: integer
+    - jsonPath: .status.pendingJobs
+      name: PendingJobs
+      type: integer
     - jsonPath: .status.conditions[?(@.type=='Ready')].status
       name: Ready
       type: string
@@ -8686,6 +8692,13 @@ spec:
           status:
             description: RunnerGroupStatus defines the observed state of a RunnerGroup.
             properties:
+              activeJobs:
+                description: |-
+                  ActiveJobs is the number of worker pods currently in the Running phase
+                  (a job is actively executing). Derived from the worker pod phase count
+                  during each reconcile; see also PendingJobs.
+                format: int32
+                type: integer
               activeSessions:
                 description: ActiveSessions is the number of currently open long-poll
                   sessions.
@@ -8758,6 +8771,16 @@ spec:
                 x-kubernetes-list-type: map
               observedGeneration:
                 format: int64
+                type: integer
+              pendingJobs:
+                description: |-
+                  PendingJobs is the number of worker pods currently in the Pending phase
+                  (a job has been acquired and a pod spawned, but the pod is not yet
+                  running — waiting on scheduling, image pull, or node readiness). Pods
+                  that remain Pending past spec.pendingPodDeadline are deleted by the
+                  controller; a sustained non-zero count warrants checking events and
+                  scheduling constraints.
+                format: int32
                 type: integer
             required:
             - activeSessions

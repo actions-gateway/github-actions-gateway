@@ -345,6 +345,28 @@ eviction-retry loops, credential-harvesting), see
 
 ---
 
+## CRD Status Fields (kubectl columns)
+
+`kubectl get runnergroup` and `kubectl get runnerset` print a subset of each CR's
+`.status` as additional columns. These give an at-a-glance view of live job state
+without opening Grafana:
+
+| Column | Field | RunnerGroup | RunnerSet | Description |
+| --- | --- | --- | --- | --- |
+| `ACTIVESESSIONS` | `.status.activeSessions` | ✓ | ✓ | Currently open long-poll sessions. Rises toward `maxListeners` during bursts; `0` means the group is not polling for work. |
+| `ACTIVEJOBS` | `.status.activeJobs` | ✓ | ✓ | Worker pods in Running phase — jobs actively executing. Updated each reconcile (driven by pod phase-change events). |
+| `PENDINGJOBS` | `.status.pendingJobs` | ✓ | ✓ | Worker pods in Pending phase — jobs acquired, pod spawned but not yet running. A sustained non-zero value signals scheduling pressure; check `WorkersUnschedulable`, `kubectl describe pod`, and node capacity. Pods past `pendingPodDeadline` are automatically reaped (and counted in `worker_pods_reaped_total{reason="pending_deadline"}`). |
+| `READY` | `.status.conditions[Ready].status` | ✓ | ✓ | `True` when at least one listener goroutine is running. |
+| `EGRESS` | `.status.proxyMode` | — | ✓ | `Proxied` or `Direct`. |
+
+> **Note:** `ACTIVEJOBS` and `PENDINGJOBS` are pod-phase counts derived at reconcile
+> time. They reflect a snapshot of the last reconcile cycle (re-triggered on every
+> pod phase-change event) — not a real-time counter. A pod that was just reaped in
+> the same reconcile cycle appears in `PENDINGJOBS` until the pod-deletion event
+> triggers the next reconcile (typically sub-second).
+
+---
+
 ## Symptom → Metric Mapping
 
 | Symptom | Metric(s) to check | Notes |
@@ -357,6 +379,7 @@ eviction-retry loops, credential-harvesting), see
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Throughput decaying job by job | `agent_recycle_errors_total` rising, `active_sessions` shrinking | Agent re-registration failing; see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero) |
 | Jobs cancelled without ever starting | `worker_pods_reaped_total{reason="pending_deadline"}` | Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) |
+| Jobs running but `ACTIVEJOBS` shows 0 | Check pod phase with `kubectl get pods -l actions-gateway/runner-group=<name>` | `ACTIVEJOBS` is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires. |
 | Proxy autoscaling not working | HPA TARGETS showing `<unknown>` | `requests.cpu` not set on proxy pods |
 | GMC/AGC reconcile broken | `reconcile_errors_total` | Non-zero sustained rate indicates operator issue |
 

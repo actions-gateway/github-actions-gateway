@@ -702,6 +702,22 @@ type RunnerGroupStatus struct {
     // managed by this RunnerGroup.
     ActiveSessions int32 `json:"activeSessions"`
 
+    // ActiveJobs is the number of worker pods currently in the Running phase
+    // (a job is actively executing). Derived from the worker pod phase count
+    // during each reconcile; updated on pod phase-change events. The v2alpha1
+    // RunnerSet carries the same field. See also PendingJobs.
+    // +optional
+    ActiveJobs int32 `json:"activeJobs,omitempty"`
+
+    // PendingJobs is the number of worker pods currently in the Pending phase
+    // (a job has been acquired and a pod spawned, but the pod is not yet
+    // running). A sustained non-zero count signals scheduling pressure —
+    // check WorkersUnschedulable, events, and node/image constraints. Pods
+    // that remain Pending past pendingPodDeadline are reaped by the
+    // controller. The v2alpha1 RunnerSet carries the same field.
+    // +optional
+    PendingJobs int32 `json:"pendingJobs,omitempty"`
+
     ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 ```
