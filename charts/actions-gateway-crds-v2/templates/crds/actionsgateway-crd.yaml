@@ -193,7 +193,109 @@ spec:
                       change, so v2 fixes it before beta.
                     enum:
                     - GitHubApp
+                    - WorkloadIdentity
                     type: string
+                  workloadIdentity:
+                    description: |-
+                      WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is
+                      signed by an external signer the AGC reaches by proving its pod identity, so no App
+                      private key is ever held in the cluster (the delegation model). Set iff Type is
+                      WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp
+                      remains the secure-by-default in-cluster option.
+                    properties:
+                      appId:
+                        description: |-
+                          AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather
+                          than in a Secret because it identifies, not authenticates.
+                        format: int64
+                        minimum: 1
+                        type: integer
+                      installationId:
+                        description: InstallationID is the GitHub App installation's
+                          numeric ID. Non-secret; inline.
+                        format: int64
+                        minimum: 1
+                        type: integer
+                      signer:
+                        description: |-
+                          Signer configures the external signer that signs the App JWT. The signing key lives
+                          in the signer's trust anchor (Vault transit in the MVP), never in the cluster.
+                        properties:
+                          provider:
+                            description: |-
+                              Provider selects the active signer backend (the union discriminator). The member it
+                              names must be set and all others absent.
+                            enum:
+                            - Vault
+                            type: string
+                          vault:
+                            description: Vault configures the HashiCorp Vault transit
+                              signer. Set iff Provider is Vault.
+                            properties:
+                              address:
+                                description: |-
+                                  Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is
+                                  required for production because the AGC's ServiceAccount token transits this channel
+                                  at login; a plaintext address is permitted only under an explicit dev/test opt-in in
+                                  the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).
+                                maxLength: 2048
+                                minLength: 1
+                                pattern: ^https?://
+                                type: string
+                              auth:
+                                description: |-
+                                  Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the
+                                  MVP).
+                                properties:
+                                  mount:
+                                    default: kubernetes
+                                    description: |-
+                                      Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults
+                                      to "kubernetes", Vault's conventional mount path.
+                                    maxLength: 255
+                                    type: string
+                                  role:
+                                    description: |-
+                                      Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this
+                                      role to the AGC ServiceAccount and namespace in Vault.
+                                    maxLength: 255
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - role
+                                type: object
+                              keyName:
+                                description: |-
+                                  KeyName is the name of the Vault transit key that signs the App JWT. The key must be
+                                  an RSA key (GitHub App keys are RSA); transit signs it as RS256
+                                  (pkcs1v15 + sha2-256).
+                                maxLength: 255
+                                minLength: 1
+                                type: string
+                              transitMount:
+                                default: transit
+                                description: |-
+                                  TransitMount is the path the Vault transit secrets engine is mounted at. Optional;
+                                  defaults to "transit", Vault's conventional mount path.
+                                maxLength: 255
+                                type: string
+                            required:
+                            - address
+                            - auth
+                            - keyName
+                            type: object
+                        required:
+                        - provider
+                        type: object
+                        x-kubernetes-validations:
+                        - message: vault must be set when signer.provider is Vault
+                            and unset otherwise
+                          rule: has(self.vault) == (self.provider == 'Vault')
+                    required:
+                    - appId
+                    - installationId
+                    - signer
+                    type: object
                 required:
                 - type
                 type: object
@@ -201,6 +303,9 @@ spec:
                 - message: githubApp must be set when credentials.type is GitHubApp
                     and unset otherwise
                   rule: has(self.githubApp) == (self.type == 'GitHubApp')
+                - message: workloadIdentity must be set when credentials.type is WorkloadIdentity
+                    and unset otherwise
+                  rule: has(self.workloadIdentity) == (self.type == 'WorkloadIdentity')
               defaultProxyRef:
                 description: |-
                   DefaultProxyRef names an EgressProxy used for AGC control-plane egress and

@@ -59,13 +59,18 @@ alpha carries no stability contract, so the reshape is free now, and the beta cu
 then inherits the correct shape — the conversion webhook (Q74) round-trips the
 credentials block as an identity rather than reshaping it.
 
-### 3. Q197 — Workload-identity credentials *(the second union member)*
+### 3. Q197 — Workload-identity credentials *(the second union member)* — **shipped**
 
-Build the `workloadIdentity` member **before the cut**, so both auth methods ship
+Built the `workloadIdentity` member **before the cut**, so both auth methods ship
 in the first beta shape and the union is validated against a real second consumer
-— not a designed-but-unbuilt one. MVP = a Vault transit signer + Kubernetes auth
-(kind-validatable). Cloud KMS providers (AWS/GCP/Azure) are additive follow-ups
-behind the same signer interface.
+— not a designed-but-unbuilt one. Shipped: the `WorkloadIdentity` union member +
+CEL `iff`; a `githubapp.Signer` interface; the MVP Vault transit signer + Vault
+Kubernetes auth (`githubapp/vaultsigner`, unit-tested against a mock Vault); the
+no-PEM provider path (`NewInstallationTokenProviderWithSigner`). Cloud KMS
+providers (AWS/GCP/Azure) are additive follow-ups behind the same signer
+interface. The GMC runtime provisioning of a workload-identity AGC + the
+in-cluster Vault kind e2e land in Q201 (the kind-e2e tier below); until then a
+`WorkloadIdentity` gateway is admitted but fails closed.
 
 ### 4. Q15 — gVisor RuntimeClass validation
 

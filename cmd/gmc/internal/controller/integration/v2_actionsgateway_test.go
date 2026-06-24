@@ -319,6 +319,37 @@ func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
 	assert.Error(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &dep))
 }
 
+// TestV2_ActionsGateway_WorkloadIdentityFailsClosed asserts the interim contract for
+// the Q197 workload-identity member: a well-formed WorkloadIdentity gateway is admitted
+// but does not provision an AGC — the GMC runtime wiring lands in Q201 — so it fails
+// closed with CredentialUnavailable=True / WorkloadIdentityProvisioningPending and never
+// creates an AGC that could not authenticate.
+func TestV2_ActionsGateway_WorkloadIdentityFailsClosed(t *testing.T) {
+	const ns = "v2-ag-wi"
+	createNamespace(t, ns)
+
+	ag := newV2WorkloadIdentityGateway(ns, "wi-gw")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startActionsGatewayV2Reconciler(t)
+
+	require.Eventually(t, func() bool {
+		var got v2alpha1.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw"}, &got); err != nil {
+			return false
+		}
+		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
+		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+		return cred != nil && cred.Status == metav1.ConditionTrue && cred.Reason == v2alpha1.ReasonWorkloadIdentityPending &&
+			ready != nil && ready.Status == metav1.ConditionFalse
+	}, 15*time.Second, 100*time.Millisecond, "workload-identity gateway must fail closed pending GMC provisioning (Q201)")
+
+	// No AGC Deployment is provisioned for the unwired method (fail closed).
+	var dep appsv1.Deployment
+	assert.Error(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw-agc"}, &dep))
+}
+
 func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {
 	const ns = "v2-ag-no-proxy"
 	createNamespace(t, ns)

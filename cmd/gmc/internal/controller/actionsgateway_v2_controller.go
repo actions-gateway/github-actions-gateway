@@ -130,16 +130,29 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Credential check: the AGC mounts the GitHub App Secret; without it, do not
-	// provision (CredentialUnavailable, fail closed).
-	var credSecret corev1.Secret
-	credErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.GitHubAppSecretName()}, &credSecret)
-	if credErr != nil && !apierrors.IsNotFound(credErr) {
-		return ctrl.Result{}, credErr
-	}
-	if apierrors.IsNotFound(credErr) {
-		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonSecretNotFound,
-			fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppSecretName(), ag.Namespace))
+	// Credential check, by union member (Q196/Q197):
+	switch ag.Spec.Credentials.Type {
+	case gmcv2alpha1.CredentialTypeGitHubApp:
+		// Possession model: the AGC mounts the GitHub App Secret; without it, do not
+		// provision (CredentialUnavailable, fail closed).
+		var credSecret corev1.Secret
+		credErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.GitHubAppSecretName()}, &credSecret)
+		if credErr != nil && !apierrors.IsNotFound(credErr) {
+			return ctrl.Result{}, credErr
+		}
+		if apierrors.IsNotFound(credErr) {
+			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonSecretNotFound,
+				fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppSecretName(), ag.Namespace))
+		}
+	case gmcv2alpha1.CredentialTypeWorkloadIdentity:
+		// Delegation model (no in-cluster key): the API shape and the external signer
+		// (githubapp/vaultsigner) ship in v2beta1, but the GMC runtime provisioning of a
+		// workload-identity AGC — stamping the signer env, projecting the ServiceAccount
+		// token, and relying on the operator's Vault role binding — lands in a kind-e2e
+		// follow-up (Q201). Fail closed until then rather than provisioning an AGC that
+		// cannot authenticate.
+		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonWorkloadIdentityPending,
+			"workload-identity credentials are accepted by the API but AGC provisioning for this method is not yet wired (Q201); use credentials.type GitHubApp to provision a gateway")
 	}
 
 	// Resolve the control-plane egress proxy from defaultProxyRef (Q168, §H.10).

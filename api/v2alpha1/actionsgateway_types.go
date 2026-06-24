@@ -100,12 +100,13 @@ type ActionsGatewaySpec struct {
 
 // CredentialType is the discriminator of the GitHubCredentials union: it names which
 // authentication method a gateway uses. The member matching this value must be set and
-// every other member absent. GitHubApp is the only method today; WorkloadIdentity is
-// added as a second member (Q197) by extending this enum and the union — a non-breaking
-// addition, which is the whole reason the discriminated-union shape is fixed before the
-// v2beta1 cut (§H.15).
+// every other member absent. GitHubApp is the possession model (the App key lives in a
+// namespace Secret); WorkloadIdentity is the delegation model (Q197) — no key in the
+// cluster, an external signer signs the App JWT. WorkloadIdentity joined by extending
+// this enum and adding a union member, a non-breaking addition — the whole reason the
+// discriminated-union shape was fixed before the v2beta1 cut (§H.15).
 //
-// +kubebuilder:validation:Enum=GitHubApp
+// +kubebuilder:validation:Enum=GitHubApp;WorkloadIdentity
 type CredentialType string
 
 const (
@@ -113,6 +114,13 @@ const (
 	// the gateway holds the App's RSA private key in a namespace Secret named by
 	// GitHubCredentials.GitHubApp.
 	CredentialTypeGitHubApp CredentialType = "GitHubApp"
+
+	// CredentialTypeWorkloadIdentity selects workload-identity authentication (the
+	// delegation model, Q197): no App private key is held in the cluster. The AGC proves
+	// its pod identity to an external trust anchor (Vault Kubernetes auth in the MVP) and
+	// the anchor signs the App JWT via an external signer. Configured by
+	// GitHubCredentials.WorkloadIdentity.
+	CredentialTypeWorkloadIdentity CredentialType = "WorkloadIdentity"
 )
 
 // GitHubCredentials is the discriminated union of the ways a gateway authenticates to
@@ -126,6 +134,7 @@ const (
 // the union.
 //
 // +kubebuilder:validation:XValidation:rule="has(self.githubApp) == (self.type == 'GitHubApp')",message="githubApp must be set when credentials.type is GitHubApp and unset otherwise"
+// +kubebuilder:validation:XValidation:rule="has(self.workloadIdentity) == (self.type == 'WorkloadIdentity')",message="workloadIdentity must be set when credentials.type is WorkloadIdentity and unset otherwise"
 type GitHubCredentials struct {
 	// Type selects the active credential member (the union discriminator). The member it
 	// names must be set and all others absent. It is required and explicit — an absent or
@@ -143,6 +152,130 @@ type GitHubCredentials struct {
 	//
 	// +optional
 	GitHubApp *LocalSecretReference `json:"githubApp,omitempty"`
+
+	// WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is
+	// signed by an external signer the AGC reaches by proving its pod identity, so no App
+	// private key is ever held in the cluster (the delegation model). Set iff Type is
+	// WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp
+	// remains the secure-by-default in-cluster option.
+	//
+	// +optional
+	WorkloadIdentity *WorkloadIdentity `json:"workloadIdentity,omitempty"`
+}
+
+// WorkloadIdentity is the workload-identity credential member: the App's identity
+// (appId/installationId, non-secret) plus an external signer that holds the App private
+// key outside the cluster and signs the App JWT on the AGC's behalf. There is no
+// privateKey field by design — the whole point of this method is that the key never
+// enters the cluster (§H.15, docs/design/05-security.md).
+type WorkloadIdentity struct {
+	// AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather
+	// than in a Secret because it identifies, not authenticates.
+	//
+	// +kubebuilder:validation:Minimum=1
+	AppID int64 `json:"appId"`
+
+	// InstallationID is the GitHub App installation's numeric ID. Non-secret; inline.
+	//
+	// +kubebuilder:validation:Minimum=1
+	InstallationID int64 `json:"installationId"`
+
+	// Signer configures the external signer that signs the App JWT. The signing key lives
+	// in the signer's trust anchor (Vault transit in the MVP), never in the cluster.
+	Signer ExternalSigner `json:"signer"`
+}
+
+// SignerProvider is the discriminator of the ExternalSigner union: it names the external
+// signing backend. Vault (HashiCorp Vault transit) is the only provider in the MVP;
+// cloud KMS backends (AWS/GCP/Azure) join as additive providers behind the same signer
+// interface, by extending this enum and the union — no breaking change.
+//
+// +kubebuilder:validation:Enum=Vault
+type SignerProvider string
+
+const (
+	// SignerProviderVault selects a HashiCorp Vault transit signer (the MVP). Configured
+	// by ExternalSigner.Vault.
+	SignerProviderVault SignerProvider = "Vault"
+)
+
+// ExternalSigner is the discriminated union of external signing backends. Provider is the
+// explicit discriminator: exactly the member it names is set. The union exists so cloud
+// KMS providers add as members without reshaping the spec — the same additive contract as
+// the GitHubCredentials union above. The "exactly the named member is set" invariant is
+// enforced by a per-provider CEL iff rule that each new provider extends.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.vault) == (self.provider == 'Vault')",message="vault must be set when signer.provider is Vault and unset otherwise"
+type ExternalSigner struct {
+	// Provider selects the active signer backend (the union discriminator). The member it
+	// names must be set and all others absent.
+	//
+	// +unionDiscriminator
+	// +kubebuilder:validation:Required
+	Provider SignerProvider `json:"provider"`
+
+	// Vault configures the HashiCorp Vault transit signer. Set iff Provider is Vault.
+	//
+	// +optional
+	Vault *VaultSigner `json:"vault,omitempty"`
+}
+
+// VaultSigner configures a HashiCorp Vault transit signer: the AGC authenticates to Vault
+// with its pod identity (Vault Kubernetes auth) and asks Vault transit to sign the App
+// JWT with a key Vault holds. No key or token is stored in the cluster — the AGC's
+// projected ServiceAccount token is its only credential, and it is minted by the kubelet,
+// not stored in a Secret.
+type VaultSigner struct {
+	// Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is
+	// required for production because the AGC's ServiceAccount token transits this channel
+	// at login; a plaintext address is permitted only under an explicit dev/test opt-in in
+	// the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:Pattern=`^https?://`
+	Address string `json:"address"`
+
+	// TransitMount is the path the Vault transit secrets engine is mounted at. Optional;
+	// defaults to "transit", Vault's conventional mount path.
+	//
+	// +optional
+	// +kubebuilder:default=transit
+	// +kubebuilder:validation:MaxLength=255
+	TransitMount string `json:"transitMount,omitempty"`
+
+	// KeyName is the name of the Vault transit key that signs the App JWT. The key must be
+	// an RSA key (GitHub App keys are RSA); transit signs it as RS256
+	// (pkcs1v15 + sha2-256).
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	KeyName string `json:"keyName"`
+
+	// Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the
+	// MVP).
+	Auth VaultKubernetesAuth `json:"auth"`
+}
+
+// VaultKubernetesAuth configures Vault Kubernetes auth: the AGC presents its projected
+// ServiceAccount token, Vault verifies it against the cluster's token review API, and
+// returns a short-lived Vault client token bound to Role. The pod-to-role binding is
+// configured in Vault by the operator, out of band — only its name is named here.
+type VaultKubernetesAuth struct {
+	// Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this
+	// role to the AGC ServiceAccount and namespace in Vault.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Role string `json:"role"`
+
+	// Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults
+	// to "kubernetes", Vault's conventional mount path.
+	//
+	// +optional
+	// +kubebuilder:default=kubernetes
+	// +kubebuilder:validation:MaxLength=255
+	Mount string `json:"mount,omitempty"`
 }
 
 // GitHubAppSecretName returns the name of the Secret holding this gateway's GitHub App

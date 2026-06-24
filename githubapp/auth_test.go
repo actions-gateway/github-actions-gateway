@@ -237,14 +237,14 @@ func TestToken_PKCS8NonRSAKey(t *testing.T) {
 	require.NoError(t, err)
 	pemBytes := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
 
-	// EC keys parse successfully (they implement crypto.Signer) but fail at signing time.
-	provider, err := githubapp.NewInstallationTokenProvider(
+	// An EC key parses as a crypto.Signer but has no GitHub-App JWT alg, so the
+	// provider rejects it at construction — fail-fast at startup rather than on the
+	// first token mint (the documented contract: surface key failures immediately).
+	_, err = githubapp.NewInstallationTokenProvider(
 		githubapp.Credentials{AppID: 1, PrivateKeyPEM: pemBytes, InstallationID: 1},
 		nil,
 		false,
 	)
-	require.NoError(t, err)
-	_, err = provider.Token(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported key type")
 }
