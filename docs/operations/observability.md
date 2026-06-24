@@ -426,6 +426,8 @@ The annotations are absent if the AcquireJob payload did not include the corresp
 
 ## Recommended Alert Rules
 
+> **Apply as code.** These rules — and the [SLO recording rules](#slo-recording-rules) below — ship as a directly-appliable `PrometheusRule` at [`deploy/monitoring/prometheusrule.yaml`](../../deploy/monitoring/prometheusrule.yaml). `kubectl apply` it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)). The blocks here are the same rules, reproduced for reference.
+
 The following Prometheus alerting rules map to the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md). Adjust thresholds to match your environment.
 
 ```yaml
@@ -621,6 +623,8 @@ groups:
 ---
 
 ## Grafana Dashboard
+
+> **Import as code.** A reference dashboard built from these panels ships at [`deploy/monitoring/grafana-dashboard.json`](../../deploy/monitoring/grafana-dashboard.json) — import it into Grafana (**Dashboards → New → Import**) or provision it, rather than rebuilding the panels by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)). The layout below documents what it contains.
 
 The following panels cover the key health and performance signals. Use the recording rules above as data sources where applicable.
 

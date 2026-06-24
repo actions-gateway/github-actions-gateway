@@ -1,0 +1,204 @@
+# Reference PrometheusRule for github-actions-gateway (Q186).
+#
+# Encodes the alerting rules and SLO recording rules described in
+# docs/operations/observability.md as a directly-appliable
+# monitoring.coreos.com/v1 PrometheusRule, so operators can adopt
+# alerts-as-code instead of rebuilding the rules from prose.
+#
+# Apply into the namespace your Prometheus selects PrometheusRules from
+# (often the Prometheus Operator's own namespace, or any namespace matched by
+# the Prometheus `ruleNamespaceSelector`). Add labels your Prometheus uses to
+# discover rules (e.g. `release: <kube-prometheus-stack-release>`):
+#
+#   kubectl apply -n monitoring -f deploy/monitoring/prometheusrule.yaml
+#
+# Every alert maps to an SLO target in docs/design/appendix-a-capacity-slos.md.
+# Adjust thresholds to match your environment. All metric names are emitted by
+# the controllers (see the Full Metrics Reference in observability.md);
+# controller_runtime_reconcile_errors_total is emitted by controller-runtime.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: actions-gateway-rules
+  labels:
+    app.kubernetes.io/name: actions-gateway
+    app.kubernetes.io/part-of: actions-gateway
+    # Uncomment and set to match your Prometheus rule selector, e.g.:
+    # release: kube-prometheus-stack
+spec:
+  groups:
+    - name: actions-gateway
+      rules:
+        # Page: no sessions means no job acquisition
+        - alert: ActionsGatewayNoActiveSessions
+          expr: |
+            actions_gateway_active_sessions == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No active listener sessions for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "The AGC has no open long-poll sessions. Jobs queue indefinitely until sessions are restored."
+
+        # Page: token refresh errors risk job failures within ~1 hour
+        - alert: ActionsGatewayTokenRefreshErrors
+          expr: |
+            rate(actions_gateway_token_refresh_errors_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "GitHub App token refresh errors in {{ $labels.namespace }}"
+            description: "Token refresh has been failing for 5+ minutes. Sessions will fail once the current token expires (~1 hour)."
+
+        # Page: sustained renewjob failures will cancel running jobs
+        - alert: ActionsGatewayRenewJobErrors
+          expr: |
+            rate(actions_gateway_renewjob_errors_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "RenewJob errors in {{ $labels.namespace }}"
+            description: "RenewJob is failing at >0.1/s for 5+ minutes. Running jobs may be cancelled."
+
+        # Page: p99 pod creation latency SLO breach
+        - alert: ActionsGatewayPodCreationLatencyP99
+          expr: |
+            histogram_quantile(0.99,
+              rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+            ) > 60
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod creation p99 latency SLO breach in {{ $labels.namespace }}"
+            description: "p99 pod creation latency exceeds 60s SLO. Check quota and node capacity."
+
+        # Ticket: p95 pod creation latency SLO breach
+        - alert: ActionsGatewayPodCreationLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+            ) > 15
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod creation p95 latency degraded in {{ $labels.namespace }}"
+            description: "p95 pod creation latency exceeds 15s SLO. Investigate quota and scheduling."
+
+        # Ticket: eviction budget exhausted — manual re-run required
+        - alert: ActionsGatewayEvictionRetriesExhausted
+          expr: |
+            increase(actions_gateway_eviction_retries_exhausted_total[5m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "A job's eviction retry budget has been exhausted. Manual re-run required."
+
+        # Page: the namespace ResourceQuota is rejecting worker pods now (Q82)
+        - alert: ActionsGatewayWorkerQuotaExceeded
+          expr: |
+            actions_gateway_worker_quota_exceeded == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Worker pods being rejected by ResourceQuota for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "The namespace ResourceQuota cannot admit another worker pod; acquired jobs will fail to schedule. Raise the quota or reduce maxWorkers."
+
+        # Page: the ResourceQuota is rejecting proxy replicas now (Q82)
+        - alert: ActionsGatewayProxyQuotaExceeded
+          expr: |
+            actions_gateway_proxy_quota_exceeded == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Proxy replica creation rejected by ResourceQuota for {{ $labels.name }} in {{ $labels.namespace }}"
+            description: "The proxy pool is being held below the HPA's target by the namespace ResourceQuota. Raise the quota or lower proxy.maxReplicas."
+
+        # Ticket: capacity can't reach the configured ceiling within quota headroom (Q82)
+        - alert: ActionsGatewayQuotaPressure
+          expr: |
+            actions_gateway_worker_quota_pressure == 1 or actions_gateway_proxy_quota_pressure == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Quota headroom too low to reach configured ceiling in {{ $labels.namespace }}"
+            description: "A proxy or worker pool cannot scale to its configured maximum within the namespace ResourceQuota headroom. Plan a quota increase or lower the ceiling before the next load spike."
+
+        # Ticket: reconcile errors need investigation
+        - alert: ActionsGatewayReconcileErrors
+          expr: |
+            rate(controller_runtime_reconcile_errors_total[5m]) > 0.033
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Reconcile errors in {{ $labels.controller }}"
+            description: "Reconcile errors at >2/minute for 10+ minutes. Resources may be stale."
+
+    - name: actions-gateway-slos
+      interval: 30s
+      rules:
+        # Pod creation latency — p95 and p99 per namespace
+        - record: actions_gateway:pod_creation_latency_seconds:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (namespace, le) (
+                rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+              )
+            )
+
+        - record: actions_gateway:pod_creation_latency_seconds:p99
+          expr: |
+            histogram_quantile(0.99,
+              sum by (namespace, le) (
+                rate(actions_gateway_pod_creation_latency_seconds_bucket[5m])
+              )
+            )
+
+        # Job duration — p50, p95, p99 per namespace and runner_group
+        - record: actions_gateway:job_duration_seconds:p50
+          expr: |
+            histogram_quantile(0.50,
+              sum by (namespace, runner_group, le) (
+                rate(actions_gateway_job_duration_seconds_bucket[5m])
+              )
+            )
+
+        - record: actions_gateway:job_duration_seconds:p95
+          expr: |
+            histogram_quantile(0.95,
+              sum by (namespace, runner_group, le) (
+                rate(actions_gateway_job_duration_seconds_bucket[5m])
+              )
+            )
+
+        # Token refresh error rate (hourly) — compare against the <1/hr SLO
+        - record: actions_gateway:token_refresh_errors:rate1h
+          expr: |
+            sum by (namespace) (
+              increase(actions_gateway_token_refresh_errors_total[1h])
+            )
+
+        # Job acquisition success rate — fraction of acquisitions that succeed
+        - record: actions_gateway:job_acquisition_success_rate:rate5m
+          expr: |
+            sum by (namespace, runner_group) (
+              rate(actions_gateway_jobs_acquired_total[5m])
+            )
+            /
+            (
+              sum by (namespace, runner_group) (
+                rate(actions_gateway_jobs_acquired_total[5m])
+              )
+              +
+              sum by (namespace, runner_group) (
+                rate(actions_gateway_job_acquisition_errors_total[5m])
+              )
+            )
