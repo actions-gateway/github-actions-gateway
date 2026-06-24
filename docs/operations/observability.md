@@ -602,19 +602,23 @@ groups:
             increase(actions_gateway_token_refresh_errors_total[1h])
           )
 
-      # Job acquisition success rate — fraction of acquisitions that succeed
+      # Job acquisition success rate — fraction of acquisitions that succeed,
+      # per namespace. Grouped by namespace only (not runner_group):
+      # job_acquisition_errors_total is labelled namespace+reason with no
+      # runner_group, so grouping the denominator by runner_group would leave
+      # the error rate unmatched and the ratio would evaluate to empty.
       - record: actions_gateway:job_acquisition_success_rate:rate5m
         expr: |
-          sum by (namespace, runner_group) (
+          sum by (namespace) (
             rate(actions_gateway_jobs_acquired_total[5m])
           )
           /
           (
-            sum by (namespace, runner_group) (
+            sum by (namespace) (
               rate(actions_gateway_jobs_acquired_total[5m])
             )
             +
-            sum by (namespace, runner_group) (
+            sum by (namespace) (
               rate(actions_gateway_job_acquisition_errors_total[5m])
             )
           )
