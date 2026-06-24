@@ -7,18 +7,17 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-actions--gateway.com-2563eb.svg)](https://actions-gateway.com)
 
-> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and isolate every tenant's GitHub egress for per-team IP allowlisting and contained blast radius.
+> **Multi-tenant self-hosted GitHub Actions runners on Kubernetes, designed for shared clusters where many teams run runners side by side.**
 
-Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`, all driven by one Kubernetes operator.
+Actions Runner Controller (ARC) scale-set mode is the common starting point. Once many teams share one cluster, three gaps open up that ARC doesn't address together — GitHub Actions Gateway (GAG) is built to close them:
 
-GitHub Actions Gateway (GAG) brings four properties that Actions Runner Controller (ARC) scale-set mode does not provide together:
+| Gap at multi-tenant scale | How GAG closes it |
+| --- | --- |
+| An evicted runner pod leaves its job stuck in GitHub's queue, up to the 24-hour timeout | Cancels the job lock in seconds and reruns, with a per-job retry budget |
+| Tenants can't be given isolated GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
+| Idle runner and listener compute stays provisioned between jobs | Workers scale to zero between jobs; listeners run as ~60 KiB goroutines, not ~256 MiB pods |
 
-- **Priority-tiered scheduling across a shared `ResourceQuota`.** Reserve a floor of slots for expensive GPU runners that a flood of cheap CPU pods can't starve, then let higher tiers burst opportunistically into spare capacity — so you can oversubscribe the quota for higher utilization and lower cost instead of holding idle headroom in reserve.
-- **Automatic eviction retry.** When a worker pod is preempted, OOM-killed, or lost to a node failure, GAG fast-cancels the GitHub-side job lock and calls the rerun API, with a per-job retry budget — no manual rerun needed.
-- **Per-tenant dedicated egress IP pool.** Every tenant's GitHub traffic exits through a tenant-specific HTTPS CONNECT proxy pool, enabling per-team IP allowlisting on the GitHub side and containing rate-limit or abuse blast radius to one tenant.
-- **Self-service multi-tenant onboarding via one CR.** A team creates a single `ActionsGateway` CR in their own namespace and receives a fully isolated gateway instance: RBAC, NetworkPolicies, egress proxy, controller, and every runner group they declared — all operating within the platform-owned namespace `ResourceQuota`.
-
-GAG also **scales workers to zero between jobs** — the same property ARC scale-set mode provides with `minRunners: 0` — but with substantially less always-on overhead. ARC's listener is a per-scale-set pod running a full .NET runtime (~256 MiB resident, plus a cluster IP, held open 24/7 to long-poll GitHub). GAG hosts every `RunnerGroup`'s listener as a goroutine in one shared controller pod, at ~60 KiB per group. A tenant with 10 runner groups holds ~600 KiB of listener state in one pod instead of ~2.5 GiB across 10 pods.
+Each team self-serves a fully isolated gateway from a single `ActionsGateway` custom resource (CR), running many runner groups (CPU, GPU, large-memory, …) under one shared `ResourceQuota`. The sections below cover **the problem**, **how GAG solves it**, and **how it works**.
 
 ## The Problem
 
@@ -197,4 +196,6 @@ in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
 <p align="center">
   <img src="docs/assets/wormhole-animation.webp" width="480"
        alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma burst, then shutters closed">
+  <br>
+  <sub><em>A secure, dedicated gateway to GitHub for each tenant.<br>Don't let noisy neighbors or secret exfiltrators ruin your sleep.</em></sub>
 </p>
