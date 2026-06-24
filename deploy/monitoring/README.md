@@ -41,3 +41,12 @@ Some Proxy/Quota panels query `kube_deployment_status_replicas_ready`,
 `kube_horizontalpodautoscaler_*`, and `kube_resourcequota`, which are emitted by
 [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics); those
 panels stay empty if it is not installed.
+
+## Previewing / screenshotting
+
+To preview or screenshot these artifacts against a real Prometheus Operator +
+Grafana without a production cluster, use the reproducible harness in
+[`preview/`](preview/README.md): it stands up a throwaway kind cluster with the
+public `kube-prometheus-stack` chart, applies the artifacts above plus a
+synthetic `actions_gateway_*` metrics stream, and renders the dashboard to a
+PNG. Re-run it whenever the dashboard or rules change.

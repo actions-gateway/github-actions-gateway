@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-a
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-b
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ag-metrics-exporter
+  namespace: team-a
+  labels: { app: ag-metrics-exporter }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ag-metrics-exporter }
+  template:
+    metadata:
+      labels: { app: ag-metrics-exporter }
+    spec:
+      containers:
+        - name: exporter
+          image: python:3.12-alpine
+          command: ["python3", "/app/exporter.py"]
+          ports:
+            - { name: metrics, containerPort: 9100 }
+          volumeMounts:
+            - { name: app, mountPath: /app }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 64Mi }
+      volumes:
+        - name: app
+          configMap:
+            name: ag-exporter-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ag-metrics-exporter
+  namespace: team-a
+  labels: { app: ag-metrics-exporter }
+spec:
+  selector: { app: ag-metrics-exporter }
+  ports:
+    - { name: metrics, port: 9100, targetPort: metrics }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ag-metrics-exporter
+  namespace: team-a
+  labels: { app: ag-metrics-exporter }
+spec:
+  selector:
+    matchLabels: { app: ag-metrics-exporter }
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+---
+# Dummy proxy Deployment/HPA/ResourceQuota so the kube-state-metrics
+# Proxy & Quota panels populate (the panels query deployment="actions-gateway-proxy").
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: actions-gateway-proxy
+  namespace: team-a
+  labels: { app: actions-gateway-proxy }
+spec:
+  replicas: 4
+  selector:
+    matchLabels: { app: actions-gateway-proxy }
+  template:
+    metadata:
+      labels: { app: actions-gateway-proxy }
+    spec:
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 50m, memory: 32Mi }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: actions-gateway-proxy
+  namespace: team-a
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: actions-gateway-proxy
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-a-quota
+  namespace: team-a
+spec:
+  hard:
+    pods: "50"
+    requests.cpu: "10"
+    requests.memory: 20Gi
