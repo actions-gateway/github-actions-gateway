@@ -7,18 +7,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-actions--gateway.com-2563eb.svg)](https://actions-gateway.com)
 
-> An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota for higher utilization and lower cost, recover evicted jobs automatically, and isolate every tenant's GitHub egress for per-team IP allowlisting and contained blast radius.
+> **Self-hosted GitHub Actions runners for many teams on one Kubernetes cluster — without the three things that hurt most under Actions Runner Controller (ARC) scale-set mode: jobs stuck in GitHub's queue when a runner pod is evicted, no way to give each tenant isolated egress IPs for GitHub allowlisting, and idle runner compute you keep paying for.** GitHub Actions Gateway (GAG) recovers evicted jobs automatically, gives every tenant a dedicated egress IP pool, scales worker compute to zero between jobs, and lets each team self-serve a fully isolated gateway from a single `ActionsGateway` custom resource (CR).
 
-Each tenant operates many runner groups (CPU, GPU, large-memory, …) inside their own namespace under a single `ResourceQuota`, all driven by one Kubernetes operator.
-
-GitHub Actions Gateway (GAG) brings four properties that Actions Runner Controller (ARC) scale-set mode does not provide together:
-
-- **Priority-tiered scheduling across a shared `ResourceQuota`.** Reserve a floor of slots for expensive GPU runners that a flood of cheap CPU pods can't starve, then let higher tiers burst opportunistically into spare capacity — so you can oversubscribe the quota for higher utilization and lower cost instead of holding idle headroom in reserve.
-- **Automatic eviction retry.** When a worker pod is preempted, OOM-killed, or lost to a node failure, GAG fast-cancels the GitHub-side job lock and calls the rerun API, with a per-job retry budget — no manual rerun needed.
-- **Per-tenant dedicated egress IP pool.** Every tenant's GitHub traffic exits through a tenant-specific HTTPS CONNECT proxy pool, enabling per-team IP allowlisting on the GitHub side and containing rate-limit or abuse blast radius to one tenant.
-- **Self-service multi-tenant onboarding via one CR.** A team creates a single `ActionsGateway` CR in their own namespace and receives a fully isolated gateway instance: RBAC, NetworkPolicies, egress proxy, controller, and every runner group they declared — all operating within the platform-owned namespace `ResourceQuota`.
-
-GAG also **scales workers to zero between jobs** — the same property ARC scale-set mode provides with `minRunners: 0` — but with substantially less always-on overhead. ARC's listener is a per-scale-set pod running a full .NET runtime (~256 MiB resident, plus a cluster IP, held open 24/7 to long-poll GitHub). GAG hosts every `RunnerGroup`'s listener as a goroutine in one shared controller pod, at ~60 KiB per group. A tenant with 10 runner groups holds ~600 KiB of listener state in one pod instead of ~2.5 GiB across 10 pods.
+Each tenant runs many runner groups (CPU, GPU, large-memory, …) in their own namespace under one shared `ResourceQuota`, all driven by a single Kubernetes operator — so a platform team can oversubscribe the shared quota for higher utilization and lower cost instead of holding idle headroom in reserve. The sections below cover **the problem** in detail, **how GAG solves it**, and **how it works**.
 
 ## The Problem
 
