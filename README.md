@@ -197,5 +197,5 @@ in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
   <img src="docs/assets/wormhole-animation.webp" width="480"
        alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma burst, then shutters closed">
   <br>
-  <sub><em>Why "Gateway"? Every tenant's GitHub traffic leaves through one isolated, controlled opening — a network gateway, strictly speaking. We could've drawn a proxy box. We went with the wormhole.</em></sub>
+  <sub><em>Why "Gateway"? Every tenant's GitHub traffic leaves through a single guarded door. The wormhole is a dramatization — no packets were actually teleported.</em></sub>
 </p>
