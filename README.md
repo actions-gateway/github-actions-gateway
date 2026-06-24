@@ -7,15 +7,15 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-actions--gateway.com-2563eb.svg)](https://actions-gateway.com)
 
-> **Multi-tenant self-hosted GitHub Actions runners on Kubernetes — without the parts of Actions Runner Controller (ARC) that hurt at scale.**
+> **Multi-tenant self-hosted GitHub Actions runners on Kubernetes, designed for shared clusters where many teams run runners side by side.**
 
-Three things break down when you run ARC scale-set mode for many teams. GitHub Actions Gateway (GAG) fixes each:
+Actions Runner Controller (ARC) scale-set mode is the common starting point. Once many teams share one cluster, three gaps open up that ARC doesn't address together — GitHub Actions Gateway (GAG) is built to close them:
 
-| Pain with ARC | Fix with GAG |
+| Gap at multi-tenant scale | How GAG closes it |
 | --- | --- |
-| Evicted runner pod → job stuck in GitHub's queue, up to its 24-hour timeout | Auto-cancels the job lock in seconds and reruns, with a per-job retry budget |
-| No way to isolate a tenant's GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
-| Idle runner and listener compute you keep paying for | Workers scale to zero between jobs; listeners run as ~60 KiB goroutines, not ~256 MiB pods |
+| An evicted runner pod leaves its job stuck in GitHub's queue, up to the 24-hour timeout | Cancels the job lock in seconds and reruns, with a per-job retry budget |
+| Tenants can't be given isolated GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
+| Idle runner and listener compute stays provisioned between jobs | Workers scale to zero between jobs; listeners run as ~60 KiB goroutines, not ~256 MiB pods |
 
 Each team self-serves a fully isolated gateway from a single `ActionsGateway` custom resource (CR), running many runner groups (CPU, GPU, large-memory, …) under one shared `ResourceQuota`. The sections below cover **the problem**, **how GAG solves it**, and **how it works**.
 
