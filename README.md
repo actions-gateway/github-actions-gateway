@@ -7,9 +7,17 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-actions--gateway.com-2563eb.svg)](https://actions-gateway.com)
 
-> **Self-hosted GitHub Actions runners for many teams on one Kubernetes cluster — without the three things that hurt most under Actions Runner Controller (ARC) scale-set mode: jobs stuck in GitHub's queue when a runner pod is evicted, no way to give each tenant isolated egress IPs for GitHub allowlisting, and idle runner compute you keep paying for.** GitHub Actions Gateway (GAG) recovers evicted jobs automatically, gives every tenant a dedicated egress IP pool, scales worker compute to zero between jobs, and lets each team self-serve a fully isolated gateway from a single `ActionsGateway` custom resource (CR).
+> **Multi-tenant self-hosted GitHub Actions runners on Kubernetes — without the parts of Actions Runner Controller (ARC) that hurt at scale.**
 
-Each tenant runs many runner groups (CPU, GPU, large-memory, …) in their own namespace under one shared `ResourceQuota`, all driven by a single Kubernetes operator — so a platform team can oversubscribe the shared quota for higher utilization and lower cost instead of holding idle headroom in reserve. The sections below cover **the problem** in detail, **how GAG solves it**, and **how it works**.
+Three things break down when you run ARC scale-set mode for many teams. GitHub Actions Gateway (GAG) fixes each:
+
+| Pain with ARC | Fix with GAG |
+| --- | --- |
+| Evicted runner pod → job stuck in GitHub's queue, up to its 24-hour timeout | Auto-cancels the job lock in seconds and reruns, with a per-job retry budget |
+| No way to isolate a tenant's GitHub egress IPs | Dedicated per-tenant egress IP pool for allowlisting and contained blast radius |
+| Idle runner and listener compute you keep paying for | Workers scale to zero between jobs; listeners run as ~60 KiB goroutines, not ~256 MiB pods |
+
+Each team self-serves a fully isolated gateway from a single `ActionsGateway` custom resource (CR), running many runner groups (CPU, GPU, large-memory, …) under one shared `ResourceQuota`. The sections below cover **the problem**, **how GAG solves it**, and **how it works**.
 
 ## The Problem
 
