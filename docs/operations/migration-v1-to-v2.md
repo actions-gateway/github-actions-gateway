@@ -46,8 +46,9 @@ The fan-out preserves v1 behavior and weakens no security property:
 - **Concurrency ceiling preserved.** v1 defaulted `maxListeners` to 1; v2 defaults to
   10. The tool pins each `RunnerSet.maxListeners` to the v1 *effective* value, so the
   ceiling does not silently jump.
-- **No secret is read.** Only the `githubAppRef` **name** is carried across — the tool
-  never reads, prints, or copies the credential Secret's contents.
+- **No secret is read.** Only the GitHub App Secret **name** is carried across — from
+  v1's `spec.githubAppRef.name` into v2's `spec.credentials.githubApp.name` (Q196) — and
+  the tool never reads, prints, or copies the credential Secret's contents.
 - **The eligibility grant is never invented.** A tenant migrating to
   `securityProfile: privileged` keeps the *existing* platform grant (domain-migrated);
   if the namespace holds no grant, the tool warns rather than self-granting one.

@@ -314,7 +314,10 @@ func buildGateway(ns, name, proxyName string, spec gmcv1alpha1.ActionsGatewaySpe
 		},
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.ActionsGatewaySpec{
-			GitHubAppRef:    v2alpha1.LocalSecretReference{Name: spec.GitHubAppRef.Name},
+			Credentials: v2alpha1.GitHubCredentials{
+				Type:      v2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &v2alpha1.LocalSecretReference{Name: spec.GitHubAppRef.Name},
+			},
 			GitHubURL:       spec.GitHubURL,
 			DefaultProxyRef: &v2alpha1.LocalObjectRef{Name: proxyName},
 			LogLevel:        spec.LogLevel,

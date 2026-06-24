@@ -51,8 +51,11 @@ func v2Gateway(name, ns, secret, proxyRef string) *gmcv2alpha1.ActionsGateway {
 	ag := &gmcv2alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv2alpha1.LocalSecretReference{Name: secret},
-			GitHubURL:    "https://github.com/example-org",
+			Credentials: gmcv2alpha1.GitHubCredentials{
+				Type:      gmcv2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &gmcv2alpha1.LocalSecretReference{Name: secret},
+			},
+			GitHubURL: "https://github.com/example-org",
 		},
 	}
 	if proxyRef != "" {

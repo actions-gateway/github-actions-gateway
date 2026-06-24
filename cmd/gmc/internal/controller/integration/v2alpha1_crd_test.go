@@ -26,8 +26,11 @@ func newV2ActionsGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
 	return &gmcv2alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv2alpha1.LocalSecretReference{Name: "acme-github-app"},
-			GitHubURL:    "https://github.com/acme",
+			Credentials: gmcv2alpha1.GitHubCredentials{
+				Type:      gmcv2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &gmcv2alpha1.LocalSecretReference{Name: "acme-github-app"},
+			},
+			GitHubURL: "https://github.com/acme",
 		},
 	}
 }
@@ -45,7 +48,9 @@ func TestV2_ActionsGateway_RoundTripAndDefaulting(t *testing.T) {
 	// securityProfile is no longer a per-gateway field in v2: it relocated to the
 	// namespace (actions-gateway.com/security-profile label, Q175 / §H.16 #7).
 	assert.Equal(t, "info", got.Spec.LogLevel, "logLevel should default to info")
-	assert.Equal(t, "acme-github-app", got.Spec.GitHubAppRef.Name)
+	require.NotNil(t, got.Spec.Credentials.GitHubApp)
+	assert.Equal(t, gmcv2alpha1.CredentialTypeGitHubApp, got.Spec.Credentials.Type)
+	assert.Equal(t, "acme-github-app", got.Spec.Credentials.GitHubApp.Name)
 }
 
 func TestV2_ActionsGateway_GitHubURLImmutable(t *testing.T) {
@@ -78,9 +83,51 @@ func TestV2_ActionsGateway_GitHubAppRefNameMutable(t *testing.T) {
 	var got gmcv2alpha1.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "acme"}, &got))
 
-	// githubAppRef.name is deliberately mutable — the supported credential-rotation path.
-	got.Spec.GitHubAppRef.Name = "acme-github-app-rotated"
-	require.NoError(t, k8sClient.Update(ctx, &got), "rotating githubAppRef.name must be allowed")
+	// credentials.githubApp.name is deliberately mutable — the supported
+	// credential-rotation path.
+	got.Spec.Credentials.GitHubApp.Name = "acme-github-app-rotated"
+	require.NoError(t, k8sClient.Update(ctx, &got), "rotating credentials.githubApp.name must be allowed")
+}
+
+// TestV2_ActionsGateway_CredentialsUnion exercises the spec.credentials discriminated
+// union (Q196) under real-apiserver CEL: the discriminator must be set to a known value,
+// and the member named by credentials.type must be present while every other member is
+// absent. These are the structural and CEL guarantees the v2beta1 freeze depends on
+// (§H.15, docs/plan/v2beta1.md) — the shape that lets workload identity (Q197) join as a
+// second member without another breaking change.
+func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
+	const ns = "v2-ag-credentials"
+	createNamespace(t, ns)
+
+	t.Run("GitHubApp member accepted", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "creds-ok")
+		require.NoError(t, k8sClient.Create(ctx, ag))
+		t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+	})
+
+	t.Run("missing discriminator rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "creds-no-type")
+		ag.Spec.Credentials.Type = ""
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for empty credentials.type, got %v", err)
+	})
+
+	t.Run("unknown discriminator rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "creds-bad-type")
+		ag.Spec.Credentials.Type = "Bogus"
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for unknown credentials.type, got %v", err)
+	})
+
+	t.Run("discriminator without its member rejected", func(t *testing.T) {
+		ag := newV2ActionsGateway(ns, "creds-no-member")
+		ag.Spec.Credentials.GitHubApp = nil // type=GitHubApp but githubApp unset
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for type=GitHubApp without githubApp, got %v", err)
+	})
 }
 
 func TestV2_ActionsGateway_NameMaxLengthRejected(t *testing.T) {

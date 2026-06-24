@@ -68,8 +68,11 @@ func newV2GatewayWired(name, ns, secretName, proxyRef string) *v2alpha1.ActionsG
 	ag := &v2alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.ActionsGatewaySpec{
-			GitHubAppRef: v2alpha1.LocalSecretReference{Name: secretName},
-			GitHubURL:    "https://github.com/example-org",
+			Credentials: v2alpha1.GitHubCredentials{
+				Type:      v2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &v2alpha1.LocalSecretReference{Name: secretName},
+			},
+			GitHubURL: "https://github.com/example-org",
 		},
 	}
 	if proxyRef != "" {

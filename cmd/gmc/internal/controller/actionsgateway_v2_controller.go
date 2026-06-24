@@ -133,13 +133,13 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// Credential check: the AGC mounts the GitHub App Secret; without it, do not
 	// provision (CredentialUnavailable, fail closed).
 	var credSecret corev1.Secret
-	credErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.GitHubAppRef.Name}, &credSecret)
+	credErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Spec.GitHubAppSecretName()}, &credSecret)
 	if credErr != nil && !apierrors.IsNotFound(credErr) {
 		return ctrl.Result{}, credErr
 	}
 	if apierrors.IsNotFound(credErr) {
 		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonSecretNotFound,
-			fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppRef.Name, ag.Namespace))
+			fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppSecretName(), ag.Namespace))
 	}
 
 	// Resolve the control-plane egress proxy from defaultProxyRef (Q168, §H.10).
@@ -551,10 +551,10 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // secretToActionsGateways enqueues any v2 ActionsGateway in the Secret's namespace
-// whose githubAppRef names it, so a credential Secret create/delete re-reconciles.
+// whose credentials.githubApp names it, so a credential Secret create/delete re-reconciles.
 func (r *ActionsGatewayV2Reconciler) secretToActionsGateways(ctx context.Context, obj client.Object) []ctrl.Request {
 	return r.gatewaysMatching(ctx, obj.GetNamespace(), func(ag *gmcv2alpha1.ActionsGateway) bool {
-		return ag.Spec.GitHubAppRef.Name == obj.GetName()
+		return ag.Spec.GitHubAppSecretName() == obj.GetName()
 	})
 }
 

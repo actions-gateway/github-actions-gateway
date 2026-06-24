@@ -161,6 +161,46 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
+              credentials:
+                description: |-
+                  Credentials configures how this gateway authenticates to GitHub. It is a
+                  discriminated union keyed by credentials.type: exactly the member the discriminator
+                  names is set (GitHubApp today; workload identity joins as an additive second member,
+                  Q197). v2 nests the credential under this explicit-discriminator parent before the
+                  v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15,
+                  docs/plan/v2beta1.md).
+                properties:
+                  githubApp:
+                    description: |-
+                      GitHubApp configures GitHub App authentication: a name-only reference to the Secret
+                      in this gateway's own namespace holding the App credentials ({appId, installationId,
+                      privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable —
+                      changing it is the supported credential-rotation path.
+                    properties:
+                      name:
+                        description: Name of the referenced Secret in the same namespace.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  type:
+                    description: |-
+                      Type selects the active credential member (the union discriminator). The member it
+                      names must be set and all others absent. It is required and explicit — an absent or
+                      implicit discriminator would have to become required later, itself a breaking
+                      change, so v2 fixes it before beta.
+                    enum:
+                    - GitHubApp
+                    type: string
+                required:
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: githubApp must be set when credentials.type is GitHubApp
+                    and unset otherwise
+                  rule: has(self.githubApp) == (self.type == 'GitHubApp')
               defaultProxyRef:
                 description: |-
                   DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
@@ -206,21 +246,6 @@ spec:
                       Name of the referenced object. Bounded by the same 52-char budget every v2
                       object name carries (§H.6), so a well-formed ref can always name a valid object.
                     maxLength: 52
-                    minLength: 1
-                    type: string
-                required:
-                - name
-                type: object
-              githubAppRef:
-                description: |-
-                  GitHubAppRef names the Secret holding this gateway's GitHub App credentials,
-                  in the gateway's own namespace (LocalSecretReference — v1's namespace field is
-                  dropped, §H.15). githubAppRef.name is deliberately mutable: changing it is the
-                  supported credential-rotation path.
-                properties:
-                  name:
-                    description: Name of the referenced Secret in the same namespace.
-                    maxLength: 253
                     minLength: 1
                     type: string
                 required:
@@ -292,7 +317,7 @@ spec:
                     type: string
                 type: object
             required:
-            - githubAppRef
+            - credentials
             - githubURL
             type: object
           status:

@@ -235,8 +235,10 @@ metadata:
   namespace: %[1]s
 spec:
   githubURL: https://github.com/example-org-direct
-  githubAppRef:
-    name: %[2]s
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: %[2]s
   logLevel: debug
 ---
 apiVersion: actions-gateway.com/v2alpha1

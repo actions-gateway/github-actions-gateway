@@ -332,7 +332,7 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		serviceAccount:   agcNameV2(ag),
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
-	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppRef.Name, proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
+	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
 }
 
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC

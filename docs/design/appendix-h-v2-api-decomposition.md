@@ -155,7 +155,7 @@ Multiple `ActionsGateway`s may share one namespace; each AGC reconciles only the
 // ActionsGateway — GitHub identity + AGC control plane only.
 // Now permitted 1..N per namespace.
 type ActionsGatewaySpec struct {
-    GitHubAppRef       LocalSecretReference `json:"githubAppRef"`       // was SecretReference; namespace field dropped
+    Credentials        GitHubCredentials    `json:"credentials"`        // discriminated union: githubApp today, workloadIdentity additive (Q196/Q197, §H.15)
     GitHubURL          string               `json:"githubURL"`          // immutable (CEL oldSelf)
     DefaultTemplateRef *ObjectRef           `json:"defaultTemplateRef"` // optional (Q172): inherited by RunnerSets with no templateRef
     Tracing            TracingConfig        `json:"tracing"`            // unchanged
@@ -273,7 +273,9 @@ apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
-  githubAppRef: { name: acme-github-app }   # LocalSecretReference, same namespace
+  credentials:                              # discriminated union (Q196, §H.15)
+    type: GitHubApp                         # discriminator; workloadIdentity is the additive 2nd member (Q197)
+    githubApp: { name: acme-github-app }    # LocalSecretReference, same namespace
   githubURL: https://github.com/acme
   # Pod Security level is owned at the namespace (GMC-guarded), not here — see §H.16 #7.
 ---
@@ -606,7 +608,7 @@ the [`v1alpha1` deprecation notice](../operations/v1alpha1-deprecation.md).
        v1alpha1 (one monolith)            one-shot tool         v2alpha1 (fan-out)
   ┌──────────────────────────────┐                       ┌──────────────────────────────┐
   │ ActionsGateway               │                  ┌──► │ ActionsGateway · identity    │
-  │   ├ githubAppRef · githubURL │                  │    └──────────────────────────────┘
+  │   ├ credentials · githubURL  │                  │    └──────────────────────────────┘
   │   ├ spec.proxy (inline)      │   ┌───────────┐  │    ┌──────────────────────────────┐
   │   └ spec.runnerGroups[]      │──►│ migration │──┼──► │ EgressProxy                  │
   │       (inline podTemplates)  │   │ tool      │  │    └──────────────────────────────┘
@@ -830,7 +832,7 @@ only the ones that fix a problem we have today.
   with a name-only `LocalSecretReference`. Removing a field is break-only.
 - **Per-field immutability** via CEL `XValidation` (`oldSelf`): **`githubURL`
   immutable** — rebinding a running gateway's GitHub org is a footgun;
-  **`githubAppRef.name` mutable** — it is the credential-rotation path. Adding
+  **`credentials.githubApp.name` mutable** — it is the credential-rotation path. Adding
   immutability later is itself breaking, so it is fixed at v2.
 - **API group rename → `actions-gateway.com`.** The group is
   `actions-gateway.github.com`, which suffixes a domain the project does not
@@ -866,6 +868,23 @@ only the ones that fix a problem we have today.
   webhook is one fewer thing whose outage blocks all admission — an availability
   and operability win, best taken during the schema rewrite.
 
+- **Credentials as a discriminated union — _shipped in `v2alpha1` (Q196); was: defer._**
+  A flat `workloadIdentityRef` sibling is *mechanically* additive, but additive *into a
+  permanently worse shape*: once `githubAppRef` is top-level under beta it can never move
+  under a parent without a breaking change + storage migration. Since `alpha → beta` is
+  the last free break and workload identity is on-strategy (removes the App key from the
+  cluster — the secure-by-default direction), the credential is nested under an
+  explicit-discriminator `spec.credentials` parent **now, in `v2alpha1`** — a free
+  reshape while alpha carries no stability contract, so the beta cut inherits the right
+  shape and the conversion webhook (Q74) round-trips it as an identity for the
+  credentials block. `spec.credentials` is a discriminated union keyed by
+  `credentials.type` (`+unionDiscriminator`): `githubApp` (a name-only `LocalSecretReference`)
+  is the first and only member today; the union's "exactly the named member is set"
+  invariant is enforced by a per-member CEL `iff` rule that each new member extends. The
+  `workloadIdentity` member (Q197) joins as the second member without another breaking
+  change — the whole point of fixing the shape before the freeze. Plan + schema sketch:
+  [v2beta1.md](../plan/v2beta1.md).
+
 **Explicitly NOT now (shape for additive later, do not build):**
 
 - **Admin policy class** — [§H.14](#h14-admin-policy-layer--deferred-until-tiering-is-real).
@@ -873,16 +892,6 @@ only the ones that fix a problem we have today.
   once there are untrusted tenants to restrict. It belongs in the admin policy
   schema and is enforced when that layer arrives; do not add a standalone tenant
   field for it now.
-- **Credentials as a discriminated union — _reconsidered: now a `v2beta1` blocker_
-  (was: defer).** A flat `workloadIdentityRef` sibling is *mechanically* additive,
-  but additive *into a permanently worse shape*: once `githubAppRef` is top-level
-  under beta it can never move under a parent without a breaking change + storage
-  migration. Since `alpha → beta` is the last free break and workload identity is
-  on-strategy (removes the App key from the cluster — the secure-by-default
-  direction), nest `githubAppRef` under an explicit-discriminator `spec.credentials`
-  **at the beta cut**, and build the `workloadIdentity` member alongside it so the
-  union is validated by a real second consumer. Plan + schema sketch:
-  [v2beta1.md](../plan/v2beta1.md).
 
 ## H.16. Open questions / sign-off needed
 
@@ -1020,7 +1029,7 @@ cert-manager trust-manager, Kubernetes finalizer guidance); ratify or override.
    The project owns the domain; the change rides the v2 cutover and its migration
    tool. Break-only, so it happens here or never.
 10. **Per-field immutability** (§H.15) — ✅ **`githubURL` immutable,
-    `githubAppRef.name` mutable.**
+    `credentials.githubApp.name` mutable.**
 11. **`maxListeners` default** (§H.15) — ✅ **`10`** (was `1` in code). Verified
     against the AGC listener source: `maxListeners` is a concurrency ceiling with
     a baseline-of-1 + demand-spawn + idle-shutdown, so a higher default is free

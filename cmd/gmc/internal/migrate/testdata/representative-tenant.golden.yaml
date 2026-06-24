@@ -4,10 +4,12 @@ metadata:
   name: team-a
   namespace: team-a
 spec:
+  credentials:
+    githubApp:
+      name: github-app
+    type: GitHubApp
   defaultProxyRef:
     name: team-a-egress
-  githubAppRef:
-    name: github-app
   githubURL: https://github.com/team-a
   logLevel: info
   tracing: {}
