@@ -533,6 +533,7 @@ body[data-md-color-scheme="slate"] {
   box-shadow: var(--gag-elev-1);
   transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
     border-color 0.2s var(--gag-ease);
+  padding: 0.6rem 0.75rem;
 }
 
 .gag-pillars .grid.cards > ul > li:hover {
@@ -547,7 +548,29 @@ body[data-md-color-scheme="slate"] {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+/* Divider between header and body. */
+.gag-pillars .grid.cards > ul > li > hr {
+  margin: 0.3rem 0;
+}
+
+/* Lead text and bullet list. */
+.gag-pillars .grid.cards > ul > li > p:not(:first-child) {
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.gag-pillars .grid.cards > ul > li ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.gag-pillars .grid.cards > ul > li ul > li {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  margin-bottom: 0.15rem;
 }
 
 /* Bold, solid icon chip with a white glyph so the card headers pop. */
@@ -557,16 +580,45 @@ body[data-md-color-scheme="slate"] {
   align-items: center;
   justify-content: center;
   vertical-align: middle;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.55rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
   background: var(--md-accent-fg-color);
   color: #fff;
 }
 
 .gag-pillars .grid.cards .twemoji.lg svg {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Continuation line in a table cell — indents to align under the first line's
+   text, past the leading icon. */
+.gag-cont {
+  display: inline-block;
+  padding-left: 1.5em;
+}
+
+/* v2 API badge — small pill on benefit cards that require the v2alpha1 API. */
+.gag-v2-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.75rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(103, 80, 164, 0.12);
+  color: #6750a4;
+  vertical-align: middle;
+  margin-left: 0.15rem;
+  white-space: nowrap;
+}
+
+[data-md-color-scheme="slate"] .gag-v2-badge {
+  background: rgba(208, 188, 255, 0.15);
+  color: #d0bcff;
 }
 
 /* Comparison / data tables: bigger text, rounded frame, emphasized header + GAG
