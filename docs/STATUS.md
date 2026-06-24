@@ -73,6 +73,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q193"></a>Q193 | [End-to-end demo / screencast](index.md) | `docs` | 🔲 | S | No demo or screencast — biggest top-of-funnel friction. Record a free end-to-end kind deploy showing job→pod→GitHub. The quantified benchmark/case-study split to Q198 (it needs a paid scale run). |
 | <a id="Q194"></a>Q194 | [Homepage segment clarity + roadmap + Discussions](index.md) | `docs` | 🔲 | S | Landing page doesn't say who it's for or show a roadmap, and there's no community channel. Add segment/persona clarity, a public roadmap page, and enable GitHub Discussions linked from README. |
 | <a id="Q195"></a>Q195 | [SEO bundle: structured data, robots.txt, analytics](development/website.md) | `docs` | 🔲 | S | Site has no JSON-LD structured data, no robots.txt, and no analytics. Add SoftwareSourceCode/Organization schema, robots.txt with sitemap, and privacy-respecting analytics (e.g. Plausible). |
+| <a id="Q199"></a>Q199 | [ARC → GAG migration guide](plan/go-to-market.md) | `docs` | 🔲 | M | New "coming from ARC" operator guide: scale-set→runnerGroup + runner-label mapping, egress/quirks, gotchas. Highest-leverage adoption artifact (go-to-market §7) — removes switching friction, ranks for migration search. |
+| <a id="Q200"></a>Q200 | [README problem-first rewrite](plan/go-to-market.md) | `docs` | 🔲 | S | Lead README.md with the ARC pain GAG solves (jobs stuck on eviction, no tenant egress isolation), not the architecture. Cheap; improves human onboarding + AI/GEO retrieval. go-to-market §6. |
 ---
 
 ## Deferred
