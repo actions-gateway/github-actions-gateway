@@ -197,5 +197,5 @@ in its `org.opencontainers.image.licenses` label. Copyright is asserted in the
   <img src="docs/assets/wormhole-animation.webp" width="480"
        alt="Animated logomark — the faceted gateway ring opens into a wormhole that erupts a plasma burst, then shutters closed">
   <br>
-  <sub><em>One guarded door between each tenant and GitHub.</em></sub>
+  <sub><em>A secure, dedicated gateway to GitHub for each tenant.<br>Don't let noisy neighbors or secret exfiltrators ruin your sleep.</em></sub>
 </p>
