@@ -126,6 +126,8 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 
 ## Incident Response
 
+For restoring a deleted or corrupted `ActionsGateway` CR, a lost tenant namespace, or a full cluster, see the dedicated [Backup, Restore, and Disaster Recovery](backup-restore.md) guide. The CR is the source of truth; deleting it cascades to the resources the GMC owns, and re-applying it reconciles them back.
+
 ### GitHub App Key Compromise
 
 **Immediate steps (< 5 minutes):**
@@ -202,6 +204,7 @@ Before handing off to the next on-call:
 
 ## Reference Links
 
+- [Backup, Restore, and Disaster Recovery](backup-restore.md) — backup posture and recovery procedures for a deleted or corrupted CR
 - [Troubleshooting Guide](troubleshooting.md) — symptom → diagnosis → resolution for each failure mode
 - [Security Operations](security-operations.md) — abuse-detection alerts and compromise-response playbooks
 - [Observability](observability.md) — full metrics reference
