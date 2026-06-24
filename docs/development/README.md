@@ -7,6 +7,7 @@ Developer workflow references. Read the relevant doc before starting a task in t
 | [building.md](building.md) | Building binaries — repo `Makefile` targets, `.build/` layout. |
 | [backpressure.md](backpressure.md) | The developer/agent feedback loops — pre-commit hook, `make check`, CI tiers, what each mechanism catches, and a graded assessment of the result. |
 | [testing.md](testing.md) | Running integration tests, editing CI workflows, picking the right test scope and tier. |
+| [broker-compatibility.md](broker-compatibility.md) | The published broker-compatibility report — which GitHub broker wire-protocol/API contracts the `cmd/probe/compat` suite verifies, and the result. Generated; regenerate with `make compat-report`. |
 | [bash-style.md](bash-style.md) | Repo bash conventions for shell scripts — `set -euo pipefail`, quoting, traps, shellcheck-finding policy. Read before writing or editing any script. |
 | [doc-update-matrix.md](doc-update-matrix.md) | Which docs to update for each kind of change — CRD fields, new behaviour, admission rules, operator-visible changes, security, module dependencies. |
 | [kind-iteration.md](kind-iteration.md) | Iterating against a local `kind` cluster — image-tag caching, distroless debugging, NetworkPolicy + kube-proxy DNAT pitfalls, AGC fakegithub/real-GitHub toggle, sub-minute inner loop. Design context in [docs/design/07-test-plan.md](../design/07-test-plan.md) §7.3. |

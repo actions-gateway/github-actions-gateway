@@ -150,6 +150,14 @@ build-probe: ## Build the probe binary
 build-proxy: ## Build the proxy binary
 	go build -C cmd/proxy -o ../../.build/proxy .
 
+# Regenerate the published broker-compatibility report (Q191) from the compat
+# suite. The suite itself runs as a normal unit test (in `make check`); a golden
+# test (TestReportInSync) fails if docs/development/broker-compatibility.md drifts
+# from what the suite produces — run this to bring it back in sync.
+.PHONY: compat-report
+compat-report: ## Regenerate docs/development/broker-compatibility.md from the broker-compat suite
+	COMPAT_WRITE_REPORT=1 go test -C cmd/probe -run TestReportInSync ./compat/...
+
 # The heavy per-module loops (test, lint) live in scripts/go-test.sh and
 # scripts/go-lint.sh, which apply the local auto-throttle themselves
 # (scripts/local-throttle.sh: parallelism cap + low-priority QoS prefix on an

@@ -37,10 +37,18 @@ in parallel; Q74 waits for all four.**
 
 GAG re-implements the GitHub broker protocol, so a protocol gap could force a CRD
 change. Run this *before* freezing the beta shape: expand `cmd/probe` into a
-compatibility suite that exercises the full broker surface against real GitHub,
-and publish a compat report. If it surfaces a needed field, that field lands in
-the beta shape; if it's clean, we freeze with confidence. Turns the silent-break
-risk into a managed, visible asset.
+compatibility suite that exercises the full broker surface and publish a compat
+report. If it surfaces a needed field, that field lands in the beta shape; if
+it's clean, we freeze with confidence. Turns the silent-break risk into a
+managed, visible asset.
+
+**Done.** The `cmd/probe/compat` suite asserts every documented broker contract
+(§3.2 credential crypto, §3.3 endpoints, §3.4 payload shapes, §3.5 rate-limit
+handling) against the in-process broker model; it runs credential-free in
+`make check`/CI on every change, with the live-against-real-GitHub probe
+(`cmd/probe`) as its companion. The published result is
+[broker-compatibility.md](../development/broker-compatibility.md): all documented
+contracts pass, so no protocol gap forces a field into the beta shape.
 
 ### 2. Q196 — Credentials discriminated-union shape *(shipped in `v2alpha1`)*
 
@@ -162,7 +170,7 @@ interface as additive follow-ups.
 
 | Blocker | Tier | How |
 |---|---|---|
-| Q191 broker-compat | live | Expand `cmd/probe`; run the suite against real GitHub; publish the report |
+| Q191 broker-compat | unit + live | `cmd/probe/compat` suite asserts every documented contract in `make check`/CI (credential-free, in-process model); live `cmd/probe` binary confirms against real GitHub. Report: [broker-compatibility.md](../development/broker-compatibility.md) ✅ |
 | Q196 credentials shape | envtest | Discriminator enum (required, known value) + per-member CEL `iff` ("the named member is set, others absent") under real-apiserver semantics; migration golden regenerated. Conversion round-trip lands with Q74 (identity for credentials). |
 | Q197 workload identity | kind e2e | **Vault in-cluster + transit engine + k8s auth**: the AGC pod's projected SA token → Vault authenticates it → Vault transit signs the App JWT. Exercises the whole no-PEM delegation flow with no cloud. Real IRSA/GKE/Azure identity binding stays manual / cloud-CI |
 | Q74 graduation | envtest | Conversion round-trip for all five kinds; storage-migration dry-run |

@@ -6,7 +6,7 @@
 ./broker	81.3
 ./cmd/agc	75.3
 ./cmd/gmc	65.8
-./cmd/probe	0.0
+./cmd/probe	45.4
 ./cmd/proxy	72.8
 ./cmd/worker	72.0
 ./githubapp	83.0
