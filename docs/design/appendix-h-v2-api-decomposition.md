@@ -868,22 +868,27 @@ only the ones that fix a problem we have today.
   webhook is one fewer thing whose outage blocks all admission — an availability
   and operability win, best taken during the schema rewrite.
 
-- **Credentials as a discriminated union — _shipped in `v2alpha1` (Q196); was: defer._**
+- **Credentials as a discriminated union — _shipped in `v2alpha1` (Q196/Q197)._**
   A flat `workloadIdentityRef` sibling is *mechanically* additive, but additive *into a
   permanently worse shape*: once `githubAppRef` is top-level under beta it can never move
   under a parent without a breaking change + storage migration. Since `alpha → beta` is
   the last free break and workload identity is on-strategy (removes the App key from the
   cluster — the secure-by-default direction), the credential is nested under an
-  explicit-discriminator `spec.credentials` parent **now, in `v2alpha1`** — a free
+  explicit-discriminator `spec.credentials` parent **in `v2alpha1`** — a free
   reshape while alpha carries no stability contract, so the beta cut inherits the right
   shape and the conversion webhook (Q74) round-trips it as an identity for the
   credentials block. `spec.credentials` is a discriminated union keyed by
-  `credentials.type` (`+unionDiscriminator`): `githubApp` (a name-only `LocalSecretReference`)
-  is the first and only member today; the union's "exactly the named member is set"
-  invariant is enforced by a per-member CEL `iff` rule that each new member extends. The
-  `workloadIdentity` member (Q197) joins as the second member without another breaking
-  change — the whole point of fixing the shape before the freeze. Plan + schema sketch:
-  [v2beta1.md](../plan/v2beta1.md).
+  `credentials.type` (`+unionDiscriminator`): `githubApp` (a name-only `LocalSecretReference`,
+  the possession model) and `workloadIdentity` (the no-PEM delegation model, Q197). The
+  union's "exactly the named member is set" invariant is enforced by a per-member CEL
+  `iff` rule that each new member extends — never an N-way "exactly one of" that grows
+  with the union. **`workloadIdentity` (Q197) shipped as the second member**: an external
+  signer signs the App JWT so the App private key never enters the cluster (MVP =
+  HashiCorp Vault transit + Vault Kubernetes auth, behind a `githubapp.Signer` interface
+  so cloud KMS providers add without another breaking change). Adding it validated the
+  shape against a real second consumer, the whole point of fixing the shape before the
+  freeze. See [05-security.md §5.7](05-security.md#57-workload-identity-the-no-pem-delegation-model)
+  for the trust model. Plan + schema sketch: [v2beta1.md](../plan/v2beta1.md).
 
 **Explicitly NOT now (shape for additive later, do not build):**
 

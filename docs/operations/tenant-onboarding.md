@@ -489,6 +489,42 @@ Changing `agcResources` rolls the AGC Deployment (a rolling restart, not a hot r
 
 There is no admission-time floor enforced on the values — the guidance above is operator-owned. When in doubt, leave `agcResources` unset and let the platform default apply.
 
+### Workload-identity credentials (external signer)
+
+`spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members. The default, `GitHubApp` (every example above), is the **possession model**: the App's RSA private key lives in a namespace `Secret` ([Step 1](#step-1-create-the-github-app-secret)) and the AGC signs the App JWT in-process. `WorkloadIdentity` is the opt-in **delegation model**: **no App private key is ever stored in the cluster** — an external signer signs the App JWT, and the AGC proves its own pod identity to that signer. Use it when policy forbids a long-lived signing key at rest in the cluster and you run a signer (HashiCorp Vault in the MVP) the AGC can reach. See [security §5.7](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model) for the trust model.
+
+There is **no `githubApp` Secret** for this method — you do not run [Step 1](#step-1-create-the-github-app-secret). Instead you put the non-secret App identity (`appId`/`installationId`) inline and reference a Vault transit key:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata: { name: acme, namespace: team-a }
+spec:
+  credentials:
+    type: WorkloadIdentity          # the no-PEM delegation member
+    workloadIdentity:
+      appId: 12345                  # non-secret; the JWT issuer
+      installationId: 67890         # non-secret
+      signer:
+        provider: Vault             # HashiCorp Vault transit (cloud KMS providers follow)
+        vault:
+          address: https://vault.vault.svc:8200   # HTTPS required (dev/test plaintext is an explicit AGC opt-in)
+          keyName: github-app       # the RSA transit key Vault signs with (signed as RS256)
+          transitMount: transit     # optional; defaults to "transit"
+          auth:
+            role: agc-acme          # the Vault Kubernetes-auth role bound to this gateway's AGC ServiceAccount
+            mount: kubernetes       # optional; defaults to "kubernetes"
+  githubURL: https://github.com/acme
+```
+
+Operator prerequisites in Vault (configured out of band, once per gateway):
+
+- A **transit key** (`keyName`) of an **RSA** type — GitHub App keys are RSA, and transit signs it as `RS256` (`pkcs1v15` + `sha2-256`). Import the App's existing private key into transit, or generate a new key in transit and register its public half as the App's key in GitHub.
+- A **Kubernetes auth role** (`auth.role`) bound to this gateway's AGC ServiceAccount and namespace, granting `update` on `transit/sign/<keyName>`. The AGC logs in with its projected ServiceAccount token; Vault verifies it via the cluster `TokenReview` API.
+- The Vault `address` must be **HTTPS** — the ServiceAccount token transits it at login. A plaintext address is rejected unless the AGC carries an explicit dev/test opt-in.
+
+> **Availability note.** The API shape and the external signer ship in v2beta1, but the GMC runtime provisioning of a workload-identity AGC (stamping the signer env, projecting the ServiceAccount token, and relying on your Vault role binding) lands in a follow-up. Until then a `WorkloadIdentity` gateway is **accepted by admission but does not provision** — it reports `Ready=False` with `CredentialUnavailable`/`WorkloadIdentityProvisioningPending`. Use `credentials.type: GitHubApp` to provision a gateway today.
+
 ---
 
 ## Handing Off to the Tenant

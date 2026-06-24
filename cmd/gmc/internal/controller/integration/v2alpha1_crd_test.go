@@ -35,6 +35,32 @@ func newV2ActionsGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
 	}
 }
 
+// newV2WorkloadIdentityGateway builds a well-formed workload-identity (Q197)
+// ActionsGateway: the second credentials union member, with a Vault transit signer.
+func newV2WorkloadIdentityGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
+	return &gmcv2alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: gmcv2alpha1.ActionsGatewaySpec{
+			Credentials: gmcv2alpha1.GitHubCredentials{
+				Type: gmcv2alpha1.CredentialTypeWorkloadIdentity,
+				WorkloadIdentity: &gmcv2alpha1.WorkloadIdentity{
+					AppID:          12345,
+					InstallationID: 67890,
+					Signer: gmcv2alpha1.ExternalSigner{
+						Provider: gmcv2alpha1.SignerProviderVault,
+						Vault: &gmcv2alpha1.VaultSigner{
+							Address: "https://vault.vault.svc:8200",
+							KeyName: "github-app",
+							Auth:    gmcv2alpha1.VaultKubernetesAuth{Role: "agc-acme"},
+						},
+					},
+				},
+			},
+			GitHubURL: "https://github.com/acme",
+		},
+	}
+}
+
 func TestV2_ActionsGateway_RoundTripAndDefaulting(t *testing.T) {
 	const ns = "v2-ag-rt"
 	createNamespace(t, ns)
@@ -127,6 +153,47 @@ func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
 		err := k8sClient.Create(ctx, ag)
 		require.Error(t, err)
 		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for type=GitHubApp without githubApp, got %v", err)
+	})
+
+	t.Run("WorkloadIdentity member accepted and defaulted", func(t *testing.T) {
+		ag := newV2WorkloadIdentityGateway(ns, "creds-wi-ok")
+		// Leave TransitMount/Auth.Mount empty to assert apiserver defaulting.
+		ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.TransitMount = ""
+		ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.Auth.Mount = ""
+		require.NoError(t, k8sClient.Create(ctx, ag))
+		t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+
+		var got gmcv2alpha1.ActionsGateway
+		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "creds-wi-ok"}, &got))
+		require.NotNil(t, got.Spec.Credentials.WorkloadIdentity)
+		assert.Nil(t, got.Spec.Credentials.GitHubApp, "githubApp must be absent under WorkloadIdentity")
+		assert.Equal(t, "transit", got.Spec.Credentials.WorkloadIdentity.Signer.Vault.TransitMount, "transitMount should default to transit")
+		assert.Equal(t, "kubernetes", got.Spec.Credentials.WorkloadIdentity.Signer.Vault.Auth.Mount, "auth.mount should default to kubernetes")
+	})
+
+	t.Run("WorkloadIdentity discriminator without its member rejected", func(t *testing.T) {
+		ag := newV2WorkloadIdentityGateway(ns, "creds-wi-no-member")
+		ag.Spec.Credentials.WorkloadIdentity = nil // type=WorkloadIdentity but member unset
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for type=WorkloadIdentity without workloadIdentity, got %v", err)
+	})
+
+	t.Run("two members set rejected", func(t *testing.T) {
+		ag := newV2WorkloadIdentityGateway(ns, "creds-two-members")
+		// type=WorkloadIdentity but githubApp also set — violates the githubApp iff rule.
+		ag.Spec.Credentials.GitHubApp = &gmcv2alpha1.LocalSecretReference{Name: "stray"}
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for two union members set, got %v", err)
+	})
+
+	t.Run("Vault provider without vault member rejected", func(t *testing.T) {
+		ag := newV2WorkloadIdentityGateway(ns, "creds-vault-no-member")
+		ag.Spec.Credentials.WorkloadIdentity.Signer.Vault = nil // provider=Vault but vault unset
+		err := k8sClient.Create(ctx, ag)
+		require.Error(t, err)
+		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for signer.provider=Vault without vault, got %v", err)
 	})
 }
 

@@ -348,6 +348,64 @@ worker pod off Best-Effort QoS — the first thing the kubelet evicts under
 node pressure, which otherwise burns the eviction-retry budget fast. A
 single-container worker pod with the defaults is Guaranteed QoS.
 
+## 5.7. Workload identity: the no-PEM delegation model
+
+A gateway authenticates to GitHub as a GitHub App by signing a short-lived App
+JWT and exchanging it for an installation token. There are two trust models for
+*where the App private key lives*, expressed as the two members of the
+`spec.credentials` discriminated union ([appendix-h §H.15](appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)):
+
+- **`githubApp` — the possession model (default, Q196).** The App's RSA private
+  key lives at rest in a namespace `Secret`, mounted into the AGC, which signs the
+  JWT in-process. This is the secure-by-default option: the key is confined to the
+  tenant namespace under the GMC's Secret-read controls, and admission/RBAC are
+  unchanged from v1.
+- **`workloadIdentity` — the delegation model (Q197).** **No App private key is
+  ever in the cluster.** The AGC holds only the non-secret App identity
+  (`appId`/`installationId`) and a reference to an *external signer*. It proves its
+  own pod identity to that signer's trust anchor and the anchor signs the App JWT
+  on its behalf. The AGC never reads, holds, mounts, or logs the App key — there is
+  no `privateKey` field on this member by construction.
+
+`workloadIdentity` is on the strict-upgrade direction of the secure-by-default
+principle (it *removes* a stored credential), so it is offered as an explicit
+opt-in member; the in-cluster-PEM `githubApp` stays the default. Choosing
+`workloadIdentity` regresses no property: the GitHub token-exchange channel still
+requires HTTPS, the App JWT still carries a `jti` replay defense and a 10-minute
+expiry, and the union CEL still enforces exactly one credential member.
+
+**MVP signer — HashiCorp Vault transit + Vault Kubernetes auth.** The first
+external signer is Vault transit, chosen because it is kind-validatable end to end
+without a cloud account. The flow holds no long-lived secret in the cluster:
+
+1. The AGC reads its **kubelet-projected ServiceAccount token** fresh from disk —
+   a short-lived token minted by the kubelet, not a stored `Secret`.
+2. It presents that token to **Vault Kubernetes auth** (`POST auth/<mount>/login`
+   with `{role, jwt}`); Vault verifies it via the cluster `TokenReview` API and
+   returns a short-lived Vault **client token**, cached only in memory and
+   re-fetched on lease expiry.
+3. It asks **Vault transit** (`POST <transit>/sign/<key>`) to sign the App JWT's
+   `header.payload` with an RSA key Vault holds — RSASSA-PKCS1-v1_5 over SHA-256,
+   i.e. JWS `RS256`. The private key never leaves Vault.
+
+The signing material's location is abstracted behind a `githubapp.Signer`
+interface (`JWTAlg`/`Sign`), so cloud KMS/HSM signers (AWS/GCP/Azure) add as new
+implementations + new `signer.provider` union members without another breaking
+change. **No code path logs, returns in an error, or env-passes the projected
+ServiceAccount token, the Vault client token, or the produced signature** — Vault
+error responses surface only operational messages (`permission denied`) and HTTP
+status. The Vault address is HTTPS-by-default (the ServiceAccount token transits
+it at login); a plaintext address is permitted only under an explicit dev/test
+opt-in, mirroring the GitHub-API-base-URL rule above.
+
+Operator configuration is in
+[tenant-onboarding.md § Workload-identity credentials](../operations/tenant-onboarding.md#workload-identity-credentials-external-signer).
+The GMC runtime provisioning of a workload-identity AGC (stamping the signer env,
+projecting the ServiceAccount token volume, and the operator's Vault role binding)
+and the in-cluster Vault kind e2e land in a follow-up (Q201); until then a
+workload-identity gateway is admitted but fails closed
+(`CredentialUnavailable`/`WorkloadIdentityProvisioningPending`).
+
 ---
 
 ← [Operational Flows](04-operational-flows.md) | [Back to index](README.md) | Next: [Implementation Phases →](06-implementation-phases.md)

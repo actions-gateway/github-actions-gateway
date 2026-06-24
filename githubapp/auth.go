@@ -9,6 +9,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -56,18 +57,83 @@ type InstallationToken struct {
 // exchange when GITHUB_API_BASE_URL is unset.
 const defaultAPIBaseURL = "https://api.github.com"
 
+// Signer signs the GitHub App authentication JWT. It abstracts the cryptographic
+// sign so the App key's location is pluggable. Two trust models implement it:
+//
+//   - pemSigner — the possession model: the App private key lives in-process (a
+//     namespace Secret mounted into the AGC). Built by NewInstallationTokenProvider.
+//   - an external signer (e.g. githubapp/vaultsigner) — the delegation model
+//     (Q197): the key lives in an external trust anchor and never enters the
+//     cluster; the AGC proves its identity to the anchor, which signs on its
+//     behalf. Built by NewInstallationTokenProviderWithSigner.
+//
+// Sign receives the JWT signing input (the "header.payload" bytes golang-jwt
+// produces) and returns the raw signature; the provider base64url-encodes it as
+// the JWS signature. JWTAlg returns the "alg" header value the signer produces,
+// which the provider stamps into the JWT header.
+//
+// A Signer implementation MUST NOT log, return in errors, or otherwise emit any
+// key, token, or signature material.
+type Signer interface {
+	// JWTAlg returns the JWS "alg" header value this signer produces — "RS256" for
+	// an RSA key (GitHub App keys), "EdDSA" for an Ed25519 key.
+	JWTAlg() string
+	// Sign signs the JWT signing input (the "header.payload" bytes) and returns the
+	// raw signature.
+	Sign(ctx context.Context, signingInput []byte) ([]byte, error)
+}
+
+// pemSigner is the in-cluster Signer: it holds the App private key in-process and
+// signs locally with golang-jwt. It preserves the historical possession-model
+// behavior, including Ed25519 support.
+type pemSigner struct {
+	key    crypto.Signer     // *rsa.PrivateKey (RS256) or ed25519.PrivateKey (EdDSA)
+	method jwt.SigningMethod // chosen from the key type at construction
+}
+
+// newPEMSigner parses a PEM-encoded App private key and returns a pemSigner that
+// signs RS256 (RSA) or EdDSA (Ed25519).
+func newPEMSigner(pemBytes []byte) (*pemSigner, error) {
+	key, err := parsePrivateKey(pemBytes)
+	if err != nil {
+		return nil, err
+	}
+	var method jwt.SigningMethod
+	switch key.(type) {
+	case *rsa.PrivateKey:
+		method = jwt.SigningMethodRS256
+	case ed25519.PrivateKey:
+		method = jwt.SigningMethodEdDSA
+	default:
+		return nil, fmt.Errorf("unsupported key type %T", key)
+	}
+	return &pemSigner{key: key, method: method}, nil
+}
+
+// JWTAlg returns the JWS alg for the held key ("RS256" or "EdDSA").
+func (s *pemSigner) JWTAlg() string { return s.method.Alg() }
+
+// Sign signs the input locally with the held key. The context is unused (no I/O).
+func (s *pemSigner) Sign(_ context.Context, signingInput []byte) ([]byte, error) {
+	return s.method.Sign(string(signingInput), s.key)
+}
+
 // installationTokenProvider implements TokenProvider by minting a fresh
-// installation access token on every call.
+// installation access token on every call. It signs the App JWT through a Signer,
+// so the App key may live in-process (pemSigner) or in an external anchor.
 type installationTokenProvider struct {
-	creds      Credentials
-	privateKey crypto.Signer // *rsa.PrivateKey (RS256) or ed25519.PrivateKey (EdDSA)
-	httpClient *http.Client
-	apiBaseURL string // validated at construction; HTTPS unless dev/test opt-in
+	appID          int64
+	installationID int64
+	signer         Signer
+	httpClient     *http.Client
+	apiBaseURL     string // validated at construction; HTTPS unless dev/test opt-in
 }
 
 // NewInstallationTokenProvider returns a TokenProvider that mints a fresh
 // installation access token on each call by signing a JWT and exchanging it
-// with the GitHub Apps API.
+// with the GitHub Apps API. The App private key is held in-process (the
+// possession model); for the no-key delegation model use
+// NewInstallationTokenProviderWithSigner.
 //
 // The token-exchange endpoint is GITHUB_API_BASE_URL (defaulting to
 // https://api.github.com). Because that exchange carries App-JWT and
@@ -81,9 +147,23 @@ type installationTokenProvider struct {
 // if GITHUB_API_BASE_URL is non-HTTPS without the opt-in, so callers surface
 // these failures at startup rather than on the first token mint.
 func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client, allowInsecureBaseURL bool) (TokenProvider, error) {
-	key, err := parsePrivateKey(creds.PrivateKeyPEM)
+	signer, err := newPEMSigner(creds.PrivateKeyPEM)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: parse private key: %w", err)
+	}
+	return NewInstallationTokenProviderWithSigner(creds.AppID, creds.InstallationID, signer, httpClient, allowInsecureBaseURL)
+}
+
+// NewInstallationTokenProviderWithSigner returns an ExpiringTokenProvider that
+// mints installation access tokens by signing the App JWT through the given
+// Signer — the no-PEM delegation path (Q197). The App private key never enters
+// this process: the Signer (e.g. githubapp/vaultsigner) delegates the sign to an
+// external trust anchor.
+//
+// The GITHUB_API_BASE_URL HTTPS rule is identical to NewInstallationTokenProvider.
+func NewInstallationTokenProviderWithSigner(appID, installationID int64, signer Signer, httpClient *http.Client, allowInsecureBaseURL bool) (ExpiringTokenProvider, error) {
+	if signer == nil {
+		return nil, fmt.Errorf("githubapp: signer must not be nil")
 	}
 
 	apiBase := os.Getenv("GITHUB_API_BASE_URL")
@@ -98,10 +178,11 @@ func NewInstallationTokenProvider(creds Credentials, httpClient *http.Client, al
 		httpClient = httpx.NewClient()
 	}
 	return &installationTokenProvider{
-		creds:      creds,
-		privateKey: key,
-		httpClient: httpClient,
-		apiBaseURL: apiBase,
+		appID:          appID,
+		installationID: installationID,
+		signer:         signer,
+		httpClient:     httpClient,
+		apiBaseURL:     apiBase,
 	}, nil
 }
 
@@ -145,15 +226,11 @@ func (p *installationTokenProvider) TokenWithExpiry(ctx context.Context) (*Insta
 func (p *installationTokenProvider) fetchToken(ctx context.Context) (*InstallationToken, error) {
 	now := time.Now()
 
-	// Choose signing method based on key type.
-	var signingMethod jwt.SigningMethod
-	switch p.privateKey.(type) {
-	case *rsa.PrivateKey:
-		signingMethod = jwt.SigningMethodRS256
-	case ed25519.PrivateKey:
-		signingMethod = jwt.SigningMethodEdDSA
-	default:
-		return nil, fmt.Errorf("githubapp: unsupported key type %T", p.privateKey)
+	// The signing method comes from the Signer's declared alg, so the JWT header
+	// matches whatever key the signer wields (RS256 for RSA, EdDSA for Ed25519).
+	signingMethod := jwt.GetSigningMethod(p.signer.JWTAlg())
+	if signingMethod == nil {
+		return nil, fmt.Errorf("githubapp: signer declares unknown JWT alg %q", p.signer.JWTAlg())
 	}
 
 	// iat is set 60 seconds in the past to absorb clock skew between this host
@@ -161,18 +238,28 @@ func (p *installationTokenProvider) fetchToken(ctx context.Context) (*Installati
 	claims := jwt.RegisteredClaims{
 		IssuedAt:  jwt.NewNumericDate(now.Add(-60 * time.Second)),
 		ExpiresAt: jwt.NewNumericDate(now.Add(10 * time.Minute)),
-		Issuer:    fmt.Sprintf("%d", p.creds.AppID),
+		Issuer:    fmt.Sprintf("%d", p.appID),
 		ID:        newUUID(), // jti: prevents replay of intercepted JWTs
 	}
+
+	// Build the signing input (base64url(header).base64url(payload)) and hand it
+	// to the Signer for the cryptographic sign — which may be a local key or an
+	// external anchor — then assemble the compact JWS. Keeping JWT assembly here
+	// means every Signer implements only the sign, never the encoding.
 	jwtToken := jwt.NewWithClaims(signingMethod, claims)
-	signed, err := jwtToken.SignedString(p.privateKey)
+	signingInput, err := jwtToken.SigningString()
+	if err != nil {
+		return nil, fmt.Errorf("githubapp: build JWT signing input: %w", err)
+	}
+	sig, err := p.signer.Sign(ctx, []byte(signingInput))
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: sign JWT: %w", err)
 	}
+	signed := signingInput + "." + base64.RawURLEncoding.EncodeToString(sig)
 
 	// apiBaseURL was resolved from GITHUB_API_BASE_URL and validated (HTTPS, or
 	// an explicit dev/test opt-in for plaintext) at construction time.
-	endpoint := fmt.Sprintf("%s/app/installations/%d/access_tokens", p.apiBaseURL, p.creds.InstallationID)
+	endpoint := fmt.Sprintf("%s/app/installations/%d/access_tokens", p.apiBaseURL, p.installationID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("githubapp: build request: %w", err)

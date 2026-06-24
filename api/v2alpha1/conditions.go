@@ -83,6 +83,13 @@ const (
 	ReasonProxyNotReady = "ProxyNotReady"
 	// ReasonSecretNotFound is the CredentialUnavailable=True reason.
 	ReasonSecretNotFound = "SecretNotFound"
+	// ReasonWorkloadIdentityPending is the CredentialUnavailable=True reason for a
+	// gateway whose credentials.type is WorkloadIdentity (Q197): the API shape and
+	// the external signer ship in v2beta1, but the GMC runtime provisioning of a
+	// workload-identity AGC (signer env, projected ServiceAccount token, Vault role
+	// binding) lands in a kind-e2e follow-up. Until then such a gateway fails closed
+	// rather than provisioning an AGC that cannot authenticate.
+	ReasonWorkloadIdentityPending = "WorkloadIdentityProvisioningPending" //nolint:gosec // G101: a condition reason, not a credential
 	// ReasonProvisioningFailed is the Degraded=True reason; the failing step is named
 	// in the message. ReasonReconcileSucceeded clears it.
 	ReasonProvisioningFailed = "ProvisioningFailed"
