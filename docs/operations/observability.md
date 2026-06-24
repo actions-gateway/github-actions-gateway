@@ -630,6 +630,10 @@ groups:
 
 > **Import as code.** A reference dashboard built from these panels ships at [`deploy/monitoring/grafana-dashboard.json`](../../deploy/monitoring/grafana-dashboard.json) — import it into Grafana (**Dashboards → New → Import**) or provision it, rather than rebuilding the panels by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)). The layout below documents what it contains.
 
+![The reference Grafana dashboard rendered against a live Prometheus, showing the gateway-health, pod-creation-latency SLO, job-throughput, proxy/quota, and GMC-overview rows.](../assets/grafana-dashboard.png)
+
+> The screenshot above is rendered against a real Prometheus with synthetic data by the reproducible harness in [`deploy/monitoring/preview/`](../../deploy/monitoring/preview/README.md); regenerate it there whenever the dashboard changes.
+
 The following panels cover the key health and performance signals. Use the recording rules above as data sources where applicable.
 
 ### Suggested Panel Layout
