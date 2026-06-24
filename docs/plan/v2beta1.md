@@ -12,9 +12,10 @@ contract (*won't be removed; changes carry a migration path; production-relyable
 **Approach.** `alpha → beta` is the **last free breaking change**: alpha carries
 no stability promise, and once beta is signed the conversion webhook must
 round-trip served versions for every later change. So the gate is narrow — get
-the shape right, then cut. Three blockers land first (a broker-compatibility
-sweep, the credentials discriminated-union reshape, and the workload-identity
-feature that validates that union), then the graduation itself.
+the shape right, then cut. Four blockers land first (a broker-compatibility
+sweep, the credentials discriminated-union reshape, the workload-identity
+feature that validates that union, and gVisor worker-isolation validation), then
+the graduation itself.
 
 ## Why graduate now
 
@@ -29,8 +30,8 @@ notice).
 
 ## The blocker sequence
 
-Ordered in the [Queue](../STATUS.md). **Q191/Q196/Q197 are independent and run in
-parallel; Q74 waits for all three.**
+Ordered in the [Queue](../STATUS.md). **Q191/Q196/Q197/Q15 are independent and run
+in parallel; Q74 waits for all four.**
 
 ### 1. Q191 — Broker-compatibility sweep *(run first)*
 
@@ -55,7 +56,17 @@ in the first beta shape and the union is validated against a real second consume
 (kind-validatable). Cloud KMS providers (AWS/GCP/Azure) are additive follow-ups
 behind the same signer interface.
 
-### 4. Q74 — The graduation cut
+### 4. Q15 — gVisor RuntimeClass validation
+
+Beta is the *production-relyable* contract, so the worker-isolation posture
+should be confirmed before signing it: validate that a worker pod with
+`RuntimeClass=gvisor` actually runs under `runsc` and that the sandbox holds.
+Now **free** to test — `minikube` + the `gvisor` addon (systrap platform, no
+nested virtualization) runs locally on a Mac and on a stock CI runner (see
+[testing.md](../development/testing.md)). Independent of the API-shape blockers;
+runs in parallel.
+
+### 5. Q74 — The graduation cut
 
 After the above: add `Hub`/`Convertible` conversion-webhook stubs, add `v2beta1`
 as a served version, mark it the storage version, run the storage migration, then
@@ -159,6 +170,7 @@ interface as additive follow-ups.
 - `v2beta1` served + storage version; conversion webhook round-trips
   `v2alpha1 ↔ v2beta1`; storage migration run.
 - Migration tool golden output regenerated for the new served version.
+- gVisor `RuntimeClass` isolation validated (minikube + gvisor addon), local + CI.
 - §H.15 and the affected appendix/operator docs updated to the shipped shape.
 
 ## Out of scope (additive, post-beta)
