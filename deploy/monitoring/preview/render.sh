@@ -136,6 +136,20 @@ apply_artifacts() {
 	kubectl -n team-a rollout status deploy/ag-metrics-exporter --timeout=120s
 }
 
+# trim_bottom removes the dead space Grafana leaves between the last panel row
+# and the bottom-pinned footer when the render viewport is taller than the
+# dashboard. It collapses the image to a 1px column of row averages, finds the
+# last row brighter than the dark-theme background, and crops to it (keeping
+# full width). No-op if ImageMagick is not installed.
+trim_bottom() {
+	local png="$1" last
+	command -v magick >/dev/null 2>&1 || return 0
+	last="$(magick "$png" -colorspace Gray -resize "1x!" -depth 8 txt:- |
+		awk 'NR>1 { split($1,a,","); g=$2; gsub(/[()]/,"",g); if (g+0 > 24) last=a[2]+0 } END{print last}')"
+	[[ -n "$last" && "$last" -gt 0 ]] || return 0
+	magick "$png" -crop "${WIDTH}x$((last + 16))+0+0" +repage "$png"
+}
+
 render() {
 	log "letting metrics accumulate (${WAIT}s) so rate()/histograms have data"
 	sleep "$WAIT"
@@ -148,6 +162,7 @@ render() {
 		code="$(curl -s -u admin:admin -o "$out" -w '%{http_code}' \
 			"http://localhost:3000/render/d/$uid/$uid?orgId=1&from=$FROM&to=$TO&width=$WIDTH&height=$HEIGHT&theme=dark&kiosk=1")"
 		[[ "$code" == "200" ]] || die "Grafana render of '$uid' returned HTTP $code"
+		trim_bottom "$out"
 		log "wrote $out ($(wc -c <"$out" | tr -d ' ') bytes)"
 	done
 	cleanup

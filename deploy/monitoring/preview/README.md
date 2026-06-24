@@ -45,7 +45,9 @@ Writes one PNG per dashboard into `OUT_DIR` (default `.`):
 
 Prerequisites: `docker`, `kind`, `helm`, `kubectl`, `curl` on `PATH`. (On macOS
 the script adds Docker Desktop's bundled `kubectl` automatically if it isn't
-already on `PATH`.)
+already on `PATH`.) `magick` (ImageMagick) is optional — when present, each PNG
+is auto-cropped to remove the dead space Grafana leaves below the last panel
+row; without it the render keeps the full `HEIGHT`.
 
 Common knobs (environment variables):
 
