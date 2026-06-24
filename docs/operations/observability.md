@@ -365,6 +365,29 @@ without opening Grafana:
 > the same reconcile cycle appears in `PENDINGJOBS` until the pod-deletion event
 > triggers the next reconcile (typically sub-second).
 
+### Drilling down to individual runner pods
+
+The count columns tell you *how many* jobs are running; to see *which* pods back them, filter by the owner label:
+
+```bash
+# RunnerGroup (v1alpha1)
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<name>
+
+# RunnerSet (v2alpha1)
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<name>
+```
+
+Add `-o wide` for node placement or `-w` to watch phase transitions live.
+
+> **Tip — correlating a pod with its GitHub Actions job:** runner pod names and
+> GitHub job names are unrelated; there is currently no annotation on the pod
+> that maps directly to the GitHub run or job ID. Use
+> `kubectl get pods … -o yaml` to get creation timestamps and pod names, then
+> cross-reference with `gh run list` or the GitHub Actions UI by matching the
+> runner name (the pod's hostname) to the runner column in the job log.
+> Annotating pods with the GitHub run/job ID at creation time is tracked as a
+> future improvement (see `docs/design/appendix-g-future-enhancements.md`).
+
 ---
 
 ## Symptom → Metric Mapping
@@ -379,7 +402,7 @@ without opening Grafana:
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Throughput decaying job by job | `agent_recycle_errors_total` rising, `active_sessions` shrinking | Agent re-registration failing; see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero) |
 | Jobs cancelled without ever starting | `worker_pods_reaped_total{reason="pending_deadline"}` | Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) |
-| Jobs running but `ACTIVEJOBS` shows 0 | Check pod phase with `kubectl get pods -l actions-gateway/runner-group=<name>` | `ACTIVEJOBS` is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires. |
+| Jobs running but `ACTIVEJOBS` shows 0 | Check pod phase with `kubectl get pods -l actions-gateway/runner-group=<name>` (v1) or `-l actions-gateway.com/runner-set=<name>` (v2) | `ACTIVEJOBS` is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires. |
 | Proxy autoscaling not working | HPA TARGETS showing `<unknown>` | `requests.cpu` not set on proxy pods |
 | GMC/AGC reconcile broken | `reconcile_errors_total` | Non-zero sustained rate indicates operator issue |
 
