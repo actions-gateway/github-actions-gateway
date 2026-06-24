@@ -5,6 +5,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | Doc | Personas | Purpose |
 |---|---|---|
 | [runbook.md](runbook.md) | SRE | Production runbook — high-level operational procedures. For initial setup see [Getting Started](../getting-started.md). |
+| [backup-restore.md](backup-restore.md) | SRE, Platform engineer | Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted `ActionsGateway` CR. |
 | [troubleshooting.md](troubleshooting.md) | SRE, Platform engineer | Symptom → diagnosis → remediation, organised by observable failure mode. |
 | [observability.md](observability.md) | SRE, Platform engineer | Prometheus metrics reference for GMC, AGC, and proxy, including standard `controller-runtime` metrics. |
 | [security-operations.md](security-operations.md) | SRE, Security | Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks. |
