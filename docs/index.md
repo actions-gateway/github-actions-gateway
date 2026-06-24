@@ -59,44 +59,44 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
 
     ---
 
-    Per-tenant quotas you can safely enforce:
+    Quotas you can safely enforce:
 
-    - Platform caps each tenant's `ResourceQuota`
-    - Evicted or quota-blocked jobs auto-recover
-    - Auto re-queued — zero manual reruns
-    - Tenants self-manage their own runners
+    - Platform-owned quota cap
+    - Blocked jobs auto-recover
+    - Zero manual reruns
+    - Tenants manage their runners
 
 -   :material-layers-triple:{ .lg .middle } __No blocked critical jobs__
 
     ---
 
-    Reserve capacity for expensive runners:
+    Reserve capacity for key runners:
 
     - Reserve N slots per runner type
-    - Fast CPU tests can't crowd out GPU or e2e
-    - Every PR's full battery still finishes
+    - CPU tests can't starve GPU jobs
+    - Critical tests always schedule
 
 -   :material-arrow-collapse-down:{ .lg .middle } __No idle GPUs__
 
     ---
 
-    Worker pods exist only while a job runs:
+    Pods live only for the job:
 
-    - Created on acquire, deleted on completion
-    - GPU nodes freed the moment a job ends
-    - No idle runners masking cold starts
-    - Scale-to-zero by default (ARC's opt-in)
+    - Created on acquire
+    - Deleted on completion
+    - GPU freed the instant a job ends
+    - Scale-to-zero by default
 
 -   :material-ip-network:{ .lg .middle } __Isolated egress IPs__
 
     ---
 
-    Each tenant exits via its own proxy pool:
+    Each tenant's own proxy pool:
 
-    - Allow-list just your runners on GitHub EMU
-    - No cluster-wide allow-list or NAT gateway
-    - One flagged tenant can't take others down
-    - v2 API: proxy optional for simpler deployments
+    - Allow-list your runners on EMU
+    - No shared cluster allow-list
+    - Flagged tenants stay isolated
+    - v2: proxy optional
 
 -   :material-feather:{ .lg .middle } __Lower listener overhead__
 
@@ -104,30 +104,52 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
 
     Listeners are goroutines, not pods:
 
-    - ~60 KiB per runner group, one shared pod
-    - vs ARC's ~256 MiB pod per scale set
-    - ~600 KiB vs ~2.5 GiB across ten groups
+    - ~60 KiB per runner group
+    - One shared pod per tenant
+    - 600 KiB vs 2.5 GiB for ten groups
 
--   :material-chart-line:{ .lg .middle } __Per-tenant utilization metrics__
-
-    ---
-
-    Per-tenant, per-group Prometheus metrics:
-
-    - Teams see their own GPU utilization
-    - Data-backed case for quota changes
-    - No cluster-wide visibility required
-
--   :material-file-document-multiple:{ .lg .middle } __Shared runner templates (v2)__
+-   :material-chart-line:{ .lg .middle } __Per-tenant observability__
 
     ---
 
-    One template for all your runner sets (v2 API):
+    Scoped visibility, no cluster access:
 
-    - `RunnerTemplate` shared across runner sets
-    - `ClusterRunnerTemplate` for platform-managed standards
-    - Identical templates collapse — define once, reference by name
-    - Migrate from v1 with `gag-migrate`
+    - Prometheus per tenant + group
+    - Job counts in `kubectl get`
+    - K8s Events on job transitions
+
+-   :material-file-document-multiple:{ .lg .middle } __Shared runner templates__ <span class="gag-v2-badge">v2</span>
+
+    ---
+
+    Define once, reference by name:
+
+    - `RunnerTemplate` per many sets
+    - Platform `ClusterRunnerTemplate`
+    - Identical templates collapse
+    - Migrate v1→v2 with `gag-migrate`
+
+-   :material-shield-lock:{ .lg .middle } __Secure by default__
+
+    ---
+
+    Hardening reconciled by default:
+
+    - `baseline` PSA per namespace
+    - Default-deny NetworkPolicies
+    - Credentials never in env vars
+    - Signed images + SBOM + SLSA
+
+-   :material-account-cog:{ .lg .middle } __Tenant runner self-service__ <span class="gag-v2-badge">v2</span>
+
+    ---
+
+    Self-managed runners, one setup:
+
+    - Self-serve `ActionsGateway` CRs
+    - Tune `maxRunners` per group
+    - Multiple gateways per namespace
+    - No platform ticket per change
 
 </div>
 </div>
