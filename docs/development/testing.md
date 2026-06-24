@@ -88,7 +88,7 @@ make cover-update  # re-record the baseline floor in coverage-baseline.txt
 | `broker` | 81.3% | `cmd/proxy` | 72.8% |
 | `cmd/agc` | 78.1% | `cmd/worker` | 72.0% |
 | `cmd/gmc` | 57.1% | `githubapp` | 82.6% |
-| `cmd/probe` | 0.0% (no tests yet) | `test/fakegithub` | n/a (helper-only module) |
+| `cmd/probe` | 45.4% (compat suite) | `test/fakegithub` | n/a (helper-only module) |
 
 Like `make test-race` and `make vulncheck`, `cover-check` is **not** part of `make check`: it re-runs the unit tests a second time (with `-cover` instead of `-race`), so folding it into the fast local loop would double its test time. Run it when a change adds or removes tests, or before a final pre-PR pass. Like the other heavy targets it applies the [local throttle](#resource-auto-throttle-on-gui-dev-machines), so a run on a GUI dev machine stays desktop-safe; on CI the prefix is a no-op.
 
@@ -125,7 +125,7 @@ The tier above says *what* observes a bug; this says *where that tier can run*. 
 
 - **Local — `kind` (the default).** Unit, envtest, Tier-A/B e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub. This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
 - **Local — `minikube` + gVisor addon (the one thing kind can't do).** A `RuntimeClass=gvisor` node needs `runsc` on the node, which kind's container-nodes can't supply cleanly. minikube can: locally `minikube start --driver=qemu` (a Linux VM) then `minikube addons enable gvisor`; on a Linux CI runner `--driver=none` (or `docker`) + the same addon. gVisor's **systrap platform needs no nested virtualization**, so it works on a stock machine and a stock `ubuntu-latest` runner alike. Reach for minikube **only** for gVisor — kind stays the default everywhere else (lighter, already wired into the e2e workflows). Full local VMs (Lima/Colima/Multipass) host the same `runsc` setup but unlock nothing beyond gVisor.
-- **Needs real GitHub.** Tier-C e2e and the broker-compatibility probe. Free (GitHub API within rate limits); needs a test App/org credential as a CI secret. Automatable per-PR or nightly.
+- **Needs real GitHub.** Tier-C e2e and the live broker-compatibility probe (the credential-gated `cmd/probe` binary). Free (GitHub API within rate limits); needs a test App/org credential as a CI secret. Automatable per-PR or nightly. The credential-free counterpart — the `cmd/probe/compat` suite that asserts every documented broker contract against the in-process broker model — runs locally in `make check` with no secrets; its published result is [broker-compatibility.md](broker-compatibility.md).
 - **Needs real cloud.** Cloud KMS signing, managed control-plane behavior (EKS/GKE/AKS), and cloud workload-identity binding (IRSA / GKE WI / Azure WI). Not reproducible in kind/minikube — needs the actual provider. Automatable as a scheduled job that provisions an **ephemeral** cluster (eksctl/Terraform), torn down after.
 - **Needs real scale.** The 1,000-pod real-cluster capacity run. A 4-core Docker Desktop VM can't host it; needs a multi-node cluster. The in-process load harness already covers the AGC-only claim locally for free, so this is release-gated, not routine.
 
