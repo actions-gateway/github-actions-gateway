@@ -119,6 +119,31 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, the test setup, or the code itself — the intent of the test must match the implementation.
 
+## Where each tier can physically run (and what it costs)
+
+The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
+
+- **Local — `kind` (the default).** Unit, envtest, Tier-A/B e2e, and the load harness need only a Linux-kernel cluster plus a fake or in-cluster GitHub. This covers the large majority of work and runs on an Intel Mac under Docker Desktop.
+- **Local — `minikube` + gVisor addon (the one thing kind can't do).** A `RuntimeClass=gvisor` node needs `runsc` on the node, which kind's container-nodes can't supply cleanly. minikube can: locally `minikube start --driver=qemu` (a Linux VM) then `minikube addons enable gvisor`; on a Linux CI runner `--driver=none` (or `docker`) + the same addon. gVisor's **systrap platform needs no nested virtualization**, so it works on a stock machine and a stock `ubuntu-latest` runner alike. Reach for minikube **only** for gVisor — kind stays the default everywhere else (lighter, already wired into the e2e workflows). Full local VMs (Lima/Colima/Multipass) host the same `runsc` setup but unlock nothing beyond gVisor.
+- **Needs real GitHub.** Tier-C e2e and the broker-compatibility probe. Free (GitHub API within rate limits); needs a test App/org credential as a CI secret. Automatable per-PR or nightly.
+- **Needs real cloud.** Cloud KMS signing, managed control-plane behavior (EKS/GKE/AKS), and cloud workload-identity binding (IRSA / GKE WI / Azure WI). Not reproducible in kind/minikube — needs the actual provider. Automatable as a scheduled job that provisions an **ephemeral** cluster (eksctl/Terraform), torn down after.
+- **Needs real scale.** The 1,000-pod real-cluster capacity run. A 4-core Docker Desktop VM can't host it; needs a multi-node cluster. The in-process load harness already covers the AGC-only claim locally for free, so this is release-gated, not routine.
+
+### Cost & cadence (rough, ephemeral CI, 2026 ballparks)
+
+| Validation | Substrate | ~Cost | Cadence |
+|---|---|---|---|
+| Broker-compat, Tier-C (Q191; Q11†) | test GitHub App | $0 (free API) | per-PR / nightly |
+| gVisor `RuntimeClass` (Q15) | minikube + gvisor addon, stock runner | $0 | per-PR / nightly |
+| Cloud KMS + workload-identity legs (Q197 cloud) | KMS key + ephemeral EKS/GKE/AKS | KMS <$5/mo; ~$0.50–1 / run | nightly / weekly |
+| Managed-cluster audit paths (Q182) | ephemeral EKS/GKE/AKS ×3 | ~$1–2 / full-matrix run | weekly / release |
+| Per-cloud apiserver CIDR (Q183) | ephemeral cluster/cloud, or doc-only | ~$0.20–0.50 / cloud, or $0 | release / manual |
+| 1,000-pod scale (Q181 real run; Q193 benchmark) | ~25–50-node ephemeral cluster | ~$10–30 / full run (~$3–8 at 250 pods) | occasional / release |
+
+† Q11 is *also* blocked on a GitHub feature (X25519 ECDH) that does not yet exist — untestable at any cost until then.
+
+*Ephemeral* = provision → test (~20–40 min) → tear down; cost is hourly proration of a small managed control plane (~$0.10/hr) plus a few small/spot nodes. A standing cluster costs more (~$50–100/mo) but CI doesn't need one. Hosted Linux runners also expose `/dev/kvm` if VM-level isolation (Kata, Firecracker) is ever needed, but gVisor does not require it.
+
 ## Integration tests
 
 Integration tests use envtest and are gated by the `integration` build tag. They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`. Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
