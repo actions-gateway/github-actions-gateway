@@ -135,6 +135,23 @@ type RunnerGroupStatus struct {
 	// ActiveSessions is the number of currently open long-poll sessions.
 	ActiveSessions int32 `json:"activeSessions"`
 
+	// ActiveJobs is the number of worker pods currently in the Running phase
+	// (a job is actively executing). Derived from the worker pod phase count
+	// during each reconcile; see also PendingJobs.
+	//
+	// +optional
+	ActiveJobs int32 `json:"activeJobs,omitempty"`
+
+	// PendingJobs is the number of worker pods currently in the Pending phase
+	// (a job has been acquired and a pod spawned, but the pod is not yet
+	// running — waiting on scheduling, image pull, or node readiness). Pods
+	// that remain Pending past spec.pendingPodDeadline are deleted by the
+	// controller; a sustained non-zero count warrants checking events and
+	// scheduling constraints.
+	//
+	// +optional
+	PendingJobs int32 `json:"pendingJobs,omitempty"`
+
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
@@ -146,6 +163,8 @@ type RunnerGroupStatus struct {
 // +kubebuilder:resource:scope=Namespaced,shortName=rg,categories=actions-gateway
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=".spec.maxListeners"
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=".status.activeSessions"
+// +kubebuilder:printcolumn:name="ActiveJobs",type=integer,JSONPath=".status.activeJobs"
+// +kubebuilder:printcolumn:name="PendingJobs",type=integer,JSONPath=".status.pendingJobs"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="Reason",type=string,priority=1,JSONPath=".status.conditions[?(@.type=='Ready')].reason"
 // +kubebuilder:printcolumn:name="ObservedGen",type=integer,priority=1,JSONPath=".status.observedGeneration"

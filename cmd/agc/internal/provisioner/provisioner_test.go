@@ -141,12 +141,14 @@ func stubPayload(runID int64) []byte {
 }
 
 // stubPayloadFull returns a payload with variables matching the GitHub Actions format,
-// including owner/repo for eviction retry.
+// including all job-annotation fields.
 func stubPayloadFull(owner, repo string, runID int64) []byte {
 	b, _ := json.Marshal(map[string]interface{}{
 		"variables": map[string]interface{}{
 			"system.github.run_id":     map[string]interface{}{"value": fmt.Sprintf("%d", runID)},
 			"system.github.repository": map[string]interface{}{"value": owner + "/" + repo},
+			"system.github.job":        map[string]interface{}{"value": "build"},
+			"system.github.workflow":   map[string]interface{}{"value": "CI"},
 		},
 	})
 	return b
@@ -754,6 +756,13 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 
 	pod := findPod(ctx, t, fc, "team-a")
+
+	// Job annotations must be stamped on the pod from the payload variables.
+	assert.Equal(t, "99", pod.Annotations["actions-gateway.com/run-id"])
+	assert.Equal(t, "myorg/myrepo", pod.Annotations["actions-gateway.com/repository"])
+	assert.Equal(t, "build", pod.Annotations["actions-gateway.com/job-name"])
+	assert.Equal(t, "CI", pod.Annotations["actions-gateway.com/workflow"])
+
 	evictPod(ctx, t, fc, "team-a", pod.Name)
 
 	require.NoError(t, <-done)

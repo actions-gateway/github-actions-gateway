@@ -35,7 +35,7 @@ const (
 // re-triggers on phase transitions; the returned duration — the time until
 // the earliest retained pod becomes due (0 = none) — is propagated as
 // RequeueAfter to cover the purely time-based expiries in between.
-func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rg *v1alpha1.RunnerGroup) (time.Duration, error) {
+func (r *RunnerGroupReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rg *v1alpha1.RunnerGroup) (time.Duration, workerPodCounts, error) {
 	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rg.Namespace, rg.Name,
 		provisioner.LabelRunnerGroup,
 		provisioner.EffectiveCompletedPodTTL(rg), provisioner.EffectivePendingPodDeadline(rg),

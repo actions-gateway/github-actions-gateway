@@ -284,8 +284,9 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// 4b. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
 	// during a GitHub outage. reapAfter is the time until the earliest retained
-	// pod becomes due; it is propagated as RequeueAfter below.
-	reapAfter, err := r.reapWorkerPods(ctx, log, &rg)
+	// pod becomes due; it is propagated as RequeueAfter below. counts is the
+	// pod phase snapshot used to populate status.activeJobs/pendingJobs.
+	reapAfter, podCounts, err := r.reapWorkerPods(ctx, log, &rg)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -343,6 +344,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// 8. Update status.
 	rg.Status.ActiveSessions = mux.ActiveCount()
+	rg.Status.ActiveJobs = podCounts.active
+	rg.Status.PendingJobs = podCounts.pending
 	rg.Status.ObservedGeneration = rg.Generation
 	r.setReadyCondition(&rg, mux.ActiveCount() > 0)
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/prometheus/client_golang/prometheus"
@@ -131,6 +132,14 @@ func TestReconcile_ReapsExpiredWorkerPods(t *testing.T) {
 	require.NotEmpty(t, stuckEvent, "reaping a stuck-Pending pod must emit a WorkerPodStuckPending event")
 	assert.Contains(t, stuckEvent, "pending-old")
 	assert.Contains(t, stuckEvent, "Warning")
+
+	// Status.ActiveJobs/PendingJobs reflect the pod phase counts from the reap pass.
+	// pending-old is counted before it is deleted (the status records the snapshot
+	// taken at reconcile time; the pod-watch-triggered re-reconcile will clear it).
+	var updatedRG v1alpha1.RunnerGroup
+	require.NoError(t, fb.Get(ctx, key, &updatedRG))
+	assert.Equal(t, int32(1), updatedRG.Status.ActiveJobs, "one Running pod must be counted as activeJobs")
+	assert.Equal(t, int32(2), updatedRG.Status.PendingJobs, "both Pending pods counted (including the one just reaped)")
 }
 
 // TestReconcile_ReaperDefaults pins the defaulting contract: with both fields

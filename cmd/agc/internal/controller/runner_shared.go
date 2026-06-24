@@ -90,13 +90,20 @@ func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 	}
 }
 
+// workerPodCounts is the per-owner count of worker pods by phase, returned
+// alongside the reap result and written into the owner's status fields.
+type workerPodCounts struct {
+	active  int32 // PodRunning: a job is actively executing
+	pending int32 // PodPending: pod spawned but not yet running
+}
+
 // reapWorkerPodsByLabel deletes worker pods (selected by labelKey == name in
 // namespace) that the owning CR no longer needs: terminal pods older than ttl, and
 // Pending pods older than deadline. It returns the time until the earliest
-// retained pod becomes due (0 = none), for propagation as RequeueAfter. metrics
-// may be nil; emitStuckPending (may be nil) records the owning-CR-typed Event on a
-// pending-deadline reap. Shared by both reconcilers' reapers so the reap logic is
-// defined once.
+// retained pod becomes due (0 = none), pod counts by phase (for status), and any
+// error. metrics may be nil; emitStuckPending (may be nil) records the owning-CR
+// typed Event on a pending-deadline reap. Shared by both reconcilers' reapers so
+// the reap logic is defined once.
 func reapWorkerPodsByLabel(
 	ctx context.Context,
 	c client.Client,
@@ -106,16 +113,17 @@ func reapWorkerPodsByLabel(
 	log *slog.Logger,
 	metrics *listener.Metrics,
 	emitStuckPending func(podName string, deadline time.Duration),
-) (time.Duration, error) {
+) (time.Duration, workerPodCounts, error) {
 	var pods corev1.PodList
 	if err := c.List(ctx, &pods,
 		client.InNamespace(namespace),
 		client.MatchingLabels{labelKey: name},
 	); err != nil {
-		return 0, fmt.Errorf("reaper: list worker pods: %w", err)
+		return 0, workerPodCounts{}, fmt.Errorf("reaper: list worker pods: %w", err)
 	}
 
 	var next time.Duration
+	var counts workerPodCounts
 	for i := range pods.Items {
 		pod := &pods.Items[i]
 		if !pod.DeletionTimestamp.IsZero() {
@@ -125,10 +133,14 @@ func reapWorkerPodsByLabel(
 		var due time.Time
 		var reason string
 		switch pod.Status.Phase {
+		case corev1.PodRunning:
+			counts.active++
+			continue
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 			due = podTerminalTime(pod).Add(ttl)
 			reason = reapReasonCompletedTTL
 		case corev1.PodPending:
+			counts.pending++
 			due = pod.CreationTimestamp.Add(deadline)
 			reason = reapReasonPendingDeadline
 		default:
@@ -146,7 +158,7 @@ func reapWorkerPodsByLabel(
 			if client.IgnoreNotFound(err) == nil {
 				continue
 			}
-			return next, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
+			return next, counts, fmt.Errorf("reaper: delete worker pod %s: %w", pod.Name, err)
 		}
 		log.Info("reaped worker pod", "pod", pod.Name, "phase", pod.Status.Phase, "reason", reason)
 		if metrics != nil {
@@ -156,7 +168,7 @@ func reapWorkerPodsByLabel(
 			emitStuckPending(pod.Name, deadline)
 		}
 	}
-	return next, nil
+	return next, counts, nil
 }
 
 // assembleListenerConfig builds the listener.Config for a single goroutine bound

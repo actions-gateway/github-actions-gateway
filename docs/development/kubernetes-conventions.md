@@ -111,6 +111,18 @@ The shared `actions-gateway/component: workload` selector label is carried by bo
 v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
 egress-lockdown posture is identical across the two APIs.
 
+Controller-set annotations on worker pods (both v1 and v2, stamped by the
+provisioner at pod creation time from the AcquireJob payload):
+
+- `actions-gateway.com/run-id` — GitHub workflow run ID.
+- `actions-gateway.com/repository` — `owner/repo` the job belongs to.
+- `actions-gateway.com/job-name` — job name as defined in the workflow YAML.
+- `actions-gateway.com/workflow` — workflow file name.
+
+These are best-effort: absent if the GitHub payload omitted the corresponding
+`system.github.*` variable. Never use them for security enforcement — they are
+informational annotations for operator visibility.
+
 ## Status conditions & alertable condition metrics
 
 The CRDs report observed state with standard Kubernetes conditions

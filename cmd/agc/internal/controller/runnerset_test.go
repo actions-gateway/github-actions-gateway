@@ -443,12 +443,16 @@ func TestRunnerSetReaper_DeletesExpiredPods(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rs, terminal, running).Build()
 	r := &RunnerSetReconciler{Client: c, Log: slog.Default()}
 
-	_, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
+	_, counts, err := r.reapWorkerPods(context.Background(), slog.Default(), rs)
 	require.NoError(t, err)
 
 	// The terminal pod is reaped; the running pod is left alone.
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "runner-done"}, &corev1.Pod{}))
 	assert.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "runner-live"}, &corev1.Pod{}))
+
+	// Running pod counted as active; no pending pods.
+	assert.Equal(t, int32(1), counts.active, "Running pod must be counted in activeJobs")
+	assert.Equal(t, int32(0), counts.pending, "no Pending pods")
 }
 
 func TestRunnerSetDrainConditions_MergesOwnSkipsOthers(t *testing.T) {
