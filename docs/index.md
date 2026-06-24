@@ -118,7 +118,7 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
     - Data-backed case for quota changes
     - No cluster-wide visibility required
 
--   :material-file-document-multiple:{ .lg .middle } __Shared runner templates__
+-   :material-file-document-multiple:{ .lg .middle } __Shared runner templates (v2)__
 
     ---
 
