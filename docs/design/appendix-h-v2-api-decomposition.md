@@ -873,11 +873,16 @@ only the ones that fix a problem we have today.
   once there are untrusted tenants to restrict. It belongs in the admin policy
   schema and is enforced when that layer arrives; do not add a standalone tenant
   field for it now.
-- **Credentials as a discriminated union.** OIDC / workload-identity federation
-  is the foreseeable successor to long-lived GitHub App keys, but a bare
-  `githubAppRef` today does not block it: a future `workloadIdentityRef` sibling
-  field (optional, with a CEL "exactly one of") is *additive*, not breaking. So
-  do not introduce a tagged union now — keep the single field.
+- **Credentials as a discriminated union — _reconsidered: now a `v2beta1` blocker_
+  (was: defer).** A flat `workloadIdentityRef` sibling is *mechanically* additive,
+  but additive *into a permanently worse shape*: once `githubAppRef` is top-level
+  under beta it can never move under a parent without a breaking change + storage
+  migration. Since `alpha → beta` is the last free break and workload identity is
+  on-strategy (removes the App key from the cluster — the secure-by-default
+  direction), nest `githubAppRef` under an explicit-discriminator `spec.credentials`
+  **at the beta cut**, and build the `workloadIdentity` member alongside it so the
+  union is validated by a real second consumer. Plan + schema sketch:
+  [v2beta1.md](../plan/v2beta1.md).
 
 ## H.16. Open questions / sign-off needed
 

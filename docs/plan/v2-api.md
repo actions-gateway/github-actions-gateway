@@ -25,7 +25,9 @@ one-shot migration tool last. The group rename folds in for free: `v2alpha1`
 - **No in-place v1→v2 conversion** — the split is a tooled fan-out (M5), not a
   conversion webhook.
 - **Not the admin policy layer, worker-image allowlist, credentials union, or
-  cross-namespace sharing** — all deferred (see below and Appendix H §H.14/§H.15).
+  cross-namespace sharing** — all out of the `v2alpha1` scope (see below and
+  Appendix H §H.14/§H.15). The credentials union is now scheduled for the
+  `v2beta1` cut ([v2beta1.md](v2beta1.md)); the rest stay deferred.
 
 ## Coexistence, rollback & parity
 
