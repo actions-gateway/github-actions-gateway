@@ -78,7 +78,7 @@ jobs:
           - name: worker
             dockerfile: cmd/worker/Dockerfile
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Resolve publish tag
         id: tag
         # On a tag push GITHUB_REF_NAME is the tag; workflow_dispatch may override
@@ -285,7 +285,7 @@ jobs:
       packages: write # push the chart + its signature to GHCR
       id-token: write # KEYLESS cosign — same Fulcio/Rekor flow as the images
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Resolve publish tag
         id: tag
         # Same guard as the image job: refuse to publish from a non-tag ref with
