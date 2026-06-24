@@ -379,14 +379,30 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<name>
 
 Add `-o wide` for node placement or `-w` to watch phase transitions live.
 
-> **Tip — correlating a pod with its GitHub Actions job:** runner pod names and
-> GitHub job names are unrelated; there is currently no annotation on the pod
-> that maps directly to the GitHub run or job ID. Use
-> `kubectl get pods … -o yaml` to get creation timestamps and pod names, then
-> cross-reference with `gh run list` or the GitHub Actions UI by matching the
-> runner name (the pod's hostname) to the runner column in the job log.
-> Annotating pods with the GitHub run/job ID at creation time is tracked as a
-> future improvement (see `docs/design/appendix-g-future-enhancements.md`).
+**Correlating a pod with its GitHub Actions job:** the AGC stamps four
+annotations on every worker pod at creation time from the AcquireJob payload:
+
+| Annotation | Example | Notes |
+| --- | --- | --- |
+| `actions-gateway.com/run-id` | `12345678` | GitHub workflow run ID |
+| `actions-gateway.com/repository` | `myorg/myrepo` | Repository the job belongs to |
+| `actions-gateway.com/job-name` | `build` | Job name as defined in the workflow YAML |
+| `actions-gateway.com/workflow` | `CI` | Workflow name |
+
+To see them in a table:
+
+```bash
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<name> \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow'
+```
+
+Or inspect a single pod in full:
+
+```bash
+kubectl describe pod <pod-name> -n <namespace>
+```
+
+The annotations are absent if the AcquireJob payload did not include the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs).
 
 ---
 

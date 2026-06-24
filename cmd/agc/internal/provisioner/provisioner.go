@@ -373,6 +373,62 @@ func (ap *acquirePayload) repoInfo() (owner, repo string, runID int64) {
 	return
 }
 
+// jobMeta holds GitHub Actions context extracted from the AcquireJob payload.
+// All fields are best-effort: an absent or malformed payload leaves them empty,
+// which is benign — the annotations are simply omitted from the pod.
+type jobMeta struct {
+	runID      string // numeric GitHub run ID, e.g. "12345678"
+	repository string // "owner/repo"
+	jobName    string // job name from workflow YAML, e.g. "build"
+	workflow   string // workflow name, e.g. "CI"
+}
+
+// jobMetaFrom extracts the job annotation fields from a parsed AcquireJob payload.
+func jobMetaFrom(ap acquirePayload) jobMeta {
+	var m jobMeta
+	if ap.Variables != nil {
+		if v, ok := ap.Variables["system.github.run_id"]; ok {
+			m.runID = v.Value
+		}
+		if v, ok := ap.Variables["system.github.repository"]; ok {
+			m.repository = v.Value
+		}
+		if v, ok := ap.Variables["system.github.job"]; ok {
+			m.jobName = v.Value
+		}
+		if v, ok := ap.Variables["system.github.workflow"]; ok {
+			m.workflow = v.Value
+		}
+	}
+	if m.runID == "" && ap.RunID != 0 {
+		m.runID = fmt.Sprintf("%d", ap.RunID)
+	}
+	return m
+}
+
+// podAnnotations returns the actions-gateway.com/* annotations to stamp on
+// worker pods. Only non-empty fields are included so pods created from
+// minimal/stub payloads don't carry zero-value keys.
+func (m jobMeta) podAnnotations() map[string]string {
+	a := make(map[string]string, 4)
+	if m.runID != "" {
+		a["actions-gateway.com/run-id"] = m.runID
+	}
+	if m.repository != "" {
+		a["actions-gateway.com/repository"] = m.repository
+	}
+	if m.jobName != "" {
+		a["actions-gateway.com/job-name"] = m.jobName
+	}
+	if m.workflow != "" {
+		a["actions-gateway.com/workflow"] = m.workflow
+	}
+	if len(a) == 0 {
+		return nil
+	}
+	return a
+}
+
 func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (err error) {
 	key := target.Key()
 	log := p.logForKey(key)
@@ -426,6 +482,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}
 	owner, repo, runIDInt := ap.repoInfo()
 	runID := fmt.Sprintf("%d", runIDInt)
+	meta := jobMetaFrom(ap)
 
 	ownerLabels := target.PodOwnerLabels()
 
@@ -464,7 +521,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 
 	// 4. Build and create the pod (with quota retry).
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
-		pod := p.buildPod(target, spec, podName, secretName, priorityClass)
+		pod := p.buildPod(target, spec, podName, secretName, priorityClass, meta)
 		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
 	}); err != nil {
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
@@ -862,7 +919,7 @@ func (p *Provisioner) buildSecret(target Target, name, planID string, payload []
 	}
 }
 
-func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secretName, priorityClass string) *corev1.Pod {
+func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secretName, priorityClass string, meta jobMeta) *corev1.Pod {
 	// Start from the resolved PodTemplate.
 	template := spec.PodTemplate.DeepCopy()
 
@@ -1000,6 +1057,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 			Name:            podName,
 			Namespace:       key.Namespace,
 			Labels:          labels,
+			Annotations:     meta.podAnnotations(),
 			OwnerReferences: []metav1.OwnerReference{target.OwnerRef()},
 		},
 		Spec: template.Spec,
