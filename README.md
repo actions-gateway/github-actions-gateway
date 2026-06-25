@@ -111,6 +111,8 @@ For day-2 operations — `helm upgrade` / rollback, per-component upgrades, and 
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GitHub App Secret, `ActionsGateway` CR, and GMC deployment.
 
+**Coming from Actions Runner Controller (ARC)?** The [Migrating from ARC guide](docs/operations/migration-from-arc.md) maps ARC scale-set concepts onto GAG and walks one runner group across with zero downtime.
+
 ## Observability
 
 Both the GMC and AGC expose Prometheus metrics at `/metrics`. See [docs/operations/observability.md](docs/operations/observability.md) for the full metrics reference.

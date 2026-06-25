@@ -23,7 +23,7 @@ itself is tracked in [`website.md`](website.md) (Q129).
 | ICP + messaging priority defined | ✅ this doc |
 | Demand evidence gathered (real ARC issues) | ✅ this doc + [competitive-analysis](competitive-analysis.md) |
 | Public site launched | ⏳ gated — see [website.md](website.md) (Q129) |
-| ARC → GAG migration guide | ❌ gap — only v1→v2 exists ([migration-v1-to-v2](../operations/migration-v1-to-v2.md)) |
+| ARC → GAG migration guide | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199) |
 | README problem-first rewrite | ❌ open |
 | Seed channels (HN / forums / ARC issues) | ❌ not started — gated on site + 1.0 install path |
 | Content pieces (blogs, comparison SEO) | ❌ not started |
@@ -165,7 +165,7 @@ set:
 | Artifact | Status / note |
 |---|---|
 | `why-gag.md` "vs ARC" page | Exists and accurate; keep claims and receipts current as Q60 verifies. |
-| **ARC → GAG migration guide** | **Gap.** Only [v1→v2](../operations/migration-v1-to-v2.md) exists. A "coming from ARC" guide is a top adoption blocker — removes switching friction and ranks for migration searches. |
+| **ARC → GAG migration guide** | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199) — concept mapping, egress differences, gotchas, and a worked one-runner-group path. |
 | README problem-first rewrite | Open. Lead with the ARC pain, not the architecture. |
 | Blog: "Recovering stuck Actions jobs after pod eviction" | New. Maps to the strongest demand signal (§3). |
 | Blog: "Multi-tenant self-hosted runners with isolated egress" | New. Maps to ICP + EMU allow-list. |
@@ -213,7 +213,7 @@ This shapes everything above and is the reason monetization stays out:
 
 ## 11. Open follow-ups (feed the Queue when scheduled)
 
-- **ARC → GAG migration guide** (§7) — highest-leverage adoption artifact; no doc exists.
+- ~~**ARC → GAG migration guide** (§7)~~ — ✅ shipped as [migration-from-arc](../operations/migration-from-arc.md) (Q199).
 - **README problem-first rewrite** (§6) — cheap, improves both humans and GEO.
 - **Q60 competitive verification** — several claims still marked VERIFY in
   [competitive-analysis](competitive-analysis.md); confirmed ones harden the

@@ -7,7 +7,9 @@ Gateway Manager Controller (GMC) with the shipped **`actions-gateway` Helm
 chart**. For day-2 operations after install, see [upgrade.md](upgrade.md). For
 the full end-to-end walkthrough that continues past the GMC install into the
 GitHub App Secret and the first `ActionsGateway` CR, see
-[Getting Started](../getting-started.md).
+[Getting Started](../getting-started.md). **Replacing Actions Runner Controller (ARC)?**
+After the GMC is installed, the [Migrating from ARC guide](migration-from-arc.md)
+maps ARC scale sets onto tenant gateways and walks one runner group across.
 
 The Helm chart installs the GMC and its cluster prerequisites **only** — CRDs,
 RBAC, the validating webhook, the `namespace-psa-guard` and

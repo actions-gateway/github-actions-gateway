@@ -14,6 +14,7 @@ hide:
 <p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner groups, for many tenants, in one shared cluster — cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
+[Migrating from ARC](operations/migration-from-arc.md){ .md-button }
 [See the architecture](design/02-architecture.md){ .md-button }
 
 </div>
@@ -235,4 +236,6 @@ spec:
     platform-owned `PriorityClass` object — a tenant cannot name a class that
     evicts other tenants' pods.
 
-Ready to try it? Follow the [getting-started guide](getting-started.md).
+Ready to try it? Follow the [getting-started guide](getting-started.md). Already
+running ARC? The [Migrating from ARC guide](operations/migration-from-arc.md) maps
+every concept above onto GAG and walks one runner group across with zero downtime.
