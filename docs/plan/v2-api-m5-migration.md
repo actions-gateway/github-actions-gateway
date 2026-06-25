@@ -94,5 +94,3 @@ stranded mid-coexistence.
 Tool migrates a representative tenant in dry-run **and** `--apply`; reuse holds;
 securityProfile lands on the namespace; dual-read verified; `make check` green. Flip the
 v2 API Progress row to ✅ and remove the Q165 Queue row (isolated `docs/STATUS.md` commit).
-</content>
-</invoke>

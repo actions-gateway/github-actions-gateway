@@ -91,5 +91,3 @@ converges.
   requeue, `TeardownIncomplete` event).
 - mark Q121/Q122/Q125 resolved in `security-audit-2026-06.md`.
 - delete Q121/Q122/Q125 rows from `STATUS.md` (isolated commit).
-</content>
-</invoke>

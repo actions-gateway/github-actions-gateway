@@ -70,4 +70,3 @@ announced as a **named release** with at least one release of notice. At removal
 
 Until that named release, no action is forced: run [`gag-migrate`](migration-v1-to-v2.md)
 when convenient, validate the v2 path, and decommission v1 at your own pace.
-</content>

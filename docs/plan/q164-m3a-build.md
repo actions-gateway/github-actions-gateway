@@ -124,5 +124,3 @@ Close each row as implemented + tested.
 - `make test-race` (touches the provisioner/multiplexer core).
 - kind e2e (job→pod→proxy→GitHub): per the task, M3a minimum is envtest; e2e may
   land with M3b — note the deferral in the PR if so.
-</content>
-</invoke>

@@ -365,5 +365,3 @@ These are not required to replace ARC. If you adopt v2 later, see the
 - [Network architecture](../design/network-architecture.md) — egress proxy and
   NetworkPolicy detail, with isolation-validation probes.
 - [Troubleshooting](troubleshooting.md) — common first-day failures.
-</content>
-</invoke>

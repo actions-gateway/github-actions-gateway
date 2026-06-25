@@ -99,5 +99,3 @@ breaks** — not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
 entirely, [start a discussion](https://github.com/actions-gateway/github-actions-gateway/discussions)
 — it's the fastest way to move it up.
-</content>
-</invoke>
