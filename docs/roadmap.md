@@ -13,8 +13,8 @@ about capability and adoption, not revenue.
 
 This page is a direction-of-travel snapshot, not a dated commitment. Priorities
 move with what adopters actually hit first, so the surest way to influence what
-comes next is to [open a discussion](https://github.com/actions-gateway/github-actions-gateway/discussions)
-or file an issue describing your setup.
+comes next is to [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues)
+describing your setup.
 
 ## Available now (1.0)
 
@@ -97,7 +97,5 @@ limit before it becomes scheduled work.
 GAG's success metric is **external operators running it and telling us what
 breaks** — not stars or downloads. That feedback drives the ordering above far
 more than any internal plan. If something here is in your way, or missing
-entirely, [start a discussion](https://github.com/actions-gateway/github-actions-gateway/discussions)
+entirely, [open an issue](https://github.com/actions-gateway/github-actions-gateway/issues)
 — it's the fastest way to move it up.
-</content>
-</invoke>
