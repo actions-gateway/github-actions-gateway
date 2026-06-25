@@ -65,9 +65,9 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/actions-gateway/github-actions-gateway
       name: GAG on GitHub
-    - icon: material/forum
-      link: https://github.com/actions-gateway/github-actions-gateway/discussions
-      name: Community discussions
+    - icon: material/message-question-outline
+      link: https://github.com/actions-gateway/github-actions-gateway/issues
+      name: Questions & issues
 
 plugins:
   - search
