@@ -153,4 +153,3 @@ both spellings working.
   these out.
 - **`gag-migrate` reports no namespaces.** With `--all-namespaces` it only targets
   namespaces holding a v1 `ActionsGateway`; pass `--namespace` explicitly otherwise.
-</content>

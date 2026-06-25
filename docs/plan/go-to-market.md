@@ -229,4 +229,3 @@ This shapes everything above and is the reason monetization stays out:
   [competitive-analysis](competitive-analysis.md); confirmed ones harden the
   comparison page and content.
 - **Public site launch** ([website.md](website.md)/Q129) — Phase 0 prerequisite for any seeding.
-</content>
