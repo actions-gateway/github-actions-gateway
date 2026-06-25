@@ -93,7 +93,7 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
 
     Each tenant's own proxy pool:
 
-    - Allow-list your runners on EMU
+    - Allow-list runners on GitHub Enterprise Managed Users (EMU)
     - No shared cluster allow-list
     - Flagged tenants stay isolated
     - v2: proxy optional
@@ -157,6 +157,59 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
 
 <div class="gag-section-intro" markdown>
 
+## Who GAG is for
+
+GAG targets a specific audience: teams that **must** self-host runners and run them for **many tenants on one cluster**. If that's you, here's the value per segment.
+
+</div>
+
+<div class="gag-pillars" markdown>
+<div class="grid cards" markdown>
+
+-   :material-account-group:{ .lg .middle } __Platform & developer-experience teams__
+
+    ---
+
+    Multi-tenant CI on a shared cluster:
+
+    - Enforce a per-team quota without stranding jobs
+    - Tenants self-serve runners from one `ActionsGateway`
+    - Stop being the ticket queue for every runner change
+
+-   :material-shield-account:{ .lg .middle } __Orgs that must self-host__
+
+    ---
+
+    Driven by a hard constraint, not preference:
+
+    - Compliance or data-residency requirements
+    - EMU or firewalled-service IP allow-lists
+    - Per-tenant egress IPs you allow-list directly
+
+-   :material-expansion-card:{ .lg .middle } __GPU / ML platform teams__
+
+    ---
+
+    Done paying for accelerators between jobs:
+
+    - Workers scale to zero — no idle GPU
+    - GPU nodes return to the scheduler on completion
+    - Priority tiers keep critical GPU jobs scheduling
+
+-   :material-information-outline:{ .lg .middle } __Not the right fit?__
+
+    ---
+
+    GAG is not a hosted, faster-CI play:
+
+    - Happy on a vendor's infrastructure? A managed-SaaS runner fits better
+    - GAG competes with ARC for self-hosted, multi-tenant clusters — not on raw build speed
+
+</div>
+</div>
+
+<div class="gag-section-intro" markdown>
+
 ## How it fits together
 
 A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`.
@@ -196,4 +249,4 @@ A four-tier system: a cluster-scoped manager gives each tenant an isolated gatew
   </div>
 </div>
 
-<p class="gag-flow__caption" markdown="span">Read the [architecture overview](design/02-architecture.md) for the full breakdown, or jump to [why GAG over ARC](why-gag.md).</p>
+<p class="gag-flow__caption" markdown="span">Read the [architecture overview](design/02-architecture.md) for the full breakdown, jump to [why GAG over ARC](why-gag.md), or see the [public roadmap](roadmap.md) for what's shipped and what's next.</p>

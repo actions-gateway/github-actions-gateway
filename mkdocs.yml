@@ -64,6 +64,10 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/actions-gateway/github-actions-gateway
+      name: GAG on GitHub
+    - icon: material/forum
+      link: https://github.com/actions-gateway/github-actions-gateway/discussions
+      name: Community discussions
 
 plugins:
   - search
@@ -98,6 +102,7 @@ nav:
   - Home: index.md
   - Why GAG: why-gag.md
   - Get started: getting-started.md
+  - Roadmap: roadmap.md
   - Design:
       - Overview: design/README.md
       - Executive summary: design/01-executive-summary.md

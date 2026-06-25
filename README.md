@@ -6,6 +6,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-actions--gateway.com-2563eb.svg)](https://actions-gateway.com)
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-purple.svg)](https://github.com/actions-gateway/github-actions-gateway/discussions)
 
 > **Multi-tenant self-hosted GitHub Actions runners on Kubernetes, designed for shared clusters where many teams run runners side by side.**
 
@@ -120,6 +121,16 @@ Both the GMC and AGC expose Prometheus metrics at `/metrics`. See [docs/operatio
 ## Capacity Reference
 
 See [docs/design/appendix-a-capacity-slos.md](docs/design/appendix-a-capacity-slos.md) for per-AGC, per-installation, and per-proxy limits and Service Level Objective (SLO) targets.
+
+## Community
+
+Questions, ideas, or running GAG in a real cluster? Start a thread in
+[GitHub Discussions](https://github.com/actions-gateway/github-actions-gateway/discussions)
+— it's the place for setup help, feature requests, and sharing what you've built.
+External issues and discussions from operators are the adoption signal the project
+cares about most.
+
+See the [public roadmap](docs/roadmap.md) for what's shipped and what's next.
 
 ## Development
 
