@@ -26,8 +26,9 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
 - [Symptom → Metric Mapping](#symptom--metric-mapping)
 - [Recommended Alert Rules](#recommended-alert-rules)
 - [SLO Recording Rules](#slo-recording-rules)
-- [Grafana Dashboard](#grafana-dashboard)
-  - [Suggested Panel Layout](#suggested-panel-layout)
+- [Grafana Dashboards](#grafana-dashboards)
+  - [Tenant dashboard](#tenant-dashboard)
+  - [Platform dashboard](#platform-dashboard)
   - [Dashboard Variables](#dashboard-variables)
 - [Label Cardinality Warning](#label-cardinality-warning)
 
@@ -426,6 +427,8 @@ The annotations are absent if the AcquireJob payload did not include the corresp
 
 ## Recommended Alert Rules
 
+> **Apply as code.** These rules — and the [SLO recording rules](#slo-recording-rules) below — ship as a directly-appliable `PrometheusRule` at [`deploy/monitoring/prometheusrule.yaml`](../../deploy/monitoring/prometheusrule.yaml). `kubectl apply` it into a namespace your Prometheus selects rules from instead of copying the YAML below by hand (see [`deploy/monitoring/README.md`](../../deploy/monitoring/README.md)). The blocks here are the same rules, reproduced for reference.
+
 The following Prometheus alerting rules map to the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md). Adjust thresholds to match your environment.
 
 ```yaml
@@ -600,19 +603,23 @@ groups:
             increase(actions_gateway_token_refresh_errors_total[1h])
           )
 
-      # Job acquisition success rate — fraction of acquisitions that succeed
+      # Job acquisition success rate — fraction of acquisitions that succeed,
+      # per namespace. Grouped by namespace only (not runner_group):
+      # job_acquisition_errors_total is labelled namespace+reason with no
+      # runner_group, so grouping the denominator by runner_group would leave
+      # the error rate unmatched and the ratio would evaluate to empty.
       - record: actions_gateway:job_acquisition_success_rate:rate5m
         expr: |
-          sum by (namespace, runner_group) (
+          sum by (namespace) (
             rate(actions_gateway_jobs_acquired_total[5m])
           )
           /
           (
-            sum by (namespace, runner_group) (
+            sum by (namespace) (
               rate(actions_gateway_jobs_acquired_total[5m])
             )
             +
-            sum by (namespace, runner_group) (
+            sum by (namespace) (
               rate(actions_gateway_job_acquisition_errors_total[5m])
             )
           )
@@ -620,11 +627,24 @@ groups:
 
 ---
 
-## Grafana Dashboard
+## Grafana Dashboards
 
-The following panels cover the key health and performance signals. Use the recording rules above as data sources where applicable.
+> **Import as code.** Two reference dashboards ship under [`deploy/monitoring/`](../../deploy/monitoring/README.md) — import them into Grafana (**Dashboards → New → Import**) or provision them, rather than rebuilding the panels by hand. They split along the scrape boundary each reads from; the layouts below document what each contains.
 
-### Suggested Panel Layout
+| Dashboard | Source scrape | Audience |
+| --- | --- | --- |
+| [`grafana-dashboard-tenant.json`](../../deploy/monitoring/grafana-dashboard-tenant.json) | a tenant's AGC + egress proxy (per-tenant mTLS) | operator of one tenant's runners |
+| [`grafana-dashboard-platform.json`](../../deploy/monitoring/grafana-dashboard-platform.json) | the GMC manager (one cluster-wide TLS scrape) | SRE running the GMC / the fleet |
+
+The split mirrors how the metrics are exposed (see [How to Access Metrics](#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnergroups_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
+
+> The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in [`deploy/monitoring/preview/`](../../deploy/monitoring/preview/README.md); regenerate them there whenever a dashboard changes.
+
+### Tenant dashboard
+
+![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
+
+Filtered by the `$namespace` and `$runner_group` template variables. Uses the SLO recording rules above as data sources where applicable.
 
 **Row 1 — Gateway Health (per namespace)**
 
@@ -652,28 +672,75 @@ The following panels cover the key health and performance signals. Use the recor
 | Eviction retries | `increase(actions_gateway_eviction_retries_total[1h])` | Bar chart |
 | Eviction budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 
-**Row 4 — Proxy and Quota**
+**Row 4 — Tenant Health Conditions**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Proxy replica count | `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series |
-| HPA desired vs. current | HPA metrics from `kube_horizontalpodautoscaler_*` | Time series |
-| ResourceQuota usage | `kube_resourcequota` filtered by namespace | Bar gauge |
+| Worker quota exceeded | `max(actions_gateway_worker_quota_exceeded)` | Stat (1 = red) |
+| Workers unschedulable | `max(actions_gateway_workers_unschedulable)` | Stat (1 = red) |
+| Worker quota pressure | `max(actions_gateway_worker_quota_pressure)` | Stat (1 = yellow) |
+| Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
 
-**Row 5 — GMC Overview**
+**Row 5 — Egress Proxy (per tenant)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Active CONNECT tunnels | `actions_gateway_proxy_connections_active` | Time series |
+| CONNECT tunnels opened/s | `rate(actions_gateway_proxy_connections_total[5m])` | Time series |
+| Proxy dial errors/s | `rate(actions_gateway_proxy_dial_errors_total[5m])` | Time series |
+| Tunnel duration p95 | `histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))` | Time series |
+
+**Row 6 — Proxy & Quota (kube-state-metrics)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Proxy replicas ready | `kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}` | Time series |
+| HPA desired vs. current | `kube_horizontalpodautoscaler_status_*_replicas` | Time series |
+| ResourceQuota usage | `kube_resourcequota{type="used"}` filtered by namespace | Bar gauge |
+
+### Platform dashboard
+
+![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows.](../assets/grafana-dashboard-platform.png)
+
+Fleet-wide; `$namespace` filters the cross-tenant rows.
+
+**Row 1 — Fleet Overview**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Managed gateways | `actions_gateway_managed_gateways` | Stat |
-| Reconcile errors | `rate(controller_runtime_reconcile_errors_total[5m])` | Time series by controller |
-| IP range refreshes | `increase(actions_gateway_ip_range_updates_total[24h])` | Stat |
+| Degraded gateways | `sum(actions_gateway_runnergroups_degraded)` | Stat (>0 = red) |
+| Egress allowlist stale | `sum(actions_gateway_egress_rules_stale)` | Stat (>0 = red) |
+| Proxy quota exceeded | `sum(actions_gateway_proxy_quota_exceeded)` | Stat (>0 = red) |
+
+**Row 2 — GMC Control Plane**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Reconcile errors by controller | `rate(controller_runtime_reconcile_errors_total[5m])` | Time series |
+| Reconcile rate by controller | `rate(controller_runtime_reconcile_total[5m])` | Time series |
+| IP range refreshes (24h) | `sum(increase(actions_gateway_ip_range_updates_total[24h]))` | Stat |
+
+**Row 3 — Fleet Conditions (per gateway)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Gateway condition rollups | `actions_gateway_runnergroups_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` | State timeline (1 = firing) |
+
+**Row 4 — Cross-tenant Throughput** (requires the per-tenant AGC scrapes)
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
+| Jobs acquired/min by namespace | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
+| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series |
 
 ### Dashboard Variables
 
-Add these template variables to make the dashboard multi-tenant:
+The dashboards ship with these template variables already wired:
 
-- `$namespace` — `label_values(actions_gateway_active_sessions, namespace)` — allows filtering to a single tenant
-- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — allows filtering to a specific RunnerGroup
+- `$namespace` — `label_values(actions_gateway_active_sessions, namespace)` — filters to a single tenant (both dashboards)
+- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup (tenant dashboard)
 
 ---
 

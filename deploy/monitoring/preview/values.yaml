@@ -1,0 +1,30 @@
+alertmanager:
+  enabled: false
+
+grafana:
+  adminPassword: admin
+  defaultDashboardsEnabled: false
+  imageRenderer:
+    enabled: true
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+kube-state-metrics:
+  enabled: true
+
+nodeExporter:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+    # Select every ServiceMonitor / PrometheusRule regardless of release label.
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 6h

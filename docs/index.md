@@ -115,6 +115,7 @@ Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer a
     Scoped visibility, no cluster access:
 
     - Prometheus per tenant + group
+    - Grafana dashboards + alerts, as code
     - Job counts in `kubectl get`
     - K8s Events on job transitions
 
