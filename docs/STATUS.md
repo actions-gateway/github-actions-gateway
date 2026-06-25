@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-23
+Last touched: 2026-06-25
 
 ---
 
@@ -69,7 +69,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q193"></a>Q193 | [End-to-end demo / screencast](index.md) | `docs` | 🔲 | S | No demo or screencast — biggest top-of-funnel friction. Record a free end-to-end kind deploy showing job→pod→GitHub. The quantified benchmark/case-study split to Q198 (it needs a paid scale run). |
 | <a id="Q194"></a>Q194 | [Homepage segment clarity + roadmap + Discussions](index.md) | `docs` | 🔲 | S | Landing page doesn't say who it's for or show a roadmap, and there's no community channel. Add segment/persona clarity, a public roadmap page, and enable GitHub Discussions linked from README. |
 | <a id="Q195"></a>Q195 | [SEO bundle: structured data, robots.txt, analytics](development/website.md) | `docs` | 🔲 | S | Site has no JSON-LD structured data, no robots.txt, and no analytics. Add SoftwareSourceCode/Organization schema, robots.txt with sitemap, and privacy-respecting analytics (e.g. Plausible). |
-| <a id="Q199"></a>Q199 | [ARC → GAG migration guide](plan/go-to-market.md) | `docs` | 🔲 | M | New "coming from ARC" operator guide: scale-set→runnerGroup + runner-label mapping, egress/quirks, gotchas. Highest-leverage adoption artifact (go-to-market §7) — removes switching friction, ranks for migration search. |
 ---
 
 ## Deferred
