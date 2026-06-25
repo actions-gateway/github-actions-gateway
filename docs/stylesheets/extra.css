@@ -238,6 +238,45 @@ body[data-md-color-scheme="slate"] {
   }
 }
 
+/* "Who GAG is for" honesty band — the disqualifier, set apart from the three
+   persona cards rather than carried as a fourth peer. Flatter than a card (no
+   shadow, no hover lift) with an accent rule, so the "not for everyone" scope
+   note reads as confident honesty — a trust signal — and closes the section. */
+.gag-fit-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 1.1rem 0 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-left: 3px solid var(--md-accent-fg-color);
+  border-radius: 0.6rem;
+  background: color-mix(
+    in srgb,
+    var(--md-accent-fg-color) 5%,
+    var(--md-default-bg-color)
+  );
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+  text-wrap: pretty;
+}
+
+.gag-fit-note strong {
+  color: var(--md-default-fg-color);
+}
+
+.gag-fit-note .twemoji {
+  flex: none;
+  color: var(--md-accent-fg-color);
+  margin-top: 0.08rem;
+}
+
+.gag-fit-note .twemoji svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 /* Marketing pages (landing + Why-GAG): give the content more side breathing
    room on wide screens. Scoped via :has() to the pages carrying the heroes, so
    the nav-inset docs pages are untouched (no JS needed). */
