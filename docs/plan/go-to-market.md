@@ -176,10 +176,20 @@ set:
 - **Phase 0 — readiness (prerequisite).** Public site live ([website.md](website.md)/Q129);
   a copy-pasteable install path that works for an outside operator; README
   problem-first; ARC→GAG migration guide drafted. Do not seed channels before this
-  — first impressions from cold traffic are one-shot.
+  — first impressions from cold traffic are one-shot. **GitHub Discussions stays
+  off** in this phase: an empty forum on a pre-adoption, solo-maintained project
+  with manually-driven (non-staffed) support reads as a ghost town, and slow
+  replies look worse there than on Issues. It also buys little over Issues until
+  there's enough volume to want Q&A/idea threads separated from bug tracking. So
+  the README, site footer, and roadmap community links point to **Issues** for
+  now (already enabled, free, slow-response-tolerant for a small project).
 - **Phase 1 — seed.** Show HN + r/devops + r/kubernetes; begin honest, one-per-thread
   participation in the §3 ARC issues. Goal: first handful of **external** deployers
-  and their issues/questions (the real adoption signal).
+  and their issues/questions (the real adoption signal). **Enable GitHub
+  Discussions here** and seed 2–3 starter threads (intro, roadmap feedback), then
+  repoint the community links from Issues back to Discussions — its value only
+  exceeds the ghost-town cost once traffic is actively flowing and someone is
+  watching it.
 - **Phase 2 — amplify.** Publish the two blog posts; land in awesome-lists and at
   least one "ARC alternatives" roundup; tune the comparison page for the §5.2
   search terms; pursue a CNCF/KubeCon lightning talk.
