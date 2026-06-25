@@ -111,6 +111,78 @@ gateway will not fight it.
 
 **Size the quota for both pools at full scale.** The quota must leave room for the proxy pool at `spec.proxy.maxReplicas` *and* worker pods up to `maxWorkers` (each × its per-pod requests/limits, plus pod count). When the remaining headroom can't cover scaling to those ceilings, the gateway flags it without blocking provisioning: the GMC raises `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the `ActionsGateway` and the AGC raises `WorkerQuotaPressure`/`WorkerQuotaExceeded` on each `RunnerGroup` (each also exported as a gauge for alerting). See [troubleshooting: Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling) and [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 
+#### Sizing calculator
+
+The full-scale footprint is the proxy pool plus every RunnerGroup's worker pool, each at its configured ceiling. The same arithmetic the gateway uses for the quota-pressure conditions is what you size against:
+
+```
+pods            = proxy.maxReplicas + Σ_groups(maxWorkers) + 1   # +1 = AGC control-plane pod
+requests.cpu    = proxy.maxReplicas × proxyReq.cpu    + Σ_groups(maxWorkers × Σ_containers req.cpu)
+requests.memory = proxy.maxReplicas × proxyReq.memory + Σ_groups(maxWorkers × Σ_containers req.memory)
+limits.cpu      = proxy.maxReplicas × proxyLim.cpu    + Σ_groups(maxWorkers × Σ_containers lim.cpu)
+limits.memory   = proxy.maxReplicas × proxyLim.memory + Σ_groups(maxWorkers × Σ_containers lim.memory)
+```
+
+Where the inputs come from:
+
+| Term | Source | Default (if unset) |
+|------|--------|--------------------|
+| `proxy.maxReplicas` | `spec.proxy.maxReplicas` on the `ActionsGateway` | `10` |
+| `proxyReq.cpu` / `proxyReq.memory` | `spec.proxy.resources.requests` (per proxy pod) | `10m` / `32Mi` |
+| `proxyLim.cpu` / `proxyLim.memory` | `spec.proxy.resources.limits` (per proxy pod) | `500m` / `64Mi` |
+| `maxWorkers` | `spec.runnerGroups[].maxWorkers` (per group) | unbounded — set it, or the worker pool has no ceiling to size against |
+| `Σ_containers req.*` / `lim.*` | sum of `requests`/`limits` across every container in that group's `podTemplate.spec.containers` | none — workers carry only what the pod template sets |
+
+Notes:
+
+- **The `+ 1` pod is the AGC control-plane pod.** On the v1 (`actions-gateway.github.com`) API it stamps **no** CPU/memory requests or limits, so it consumes one `pods` slot but contributes nothing to the cpu/memory rows. It still has to be *admitted*, though — see the LimitRange caveat below.
+- **Σ over groups, not just the first.** Each `runnerGroups[]` entry has its own `maxWorkers` and pod template; total worker demand is the sum across all of them. A GPU group with large per-pod requests can dominate the total even at a low `maxWorkers`.
+- **A term with no value drops out.** If a group's pod template sets requests but no limits, its `limits.*` contribution is `0` (the gateway sums only what's declared).
+
+#### Worked example
+
+A gateway with the default proxy pool and two runner groups:
+
+| Pool | Count | Per-pod requests | Per-pod limits |
+|------|-------|------------------|----------------|
+| Proxy (defaults) | `maxReplicas: 10` | cpu `10m`, mem `32Mi` | cpu `500m`, mem `64Mi` |
+| `default` group | `maxWorkers: 20` | cpu `1`, mem `2Gi` | cpu `2`, mem `4Gi` |
+| `gpu` group | `maxWorkers: 4` | cpu `4`, mem `16Gi` | cpu `8`, mem `32Gi` |
+
+| Quota key | Proxy | `default` (×20) | `gpu` (×4) | AGC | **Total** | **Rounded up** |
+|-----------|-------|-----------------|------------|-----|-----------|----------------|
+| `pods` | 10 | 20 | 4 | 1 | **35** | `35` |
+| `requests.cpu` | 100m | 20 | 16 | — | **36.1** | `37` |
+| `requests.memory` | 320Mi | 40Gi | 64Gi | — | **~104.3Gi** | `105Gi` |
+| `limits.cpu` | 5 | 40 | 32 | — | **77** | `77` |
+| `limits.memory` | 640Mi | 80Gi | 128Gi | — | **~208.6Gi** | `209Gi` |
+
+The proxy pool's footprint is tiny next to the worker pools — round the totals **up** to leave headroom for the next scale-out and for any system pods the platform schedules into the namespace.
+
+#### Copy-pasteable template
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: <tenant>-quota
+  namespace: <tenant-namespace>
+spec:
+  hard:
+    # From the worked example above — recompute for your own proxy.maxReplicas,
+    # maxWorkers, and per-pod requests/limits.
+    pods: "35"
+    requests.cpu: "37"
+    requests.memory: "105Gi"
+    # limits.* are optional — include them only if you want to cap aggregate
+    # limits as well as requests. If you DO constrain limits.*, every pod in the
+    # namespace must declare limits (see the LimitRange caveat).
+    limits.cpu: "77"
+    limits.memory: "209Gi"
+```
+
+> **LimitRange caveat.** A `ResourceQuota` that constrains `requests.cpu`/`requests.memory` (or `limits.*`) makes those declarations **mandatory** for every pod in the namespace — Kubernetes rejects any pod that omits a constrained resource. The v1 AGC pod stamps none, so pair the quota with a `LimitRange` that supplies default requests (and limits, if constrained); otherwise the AGC Deployment's pods are rejected with a `must specify requests.cpu` admission error. The proxy always carries requests, and workers carry whatever their pod template sets, but the AGC pod relies on the `LimitRange` default. Constraining only `pods` avoids this entirely (at the cost of no cpu/memory cap).
+
 ---
 
 ## Step 2: Create the ActionsGateway Resource
