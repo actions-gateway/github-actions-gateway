@@ -196,17 +196,10 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
     - GPU nodes return to the scheduler on completion
     - Priority tiers keep critical GPU jobs scheduling
 
--   :material-information-outline:{ .lg .middle } __Not the right fit?__
-
-    ---
-
-    GAG is not a hosted, faster-CI play:
-
-    - Happy on a vendor's infrastructure? A managed-SaaS runner fits better
-    - GAG competes with ARC for self-hosted, multi-tenant clusters — not on raw build speed
-
 </div>
 </div>
+
+<p class="gag-fit-note" markdown="span">:material-information-outline: **Not your setup?** If you're happy running on a vendor's infrastructure, a managed-SaaS runner is the better fit. GAG competes with Actions Runner Controller (ARC) for self-hosted, multi-tenant clusters — not on raw build speed.</p>
 
 <div class="gag-section-intro" markdown>
 
