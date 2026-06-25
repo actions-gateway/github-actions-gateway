@@ -173,8 +173,8 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
     Multi-tenant CI on a shared cluster:
 
     - Enforce a per-team quota without stranding jobs
-    - Tenants self-serve runners from one `ActionsGateway`
-    - Stop being the ticket queue for every runner change
+    - Tenants self-serve from one `ActionsGateway`
+    - No ticket queue for every runner change
 
 -   :material-shield-account:{ .lg .middle } __Orgs that must self-host__
 
