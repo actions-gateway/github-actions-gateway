@@ -274,8 +274,8 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 // it cannot reach an external resolver. Only the open "any resolver" breadth is
 // removed, not legitimate resolution.
 //
-// kindnet does not enforce egress NetworkPolicy (see Q7b in
-// docs/plan/worker-egress-proxy.md), so this restriction is guarded at the
+// kindnet does not enforce egress NetworkPolicy (see Q7b, worker-egress
+// isolation), so this restriction is guarded at the
 // spec/authoring level by TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS
 // rather than by a live e2e deny test; a runtime negative needs a
 // policy-enforcing CNI such as Calico.

@@ -119,7 +119,7 @@ func TestV2_ActionsGateway_GitHubAppRefNameMutable(t *testing.T) {
 // union (Q196) under real-apiserver CEL: the discriminator must be set to a known value,
 // and the member named by credentials.type must be present while every other member is
 // absent. These are the structural and CEL guarantees the v2beta1 freeze depends on
-// (§H.15, docs/plan/v2beta1.md) — the shape that lets workload identity (Q197) join as a
+// (§H.15) — the shape that lets workload identity (Q197) join as a
 // second member without another breaking change.
 func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
 	const ns = "v2-ag-credentials"

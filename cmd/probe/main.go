@@ -368,7 +368,7 @@ func run(logger *slog.Logger) error {
 // required for correct delivery semantics.
 //
 // Document findings (HTTP status, response body, effect of omitting the call)
-// in docs/plan/milestone-1.md §8.A before closing Milestone 1.
+// in the Milestone 1 plan §8.A before closing Milestone 1.
 func probeAcknowledge(ctx context.Context, logger *slog.Logger, bc *broker.Client, messageID int64, sessionID string) string {
 	url := fmt.Sprintf("%s/messages/%d?sessionId=%s", bc.PoolBase(), messageID, sessionID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)

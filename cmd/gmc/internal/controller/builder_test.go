@@ -587,7 +587,7 @@ func TestBuildWorkloadNetworkPolicy_NoGitHubEgress(t *testing.T) {
 // untrusted GitHub Actions job code and must accept no inbound connections. The
 // authoring guard asserts the generated spec declares PolicyTypeIngress with an empty
 // ingress rule set (= default-deny). This is the reliable CI gate because kindnet does
-// not enforce ingress NetworkPolicy (see Q7b in docs/plan/worker-egress-proxy.md); a
+// not enforce ingress NetworkPolicy (see Q7b, worker-egress isolation); a
 // runtime negative needs a policy-enforcing CNI such as Calico.
 func TestBuildWorkloadNetworkPolicy_DefaultDenyIngress(t *testing.T) {
 	ag := newTestAG("gateway", "team-a")

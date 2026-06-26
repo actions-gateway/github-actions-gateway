@@ -18,5 +18,5 @@
 // untagged package home and carries the godoc.
 //
 // See cmd/agc/test/load/README.md for how to run the harness and interpret its
-// results, and docs/plan/milestone-5.md §2 for the design rationale.
+// results, and the Milestone 5 plan §2 for the design rationale.
 package load

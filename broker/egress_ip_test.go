@@ -15,7 +15,7 @@ package broker_test
 //  4. TestEgressIPVariance_Live — full broker sequence through two proxies,
 //     skipped unless GITHUB_* environment variables are set.
 //
-// Findings from the live test must be documented in docs/plan/milestone-1.md §8.B
+// Findings from the live test must be documented in the Milestone 1 plan §8.B
 // before closing Milestone 1.
 
 import (
@@ -175,7 +175,7 @@ func TestCONNECTProxy_RejectsNonCONNECT(t *testing.T) {
 // simulating different egress IPs on every call.
 //
 // This test is SKIPPED unless all required GITHUB_* environment variables are set.
-// When run successfully, document findings in docs/plan/milestone-1.md §8.B:
+// When run successfully, document findings in the Milestone 1 plan §8.B:
 //   - Did all four call types succeed across proxy alternation?
 //   - Were any 403/401 responses observed that suggest IP-based session pinning?
 //   - Recommended proxy affinity approach for Milestone 4.
