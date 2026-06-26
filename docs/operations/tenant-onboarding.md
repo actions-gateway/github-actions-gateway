@@ -19,7 +19,7 @@ Before beginning, confirm all of the following:
 - [ ] **Cluster CNI enforces egress NetworkPolicy.** The tenant isolation model (workers restricted to DNS + the per-tenant proxy; no direct GitHub or Kubernetes API egress) is implemented as NetworkPolicy egress rules, which are inert unless the cluster's Container Network Interface (CNI) plugin enforces them. Production clusters must run an egress-enforcing CNI such as Calico or Cilium — kind's default kindnet, for example, accepts NetworkPolicy objects without enforcing egress. Verify with your CNI's documentation, or run the negative probes in [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) after onboarding: the "blocked" probes must actually time out.
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`. Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
 - [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
-- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file.
+- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file. First time? [Step 0](#step-0-create-and-install-the-github-app) walks through creating the App and capturing all three.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
 - [ ] **GitHub URL is known.** The org/enterprise/repo URL the runners register against — `https://github.com/<org>`, `https://github.com/<org>/<repo>`, or a GitHub Enterprise Server URL `https://ghes.example.com/<org>`. It goes in `spec.gitHubURL` (Step 2) and must match where the App is installed. It is a required field — there is no default.
 - [ ] **Quota is provisioned (platform-owned).** The tenant's resource requirements have been reviewed and the platform has created a `ResourceQuota` (and any `LimitRange`) on the tenant namespace — CPU, memory, and pod count. This is the real, tenant-uncontrollable cap; the gateway operates within it but never creates or mutates it. See [Step 1b](#step-1b-set-the-platform-owned-resourcequota). (If you provision namespaces and quotas via a GitOps or tenant-operator stack — Capsule, HNC, vCluster, kiosk — the quota comes from there instead.)
@@ -44,9 +44,85 @@ Before beginning, confirm all of the following:
 
 ---
 
+## Step 0: Create and Install the GitHub App
+
+> **First-time setup.** Skip this step if the platform team already handed you an `appId`, an `installationId`, and the private-key `.pem` file (the "GitHub App is registered" pre-condition). Otherwise, this is where those three values come from. The output of this step feeds directly into [Step 1](#step-1-create-the-github-app-secret).
+
+GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path. There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh app create`), so the App is created in the web UI; the GitHub CLI (`gh`) is used afterwards to read back the IDs.
+
+### 0a. Create the App (web UI)
+
+1. Go to the org's App settings: `https://github.com/organizations/<org>/settings/apps` → **New GitHub App**. (For an enterprise, use the enterprise settings path; for a user-owned App, Settings → Developer settings → GitHub Apps → **New GitHub App**.)
+2. **GitHub App name** — any unique name, e.g. `acme-actions-gateway`.
+3. **Homepage URL** — any valid URL (e.g. the repo URL); it is not used by the gateway.
+4. **Webhook** — uncheck **Active**. The gateway polls GitHub; it does not receive webhooks, so no webhook URL or secret is needed.
+5. **Permissions** — grant only the two read-only permissions the gateway needs to register and observe self-hosted runners:
+   - **Repository permissions → Actions: Read-only**
+   - **Organization permissions → Administration: Read-only** (labelled **Self-hosted runners: Read-only** on some plans)
+   - These are the `Actions: Read` and `Administration: Read` permissions referenced throughout this guide. Leave **Contents**, **Pull requests**, and everything else at **No access** — the gateway never reads tenant code or writes to repositories.
+6. **Where can this GitHub App be installed?** — **Only on this account** is the typical choice for a single-org deployment.
+7. Click **Create GitHub App**.
+
+> **Least privilege.** The installation tokens the gateway mints inherit exactly these App permissions. Granting more than `Actions: Read` + `Administration: Read` widens the blast radius of a key compromise for no functional gain — see [security §5](../design/05-security.md) and the [runbook key-compromise scope assessment](runbook.md).
+
+### 0b. Capture the `appId`
+
+On the App's **General** page, copy the numeric **App ID** (top of the page). This is `appId` — a small integer, not the App name or the client ID.
+
+### 0c. Install the App and capture the `installationId`
+
+1. On the App's **Install App** tab, install it onto the target organization (or specific repositories). The org/repos you install it on **must match** the `gitHubURL` you set in [Step 2](#step-2-create-the-actionsgateway-resource).
+2. After installing, the browser lands on the installation's settings page; the `installationId` is the trailing number in the URL:
+   `https://github.com/organizations/<org>/settings/installations/<installationId>`.
+
+You can also read it back with the GitHub CLI authenticated as the App (advanced — requires an App JWT, not your user token). The web-UI URL above is the reliable path; the `gh api /app/installations` endpoint is available once you can present an App JWT.
+
+### 0d. Generate and download the private key (`.pem`)
+
+On the App's **General** page → **Private keys** → **Generate a private key**. The browser downloads a `.pem` file **once** — GitHub never shows it again, so store it safely and treat it as a high-value secret.
+
+**The exact PEM format the controller expects.** The AGC parses the key with Go's standard library and accepts exactly two PEM block types ([`githubapp/auth.go`](../../githubapp/auth.go)):
+
+| First line of the `.pem` | Format | Accepted? |
+| --- | --- | --- |
+| `-----BEGIN RSA PRIVATE KEY-----` | PKCS#1 (RSA) | ✅ — this is what GitHub downloads |
+| `-----BEGIN PRIVATE KEY-----` | PKCS#8 (RSA or Ed25519) | ✅ — e.g. after `openssl pkcs8` conversion |
+| `-----BEGIN OPENSSH PRIVATE KEY-----`, `-----BEGIN EC PRIVATE KEY-----`, anything else | other | ❌ — rejected with `unsupported PEM block type` |
+
+GitHub's downloaded key is already PKCS#1 — **use it byte-for-byte; no conversion is required or recommended.**
+
+> **PEM pitfalls — the #1 first-day failure.** The strict PEM format makes hand-editing the key the most common onboarding error. The controller surfaces it as `private key: RSA key parse error` / `no PEM block found` and `AGCAvailable=False` (reason `CredentialError`). Avoid all of these by never opening or retyping the key:
+>
+> - **Do not copy-paste the key into a terminal or YAML by hand.** Pasting can drop the trailing newline, re-wrap the base64 body, insert spaces/blank lines, or substitute smart-quotes — any of which breaks parsing. Always feed GitHub's file directly (Step 1's `--from-file`).
+> - **Do not open it in an editor that rewrites line endings.** A CRLF (`\r\n`) conversion or a stripped final newline corrupts the block. Keep the file exactly as downloaded.
+> - **Do not base64-encode it yourself.** `kubectl ... --from-file` and `stringData` encode the value for you; pre-encoding double-encodes it.
+> - **Header/footer must be intact and exact.** The `-----BEGIN …-----` / `-----END …-----` lines must be present and unaltered, with no leading/trailing whitespace or extra blank lines.
+
+You now have the three values [Step 1](#step-1-create-the-github-app-secret) needs: `appId`, `installationId`, and the `.pem` file on disk (referred to below as `app.pem`).
+
+---
+
 ## Step 1: Create the GitHub App Secret
 
-Create this in the tenant's namespace. Use a stable, versioned name (e.g. `github-app-v1`) to enable clean credential rotation later.
+Create this in the tenant's namespace. Use a stable, versioned name (e.g. `github-app-v1`) to enable clean credential rotation later. The Secret holds three keys — `appId`, `installationId`, and `privateKey` — which the GMC projects into the AGC pod as files the controller reads at startup (`cmd/agc/main.go`).
+
+**Recommended — create from the downloaded file (secure).** Pass the `.pem` straight into `kubectl` with `--from-file`; this preserves the key byte-for-byte (sidestepping every PEM pitfall above) and never exposes it in a shell argument, an environment variable, or your shell history. Delete the file as soon as the Secret exists:
+
+```sh
+# app.pem is the file downloaded in Step 0d — never echo, cat, or paste its contents.
+kubectl create secret generic github-app-v1 \
+  --namespace <tenant-namespace> \
+  --from-literal=appId='<GitHub App ID>' \
+  --from-literal=installationId='<Installation ID>' \
+  --from-file=privateKey=app.pem
+
+# Remove the private key from disk now that it lives only in the Secret.
+rm -f app.pem
+```
+
+> **Why not paste the key into YAML?** The declarative form below requires putting the PEM body into a file on disk that is easy to accidentally commit to git, and inviting a hand-paste that mangles the key. Prefer `--from-file`. If you must use YAML (e.g. GitOps), keep the manifest out of version control or supply the `privateKey` via your secrets manager / sealed-secrets tooling — never commit a plaintext key.
+
+**Alternative — declarative manifest.** Equivalent to the command above; the `--from-file` key name (`privateKey`) maps to the `stringData` key here:
 
 ```yaml
 apiVersion: v1
@@ -80,6 +156,8 @@ kubectl get secret github-app-v1 -n <tenant-namespace> \
 # Expected: -----BEGIN RSA PRIVATE KEY----- (PKCS#1)
 #      or: -----BEGIN PRIVATE KEY----- (PKCS#8, RSA or Ed25519)
 ```
+
+If the AGC later reports `CredentialError` / `RSA key parse error`, the key was altered in transit — see [troubleshooting: GitHub App Secret misconfiguration](troubleshooting.md#github-app-secret-misconfiguration).
 
 ---
 
