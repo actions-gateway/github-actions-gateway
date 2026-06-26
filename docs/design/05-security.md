@@ -409,12 +409,18 @@ token and delegates the App-JWT sign to Vault transit, so the gateway authentica
 to GitHub with no App key in the cluster. The live no-PEM round-trip is covered by an
 in-cluster (dev-mode) Vault kind e2e.
 
-> **NetworkPolicy egress to Vault.** The per-tenant AGC NetworkPolicy default-denies
-> egress except DNS + GitHub + the kube API. Vault is a destination the API cannot
-> express as a NetworkPolicy peer (its address is an opaque URL, not a selectable
-> namespace/pod or a GMC-managed CIDR), so on a policy-enforcing CNI the operator must
-> add an egress rule permitting the AGC to reach their Vault endpoint. First-class
-> Vault egress is a tracked follow-up.
+> **NetworkPolicy egress to Vault (Q202).** The per-tenant AGC NetworkPolicy default-denies
+> egress except DNS + GitHub + the kube API. Vault's `address` is an opaque URL, not a
+> selectable peer, so the GMC takes the peer from `signer.vault.networkPolicy`: a
+> pod/namespace selector (in-cluster Vault) or a CIDR (external Vault). When set, the GMC
+> adds a **scoped** AGC→Vault egress rule — that one peer on the Vault API port parsed from
+> `address` — to the per-gateway AGC NetworkPolicy only (worker pods never get it). It is
+> emitted **only** for `credentials.type: WorkloadIdentity` with a Vault signer; a
+> possession-model (`githubApp`) gateway keeps strict default-deny and the rule is a strict
+> tightening that is only ever added, never a broaden-to-all-egress. Leave `networkPolicy`
+> unset on a non-enforcing CNI (kindnet) or to manage the rule out of band — the egress
+> posture is unchanged in that case. As with every egress negative this is enforced only by
+> a policy-aware CNI.
 
 ---
 

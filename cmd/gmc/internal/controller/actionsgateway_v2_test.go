@@ -367,6 +367,89 @@ func TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule(t *testing.T) {
 	assert.False(t, hasGitHubCIDREgress(proxied, "140.82.112.0/20"))
 }
 
+// TestBuildAGCNetworkPolicyV2_VaultEgress: a workload-identity gateway whose Vault
+// signer declares a NetworkPolicy peer gains a scoped AGC→Vault egress rule, in both
+// CIDR (external) and selector (in-cluster) form, on the Vault API port parsed from the
+// address; a workload-identity gateway without the peer, and any possession-model
+// (githubApp) gateway, keep default-deny (no Vault rule) (Q202).
+func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
+	// CIDR form (external Vault): scoped ipBlock peer on the address port (8200).
+	wiCIDR := v2WorkloadIdentityGateway("gw", "team-a", "")
+	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.VaultNetworkPolicy{
+		CIDR: "10.0.5.7/32",
+	}
+	np := buildAGCNetworkPolicyV2(wiCIDR, nil, nil, true)
+	rule := findVaultEgressRule(np)
+	require.NotNil(t, rule, "CIDR-form WI gateway gains a Vault egress rule")
+	require.Len(t, rule.To, 1)
+	require.NotNil(t, rule.To[0].IPBlock)
+	assert.Equal(t, "10.0.5.7/32", rule.To[0].IPBlock.CIDR)
+	require.Len(t, rule.Ports, 1)
+	assert.Equal(t, int32(8200), rule.Ports[0].Port.IntVal, "port parsed from the signer address")
+	// The apiserver + DNS egress (default-deny baseline) are untouched — Vault is additive.
+	require.NotNil(t, findApiserverEgressRule(np))
+
+	// Selector form (in-cluster Vault): pod + namespace selector peer, default https port.
+	wiSel := v2WorkloadIdentityGateway("gw", "team-a", "")
+	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.vault.svc"
+	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.VaultNetworkPolicy{
+		PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "vault"}},
+		NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "vault"}},
+	}
+	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiSel, nil, nil, false))
+	require.NotNil(t, rule, "selector-form WI gateway gains a Vault egress rule")
+	require.Len(t, rule.To, 1)
+	assert.Nil(t, rule.To[0].IPBlock)
+	require.NotNil(t, rule.To[0].PodSelector)
+	assert.Equal(t, "vault", rule.To[0].PodSelector.MatchLabels["app.kubernetes.io/name"])
+	require.NotNil(t, rule.To[0].NamespaceSelector)
+	assert.Equal(t, int32(443), rule.Ports[0].Port.IntVal, "no explicit address port ⇒ https default")
+
+	// WI gateway without a NetworkPolicy peer: default-deny preserved (no Vault rule).
+	wiNone := v2WorkloadIdentityGateway("gw", "team-a", "")
+	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(wiNone, nil, nil, true)),
+		"WI gateway without networkPolicy keeps default-deny")
+
+	// Possession-model (githubApp) gateway: never gains a Vault egress rule.
+	pem := v2Gateway("gw", "team-a", "github-app", "")
+	assert.Nil(t, findVaultEgressRule(buildAGCNetworkPolicyV2(pem, nil, nil, true)),
+		"PEM gateway keeps default-deny — no Vault egress")
+}
+
+// findVaultEgressRule returns the AGC→Vault egress rule (the rule whose single peer is
+// neither DNS, the apiserver, nor a GitHub CIDR), or nil. It keys on the Vault peer being
+// a single To with a non-DNS port — distinct from the DNS (53), apiserver (443/6443 with no
+// To or apiserver CIDRs), and GitHub (443 ipBlock) rules in shape.
+func findVaultEgressRule(np *networkingv1.NetworkPolicy) *networkingv1.NetworkPolicyEgressRule {
+	for i := range np.Spec.Egress {
+		e := &np.Spec.Egress[i]
+		// DNS rule carries port 53; skip it.
+		isDNS := false
+		for _, p := range e.Ports {
+			if p.Port != nil && p.Port.IntVal == 53 {
+				isDNS = true
+			}
+		}
+		if isDNS || len(e.To) != 1 {
+			continue
+		}
+		peer := e.To[0]
+		// A selector peer is unambiguously Vault (apiserver/GitHub/DNS use ipBlock or
+		// kube-dns selectors with port 53). A single ipBlock peer that is not a GitHub
+		// 443 rule and not the DNS link-local block is the external-Vault rule.
+		if peer.PodSelector != nil || peer.NamespaceSelector != nil {
+			if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] != "kube-system" {
+				return e
+			}
+			continue
+		}
+		if peer.IPBlock != nil && peer.IPBlock.CIDR != dnsNodeLocalCIDR {
+			return e
+		}
+	}
+	return nil
+}
+
 // TestBuildWorkloadNetworkPolicyV2_DirectEgress: direct mode keeps the DNS + proxy
 // rules and adds the GitHub-CIDR rule; proxied mode carries no GitHub rule (Q168).
 func TestBuildWorkloadNetworkPolicyV2_DirectEgress(t *testing.T) {

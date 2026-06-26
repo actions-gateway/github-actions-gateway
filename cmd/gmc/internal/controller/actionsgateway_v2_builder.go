@@ -7,6 +7,7 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -217,7 +218,64 @@ func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []st
 			np.Spec.Egress = append(np.Spec.Egress, rule)
 		}
 	}
+	if rule, ok := vaultEgressRule(ag); ok {
+		np.Spec.Egress = append(np.Spec.Egress, rule)
+	}
 	return np
+}
+
+// vaultEgressRule returns the scoped AGC→Vault egress rule for a workload-identity gateway
+// whose Vault signer declares a NetworkPolicy peer, and false otherwise (Q202). It is emitted
+// only for credentials.type=WorkloadIdentity with a Vault signer that sets
+// signer.vault.networkPolicy — never for a possession-model (githubApp) gateway, so the
+// default-deny posture is preserved for PEM gateways. The rule is tightly scoped: a single
+// pod/namespace selector peer (in-cluster Vault) or a CIDR peer (external Vault), on the Vault
+// API port parsed from the signer Address — never a broaden-to-all-egress. Added additively
+// to the AGC-only policy, so only the AGC reaches Vault; worker pods (which carry no AGC `app`
+// label) do not.
+func vaultEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
+	creds := ag.Spec.Credentials
+	if creds.Type != gmcv2alpha1.CredentialTypeWorkloadIdentity || creds.WorkloadIdentity == nil {
+		return networkingv1.NetworkPolicyEgressRule{}, false
+	}
+	signer := creds.WorkloadIdentity.Signer
+	if signer.Provider != gmcv2alpha1.SignerProviderVault || signer.Vault == nil || signer.Vault.NetworkPolicy == nil {
+		return networkingv1.NetworkPolicyEgressRule{}, false
+	}
+	npc := signer.Vault.NetworkPolicy
+	var peer networkingv1.NetworkPolicyPeer
+	if npc.CIDR != "" {
+		peer = networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: npc.CIDR}}
+	} else {
+		peer = networkingv1.NetworkPolicyPeer{
+			PodSelector:       npc.PodSelector,
+			NamespaceSelector: npc.NamespaceSelector,
+		}
+	}
+	return networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(vaultEgressPort(signer.Vault.Address)))}},
+		To:    []networkingv1.NetworkPolicyPeer{peer},
+	}, true
+}
+
+// vaultEgressPort parses the Vault API port from the signer Address for the egress rule. An
+// explicit port wins; otherwise the scheme default (https→443, http→80). Falls back to Vault's
+// conventional 8200 only if Address fails to parse — Address is CEL-validated as ^https?:// at
+// admission, so the fallback is defensive.
+func vaultEgressPort(address string) int32 {
+	u, err := url.Parse(address)
+	if err != nil {
+		return 8200
+	}
+	if p := u.Port(); p != "" {
+		if n, convErr := strconv.Atoi(p); convErr == nil {
+			return int32(n)
+		}
+	}
+	if u.Scheme == "http" {
+		return 80
+	}
+	return 443
 }
 
 // v2ProxyServiceAddr is the in-cluster HTTPS proxy address the AGC egresses
