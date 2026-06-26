@@ -493,6 +493,154 @@ body[data-md-color-scheme="slate"] {
   }
 }
 
+/* Savings calculator (Appendix F § F.5). The `.gag-calc` mount is empty in the
+   markdown (so GitHub / no-JS shows the worked example below it); JS fills it. */
+.gag-calc {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.7rem;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--gag-elev-1);
+}
+
+.gag-calc__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.gag-calc__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gag-calc__field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-calc__field input {
+  font-size: 0.95rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.4rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+}
+
+.gag-calc__field input:focus-visible {
+  outline: 2px solid var(--md-accent-fg-color);
+  outline-offset: 1px;
+}
+
+.gag-calc__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.gag-calc__preset {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.45rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color);
+  cursor: pointer;
+  transition: border-color 0.15s var(--gag-ease), transform 0.15s var(--gag-ease);
+}
+
+.gag-calc__preset:hover {
+  border-color: var(--gag-accent-line);
+  transform: translateY(-1px);
+}
+
+.gag-calc__preset strong {
+  font-size: 0.82rem;
+}
+
+.gag-calc__preset small {
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-calc__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.gag-calc__cell {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.55rem;
+  padding: 0.8rem 0.7rem;
+  text-align: center;
+  background: var(--md-default-bg-color);
+}
+
+.gag-calc__cell--win {
+  border-color: color-mix(in srgb, var(--gag-win-fill) 45%, transparent);
+  background: color-mix(in srgb, var(--gag-win-fill) 9%, transparent);
+}
+
+.gag-calc__cell-num {
+  display: block;
+  font-size: clamp(1.2rem, 0.95rem + 1vw, 1.6rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.gag-calc__cell--win .gag-calc__cell-num {
+  color: var(--gag-win-ink);
+}
+
+.gag-calc__cell-label {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color);
+}
+
+.gag-calc__cell-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.gag-calc__note {
+  margin: 0.9rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+  text-wrap: pretty;
+}
+
+@media screen and (max-width: 50rem) {
+  .gag-calc__form {
+    grid-template-columns: 1fr;
+  }
+  .gag-calc__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 30rem) {
+  .gag-calc__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Four-tier flow: real DOM boxes so text stays legible and the layout reflows
    (branching row on wide screens, stacked on narrow) instead of scaling an SVG. */
 .gag-flow {
