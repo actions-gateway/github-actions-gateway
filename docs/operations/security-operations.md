@@ -272,56 +272,108 @@ them): the GMC ServiceAccount user string if you overrode the install
 namespace or `namePrefix`, and one `users:` entry per tenant namespace for the
 AGC rule (the audit `users:` field is an exact match with no wildcard).
 
-**Install on a self-managed API server.** The policy is a static file read by
-`kube-apiserver`, not a cluster object — you cannot `kubectl apply` it. On a
-kubeadm control plane:
+#### Where auto-install is — and isn't — possible
 
-1. Copy the file onto every control-plane node, e.g.
-   `/etc/kubernetes/audit/policy.yaml`.
-2. Edit the static-pod manifest `/etc/kubernetes/manifests/kube-apiserver.yaml`
-   to add the audit flags and mount the policy file and a log directory:
+The policy is a **static file `kube-apiserver` reads at startup**, not a cluster
+object: there is no `kubectl apply` for it, and the Helm chart cannot install it
+(it deploys workloads, not control-plane node files). Full installation is
+therefore only possible where **you control the API-server flags** — a cluster
+you provision (kind, kubeadm). On a managed control plane (EKS / GKE / AKS) the
+provider owns those flags and ships a *fixed* audit configuration to its own log
+sink; you cannot supply this file, so the path is to enable the provider's audit
+logging and translate the same predicates against the managed stream. Both are
+covered below.
 
-   ```yaml
-   spec:
-     containers:
-     - command:
-       - kube-apiserver
-       # ...existing flags...
-       - --audit-policy-file=/etc/kubernetes/audit/policy.yaml
-       - --audit-log-path=/var/log/kubernetes/audit/audit.log
-       - --audit-log-maxage=30
-       - --audit-log-maxbackup=10
-       - --audit-log-maxsize=100
-       volumeMounts:
-       - name: audit-policy
-         mountPath: /etc/kubernetes/audit/policy.yaml
-         readOnly: true
-       - name: audit-log
-         mountPath: /var/log/kubernetes/audit
-     volumes:
-     - name: audit-policy
-       hostPath:
-         path: /etc/kubernetes/audit/policy.yaml
-         type: File
-     - name: audit-log
-       hostPath:
-         path: /var/log/kubernetes/audit
-         type: DirectoryOrCreate
-   ```
+#### Self-managed: cluster you provision (auto)
 
-   The kubelet restarts the API server automatically when the manifest
-   changes. Use `--audit-log-path=-` to emit to stdout instead of a file (e.g.
-   to ship via a log agent). Forward the log to your SIEM and translate the
-   table's predicates into alert rules there.
+If you are creating the cluster, bake the policy into `kube-apiserver` from the
+start — no static-pod surgery. The
+[`examples/kind-cluster-audit.yaml`](examples/kind-cluster-audit.yaml) kind
+config does this via `extraMounts` + a `ClusterConfiguration` audit patch; the
+same `apiServer.extraArgs` / `extraVolumes` block works in any kubeadm
+`ClusterConfiguration` (`kubeadm init --config`).
 
-**Managed control planes.** EKS, GKE, and AKS do not let you supply a custom
-`--audit-policy-file` — the provider owns the API server flags and ships a
-fixed audit configuration to its own log sink (CloudWatch / Cloud Audit Logs /
-Azure Monitor). You cannot install this file there. Instead, enable the
-provider's API-server (control-plane) audit logging and apply the **same
-predicates** — requester `user.username`, `verb`, `objectRef.resource` —
-as filters/alerts against that managed log stream. The detection logic is
-identical; only the substrate differs.
+#### Self-managed: existing kubeadm cluster (scripted)
+
+For a cluster already running, the policy file must be placed on each
+control-plane node and the `kube-apiserver` static-pod manifest patched to add
+the audit flags and mounts.
+[`examples/install-apiserver-audit-policy.sh`](examples/install-apiserver-audit-policy.sh)
+automates exactly that — run it **once per control-plane node, as root, on the
+node**:
+
+```bash
+sudo ./install-apiserver-audit-policy.sh        # --dry-run to preview first
+```
+
+It validates the policy, installs it to `/etc/kubernetes/audit/policy.yaml`, and
+idempotently patches `/etc/kubernetes/manifests/kube-apiserver.yaml` (timestamped
+backup; `yq` for the structured edit so the manifest cannot be corrupted). The
+kubelet restarts the API server automatically. To do it by hand instead, add the
+`--audit-policy-file` / `--audit-log-*` flags and the `audit-policy` +
+`audit-log` `volumeMounts`/`volumes` to the manifest — the script's
+[kind config](examples/kind-cluster-audit.yaml) shows the exact shape. Use
+`--audit-log-path=-` to emit to stdout (e.g. to ship via a log agent) instead of
+a file. Forward the log to your SIEM and translate the table's predicates into
+alert rules there.
+
+#### Managed control planes (EKS / GKE / AKS)
+
+You **cannot** supply a custom `--audit-policy-file` on a managed control plane —
+the provider owns the API-server flags. Instead, enable the provider's
+control-plane audit logging and apply the **same predicates** (requester
+`user.username` / principal, `verb`, Secret resource, VAP `403` denials) as
+filters/alerts against the managed log stream. The detection logic is identical;
+only the substrate differs. The provider's default policy is broader than this
+sample (it logs more than the controller ServiceAccounts) — scope your queries to
+the controller identities below.
+
+- **Amazon EKS.** Enable the **`audit`** control-plane log type on the cluster
+  (`aws eks update-cluster-config --logging`, or the console/IaC equivalent).
+  Events land in CloudWatch log group `/aws/eks/<cluster>/cluster`, streams
+  `kube-apiserver-audit-*`; EKS's fixed policy logs Secret access at `Metadata`.
+  Query with CloudWatch Logs Insights:
+
+  ```
+  fields @timestamp, user.username, verb, objectRef.namespace, objectRef.name, responseStatus.code
+  | filter @logStream like /kube-apiserver-audit/
+  | filter objectRef.resource = "secrets"
+      and user.username = "system:serviceaccount:gmc-system:gmc-controller-manager"
+  | filter verb in ["list","watch"] or objectRef.namespace != "<a-tenant-namespace>"
+  ```
+
+- **Google GKE.** API-server **write** events are Admin Activity audit logs
+  (always on). Secret **reads** are **Data Access** logs, which are **off by
+  default** — enable `DATA_READ`/`ADMIN_READ` for the Kubernetes Engine API
+  (Cloud Console → IAM → Audit Logs, or IaC). Query in Logs Explorer; the
+  Kubernetes verb is encoded in `protoPayload.methodName`
+  (`io.k8s.core.v1.secrets.get` / `.list` / `.watch`) and the caller in
+  `protoPayload.authenticationInfo.principalEmail`:
+
+  ```
+  resource.type="k8s_cluster"
+  protoPayload.methodName=~"io.k8s.core.v1.secrets.(get|list|watch)"
+  protoPayload.authenticationInfo.principalEmail="system:serviceaccount:gmc-system:gmc-controller-manager"
+  ```
+
+- **Azure AKS.** Add a cluster **diagnostic setting** forwarding the
+  **`kube-audit`** category (to Log Analytics, a storage account, or Event Hub).
+  Use `kube-audit`, **not** `kube-audit-admin`: the `-admin` variant drops
+  `get`/`list` events, so it cannot see Secret reads — the very signal this
+  policy exists for. Query with KQL (the event is JSON in the `log_s` column):
+
+  ```kusto
+  AzureDiagnostics
+  | where Category == "kube-audit"
+  | extend e = parse_json(log_s)
+  | where e.objectRef.resource == "secrets"
+      and e.user.username == "system:serviceaccount:gmc-system:gmc-controller-manager"
+  | where e.verb in ("list","watch") or e.objectRef.namespace != "<a-tenant-namespace>"
+  ```
+
+  Repeat the per-provider queries for each AGC ServiceAccount
+  (`system:serviceaccount:<tenant-ns>:actions-gateway-controller`), alerting on
+  `verb == "list"` or a `get` on a Secret the AGC does not own.
 
 **Read the events.** Audit events are one JSON object per line. To see GMC
 Secret reads (substitute your GMC user string):

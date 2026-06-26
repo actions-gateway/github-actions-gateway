@@ -56,6 +56,11 @@
 # Installation and how to read the resulting events:
 #   docs/operations/security-operations.md
 #     § API server audit policy (sample)
+# Auto-install paths (so you don't hand-copy this file):
+#   * existing kubeadm node: install-apiserver-audit-policy.sh (this directory)
+#   * cluster you provision:  kind-cluster-audit.yaml (this directory)
+#   * EKS / GKE / AKS:         not installable — see the per-provider managed
+#                              audit-log guidance in security-operations.md
 apiVersion: audit.k8s.io/v1
 kind: Policy
 # Log one event per request, at completion, instead of two (request + response).
