@@ -150,6 +150,145 @@
   }
 })();
 
+// Savings calculator (Appendix F): enhance an empty `.gag-calc` mount into an
+// interactive estimator of monthly savings vs ARC. Without JS the mount is empty
+// and the hand-worked example in the markdown is the static fallback — same
+// progressive-enhancement contract as the persona chips above.
+//
+// Model (honest, deliberately conservative): active job time costs the same in
+// BOTH systems (one pod per job, for the job's duration), so it cancels out. The
+// only difference is ARC's idle `minRunners` floor, billed 24/7. The estimated
+// saving is exactly that eliminated floor. See appendix-f-cost-model.md § F.5.
+(function () {
+  var mount = document.querySelector(".gag-calc");
+  if (!mount) return;
+
+  var HOURS_PER_MONTH = 730; // 365 × 24 ÷ 12
+  var DAYS_PER_MONTH = HOURS_PER_MONTH / 24; // ≈ 30.42
+
+  function attrNum(attr, dflt) {
+    var v = parseFloat(mount.getAttribute(attr));
+    return isFinite(v) ? v : dflt;
+  }
+
+  var state = {
+    jobs: attrNum("data-jobs", 200),
+    duration: attrNum("data-duration", 12),
+    idle: attrNum("data-idle", 10),
+    rate: attrNum("data-rate", 4.10)
+  };
+
+  // Instance presets — list prices cited in appendix-f § F.0.
+  var presets = [
+    { label: "A100 GPU", sub: "p4d.24xlarge ⅛", rate: 4.10 },
+    { label: "A10G GPU", sub: "g5.xlarge", rate: 1.01 },
+    { label: "T4 GPU", sub: "g4dn.xlarge", rate: 0.53 },
+    { label: "CPU node", sub: "m6i.4xlarge", rate: 0.77 }
+  ];
+
+  function dollars(n) {
+    return "$" + Math.max(0, Math.round(n)).toLocaleString("en-US");
+  }
+  function rateStr(n) {
+    return "$" + n.toFixed(2);
+  }
+
+  var fields = [
+    { key: "jobs", label: "Jobs per day", step: 10 },
+    { key: "duration", label: "Avg job duration (min)", step: 1 },
+    { key: "idle", label: "Idle runners ARC holds (minRunners × sets)", step: 1 },
+    { key: "rate", label: "Cost per runner-hour ($)", step: 0.01 }
+  ];
+
+  var form = document.createElement("form");
+  form.className = "gag-calc__form";
+  form.setAttribute("aria-label", "Estimate monthly savings versus ARC");
+  form.addEventListener("submit", function (e) { e.preventDefault(); });
+
+  var inputs = {};
+  fields.forEach(function (f) {
+    var wrap = document.createElement("label");
+    wrap.className = "gag-calc__field";
+    var span = document.createElement("span");
+    span.className = "gag-calc__field-label";
+    span.textContent = f.label;
+    var input = document.createElement("input");
+    input.type = "number";
+    input.inputMode = "decimal";
+    input.min = "0";
+    input.step = String(f.step);
+    input.value = String(state[f.key]);
+    input.addEventListener("input", function () {
+      var v = parseFloat(input.value);
+      state[f.key] = isFinite(v) && v >= 0 ? v : 0;
+      render();
+    });
+    inputs[f.key] = input;
+    wrap.appendChild(span);
+    wrap.appendChild(input);
+    form.appendChild(wrap);
+  });
+
+  var presetBar = document.createElement("div");
+  presetBar.className = "gag-calc__presets";
+  presetBar.setAttribute("role", "group");
+  presetBar.setAttribute("aria-label", "Per-runner cost presets");
+  presets.forEach(function (p) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "gag-calc__preset";
+    b.innerHTML = "<strong>" + p.label + "</strong><small>" + p.sub +
+      " · " + rateStr(p.rate) + "/hr</small>";
+    b.addEventListener("click", function () {
+      state.rate = p.rate;
+      inputs.rate.value = String(p.rate);
+      render();
+    });
+    presetBar.appendChild(b);
+  });
+
+  var out = document.createElement("div");
+  out.className = "gag-calc__out";
+  out.setAttribute("role", "status");
+  out.setAttribute("aria-live", "polite");
+
+  mount.appendChild(form);
+  mount.appendChild(presetBar);
+  mount.appendChild(out);
+
+  function cell(label, value, sub, win) {
+    return '<div class="gag-calc__cell' + (win ? " gag-calc__cell--win" : "") + '">' +
+      '<span class="gag-calc__cell-num">' + value + "</span>" +
+      '<span class="gag-calc__cell-label">' + label + "</span>" +
+      '<span class="gag-calc__cell-sub">' + sub + "</span></div>";
+  }
+
+  function render() {
+    var activeHours = state.jobs * (state.duration / 60) * DAYS_PER_MONTH;
+    var activeCost = activeHours * state.rate; // paid by BOTH systems
+    var idleCost = state.idle * state.rate * HOURS_PER_MONTH; // ARC only
+    var arcTotal = activeCost + idleCost;
+    var saving = idleCost;
+    var pct = arcTotal > 0 ? Math.round((saving / arcTotal) * 100) : 0;
+
+    out.innerHTML =
+      '<div class="gag-calc__grid">' +
+        cell("ARC / month", dollars(arcTotal), "active jobs + idle floor") +
+        cell("This system / month", dollars(activeCost), "active jobs only") +
+        cell("You save / month", dollars(saving), pct + "% of ARC's bill", true) +
+        cell("You save / year", dollars(saving * 12), "at this workload", true) +
+      "</div>" +
+      '<p class="gag-calc__note">Saving = the idle-runner floor ARC holds 24/7 (' +
+      Math.round(state.idle).toLocaleString("en-US") + " × " + rateStr(state.rate) +
+      "/hr × 730 hr). Active job time (~" +
+      Math.round(activeHours).toLocaleString("en-US") +
+      " hr/mo) costs the same in both systems, so it cancels out. " +
+      "Estimate from list prices — verify your own contracted rates.</p>";
+  }
+
+  render();
+})();
+
 // Per-doc audience: upgrade a leading "> **Audience:** ..." blockquote into pills.
 // On github.com (and without JS) it stays a readable blockquote.
 (function () {

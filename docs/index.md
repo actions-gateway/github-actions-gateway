@@ -48,7 +48,7 @@ helm install gag \
 
 ## What GAG gives you
 
-Most of these ladder up to one outcome — **lower cost**: no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs.
+Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc): no idle GPUs, fewer always-on resources, and guaranteed throughput instead of blocked critical jobs. [Estimate your savings vs ARC →](design/appendix-f-cost-model.md#f5-savings-calculator-this-system-vs-arc)
 
 </div>
 
