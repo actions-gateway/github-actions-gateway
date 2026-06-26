@@ -36,6 +36,41 @@ hardening — not yet done.**
 (The original build plan and decision log is `docs/plan/website.md`; this doc is
 the durable how-to-maintain reference.)
 
+## SEO & analytics
+
+Three pieces of machine-readable/operational metadata are wired centrally so they
+apply site-wide, not per page:
+
+- **JSON-LD structured data** — `overrides/main.html`'s `extrahead` block emits
+  `SoftwareSourceCode` and `Organization` schema on every page, populated from
+  `mkdocs.yml` (`site_name`, `site_description`, `site_url`, `repo_url`). Editing
+  those config values updates the structured data automatically; don't hand-paste
+  schema into individual pages. Validate built output at
+  [validator.schema.org](https://validator.schema.org/).
+- **`robots.txt`** — `docs/robots.txt` is copied verbatim into the site root (same
+  mechanism as `docs/CNAME`). It allows all crawlers and references the sitemap.
+- **`sitemap.xml`** — generated automatically by MkDocs Material because
+  `site_url` is set; no extra config. `robots.txt` points crawlers at it.
+
+### Analytics (Plausible — opt-in)
+
+Privacy-respecting analytics (Plausible: no cookies, no Google Analytics) are
+wired via config in `mkdocs.yml` under `extra.analytics` and rendered by
+`overrides/main.html`. **Disabled by default** — the script is only emitted when
+`plausible_domain` is non-empty:
+
+```yaml
+extra:
+  analytics:
+    plausible_domain: ""                              # set to enable, e.g. actions-gateway.com
+    plausible_src: https://plausible.io/js/script.js  # override for a self-hosted instance
+```
+
+To turn analytics on, a maintainer sets `plausible_domain` to the public site
+domain (this is **not** a secret — it is the same `actions-gateway.com` already
+in `site_url`) and registers that domain in their Plausible dashboard. Point
+`plausible_src` at a self-hosted Plausible to avoid the hosted `plausible.io`.
+
 ## Local preview
 
 ```sh

@@ -61,6 +61,15 @@ extra_javascript:
   - javascripts/extra.js
 
 extra:
+  # Privacy-respecting analytics (Plausible) — opt-in, no cookies, no Google.
+  # Wired in overrides/main.html. Leave plausible_domain empty to keep analytics
+  # OFF (the default). To enable, a maintainer sets it to the public site domain
+  # (e.g. actions-gateway.com — this is not a secret); point plausible_src at a
+  # self-hosted instance to avoid the hosted plausible.io. See
+  # docs/development/website.md § Analytics.
+  analytics:
+    plausible_domain: ""
+    plausible_src: https://plausible.io/js/script.js
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/actions-gateway/github-actions-gateway

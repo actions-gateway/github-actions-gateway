@@ -17,4 +17,43 @@
   <link rel="apple-touch-icon" href="{{ config.site_url }}assets/apple-touch-icon.png">
   <link rel="alternate icon" href="{{ config.site_url }}assets/favicon.ico">
   <link rel="icon" type="image/png" sizes="512x512" href="{{ config.site_url }}assets/icon-512.png">
+  {# JSON-LD structured data — emitted on every page from config (not hand-pasted
+     per page) so search engines get a machine-readable description of the
+     project and its source repository. Values track mkdocs.yml. #}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": {{ config.site_name | tojson }},
+    "description": {{ config.site_description | tojson }},
+    "url": {{ config.site_url | tojson }},
+    "codeRepository": {{ config.repo_url | tojson }},
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": {{ config.site_name | tojson }},
+      "url": {{ config.site_url | tojson }}
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": {{ config.site_name | tojson }},
+    "url": {{ config.site_url | tojson }},
+    "logo": "{{ config.site_url }}assets/icon-512.png",
+    "sameAs": [{{ config.repo_url | tojson }}]
+  }
+  </script>
+  {# Privacy-respecting analytics (Plausible) — opt-in and self-host-friendly.
+     Disabled until a maintainer sets extra.analytics.plausible_domain in
+     mkdocs.yml; plausible_src can point at a self-hosted instance. No cookies,
+     no Google Analytics. See docs/development/website.md § Analytics. #}
+  {% if config.extra.analytics and config.extra.analytics.plausible_domain %}
+  <script defer
+          data-domain="{{ config.extra.analytics.plausible_domain }}"
+          src="{{ config.extra.analytics.plausible_src | default('https://plausible.io/js/script.js', true) }}"></script>
+  {% endif %}
 {% endblock %}
