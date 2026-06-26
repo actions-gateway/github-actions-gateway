@@ -123,6 +123,22 @@ These are best-effort: absent if the GitHub payload omitted the corresponding
 `system.github.*` variable. Never use them for security enforcement — they are
 informational annotations for operator visibility.
 
+The provisioner also gap-fills three **node-disruption-safety** annotations on
+every worker pod, so a node autoscaler or the descheduler does not evict a pod
+mid-job and strand the CI run (these are third-party well-known keys, not our
+`actions-gateway.com/` domain):
+
+- `karpenter.sh/do-not-disrupt: "true"` — Karpenter consolidation/drift opt-out.
+- `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` — Cluster Autoscaler scale-down opt-out.
+- `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` — descheduler opt-out (current well-known key; the older `…/evict` is opt-*in* only).
+
+Gap-fill only: a value for any of these keys set in the runner's
+`podTemplate.metadata.annotations` wins (mirroring the SecurityContext gap-fill).
+Only these three keys are honored from the template; arbitrary `podTemplate`
+annotations are not copied onto worker pods. The markers live on the pod, so they
+release automatically when the pod is torn down on job completion. Operator-facing
+detail in [observability.md](../operations/observability.md#node-disruption-safety-annotations).
+
 ## Status conditions & alertable condition metrics
 
 The CRDs report observed state with standard Kubernetes conditions

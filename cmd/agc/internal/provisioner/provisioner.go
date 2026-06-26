@@ -80,6 +80,25 @@ const (
 	workerComponent = "runner"
 	partOf          = "actions-gateway"
 
+	// Node-disruption-safety annotation keys stamped on worker pods so the
+	// common cluster autoscalers and the descheduler do not evict a pod while
+	// it is running a CI job (which would strand the job). A worker pod is a
+	// Job-like, non-replicated unit of work: there is no replacement once it is
+	// killed, so consolidation/scale-down/descheduling must leave it alone for
+	// the (bounded) lifetime of the job. See applyDisruptionSafetyDefaults.
+	//   - annoKarpenterDoNotDisrupt blocks Karpenter consolidation/drift
+	//     disruption (karpenter.sh/do-not-disrupt: "true").
+	//   - annoSafeToEvict tells the cluster-autoscaler the pod is not safe to
+	//     evict on scale-down (cluster-autoscaler.kubernetes.io/safe-to-evict:
+	//     "false").
+	//   - annoDeschedulerPreferNoEviction is the current well-known descheduler
+	//     opt-out (descheduler.alpha.kubernetes.io/prefer-no-eviction: "true").
+	//     The older descheduler.alpha.kubernetes.io/evict key is opt-IN only —
+	//     its value is ignored, so it cannot express "do not evict".
+	annoKarpenterDoNotDisrupt       = "karpenter.sh/do-not-disrupt"
+	annoSafeToEvict                 = "cluster-autoscaler.kubernetes.io/safe-to-evict"
+	annoDeschedulerPreferNoEviction = "descheduler.alpha.kubernetes.io/prefer-no-eviction"
+
 	// securityProfilePrivileged / securityProfileRestricted are the PSA
 	// enforcement levels (mirrored from ActionsGateway.spec.securityProfile)
 	// that gate how much of the secure-by-default worker SecurityContext
@@ -427,6 +446,50 @@ func (m jobMeta) podAnnotations() map[string]string {
 		return nil
 	}
 	return a
+}
+
+// disruptionSafetyDefaults is the gap-fill set of node-disruption-safety
+// annotations stamped on every worker pod. Each value is the marker the
+// respective component honors to skip evicting a running pod.
+var disruptionSafetyDefaults = map[string]string{
+	annoKarpenterDoNotDisrupt:       "true",
+	annoSafeToEvict:                 "false",
+	annoDeschedulerPreferNoEviction: "true",
+}
+
+// applyDisruptionSafetyDefaults gap-fills the node-disruption-safety annotations
+// (see disruptionSafetyDefaults) onto the worker pod annotation map, mirroring
+// the secure-by-default SecurityContext gap-fill: a controller-managed default
+// that a tenant can still override per key.
+//
+// A worker pod runs exactly one CI job and has no replica/controller behind it,
+// so an autoscaler or descheduler that evicts it mid-job strands that job with
+// no replacement. Stamping these markers makes the pod "production-relyable" on
+// the clusters operators actually run (Karpenter, cluster-autoscaler,
+// descheduler) without per-tenant configuration. The markers ride on the worker
+// pod itself, so they vanish the moment the pod is torn down on job completion
+// (immediately when completedPodTTL is 0, otherwise by the reaper) — they can
+// never pin a dead pod.
+//
+// Overridable: a tenant who manages disruption another way (a PodDisruptionBudget,
+// or a job they know is safe to interrupt) can set any of these keys to a
+// different value in their PodTemplate metadata and that explicit value wins.
+// Only these three keys are honored from the template; arbitrary template
+// annotations are not copied onto the worker pod.
+func applyDisruptionSafetyDefaults(dst, templateAnnotations map[string]string) map[string]string {
+	if dst == nil {
+		dst = make(map[string]string, len(disruptionSafetyDefaults))
+	}
+	for key, def := range disruptionSafetyDefaults {
+		if v, ok := templateAnnotations[key]; ok {
+			dst[key] = v // explicit tenant override wins
+			continue
+		}
+		if _, ok := dst[key]; !ok {
+			dst[key] = def
+		}
+	}
+	return dst
 }
 
 func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (err error) {
@@ -1052,12 +1115,17 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 		labels[k] = v
 	}
 
+	// Stamp node-disruption-safety defaults (gap-filled; a tenant PodTemplate
+	// annotation for any of these keys wins) so consolidation/scale-down/
+	// descheduling don't evict the pod mid-job and strand the CI run.
+	annotations := applyDisruptionSafetyDefaults(meta.podAnnotations(), template.ObjectMeta.Annotations)
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            podName,
 			Namespace:       key.Namespace,
 			Labels:          labels,
-			Annotations:     meta.podAnnotations(),
+			Annotations:     annotations,
 			OwnerReferences: []metav1.OwnerReference{target.OwnerRef()},
 		},
 		Spec: template.Spec,
