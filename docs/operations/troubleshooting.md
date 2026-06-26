@@ -24,6 +24,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
@@ -653,6 +654,16 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 - Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
 - If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
 - Re-run the cancelled workflow from the GitHub UI once the cause is fixed.
+
+---
+
+## Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)
+
+**Symptoms.** Worker pods sit `Running` with a not-ready container count (`READY 1/2`) long after their job completed; `completedPodTTL` never deletes them; over time the RunnerGroup wedges at `maxWorkers` and new jobs stop being picked up even though no job is actually executing. `kubectl get pod -o jsonpath='{.spec.containers[*].name}'` shows a second container such as `istio-proxy` or `linkerd-proxy`.
+
+**What happened.** A service-mesh sidecar was injected into the worker pod. GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit. A classic mesh sidecar never exits on its own, so the pod stays `Running` forever and falls through both reaper paths (`completedPodTTL` covers terminal pods; `pendingPodDeadline` covers `Pending` pods — neither covers a stuck `Running` pod).
+
+**Resolution.** Opt the GAG tenant namespace out of the mesh, or — if mesh membership is mandatory — switch to native sidecars (Kubernetes 1.28+) or a sidecar-less/ambient data plane. The full per-mesh configuration (Istio sidecar + ambient, Linkerd, Cilium, generic) is in [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md). Note that mesh opt-out/exclusion annotations set on the RunnerGroup `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
 
 ---
 

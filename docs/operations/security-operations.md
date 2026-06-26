@@ -582,6 +582,13 @@ refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted
 or go stale. See [network-architecture.md](../design/network-architecture.md#networkpolicy-rules)
 for the full policy set.
 
+> **Running a service mesh?** A mesh sidecar transparently intercepts the
+> worker's outbound TCP and can re-route GitHub-bound traffic through a mesh
+> egress gateway, silently bypassing the per-tenant proxy and dropping the
+> egress-IP attribution this isolation property rests on. See
+> [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md) for the
+> injection opt-out and egress exclusions that keep GAG's proxy path authoritative.
+
 Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy
 tunnels HTTP/HTTPS to GitHub CIDRs only, so a non-HTTP protocol (a database, SSH,
 a raw TCP/UDP service), an internal artifact store or package mirror, or a

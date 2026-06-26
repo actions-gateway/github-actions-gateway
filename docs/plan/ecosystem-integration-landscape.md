@@ -57,6 +57,9 @@ GAG facts that drive the mapping (from `docs/design/`):
 |22|Gateway API|★★★★|🟡|Ingress successor; GAG exposes no public ingress, but metrics/webhook services could adopt conventions.|
 
 ### C. Service mesh (highest-conflict area)
+
+> **Delivered (Q206):** the operator-facing coexistence guide — injection opt-out, sidecar lifecycle (native sidecars / ambient), and egress exclusions for Istio/Linkerd/ambient with concrete config — is at [operations/service-mesh-coexistence.md](../operations/service-mesh-coexistence.md).
+
 | # | Project | Pop. | Rel. | Note for GAG |
 |--:|---|:--:|:--:|---|
 |23|Istio|★★★★★|🔴|**Sidecar injection breaks run-to-completion worker pods** (job + sidecar never exits) and **mesh mTLS/egress interception conflicts with the per-tenant proxy egress model**. Needs: namespace/pod opt-out guidance, ambient-mode note, `holdApplicationUntilProxyStarts`/`EXIT_ON_ZERO_ACTIVE_CONNECTIONS` caveats.|
