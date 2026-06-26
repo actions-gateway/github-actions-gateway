@@ -60,8 +60,7 @@ markers per item.
 | [docs.md](docs.md) | Documentation roadmap across phases | ✅ Done — all Phase 1/2/3 items shipped except alerting.md, deferred as [Q18](../STATUS.md#Q18) |
 | [docs-six-layer-audit.md](docs-six-layer-audit.md) | Six-layer consistency audit of `docs/` (terminology, cross-refs, nav, reuse) | ✅ Done — all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only |
-| [k8s-best-practices.md](k8s-best-practices.md) | Project-wide Kubernetes best-practices audit (RBAC, pod security, controller correctness, CRD polish, manifests, observability, supply chain) | ✅ Done — fixes shipped (was STATUS Queue Q30–Q36, all completed); kept (still cited by Q74 + code as rationale) |
-| [logging-audit.md](logging-audit.md) | Cross-module log-call-site audit: format fragmentation (slog/zap), credential-leak surface, hot-path spam, correlation, per-tenant log level | ✅ Done — all themes shipped (was Q87–Q89, all completed); kept (still cited by code as rationale) |
+| [k8s-best-practices.md](k8s-best-practices.md) | Project-wide Kubernetes best-practices audit (RBAC, pod security, controller correctness, CRD polish, manifests, observability, supply chain) | ✅ Done — fixes shipped (was STATUS Queue Q30–Q36, all completed); kept active (still referenced by Q74's graduation work) |
 | [go-to-market.md](go-to-market.md) | Adoption plan (OSS, non-commercial): ICP, demand evidence vs ARC, messaging priority, channels, AI discoverability, donation posture | ⓘ Strategy — follow-ups (ARC→GAG migration guide, README problem-first) on the STATUS Queue |
 | [ecosystem-integration-landscape.md](ecosystem-integration-landscape.md) | ~100 Kubernetes ecosystem integrations cataloged + mapped to GAG (conflict / integrate / interact); basis for ecosystem enhancements and "feels-native" conventions | ⓘ Research — items filed on the STATUS Queue/Deferred as Q205–Q218; Q218 (worker disruption-safety) is a v2beta1 gate |
 | [website.md](website.md) | Public GitHub Pages site: MkDocs Material rendering of `docs/` + a custom landing page and "vs ARC" comparison; domain decision folded in (org move) | ✅ Done — scaffold, landing, comparison, and public launch shipped (was Q52/Q99/Q129, all completed) |
@@ -82,6 +81,7 @@ Plans whose work has fully landed and which `docs/STATUS.md` no longer reference
 | [archive/acquire-admission-control.md](archive/acquire-admission-control.md) | Gate worker-pod capacity before `acquirejob`; in-cluster queue rejected | Q59 — implemented |
 | [archive/competitive-analysis.md](archive/competitive-analysis.md) | GAG vs ARC per-benefit working notes; fed the comparison content | Q60 — verified + folded into [appendix-d](../design/appendix-d-alternatives-considered.md) |
 | [archive/platform-owned-quota.md](archive/platform-owned-quota.md) | Remove tenant `spec.namespaceQuota`; platform owns Namespace + `ResourceQuota` + `LimitRange` | 2026-06-14 — Q130, breaking CRD change pre-1.0 |
+| [archive/logging-audit.md](archive/logging-audit.md) | Cross-module log-call-site audit: format fragmentation, credential-leak surface, hot-path spam, correlation, per-tenant log level | Q86–Q89 — all themes shipped (Theme A was the 1.0-gating JSON unification) |
 
 ## Conventions
 
@@ -104,8 +104,13 @@ When a plan fully closes:
   row), leave it under `docs/plan/`.
 - Once STATUS.md no longer references it, `git mv` it to
   `docs/plan/archive/` and move its row in this README to the Archive
-  section. Update any other in-repo links to the new path. The doc
-  stays available; the working directory just gets less noisy. See the
+  section. Update any other in-repo links to the new path **and the moved
+  doc's own relative links** (dropping into `archive/` adds one `../` level).
+  The doc stays available; the working directory just gets less noisy. See the
   full protocol in [`docs/development/maintaining-backlog.md`](../development/maintaining-backlog.md#archiving-completed-plan-docs).
+- **Do this on close, not in a later audit** — in the same change that drops the
+  plan's last STATUS reference. `make plan-index-check` (part of `make check`)
+  fails when an active, non-`ⓘ` plan here is no longer referenced by STATUS.md,
+  so a forgotten archival can't ship silently.
 
 Add a row to this README when creating, completing, or archiving a plan.

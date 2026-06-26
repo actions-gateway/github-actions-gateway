@@ -140,7 +140,13 @@ When you flip a plan to `✅`, add (or update) a **Status** banner at the top of
 
 ## Archiving completed plan docs
 
-When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
+When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
+
+**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open. Closed plans left in place pile up and make the index read as though finished projects still have work — the exact drift this rule exists to prevent. Two gates (both in `make check`) enforce it so the omission can't ship silently:
+- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` is no longer referenced by `STATUS.md` — i.e. a plan that should have been archived. To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
+- **`make doc-links`** fails on any broken link the move introduces.
+
+The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit (don't wait for someone to notice it citing a since-completed `QNN`).
 
 **Protocol:**
 
@@ -151,7 +157,8 @@ When a plan's work fully lands and `docs/STATUS.md` no longer references it (no 
    - `docs/plan/README.md` — move the doc's row from its current section into the **Archive** section and update the status text.
    - Other plan docs cross-referencing it (`grep -rn "<docname>.md" docs/plan/`).
    - `docs/development/`, `docs/design/`, `docs/operations/` if the plan is cited there.
-   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`).
+   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`). Prose mentions (e.g. "see foo Theme E") don't break; only `](…<docname>.md…)` *links* need rewriting.
+   - **The moved doc's *own* outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself: each `](../…)` needs one more `../`, and a bare same-dir link to a doc still in `plan/` becomes `](../name.md)`. Easy to miss; `make doc-links` catches it.
 5. **Bundle archival in one commit.** If multiple plans are being archived in the same session (e.g. after a sweep), move them together — easier to review and to revert as a unit if a reference was missed.
 6. **Do not edit STATUS.md in the same commit** as the archive move. STATUS.md edits are always isolated (see §1 of the non-negotiables).
 

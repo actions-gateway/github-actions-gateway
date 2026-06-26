@@ -63,7 +63,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status shellcheck queue-unblock \
+        ginkgo golangci-lint lint lint-status plan-index-check shellcheck queue-unblock \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -90,7 +90,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status plan-index-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
@@ -226,6 +226,12 @@ lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modul
 .PHONY: lint-status
 lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 	scripts/lint-status.sh
+
+# Catches the "closed plan never archived" drift that makes docs/plan/README.md
+# read as stale. Rationale + the ⓘ exemption live in the script header.
+.PHONY: plan-index-check
+plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS-referenced (else archive them)
+	scripts/check-plan-index.sh
 
 # Without this gate, standalone helper scripts ship unlinted: actionlint only
 # covers inline workflow `run:` blocks. Glob, version pin, and rationale live
