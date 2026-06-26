@@ -24,8 +24,8 @@ type ActionsGatewaySpec struct {
 	// discriminated union keyed by credentials.type: exactly the member the discriminator
 	// names is set (GitHubApp today; workload identity joins as an additive second member,
 	// Q197). v2 nests the credential under this explicit-discriminator parent before the
-	// v2beta1 freeze so adding an auth method never reshapes the spec again (§H.15,
-	// docs/plan/v2beta1.md).
+	// v2beta1 freeze so adding an auth method never reshapes the spec again
+	// (§H.15).
 	Credentials GitHubCredentials `json:"credentials"`
 
 	// GitHubURL is the GitHub organization, enterprise, or repository URL this
@@ -127,8 +127,8 @@ const (
 // GitHub. Type is the explicit discriminator (k8s union convention): exactly the member
 // it names is set. Today the only member is GitHubApp; workload identity joins as a
 // second member without a breaking change (Q197) — the union shape exists so adding an
-// auth method never reshapes the spec again after the v2beta1 freeze (§H.15,
-// docs/plan/v2beta1.md). The "exactly the named member is set" invariant is enforced by
+// auth method never reshapes the spec again after the v2beta1 freeze (§H.15).
+// The "exactly the named member is set" invariant is enforced by
 // CEL (the apiserver does not enforce native union semantics on CRDs): one per-member
 // iff rule that each new member extends, never an N-way "exactly one of" that grows with
 // the union.

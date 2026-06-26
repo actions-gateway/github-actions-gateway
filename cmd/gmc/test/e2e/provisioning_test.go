@@ -526,7 +526,7 @@ spec:
 // egressEnforcingCNI reports whether the cluster runs a CNI known to enforce
 // NetworkPolicy egress rules at runtime. kindnet (kind's default) bundles
 // kube-network-policies, which two CI iterations showed does NOT drop egress
-// for the negative cases (see docs/plan/worker-egress-proxy.md); the runtime
+// for the negative cases (see the worker-egress-proxy plan); the runtime
 // negative specs skip themselves unless Calico or Cilium is detected.
 func egressEnforcingCNI() bool {
 	return utils.ResourceExists("daemonset", "kube-system", "calico-node") || // manifest install

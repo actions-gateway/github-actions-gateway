@@ -48,8 +48,8 @@ const RunnerVersion = "2.335.1"
 const WorkerImageRepo = "ghcr.io/actions/actions-runner"
 
 // WorkerImageDigest is the multi-arch manifest-index digest of WorkerImageRepo
-// at RunnerVersion (covers linux/amd64 + linux/arm64 — see
-// docs/plan/q97-multiarch-images.md). It MUST equal the @sha256 in
+// at RunnerVersion (covers linux/amd64 + linux/arm64; see the multi-arch
+// image plan, Q97). It MUST equal the @sha256 in
 // cmd/worker/Dockerfile's FROM line; the lockstep test enforces that.
 //
 // Re-resolve on a version bump with:

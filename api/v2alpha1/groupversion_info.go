@@ -10,8 +10,8 @@
 // GMC-group ActionsGateway (gatewayRef) and EgressProxy (proxyRef), but the GMC
 // module already imports the AGC module to build RunnerSet CRs; co-locating the v2
 // kinds here breaks that would-be module dependency cycle without either
-// controller module importing the other's API package
-// (docs/plan/v2-api.md, M3a "Module dependency cycle").
+// controller module importing the other's API package (the neutral api/ module
+// resolves the GMC↔AGC cycle; see docs/development/go-workspaces.md).
 //
 // v2 renames the API group from actions-gateway.github.com (v1alpha1) to
 // actions-gateway.com — a domain the project owns

@@ -3,7 +3,7 @@
 // in-process broker model, asserting conformance to every documented contract
 // in docs/design/03-api-contracts.md (§3.2 credential crypto, §3.3 endpoints,
 // §3.4 payload shapes, §3.5 rate-limit handling) plus the live-protocol
-// findings confirmed in docs/plan/milestone-1.md §8.
+// findings confirmed in the Milestone 1 plan §8.
 //
 // The suite is deliberately credential-free: it drives broker.Client against
 // the shared broker stub (broker/brokertest) and small purpose-built httptest
@@ -703,7 +703,7 @@ func Report(results []Result) string {
 	b.WriteString("in-process model of the broker. It does not, by itself, talk to GitHub. The\n")
 	b.WriteString("behaviours the model encodes were confirmed against real GitHub during\n")
 	b.WriteString("Milestone 1 — see the live-probe findings in\n")
-	b.WriteString("[docs/plan/milestone-1.md](../plan/milestone-1.md) §8 (acknowledge not required,\n")
+	b.WriteString("the Milestone 1 plan §8 (acknowledge not required,\n")
 	b.WriteString("session reuse after acquire, egress-IP variance). The companion\n")
 	b.WriteString("credential-gated probe binary (`cmd/probe`) is the live check that the model\n")
 	b.WriteString("still matches production; this suite is the repeatable, always-green guard that\n")
