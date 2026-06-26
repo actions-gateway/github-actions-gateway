@@ -717,27 +717,89 @@ tenant). The GMC **validates each entry as a CIDR at startup and refuses to star
 on a malformed one**, so a typo fails fast rather than reconciling a NetworkPolicy
 the apiserver rejects.
 
-**Finding the right CIDR — and the cost of getting it wrong.** The value must
-cover the destination the AGC's apiserver traffic carries **after** kube-proxy
-DNAT, which is cluster-topology-specific:
+### The one verification every platform shares
 
-- Inspect what `kubernetes.default.svc` resolves/DNATs to. On many managed
-  platforms it is the control-plane node IPs or a load-balancer VIP; confirm with
-  `kubectl get endpoints kubernetes -o wide` (the `ENDPOINTS` are the post-DNAT
-  targets NetworkPolicy evaluates against).
-- A CIDR that is too narrow (or that the platform rotates without notice) will
-  **break the AGC's apiserver access** — the AGC then cannot acquire jobs or
-  manage worker pods for that tenant. Symptom: AGC logs show apiserver dial
-  timeouts after a rollout that introduced or changed `apiServerCIDRs`. **Remedy:
-  widen the CIDR or clear `apiServerCIDRs` to restore the any-destination
-  default.** Treat this as you would any egress tightening — validate on one
-  cluster before fleet-wide rollout, and re-confirm after control-plane scaling
-  or IP changes.
+The value must cover the destination the AGC's apiserver traffic carries
+**after** kube-proxy DNAT — **not** the `kubernetes` Service ClusterIP (that
+virtual IP is DNAT'd away *before* NetworkPolicy is evaluated, so an `ipBlock`
+naming the ClusterIP matches nothing and severs apiserver access). The post-DNAT
+destinations are exactly the **endpoints** of the `kubernetes` Service in the
+`default` namespace. On every platform, confirm them before you scope:
+
+```bash
+kubectl get endpoints kubernetes -n default -o wide
+# NAME         ENDPOINTS                          AGE
+# kubernetes   10.0.12.34:443,10.0.34.56:443      90d
+```
+
+Those `ENDPOINTS` IP:port pairs are the literal targets the policy evaluator
+matches against. Your `apiServerCIDRs` must contain a CIDR covering **all** of
+them, and **stay** covering them as the platform rotates. Below is how to find a
+*stable* covering CIDR per platform — and where no stable CIDR exists, so you
+must leave the default.
+
+### Finding the apiserver CIDR, by platform
+
+| Platform | Where the apiserver lives after DNAT | Stable CIDR to scope to | Safe to scope? |
+|---|---|---|---|
+| **kind** | The control-plane container's IP on the kind Docker network, on **6443**. | The kind network subnet, e.g. `172.18.0.0/16` (`docker network inspect kind -f '{{(index .IPAM.Config 0).Subnet}}'`), or a `/32` per control-plane node. | **Yes** — local, you own the IPs. (Note kindnet does not *enforce* NetworkPolicy; scope it on a Calico/Cilium kind.) |
+| **kubeadm / self-managed** | Control-plane node IP(s), on **6443**. | A `/32` per control-plane node, or the control-plane node subnet CIDR. For HA, list **every** control-plane node IP — a missed one strands the AGC whenever it lands on that apiserver. | **Yes**, if control-plane node IPs are static (the usual case). Re-confirm after any control-plane add/replace. |
+| **Amazon EKS** | With **private endpoint access**, managed elastic network interfaces (ENIs) in *your* VPC subnets — private IPs you control. With **public-only** access, an AWS-managed public IP that AWS does **not** publish and may change. | The VPC CIDR, or the specific subnet CIDRs that host the cluster ENIs (`aws ec2 describe-subnets`). Verify against `kubectl get endpoints kubernetes`. | **Yes** for private-endpoint clusters. **No** for public-only — leave the default. |
+| **Google GKE** | For **private clusters**, the control-plane private endpoint in the Google-managed master CIDR block (a `/28` you set at cluster creation). Public clusters use a Google-managed public IP that can change. | The master `/28`: `gcloud container clusters describe <c> --format='value(privateClusterConfig.masterIpv4CidrBlock)'`. | **Yes** for private clusters. **No** for public endpoint — leave the default. |
+| **Azure AKS** | For **private clusters**, a private IP in your VNet (resolved via the cluster's private DNS zone). Public AKS uses an Azure-managed public IP behind the apiserver FQDN that may change. | The AKS node subnet CIDR (or the resolved private-endpoint IP as a `/32`); confirm with `kubectl get endpoints kubernetes`. | **Yes** for private clusters. **No** for public endpoint — leave the default. |
+
+Rule of thumb: **a managed control plane is only safely scopable when you have
+put its endpoint inside a network range you own** (private/VPC/VNet access). A
+public managed endpoint is a moving, provider-owned IP — scoping to a guessed
+range will eventually break, so keep the any-destination default there.
+
+**The cost of getting it wrong.** A CIDR that is too narrow (or that the
+platform rotates out from under you) **breaks the AGC's apiserver access** — the
+AGC can no longer acquire jobs or manage worker pods for that tenant. Symptom:
+AGC logs show apiserver dial timeouts after a rollout that introduced or changed
+`apiServerCIDRs`. **Remedy: widen the CIDR or clear `apiServerCIDRs` to restore
+the any-destination default.** Treat this as any egress tightening — validate on
+one cluster before fleet-wide rollout, and re-confirm after control-plane
+scaling, upgrades, or IP changes.
 
 Leave `apiServerCIDRs` unset unless you have a confirmed, stable apiserver CIDR —
 the any-destination default is bounded by the §5.2 compensating controls (key
 mounted read-only, never an env var; workers carry no apiserver egress at all;
 digest-pinned non-root AGC; all GitHub-bound traffic still through the proxy).
+
+### Why GAG can't discover and tighten this for you (feasibility verdict)
+
+A natural question is whether the GMC should just **read the `kubernetes`
+endpoints itself and scope every AGC NetworkPolicy automatically**, making the
+tightening the default. We reviewed this for Q183 and **deliberately did not**,
+because an auto-tightened default would silently regress apiserver reachability
+on common platforms:
+
+- **The IPs rotate, and a snapshot goes stale.** On managed control planes the
+  endpoint IPs change on scaling, upgrades, and maintenance — without notice.
+  A one-time discovery at provisioning time would tighten to a set that later
+  stops matching, breaking the AGC.
+- **Keeping it live needs a watch — with a lockout failure mode.** Staying
+  correct means watching `endpoints/kubernetes` and re-reconciling every
+  tenant's AGC policy on each change. There is always a race window where the
+  policy lags a real IP rotation; during it the AGC (and potentially the GMC,
+  which reaches the apiserver over the same path) is locked out of the very
+  apiserver it needs to *repair* the policy — a self-inflicted control-plane
+  deadlock. A tightening that can strand the controller maintaining it is not a
+  safe default.
+- **CNI rewrites can move the target again.** Some CNIs apply further
+  SNAT/encapsulation, so even the endpoint IPs are not guaranteed to be what the
+  policy evaluator ultimately matches — another reason a portable automatic
+  value does not exist.
+
+**Verdict:** automatic, default-on tightening is **not safe or portable**, so
+the any-destination rule stays the secure default and narrowing remains an
+operator-confirmed, per-cluster opt-in (the `apiServerCIDRs` allowlist above).
+This honours secure-by-default without silently regressing reachability: the
+operator who *can* verify a stable CIDR closes the residual, and everyone else
+keeps a working AGC. A controller-driven endpoint-watch that auto-narrows is
+recorded as a future enhancement gated on solving the rotation/lockout failure
+mode — see [appendix-g §G.10](../design/appendix-g-future-enhancements.md#g10-controller-discovered-apiserver-cidr-auto-narrowing).
 
 ---
 
