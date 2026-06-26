@@ -110,11 +110,14 @@ go-version-check: ## Assert a single `go` directive across go.work / go.mod / go
 	scripts/check-go-version.sh
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
-# express — currently the tags-only release signing-identity regexp (Q124).
-# Lightweight pure-bash checks; part of `check` and the CI shellcheck job.
+# express — the tags-only release signing-identity regexp (Q124) and the
+# validate-cluster preflight decision helpers (CNI classification + K8s version
+# parsing, Q184). Lightweight pure-bash checks; part of `check` and the CI
+# shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (e.g. release identity regexp)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers)
 	scripts/verify-release-test.sh
+	scripts/validate-cluster-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
@@ -351,6 +354,19 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 	scripts/sync-chart-rbac.sh --check
 	scripts/sync-chart-webhook.sh --check
 	scripts/manifest-validate.sh
+
+##@ Operations
+
+# Pre-install cluster preflight (Q184). Validates the target cluster can uphold
+# tenant isolation BEFORE `helm install`: CNI NetworkPolicy enforcement (the
+# critical one — kindnet silently voids it = hard fail), Kubernetes >= 1.30,
+# cert-manager, and metrics-server. Detection-based (no workloads scheduled), so
+# it is safe to run against a fresh cluster. KUBECTL/VALIDATE_STRICT env-override
+# the binary and warning strictness (see the script header). Operators run this
+# as the required first install step (docs/operations/install.md).
+.PHONY: validate-cluster
+validate-cluster: ## Preflight the target cluster before install (CNI enforcement, K8s>=1.30, cert-manager, metrics-server)
+	scripts/validate-cluster.sh
 
 ##@ e2e
 
