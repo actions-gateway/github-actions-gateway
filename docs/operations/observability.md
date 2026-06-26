@@ -31,6 +31,7 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
   - [Platform dashboard](#platform-dashboard)
   - [Dashboard Variables](#dashboard-variables)
 - [Label Cardinality Warning](#label-cardinality-warning)
+- [Breaking observability changes (Q205)](#breaking-observability-changes-q205)
 
 ## Logging
 
@@ -77,8 +78,10 @@ Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, pr
 
 The per-tenant AGC emits **OpenTelemetry traces** for its two hottest operational paths:
 
-- **`RunnerGroup.Reconcile`** — one span per reconcile, attributed with `runnergroup.namespace` / `runnergroup.name`. Errors set the span status.
-- **`Provisioner.provision`** — one span per acquired job (the job-to-pod path), with child spans `stageJobSecret`, `countActivePods`, `createPod`, and `waitForCompletion`. The root span carries `runnergroup.*`, `plan.id`, `pod.name`, `active_pods`, `ceiling.held`, `priority_class`, and the final `pod.phase` / `pod.reason` / `duration_seconds`. `waitForCompletion` is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.
+- **`RunnerGroup.Reconcile`** — one span per reconcile, attributed with `k8s.namespace.name` / `gateway.runnergroup.name`. Errors set the span status.
+- **`Provisioner.provision`** — one span per acquired job (the job-to-pod path), with child spans `stageJobSecret`, `countActivePods`, `createPod`, and `waitForCompletion`. The root span carries `k8s.namespace.name`, `gateway.owner.name`, `gateway.plan.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, `gateway.priority_class`, and the final `gateway.pod.phase` / `gateway.pod.reason` / `gateway.provision.duration_seconds`. `waitForCompletion` is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.
+
+> Span attribute names follow the [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/): Kubernetes-native attributes use the `k8s.*` keys (`k8s.namespace.name`, `k8s.pod.name`); project-specific attributes are namespaced under `gateway.`. These keys were renamed in the Q205 naming audit — see [Breaking observability changes](#breaking-observability-changes-q205) for the old→new mapping.
 
 Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.
 
@@ -307,7 +310,7 @@ remove the files when finished.)
 | `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see [Appendix A](../design/appendix-a-capacity-slos.md). |
 | `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful GitHub App installation token refreshes. |
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refresh attempts. See SLO threshold below. |
-| `actions_gateway_renewjob_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. |
+| `actions_gateway_renew_job_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. (Renamed from `…_renewjob_errors_total` in Q205 — see [Breaking observability changes](#breaking-observability-changes-q205).) |
 | `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction. |
 | `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). |
 | `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. |
@@ -405,6 +408,36 @@ kubectl describe pod <pod-name> -n <namespace>
 
 The annotations are absent if the AcquireJob payload did not include the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs).
 
+### Selecting GAG objects with the recommended labels
+
+Every object GAG creates — AGC/proxy/worker pods, Deployments, Services,
+NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs
+— carries the Kubernetes [recommended (`app.kubernetes.io/*`) labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/),
+so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost
+cost attribution work without learning the project-specific keys. They are
+**additive metadata** — the functional selectors the controllers rely on (`app:`,
+`actions-gateway/component: workload`, the per-gateway/runner-set identity labels)
+are untouched, so never build a controller's pod selector on the `app.kubernetes.io/*`
+labels.
+
+| Label | Values |
+| --- | --- |
+| `app.kubernetes.io/name` | `actions-gateway-controller` · `actions-gateway-proxy` · `actions-runner` |
+| `app.kubernetes.io/instance` | the owning `ActionsGateway` / `EgressProxy` / `RunnerGroup` / `RunnerSet` name |
+| `app.kubernetes.io/component` | `controller` · `proxy` · `runner` |
+| `app.kubernetes.io/part-of` | `actions-gateway` (every GAG object) |
+| `app.kubernetes.io/managed-by` | `actions-gateway-gmc` (control-plane children) · `actions-gateway-controller` (worker pods + job Secrets, created by the AGC) |
+| `app.kubernetes.io/version` | the runner version on worker pods and their job Secrets; omitted on versionless infra (RBAC, NetworkPolicies, Services, TLS Secrets) and control-plane objects |
+
+```bash
+# Everything GAG owns, across tenants:
+kubectl get all,networkpolicy,secret -A -l app.kubernetes.io/part-of=actions-gateway
+
+# One tenant's proxy pool:
+kubectl get all -n <namespace> \
+  -l app.kubernetes.io/instance=<gateway>,app.kubernetes.io/component=proxy
+```
+
 ### Node-disruption-safety annotations
 
 A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement. So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:
@@ -426,7 +459,7 @@ These markers ride on the worker pod itself, so they are removed the moment the 
 | Symptom | Metric(s) to check | Notes |
 | --- | --- | --- |
 | Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s |
-| Jobs are randomly cancelled | `renewjob_errors_total` | Each sustained error risks a job cancellation |
+| Jobs are randomly cancelled | `renew_job_errors_total` | Each sustained error risks a job cancellation |
 | Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
@@ -475,7 +508,7 @@ groups:
       # Page: sustained renewjob failures will cancel running jobs
       - alert: ActionsGatewayRenewJobErrors
         expr: |
-          rate(actions_gateway_renewjob_errors_total[5m]) > 0.1
+          rate(actions_gateway_renew_job_errors_total[5m]) > 0.1
         for: 5m
         labels:
           severity: critical
@@ -667,7 +700,7 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Active sessions | `actions_gateway_active_sessions` | Stat / Time series |
 | Jobs acquired/min | `rate(actions_gateway_jobs_acquired_total[5m]) * 60` | Time series |
 | Token refresh errors | `rate(actions_gateway_token_refresh_errors_total[5m])` | Stat (threshold: >0 = red) |
-| RenewJob errors | `rate(actions_gateway_renewjob_errors_total[5m])` | Stat (threshold: >0 = yellow) |
+| RenewJob errors | `rate(actions_gateway_renew_job_errors_total[5m])` | Stat (threshold: >0 = yellow) |
 
 **Row 2 — Pod Creation Latency SLO**
 
@@ -765,3 +798,40 @@ Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardi
 - **Do not use dynamically generated `runner_group` names** (e.g. names incorporating PR numbers or commit SHAs). Each unique combination of `namespace` + `runner_group` creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.
 - **Stable, human-meaningful names** like `gpu-2x`, `cpu-standard`, `gpu-a100` are correct. These are configured in the `ActionsGateway` spec and should not change after initial setup.
 - If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.
+
+## Breaking observability changes (Q205)
+
+The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
+OpenTelemetry conventions before the v2beta1 freeze. These are **breaking** for any
+dashboard, alert, recording rule, or trace query that references the old names —
+update them when you adopt a release that includes Q205.
+
+**Metric renames**
+
+| Old | New |
+| --- | --- |
+| `actions_gateway_renewjob_errors_total` | `actions_gateway_renew_job_errors_total` |
+
+All other metric names were audited and kept: every counter already ends in `_total`,
+every histogram already carries the `_seconds` base unit, and the gauge names are
+already conventional. (`pod_creation_latency_seconds` was considered for a
+`…_duration_seconds` rename but kept — `latency` is a recognised Prometheus term and
+the rename's blast radius across dashboards and recording-rule names outweighed the
+stylistic gain.)
+
+**Span attribute renames** (the span names themselves — `RunnerGroup.Reconcile`,
+`Provisioner.provision`, and the child spans — are unchanged):
+
+| Old | New |
+| --- | --- |
+| `owner.namespace`, `runnergroup.namespace` | `k8s.namespace.name` |
+| `pod.name` | `k8s.pod.name` |
+| `owner.name` | `gateway.owner.name` |
+| `runnergroup.name` | `gateway.runnergroup.name` |
+| `plan.id` | `gateway.plan.id` |
+| `active_pods` | `gateway.active_pods` |
+| `ceiling.held` | `gateway.ceiling_held` |
+| `priority_class` | `gateway.priority_class` |
+| `pod.phase` | `gateway.pod.phase` |
+| `pod.reason` | `gateway.pod.reason` |
+| `duration_seconds` | `gateway.provision.duration_seconds` |

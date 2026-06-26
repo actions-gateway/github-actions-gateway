@@ -12,6 +12,7 @@ import (
 	"time"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -80,12 +81,21 @@ func metricsClientSecretNameV2(ag *gmcv2alpha1.ActionsGateway) string {
 }
 
 // v2GatewayLabels returns the metadata labels stamped on every AGC control-plane
-// child: the managed-by marker plus the per-gateway identity label.
+// child: the recommended app.kubernetes.io/* set (controller component, instance
+// scoped to the gateway) plus the per-gateway identity label the v2 controller keys
+// on. The recommended labels are additive metadata; the identity label is functional.
 func v2GatewayLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
-	return map[string]string{
-		labelManagedBy:        labelManagerValue,
-		gatewayComponentLabel: ag.Name,
-	}
+	l := apilabels.Recommended(agcAppName, ag.Name, componentControllerLabel, "", labelManagerValue)
+	l[gatewayComponentLabel] = ag.Name
+	return l
+}
+
+// v2WorkerLabels is v2GatewayLabels for the worker (runner) component — the worker
+// ServiceAccount the AGC assigns to v2 worker pods. Mirrors v1's workerLabels.
+func v2WorkerLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
+	l := apilabels.Recommended(appNameWorker, ag.Name, componentRunnerLabel, "", labelManagerValue)
+	l[gatewayComponentLabel] = ag.Name
+	return l
 }
 
 func buildAGCServiceAccountV2(ag *gmcv2alpha1.ActionsGateway) *corev1.ServiceAccount {
@@ -96,7 +106,7 @@ func buildAGCServiceAccountV2(ag *gmcv2alpha1.ActionsGateway) *corev1.ServiceAcc
 
 func buildWorkerServiceAccountV2(ag *gmcv2alpha1.ActionsGateway) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: workerSANameV2(ag), Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: workerSANameV2(ag), Namespace: ag.Namespace, Labels: v2WorkerLabels(ag)},
 	}
 }
 

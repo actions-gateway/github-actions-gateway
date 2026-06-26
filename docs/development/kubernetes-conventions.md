@@ -111,6 +111,20 @@ The shared `actions-gateway/component: workload` selector label is carried by bo
 v1 and v2 worker/AGC pods (it backs the workload NetworkPolicy selector), so the
 egress-lockdown posture is identical across the two APIs.
 
+### Recommended `app.kubernetes.io/*` labels (Q205)
+
+Every object the GMC or AGC creates also carries the Kubernetes
+[recommended labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/)
+— `app.kubernetes.io/{name,instance,component,part-of,managed-by}` (and `version`
+where a meaningful one exists) — stamped via the shared
+[`api/apilabels`](../../api/apilabels/labels.go) helper so the GMC and AGC never
+diverge on the keys or the `part-of` value. They are **additive metadata**: stamp
+them *alongside* the functional selector labels above, never in place of them, and
+never build a controller's pod/Service selector on them (an operator may relabel
+them). `apilabels.Merge` preserves any existing key, so it cannot clobber a
+selector label. The canonical per-component values and operator `kubectl -l`
+recipes live in [observability.md](../operations/observability.md#selecting-gag-objects-with-the-recommended-labels).
+
 Controller-set annotations on worker pods (both v1 and v2, stamped by the
 provisioner at pod creation time from the AcquireJob payload):
 

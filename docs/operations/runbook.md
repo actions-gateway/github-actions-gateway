@@ -67,7 +67,7 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 | Metric | Recommended threshold | Severity | Notes |
 | --- | --- | --- | --- |
 | `actions_gateway_token_refresh_errors_total` | rate > 1/hour per namespace | Page | Token expiry causes session failures within ~1 hour |
-| `actions_gateway_renewjob_errors_total` | rate > 5/minute per namespace | Page | Sustained failures cancel running jobs |
+| `actions_gateway_renew_job_errors_total` | rate > 5/minute per namespace | Page | Sustained failures cancel running jobs |
 | `actions_gateway_pod_creation_latency_seconds` p95 | > 15s | Ticket | SLO target from Appendix A |
 | `actions_gateway_pod_creation_latency_seconds` p99 | > 60s | Page | Indicates scheduling stall or quota exhaustion |
 | `actions_gateway_eviction_retries_exhausted_total` | rate > 0 | Ticket | Each increment requires a manual re-run |
@@ -81,7 +81,7 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 
 **Page** (requires immediate response, typically < 15 minutes):
 - `active_sessions = 0` — no jobs can be acquired until fixed.
-- `renewjob_errors_total` rate high — jobs will be cancelled.
+- `renew_job_errors_total` rate high — jobs will be cancelled.
 - `token_refresh_errors_total` spiking — token will expire within ~1 hour.
 - `pod_creation_latency p99 > 60s` — scheduling is stalled.
 - `RateLimited` condition > 10 minutes — installation is over budget.
@@ -195,7 +195,7 @@ Before handing off to the next on-call:
 - [ ] No sustained `RateLimited` conditions.
 - [ ] `active_sessions` > 0 for all active RunnerGroups.
 - [ ] `token_refresh_errors_total` rate is zero (or below 1/hour).
-- [ ] `renewjob_errors_total` rate is zero.
+- [ ] `renew_job_errors_total` rate is zero.
 - [ ] No pods in `CrashLoopBackOff` or `OOMKilled` state.
 - [ ] No open incidents or unresolved pages.
 - [ ] Any `eviction_retries_exhausted_total` increments from the shift are documented and re-runs are queued.

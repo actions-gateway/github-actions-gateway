@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -221,8 +222,8 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// traces driven off the listener goroutines, not children of this one. The
 	// deferred closure stamps the span's error status from the named return.
 	ctx, span := tracer.Start(ctx, "RunnerGroup.Reconcile", trace.WithAttributes(
-		attribute.String("runnergroup.namespace", req.Namespace),
-		attribute.String("runnergroup.name", req.Name),
+		semconv.K8SNamespaceName(req.Namespace),
+		attribute.String("gateway.runnergroup.name", req.Name),
 	))
 	defer func() {
 		if retErr != nil {

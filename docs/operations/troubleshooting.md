@@ -950,7 +950,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 ## RenewJob Failures Rising
 
-**Symptoms.** `actions_gateway_renewjob_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion.
+**Symptoms.** `actions_gateway_renew_job_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion.
 
 **Likely causes.**
 - Network connectivity issues between the AGC and GitHub (via proxy).
@@ -961,7 +961,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 ```sh
 # Check recent error rate
-# Metric: rate(actions_gateway_renewjob_errors_total[5m])
+# Metric: rate(actions_gateway_renew_job_errors_total[5m])
 
 # Check AGC logs for renewal errors and job IDs
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "renewjob"
