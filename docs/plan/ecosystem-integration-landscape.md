@@ -185,8 +185,8 @@ GAG facts that drive the mapping (from `docs/design/`):
 Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 
 1. **Service-mesh coexistence guide (Istio/Linkerd/Cilium ambient).** 🔴 The #1 silent breakage: injected sidecars prevent run-to-completion worker pods from terminating, and mesh egress interception fights the per-tenant proxy. Deliver: per-namespace injection opt-out, native-sidecar/ambient guidance, egress-exclusion notes. *Highest priority — affects every mesh user.*
-2. **Node-autoscaler disruption safety (Karpenter + Cluster Autoscaler).** 🔴 Set/document `karpenter.sh/do-not-disrupt` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on worker pods so consolidation/scale-down doesn't strand running jobs. Consider making it a `RunnerGroup` toggle.
-3. **Descheduler exclusion.** 🔴 Document (and possibly auto-annotate) worker pods so descheduler doesn't evict mid-job.
+2. **Node-autoscaler disruption safety (Karpenter + Cluster Autoscaler).** ✅ **Done (Q218).** The provisioner gap-fills `karpenter.sh/do-not-disrupt: "true"` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` on every worker pod so consolidation/scale-down doesn't strand running jobs. Overridable per-key via `podTemplate.metadata.annotations`.
+3. **Descheduler exclusion.** ✅ **Done (Q218).** Worker pods are gap-filled with `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` (current well-known key) so the descheduler doesn't evict mid-job.
 4. **Policy-engine compatibility matrix (Kyverno / Gatekeeper).** 🔴/🟠 Show which common constraints reject worker/proxy pods and ship complementary sample policies. Reduces "GAG pods won't schedule" support load.
 5. **CNI-native egress policy (Cilium FQDN / Calico DNS policy).** 🟠 Offer an opt-in that replaces GMC's GitHub-CIDR feed with `toFQDNs: api.github.com` — simpler, no 24h CIDR reconcile. Pairs with existing `managedNetworkPolicy: false`.
 6. **External Secrets Operator example for the GitHub App key.** 🟠 Low-risk, high-demand: wire `gitHubAppRef` to an ESO-synced Secret; also Sealed Secrets variant for GitOps.
@@ -203,7 +203,7 @@ Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 
 ## Conventions & best practices to adopt (so GAG feels native to these users)
 
-- **Pod disruption annotations as a contract.** Users of Karpenter/Cluster Autoscaler/Descheduler expect long-running Job-like pods to declare `safe-to-evict: false` / `do-not-disrupt`. Emit these on worker pods (toggleable) — it's the single biggest "plays well with my cluster" signal.
+- **Pod disruption annotations as a contract.** ✅ **Done (Q218).** Worker pods declare `karpenter.sh/do-not-disrupt: "true"`, `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, and `descheduler.alpha.kubernetes.io/prefer-no-eviction: "true"` (gap-filled, per-key overridable) — the single biggest "plays well with my cluster" signal.
 - **Standard well-known labels.** Apply `app.kubernetes.io/{name,instance,component,part-of,managed-by}` consistently across GMC/AGC/proxy/worker objects (verify current coverage). Tools like Lens/k9s/Argo group by these.
 - **OTel semantic conventions.** Name spans/attributes per OTel semconv; align metric names with Prometheus naming guidelines (`_total`, base units) so dashboards and recording rules are portable.
 - **`ServiceMonitor` + `PrometheusRule` as packaged, opt-in extras** (already partly done) — ship alerts as an installable bundle, not just sample YAML.

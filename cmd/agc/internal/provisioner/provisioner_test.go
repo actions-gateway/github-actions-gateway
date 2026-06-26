@@ -1901,6 +1901,56 @@ func TestBuildPod_RecommendedLabels(t *testing.T) {
 	assert.Equal(t, "workload", pod.Labels["actions-gateway/component"])
 }
 
+// TestBuildPod_DisruptionSafetyDefaults verifies every worker pod is stamped
+// with the node-disruption-safety markers (Q218) so Karpenter consolidation,
+// cluster-autoscaler scale-down, and the descheduler do not evict a pod
+// mid-job and strand the CI run.
+func TestBuildPod_DisruptionSafetyDefaults(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	pod := runAndGetPod(ctx, t, p, fc, newRG("mygroup", "team-a"), "plan-disrupt", "team-a")
+
+	assert.Equal(t, "true", pod.Annotations["karpenter.sh/do-not-disrupt"])
+	assert.Equal(t, "false", pod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+	assert.Equal(t, "true", pod.Annotations["descheduler.alpha.kubernetes.io/prefer-no-eviction"])
+	// The defaults must coexist with the job-metadata annotations, not clobber them.
+	assert.Equal(t, "1", pod.Annotations["actions-gateway.com/run-id"])
+}
+
+// TestBuildPod_DisruptionSafetyTenantOverride verifies the disruption-safety
+// markers are gap-fill only: a tenant that sets one of the keys in its
+// PodTemplate metadata (e.g. opting a known-interruptible job back into
+// eviction) keeps its explicit value, while the other keys still default.
+func TestBuildPod_DisruptionSafetyTenantOverride(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.PodTemplate.ObjectMeta.Annotations = map[string]string{
+		"cluster-autoscaler.kubernetes.io/safe-to-evict": "true",
+	}
+
+	pod := runAndGetPod(ctx, t, p, fc, rg, "plan-disrupt-override", "team-a")
+
+	assert.Equal(t, "true", pod.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"],
+		"explicit tenant override must win")
+	// Untouched keys still default.
+	assert.Equal(t, "true", pod.Annotations["karpenter.sh/do-not-disrupt"])
+	assert.Equal(t, "true", pod.Annotations["descheduler.alpha.kubernetes.io/prefer-no-eviction"])
+	// Arbitrary template annotations are NOT copied onto the worker pod — only
+	// the three disruption-safety keys are honored from the template.
+	rg2 := newRG("othergroup", "team-b")
+	rg2.Spec.PodTemplate.ObjectMeta.Annotations = map[string]string{"tenant.example.com/foo": "bar"}
+	pod2 := runAndGetPod(ctx, t, p, fc, rg2, "plan-disrupt-arbitrary", "team-b")
+	_, copied := pod2.Annotations["tenant.example.com/foo"]
+	assert.False(t, copied, "arbitrary tenant PodTemplate annotations must not be stamped on the worker pod")
+}
+
 // defaultCPU returns the default worker CPU request as a string for assertions.
 func defaultCPU() string { return "500m" }
 

@@ -405,6 +405,20 @@ kubectl describe pod <pod-name> -n <namespace>
 
 The annotations are absent if the AcquireJob payload did not include the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs).
 
+### Node-disruption-safety annotations
+
+A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement. So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:
+
+| Annotation | Value | Honored by |
+| --- | --- | --- |
+| `karpenter.sh/do-not-disrupt` | `true` | Karpenter — skips the pod's node for consolidation/drift disruption |
+| `cluster-autoscaler.kubernetes.io/safe-to-evict` | `false` | Cluster Autoscaler — won't scale down a node running the pod |
+| `descheduler.alpha.kubernetes.io/prefer-no-eviction` | `true` | Descheduler — skips the pod (current well-known key; the older `descheduler.alpha.kubernetes.io/evict` is opt-*in* only and its value is ignored) |
+
+These markers ride on the worker pod itself, so they are removed the moment the pod is torn down on job completion (immediately when `completedPodTTL: 0s`, otherwise by the reaper once the TTL elapses) — they never pin a node for a pod that is no longer running.
+
+**Overriding.** The markers are gap-fill defaults: set any of these keys in the runner's `podTemplate.metadata.annotations` and your explicit value wins. For example, a job you know is safe to interrupt can opt back into eviction with `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`. Only these three keys are honored from the template; other `podTemplate` annotations are not copied onto worker pods. Prefer a [PodDisruptionBudget](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) if you need finer voluntary-disruption control.
+
 ---
 
 ## Symptom → Metric Mapping
