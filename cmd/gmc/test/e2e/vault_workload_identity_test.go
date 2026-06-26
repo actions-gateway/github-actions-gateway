@@ -59,14 +59,13 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 		By("applying the workload-identity ActionsGateway + RunnerTemplate + RunnerSet")
 		vaultAddr := fmt.Sprintf("http://vault.%s.svc.cluster.local:8200", infraNamespace)
 		Expect(utils.ApplyManifest(vaultWorkloadIdentityManifest(
-			tenantNS, gwName, runnerSet, vaultAddr, transitKey, vaultRole, agcImage))).To(Succeed())
+			tenantNS, gwName, runnerSet, vaultAddr, transitKey, vaultRole, agcImage, infraNamespace))).To(Succeed())
 
-		By("granting the AGC egress to fakegithub and to Vault (both in " + infraNamespace + ")")
-		// kindnet does not enforce egress drops, but apply these so the spec is correct
-		// under a policy-enforcing CNI too (the GMC does not yet auto-provision an
-		// AGC→Vault egress rule — see docs/operations/tenant-onboarding.md / Q201).
+		By("granting the AGC egress to fakegithub (Vault egress is GMC-provisioned, Q202)")
+		// kindnet does not enforce egress drops, but apply this so the spec is correct
+		// under a policy-enforcing CNI too. The AGC→Vault egress rule is auto-provisioned
+		// by the GMC from signer.vault.networkPolicy (Q202), so no hand-applied NP here.
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
-		applyVaultEgressNetworkPolicy(tenantNS, infraNamespace)
 
 		By("waiting for the workload-identity AGC Deployment to become ready")
 		utils.WaitForDeploymentReady(tenantNS, gwAGC, 4*time.Minute)
@@ -189,35 +188,6 @@ vault write auth/kubernetes/role/%[2]s \
 	}, 2*time.Minute, 5*time.Second).Should(Succeed())
 }
 
-// applyVaultEgressNetworkPolicy permits the gateway's AGC (a workload-labeled pod)
-// to reach the test Vault on 8200 in the infra namespace. Correctness under a
-// policy-enforcing CNI; a no-op under kindnet (which does not drop egress).
-func applyVaultEgressNetworkPolicy(ns, vaultNS string) {
-	manifest := fmt.Sprintf(`apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: e2e-vault-egress
-  namespace: %s
-spec:
-  podSelector:
-    matchLabels:
-      actions-gateway/component: workload
-  policyTypes: [Egress]
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: %s
-      podSelector:
-        matchLabels:
-          app: vault
-    ports:
-    - port: 8200
-      protocol: TCP
-`, ns, vaultNS)
-	Expect(utils.ApplyManifest(manifest)).To(Succeed(), "apply Vault egress NP in %s", ns)
-}
-
 // testVaultManifest renders a dev-mode Vault Deployment + Service + ServiceAccount,
 // with a ClusterRoleBinding granting the Vault SA system:auth-delegator so Vault can
 // review the AGC's projected token via the TokenReview API.
@@ -297,8 +267,10 @@ spec:
 
 // vaultWorkloadIdentityManifest renders the workload-identity object set: an
 // ActionsGateway (no Secret, direct egress), a RunnerTemplate, and a RunnerSet bound
-// to it so the AGC opens broker sessions (the no-PEM round-trip under test).
-func vaultWorkloadIdentityManifest(ns, gw, runnerSet, vaultAddr, key, role, workerImage string) string {
+// to it so the AGC opens broker sessions (the no-PEM round-trip under test). The
+// gateway declares signer.vault.networkPolicy so the GMC auto-provisions the scoped
+// AGC→Vault egress rule (Q202) — no hand-applied NetworkPolicy is needed.
+func vaultWorkloadIdentityManifest(ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS string) string {
 	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
@@ -318,6 +290,13 @@ spec:
           keyName: %[5]s
           auth:
             role: %[6]s
+          networkPolicy:
+            namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: %[8]s
+            podSelector:
+              matchLabels:
+                app: vault
   logLevel: debug
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -345,5 +324,5 @@ spec:
     name: tmpl
   maxListeners: 2
   runnerLabels: ["e2e-wi"]
-`, ns, gw, runnerSet, vaultAddr, key, role, workerImage)
+`, ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS)
 }

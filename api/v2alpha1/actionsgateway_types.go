@@ -255,6 +255,49 @@ type VaultSigner struct {
 	// Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the
 	// MVP).
 	Auth VaultKubernetesAuth `json:"auth"`
+
+	// NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress
+	// peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies
+	// egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a
+	// peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault
+	// egress rule on the Vault API port (parsed from Address). Leave it unset on a non-
+	// enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule
+	// is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a
+	// GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).
+	//
+	// +optional
+	NetworkPolicy *VaultNetworkPolicy `json:"networkPolicy,omitempty"`
+}
+
+// VaultNetworkPolicy identifies Vault as a NetworkPolicy egress peer so the GMC can emit a
+// scoped AGC→Vault egress rule. Exactly one peer must be given: a pod/namespace selector for
+// an in-cluster Vault, or a CIDR for an external Vault. The two forms are mutually exclusive —
+// a CIDR cannot carry a selector and vice versa — and the GMC always scopes the rule to the
+// Vault API port (from VaultSigner.Address), never to all egress.
+//
+// +kubebuilder:validation:XValidation:rule="(has(self.cidr) && size(self.cidr) > 0) != (has(self.podSelector) || has(self.namespaceSelector))",message="exactly one of cidr or a pod/namespace selector must be set"
+type VaultNetworkPolicy struct {
+	// PodSelector selects the in-cluster Vault pods the AGC may reach (e.g. {app.kubernetes.io/name:
+	// vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer
+	// semantics. Mutually exclusive with CIDR.
+	//
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+
+	// NamespaceSelector selects the namespace(s) the in-cluster Vault runs in (e.g.
+	// {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set.
+	// Mutually exclusive with CIDR.
+	//
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+
+	// CIDR is the IP block of an external (out-of-cluster) Vault, e.g. "10.0.5.7/32". Mutually
+	// exclusive with the pod/namespace selectors.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxLength=43
+	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F:]+)/[0-9]{1,3}$`
+	CIDR string `json:"cidr,omitempty"`
 }
 
 // VaultKubernetesAuth configures Vault Kubernetes auth: the AGC presents its projected

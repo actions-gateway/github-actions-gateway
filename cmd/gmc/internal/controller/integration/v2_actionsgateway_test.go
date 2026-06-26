@@ -375,6 +375,58 @@ func TestV2_ActionsGateway_WorkloadIdentityProvisions(t *testing.T) {
 	assert.True(t, sawVaultToken, "expected a projected Vault-audience ServiceAccount token volume")
 }
 
+// TestV2_ActionsGateway_WorkloadIdentityVaultEgressNetworkPolicy asserts the Q202
+// contract under the real apiserver (CEL accepts signer.vault.networkPolicy, and the
+// field round-trips so the reconciler reads it back): a WorkloadIdentity gateway whose
+// Vault signer declares a NetworkPolicy CIDR peer gets a scoped AGC→Vault egress rule on
+// its own AGC NetworkPolicy, on the Vault API port from the address — additive to the
+// default-deny baseline (DNS + apiserver), never a broaden-to-all-egress.
+func TestV2_ActionsGateway_WorkloadIdentityVaultEgressNetworkPolicy(t *testing.T) {
+	const ns = "v2-ag-wi-np"
+	createNamespace(t, ns)
+
+	ag := newV2WorkloadIdentityGateway(ns, "wi-np-gw")
+	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &v2alpha1.VaultNetworkPolicy{
+		CIDR: "10.0.5.7/32",
+	}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startActionsGatewayV2Reconciler(t)
+
+	var np networkingv1.NetworkPolicy
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-np-gw-agc"}, &np) == nil
+	}, 15*time.Second, 100*time.Millisecond, "WI gateway must provision its AGC NetworkPolicy")
+
+	var vaultRule *networkingv1.NetworkPolicyEgressRule
+	for i := range np.Spec.Egress {
+		e := &np.Spec.Egress[i]
+		if len(e.To) == 1 && e.To[0].IPBlock != nil && e.To[0].IPBlock.CIDR == "10.0.5.7/32" {
+			vaultRule = e
+		}
+	}
+	require.NotNil(t, vaultRule, "AGC NetworkPolicy must include the scoped Vault egress CIDR (Q202)")
+	require.Len(t, vaultRule.Ports, 1)
+	assert.Equal(t, int32(8200), vaultRule.Ports[0].Port.IntVal, "Vault egress scoped to the address port")
+
+	// Default-deny baseline preserved: DNS + apiserver egress still present, ingress
+	// still default-deny except the metrics scrape.
+	sawDNS, sawAPIServer := false, false
+	for _, e := range np.Spec.Egress {
+		for _, p := range e.Ports {
+			switch p.Port.IntVal {
+			case 53:
+				sawDNS = true
+			case 6443:
+				sawAPIServer = true
+			}
+		}
+	}
+	assert.True(t, sawDNS, "DNS egress preserved")
+	assert.True(t, sawAPIServer, "apiserver egress preserved")
+}
+
 func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {
 	const ns = "v2-ag-no-proxy"
 	createNamespace(t, ns)

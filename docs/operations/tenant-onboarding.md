@@ -671,6 +671,16 @@ spec:
           auth:
             role: agc-acme          # the Vault Kubernetes-auth role bound to this gateway's AGC ServiceAccount
             mount: kubernetes       # optional; defaults to "kubernetes"
+          # Optional (Q202): on a policy-enforcing CNI, identify Vault as a NetworkPolicy
+          # egress peer so the GMC opens a scoped AGC→Vault egress rule automatically.
+          # Set exactly one form — a pod/namespace selector (in-cluster Vault) OR a cidr
+          # (external Vault). Omit on a non-enforcing CNI (kindnet) or to manage it by hand.
+          networkPolicy:
+            namespaceSelector:
+              matchLabels: { kubernetes.io/metadata.name: vault }
+            podSelector:
+              matchLabels: { app.kubernetes.io/name: vault }
+            # external Vault instead: cidr: 10.0.5.7/32
   githubURL: https://github.com/acme
 ```
 
@@ -680,7 +690,7 @@ Operator prerequisites in Vault (configured out of band, once per gateway):
 - A **Kubernetes auth role** (`auth.role`) bound to this gateway's AGC ServiceAccount (named `<gateway-name>-agc`) and namespace, granting `update` on `transit/sign/<keyName>`. The AGC logs in with its projected ServiceAccount token; Vault verifies it via the cluster `TokenReview` API. The GMC projects that token with the audience **`vault`**, so configure the role with `audience=vault` (or leave it unset to skip the audience check) — e.g. `vault write auth/kubernetes/role/<role> bound_service_account_names=<gateway-name>-agc bound_service_account_namespaces=<namespace> token_policies=<policy> audience=vault`.
 - The Vault `address` must be **HTTPS** — the ServiceAccount token transits it at login. A plaintext address is rejected unless the AGC carries an explicit dev/test opt-in.
 
-> **NetworkPolicy egress to Vault.** The GMC's per-tenant AGC NetworkPolicy default-denies egress except DNS, GitHub, and the kube API server — it does **not** yet auto-permit your Vault endpoint (Vault's address is not a NetworkPolicy-expressible peer). On a policy-enforcing CNI (Calico/Cilium — the production recommendation), add an egress rule allowing the AGC pods (`actions-gateway/component: workload`) to reach your Vault on its port, or the AGC's Vault login will be dropped. On a non-enforcing CNI (kindnet) no extra rule is needed. First-class Vault egress is a tracked follow-up.
+> **NetworkPolicy egress to Vault (Q202).** The GMC's per-tenant AGC NetworkPolicy default-denies egress except DNS, GitHub, and the kube API server. Vault's `address` is not itself a NetworkPolicy-expressible peer, so set `signer.vault.networkPolicy` (above) to identify Vault — a `namespaceSelector`/`podSelector` for an in-cluster Vault, or a `cidr` for an external one. The GMC then opens a **scoped** AGC→Vault egress rule (that peer, on the Vault API port from `address`) on the AGC NetworkPolicy automatically — you no longer add it by hand. If you leave `networkPolicy` unset on a policy-enforcing CNI (Calico/Cilium — the production recommendation), the AGC's Vault login will be dropped, so set it; on a non-enforcing CNI (kindnet) it is inert and may be omitted. As with all egress rules, it is enforced only by a policy-aware CNI.
 
 The GMC provisions the workload-identity AGC the same as a `GitHubApp` gateway — minus the credential `Secret` mount (there is none), plus the projected Vault-audience ServiceAccount token and the signer config env. A `WorkloadIdentity` gateway reaches `Ready=True` once its AGC mints its first installation token through Vault.
 
