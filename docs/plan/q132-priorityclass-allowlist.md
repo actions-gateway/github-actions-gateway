@@ -9,7 +9,7 @@ not on the allowlist. Secure-by-default: an empty/unset allowlist forbids *all*
 `priorityTiers` PriorityClass references.
 
 Tracked as STATUS Queue Q132 (`security`, `1.0-gate`). Same "platform owns it,
-not the tenant" family as [Q130](platform-owned-quota.md) (platform-owned
+not the tenant" family as [Q130](archive/platform-owned-quota.md) (platform-owned
 `ResourceQuota`) and the [Q121/Q122/Q125](q121-q122-q125-gmc-confinement.md) GMC
 write confinement.
 
@@ -40,7 +40,7 @@ arbitrary cluster-scoped class — but the allowlist fits this codebase far bett
    `PriorityClass` objects have to exist; "the GMC creates/owns them" re-expands
    the cluster-scoped write surface that
    [Q121/Q122/Q125](q121-q122-q125-gmc-confinement.md) just *confined* to tenant
-   namespaces, and contradicts [Q130](platform-owned-quota.md)'s model (platform
+   namespaces, and contradicts [Q130](archive/platform-owned-quota.md)'s model (platform
    admin owns infra/cluster resources; GAG operates *within* them). The platform
    already pre-creates these classes today — keep it that way.
 2. **The `RunnerGroupSpec` type is shared verbatim.** `ActionsGateway.spec.runnerGroups`

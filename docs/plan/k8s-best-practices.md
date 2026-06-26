@@ -121,4 +121,4 @@ These fold into existing test plans rather than warranting new plans.
 | # | Sev | Finding | Where it fits |
 |---|---|---|---|
 | H1 | 🟡 | No envtest suite for the RunnerGroup controller — finalizer-ordering bug A9 would slip. | [archive/milestone-2-tests.md](archive/milestone-2-tests.md) (add gap row). |
-| H2 | 🟡 | No e2e covering a real GitHub `rerun-failed-jobs` POST on eviction. | [milestone-3-tests.md](milestone-3-tests.md) (item H2 in that plan is the rerun-API 5xx case; add a Tier-C live happy-path companion). |
+| H2 | 🟡 | No e2e covering a real GitHub `rerun-failed-jobs` POST on eviction. | [milestone-3-tests.md](archive/milestone-3-tests.md) (item H2 in that plan is the rerun-API 5xx case; add a Tier-C live happy-path companion). |
