@@ -69,7 +69,7 @@ func NewMetrics() *Metrics {
 		}, []string{"namespace"}),
 
 		RenewJobErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "actions_gateway_renewjob_errors_total",
+			Name: "actions_gateway_renew_job_errors_total",
 			Help: "Total number of RenewJob non-OK responses.",
 		}, []string{"namespace"}),
 

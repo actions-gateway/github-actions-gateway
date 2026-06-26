@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
@@ -91,6 +92,14 @@ func TestV2_EgressProxy_ReconcilesOwnedProxyPool(t *testing.T) {
 	assert.Equal(t, int32(3), *dep.Spec.Replicas, "replicas should track minReplicas")
 	assert.Equal(t, egressProxyName, dep.Spec.Template.Labels[proxyIdentityLabel()], "pod template carries the egress-proxy identity label")
 	assert.Equal(t, egressProxyName, dep.Spec.Selector.MatchLabels[proxyIdentityLabel()], "selector keys on the egress-proxy identity")
+	// Q205: recommended app.kubernetes.io/* metadata on the Deployment and its pods,
+	// additive to the functional identity selector above.
+	assert.Equal(t, "actions-gateway-proxy", dep.Labels[apilabels.Name])
+	assert.Equal(t, egressProxyName, dep.Labels[apilabels.Instance])
+	assert.Equal(t, "proxy", dep.Labels[apilabels.Component])
+	assert.Equal(t, apilabels.PartOfValue, dep.Labels[apilabels.PartOf])
+	assert.Equal(t, "actions-gateway-gmc", dep.Labels[apilabels.ManagedBy])
+	assert.Equal(t, "proxy", dep.Spec.Template.Labels[apilabels.Component], "pods carry the recommended labels too")
 
 	// Service: created, owned, identity selector, proxy port.
 	var svc corev1.Service

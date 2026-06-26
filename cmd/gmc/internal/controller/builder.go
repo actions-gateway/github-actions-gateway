@@ -8,6 +8,7 @@ import (
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	appsv1 "k8s.io/api/apps/v1"
@@ -26,6 +27,14 @@ import (
 const (
 	labelManagedBy    = "app.kubernetes.io/managed-by"
 	labelManagerValue = "actions-gateway-gmc"
+
+	// app.kubernetes.io/component values for the objects the GMC creates, and the
+	// app.kubernetes.io/name value for worker-tier objects (the AGC/proxy names are
+	// agcAppName/proxyAppName below). Stamped via the recommendedLabels helpers.
+	componentControllerLabel = "controller"
+	componentProxyLabel      = "proxy"
+	componentRunnerLabel     = "runner"
+	appNameWorker            = "actions-runner"
 
 	agcSAName    = agcnames.ControllerName
 	workerSAName = agcnames.WorkerSAName
@@ -198,12 +207,51 @@ func nonrootPodSecurityContext() *corev1.PodSecurityContext {
 	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
 }
 
-func managedLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
-	return map[string]string{
-		labelManagedBy:               labelManagerValue,
-		"actions-gateway/owner-name": ag.Name,
-		"actions-gateway/owner-ns":   ag.Namespace,
+// componentLabels returns the metadata labels stamped on a GMC-created object of
+// the given component: the recommended app.kubernetes.io/* set (managed-by the GMC,
+// instance scoped to the gateway, no version — control-plane objects carry no
+// plumbed build version) plus the legacy owner-name/owner-ns labels that scope
+// per-tenant ServiceMonitor selectors to a single gateway. The recommended labels
+// are additive metadata; callers layer functional selector labels on top.
+func componentLabels(ag *gmcv1alpha1.ActionsGateway, appName, component string) map[string]string {
+	l := apilabels.Recommended(appName, ag.Name, component, "", labelManagerValue)
+	l["actions-gateway/owner-name"] = ag.Name
+	l["actions-gateway/owner-ns"] = ag.Namespace
+	return l
+}
+
+// copyRecommendedLabels copies the app.kubernetes.io/* recommended metadata from
+// src (an object's metadata labels) into dst (a pod template's labels) without
+// overwriting any functional selector label already in dst. Used to carry a
+// Deployment's recommended labels onto its pods so the pods group with their owner
+// under Lens/k9s/Argo and Prometheus relabel rules.
+func copyRecommendedLabels(dst, src map[string]string) {
+	for k, v := range src {
+		if strings.HasPrefix(k, "app.kubernetes.io/") {
+			if _, ok := dst[k]; !ok {
+				dst[k] = v
+			}
+		}
 	}
+}
+
+// managedLabels is componentLabels for the AGC control-plane component — the common
+// case (ServiceAccount, RBAC, AGC NetworkPolicy/Service/Deployment, RunnerGroup).
+// Proxy and worker objects use proxyLabels / workerLabels.
+func managedLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
+	return componentLabels(ag, agcAppName, componentControllerLabel)
+}
+
+// proxyLabels is componentLabels for the egress-proxy component (proxy Deployment,
+// Service, NetworkPolicy, PDB, HPA, cert Secret).
+func proxyLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
+	return componentLabels(ag, proxyAppName, componentProxyLabel)
+}
+
+// workerLabels is componentLabels for the worker (runner) component — the worker
+// ServiceAccount the AGC assigns to worker pods.
+func workerLabels(ag *gmcv1alpha1.ActionsGateway) map[string]string {
+	return componentLabels(ag, appNameWorker, componentRunnerLabel)
 }
 
 func buildAGCServiceAccount(ag *gmcv1alpha1.ActionsGateway) *corev1.ServiceAccount {
@@ -214,7 +262,7 @@ func buildAGCServiceAccount(ag *gmcv1alpha1.ActionsGateway) *corev1.ServiceAccou
 
 func buildWorkerServiceAccount(ag *gmcv1alpha1.ActionsGateway) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{Name: workerSAName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: workerSAName, Namespace: ag.Namespace, Labels: workerLabels(ag)},
 	}
 }
 
@@ -358,7 +406,7 @@ func buildProxyNetworkPolicy(ag *gmcv1alpha1.ActionsGateway, githubCIDRs []net.I
 	}
 
 	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: npProxyName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: npProxyName, Namespace: ag.Namespace, Labels: proxyLabels(ag)},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress, networkingv1.PolicyTypeIngress},
@@ -541,12 +589,14 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 	tlsMode := int32(0o440)
 
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: proxyLabels(ag)},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": proxyAppName, labelManagedBy: labelManagerValue}},
+				// "app: proxyAppName" is the functional selector; the recommended
+				// app.kubernetes.io/* metadata is layered on additively.
+				ObjectMeta: metav1.ObjectMeta{Labels: apilabels.Merge(map[string]string{"app": proxyAppName}, proxyAppName, ag.Name, componentProxyLabel, "", labelManagerValue)},
 				Spec: corev1.PodSpec{
 					SecurityContext: nonrootPodSecurityContext(),
 					// 60s lets in-flight CONNECT tunnels drain on rollout/eviction;
@@ -653,7 +703,11 @@ func buildProxyDeployment(ag *gmcv1alpha1.ActionsGateway, proxyImage string) *ap
 // tenant) plus the component `app` label that distinguishes the proxy Service
 // from the AGC Service within the namespace.
 func metricsServiceLabels(ag *gmcv1alpha1.ActionsGateway, appName string) map[string]string {
-	labels := managedLabels(ag)
+	component := componentControllerLabel
+	if appName == proxyAppName {
+		component = componentProxyLabel
+	}
+	labels := componentLabels(ag, appName, component)
 	labels["app"] = appName
 	return labels
 }
@@ -795,7 +849,7 @@ func buildProxyCertSecret(ag *gmcv1alpha1.ActionsGateway, certPEM, keyPEM []byte
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      proxyTLSSecretName,
 			Namespace: ag.Namespace,
-			Labels:    managedLabels(ag),
+			Labels:    proxyLabels(ag),
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
@@ -846,7 +900,7 @@ func buildMetricsClientSecret(ag *gmcv1alpha1.ActionsGateway, b *metricsCertBund
 
 func buildPDB(ag *gmcv1alpha1.ActionsGateway) *policyv1.PodDisruptionBudget {
 	return &policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: proxyLabels(ag)},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MinAvailable: ptr(intstr.FromInt32(1)),
 			Selector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
@@ -868,7 +922,7 @@ func buildHPA(ag *gmcv1alpha1.ActionsGateway) *autoscalingv2.HorizontalPodAutosc
 		targetCPU = *ag.Spec.Proxy.TargetCPUUtilizationPercentage
 	}
 	return &autoscalingv2.HorizontalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: managedLabels(ag)},
+		ObjectMeta: metav1.ObjectMeta{Name: proxyServiceName, Namespace: ag.Namespace, Labels: proxyLabels(ag)},
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{APIVersion: "apps/v1", Kind: "Deployment", Name: proxyServiceName},
 			MinReplicas:    &minReplicas,
@@ -1064,6 +1118,13 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 		podAnnotations = map[string]string{"actions-gateway/github-app-secret": credSecretName}
 	}
 
+	// "app"/"actions-gateway/component: workload" are the functional selectors; the
+	// recommended app.kubernetes.io/* metadata is carried over from the Deployment's
+	// metaLabels additively (works for both the v1 and v2 callers, whose metaLabels
+	// already carry the per-gateway instance).
+	podLabels := map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}
+	copyRecommendedLabels(podLabels, metaLabels)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: names.app, Namespace: namespace, Labels: metaLabels},
 		Spec: appsv1.DeploymentSpec{
@@ -1071,7 +1132,7 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": names.app}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels:      map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
+					Labels:      podLabels,
 					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{

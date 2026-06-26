@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
@@ -163,6 +164,26 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: sa}, &got), "ServiceAccount %s", sa)
 		assert.True(t, hasGatewayOwnerRef(got.OwnerReferences, "gw"))
 	}
+
+	// Q205: recommended app.kubernetes.io/* metadata, instance-scoped to the gateway,
+	// with the correct per-component name/component. The AGC SA is controller-tier;
+	// the worker SA is runner-tier (mirrors v1).
+	var agcSAObj, workerSAObj corev1.ServiceAccount
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwAGC}, &agcSAObj))
+	assert.Equal(t, "actions-gateway-controller", agcSAObj.Labels[apilabels.Name])
+	assert.Equal(t, "gw", agcSAObj.Labels[apilabels.Instance])
+	assert.Equal(t, "controller", agcSAObj.Labels[apilabels.Component])
+	assert.Equal(t, apilabels.PartOfValue, agcSAObj.Labels[apilabels.PartOf])
+	assert.Equal(t, "actions-gateway-gmc", agcSAObj.Labels[apilabels.ManagedBy])
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwWorkerSA}, &workerSAObj))
+	assert.Equal(t, "actions-runner", workerSAObj.Labels[apilabels.Name])
+	assert.Equal(t, "runner", workerSAObj.Labels[apilabels.Component])
+	// AGC Deployment + pods carry controller-component recommended labels; the
+	// functional workload selector survives on the pods.
+	assert.Equal(t, "controller", dep.Labels[apilabels.Component])
+	assert.Equal(t, "controller", dep.Spec.Template.Labels[apilabels.Component])
+	assert.Equal(t, "workload", dep.Spec.Template.Labels["actions-gateway/component"],
+		"the workload NetworkPolicy podSelector label must survive on AGC pods")
 
 	// RoleBinding → agc-tenant-role (per-gateway binding name).
 	var rb rbacv1.RoleBinding

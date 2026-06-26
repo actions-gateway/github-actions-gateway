@@ -19,6 +19,7 @@ package controller
 import (
 	"net"
 
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -68,10 +69,9 @@ func egressProxyTLSSecretName(ep *gmcv2alpha1.EgressProxy) string {
 // egressProxyLabels returns the metadata labels stamped on every EgressProxy
 // child: the managed-by marker plus the per-EgressProxy identity label.
 func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
-	return map[string]string{
-		labelManagedBy:            labelManagerValue,
-		egressProxyComponentLabel: ep.Name,
-	}
+	l := apilabels.Recommended(proxyAppName, ep.Name, componentProxyLabel, "", labelManagerValue)
+	l[egressProxyComponentLabel] = ep.Name
+	return l
 }
 
 // egressProxyPodSelector returns the label set used as both the pod template
@@ -151,6 +151,15 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 	name := proxyResourceName(ep)
 	selector := egressProxyPodSelector(ep)
 
+	// Pod template labels: the functional selector (used as-is for matchLabels and
+	// anti-affinity) plus the recommended app.kubernetes.io/* metadata, layered on a
+	// clone so the selector map the Deployment/Service match on is never mutated.
+	podLabels := map[string]string{}
+	for k, v := range selector {
+		podLabels[k] = v
+	}
+	apilabels.Merge(podLabels, proxyAppName, ep.Name, componentProxyLabel, "", labelManagerValue)
+
 	// Mode 0o440 + fsGroup 65532: the non-root distroless proxy reads the cert via
 	// group ownership without making it world-readable. See v1 buildProxyDeployment.
 	tlsMode := int32(0o440)
@@ -161,7 +170,7 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: selector},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: selector},
+				ObjectMeta: metav1.ObjectMeta{Labels: podLabels},
 				Spec: corev1.PodSpec{
 					SecurityContext:               nonrootPodSecurityContext(),
 					TerminationGracePeriodSeconds: ptr(int64(60)),

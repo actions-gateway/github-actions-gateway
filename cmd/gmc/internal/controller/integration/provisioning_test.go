@@ -9,6 +9,7 @@ import (
 	"time"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -202,6 +203,45 @@ func TestGMC_TenantProvisioning_AllResourcesCreated(t *testing.T) {
 	for _, k := range []string{corev1.TLSCertKey, corev1.TLSPrivateKeyKey, "ca.crt"} {
 		assert.NotEmpty(t, metricsClientSec.Data[k], "metrics client Secret must carry %s", k)
 	}
+
+	// Q205: every created object carries the recommended app.kubernetes.io/* labels,
+	// managed-by the GMC and instance-scoped to the gateway, additive to the
+	// functional selector labels. Spot-check one object per component.
+	const gwName = "my-gateway"
+	assertRecommended := func(obj client.Object, name, component string) {
+		t.Helper()
+		l := obj.GetLabels()
+		assert.Equal(t, name, l[apilabels.Name], "%T app.kubernetes.io/name", obj)
+		assert.Equal(t, gwName, l[apilabels.Instance], "%T app.kubernetes.io/instance", obj)
+		assert.Equal(t, component, l[apilabels.Component], "%T app.kubernetes.io/component", obj)
+		assert.Equal(t, apilabels.PartOfValue, l[apilabels.PartOf], "%T app.kubernetes.io/part-of", obj)
+		assert.Equal(t, "actions-gateway-gmc", l[apilabels.ManagedBy], "%T app.kubernetes.io/managed-by", obj)
+	}
+
+	var agcSA, workerSA corev1.ServiceAccount
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &agcSA))
+	assertRecommended(&agcSA, "actions-gateway-controller", "controller")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: workerSAName}, &workerSA))
+	assertRecommended(&workerSA, "actions-runner", "runner")
+
+	var proxyDep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &proxyDep))
+	assertRecommended(&proxyDep, "actions-gateway-proxy", "proxy")
+	// The pod template carries the recommended labels too, alongside the functional
+	// "app" selector the Deployment/Service/NetworkPolicy match on.
+	assert.Equal(t, "actions-gateway-proxy", proxyDep.Spec.Template.Labels[apilabels.Name])
+	assert.Equal(t, proxyName, proxyDep.Spec.Template.Labels["app"], "functional proxy selector must survive")
+
+	var proxyNP networkingv1.NetworkPolicy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: proxyName}, &proxyNP))
+	assertRecommended(&proxyNP, "actions-gateway-proxy", "proxy")
+
+	// AGC Deployment + its pod template (controller component); the functional
+	// workload selector label must survive on the pods.
+	assertRecommended(&agcDep, "actions-gateway-controller", "controller")
+	assert.Equal(t, "controller", agcDep.Spec.Template.Labels[apilabels.Component])
+	assert.Equal(t, "workload", agcDep.Spec.Template.Labels["actions-gateway/component"],
+		"the workload NetworkPolicy podSelector label must survive on AGC pods")
 }
 
 // TestGMC_TenantProvisioning_NoResourceQuotaCreated asserts the platform-owned

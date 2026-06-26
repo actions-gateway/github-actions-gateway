@@ -10,6 +10,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,6 +109,40 @@ func TestAGC_PodProvisioning_CorrectSpec(t *testing.T) {
 	assert.True(t, envNames["HTTP_PROXY"], "HTTP_PROXY must be injected")
 	assert.True(t, envNames["HTTPS_PROXY"], "HTTPS_PROXY must be injected")
 	assert.True(t, envNames["NO_PROXY"], "NO_PROXY must be injected")
+
+	// Q205: recommended app.kubernetes.io/* metadata on the worker pod, additive to
+	// the functional selector labels the controllers and NetworkPolicy rely on.
+	assert.Equal(t, "actions-runner", pod.Labels[apilabels.Name])
+	assert.Equal(t, "pod-spec-rg", pod.Labels[apilabels.Instance])
+	assert.Equal(t, "runner", pod.Labels[apilabels.Component])
+	assert.Equal(t, apilabels.PartOfValue, pod.Labels[apilabels.PartOf])
+	assert.Equal(t, agcnames.ControllerName, pod.Labels[apilabels.ManagedBy])
+	// version is the resolved worker image's tag (WorkerImage custom-runner:v1.2.3).
+	assert.Equal(t, "v1.2.3", pod.Labels[apilabels.Version])
+	// Functional selector labels must be preserved untouched.
+	assert.Equal(t, "workload", pod.Labels["actions-gateway/component"],
+		"the workload NetworkPolicy podSelector label must survive")
+	assert.Equal(t, "pod-spec-rg", pod.Labels["actions-gateway/runner-group"],
+		"the owner-identity label the Pod watch filters on must survive")
+
+	// The backing job Secret carries the same recommended labels so it groups with
+	// its pod under Lens/k9s/Argo. Resolve it via the pod's job-payload volume so we
+	// assert the job Secret specifically (not an agentpool JIT Secret in the ns).
+	var jobSecretName string
+	for _, v := range pod.Spec.Volumes {
+		if v.Secret != nil && v.Name == "job-payload" {
+			jobSecretName = v.Secret.SecretName
+		}
+	}
+	require.NotEmpty(t, jobSecretName, "the worker pod must mount its job-payload Secret")
+	var sec corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: jobSecretName}, &sec))
+	assert.Equal(t, "actions-runner", sec.Labels[apilabels.Name])
+	assert.Equal(t, "pod-spec-rg", sec.Labels[apilabels.Instance])
+	assert.Equal(t, "runner", sec.Labels[apilabels.Component])
+	assert.Equal(t, apilabels.PartOfValue, sec.Labels[apilabels.PartOf])
+	assert.Equal(t, agcnames.ControllerName, sec.Labels[apilabels.ManagedBy])
+	assert.Equal(t, "v1.2.3", sec.Labels[apilabels.Version])
 }
 
 // waitForWorkerPodMatching polls until a worker Pod in nsName for rgName satisfies

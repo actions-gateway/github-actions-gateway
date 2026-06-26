@@ -72,7 +72,7 @@ def render():
         L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {int(0.01 * elapsed)}')
         L.append(f'actions_gateway_token_refreshes_total{{namespace="{ns}"}} {int(0.0003 * elapsed) + 1}')
         L.append(f'actions_gateway_token_refresh_errors_total{{namespace="{ns}"}} 0')
-        L.append(f'actions_gateway_renewjob_errors_total{{namespace="{ns}"}} 0')
+        L.append(f'actions_gateway_renew_job_errors_total{{namespace="{ns}"}} 0')
         L.append(f'actions_gateway_ip_range_updates_total{{namespace="{ns}"}} 1')
         # pod creation latency: center ~ bucket index 3-4 (5-10s) -> p95<15, p99~12
         L += hist_lines("actions_gateway_pod_creation_latency_seconds", f'namespace="{ns}"', POD_BUCKETS, 1.2, 3, elapsed)

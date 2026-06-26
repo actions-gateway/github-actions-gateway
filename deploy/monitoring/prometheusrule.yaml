@@ -54,7 +54,7 @@ spec:
         # Page: sustained renewjob failures will cancel running jobs
         - alert: ActionsGatewayRenewJobErrors
           expr: |
-            rate(actions_gateway_renewjob_errors_total[5m]) > 0.1
+            rate(actions_gateway_renew_job_errors_total[5m]) > 0.1
           for: 5m
           labels:
             severity: critical

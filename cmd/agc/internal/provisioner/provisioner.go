@@ -36,10 +36,12 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -59,26 +61,20 @@ var tracer = otel.Tracer(tracing.InstrumentationName)
 var defaultProvisionerClient = httpx.NewClient()
 
 const (
-	labelManagedBy = "app.kubernetes.io/managed-by"
 	// LabelRunnerGroup is stamped on every worker pod (and job Secret) with the
 	// owning RunnerGroup's name as its value. It is the contract the RunnerGroup
 	// controller's Pod watch filters and maps on, so it is exported.
 	LabelRunnerGroup = "actions-gateway/runner-group"
 	labelPlanID      = "actions-gateway/plan-id"
 
-	// Recommended Kubernetes labels (app.kubernetes.io/*) stamped on every
-	// worker pod so k9s, Prometheus relabel rules, and `kubectl get -l` work
-	// out of the box without operators learning the project-specific keys.
-	labelAppName      = "app.kubernetes.io/name"
-	labelAppInstance  = "app.kubernetes.io/instance"
-	labelAppComponent = "app.kubernetes.io/component"
-	labelAppPartOf    = "app.kubernetes.io/part-of"
-
-	// workerAppName / workerComponent / partOf are the recommended-label
-	// values for worker pods.
+	// workerAppName / workerComponent are the app.kubernetes.io/name and
+	// app.kubernetes.io/component values for worker pods and their job Secrets.
+	// The full recommended app.kubernetes.io/* set (incl. part-of, managed-by,
+	// version) is stamped via apilabels — see buildPod / buildSecret — so k9s,
+	// Prometheus relabel rules, and `kubectl get -l` work out of the box without
+	// operators learning the project-specific keys.
 	workerAppName   = "actions-runner"
 	workerComponent = "runner"
-	partOf          = "actions-gateway"
 
 	// Node-disruption-safety annotation keys stamped on worker pods so the
 	// common cluster autoscalers and the descheduler do not evict a pod while
@@ -523,10 +519,10 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// wait for completion — usually the long pole). The deferred closure stamps
 	// the span's error status from the named return so any early exit is visible.
 	ctx, span := tracer.Start(ctx, "Provisioner.provision", trace.WithAttributes(
-		attribute.String("owner.namespace", key.Namespace),
-		attribute.String("owner.name", key.Name),
-		attribute.String("plan.id", planID),
-		attribute.String("pod.name", podName),
+		semconv.K8SNamespaceName(key.Namespace),
+		attribute.String("gateway.owner.name", key.Name),
+		attribute.String("gateway.plan.id", planID),
+		semconv.K8SPodName(podName),
 	))
 	defer func() {
 		if err != nil {
@@ -548,10 +544,11 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	meta := jobMetaFrom(ap)
 
 	ownerLabels := target.PodOwnerLabels()
+	workerVersion := imageVersion(p.resolveWorkerImage(spec))
 
 	// 1. Stage the job Secret.
 	if err = traceStep(ctx, "stageJobSecret", func(ctx context.Context) error {
-		secret := p.buildSecret(target, secretName, planID, payload, jitConfig)
+		secret := p.buildSecret(target, secretName, planID, workerVersion, payload, jitConfig)
 		return p.Client.Create(ctx, secret)
 	}); err != nil {
 		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
@@ -570,11 +567,11 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		return fmt.Errorf("provisioner: count active pods: %w", err)
 	}
-	span.SetAttributes(attribute.Int("active_pods", int(count)))
+	span.SetAttributes(attribute.Int("gateway.active_pods", int(count)))
 
 	// 3. Ceiling enforcement.
 	priorityClass, held := ceilingCheck(spec, count)
-	span.SetAttributes(attribute.Bool("ceiling.held", held), attribute.String("priority_class", priorityClass))
+	span.SetAttributes(attribute.Bool("gateway.ceiling_held", held), attribute.String("gateway.priority_class", priorityClass))
 	if held {
 		log.Info("pod held by concurrency ceiling", "activePods", count)
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
@@ -608,9 +605,9 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 
 	duration := time.Since(start)
 	span.SetAttributes(
-		attribute.String("pod.phase", string(phase)),
-		attribute.String("pod.reason", reason),
-		attribute.Float64("duration_seconds", duration.Seconds()),
+		attribute.String("gateway.pod.phase", string(phase)),
+		attribute.String("gateway.pod.reason", reason),
+		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
 	)
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed", "phase", phase, "reason", reason, "duration", duration)
@@ -959,7 +956,44 @@ func ceilingCheck(spec *ResolvedSpec, activePods int32) (priorityClass string, h
 	return "", false
 }
 
-func (p *Provisioner) buildSecret(target Target, name, planID string, payload []byte, jitConfig string) *corev1.Secret {
+// resolveWorkerImage returns the worker image used for a provision: the
+// per-RunnerGroup override, else the AGC --worker-image flag, else the
+// digest-pinned built-in default. Shared by buildPod and the version-label
+// computation so both agree on which image (hence which runner version) a pod runs.
+func (p *Provisioner) resolveWorkerImage(spec *ResolvedSpec) string {
+	if spec.WorkerImage != "" {
+		return spec.WorkerImage
+	}
+	if p.DefaultWorkerImage != "" {
+		return p.DefaultWorkerImage
+	}
+	return DefaultWorkerImage
+}
+
+// imageVersion extracts the tag from a container image reference for the
+// app.kubernetes.io/version label. A digest-only or untagged reference has no
+// version to report, so it falls back to names.RunnerVersion (the pinned default
+// the project ships). Examples:
+//
+//	ghcr.io/actions/actions-runner:2.335.1@sha256:…  -> 2.335.1
+//	ghcr.io/actions/actions-runner:2.335.1           -> 2.335.1
+//	ghcr.io/actions/actions-runner@sha256:…          -> names.RunnerVersion
+func imageVersion(image string) string {
+	// Strip any digest first so an '@sha256:' colon is never mistaken for a tag.
+	if at := strings.IndexByte(image, '@'); at >= 0 {
+		image = image[:at]
+	}
+	// A tag follows the last ':' that comes after the last '/' — a registry port
+	// (host:5000/repo) has its colon before the final path separator.
+	if colon := strings.LastIndexByte(image, ':'); colon > strings.LastIndexByte(image, '/') {
+		if tag := image[colon+1:]; tag != "" {
+			return tag
+		}
+	}
+	return names.RunnerVersion
+}
+
+func (p *Provisioner) buildSecret(target Target, name, planID, version string, payload []byte, jitConfig string) *corev1.Secret {
 	data := map[string][]byte{
 		payloadKey: payload,
 		planIDKey:  []byte(planID),
@@ -967,7 +1001,11 @@ func (p *Provisioner) buildSecret(target Target, name, planID string, payload []
 	if jitConfig != "" {
 		data[jitConfigKey] = []byte(jitConfig)
 	}
-	labels := map[string]string{labelManagedBy: managerName}
+	// Recommended app.kubernetes.io/* metadata so the job Secret groups with the
+	// worker pod it backs; the owner-identity label(s) the controller filters on
+	// layer on top. managed-by is the AGC (managerName) — it, not the GMC, creates
+	// these objects.
+	labels := apilabels.Recommended(workerAppName, target.Key().Name, workerComponent, version, managerName)
 	for k, v := range target.PodOwnerLabels() {
 		labels[k] = v
 	}
@@ -986,14 +1024,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	// Start from the resolved PodTemplate.
 	template := spec.PodTemplate.DeepCopy()
 
-	workerImage := spec.WorkerImage
-	if workerImage == "" {
-		if p.DefaultWorkerImage != "" {
-			workerImage = p.DefaultWorkerImage
-		} else {
-			workerImage = DefaultWorkerImage
-		}
-	}
+	workerImage := p.resolveWorkerImage(spec)
 
 	// Ensure a container named "runner" exists.
 	runnerIdx := -1
@@ -1097,18 +1128,15 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	p.applyResourceDefaults(&template.Spec)
 
 	key := target.Key()
-	labels := map[string]string{
-		labelManagedBy: managerName,
-		labelPlanID:    safeName(podName), // use pod name fragment as stable label
-		// "actions-gateway/component: workload" matches the workload NetworkPolicy
-		// podSelector so worker egress is restricted to the per-tenant proxy only.
-		"actions-gateway/component": "workload",
-		// Recommended app.kubernetes.io/* labels for tooling interop.
-		labelAppName:      workerAppName,
-		labelAppInstance:  key.Name,
-		labelAppComponent: workerComponent,
-		labelAppPartOf:    partOf,
-	}
+	// Recommended app.kubernetes.io/* metadata for tooling interop. managed-by is
+	// the AGC (managerName); version is the resolved runner image's version.
+	labels := apilabels.Recommended(workerAppName, key.Name, workerComponent, imageVersion(workerImage), managerName)
+	// Functional labels (additive to, never overwritten by, the recommended set):
+	//   actions-gateway/component: workload — matches the workload NetworkPolicy
+	//     podSelector so worker egress is restricted to the per-tenant proxy only.
+	//   actions-gateway/plan-id — stable per-pod fragment for owner-scoped lookups.
+	labels["actions-gateway/component"] = "workload"
+	labels[labelPlanID] = safeName(podName)
 	// Owner-identity label(s): LabelRunnerGroup for v1, LabelRunnerSet for v2 —
 	// the key the owning controller's Pod watch and reaper filter on.
 	for k, v := range target.PodOwnerLabels() {

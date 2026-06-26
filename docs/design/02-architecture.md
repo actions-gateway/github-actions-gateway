@@ -192,7 +192,7 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to runner container start (scheduling + image pull) |
 | `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful installation token refreshes |
 | `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refreshes |
-| `actions_gateway_renewjob_errors_total` | Counter | `namespace` | RenewJob call failures (leading indicator for cancelled jobs) |
+| `actions_gateway_renew_job_errors_total` | Counter | `namespace` | RenewJob call failures (leading indicator for cancelled jobs) |
 | `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction |
 | `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Evicted jobs where retry budget was exhausted; requires manual re-run |
 | `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried due to namespace ResourceQuota exhaustion |
