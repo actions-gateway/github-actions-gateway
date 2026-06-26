@@ -63,7 +63,7 @@ WORKER_IMG     ?= $(IMAGE_REGISTRY)/worker:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status plan-index-check shellcheck queue-unblock \
+        ginkgo golangci-lint lint lint-status plan-index-check no-plan-refs-check shellcheck queue-unblock \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -90,7 +90,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status plan-index-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
+check: lint lint-status plan-index-check no-plan-refs-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links test ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests (CI also runs them under -race; see `make test-race`)
 
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
@@ -232,6 +232,13 @@ lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
 .PHONY: plan-index-check
 plan-index-check: ## Assert active plans in docs/plan/README.md are still STATUS-referenced (else archive them)
 	scripts/check-plan-index.sh
+
+# Keeps plan archival a docs-only operation: code that path-links a plan would
+# force a code edit (and heavy CI) when that plan is archived. Rationale in the
+# script header.
+.PHONY: no-plan-refs-check
+no-plan-refs-check: ## Assert Go code doesn't reference docs/plan/ paths (cite durable docs / Q-IDs instead)
+	scripts/check-no-plan-refs-in-code.sh
 
 # Without this gate, standalone helper scripts ship unlinted: actionlint only
 # covers inline workflow `run:` blocks. Glob, version pin, and rationale live

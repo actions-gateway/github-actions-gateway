@@ -148,6 +148,8 @@ When a plan's work fully lands and `docs/STATUS.md` no longer references it (no 
 
 The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit (don't wait for someone to notice it citing a since-completed `QNN`).
 
+**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md` (or `../plan/<file>.md`); cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched, since IDs are never reused and design sections don't move on plan close). If a plan's conclusion is load-bearing enough that code wants to cite it, **promote that conclusion to a durable doc when the plan closes** (the [doc-update matrix](doc-update-matrix.md) already requires the design/operations update on the code change); the plan keeps the full derivation as history, and code points at the durable home. `make no-plan-refs-check` (in `make check`) fails on any `docs/plan/` path in a `.go` file, so the coupling can't re-accrete. Prose mentions of a plan's *content* ("Milestone 1 §8", "the worker-egress-proxy plan") are fine — only file *paths* rot.
+
 **Protocol:**
 
 1. **Confirm STATUS.md doesn't reference the doc.** `grep -n "<docname>" docs/STATUS.md` should be empty.

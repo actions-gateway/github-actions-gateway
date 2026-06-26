@@ -1,0 +1,35 @@
+name: plan-hygiene
+on:
+  pull_request:
+    paths:
+      - 'docs/plan/README.md'
+      - 'docs/STATUS.md'
+      - '**.go'
+      - 'scripts/check-plan-index.sh'
+      - 'scripts/check-no-plan-refs-in-code.sh'
+      - '.github/workflows/plan-hygiene.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/plan/README.md'
+      - 'docs/STATUS.md'
+      - '**.go'
+      - 'scripts/check-plan-index.sh'
+      - 'scripts/check-no-plan-refs-in-code.sh'
+      - '.github/workflows/plan-hygiene.yml'
+
+# Cancel superseded runs on the same PR; pushes to main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan-hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: active plans are still STATUS-referenced (else archive)
+        run: scripts/check-plan-index.sh
+      - name: Go code does not reference plan-doc paths
+        run: scripts/check-no-plan-refs-in-code.sh

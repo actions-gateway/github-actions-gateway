@@ -58,7 +58,7 @@ This suite verifies conformance to the **documented** broker contract against an
 in-process model of the broker. It does not, by itself, talk to GitHub. The
 behaviours the model encodes were confirmed against real GitHub during
 Milestone 1 — see the live-probe findings in
-[docs/plan/milestone-1.md](../plan/milestone-1.md) §8 (acknowledge not required,
+the Milestone 1 plan §8 (acknowledge not required,
 session reuse after acquire, egress-IP variance). The companion
 credential-gated probe binary (`cmd/probe`) is the live check that the model
 still matches production; this suite is the repeatable, always-green guard that

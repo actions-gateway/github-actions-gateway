@@ -2,7 +2,7 @@ package listener_test
 
 // Q114 self-heal tests: single-use JIT agents are re-registered after each
 // job, and stale sessions (401 / 200-with-EOF GetMessage loops) heal in place
-// instead of looping forever. See docs/plan/q114-jit-agent-selfheal.md.
+// instead of looping forever. See the JIT-agent self-heal plan (Q114).
 
 import (
 	"context"
