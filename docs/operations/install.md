@@ -53,6 +53,39 @@ see the [chart README](../../charts/actions-gateway/README.md).
 
 ---
 
+## Preflight the cluster (required first step)
+
+Before installing, **validate that the target cluster can actually uphold the
+tenant-isolation guarantees**. The most dangerous failure mode is silent:
+installing onto a CNI that does not enforce `NetworkPolicy` (e.g. `kindnet`)
+leaves every NetworkPolicy the chart ships **inert**, so tenants are *not*
+confined — and nothing fails or warns at install time. Run the preflight from a
+[source checkout](#install) first:
+
+```sh
+make validate-cluster
+```
+
+It checks four prerequisites and prints a clear `PASS`/`WARN`/`FAIL` line with a
+remediation hint for each:
+
+| Check | Severity | Meaning |
+|---|---|---|
+| **CNI NetworkPolicy enforcement** | **FAIL** (blocking) | Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; `kindnet` **fails loudly** — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement). |
+| **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. |
+| **cert-manager present** | WARN | Required only for the default cert path (`certManager.enabled=true`). An install with `--set certManager.enabled=false` uses the chart's self-signed fallback and does not need it. |
+| **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume. Install succeeds without it; autoscaling stays degraded until it is present. |
+
+`make validate-cluster` exits non-zero on any blocking **FAIL** (or if the
+cluster is unreachable). Warnings do not block the install; set
+`VALIDATE_STRICT=1` to treat them as failures too. The check is detection-based —
+it schedules no workloads and needs no extra permissions, so it is safe to run
+against a fresh cluster. Resolve every **FAIL** before proceeding; for CNI
+enforcement specifically, install on a cluster whose CNI enforces
+`NetworkPolicy` (see [Prerequisites](#prerequisites)).
+
+---
+
 ## Install
 
 > **General availability — `v1.0.0`.** The chart is published, cosign-signed,
