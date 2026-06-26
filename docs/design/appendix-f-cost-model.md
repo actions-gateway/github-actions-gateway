@@ -35,6 +35,27 @@ Every dollar figure below uses **real public list prices**, cited here so you ca
 - **A month is 730 hours** (365 × 24 ÷ 12 ≈ 30.4 days).
 - Figures ignore second-order differences (image-pull time, control-plane pods) that are small relative to GPU-node cost and roughly equal between the two systems.
 
+### Comparing accelerators: memory per dollar, not dollars per GPU-hour
+
+Sticker price per GPU-hour is a poor cross-vendor value signal — it blends chip generation, cloud tier, and on-board memory into one number. For the memory-bound jobs that dominate GPU CI/ML (large-model inference, long context, large batch sizes, big container builds), the metric that tracks real value is **memory per dollar**: dollars per GB-of-HBM per hour. That is a spec-sheet ratio, not a benchmark, so it does not hinge on framework or kernel tuning.
+
+Comparing current-generation parts at the **same cloud tier** (specialty/neocloud on-demand, 2026-06):
+
+| Accelerator | HBM | On-demand $/GPU-hr | $/GB-HBM-hr |
+|---|---|---|---|
+| NVIDIA H100 | 80 GB | ≈ $2.50 | ≈ $0.031 |
+| NVIDIA H200 | 141 GB | ≈ $3.00 | ≈ $0.021 |
+| AMD Instinct MI300X | 192 GB | ≈ $2.00 | ≈ $0.010 |
+| AMD Instinct MI325X | 256 GB | ≈ $2.10 | ≈ $0.008 |
+| AMD Instinct MI355X | 288 GB | ≈ $3.00 | ≈ $0.010 |
+
+On memory per dollar, AMD Instinct's larger HBM stacks land it roughly **2–3× ahead** of same-tier NVIDIA — and because one high-memory Instinct GPU can often do the work of several smaller cards, that advantage compounds under this system's per-job model as **fewer worker pods and fewer GPU-hours per job**, not just a lower hourly rate.
+
+Two caveats keep this a fair comparison rather than a thumb on the scale:
+
+- **It is a memory claim, not a compute claim.** Throughput per dollar ($ per token/sec, or per wall-clock job) is what ultimately decides cost, and it depends on your workload and on ROCm/kernel maturity for your framework. Measure it on your own jobs; we make no generic compute-per-dollar claim.
+- **Use the rate you can actually get.** MI355X here uses the low end of its volatile range ($3.00); at Oracle's $8.60/GPU-hr on-demand it is ≈ $0.030/GB-HBM-hr — level with H100. Same-tier, current-quote comparisons are the only honest ones. Sources: [getdeploying H100](https://getdeploying.com/gpus/nvidia-h100), [H200](https://getdeploying.com/gpus/nvidia-h200), and the AMD Instinct sources cited above.
+
 ---
 
 ## F.1. Per-Job Cost Breakdown
