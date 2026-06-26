@@ -375,7 +375,7 @@ func TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule(t *testing.T) {
 func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	// CIDR form (external Vault): scoped ipBlock peer on the address port (8200).
 	wiCIDR := v2WorkloadIdentityGateway("gw", "team-a", "")
-	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.VaultNetworkPolicy{
+	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
 		CIDR: "10.0.5.7/32",
 	}
 	np := buildAGCNetworkPolicyV2(wiCIDR, nil, nil, true)
@@ -392,7 +392,7 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	// Selector form (in-cluster Vault): pod + namespace selector peer, default https port.
 	wiSel := v2WorkloadIdentityGateway("gw", "team-a", "")
 	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.vault.svc"
-	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.VaultNetworkPolicy{
+	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
 		PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "vault"}},
 		NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "vault"}},
 	}
@@ -404,6 +404,19 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	assert.Equal(t, "vault", rule.To[0].PodSelector.MatchLabels["app.kubernetes.io/name"])
 	require.NotNil(t, rule.To[0].NamespaceSelector)
 	assert.Equal(t, int32(443), rule.Ports[0].Port.IntVal, "no explicit address port ⇒ https default")
+
+	// Explicit EgressPeer.Port (Q204) overrides the address-derived port. The shared
+	// descriptor lets a peer pin its own port; for Vault the override wins over the address.
+	wiPort := v2WorkloadIdentityGateway("gw", "team-a", "")
+	wiPort.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.vault.svc"
+	wiPort.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
+		CIDR: "10.0.5.7/32",
+		Port: ptr(int32(8201)),
+	}
+	rule = findVaultEgressRule(buildAGCNetworkPolicyV2(wiPort, nil, nil, true))
+	require.NotNil(t, rule, "explicit-port WI gateway gains a Vault egress rule")
+	require.Len(t, rule.Ports, 1)
+	assert.Equal(t, int32(8201), rule.Ports[0].Port.IntVal, "explicit EgressPeer.Port wins over the derived port")
 
 	// WI gateway without a NetworkPolicy peer: default-deny preserved (no Vault rule).
 	wiNone := v2WorkloadIdentityGateway("gw", "team-a", "")
