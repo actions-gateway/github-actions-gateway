@@ -179,7 +179,7 @@ worker pod:
   sidecar. Worker pods run to completion untouched. Enroll *other* namespaces in
   ambient with `istio.io/dataplane-mode=ambient`; simply leave the GAG namespace
   unlabeled (or `istio.io/dataplane-mode=none`) and still apply the
-  [egress consideration](#ambient--sidecar-less-meshes) for ztunnel.
+  [egress consideration](#istio--ambient-mode) for ztunnel.
 - **Cilium Service Mesh** — sidecar-less (per-node Envoy). No injection to
   disable; verify no L7 redirect captures the proxy's egress.
 
