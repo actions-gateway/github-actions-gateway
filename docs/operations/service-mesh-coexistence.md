@@ -26,6 +26,18 @@ posture is to opt the GAG tenant namespace out of the mesh entirely.** One label
 resolves both problems at once, and it costs you nothing GAG-specific — see
 [The one-label answer](#the-one-label-answer).
 
+> **Validation status (read before relying on the in-mesh recipes).** The
+> failure analysis and the [namespace opt-out](#the-one-label-answer) are
+> verified against GAG's implementation, and the opt-out needs no field
+> validation — removing GAG from the mesh removes the conflict by construction.
+> The **in-mesh** mitigations below (native sidecars, egress exclusions, the
+> per-mesh knob names and version floors) are derived from each mesh's upstream
+> documentation and have **not** been validated end-to-end against a running
+> Istio or Linkerd cluster (tracked as Q220). Treat them as starting points to
+> confirm in a staging cluster against your mesh version, not as a certified
+> procedure — knob names and defaults drift between mesh releases. When in doubt,
+> prefer the opt-out.
+
 ---
 
 ## Background: what GAG assumes about a worker pod
@@ -165,6 +177,15 @@ phase. A run-to-completion worker pod then completes normally and GAG reaps it.
 - **Linkerd** — install (or upgrade) with `--set proxy.nativeSidecar=true`
   (Linkerd 2.16+ / recent edge releases). Requires Kubernetes ≥ 1.28.
 
+> **Not yet validated against a running mesh (Q220).** The mechanism is sound —
+> GAG worker pods are `RestartPolicy: Never` with a single regular container, so
+> the kubelet should terminate the native-sidecar proxy once the runner exits —
+> but the exact flag/value names and version floors above are from upstream docs,
+> not a tested run. Confirm against your mesh version in staging, and watch a
+> completed worker pod actually reach `Succeeded`/`Failed` (see
+> [Verifying coexistence](#verifying-coexistence)) before trusting it in
+> production.
+
 > **Native sidecars fix termination, not interception.** A native-sidecar proxy
 > still transparently intercepts the worker's outbound traffic, so you must
 > *also* apply the [egress exclusions](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy)
@@ -243,6 +264,12 @@ So for an in-mesh worker namespace you configure exclusions at the **mesh-instal
 ---
 
 ## Per-mesh recipes
+
+> These recipes are the in-mesh path and carry the
+> [validation caveat](#the-one-label-answer) (Q220): the structure is sound, but
+> verify the specific knob names, values, and version floors against your mesh
+> release before relying on them. The [namespace opt-out](#the-one-label-answer)
+> remains the recommended default.
 
 ### Istio — sidecar mode (in-mesh, if opt-out is not allowed)
 
