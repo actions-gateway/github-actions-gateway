@@ -66,7 +66,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q190"></a>Q190 | [GitHub App setup walkthrough](operations/tenant-onboarding.md) | `docs` | 🔲 | S | Onboarding omits GitHub App creation (appId/installationId/PEM); strict PEM format is a common first-day failure. Add a gh-CLI/screenshot walkthrough for first-time app + Secret creation. |
 | <a id="Q192"></a>Q192 | [Quantified cost story / savings calculator](design/appendix-f-cost-model.md) | `docs` | 🔲 | M | Cost model (appendix-f) uses placeholder rates; homepage "lower cost" is unquantified. Replace with real per-job / $ figures and an interactive savings calculator vs ARC. |
 | <a id="Q193"></a>Q193 | [End-to-end demo / screencast](index.md) | `docs` | 🔲 | S | No demo or screencast — biggest top-of-funnel friction. Record a free end-to-end kind deploy showing job→pod→GitHub. The quantified benchmark/case-study split to Q198 (it needs a paid scale run). |
-| <a id="Q195"></a>Q195 | [SEO bundle: structured data, robots.txt, analytics](development/website.md) | `docs` | 🔲 | S | Site has no JSON-LD structured data, no robots.txt, and no analytics. Add SoftwareSourceCode/Organization schema, robots.txt with sitemap, and privacy-respecting analytics (e.g. Plausible). |
 ---
 
 ## Deferred
