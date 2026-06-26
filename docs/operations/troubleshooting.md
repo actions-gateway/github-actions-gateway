@@ -13,6 +13,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
+- [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
 - [ActionsGateway Stuck Deleting (Teardown Blocked on a Failing Delete)](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)
@@ -258,6 +259,58 @@ kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
 
 The condition clears automatically on the next reconcile once a worker pod
 schedules successfully.
+
+---
+
+## Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine
+
+**Symptoms.** Pods never appear at all (not even `Pending`): a `Deployment`
+stays at zero ready replicas, or no worker pod is created for an acquired job.
+The owning controller's events or logs show an admission denial naming
+[Kyverno](https://kyverno.io) or [OPA Gatekeeper](https://open-policy-agent.github.io/gatekeeper/),
+for example:
+
+```
+admission webhook "validate.kyverno.svc-fail" denied the request:
+... validation error: ... rule require-drop-all failed
+```
+
+**Cause.** A cluster-wide admission policy rejects the GAG pod for violating a
+rule it does not satisfy. The usual culprits: a policy requiring `drop: [ALL]`
+capabilities or `allowPrivilegeEscalation: false` on *all* pods (the default
+`baseline` worker profile sets neither — baseline CI relies on in-job `sudo`); a
+`readOnlyRootFilesystem` requirement (no worker profile sets it — the runner
+needs a writable root filesystem); a registry allowlist that omits GAG's
+registries; or a "require resource limits" rule (AGC v1alpha1 pods carry none).
+
+This is distinct from [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable)
+(scheduler can't place a *created* pod) and from `WorkerQuotaExceeded`
+(`ResourceQuota` blocks admission): here the policy engine blocks pod creation
+*before* either applies.
+
+**Diagnostics.**
+
+```sh
+# Worker path: the owning RunnerGroup surfaces the create error in its conditions.
+kubectl get runnergroup -n <namespace> <runner-group> -o yaml | less   # status.conditions / events
+# Proxy / AGC path: the GMC logs the failed apply.
+kubectl logs -n <gmc-install-namespace> deploy/<gmc-manager> | grep -i "denied\|forbidden\|policy"
+# Confirm which policy fired.
+kubectl get cpol,polr -A           # Kyverno ClusterPolicies + PolicyReports
+kubectl get constraints            # Gatekeeper
+```
+
+**Resolution.** Reconcile the cluster policy with GAG's real pod posture — see
+the [admission-policies compatibility matrix](admission-policies.md), which
+states per policy class whether GAG complies or what to allow. In short:
+- Add GAG's registries to your allowlist (`ghcr.io/actions-gateway/*` for the
+  control plane, `ghcr.io/actions/actions-runner` for the default worker).
+- For `drop-ALL` / no-privilege-escalation requirements: have tenants set
+  `securityProfile: restricted` (which satisfies them), or apply the scoped
+  [exception samples](examples/policies/) so `baseline` workers pass.
+- For `readOnlyRootFilesystem`: exempt worker pods (no profile can satisfy it).
+- For "require limits" on AGC v1alpha1: migrate the tenant to a v2alpha1
+  `ActionsGateway`, or exempt AGC pods.
 
 ---
 

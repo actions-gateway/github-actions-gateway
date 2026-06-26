@@ -455,6 +455,11 @@ The detections above catch abuse at runtime. Two scanners catch posture
 regressions *before* they reach a cluster — one in CI on every chart change,
 one a pre-production manual step against the live cluster.
 
+If your cluster runs a policy engine (Kyverno / OPA Gatekeeper), see
+[admission-policies.md](admission-policies.md) for whether GAG pods comply with
+common admission policies and for sample policies that *enforce* GAG's posture
+at admission time.
+
 ### Manifest posture — polaris (automated, in CI)
 
 [polaris](https://polaris.docs.fairwinds.com/) audits the Kubernetes
