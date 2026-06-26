@@ -360,10 +360,13 @@ for anything else.
 The Vault work established the reusable pattern for opening a hole in the
 default-deny envelope: a peer the **tenant names in its own CR**, that the
 **GMC scopes** to a single peer + port, attached to the **AGC policy only**
-so untrusted worker pods never inherit it. The entries below are the other
-egress holes we can foresee wanting, the governance each needs, and — the
-load-bearing question — confirmation that none of them forces a breaking
-API change before v2.
+so untrusted worker pods never inherit it. That peer descriptor is now the
+shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type
+(selector | CIDR + optional explicit port), extracted from the Vault-specific
+shape before the v2 freeze so future consumers reuse one descriptor (Q204; see
+the pre-v2 analysis below). The entries below are the other egress holes we can
+foresee wanting, the governance each needs, and — the load-bearing question —
+confirmation that none of them forces a breaking API change before v2.
 
 **Gap — the egress holes we can foresee.**
 
@@ -401,16 +404,20 @@ hole above is reachable additively under the frozen v2 shape:
 - The worker-through-proxy case extends the proxy allowlist
   ([G.1](#g1-proxy-enforced-destination-allowlist)), not the CRD egress shape.
 
-The **one** pre-v2 hygiene decision worth settling deliberately: the Vault
+The **one** pre-v2 hygiene decision worth settling deliberately was: the Vault
 work shipped a per-feature peer descriptor (`VaultNetworkPolicy`: selector |
-CIDR, port derived from the address). If KMS, telemetry, and worker-egress
-each grow their own near-duplicate descriptor, v2 freezes three inconsistent
-shapes. Introducing a **shared `EgressPeer` type** (selector | CIDR + an
-explicit port) *now*, with the Vault field referencing it, is cheap before
-the freeze and materially annoying to reconcile after. Not a hard blocker —
-per-feature fields are themselves additive — but it is exactly the kind of
-shape decision that is far cheaper to make before the v2alpha1 → v2beta1
-graduation ([Q74](../STATUS.md)) than after. Tracked as [Q204](../STATUS.md).
+CIDR, port derived from the address). If KMS, telemetry, and worker-egress had
+each grown their own near-duplicate descriptor, v2 would freeze three
+inconsistent shapes. **Resolved (Q204):** the descriptor is now the shared
+[`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR
++ an optional explicit port), and `signer.vault.networkPolicy` references it.
+The extraction is serialization-compatible — the field keys (`podSelector`,
+`namespaceSelector`, `cidr`) are unchanged, so the v2alpha1 shape already
+shipped is preserved; only the additive optional `port` is new, with the Vault
+builder still deriving the port from the address when `port` is unset. Future
+consumers (KMS, telemetry) now reference the same type instead of forking it —
+the shape that is far cheaper to settle before the v2alpha1 → v2beta1
+graduation ([Q74](../STATUS.md)) than after.
 
 **What would trigger building any of it.** A concrete signer provider beyond
 Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job

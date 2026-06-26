@@ -265,39 +265,58 @@ type VaultSigner struct {
 	// is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a
 	// GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).
 	//
+	// The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule
+	// to. Its Port is left unset for Vault (the port is derived from Address); set it only to
+	// override that derived port.
+	//
 	// +optional
-	NetworkPolicy *VaultNetworkPolicy `json:"networkPolicy,omitempty"`
+	NetworkPolicy *EgressPeer `json:"networkPolicy,omitempty"`
 }
 
-// VaultNetworkPolicy identifies Vault as a NetworkPolicy egress peer so the GMC can emit a
-// scoped AGC→Vault egress rule. Exactly one peer must be given: a pod/namespace selector for
-// an in-cluster Vault, or a CIDR for an external Vault. The two forms are mutually exclusive —
-// a CIDR cannot carry a selector and vice versa — and the GMC always scopes the rule to the
-// Vault API port (from VaultSigner.Address), never to all egress.
+// EgressPeer identifies a single destination the GMC may open in an otherwise default-deny
+// per-tenant NetworkPolicy: a pod/namespace selector for an in-cluster peer, or a CIDR for an
+// external one. Exactly one peer form must be given — a CIDR cannot carry a selector and vice
+// versa — so the rule the GMC emits is always scoped to one peer, never a broaden-to-all-egress.
+//
+// This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
+// reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
+// (Q204). Today the Vault signer (VaultSigner.NetworkPolicy) is its only consumer; foreseen
+// future consumers — cloud KMS signers, AGC telemetry endpoints — reuse it additively. See
+// docs/design/appendix-g-future-enhancements.md §G.9.
 //
 // +kubebuilder:validation:XValidation:rule="(has(self.cidr) && size(self.cidr) > 0) != (has(self.podSelector) || has(self.namespaceSelector))",message="exactly one of cidr or a pod/namespace selector must be set"
-type VaultNetworkPolicy struct {
-	// PodSelector selects the in-cluster Vault pods the AGC may reach (e.g. {app.kubernetes.io/name:
+type EgressPeer struct {
+	// PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name:
 	// vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer
 	// semantics. Mutually exclusive with CIDR.
 	//
 	// +optional
 	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
 
-	// NamespaceSelector selects the namespace(s) the in-cluster Vault runs in (e.g.
+	// NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g.
 	// {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set.
 	// Mutually exclusive with CIDR.
 	//
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
 
-	// CIDR is the IP block of an external (out-of-cluster) Vault, e.g. "10.0.5.7/32". Mutually
+	// CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually
 	// exclusive with the pod/namespace selectors.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=43
 	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F:]+)/[0-9]{1,3}$`
 	CIDR string `json:"cidr,omitempty"`
+
+	// Port optionally pins the destination port (1–65535) the egress rule permits. Leave it
+	// unset for a peer whose port is derivable elsewhere — the Vault signer derives it from
+	// VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose
+	// port is not otherwise derivable, or to override the derived port.
+	//
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 // VaultKubernetesAuth configures Vault Kubernetes auth: the AGC presents its projected

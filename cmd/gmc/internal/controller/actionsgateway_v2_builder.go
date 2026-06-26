@@ -243,19 +243,30 @@ func vaultEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicy
 		return networkingv1.NetworkPolicyEgressRule{}, false
 	}
 	npc := signer.Vault.NetworkPolicy
-	var peer networkingv1.NetworkPolicyPeer
-	if npc.CIDR != "" {
-		peer = networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: npc.CIDR}}
-	} else {
-		peer = networkingv1.NetworkPolicyPeer{
-			PodSelector:       npc.PodSelector,
-			NamespaceSelector: npc.NamespaceSelector,
-		}
+	// Port: an explicit EgressPeer.Port wins; otherwise derive it from the Vault address
+	// (the historical, default behavior).
+	port := vaultEgressPort(signer.Vault.Address)
+	if npc.Port != nil {
+		port = *npc.Port
 	}
 	return networkingv1.NetworkPolicyEgressRule{
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(vaultEgressPort(signer.Vault.Address)))}},
-		To:    []networkingv1.NetworkPolicyPeer{peer},
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(port))}},
+		To:    []networkingv1.NetworkPolicyPeer{egressPeerTo(npc)},
 	}, true
+}
+
+// egressPeerTo converts a shared EgressPeer descriptor (Q204) to a NetworkPolicy peer: a CIDR
+// IPBlock for an external peer, otherwise the pod/namespace selector for an in-cluster one. The
+// EgressPeer CEL validation guarantees exactly one form is set, so the branch is unambiguous.
+// Shared so future egress-peer consumers (cloud KMS signers, telemetry) emit peers identically.
+func egressPeerTo(p *gmcv2alpha1.EgressPeer) networkingv1.NetworkPolicyPeer {
+	if p.CIDR != "" {
+		return networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: p.CIDR}}
+	}
+	return networkingv1.NetworkPolicyPeer{
+		PodSelector:       p.PodSelector,
+		NamespaceSelector: p.NamespaceSelector,
+	}
 }
 
 // vaultEgressPort parses the Vault API port from the signer Address for the egress rule. An

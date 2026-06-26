@@ -386,7 +386,7 @@ func TestV2_ActionsGateway_WorkloadIdentityVaultEgressNetworkPolicy(t *testing.T
 	createNamespace(t, ns)
 
 	ag := newV2WorkloadIdentityGateway(ns, "wi-np-gw")
-	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &v2alpha1.VaultNetworkPolicy{
+	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &v2alpha1.EgressPeer{
 		CIDR: "10.0.5.7/32",
 	}
 	require.NoError(t, k8sClient.Create(ctx, ag))

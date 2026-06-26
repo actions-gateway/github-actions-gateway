@@ -421,6 +421,13 @@ in-cluster (dev-mode) Vault kind e2e.
 > unset on a non-enforcing CNI (kindnet) or to manage the rule out of band — the egress
 > posture is unchanged in that case. As with every egress negative this is enforced only by
 > a policy-aware CNI.
+>
+> `signer.vault.networkPolicy` is a shared `EgressPeer` (selector | CIDR + optional explicit
+> `port`) — the one descriptor future tenant-delegated egress holes (cloud KMS signers,
+> telemetry endpoints) reuse so the v2 API freezes one consistent shape (Q204). For Vault the
+> `port` is left unset and derived from `address`; the secure default is unchanged — still a
+> single scoped peer, never a broaden-to-all-egress. See
+> [appendix-g §G.9](appendix-g-future-enhancements.md#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies).
 
 ---
 
