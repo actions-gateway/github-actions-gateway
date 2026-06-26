@@ -342,4 +342,86 @@ layer and wants to shed the proxy's always-on cost.
 
 ---
 
+## G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)
+
+**Current behavior.** The GMC reconciles three default-deny per-tenant
+NetworkPolicies (§5.2, [`builder.go`](../../cmd/gmc/internal/controller/builder.go)).
+The **AGC** policy permits egress to cluster DNS + the kube API server
+(+ the GitHub CIDR allowlist in direct mode), and — once the Vault egress
+work landed — a *scoped* AGC→Vault rule when a workload-identity gateway
+declares `signer.vault.networkPolicy` (a pod/namespace selector or a CIDR;
+the rule targets only that peer, on the Vault API port from the signer
+address, and only the AGC pod selects into it). The **workload** policy
+permits worker pods egress to cluster DNS + the proxy on 8080 (+ the GitHub
+CIDRs in direct mode) and nothing else. The link-local block
+`169.254.0.0/16` is permitted on **port 53 only** (NodeLocal DNSCache), not
+for anything else.
+
+The Vault work established the reusable pattern for opening a hole in the
+default-deny envelope: a peer the **tenant names in its own CR**, that the
+**GMC scopes** to a single peer + port, attached to the **AGC policy only**
+so untrusted worker pods never inherit it. The entries below are the other
+egress holes we can foresee wanting, the governance each needs, and — the
+load-bearing question — confirmation that none of them forces a breaking
+API change before v2.
+
+**Gap — the egress holes we can foresee.**
+
+| Use case | Who needs egress | Governance | Notes |
+|---|---|---|---|
+| **Cloud KMS signers** (AWS/GCP/Azure KMS as additive `signer.provider` members) | AGC | Tenant-delegated for the signer endpoint (tenant names its own KMS); **admin-governed** for any cloud-metadata leg | The metadata/credential path varies by provider: **GKE Workload Identity** and **EC2 IMDS / EKS Pod Identity** reach a link-local address (`169.254.169.254` / `169.254.170.23`) on :80 — a *new* hole distinct from the existing :53-only `169.254/16` rule; **AWS IRSA** and **Azure Workload Identity** instead call a *public* STS/AAD host (the same opaque-URL problem the Vault rule already solves). |
+| **AGC telemetry** (`spec.tracing.endpoint`, and any future metrics/log push) | AGC | Tenant-delegated, AGC-only | A scoped rule is derivable from the *already-existing* `tracing.endpoint`; today that endpoint is not auto-permitted on a policy-enforcing CNI. |
+| **Worker job dependencies** (container/package registries, build caches, internal services the CI job legitimately calls) | Worker | **Through the proxy → tenant-delegated** (attribution preserved); **direct → admin-governed** | The single most common operator ask. The attribution-preserving answer is the proxy destination allowlist ([G.1](#g1-proxy-enforced-destination-allowlist)); a *direct* worker egress hole forfeits per-tenant IP attribution and the DNS-exfil containment, so it must stay an explicit admin opt-in, never tenant-openable by default. |
+| **Cloud metadata for worker OIDC** (`configure-aws-credentials` etc.) | Worker | **Admin-governed, default-deny** | Metadata-server reach from untrusted job code is a classic credential-theft / SSRF vector; the common OIDC path uses GitHub's token → public STS, which needs no metadata at all. |
+
+**The governance principle (the durable decision).** A tenant may
+self-declare egress, in its own CR, **only** to peers it names and controls
+that are reached **either** by its AGC control plane **or** through the
+attribution-preserving proxy. Egress that originates **directly from worker
+pods** (bypassing the proxy) or targets a **shared / sensitive surface**
+(cloud metadata, cluster infrastructure, arbitrary internet) stays
+**platform-admin-governed** — a GMC flag or cluster policy, never a
+tenant-settable default. The rationale is the trust split the whole design
+rests on: worker pods run untrusted GitHub Actions job code, the AGC is
+trusted control plane, and the proxy is the per-tenant attribution boundary.
+The Vault `signer.vault.networkPolicy` is the canonical tenant-delegated case
+(AGC-only, tenant-named, GMC-scoped); the worker-direct and metadata cases
+are the canonical admin-governed ones.
+
+**Pre-v2 API-compatibility analysis (no breaking change required).** Every
+hole above is reachable additively under the frozen v2 shape:
+
+- Cloud KMS signers join as **new `signer.provider` union members**, each
+  carrying its *own* optional peer descriptor — exactly the additive
+  contract the union was built for; existing members are untouched.
+- AGC telemetry and worker-direct egress would be **new optional fields**
+  on existing structs (`ActionsGateway` / `RunnerSet` / `RunnerTemplate`)
+  or new GMC flags. Optional CRD fields don't prune and old clients ignore
+  them, so adding them later is non-breaking.
+- The worker-through-proxy case extends the proxy allowlist
+  ([G.1](#g1-proxy-enforced-destination-allowlist)), not the CRD egress shape.
+
+The **one** pre-v2 hygiene decision worth settling deliberately: the Vault
+work shipped a per-feature peer descriptor (`VaultNetworkPolicy`: selector |
+CIDR, port derived from the address). If KMS, telemetry, and worker-egress
+each grow their own near-duplicate descriptor, v2 freezes three inconsistent
+shapes. Introducing a **shared `EgressPeer` type** (selector | CIDR + an
+explicit port) *now*, with the Vault field referencing it, is cheap before
+the freeze and materially annoying to reconcile after. Not a hard blocker —
+per-feature fields are themselves additive — but it is exactly the kind of
+shape decision that is far cheaper to make before the v2alpha1 → v2beta1
+graduation ([Q74](../STATUS.md)) than after. Tracked as [Q204](../STATUS.md).
+
+**What would trigger building any of it.** A concrete signer provider beyond
+Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job
+dependency reachable, or the graduation review deciding to consolidate the
+peer descriptor.
+
+**Related.** [05-security.md](05-security.md) (the per-tenant NetworkPolicy
+isolation model); [G.1 Proxy-Enforced Destination Allowlist](#g1-proxy-enforced-destination-allowlist);
+[G.8 Optional Egress Proxy](#g8-optional-disable-able-egress-proxy);
+[`builder.go`](../../cmd/gmc/internal/controller/builder.go).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
