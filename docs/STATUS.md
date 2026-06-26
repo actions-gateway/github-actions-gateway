@@ -23,7 +23,7 @@ Last touched: 2026-06-25
 
 ## Progress
 
-Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces remain open in the Queue below.
+Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residuals live in [Deferred](#deferred) and don't count against completion). ⚠️ = ≥1 open Queue row remains. See [maintaining-backlog.md](development/maintaining-backlog.md#-means-an-open-queue-row-remains--deferred-residuals-dont-count).
 
 | Item | Labels | Status |
 |---|---|---|
@@ -34,8 +34,8 @@ Plan-level view. ✅ = all criteria met. ⚠️ = code shipped, specific pieces 
 | [M4: GMC + proxy](plan/milestone-4.md) | `milestone` | ✅ |
 | [M5: Hardening](plan/milestone-5.md) | `milestone` `security` | ⚠️ |
 | [Release 1.0](plan/release-1.0.md) | `milestone` | ✅ |
-| [Security hardening](plan/security.md) | `security` | ⚠️ |
-| [Security audit 2 (2026-06)](plan/security-audit-2026-06.md) | `security` | ⚠️ |
+| [Security hardening](plan/security.md) | `security` | ✅ |
+| [Security audit 2 (2026-06)](plan/security-audit-2026-06.md) | `security` | ✅ |
 | [Worker egress proxy](plan/worker-egress-proxy.md) | `security` `infra` | ✅ |
 | [Docs](plan/docs.md) | `docs` | ✅ |
 | [Six-layer docs audit](plan/docs-six-layer-audit.md) | `docs` | ✅ |
@@ -63,6 +63,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q202"></a>Q202 | [First-class AGC→Vault NetworkPolicy egress](design/05-security.md#57-workload-identity-the-no-pem-delegation-model) | `security` `infra` | 🔲 | S | Q201 gap: the GMC default-deny AGC egress can't express Vault as an NP peer (its address isn't a selectable namespace/pod or managed CIDR), so on a policy CNI operators add the rule by hand (documented). Add a selector/CIDR Vault egress rule. |
 | <a id="Q183"></a>Q183 | [Per-cloud apiserver-CIDR egress tightening](design/05-security.md) | `security` `docs` | 🔲 | S | AGC NetworkPolicy allows 443/6443 to any dest by default (security residual). Document how to find the stable apiserver CIDR per cloud (EKS/GKE/AKS/kubeadm/kind) and review whether a tighter default is feasible. |
 | <a id="Q184"></a>Q184 | [`make validate-cluster` pre-flight check](operations/install.md) | `infra` | 🔲 | M | No pre-flight check: deploying onto kindnet silently voids tenant isolation (NetworkPolicy inert). Add a make/helm preflight validating CNI enforcement, K8s>=1.30, cert-manager, metrics-server before install. |
+| <a id="Q219"></a>Q219 | [M5 live `helm install` → working-tenant validation](plan/milestone-5.md) | `milestone` `infra` `tests` | 🔲 | M | M5 track A: chart is verified offline only (helm template/kubeconform/polaris). Run a live `helm install` on kind with real App creds → working tenant (job→pod→GitHub), the last M5 verification gap. Pairs with Q15 (same cluster run). |
 | <a id="Q206"></a>Q206 | [Service-mesh coexistence guide (Istio/Linkerd/ambient)](plan/ecosystem-integration-landscape.md#c-service-mesh-highest-conflict-area) | `docs` `infra` | 🔲 | S | Injected mesh sidecars stop run-to-completion worker pods from terminating, and mesh egress interception fights the per-tenant proxy. Document per-ns injection opt-out, native-sidecar/ambient guidance, egress exclusions. Top silent-breakage. |
 | <a id="Q207"></a>Q207 | [Kyverno/Gatekeeper compatibility matrix + sample policies](plan/ecosystem-integration-landscape.md#e-secrets-identity--supply-chain-security) | `docs` `security` | 🔲 | S | Common cluster policies (require runAsNonRoot, block `:latest`, registry allowlists) can reject GAG worker/proxy pods so they never schedule. Ship a compat matrix + complementary sample policies. Cuts "pods won't schedule" support. |
 | <a id="Q208"></a>Q208 | [CNI-native FQDN egress opt-in (Cilium/Calico DNS policy)](design/05-security.md) | `infra` `security` | 🔲 | M | Opt-in replacing GMC's 24h GitHub-CIDR reconcile with `toFQDNs: api.github.com` on policy CNIs. Pairs with existing `managedNetworkPolicy:false`. Simpler egress, no CIDR feed. Additive. |
