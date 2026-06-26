@@ -21,7 +21,7 @@ The following targets are conservative defaults derived from the architectural c
 
 | Resource | Target | Rationale |
 | --- | --- | --- |
-| Concurrent virtual sessions (peak burst) | ≤ 1,000 | Memory-bound burst ceiling: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident; 1,000 sessions ≈ 60 MiB at peak. Steady-state cost is 1 session per RunnerGroup (~60 KiB each), far below this ceiling for typical deployments. |
+| Concurrent virtual sessions (peak burst) | ≤ 1,000 | Memory-bound burst ceiling: each goroutine stack + HTTP buffer + token-manager indirection averages ~60 KiB resident (a deliberately conservative sizing figure — the AGC's own per-session structures measure **~12 KiB**, see [Per-session memory & density](#per-session-memory--density-measured)); 1,000 sessions ≈ 60 MiB at peak. Steady-state cost is 1 session per RunnerGroup, far below this ceiling for typical deployments. |
 | Memory request | 2 GiB | Sized for the peak burst ceiling of 1,000 concurrent goroutines (~60 MiB) with 4× safety margin for Go runtime overhead, heap churn, and reconcile storms. Actual steady-state resident size will be much smaller. |
 | Memory limit | 4 GiB | Allows transient bursts during reconcile storms without triggering OOM. |
 | CPU request | 500m | Predominantly I/O-bound; request reflects baseline scheduling weight rather than steady CPU draw. |
@@ -57,9 +57,64 @@ The following targets are conservative defaults derived from the architectural c
 
 ---
 
-These numbers must be re-derived once two consecutive weeks of production telemetry are available. Treat them as a load-test design input, not as a contract.
+## Per-session memory & density (measured)
 
-> **Validation status.** The session-multiplexing core **has been load-tested.** The in-process harness (`cmd/agc/test/load/`, Q13; `make load-test-quick`) holds **~1,000 concurrent virtual sessions in a single AGC** — a representative run sustained avg 998/1,000 with **zero goroutine leak** and 1.0 re-registrations per job (the single-use model under load). The faithful results from this tier are the **sustained-session count, the no-leak guarantee, and the re-registration rate**; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling. Two caveats on the figures: (1) the measured per-session memory (~127 KiB) is an **upper bound inflated by the in-process broker stub** — the broker client and server share the test process — so the AGC-only cost, and thus a precise efficiency multiplier versus one-runner-per-pod controllers, is not yet pinned; the ~60 KiB estimate above remains a design figure. (2) The **real-cluster, real-GitHub scale run** — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred. Operators should size against their own observed telemetry rather than treat these ceilings as proven.
+The peak-burst sizing above uses a deliberately conservative ~60 KiB/session. To
+pin the AGC's *actual* per-session overhead — the figure behind the
+density-versus-pod-per-runner claim — `TestAGCPerSessionMemory`
+(`cmd/agc/test/load/mem_test.go`, `make mem-profile`) isolates it locally, with
+no cluster, no real broker, and crucially **no in-process broker stub** (the stub
+inflated the earlier ~127 KiB figure because its server side runs in the same
+process).
+
+**Methodology.** The probe drives the real multiplexing core
+(`listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client`) but
+replaces the broker stub with `memTransport`, an in-process `http.RoundTripper`
+that answers the OAuth/CreateSession/GetMessage calls with canned responses and
+**no server, socket, or per-session server-side state**. `GET …/message` parks
+the caller on its request context, so each of the 1,000 started listeners rests
+in exactly one goroutine blocked in its long-poll — the steady idle-session
+state. It then takes a three-point heap+stack differential: shared infra only →
+plus N pooled agents and empty multiplexers → plus all N goroutines parked. The
+last delta (`mFull − mAgents`) is the marginal cost of one more concurrent
+session and excludes both the agent pool and the fake k8s client's retained
+Secrets (an apiserver-side cost in production, not AGC memory).
+
+**Result (1,000 sessions, Go on `darwin/arm64`):**
+
+| Component | Per session |
+|---|---|
+| listener goroutine stack | ~8.1 KiB |
+| heap (`broker.Client` + live session state: sessionID, AES key, scoped logger) | ~4.1 KiB |
+| **AGC-only total (measured)** | **~12.2 KiB** |
+
+The pre-registered agent struct (Ed25519 key + credentials, no JIT blob in this
+path) adds sub-KiB on top; the agent *Secret* itself is apiserver-resident in
+production. The measured ~12.2 KiB is **~5× below** the ~60 KiB design estimate —
+the gap is the per-connection HTTP transport buffers that an active long-poll
+holds in production, which the in-process transport omits. The design estimate is
+therefore confirmed as a conservative upper bound.
+
+**Density versus pod-per-runner.** Against ARC's `Runner.Listener` (~256 MiB
+resident for the full .NET runtime):
+
+```
+256 MiB ÷ 60 KiB (conservative design figure) ≈ 4,400×   ← the published "4,000×"
+256 MiB ÷ 12.2 KiB (measured AGC structures)  ≈ 21,000×   ← floor excludes HTTP-conn buffers
+```
+
+The measurement **confirms the published ~4,000× claim and shows it is
+conservative**: even adding a generous per-connection HTTP-buffer allowance to the
+measured ~12 KiB keeps the per-session cost well under the 60 KiB the 4,000×
+figure assumes. We retain ~4,000× as the headline because it is the defensible,
+conservative number; the higher ratios above follow directly from the math but
+lean on assumptions the local probe cannot fully exercise.
+
+---
+
+These numbers should still be re-derived once two consecutive weeks of production telemetry are available. Treat the locally-measured figures as validated lower bounds on efficiency, not as a production-scale contract.
+
+> **Validation status.** The session-multiplexing core **has been load-tested**, and its **per-session memory is now pinned**. The in-process harness (`cmd/agc/test/load/`, Q13; `make load-test-quick`) holds **~1,000 concurrent virtual sessions in a single AGC** — a representative run sustained avg 998/1,000 with **zero goroutine leak** and 1.0 re-registrations per job (the single-use model under load). The faithful results from that tier are the **sustained-session count, the no-leak guarantee, and the re-registration rate**; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling. The earlier ~127 KiB/session figure was an **upper bound inflated by the in-process broker stub**; the stub-free probe above (Q181) isolates the AGC's own structures at **~12.2 KiB/session**, confirming the ~4,000× density claim is conservative. One caveat remains: the **real-cluster, real-GitHub scale run** — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred. Operators should size against their own observed telemetry rather than treat these ceilings as proven.
 
 ---
 

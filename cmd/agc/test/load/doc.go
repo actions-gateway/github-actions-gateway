@@ -11,11 +11,18 @@
 // agent Secrets, and an in-memory registrar. It needs no cluster and no real
 // GitHub credentials.
 //
-// The executable harness, broker stub, report, and TestAGCLoad entrypoint are
+// A second entrypoint, TestAGCPerSessionMemory (mem_test.go), isolates the
+// AGC's own per-session memory (Q181) without the broker stub: it drives the
+// same multiplexing core through memTransport, an in-process http.RoundTripper
+// with no server, socket, or per-session server-side state, and reports a
+// heap+stack differential as bytes/session. Run it via `make mem-profile`.
+//
+// The executable harness, broker stub, report, and both test entrypoints are
 // all behind the `load` build tag (see broker_stub.go, harness.go, report.go,
-// load_test.go), so they are excluded from the default `make check` gate and
-// run only via `make load-test-quick` / `make load-test-full`. This file is the
-// untagged package home and carries the godoc.
+// load_test.go, mem_transport.go, mem_test.go), so they are excluded from the
+// default `make check` gate and run only via `make load-test-quick` /
+// `make load-test-full` / `make mem-profile`. This file is the untagged package
+// home and carries the godoc.
 //
 // See cmd/agc/test/load/README.md for how to run the harness and interpret its
 // results, and the Milestone 5 plan §2 for the design rationale.
