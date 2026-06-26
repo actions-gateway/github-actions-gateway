@@ -48,7 +48,9 @@ Before beginning, confirm all of the following:
 
 > **First-time setup.** Skip this step if the platform team already handed you an `appId`, an `installationId`, and the private-key `.pem` file (the "GitHub App is registered" pre-condition). Otherwise, this is where those three values come from. The output of this step feeds directly into [Step 1](#step-1-create-the-github-app-secret).
 
-GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path. There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh app create`), so the App is created in the web UI; the GitHub CLI (`gh`) is used afterwards to read back the IDs.
+GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path. This is deliberate: an App yields **short-lived, auto-rotating installation tokens** scoped to the installation and to the App's declared permissions (`Actions: Read` + `Administration: Read` here), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access. The App is also an **automation-owned identity** — it does not break when a user leaves the org or loses access — and installation-level rate/concurrency budgets are what let one tenant scale to thousands of sessions (and shard across installations; see [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations)). See [security §5](../design/05-security.md) for the full credential trust model.
+
+There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh app create`), so the App is created in the web UI; the GitHub CLI (`gh`) is used afterwards to read back the IDs.
 
 ### 0a. Create the App (web UI)
 
