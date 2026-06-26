@@ -1,6 +1,6 @@
 # Milestone 3 Test Improvement Plan
 
-← [Milestone 3](milestone-3.md)
+← [Milestone 3](../milestone-3.md)
 
 ---
 

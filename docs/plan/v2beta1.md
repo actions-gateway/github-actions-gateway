@@ -12,10 +12,17 @@ contract (*won't be removed; changes carry a migration path; production-relyable
 **Approach.** `alpha → beta` is the **last free breaking change**: alpha carries
 no stability promise, and once beta is signed the conversion webhook must
 round-trip served versions for every later change. So the gate is narrow — get
-the shape right, then cut. Four blockers land first (a broker-compatibility
+the shape right, then cut. Five blockers land first (a broker-compatibility
 sweep, the credentials discriminated-union reshape, the workload-identity
-feature that validates that union, and gVisor worker-isolation validation), then
-the graduation itself.
+feature that validates that union, gVisor worker-isolation validation, and
+worker-pod disruption-safety defaults), then the graduation itself.
+
+Two of the five are *not* shape blockers but **production-reliability** blockers:
+beta's contract is "production-relyable," so the worker posture is confirmed
+before signing — gVisor isolation holds (Q15) **and** routine cluster churn (node
+consolidation, descheduler) cannot strand a running job (Q218). Neither is a CRD
+shape change — both are cheap, additive runtime behavior — but both gate the beta
+*quality* bar exactly as the gVisor check does.
 
 ## Why graduate now
 
@@ -30,8 +37,8 @@ notice).
 
 ## The blocker sequence
 
-Ordered in the [Queue](../STATUS.md). **Q191/Q196/Q197/Q15 are independent and run
-in parallel; Q74 waits for all four.**
+Ordered in the [Queue](../STATUS.md). **Q191/Q196/Q197/Q15/Q218 are independent and
+run in parallel; Q74 waits for all five.**
 
 ### 1. Q191 — Broker-compatibility sweep *(run first)*
 
@@ -82,7 +89,28 @@ nested virtualization) runs locally on a Mac and on a stock CI runner (see
 [testing.md](../development/testing.md)). Independent of the API-shape blockers;
 runs in parallel.
 
-### 5. Q74 — The graduation cut
+### 5. Q218 — Worker-pod disruption-safety defaults
+
+Beta is the *production-relyable* contract, so a beta-quality runner platform must
+not let routine cluster operations kill a running CI job. By default a Karpenter
+consolidation event, a Cluster Autoscaler scale-down, or a Descheduler eviction
+will reschedule a worker pod mid-job — stranding the GitHub Actions run. Stamp the
+disruption-safety annotations on worker pods — `karpenter.sh/do-not-disrupt`,
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, and a descheduler
+exclusion — as a secure-default gap-fill, the same way the AGC already stamps
+`runAsNonRoot`/`seccompProfile` when a tenant omits them (a tenant value always
+wins). Not a CRD shape change; additive runtime behavior, independent of the
+API-shape blockers, runs in parallel. A per-`RunnerSet` toggle, if wanted, is an
+additive field that can land post-beta.
+
+**Recommended before the freeze (not a hard gate):** Q205 — apply
+`app.kubernetes.io/*` recommended labels across all objects and align metric/span
+names to Prometheus/OTel semantic conventions. Adding labels later is non-breaking,
+but operators build selectors, dashboards, and alerts against the observable
+surface the moment beta says "production-relyable," so the convention is cheapest
+to settle now (the same cheap-now/expensive-later logic as M1's field-naming pass).
+
+### 6. Q74 — The graduation cut
 
 After the above: add `Hub`/`Convertible` conversion-webhook stubs, add `v2beta1`
 as a served version, mark it the storage version, run the storage migration, then
@@ -189,6 +217,9 @@ interface as additive follow-ups.
   `v2alpha1 ↔ v2beta1`; storage migration run.
 - Migration tool golden output regenerated for the new served version.
 - gVisor `RuntimeClass` isolation validated (minikube + gvisor addon), local + CI.
+- Worker pods carry the disruption-safety defaults (Q218) so node
+  consolidation/descheduler cannot strand a running job; verified under envtest +
+  the kind e2e.
 - §H.15 and the affected appendix/operator docs updated to the shipped shape.
 
 ## Out of scope (additive, post-beta)
