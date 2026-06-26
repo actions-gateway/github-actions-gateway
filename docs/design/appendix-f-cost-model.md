@@ -12,16 +12,21 @@ Want a number for your own workload? Jump to the **[interactive savings calculat
 
 ## F.0. Rate sources and assumptions
 
-Every dollar figure below uses **real public list prices**, cited here so you can audit and re-derive them. Rates are AWS EC2 Linux **on-demand** in `us-east-1` and GitHub Actions per-minute billing, captured **2026-06**. They change over time and vary by region, commitment (Savings Plans / Reserved / Spot), and provider — treat them as a worked baseline, not a quote, and substitute your own contracted rates.
+Every dollar figure below uses **real public list prices**, cited here so you can audit and re-derive them. NVIDIA rates are AWS EC2 Linux **on-demand** in `us-east-1`; AMD Instinct rates are on-demand from specialty GPU clouds and hyperscalers (AMD Instinct is not offered on AWS); GitHub figures are per-minute Actions billing. All captured **2026-06**. They change over time and vary by region, commitment (Savings Plans / Reserved / Spot), and provider — treat them as a worked baseline, not a quote, and substitute your own contracted rates.
 
 | Rate | Value | Source |
 |------|-------|--------|
 | `p4d.24xlarge` — 8× NVIDIA A100 40 GB, 96 vCPU | **$32.77/hr** (≈ **$4.10/hr per GPU**) | [AWS EC2 On-Demand pricing](https://aws.amazon.com/ec2/pricing/on-demand/) |
 | `g5.xlarge` — 1× NVIDIA A10G, 4 vCPU | **$1.006/hr** | [AWS EC2 On-Demand pricing](https://aws.amazon.com/ec2/pricing/on-demand/) |
 | `g4dn.xlarge` — 1× NVIDIA T4, 4 vCPU | **$0.526/hr** | [AWS EC2 On-Demand pricing](https://aws.amazon.com/ec2/pricing/on-demand/) |
+| AMD Instinct **MI300X** (192 GB HBM3), per GPU | **≈ $2.00/hr** on-demand (neocloud; $6–7.86 on Oracle/Azure) | [getdeploying MI300X](https://getdeploying.com/gpus/amd-mi300x) |
+| AMD Instinct **MI325X** (256 GB HBM3E), per GPU | **≈ $2.10/hr** on-demand ($1.95–$2.29; from $1.69 on contract) | [getdeploying MI325X](https://getdeploying.com/gpus/amd-mi325x) |
+| AMD Instinct **MI355X** (288 GB HBM3E), per GPU | **≈ $3.00–$8.60/hr** on-demand (CDNA4; new + scarce) | [getdeploying MI355X](https://getdeploying.com/gpus/amd-mi355x) |
 | `m6i.4xlarge` — 16 vCPU, 64 GiB (CPU node) | **$0.768/hr** | [AWS EC2 On-Demand pricing](https://aws.amazon.com/ec2/pricing/on-demand/) |
 | GitHub-hosted Linux 2-vCPU runner | **$0.008/min** (= $0.48/hr) | [GitHub Actions billing](https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions) |
 | GitHub-hosted Linux GPU runner (4 vCPU, 1× T4) | **$0.07/min** (= $4.20/hr) | [GitHub Actions billing](https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions) |
+
+> **AMD Instinct pricing is more volatile than NVIDIA.** It is sourced from specialty clouds (DigitalOcean, Hot Aisle, Runpod, TensorWave, Vultr) and hyperscalers (Oracle, Azure), not AWS, and the same chip can vary several-fold between providers and over short windows — MI355X on-demand swung from $2.59 to $8.60/GPU-hr in eight months. The per-GPU figures above are representative on-demand rates; re-check a current quote before relying on one. The cost *model* below is provider-agnostic — it cares only about the per-runner-hour rate you plug in, whichever accelerator and cloud you run.
 
 **Assumptions baked into every figure below:**
 

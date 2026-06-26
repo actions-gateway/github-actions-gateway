@@ -178,11 +178,16 @@
     rate: attrNum("data-rate", 4.10)
   };
 
-  // Instance presets — list prices cited in appendix-f § F.0.
+  // Instance presets — list prices cited in appendix-f § F.0. AMD Instinct rates
+  // are representative on-demand neocloud figures and are more volatile than the
+  // AWS NVIDIA rates; the caveat in § F.0 spells that out.
   var presets = [
     { label: "A100 GPU", sub: "p4d.24xlarge ⅛", rate: 4.10 },
     { label: "A10G GPU", sub: "g5.xlarge", rate: 1.01 },
     { label: "T4 GPU", sub: "g4dn.xlarge", rate: 0.53 },
+    { label: "MI300X GPU", sub: "AMD · on-demand", rate: 2.00 },
+    { label: "MI325X GPU", sub: "AMD · on-demand", rate: 2.10 },
+    { label: "MI355X GPU", sub: "AMD · scarce", rate: 3.00 },
     { label: "CPU node", sub: "m6i.4xlarge", rate: 0.77 }
   ];
 
