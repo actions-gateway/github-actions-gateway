@@ -130,6 +130,14 @@ The same applies to bulk completions: if a session verifies that a stale Queue e
 
 If you completed work that closes the last ⚠️ open item under a Progress row, update both in the same commit.
 
+### `⚠️` means an open *Queue* row remains — deferred residuals don't count
+
+A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in the [Deferred](#deferred-items-live-below-the-queue-not-in-it) section (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)), and they **do not keep a plan `⚠️`**. A plan whose only remainders are Deferred rows or accepted-by-design residuals is `✅`, not `⚠️`.
+
+This keeps the Progress table honest: `⚠️` reads as "active work remains on this plan," not "a box was once left unchecked." Leaving a finished-but-for-deferrals plan at `⚠️` makes old, intentionally-parked work look like an open obligation.
+
+When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc that names the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). That makes the deferral auditable from the plan itself, and explains the `✅` to anyone who notices the plan still lists open-sounding items in its body. The plan doc is **not** archived in this case — it stays in `docs/plan/` because its `✅` Progress row still references it (archival is only for plans no longer referenced anywhere; see [Archiving completed plan docs](#archiving-completed-plan-docs)).
+
 ## Archiving completed plan docs
 
 When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.

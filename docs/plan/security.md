@@ -2,6 +2,14 @@
 
 A code-level security review of the GitHub Actions Gateway as of 2026-05-23.
 
+> **Status: Complete.** Every committed workstream (W2–W9 and the M-/L-items)
+> shipped. The lone open residual is the live Ed25519 compatibility probe
+> (M-11b) — an intentionally-deferred opt-in gate tracked as
+> [Q11](../STATUS.md#Q11) in the [STATUS.md Deferred](../STATUS.md#deferred)
+> section; it does not affect the RSA-3072 default and is not active work on
+> this audit. Accepted residuals (e.g. H-2's RBAC `list`) are documented in
+> place.
+
 > **Successor audit:** a second full audit (2026-06-12) lives in
 > [security-audit-2026-06.md](security-audit-2026-06.md); its new findings
 > are queued as Q121–Q128. This doc remains the record of the first
