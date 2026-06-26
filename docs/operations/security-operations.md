@@ -834,6 +834,66 @@ There is deliberately no tenant-settable per-tier `preemptionPolicy` field;
 preemption is governed entirely by the platform-created `PriorityClass` object.
 See [§5.2 — Cross-Tenant Pod Preemption via PriorityClass](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 
+### Self-service additions via a watched ConfigMap (Q188)
+
+Editing `--allowed-priority-classes` and rolling out the GMC for every new class
+is slow. The GMC can **also** source the allowlist from a ConfigMap it watches in
+its own install namespace, so a platform admin can add an allowed class without a
+flag edit or restart — the change takes effect on the next watch event.
+
+The ConfigMap source is **additive** and **off by default**. When unset, behavior
+is exactly the flag-only behavior above.
+
+1. **Enable the watch.** Set the ConfigMap name on the GMC, either via the flag
+   or the Helm value:
+
+   ```yaml
+   # GMC Deployment / Helm values
+   priorityClassAllowlist:
+     configMapName: gmc-priority-class-allowlist   # renders --priority-class-allowlist-configmap
+   ```
+
+   Setting it renders the flag **and** a namespaced `Role`/`RoleBinding` granting
+   the GMC `get`/`list`/`watch` on that one ConfigMap in its own namespace — the
+   GMC is never granted cluster-wide ConfigMap read.
+
+2. **Create the ConfigMap in the GMC's namespace.** It must live in the GMC
+   install namespace (e.g. `gmc-system`) so only a platform admin — not a tenant —
+   can write it. The `allowedPriorityClasses` key lists class names, separated by
+   commas or newlines:
+
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: gmc-priority-class-allowlist
+     namespace: gmc-system
+   data:
+     allowedPriorityClasses: |
+       runner-bursty
+       runner-batch
+   ```
+
+   The **effective allowlist is the union** of the static `--allowed-priority-classes`
+   flag and the ConfigMap entries: the ConfigMap can only *widen* the allowlist,
+   never remove a flag-pinned class. You still pre-create each `PriorityClass`
+   object first (step 1 of the previous section) — the allowlist only governs which
+   *names* a tenant may reference.
+
+**Fail-safe behavior.** The allowlist is a cross-tenant-isolation guardrail, so a
+broken ConfigMap must never silently widen it:
+
+- A **missing or deleted** ConfigMap, a **missing `allowedPriorityClasses` key**,
+  or **any invalid entry** (a name that is not a valid DNS-1123 subdomain) causes
+  the GMC to fall back to the **static flag allowlist only** and log a warning.
+- A malformed ConfigMap is rejected **wholesale** — a valid name sitting next to a
+  typo is *not* partially applied — so a mistake can never smuggle a class in.
+- An **empty** `allowedPriorityClasses` value is valid and simply adds nothing.
+
+Because the dynamic set is additive and resets to the static base on any error,
+the worst case of a bad ConfigMap is that recently-added self-service classes stop
+being accepted until it is fixed — never that an unintended class becomes allowed.
+
 ---
 
 ## License attribution in images

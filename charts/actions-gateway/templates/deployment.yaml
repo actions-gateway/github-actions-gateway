@@ -59,6 +59,12 @@ spec:
         # priorityTiers may reference. Empty/unset rejects all (secure default).
         - --allowed-priority-classes={{ join "," . }}
         {{- end }}
+        {{- with .Values.priorityClassAllowlist.configMapName }}
+        # Q188: also source the PriorityClass allowlist from this ConfigMap in the
+        # GMC namespace, watched so additions take effect without a restart.
+        # Additive to --allowed-priority-classes; fail-safe on a missing/bad CM.
+        - --priority-class-allowlist-configmap={{ . }}
+        {{- end }}
         {{- with .Values.apiServerCIDRs }}
         # Opt-in tightening (Q145): scope the AGC NetworkPolicy apiserver
         # (443/6443) egress to these CIDRs. Empty/unset keeps any-destination —
