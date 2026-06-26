@@ -13,7 +13,7 @@ This plan is internal strategy and stays GitHub-only (it lives under
 `docs/plan/`, which `mkdocs.yml` excludes from the published site). The
 *outward-facing* positioning it drives lives in [`why-gag.md`](../why-gag.md) and
 [`index.md`](../index.md); the per-claim verification work feeds
-[`competitive-analysis.md`](competitive-analysis.md) (Q60); the public site
+[`competitive-analysis.md`](archive/competitive-analysis.md) (Q60); the public site
 itself is tracked in [`website.md`](website.md) (Q129).
 
 ## Status at a glance
@@ -21,7 +21,7 @@ itself is tracked in [`website.md`](website.md) (Q129).
 | Workstream | State |
 |---|---|
 | ICP + messaging priority defined | ✅ this doc |
-| Demand evidence gathered (real ARC issues) | ✅ this doc + [competitive-analysis](competitive-analysis.md) |
+| Demand evidence gathered (real ARC issues) | ✅ this doc + [competitive-analysis](archive/competitive-analysis.md) |
 | Public site launched | ⏳ gated — see [website.md](website.md) (Q129) |
 | ARC → GAG migration guide | ✅ [migration-from-arc](../operations/migration-from-arc.md) (Q199) |
 | README problem-first rewrite | ❌ open |
@@ -97,7 +97,7 @@ proof and they are exactly what operators (and AI assistants) search for.
 **Weakest demand signal:** priority-tiered GPU scheduling and listener-memory
 overhead are GAG's most *differentiated* features but have the least *public*
 complaint volume. Treat them as supporting proof, not the headline. (Cross-ref the
-open VERIFY items in [competitive-analysis](competitive-analysis.md).)
+open VERIFY items in [competitive-analysis](archive/competitive-analysis.md).)
 
 ## 4. Messaging priority
 
@@ -226,6 +226,6 @@ This shapes everything above and is the reason monetization stays out:
 - ~~**ARC → GAG migration guide** (§7)~~ — ✅ shipped as [migration-from-arc](../operations/migration-from-arc.md) (Q199).
 - **README problem-first rewrite** (§6) — cheap, improves both humans and GEO.
 - **Q60 competitive verification** — several claims still marked VERIFY in
-  [competitive-analysis](competitive-analysis.md); confirmed ones harden the
+  [competitive-analysis](archive/competitive-analysis.md); confirmed ones harden the
   comparison page and content.
 - **Public site launch** ([website.md](website.md)/Q129) — Phase 0 prerequisite for any seeding.

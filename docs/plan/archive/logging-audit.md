@@ -1,7 +1,7 @@
 # Cross-module logging audit
 
 **Status:** Theme A (F1) ✅ resolved (1.0-gate JSON-unification — see the Fix
-below); Themes B–G filed to the [STATUS Queue](../STATUS.md) (Q86–Q89). Theme C
+below); Themes B–G filed to the [STATUS Queue](../../STATUS.md) (Q86–Q89). Theme C
 folds into Theme G.
 
 A cross-module audit of every log call site in the repo (`cmd/agc`, `cmd/gmc`,
@@ -28,7 +28,7 @@ pipeline cannot parse the majority of an AGC pod's lines. This is why F5's
 "structured JSON" promise (PR #151) is only half-effective — it is true only for
 the minority of lines that go through the manager's `ctrl.Log`.
 
-**Why it gates 1.0.** [release-1.0.md](release-1.0.md) §D says the slog+zap
+**Why it gates 1.0.** [release-1.0.md](../release-1.0.md) §D says the slog+zap
 mismatch is "recommended to resolve, gating only if it breaks log ingestion." It
 *does* break ingestion: the busiest AGC code paths emit unparseable text.
 
@@ -87,7 +87,7 @@ cannot survive in the tail. Applied at all sites: `runner_auth.go` (:248/:259),
 (via `capBody`), and `cmd/probe/main.go`. `broker` reuses the helper rather than
 duplicating redaction (the `broker → githubapp` module edge already existed via
 `replace`; both are GitHub-domain libs and there is no standalone broker
-binary). Note added to [05-security.md](../design/05-security.md) §5.2.
+binary). Note added to [05-security.md](../../design/05-security.md) §5.2.
 
 No **direct** secret logging exists anywhere — tokens, keys, and PEM are never
 logged, and that posture must be preserved. But several error paths interpolate
@@ -110,7 +110,7 @@ the upstream HTTP **response body** into an error that callers log. Two are
 **Fix.** Cap (reuse/extend `broker`'s `capBody`) **and** redact obvious
 token-shaped substrings before interpolating any upstream body into an error or
 log. Start with the two uncapped sites. Reference and update
-[05-security.md](../design/05-security.md). This is defensible as a "should-fix"
+[05-security.md](../../design/05-security.md). This is defensible as a "should-fix"
 hardening item, not a confirmed live leak (these are normally GitHub error
 JSON), but recommended before 1.0 given the project's credential-isolation
 thesis.
@@ -170,7 +170,7 @@ fires on the reconcile loop, not the per-session hot path).
 
 ✅ **Resolved** — debug diagnostics added to every previously-silent stuck/failed
 path. Operator-facing grep anchors documented in
-[observability.md](../operations/observability.md) § Debug diagnostics.
+[observability.md](../../operations/observability.md) § Debug diagnostics.
 
 - `provisioner/podwaiter.go` had **zero logs** — a session stuck waiting for pod
   completion (missed informer event, pod never terminal) produced no output;
@@ -216,10 +216,10 @@ per-session/per-job correlation lines. Tests: envtest defaulting + enum rejectio
 (`crd_admission_test.go`) and the restart-on-change path
 (`log_level_test.go`); builder unit tests for both Deployments
 (`builder_test.go`); AGC level-mapping unit test (`main_test.go`). Docs updated:
-[03-api-contracts.md](../design/03-api-contracts.md),
-[02-architecture.md](../design/02-architecture.md),
-[tenant-onboarding.md](../operations/tenant-onboarding.md), and
-[observability.md](../operations/observability.md).
+[03-api-contracts.md](../../design/03-api-contracts.md),
+[02-architecture.md](../../design/02-architecture.md),
+[tenant-onboarding.md](../../operations/tenant-onboarding.md), and
+[observability.md](../../operations/observability.md).
 
 ---
 

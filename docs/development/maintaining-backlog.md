@@ -130,9 +130,25 @@ The same applies to bulk completions: if a session verifies that a stale Queue e
 
 If you completed work that closes the last ⚠️ open item under a Progress row, update both in the same commit.
 
+### `⚠️` means an open *Queue* row remains — deferred residuals don't count
+
+A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in the [Deferred](#deferred-items-live-below-the-queue-not-in-it) section (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)), and they **do not keep a plan `⚠️`**. A plan whose only remainders are Deferred rows or accepted-by-design residuals is `✅`, not `⚠️`.
+
+This keeps the Progress table honest: `⚠️` reads as "active work remains on this plan," not "a box was once left unchecked." Leaving a finished-but-for-deferrals plan at `⚠️` makes old, intentionally-parked work look like an open obligation.
+
+When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc that names the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). That makes the deferral auditable from the plan itself, and explains the `✅` to anyone who notices the plan still lists open-sounding items in its body. The plan doc is **not** archived in this case — it stays in `docs/plan/` because its `✅` Progress row still references it (archival is only for plans no longer referenced anywhere; see [Archiving completed plan docs](#archiving-completed-plan-docs)).
+
 ## Archiving completed plan docs
 
-When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
+When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
+
+**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open. Closed plans left in place pile up and make the index read as though finished projects still have work — the exact drift this rule exists to prevent. Two gates (both in `make check`) enforce it so the omission can't ship silently:
+- **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` is no longer referenced by `STATUS.md` — i.e. a plan that should have been archived. To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
+- **`make doc-links`** fails on any broken link the move introduces.
+
+The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit (don't wait for someone to notice it citing a since-completed `QNN`).
+
+**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md` (or `../plan/<file>.md`); cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched, since IDs are never reused and design sections don't move on plan close). If a plan's conclusion is load-bearing enough that code wants to cite it, **promote that conclusion to a durable doc when the plan closes** (the [doc-update matrix](doc-update-matrix.md) already requires the design/operations update on the code change); the plan keeps the full derivation as history, and code points at the durable home. `make no-plan-refs-check` (in `make check`) fails on any `docs/plan/` path in a `.go` file, so the coupling can't re-accrete. Prose mentions of a plan's *content* ("Milestone 1 §8", "the worker-egress-proxy plan") are fine — only file *paths* rot.
 
 **Protocol:**
 
@@ -143,7 +159,8 @@ When a plan's work fully lands and `docs/STATUS.md` no longer references it (no 
    - `docs/plan/README.md` — move the doc's row from its current section into the **Archive** section and update the status text.
    - Other plan docs cross-referencing it (`grep -rn "<docname>.md" docs/plan/`).
    - `docs/development/`, `docs/design/`, `docs/operations/` if the plan is cited there.
-   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`).
+   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`). Prose mentions (e.g. "see foo Theme E") don't break; only `](…<docname>.md…)` *links* need rewriting.
+   - **The moved doc's *own* outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself: each `](../…)` needs one more `../`, and a bare same-dir link to a doc still in `plan/` becomes `](../name.md)`. Easy to miss; `make doc-links` catches it.
 5. **Bundle archival in one commit.** If multiple plans are being archived in the same session (e.g. after a sweep), move them together — easier to review and to revert as a unit if a reference was missed.
 6. **Do not edit STATUS.md in the same commit** as the archive move. STATUS.md edits are always isolated (see §1 of the non-negotiables).
 

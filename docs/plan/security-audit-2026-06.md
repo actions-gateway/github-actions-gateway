@@ -8,6 +8,13 @@ audit (2026-05) and its W/C/H/M/L workstreams live in
 [security.md](security.md); this doc records only the second audit's
 findings and their disposition.
 
+> **Status: Complete.** Every High/Medium finding is resolved (Q121–Q130). The
+> only remainders are intentionally deferred and tracked in the
+> [STATUS.md Deferred](../STATUS.md#deferred) section — the proxy
+> destination-allowlist / SSRF revisit ([Q19](../STATUS.md#Q19)) and the worker
+> trivy-leg flip ([Q70](../STATUS.md#Q70)) — plus info-level / accepted-by-design
+> items documented in place. No active work remains on this audit.
+
 **Method note:** each track read the claimed security properties in
 `docs/design/05-security.md` / `02-architecture.md` /
 `network-architecture.md` first, then verified the code implements them.
@@ -134,13 +141,15 @@ A compromised GMC can create a Deployment or RoleBinding in `kube-system`.
 writes of these kinds in namespaces lacking the tenant marker label —
 and/or update the docs. *Interim (2026-06-12): the claims in
 `05-security.md` and `02-architecture.md` are struck through with
-corrections in place pending resolution.* **Partially resolved (Q130,
-2026-06-14): the `resourcequotas` write verb has been dropped entirely —
-the namespace `ResourceQuota` is now platform-owned and the GMC no longer
-creates or mutates it, shrinking the cluster-wide-write surface by one
-kind. The remaining kinds (deployments, rolebindings, networkpolicies,
-services, serviceaccounts, HPAs, PDBs) are still unconfined — Q122 stays
-open for the VAP-confinement work.**
+corrections in place pending resolution.* **Resolved (Q122 + Q130).** The `gmc-tenant-resource-guard`
+ValidatingAdmissionPolicy now denies GMC-SA `CREATE`/`UPDATE`/`DELETE` of every
+workload kind — secrets, serviceaccounts, services, deployments,
+networkpolicies, horizontalpodautoscalers, poddisruptionbudgets, rolebindings,
+roles (plus the `RunnerGroup`/`RunnerSet` CRs) — in namespaces lacking the
+tenant marker label, so a compromised GMC can no longer write into
+`kube-system`. `resourcequotas` was dropped from the GMC entirely (Q130 — the
+`ResourceQuota` is platform-owned). `05-security.md` / `02-architecture.md`
+updated to match. Claim == reality.
 
 ### Q123 — SHA-pin GitHub Actions; publish.yml first (High) — RESOLVED
 

@@ -1,12 +1,12 @@
 # Pre-Acquisition Admission Control (Capacity-Gated `acquirejob`)
 
-Status: ✅ Implemented (in-memory reservation-counter gate). Tracked as [Q59](../STATUS.md).
+Status: ✅ Implemented (in-memory reservation-counter gate). Tracked as [Q59](../../STATUS.md).
 
 > **What shipped.** The in-memory reservation-counter variant (the leading
 > candidate below) is live: an `AdmitFunc` hook on `listener.Config`
-> ([`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)) is consulted
+> ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) is consulted
 > before `AcquireJob`; the per-RunnerGroup gate lives in the provisioner
-> ([`admission.go`](../../cmd/agc/internal/provisioner/admission.go)) and reads
+> ([`admission.go`](../../../cmd/agc/internal/provisioner/admission.go)) and reads
 > the ceiling from the freshly cached RunnerGroup each call (honours spec edits,
 > Q117). Rejections increment `actions_gateway_jobs_admission_rejected_total`.
 > The post-acquire `ceilingCheck` and quota retry are unchanged — they remain
@@ -24,7 +24,7 @@ getting the run cancelled rather than redelivered.
 ## Current behavior (verified against code)
 
 The acquire-then-place ordering lives in the listener's `handleJob`
-([`cmd/agc/internal/listener/goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)):
+([`cmd/agc/internal/listener/goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)):
 
 1. Long-poll `GET /message` returns a job.
 2. **`AcquireJob`** is called (`goroutine.go:341`) — this claims the job from
@@ -34,7 +34,7 @@ The acquire-then-place ordering lives in the listener's `handleJob`
 5. **`JobHandler`** runs (line 378) → the provisioner's `Provision`.
 
 Only in step 5 does capacity get evaluated. In
-[`cmd/agc/internal/provisioner/provisioner.go`](../../cmd/agc/internal/provisioner/provisioner.go):
+[`cmd/agc/internal/provisioner/provisioner.go`](../../../cmd/agc/internal/provisioner/provisioner.go):
 
 - **Ceiling check** (`provisioner.go:232`, `ceilingCheck`): counts active pods
   against `maxWorkers` / `priorityTiers`. If the ceiling is reached the
@@ -51,8 +51,8 @@ Only in step 5 does capacity get evaluated. In
    returns `held`, `JobHandler` returns an error, `handleJob` returns, and the
    `defer stop()` halts renewal. The job was *already acquired* but no worker
    ever runs and the lock is no longer renewed. Per the lock-expiry contract in
-   [`docs/design/04-operational-flows.md`](../design/04-operational-flows.md)
-   and [`02-architecture.md` §2.2](../design/02-architecture.md), a job whose
+   [`docs/design/04-operational-flows.md`](../../design/04-operational-flows.md)
+   and [`02-architecture.md` §2.2](../../design/02-architecture.md), a job whose
    renewal window lapses is **cancelled** by GitHub — *not* redelivered. So a
    capacity rejection that arrives one step too late converts "GitHub would
    have handed this to another session in ~2 min" into "the run is cancelled
@@ -110,10 +110,10 @@ Key design questions to resolve in implementation:
      soft state lost on AGC restart (acceptable — fail-safe, like the eviction
      counter; budget resets generously, never starves).
      **Leading candidate.**
-   - **Informer-backed pod cache** (ties into [Q64](../STATUS.md), which already
+   - **Informer-backed pod cache** (ties into [Q64](../../STATUS.md), which already
      wants the provisioner to *watch* pods instead of polling). The admit check
      reads the cache instead of the API server. Best long-term; pairs naturally
-     with [Q63](../STATUS.md)'s RunnerGroup `Owns(&Pod)`.
+     with [Q63](../../STATUS.md)'s RunnerGroup `Owns(&Pod)`.
    - Keep the live `List` but move it pre-acquire. Simplest, slowest, racy.
 
 2. **Reservation vs. observed count.** A pure observed-pod count
@@ -160,7 +160,7 @@ considered and rejected:
   reconciliation problem.
 - **It breaks the stateless-AGC pillar.** The AGC is `replicas: 1` with an
   in-memory session registry precisely so it holds no durable state; HA is
-  job-level via GitHub redelivery ([`02-architecture.md` §2.2](../design/02-architecture.md)).
+  job-level via GitHub redelivery ([`02-architecture.md` §2.2](../../design/02-architecture.md)).
   A persistent queue forces a datastore + leader election or a shared store.
 - **Durability buys little here.** The one piece of state we lose on restart —
   retry counters — is fail-safe to lose (budgets reset generously).
@@ -181,7 +181,7 @@ borrowing, `WorkloadPriorityClass` preemption). It is a natural thing to reach
 for when someone asks "why not just put a priority queue in front of the
 runners?" — and it is sometimes layered under ARC for GPU/quota management
 (e.g. the pattern vendors like Exostellar use; *specifics to verify in the
-[Q60](../STATUS.md) competitive analysis*). So the design must say explicitly
+[Q60](../../STATUS.md) competitive analysis*). So the design must say explicitly
 why GAG does not delegate admission to it.
 
 **Kueue gates the wrong layer for this problem.** Per its own docs, Kueue
@@ -205,7 +205,7 @@ upstream of anything Kueue can act on.
 **Operational mismatch too.** Kueue requires cluster-admin install (CRDs,
 webhooks, cluster-wide controller). GAG's stated requirement is self-service
 tenant onboarding without cluster-admin involvement per team
-([Appendix D intro](../design/appendix-d-alternatives-considered.md)). Making
+([Appendix D intro](../../design/appendix-d-alternatives-considered.md)). Making
 Kueue a hard dependency regresses that.
 
 **Where Kueue *is* complementary:** in clusters that already run it, GAG's
@@ -225,16 +225,16 @@ cluster quota. The point is that Kueue **augments** the pod layer; it cannot
   ceiling/quota counters as the post-acquire backstop signal. A persistent gap
   between admission-rejected and the old ceiling-held counter tells operators
   the gate is working.
-- **Docs to update when implemented:** [`02-architecture.md`](../design/02-architecture.md)
+- **Docs to update when implemented:** [`02-architecture.md`](../../design/02-architecture.md)
   (Session Multiplexer / Pod Provisioner prose + metrics table),
-  [`04-operational-flows.md`](../design/04-operational-flows.md) (job-acquisition
-  flow), [`03-api-contracts.md`](../design/03-api-contracts.md) if any
+  [`04-operational-flows.md`](../../design/04-operational-flows.md) (job-acquisition
+  flow), [`03-api-contracts.md`](../../design/03-api-contracts.md) if any
   RunnerGroup field is added, and a troubleshooting note for "jobs not being
   acquired despite queued work" (gate saturated).
 - **Document the *why*, not just the *what* (required, not optional).** When
   this ships, the rationale must land in **human-facing docs**, not only this
   plan doc. Specifically:
-  - Add a section to [`appendix-d-alternatives-considered.md`](../design/appendix-d-alternatives-considered.md)
+  - Add a section to [`appendix-d-alternatives-considered.md`](../../design/appendix-d-alternatives-considered.md)
     (it already runs D.1–D.4; this is a natural **D.5 — Kueue / k8s job-queue
     managers**) capturing two things: (1) why admission is gated *before*
     `acquirejob` rather than via a durable internal queue, and (2) the
@@ -260,7 +260,7 @@ The load-bearing assumption — *a ceiling-held, already-acquired job is cancell
 Q154, only unit-tested and source-read. Per CLAUDE.md's PR #59 lesson (✅
 source-read findings are unverified until run), it is now confirmed by a Tier-A
 kind e2e: `E2E_AGC_AcquireAdmissionControl` in
-[`cmd/gmc/test/e2e/acquire_admission_test.go`](../../cmd/gmc/test/e2e/acquire_admission_test.go).
+[`cmd/gmc/test/e2e/acquire_admission_test.go`](../../../cmd/gmc/test/e2e/acquire_admission_test.go).
 
 The spec proves both halves of the contract the gate rests on, observing
 GitHub's behaviour through fakegithub (extended with an opt-in, owner-scoped
@@ -293,7 +293,7 @@ post-acquire rejection is not (cancellation, no redelivery).
 - ~~Decide reservation-counter vs. informer-cache for the gate's count source.~~
   **Resolved: reservation counter** (the leading candidate), shipped as a pure
   in-memory per-RunnerGroup counter independent of the provisioner's
-  List-backed `ceilingCheck`. If [Q64](../STATUS.md) later moves the provisioner
+  List-backed `ceilingCheck`. If [Q64](../../STATUS.md) later moves the provisioner
   to an informer-backed pod cache, the gate's *backstop* (`ceilingCheck`) can
   read that cache; the gate's own reservation count stays in-memory by design
   (it must reserve pre-pod, which no observed-pod source can do).
