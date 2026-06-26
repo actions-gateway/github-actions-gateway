@@ -64,6 +64,10 @@ stringData:
     -----END RSA PRIVATE KEY-----
 ```
 
+Both PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`, the format GitHub downloads) and
+PKCS#8 (`-----BEGIN PRIVATE KEY-----`, RSA or Ed25519) are accepted — paste
+whichever your `.pem` file contains, header and footer lines included.
+
 ```sh
 kubectl apply -f secret.yaml
 ```
@@ -73,7 +77,8 @@ kubectl apply -f secret.yaml
 kubectl get secret github-app-v1 -n <tenant-namespace>
 kubectl get secret github-app-v1 -n <tenant-namespace> \
   -o jsonpath='{.data.privateKey}' | base64 -d | head -1
-# Expected: -----BEGIN RSA PRIVATE KEY-----
+# Expected: -----BEGIN RSA PRIVATE KEY----- (PKCS#1)
+#      or: -----BEGIN PRIVATE KEY----- (PKCS#8, RSA or Ed25519)
 ```
 
 ---
@@ -422,7 +427,7 @@ Onboarding is complete when:
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `ActionsGateway` condition `AGCAvailable=False`, logs show `RSA key parse error` | Private key has trailing whitespace or incorrect PEM format | Recreate the Secret; ensure the key starts with `-----BEGIN RSA PRIVATE KEY-----` and has no extra blank lines or spaces |
+| `ActionsGateway` condition `AGCAvailable=False`, logs show `RSA key parse error` | Private key has trailing whitespace or incorrect PEM format | Recreate the Secret; ensure the key starts with `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) or `-----BEGIN PRIVATE KEY-----` (PKCS#8, RSA or Ed25519) and has no extra blank lines or spaces |
 | `HPA TARGETS: <unknown>` | `proxy.resources.requests.cpu` not set | Add `requests.cpu: "10m"` under `spec.proxy.resources.requests` |
 | Worker pods stuck `Pending` | `ResourceQuota` exhausted or no schedulable nodes | Check `kubectl describe resourcequota -n <namespace>` and node capacity |
 | `RunnerGroup` condition `VersionTooOld` | Worker image contains a runner version below GitHub's minimum | Update `workerImage` in the RunnerGroup spec |
