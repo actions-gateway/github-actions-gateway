@@ -44,6 +44,22 @@ const (
 	agcCredsVolumeName = "github-app-credentials"          //nolint:gosec // G101: a volume name, not a credential
 	agcCredsMountPath  = "/etc/actions-gateway/github-app" //nolint:gosec // G101: a mount-path constant, not a credential
 
+	// Workload-identity (Q201): the AGC presents a kubelet-projected ServiceAccount
+	// token to Vault Kubernetes auth instead of mounting a GitHub App Secret. The
+	// token is audience-scoped to Vault and read fresh from disk at each Vault login;
+	// it is never a stored Secret. vaultTokenAudience is the projected token's
+	// audience — operators bind their Vault k8s-auth role to it (the MVP fixes it; a
+	// configurable audience is a documented follow-up).
+	vaultTokenVolumeName = "vault-token"                                  //nolint:gosec // G101: a volume name, not a credential
+	vaultTokenMountDir   = "/var/run/secrets/actions-gateway/vault-token" //nolint:gosec // G101: a mount-path constant, not a credential
+	vaultTokenFile       = "token"
+	vaultTokenAudience   = "vault"
+	// vaultTokenExpirationSeconds is the projected token's lifetime. The kubelet
+	// rotates it well before expiry and the vaultsigner re-reads it on each login, so
+	// a short lifetime bounds the blast radius of a leaked token without risking a
+	// stale read.
+	vaultTokenExpirationSeconds int64 = 600
+
 	proxyServiceName = gmcnames.ProxyName
 	// proxyServiceMonitorName / agcServiceMonitorName are the per-tenant
 	// Prometheus-Operator ServiceMonitors that scrape the proxy and AGC mTLS
@@ -964,15 +980,6 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 
 	volumes := []corev1.Volume{
 		{
-			Name: agcCredsVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  credSecretName,
-					DefaultMode: &credMode,
-				},
-			},
-		},
-		{
 			// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key). The AGC's
 			// controller-runtime metrics server serves /metrics over mTLS on metricsPort
 			// and verifies scraper client certs against ca.crt.
@@ -986,8 +993,47 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{
-		{Name: agcCredsVolumeName, MountPath: agcCredsMountPath, ReadOnly: true},
 		{Name: metricsTLSVolumeName, MountPath: metricsTLSMountPath, ReadOnly: true},
+	}
+
+	// Credential wiring, by union member (Q196/Q197/Q201):
+	//   - possession (githubApp): credSecretName names the GitHub App Secret; mount
+	//     its appId/installationId/privateKey as read-only files (never env).
+	//   - delegation (workloadIdentity): credSecretName is "", so no Secret exists to
+	//     mount. The AGC instead presents a kubelet-projected ServiceAccount token to
+	//     Vault; project it audience-scoped to Vault, read-only. No App key, ever.
+	if credSecretName != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: agcCredsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  credSecretName,
+					DefaultMode: &credMode,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name: agcCredsVolumeName, MountPath: agcCredsMountPath, ReadOnly: true,
+		})
+	} else {
+		volumes = append(volumes, corev1.Volume{
+			Name: vaultTokenVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					DefaultMode: &credMode,
+					Sources: []corev1.VolumeProjection{{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Audience:          vaultTokenAudience,
+							ExpirationSeconds: ptr(vaultTokenExpirationSeconds),
+							Path:              vaultTokenFile,
+						},
+					}},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name: vaultTokenVolumeName, MountPath: vaultTokenMountDir, ReadOnly: true,
+		})
 	}
 	// Proxy CA cert (public part only — private key excluded via Items). The AGC pins
 	// the proxy's TLS cert rather than trusting the cluster CA, preventing MITM even
@@ -1010,6 +1056,14 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 		})
 	}
 
+	// Record the referenced GitHub App Secret name so kubectl rollout history shows
+	// the cause of any credential-rotation rolling update. Omitted for workload
+	// identity (credSecretName ""), which holds no Secret to rotate.
+	var podAnnotations map[string]string
+	if credSecretName != "" {
+		podAnnotations = map[string]string{"actions-gateway/github-app-secret": credSecretName}
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: names.app, Namespace: namespace, Labels: metaLabels},
 		Spec: appsv1.DeploymentSpec{
@@ -1017,12 +1071,8 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": names.app}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
-					// Record the referenced Secret name so that kubectl rollout history
-					// shows the cause of any credential-rotation rolling update.
-					Annotations: map[string]string{
-						"actions-gateway/github-app-secret": credSecretName,
-					},
+					Labels:      map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload},
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: names.serviceAccount,

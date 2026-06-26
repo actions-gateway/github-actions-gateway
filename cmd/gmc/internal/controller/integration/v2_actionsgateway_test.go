@@ -319,35 +319,60 @@ func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
 	assert.Error(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &dep))
 }
 
-// TestV2_ActionsGateway_WorkloadIdentityFailsClosed asserts the interim contract for
-// the Q197 workload-identity member: a well-formed WorkloadIdentity gateway is admitted
-// but does not provision an AGC — the GMC runtime wiring lands in Q201 — so it fails
-// closed with CredentialUnavailable=True / WorkloadIdentityProvisioningPending and never
-// creates an AGC that could not authenticate.
-func TestV2_ActionsGateway_WorkloadIdentityFailsClosed(t *testing.T) {
+// TestV2_ActionsGateway_WorkloadIdentityProvisions asserts the Q201 contract: a
+// well-formed WorkloadIdentity gateway holds NO GitHub App Secret yet provisions a
+// full AGC control plane under real-apiserver CEL. It clears CredentialUnavailable
+// (there is no Secret to be missing), stamps the signer config env, projects a
+// Vault-audience ServiceAccount token instead of mounting a Secret, and never places
+// the App key in env — the no-PEM delegation path is wired end to end.
+func TestV2_ActionsGateway_WorkloadIdentityProvisions(t *testing.T) {
 	const ns = "v2-ag-wi"
 	createNamespace(t, ns)
 
+	// No createGitHubAppSecret: the delegation model holds no Secret.
 	ag := newV2WorkloadIdentityGateway(ns, "wi-gw")
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
 	startActionsGatewayV2Reconciler(t)
 
+	var dep appsv1.Deployment
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw-agc"}, &dep) == nil
+	}, 15*time.Second, 100*time.Millisecond, "workload-identity gateway must provision an AGC Deployment (Q201)")
+
+	// CredentialUnavailable is cleared (no Secret is required for this method).
 	require.Eventually(t, func() bool {
 		var got v2alpha1.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw"}, &got); err != nil {
 			return false
 		}
 		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
-		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
-		return cred != nil && cred.Status == metav1.ConditionTrue && cred.Reason == v2alpha1.ReasonWorkloadIdentityPending &&
-			ready != nil && ready.Status == metav1.ConditionFalse
-	}, 15*time.Second, 100*time.Millisecond, "workload-identity gateway must fail closed pending GMC provisioning (Q201)")
+		return cred != nil && cred.Status == metav1.ConditionFalse
+	}, 15*time.Second, 100*time.Millisecond, "CredentialUnavailable must be False for workload identity")
 
-	// No AGC Deployment is provisioned for the unwired method (fail closed).
-	var dep appsv1.Deployment
-	assert.Error(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw-agc"}, &dep))
+	// Signer config threaded as env (non-secret); the App key is never in env.
+	assert.Equal(t, "WorkloadIdentity", envValue(&dep, "CREDENTIAL_TYPE"))
+	assert.Equal(t, "12345", envValue(&dep, "GITHUB_APP_ID"))
+	assert.Equal(t, "67890", envValue(&dep, "GITHUB_INSTALLATION_ID"))
+	assert.Equal(t, "https://vault.vault.svc:8200", envValue(&dep, "VAULT_ADDR"))
+	assert.Equal(t, "github-app", envValue(&dep, "VAULT_TRANSIT_KEY"))
+	assert.Equal(t, "agc-acme", envValue(&dep, "VAULT_AUTH_ROLE"))
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		assert.NotContains(t, []string{"appId", "privateKey", "installationId", "PRIVATE_KEY"}, e.Name, "App key/identity files must never be env")
+	}
+
+	// No GitHub App credential Secret volume (the metrics-TLS Secret is still a
+	// volume); a projected Vault token volume instead.
+	var sawVaultToken bool
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		assert.NotEqual(t, "github-app-credentials", v.Name, "workload identity mounts no GitHub App credential Secret")
+		if v.Projected != nil && len(v.Projected.Sources) == 1 && v.Projected.Sources[0].ServiceAccountToken != nil {
+			sawVaultToken = true
+			assert.Equal(t, "vault", v.Projected.Sources[0].ServiceAccountToken.Audience)
+		}
+	}
+	assert.True(t, sawVaultToken, "expected a projected Vault-audience ServiceAccount token volume")
 }
 
 func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {

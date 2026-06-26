@@ -7,6 +7,7 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -320,6 +321,11 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 			corev1.EnvVar{Name: "PROXY_TLS_SECRET_NAME", Value: proxyTLSSecret},
 		)
 	}
+	// Credential method (Q196/Q197/Q201). GitHubApp threads no extra env (the AGC
+	// reads the mounted Secret files); WorkloadIdentity threads the non-secret signer
+	// config — the projected ServiceAccount token volume is added by
+	// buildAGCDeploymentFrom when no credential Secret is named.
+	env = append(env, credentialEnvV2(ag)...)
 	env = append(env, tracingEnvV2(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
@@ -333,6 +339,44 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
 	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
+}
+
+// credentialEnvV2 returns the AGC environment that selects and configures the
+// gateway's credential method (Q201). The discriminator CREDENTIAL_TYPE tells the
+// AGC which path to take; for WorkloadIdentity it threads the non-secret signer
+// configuration (App identity + Vault address/mounts/role + the projected-token
+// path). It threads NO secret: the App key never exists for this method, and the
+// projected ServiceAccount token reaches the AGC as a file (the volume stamped by
+// buildAGCDeploymentFrom), never an env var. GitHubApp threads nothing — the AGC
+// reads the mounted Secret files as before, and an absent CREDENTIAL_TYPE defaults
+// to that path.
+func credentialEnvV2(ag *gmcv2alpha1.ActionsGateway) []corev1.EnvVar {
+	wi := ag.Spec.Credentials.WorkloadIdentity
+	if ag.Spec.Credentials.Type != gmcv2alpha1.CredentialTypeWorkloadIdentity || wi == nil {
+		return nil
+	}
+	env := []corev1.EnvVar{
+		{Name: "CREDENTIAL_TYPE", Value: string(gmcv2alpha1.CredentialTypeWorkloadIdentity)},
+		{Name: "GITHUB_APP_ID", Value: strconv.FormatInt(wi.AppID, 10)},
+		{Name: "GITHUB_INSTALLATION_ID", Value: strconv.FormatInt(wi.InstallationID, 10)},
+		{Name: "VAULT_SA_TOKEN_PATH", Value: vaultTokenMountDir + "/" + vaultTokenFile},
+	}
+	if v := wi.Signer.Vault; v != nil {
+		env = append(env,
+			corev1.EnvVar{Name: "VAULT_ADDR", Value: v.Address},
+			corev1.EnvVar{Name: "VAULT_TRANSIT_KEY", Value: v.KeyName},
+			corev1.EnvVar{Name: "VAULT_AUTH_ROLE", Value: v.Auth.Role},
+		)
+		// Mounts are optional in the spec (the AGC defaults them to Vault's
+		// conventional paths); thread them only when set so the env stays minimal.
+		if v.TransitMount != "" {
+			env = append(env, corev1.EnvVar{Name: "VAULT_TRANSIT_MOUNT", Value: v.TransitMount})
+		}
+		if v.Auth.Mount != "" {
+			env = append(env, corev1.EnvVar{Name: "VAULT_AUTH_MOUNT", Value: v.Auth.Mount})
+		}
+	}
+	return env
 }
 
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC

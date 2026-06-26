@@ -91,6 +91,12 @@ jobs:
       # upstream tag and the mirror tag together.
       E2E_CURL_UPSTREAM: curlimages/curl:8.10.1
       E2E_CURL_IMAGE: 127.0.0.1:5000/curlimages/curl:8.10.1
+      # The workload-identity (Q201) e2e stands up an in-cluster TEST Vault (dev
+      # mode, no real credentials) for the no-PEM round-trip. Mirror the upstream
+      # image into the local registry like curl so the kind nodes never pull from
+      # Docker Hub (429 flakes). Bump the pinned upstream and mirror tags together.
+      E2E_VAULT_UPSTREAM: hashicorp/vault:1.18.3
+      E2E_VAULT_IMAGE: 127.0.0.1:5000/hashicorp/vault:1.18.3
       # The buildkit image docker/setup-buildx-action boots its docker-container
       # builder from. Named here so the pre-pull step and the builder pin below
       # reference one source. DIGEST-PINNED (Q151): the buildx-stable-1 tag
@@ -213,6 +219,34 @@ jobs:
           fi
           docker tag "${E2E_CURL_UPSTREAM}" "${E2E_CURL_IMAGE}"
           docker push "${E2E_CURL_IMAGE}"
+
+      - name: Cache Vault test image
+        # The workload-identity e2e's in-cluster test Vault. Keyed on the pinned
+        # upstream tag so a Vault bump invalidates it.
+        id: vault-image-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/vault-image
+          key: vault-image-${{ env.E2E_VAULT_UPSTREAM }}
+
+      - name: Mirror Vault test image into local registry
+        # Same Docker-Hub-429 avoidance as the curl mirror above: pull once on the
+        # runner (cached) and push to the local registry the kind nodes resolve.
+        run: |
+          set -euo pipefail
+          tar=/tmp/vault-image/vault.tar
+          if [[ -f "$tar" ]]; then
+            echo "==> loading vault image from cache"
+            docker load -i "$tar"
+          else
+            echo "==> pulling ${E2E_VAULT_UPSTREAM}"
+            PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+              scripts/pull-image-with-retry.sh "${E2E_VAULT_UPSTREAM}"
+            mkdir -p /tmp/vault-image
+            docker save -o "$tar" "${E2E_VAULT_UPSTREAM}"
+          fi
+          docker tag "${E2E_VAULT_UPSTREAM}" "${E2E_VAULT_IMAGE}"
+          docker push "${E2E_VAULT_IMAGE}"
 
       - name: Cache Calico images
         # Calico-only. Keyed on CALICO_VERSION so a Calico bump invalidates it.

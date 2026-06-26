@@ -400,11 +400,21 @@ opt-in, mirroring the GitHub-API-base-URL rule above.
 
 Operator configuration is in
 [tenant-onboarding.md § Workload-identity credentials](../operations/tenant-onboarding.md#workload-identity-credentials-external-signer).
-The GMC runtime provisioning of a workload-identity AGC (stamping the signer env,
-projecting the ServiceAccount token volume, and the operator's Vault role binding)
-and the in-cluster Vault kind e2e land in a follow-up (Q201); until then a
-workload-identity gateway is admitted but fails closed
-(`CredentialUnavailable`/`WorkloadIdentityProvisioningPending`).
+The GMC provisions a workload-identity AGC end to end (Q201): it stamps the signer
+config env, projects a Vault-audience-scoped ServiceAccount token volume (mounted
+read-only; never an env var), and runs the AGC under its per-gateway ServiceAccount —
+the in-cluster identity the operator binds to a Vault Kubernetes-auth role out of
+band. The AGC's `vaultsigner` provider then logs in to Vault with that projected
+token and delegates the App-JWT sign to Vault transit, so the gateway authenticates
+to GitHub with no App key in the cluster. The live no-PEM round-trip is covered by an
+in-cluster (dev-mode) Vault kind e2e.
+
+> **NetworkPolicy egress to Vault.** The per-tenant AGC NetworkPolicy default-denies
+> egress except DNS + GitHub + the kube API. Vault is a destination the API cannot
+> express as a NetworkPolicy peer (its address is an opaque URL, not a selectable
+> namespace/pod or a GMC-managed CIDR), so on a policy-enforcing CNI the operator must
+> add an egress rule permitting the AGC to reach their Vault endpoint. First-class
+> Vault egress is a tracked follow-up.
 
 ---
 

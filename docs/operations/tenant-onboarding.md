@@ -592,10 +592,12 @@ spec:
 Operator prerequisites in Vault (configured out of band, once per gateway):
 
 - A **transit key** (`keyName`) of an **RSA** type — GitHub App keys are RSA, and transit signs it as `RS256` (`pkcs1v15` + `sha2-256`). Import the App's existing private key into transit, or generate a new key in transit and register its public half as the App's key in GitHub.
-- A **Kubernetes auth role** (`auth.role`) bound to this gateway's AGC ServiceAccount and namespace, granting `update` on `transit/sign/<keyName>`. The AGC logs in with its projected ServiceAccount token; Vault verifies it via the cluster `TokenReview` API.
+- A **Kubernetes auth role** (`auth.role`) bound to this gateway's AGC ServiceAccount (named `<gateway-name>-agc`) and namespace, granting `update` on `transit/sign/<keyName>`. The AGC logs in with its projected ServiceAccount token; Vault verifies it via the cluster `TokenReview` API. The GMC projects that token with the audience **`vault`**, so configure the role with `audience=vault` (or leave it unset to skip the audience check) — e.g. `vault write auth/kubernetes/role/<role> bound_service_account_names=<gateway-name>-agc bound_service_account_namespaces=<namespace> token_policies=<policy> audience=vault`.
 - The Vault `address` must be **HTTPS** — the ServiceAccount token transits it at login. A plaintext address is rejected unless the AGC carries an explicit dev/test opt-in.
 
-> **Availability note.** The API shape and the external signer ship in v2beta1, but the GMC runtime provisioning of a workload-identity AGC (stamping the signer env, projecting the ServiceAccount token, and relying on your Vault role binding) lands in a follow-up. Until then a `WorkloadIdentity` gateway is **accepted by admission but does not provision** — it reports `Ready=False` with `CredentialUnavailable`/`WorkloadIdentityProvisioningPending`. Use `credentials.type: GitHubApp` to provision a gateway today.
+> **NetworkPolicy egress to Vault.** The GMC's per-tenant AGC NetworkPolicy default-denies egress except DNS, GitHub, and the kube API server — it does **not** yet auto-permit your Vault endpoint (Vault's address is not a NetworkPolicy-expressible peer). On a policy-enforcing CNI (Calico/Cilium — the production recommendation), add an egress rule allowing the AGC pods (`actions-gateway/component: workload`) to reach your Vault on its port, or the AGC's Vault login will be dropped. On a non-enforcing CNI (kindnet) no extra rule is needed. First-class Vault egress is a tracked follow-up.
+
+The GMC provisions the workload-identity AGC the same as a `GitHubApp` gateway — minus the credential `Secret` mount (there is none), plus the projected Vault-audience ServiceAccount token and the signer config env. A `WorkloadIdentity` gateway reaches `Ready=True` once its AGC mints its first installation token through Vault.
 
 ---
 

@@ -2,12 +2,15 @@
 // It reconciles RunnerGroup CRDs into adaptive listener goroutine pools that
 // long-poll the GitHub Actions broker for incoming workflow jobs.
 //
-// GitHub App credentials are read from files under /etc/actions-gateway/github-app/
-// (projected from a Kubernetes Secret by the GMC). Keys:
+// The gateway authenticates to GitHub by one of two credential methods, selected
+// by the GMC via the CREDENTIAL_TYPE env (see buildTokenProvider in credentials.go):
 //
-//	appId          - GitHub App numeric ID
-//	installationId - Installation ID for the target org/repo
-//	privateKey     - GitHub App private key in PEM format
+//   - GitHubApp (possession, the default): GitHub App credentials are read from
+//     files under /etc/actions-gateway/github-app/ (projected from a Kubernetes
+//     Secret by the GMC). Keys: appId, installationId, privateKey (PEM).
+//   - WorkloadIdentity (delegation, Q201): no App private key in the cluster — the
+//     App JWT is signed via Vault transit (githubapp/vaultsigner), with the AGC
+//     proving its pod identity to Vault using a projected ServiceAccount token.
 //
 // Flags:
 //
@@ -41,7 +44,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker"
-	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
 	uberzap "go.uber.org/zap"
@@ -248,53 +250,16 @@ func run() error {
 		http.DefaultTransport = t
 	}
 
-	// ── 1. Read credentials from mounted Secret files ────────────────────────
-	appIDBytes, err := os.ReadFile(filepath.Join(credsDir, "appId"))
+	// ── 1+2. Build the installation-token provider for the configured credential
+	// method (possession/GitHubApp reads the mounted Secret files; delegation/
+	// WorkloadIdentity signs the App JWT via Vault with no in-cluster key — Q201).
+	// buildTokenProvider gates a non-HTTPS GitHub/Vault address on the dev/test
+	// STUB_AUTH_URL signal, which only reaches a GMC-provisioned AGC via AGC_EXTRA_*
+	// under the testing-only --allow-agc-extra-env flag; production AGCs keep HTTPS
+	// mandatory.
+	expProvider, err := buildTokenProvider(ctrl.Log.WithName("credentials"))
 	if err != nil {
-		return fmt.Errorf("read appId: %w", err)
-	}
-	appID, err := strconv.ParseInt(strings.TrimSpace(string(appIDBytes)), 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse appId: %w", err)
-	}
-
-	installIDBytes, err := os.ReadFile(filepath.Join(credsDir, "installationId"))
-	if err != nil {
-		return fmt.Errorf("read installationId: %w", err)
-	}
-	installID, err := strconv.ParseInt(strings.TrimSpace(string(installIDBytes)), 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse installationId: %w", err)
-	}
-
-	pemBytes, err := os.ReadFile(filepath.Join(credsDir, "privateKey"))
-	if err != nil {
-		return fmt.Errorf("read privateKey: %w", err)
-	}
-
-	// ── 2. Build token provider and manager ─────────────────────────────────
-	creds := githubapp.Credentials{
-		AppID:          appID,
-		PrivateKeyPEM:  pemBytes,
-		InstallationID: installID,
-	}
-	// Allow a plaintext GITHUB_API_BASE_URL only in dev/test, signalled by the
-	// stub env (STUB_AUTH_URL). Production AGCs never carry it — it only reaches
-	// a GMC-provisioned AGC via AGC_EXTRA_* under the testing-only
-	// --allow-agc-extra-env flag (see the registrar selection below and the e2e
-	// suite, which points the AGC at an in-cluster fakegithub over plaintext).
-	// With no signal, a non-HTTPS base URL is rejected (defense in depth).
-	allowInsecureAPIBaseURL := os.Getenv("STUB_AUTH_URL") != ""
-	if allowInsecureAPIBaseURL {
-		ctrl.Log.Info("dev/test mode: allowing non-HTTPS GITHUB_API_BASE_URL for token exchange (STUB_AUTH_URL set)")
-	}
-	rawProvider, err := githubapp.NewInstallationTokenProvider(creds, nil, allowInsecureAPIBaseURL)
-	if err != nil {
-		return fmt.Errorf("create token provider: %w", err)
-	}
-	expProvider, ok := rawProvider.(githubapp.ExpiringTokenProvider)
-	if !ok {
-		return fmt.Errorf("token provider does not implement ExpiringTokenProvider")
+		return err
 	}
 	tokenMgr := token.NewManager(expProvider, nil)
 
