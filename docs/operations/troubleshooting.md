@@ -435,7 +435,7 @@ kubectl describe runnergroup -n <namespace> <name>
 
 **Resolution.**
 - If the Secret is missing or has wrong keys, recreate it. See [Getting Started — GitHub App Secret](../getting-started.md#3-create-a-github-app-credential-secret).
-- If the private key format is wrong, ensure it is a PEM-encoded RSA key starting with `-----BEGIN RSA PRIVATE KEY-----`. The Secret `stringData.privateKey` must include the full key including header and footer lines.
+- If the private key format is wrong, ensure it is a PEM-encoded key starting with `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) or `-----BEGIN PRIVATE KEY-----` (PKCS#8, RSA or Ed25519). The Secret `stringData.privateKey` must include the full key including header and footer lines.
 - If the runner version is outdated, update `workerImage` in the RunnerGroup spec (or the AGC's `--worker-image` flag). Watch for `RunnerGroup` conditions with reason `VersionTooOld`.
 - If `appId` or `installationId` are wrong, update the Secret.
 
@@ -820,7 +820,7 @@ kubectl get runnergroup -n <namespace> <name> \
 
 | Error message | Likely cause |
 | --- | --- |
-| `private key: RSA key parse error` | PEM key has extra whitespace, missing newline, or wrong format (PKCS#8 instead of RSA PKCS#1). |
+| `private key: RSA key parse error` / `no PEM block found` | PEM key is corrupted — extra whitespace, missing or extra newlines, CRLF line endings, hand-paste damage, or an unsupported block type (e.g. `OPENSSH`/`EC`, which fail with `unsupported PEM block type`). Both PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`) and PKCS#8 (`-----BEGIN PRIVATE KEY-----`) are accepted, so PKCS#8 is **not** a wrong format. |
 | `401 Unauthorized` on token exchange | `appId` or `installationId` is wrong. |
 | `404 Not Found` on token exchange | The GitHub App is not installed in the target organization or the `installationId` does not match. |
 | `422 Unprocessable Entity` | The App lacks the `Actions: Read` and `Administration: Read` permissions. |
@@ -832,7 +832,8 @@ kubectl get runnergroup -n <namespace> <name> \
 kubectl get secret -n <namespace> <name> -o jsonpath='{.data.appId}' | base64 -d
 kubectl get secret -n <namespace> <name> -o jsonpath='{.data.installationId}' | base64 -d
 kubectl get secret -n <namespace> <name> -o jsonpath='{.data.privateKey}' | base64 -d | head -1
-# Expected first line: -----BEGIN RSA PRIVATE KEY-----
+# Expected first line: -----BEGIN RSA PRIVATE KEY----- (PKCS#1)
+#                  or: -----BEGIN PRIVATE KEY----- (PKCS#8, RSA or Ed25519)
 
 # Verify the App ID and installation ID match the GitHub App
 # GitHub UI: Settings → Developer settings → GitHub Apps → <app> → General (App ID)
