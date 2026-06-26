@@ -145,14 +145,12 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 				fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppSecretName(), ag.Namespace))
 		}
 	case gmcv2alpha1.CredentialTypeWorkloadIdentity:
-		// Delegation model (no in-cluster key): the API shape and the external signer
-		// (githubapp/vaultsigner) ship in v2beta1, but the GMC runtime provisioning of a
-		// workload-identity AGC — stamping the signer env, projecting the ServiceAccount
-		// token, and relying on the operator's Vault role binding — lands in a kind-e2e
-		// follow-up (Q201). Fail closed until then rather than provisioning an AGC that
-		// cannot authenticate.
-		return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonWorkloadIdentityPending,
-			"workload-identity credentials are accepted by the API but AGC provisioning for this method is not yet wired (Q201); use credentials.type GitHubApp to provision a gateway")
+		// Delegation model (no in-cluster key, Q197/Q201): there is no GitHub App Secret
+		// to check — the App key never enters the cluster. The AGC is provisioned with
+		// the signer config env and a Vault-audience-scoped projected ServiceAccount
+		// token (buildAGCDeploymentV2), and authenticates to Vault with that pod identity
+		// (the operator binds the AGC ServiceAccount to its Vault role out of band). No
+		// fail-closed branch: provisioning proceeds below.
 	}
 
 	// Resolve the control-plane egress proxy from defaultProxyRef (Q168, §H.10).
@@ -429,8 +427,10 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 		})
 	}
 
-	// Provisioning succeeded, so clear the abnormal conditions.
-	set(gmcv2alpha1.ConditionCredentialUnavailable, false, gmcv2alpha1.ReasonReconcileSucceeded, "GitHub App Secret present")
+	// Provisioning succeeded, so clear the abnormal conditions. The credential is
+	// present for both methods — the mounted GitHub App Secret (possession) or the
+	// projected Vault-auth identity (delegation, Q201).
+	set(gmcv2alpha1.ConditionCredentialUnavailable, false, gmcv2alpha1.ReasonReconcileSucceeded, "credential is available")
 	set(gmcv2alpha1.ConditionDegraded, false, gmcv2alpha1.ReasonReconcileSucceeded, "all AGC control-plane resources reconciled")
 
 	// Egress mode (§H.10). Direct egress is an explicit, auditable status — not an

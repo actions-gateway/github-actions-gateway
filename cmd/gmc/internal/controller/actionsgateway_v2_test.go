@@ -64,6 +64,37 @@ func v2Gateway(name, ns, secret, proxyRef string) *gmcv2alpha1.ActionsGateway {
 	return ag
 }
 
+// v2WorkloadIdentityGateway is a fixture for the no-PEM delegation method (Q201):
+// no GitHub App Secret, App identity + Vault transit signer inline. proxyRef ""
+// leaves egress direct.
+func v2WorkloadIdentityGateway(name, ns, proxyRef string) *gmcv2alpha1.ActionsGateway {
+	ag := &gmcv2alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: gmcv2alpha1.ActionsGatewaySpec{
+			Credentials: gmcv2alpha1.GitHubCredentials{
+				Type: gmcv2alpha1.CredentialTypeWorkloadIdentity,
+				WorkloadIdentity: &gmcv2alpha1.WorkloadIdentity{
+					AppID:          424242,
+					InstallationID: 99,
+					Signer: gmcv2alpha1.ExternalSigner{
+						Provider: gmcv2alpha1.SignerProviderVault,
+						Vault: &gmcv2alpha1.VaultSigner{
+							Address: "https://vault.vault.svc:8200",
+							KeyName: "agc",
+							Auth:    gmcv2alpha1.VaultKubernetesAuth{Role: "agc"},
+						},
+					},
+				},
+			},
+			GitHubURL: "https://github.com/example-org",
+		},
+	}
+	if proxyRef != "" {
+		ag.Spec.DefaultProxyRef = &gmcv2alpha1.LocalObjectRef{Name: proxyRef}
+	}
+	return ag
+}
+
 // reconcileV2Gateway runs the reconciler twice (the first pass adds the finalizer
 // and requeues; the second provisions), returning the last result.
 func reconcileV2Gateway(t *testing.T, r *ActionsGatewayV2Reconciler, ns, name string) ctrl.Result {
@@ -410,6 +441,85 @@ func TestBuildAGCDeploymentV2_DirectEgress(t *testing.T) {
 	for _, v := range dep.Spec.Template.Spec.Volumes {
 		assert.NotEqual(t, proxyCACertVolumeName, v.Name, "direct mode must not mount a proxy-CA volume")
 	}
+}
+
+// TestBuildAGCDeploymentV2_WorkloadIdentity: a delegation-model AGC carries the
+// signer config env, projects a Vault-audience ServiceAccount token (not a Secret
+// mount), and mounts NO GitHub App credential Secret — the App key never enters the
+// pod (Q201). The rollout annotation that records the credential Secret is omitted.
+func TestBuildAGCDeploymentV2_WorkloadIdentity(t *testing.T) {
+	ag := v2WorkloadIdentityGateway("gw", "team-a", "")
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+
+	env := agcEnv(dep)
+	assert.Equal(t, "WorkloadIdentity", env["CREDENTIAL_TYPE"])
+	assert.Equal(t, "424242", env["GITHUB_APP_ID"])
+	assert.Equal(t, "99", env["GITHUB_INSTALLATION_ID"])
+	assert.Equal(t, "https://vault.vault.svc:8200", env["VAULT_ADDR"])
+	assert.Equal(t, "agc", env["VAULT_TRANSIT_KEY"])
+	assert.Equal(t, "agc", env["VAULT_AUTH_ROLE"])
+	assert.Equal(t, vaultTokenMountDir+"/"+vaultTokenFile, env["VAULT_SA_TOKEN_PATH"])
+	// Optional mounts unset in the fixture ⇒ not threaded (AGC defaults them).
+	assert.NotContains(t, env, "VAULT_TRANSIT_MOUNT")
+	assert.NotContains(t, env, "VAULT_AUTH_MOUNT")
+
+	// No GitHub App credential Secret volume/mount: there is no key to mount.
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		assert.NotEqual(t, agcCredsVolumeName, v.Name, "workload identity must not mount a GitHub App Secret")
+	}
+	// A projected ServiceAccount token volume, audience-scoped to Vault, is present.
+	var vaultVol *corev1.Volume
+	for i := range dep.Spec.Template.Spec.Volumes {
+		if dep.Spec.Template.Spec.Volumes[i].Name == vaultTokenVolumeName {
+			vaultVol = &dep.Spec.Template.Spec.Volumes[i]
+		}
+	}
+	require.NotNil(t, vaultVol, "expected a projected Vault token volume")
+	require.NotNil(t, vaultVol.Projected)
+	require.Len(t, vaultVol.Projected.Sources, 1)
+	sat := vaultVol.Projected.Sources[0].ServiceAccountToken
+	require.NotNil(t, sat)
+	assert.Equal(t, vaultTokenAudience, sat.Audience)
+	assert.Equal(t, vaultTokenFile, sat.Path)
+	require.NotNil(t, sat.ExpirationSeconds)
+	// And it is mounted read-only at the path VAULT_SA_TOKEN_PATH points into.
+	var mounted bool
+	for _, m := range dep.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if m.Name == vaultTokenVolumeName {
+			mounted = true
+			assert.Equal(t, vaultTokenMountDir, m.MountPath)
+			assert.True(t, m.ReadOnly)
+		}
+	}
+	assert.True(t, mounted, "Vault token volume must be mounted into the AGC container")
+
+	// No github-app-secret rollout annotation (no Secret to rotate).
+	_, ok := dep.Spec.Template.Annotations["actions-gateway/github-app-secret"]
+	assert.False(t, ok, "workload identity has no GitHub App Secret annotation")
+}
+
+// TestActionsGatewayV2Reconcile_WorkloadIdentityProvisions: a workload-identity
+// gateway holds NO App Secret, yet must provision a full AGC control plane and clear
+// CredentialUnavailable — it does not fail closed on the absent Secret (Q201).
+func TestActionsGatewayV2Reconcile_WorkloadIdentityProvisions(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	ag := v2WorkloadIdentityGateway("gw", "team-a", "") // no Secret, direct egress
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ns, ag).WithStatusSubresource(ag).Build()
+
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
+	reconcileV2Gateway(t, r, "team-a", "gw")
+
+	var got gmcv2alpha1.ActionsGateway
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
+	cred := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable)
+	require.NotNil(t, cred)
+	assert.Equal(t, metav1.ConditionFalse, cred.Status, "workload identity needs no Secret; CredentialUnavailable must be cleared")
+
+	// The AGC Deployment is provisioned (not failed closed).
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
+	assert.Equal(t, "WorkloadIdentity", agcEnv(&dep)["CREDENTIAL_TYPE"])
 }
 
 func TestGenerateMetricsCertsV2_ParsesAndCoversAGCService(t *testing.T) {
