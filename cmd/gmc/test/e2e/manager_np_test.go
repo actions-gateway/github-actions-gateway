@@ -193,16 +193,26 @@ spec:
 				"NetworkPolicy allow rule for `metrics: enabled` is not live in the dataplane; got phase=%s logs:\n%s",
 			gatePhase, gateLogs)
 
-		// Positive control: proves the endpoint is reachable when the NP admits
-		// it, so the negative above is attributable to NP enforcement and not a
-		// dead endpoint. A non-000 HTTP code (even 401/403 from the metrics
-		// authn filter) means the TCP/TLS connection was allowed through.
-		By("positive: a pod in the labeled namespace reaches the manager metrics endpoint :8443")
-		logs := runEgressProbe(metricsNPLabeledNS, "metrics-allowed", false, metricsURL)
-		Expect(logs).To(MatchRegexp(`CURL_RC=0(\s|$)`),
-			"scrape from a `metrics: enabled` namespace was blocked — the NP is denying an allowed source; logs:\n%s", logs)
-		Expect(logs).NotTo(ContainSubstring("HTTP_CODE=000"),
-			"scrape from a `metrics: enabled` namespace got no HTTP response (HTTP_CODE=000) — the NP blocked an allowed source; logs:\n%s", logs)
+		// Positive control: the gate pod above IS the proof the endpoint is
+		// reachable when the NP admits it — it exits 0 only after several
+		// consecutive successful scrapes (curl exit 0, i.e. a completed HTTP
+		// exchange, never HTTP_CODE=000), which makes the negative case
+		// attributable to NP enforcement and not a dead endpoint. Assert on the
+		// gate's sustained-allow marker rather than spinning a *second* one-shot
+		// probe afterward: a freshly scheduled source pod re-races Calico's
+		// per-endpoint policy programming (its IP must propagate into the
+		// manager's allow ipset before the namespaceSelector admits it), so a
+		// lone post-gate scrape could be dropped before that completes — the
+		// exact propagation flake the gate exists to absorb, re-incurred per new
+		// pod (Q159 added the gate; the leftover second probe still flaked on
+		// PR #411, e2e-calico, with HTTP_CODE=000). The gate's loop already is
+		// the "wait until the scrape is consistently allowed" retry, so folding
+		// the positive control into it removes the residual race without
+		// weakening the assertion (3 consecutive allowed scrapes > 1).
+		By("positive: the labeled-namespace gate pod confirmed the metrics endpoint :8443 is reachable through the NP")
+		Expect(gateLogs).To(ContainSubstring("ENFORCED: metrics scrape allowed"),
+			"gate pod reached Succeeded but its logs lack the sustained-allow marker — the positive-control "+
+				"scrape never completed (expected curl exit 0, never HTTP_CODE=000); logs:\n%s", gateLogs)
 	})
 
 	It("E2E_GMC_ManagerWebhookNP_AdmissionStillWorks: validating webhook on :9443 is reachable through the NP", func() {
