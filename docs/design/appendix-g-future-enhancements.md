@@ -511,6 +511,7 @@ that the alternatives below do not already cover:
 | Every cold node re-pulls the large runner **image** | **Peer-to-peer image mirror** (Spegel/Dragonfly — see the Q211 P2P image-distribution guide) | Makes N concurrent pulls cost ~1 back-to-source pull with **no added latency**. A ramp still pulls N times, just spread out — strictly worse. The storm scales with distinct cold nodes, not pod count. |
 | Cold nodes re-pull the **same image** but no P2P | kubelet `maxParallelImagePulls`/`serializeImagePulls`; pre-pull DaemonSet | Per-node pull throttle / pre-warming is the node-layer fix; keeps cold-start off the critical path. |
 | Workers stampede a shared **downstream dependency** at startup (artifact registry, license server, internal API, DB, Vault) | **Scale-up rate limit** *(this item)* — or workflow-level `concurrency:` | This is the genuine case for a ramp: the resource isn't the image and isn't cluster-internal. Often pushable to the workflow author via GitHub's native `concurrency:` groups first. |
+| Bursting workers saturate a shared **network egress** path (internet uplink, NAT/SNAT gateway, stateful firewall, site-to-site VPN) — e.g. a multi-site network | **Scale-up rate limit** for the *onset* **+ concurrency ceiling** for *sustained* load | Mixed (see [worked example](#worked-example--multi-site-shared-egress-nat--firewall--vpn)): a ramp smooths connection-establishment / conntrack / SNAT-port churn; sustained-bandwidth saturation is a *ceiling* problem a ramp only defers. |
 | Mass node provisioning trips **cloud/control-plane API** throttling | Scale-up rate limit *(this item)*; or autoscaler-side limits (Karpenter/CA) | Smoothing pod-admission rate eases the node-scale-up burst; autoscalers also expose their own rate controls. |
 | One tenant/workflow drains the **whole shared quota** and starves others | **Worker quota / concurrency ceiling** (already shipped) | A fairness/blast-radius problem — a *ceiling*, not a *rate*. The existing quota model largely covers it. |
 | Limited-seat external system (K concurrent consumers) | **Concurrency cap** (ceiling), not a rate | You want a hard in-flight cap, not a ramp. |
@@ -518,7 +519,33 @@ that the alternatives below do not already cover:
 In short: **image** pull storms → P2P + node pull controls; **shared-dependency
 or control-plane** stampedes → a rate limit (or workflow `concurrency:`);
 **fairness / limited seats** → the quota/ceiling GAG already has. A scale-up rate
-limit earns its latency cost only in the middle row.
+limit earns its latency cost only in the middle rows.
+
+### Worked example — multi-site shared egress (NAT / firewall / VPN)
+
+A new environment scales runners up and job runs slow down because the
+simultaneously starting workers hammer a shared egress path — an internet
+uplink, a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or
+a site-to-site VPN tunnel (a failure mode also seen with Actions Runner
+Controller). This is a real motivator for the ramp, but diagnose *which* limit
+binds, because a rate limit and a ceiling fix different halves:
+
+- **Onset / connection-establishment burst** — NAT/SNAT port-allocation spikes,
+  firewall conntrack-table churn, TCP slow-start synchronization, VPN/IKE
+  renegotiation. Symptom: slowest *right as the burst starts*, recovering once
+  it settles. → a **scale-up rate limit (ramp)** helps directly, by spreading
+  connection setup over time.
+- **Sustained saturation** — uplink bandwidth, total NAT ports in use, conntrack
+  table size, VPN tunnel throughput. Symptom: slow for the *whole duration* of
+  the concurrent load. → a **concurrency ceiling** is the right tool; a ramp
+  only *defers* the cliff, because it bounds the start *rate*, not the running
+  *count*. Also raise capacity (more NAT gateways / SNAT IPs) or cut per-job
+  egress with a caching pull-through proxy / P2P mirror.
+
+**Diagnostic:** does the slowness peak during scale-up and recover, or stay flat
+while many jobs run? Former → ramp; latter → ceiling. Multi-site setups are
+often **both**, so the ramp **complements** GAG's existing worker-quota ceiling
+rather than replacing it.
 
 **What "added" would look like.** An **opt-in, per-RunnerGroup** creation-rate
 limit on the provisioner — a token bucket bounding new worker pods per unit time
@@ -534,11 +561,13 @@ trading time-to-pickup. It also overlaps the cluster autoscaler/Karpenter, which
 are making their own node-scaling decisions. So it stays an explicit opt-in for
 the narrow stampede cases above, never a default.
 
-**What would trigger building it.** A concrete operator report of a cold-start
-stampede that the alternatives do not cover — a shared dependency knocked over by
-simultaneous worker starts, or cloud/control-plane API throttling during mass
-scale-up — where workflow-level `concurrency:` and the existing quota ceiling are
-insufficient.
+**Status — promoted to the active backlog (Q223).** The trigger fired: observed
+ARC-style scale-up saturating a shared egress path (NAT gateway / firewall / VPN)
+in a multi-site network — the worked example above — which the existing quota
+ceiling and workflow `concurrency:` do not fully address. The open questions for
+the Q223 plan doc are the exact knob surface (`scaleUp.maxPerSecond`/`burst`
+naming and scope), how the ramp composes with the `WorkerQuotaPressure` backoff,
+and how it coexists with the node autoscaler's own rate controls.
 
 **Related.** The Q211 P2P image-distribution operations guide (image-pull
 storms); [G.2](#g2-proxy-enforced-per-tenant-rate-limiting) (proxy egress rate
