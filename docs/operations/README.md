@@ -22,6 +22,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [gitops.md](gitops.md) | Platform engineer | Install the OCI chart declaratively via Argo CD or Flux — `Application` / `HelmRelease` examples with the CRD-pruning gotcha handled, plus sourcing the GitHub App credential Secret with External Secrets Operator or Sealed Secrets (raw key never committed). |
 | [upgrade.md](upgrade.md) | Platform engineer | Upgrade and rollback procedures. Strategy intent lives in [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). |
 | [release.md](release.md) | Maintainer | How to cut a release: tag → publish (build, push, keyless-sign, SBOM-attest) → verify → record digests → bump the chart. |
+| [kata-ci-spike-runbook.md](kata-ci-spike-runbook.md) | Platform engineer, Security | Live go/no-go runbook for the Q226 Kata-on-GKE spike — run an unprivileged `dockerd`+`kind` runner inside a Kata micro-VM, step-by-step against the six acceptance criteria. Applies the artifacts in [deploy/kata-ci/](../../deploy/kata-ci/). |
 | [../design/08-glossary.md](../design/08-glossary.md) | All | Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers). |
 
 When adding a new failure mode an operator might observe, add a section to [troubleshooting.md](troubleshooting.md).

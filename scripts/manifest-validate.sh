@@ -53,14 +53,15 @@ crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"
 kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -ignore-missing-schemas"
 [[ -n "$KUBECONFORM_CACHE" ]] && kubeconform_flags+=" -cache $KUBECONFORM_CACHE"
 
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config"
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/kata-ci"
 
 # The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
 # (CRDs, manager RBAC role, webhook config) that are the codegen substrate and
 # single-source inputs to the chart CRD/RBAC generators, plus the two
 # ValidatingAdmissionPolicies the GMC integration suite applies in envtest.
 # Schema-validate them directly since there is no longer a kustomize overlay that
-# renders them.
+# renders them. The deploy/kata-ci/ manifests (Q226 Kata-on-GKE spike) are plain
+# static YAML with no chart/overlay either, so they are schema-validated here too.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
 cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
 api/config/crd/actions-gateway.com_runnersets.yaml
@@ -74,7 +75,10 @@ cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
-cmd/gmc/config/admission-policy/tenant-resource-guard.yaml"
+cmd/gmc/config/admission-policy/tenant-resource-guard.yaml
+deploy/kata-ci/kata-deploy.yaml
+deploy/kata-ci/runtimeclass.yaml
+deploy/kata-ci/runner-pod.yaml"
 
 echo "==> yamllint (static manifests + chart metadata)"
 # shellcheck disable=SC2086  # path and flag lists word-split intentionally

@@ -1,0 +1,131 @@
+# Kata Containers installer — kata-deploy DaemonSet + scoped RBAC.
+#
+# kata-deploy lands the Kata runtime binaries, the guest kernel/image, and the
+# containerd runtime handler config onto each targeted node, then labels the
+# node so kata RuntimeClass pods can schedule there. It is the one-time,
+# platform-operator-run, TRUSTED install step. Its DaemonSet runs privileged
+# because installing a container runtime requires writing to the node's
+# /opt/kata, /usr/local/bin and /etc/containerd and restarting containerd.
+#
+# This privilege is confined to the installer and is the deliberate trade in the
+# Kata model: privilege lives in the trusted, node-scoped installer, NOT in the
+# untrusted runner pod (see runner-pod.yaml, which is fully unprivileged). The
+# whole point of Q226 is that contributor CI code never runs with any privilege;
+# the installer is operator-owned and runs no untrusted code.
+#
+# This manifest mirrors upstream kata-deploy and is pinned by image tag.
+# VERIFY AT SPIKE TIME: confirm the pinned tag exists on quay.io and matches a
+# current Kata Containers release (https://github.com/kata-containers/kata-containers/releases),
+# and diff this DaemonSet against upstream's published manifest for that tag —
+# upstream's manifest for the pinned release is canonical. Bump KATA_VERSION to
+# the latest patch release as the spike's recorded install step.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kata-deploy-sa
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kata-deploy-role
+rules:
+# Read its own pod (to find the node it runs on) and get/patch nodes to label
+# them once the runtime is installed. No write access to workloads or secrets.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kata-deploy-rb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kata-deploy-role
+subjects:
+- kind: ServiceAccount
+  name: kata-deploy-sa
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      serviceAccountName: kata-deploy-sa
+      # Install only on the nested-virt node pool created by scripts/kata-node-pool.sh,
+      # not cluster-wide. The script applies this label; kata-deploy then adds
+      # katacontainers.io/kata-runtime=true once binaries are in place.
+      nodeSelector:
+        katacontainers.io/kata-runtime: "true"
+      containers:
+      - name: kube-kata
+        # VERIFY: pin to a current released tag (see header note); never :latest/:stable.
+        image: quay.io/kata-containers/kata-deploy:3.20.0
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
+        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: DEBUG
+          value: "false"
+        # Install only the QEMU shim — the only handler the RuntimeClass objects
+        # reference. Fewer shims = smaller install surface.
+        - name: SHIMS
+          value: "qemu"
+        - name: DEFAULT_SHIM
+          value: "qemu"
+        # Do NOT let the installer create RuntimeClasses or set a cluster default
+        # runtime; we ship them explicitly in runtimeclass.yaml so the surface is
+        # reviewable and version-controlled.
+        - name: CREATE_RUNTIMECLASSES
+          value: "false"
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: "false"
+        securityContext:
+          # Installing a node-level container runtime requires host write access.
+          # This privilege is scoped to the trusted installer only — see header.
+          privileged: true
+        volumeMounts:
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+        - name: kata-artifacts
+          mountPath: /opt/kata/
+        - name: local-bin
+          mountPath: /usr/local/bin/
+      volumes:
+      - name: containerd-conf
+        hostPath:
+          path: /etc/containerd/
+      - name: kata-artifacts
+        hostPath:
+          path: /opt/kata/
+          type: DirectoryOrCreate
+      - name: local-bin
+        hostPath:
+          path: /usr/local/bin/
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
