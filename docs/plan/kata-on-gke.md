@@ -63,25 +63,38 @@ privileged DinD; GAG provides a secure path.
 ## Why not the other options?
 
 **Sysbox** — `nestybox/sysbox#920` (opened March 2025) documents that kind inside Sysbox
-breaks for K8s v1.25+ node images. No confirmed fix exists as of June 2026 (the last
-kind-specific fix was v0.5.0, March 2022). Docker acquired Nestybox in 2022 and
-development has slowed sharply. Contributing a fix would take 4–8 weeks of low-level
-systems work with uncertain upstream acceptance and indefinite fork-maintenance cost.
+breaks for K8s v1.25+ node images. The only kind-specific fix in the Sysbox changelog was
+v0.5.0 (March 2022, fixing #415). v0.6.1 (April 2023) added K8s 1.24–1.26 support in the
+`sysbox-deploy-k8s` installer but contains no changelog entry for kind with 1.25+ node
+images, and issue #920 post-dates it. Claims that a Sysbox v0.7.0 released in June 2026
+resolves this were adversarially checked and refuted (no such release found). Docker
+acquired Nestybox in May 2022 and development has slowed sharply. Contributing a fix would
+take 4–8 weeks of low-level systems work with uncertain upstream acceptance and indefinite
+fork-maintenance cost.
 
 **kindbox** — Nestybox's own Sysbox-aware kind replacement is a bash script wrapper
 explicitly documented as "a reference example, not a replacement for kind." Last commit:
-October 2021. No `kind load docker-image` equivalent. Calico CNI (which GAG's e2e uses)
-requires Sysbox-EE, which has been archived since Docker's acquisition.
+2021-10-12. No `kind load docker-image` equivalent. Calico CNI (which GAG's e2e uses)
+requires Sysbox-EE (enterprise edition), which was archived in May 2022 at
+`docker-archive/nestybox.sysbox-ee` after the Docker acquisition and has received no
+releases since.
 
-**Rootless Docker + rootless kind** — Requires cgroup v2 and four iptables kernel modules
-pre-loaded on the host node. Doable on GKE COS nodes but requires a privileged DaemonSet
-to `modprobe` the modules — the runner pod stays unprivileged but the setup requires node
+**Rootless Docker + rootless kind** — Requires cgroup v2 on the host node and four
+iptables kernel modules pre-loaded: `ip_tables`, `iptable_nat`, `ip6_tables`,
+`ip6table_nat`. Doable on GKE COS nodes but requires a privileged DaemonSet to
+`modprobe` the modules — the runner pod stays unprivileged but the setup requires node
 surgery. Lower isolation gain than Kata (shared kernel vs. micro-VM).
 
 **Kata Containers** — Runs each pod inside a lightweight VM via an OCI-compatible
 `RuntimeClass`. The pod itself requires no `privileged: true`; isolation is enforced at
 the hypervisor layer. Inside the Kata VM, Docker and kind run natively with no DinD
 tricks. This is the highest-security option available on GKE.
+
+> **Common confusion:** GKE's nested-virtualization documentation mentions
+> `securityContext.privileged: true` in some contexts. That requirement applies to pods
+> that interact *directly* with the nested hypervisor (e.g. launching their own VMs). A
+> pod that uses `runtimeClassName: kata` does not do this — the Kata shim handles VM
+> lifecycle outside the pod. The runner pod runs without any privileged context.
 
 ---
 
