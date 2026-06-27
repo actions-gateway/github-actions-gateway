@@ -11,6 +11,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [security-operations.md](security-operations.md) | SRE, Security | Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks. |
 | [admission-policies.md](admission-policies.md) | Platform engineer, Security | Kyverno/Gatekeeper compatibility matrix — whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies. |
 | [tenant-onboarding.md](tenant-onboarding.md) | Platform engineer | Step-by-step checklist for onboarding a new tenant team. |
+| [in-runner-image-builds.md](in-runner-image-builds.md) | Platform engineer, Tenant owner | Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, privileged DinD) to the right `securityProfile`/PSA level, with a decision table. |
 | [service-mesh-coexistence.md](service-mesh-coexistence.md) | Platform engineer, SRE | Running GAG alongside Istio/Linkerd/ambient — injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored. |
 | [migration-from-arc.md](migration-from-arc.md) | Platform engineer | Coming from Actions Runner Controller (ARC) scale-set mode — concept mapping, behavioral differences, and a worked one-runner-group migration. |
 | [install.md](install.md) | Platform engineer | Install the GMC with the `actions-gateway` Helm chart — prerequisites, digest pinning, healthy-install verification, uninstall. |

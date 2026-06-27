@@ -72,6 +72,13 @@ namespace a platform administrator has opted in — see
 [Privileged eligibility is a platform decision](#privileged-eligibility-is-a-platform-decision)
 below.
 
+In-runner image builds (`docker build`, the most common heavyweight runner
+workload) are where this profile choice bites hardest. The
+[In-runner image builds](../operations/in-runner-image-builds.md) operator
+guide maps each build approach — BuildKit-rootless, Kaniko, Sysbox, and
+privileged Docker-in-Docker (DinD) — to the profile it needs, so most
+builds land on `baseline` rather than `privileged`.
+
 ### Privileged eligibility is a platform decision
 
 The tenant owns the `ActionsGateway` CR, so a tenant can *self-select*
