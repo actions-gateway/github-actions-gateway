@@ -142,9 +142,11 @@ For 10 GPU runner sets, each requiring a dedicated `p4d.24xlarge` (8× A100) nod
 
 Because each tenant has a dedicated namespace with a scoped `ResourceQuota`, per-tenant costs can be attributed precisely.
 
+> **Want live dollars, not a model?** This appendix is a framework. To get **real $/tenant** from your running cluster with OpenCost or Kubecost — mapping GAG's per-tenant namespaces and `app.kubernetes.io/*` labels to allocation queries — follow the how-to in [Live per-tenant cost attribution](../operations/cost-attribution.md).
+
 ### Worker Pod Attribution
 
-Label worker pods with the tenant namespace and RunnerGroup at creation time. Query your cloud provider's node usage metrics or use Kubernetes cost attribution tooling (e.g. OpenCost, Kubecost) scoped to the tenant namespace:
+Worker pods already carry the tenant namespace and the `app.kubernetes.io/*` recommended labels (the AGC stamps them at creation time), so Kubernetes cost-attribution tooling (e.g. OpenCost, Kubecost) can attribute them per tenant with no extra wiring — see the [live cost-attribution how-to](../operations/cost-attribution.md) for the exact allocation queries. For an ad-hoc snapshot without that tooling, query your cloud provider's node usage metrics or scope `kubectl top` to the tenant namespace:
 
 ```sh
 # Approximate: sum of worker pod CPU × memory × duration in namespace

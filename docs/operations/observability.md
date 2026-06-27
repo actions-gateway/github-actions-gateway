@@ -420,6 +420,10 @@ cost attribution work without learning the project-specific keys. They are
 are untouched, so never build a controller's pod selector on the `app.kubernetes.io/*`
 labels.
 
+> For live per-tenant **cost** attribution with OpenCost/Kubecost — mapping these
+> labels and the per-tenant namespaces to allocation queries — see
+> [Live per-tenant cost attribution](cost-attribution.md).
+
 | Label | Values |
 | --- | --- |
 | `app.kubernetes.io/name` | `actions-gateway-controller` · `actions-gateway-proxy` · `actions-runner` |

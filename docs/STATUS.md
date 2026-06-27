@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-25
+Last touched: 2026-06-27
 
 ---
 
@@ -62,7 +62,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q220"></a>Q220 | [Validate service-mesh coexistence guidance on a live cluster](operations/service-mesh-coexistence.md) | `tests` `docs` | 🔲 | M | Q206 guide's in-mesh recipes (native sidecars, egress exclusions) reasoned from code+docs, untested. Stand up Istio (sidecar/native/ambient)+Linkerd on kind; run a job through a meshed GAG ns; confirm pods terminate + egress IP preserved. |
 | <a id="Q193"></a>Q193 | [End-to-end demo / screencast](index.md) | `docs` | 🔲 | S | No demo or screencast — biggest top-of-funnel friction. Record a free end-to-end kind deploy showing job→pod→GitHub. The quantified benchmark/case-study split to Q198 (it needs a paid scale run). |
 | <a id="Q211"></a>Q211 | [P2P image distribution (Spegel/Dragonfly) for pull storms](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane) | `docs` `infra` | 🔲 | S | Ephemeral per-job worker pods cause image-pull storms at scale. Document Spegel/Dragonfly P2P registry mirror as a recommended companion; note `imagePullPolicy`/digest-pin interplay. Scale-readiness. |
-| <a id="Q213"></a>Q213 | [OpenCost/Kubecost per-tenant cost attribution](design/appendix-f-cost-model.md) | `docs` `infra` | 🔲 | S | Tenant=namespace fits per-tenant cost attribution natively. Document the label conventions OpenCost/Kubecost need to split cost per tenant. Pairs with the Q192 cost story and the Q205 label audit. |
 ---
 
 ## Deferred
