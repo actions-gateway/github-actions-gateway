@@ -184,6 +184,14 @@ The chart generates a self-signed webhook serving cert and wires the `caBundle`
 itself. Review the rotation trade-off in
 [Prerequisites](#prerequisites) before choosing this path.
 
+### GitOps (Argo CD / Flux)
+
+To install the chart declaratively from Git instead of running `helm install` by
+hand, see [gitops.md](gitops.md). It gives ready-to-apply Argo CD `Application` and
+Flux `HelmRelease` examples (with the CRD-pruning gotcha handled) and shows how to
+source the GitHub App credential Secret securely — External Secrets Operator or
+Sealed Secrets — so the private key is never committed to Git.
+
 ---
 
 ## Key values an operator sets
