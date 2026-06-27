@@ -144,6 +144,7 @@ nav:
       - "P2P image distribution": operations/p2p-image-distribution.md
       - Service mesh coexistence: operations/service-mesh-coexistence.md
       - Observability: operations/observability.md
+      - "Cost attribution": operations/cost-attribution.md
       - Runbook: operations/runbook.md
       - Backup & restore: operations/backup-restore.md
       - Velero backup & restore: operations/velero-backup-restore.md
