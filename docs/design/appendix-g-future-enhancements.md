@@ -431,4 +431,51 @@ isolation model); [G.1 Proxy-Enforced Destination Allowlist](#g1-proxy-enforced-
 
 ---
 
+## G.10. Controller-Discovered apiserver-CIDR Auto-Narrowing
+
+**Current behavior.** The AGC NetworkPolicy's Kubernetes API server egress rule
+(443/6443) is **any-destination by default**. An operator whose platform exposes
+a stable apiserver CIDR can opt in to scoping it via the GMC's `--apiserver-cidrs`
+flag (Helm value `apiServerCIDRs`), which attaches an `ipBlock` peer per CIDR
+(Q145). The default is broad because the post-DNAT apiserver IP is provider- and
+topology-specific and a wrong `ipBlock` silently severs apiserver access (the PR
+#59 trap). This is the [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped)
+residual; per-cloud narrowing guidance is in
+[security-operations.md § Tightening AGC apiserver egress](../operations/security-operations.md#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist).
+
+**Gap — could the controller discover and narrow it automatically?** The GMC
+could read the `kubernetes` Service endpoints in the `default` namespace (the
+real post-DNAT apiserver IPs) and scope every tenant's AGC policy itself, making
+the tightening the default and removing the operator step. The Q183 feasibility
+review concluded this **must not be a default**, for three reasons:
+
+1. **Stale-snapshot regression.** On managed control planes (EKS/GKE/AKS) the
+   endpoint IPs rotate on scaling, upgrades, and maintenance without notice. A
+   one-time discovery tightens to a set that later stops matching and breaks the
+   AGC — a silent reachability regression, which secure-by-default forbids.
+2. **Self-lockout under a live watch.** Staying correct requires watching
+   `endpoints/kubernetes` and re-reconciling every AGC policy on each change.
+   There is always a race window where the policy lags a real rotation; during
+   it the AGC — and the GMC, which reaches the apiserver over the same path —
+   can be locked out of the very apiserver it needs to *repair* the policy. A
+   tightening that can strand the controller maintaining it is not a safe
+   default.
+3. **CNI rewrites.** Some CNIs apply further SNAT/encapsulation, so even the
+   discovered endpoint IPs are not guaranteed to be what the policy evaluator
+   matches.
+
+**What would trigger building it.** A design that closes the lockout window —
+e.g. always-union the freshly-observed endpoints with the prior set and only
+*remove* an IP after a confirmed drain, plus a fail-open watchdog that reverts to
+any-destination if the GMC loses apiserver contact — and demonstrated robustness
+across the managed-CP rotation behaviours above. Until then, narrowing stays the
+operator-confirmed, per-cluster `apiServerCIDRs` opt-in.
+
+**Related.** [05-security.md §5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped);
+[security-operations.md § Tightening AGC apiserver egress](../operations/security-operations.md#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist);
+[network-architecture.md § Policy 2](network-architecture.md#policy-2-actions-gateway-controller--agc--kubernetes-api-server);
+[`builder.go`](../../cmd/gmc/internal/controller/builder.go).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
