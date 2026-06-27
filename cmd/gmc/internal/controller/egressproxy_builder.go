@@ -294,9 +294,13 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 // EgressProxy's pool. It mirrors v1's buildProxyNetworkPolicy and preserves its
 // secure-by-default semantics exactly:
 //   - Egress: DNS always; GitHub CIDRs on 443 only when managedNetworkPolicy is
-//     true (the default) and the IP cache is populated. managedNetworkPolicy=false
-//     omits the GitHub rule so an operator can layer their own (NetworkPolicies are
-//     additive), never a silent loosening.
+//     true (the default), the egress mode is CIDR (the default), and the IP cache is
+//     populated. managedNetworkPolicy=false omits the GitHub rule so an operator can
+//     layer their own (NetworkPolicies are additive), never a silent loosening. In an
+//     FQDN egress mode (Q208) the GitHub rule is also omitted here — a CNI-native
+//     policy carries the GitHub allowlist instead — so this policy default-denies
+//     GitHub egress and the posture stays fail-closed if the CNI cannot enforce the
+//     FQDN policy.
 //   - Ingress: workload pods may reach the proxy port; default-deny otherwise.
 //
 // The pod selector keys on the per-EgressProxy identity so the policy governs only
@@ -304,7 +308,7 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
-	if managed && len(githubCIDRs) > 0 {
+	if managed && egressUsesCIDR(ep.Spec) && len(githubCIDRs) > 0 {
 		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
 		for _, cidr := range githubCIDRs {
 			c := cidr.String()

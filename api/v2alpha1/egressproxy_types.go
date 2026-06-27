@@ -5,6 +5,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
+// allowlist.
+//
+//   - CIDR (the default) emits a standard Kubernetes NetworkPolicy whose egress
+//     allowlist is the GitHub IP ranges, refreshed from api.github.com/meta every
+//     24h by the GMC's IPRangeReconciler. It works on every NetworkPolicy-enforcing
+//     CNI and requires no DNS awareness.
+//   - CiliumFQDN / CalicoFQDN instead emit a CNI-native, DNS-aware egress policy
+//     (a CiliumNetworkPolicy with toFQDNs, or a Calico NetworkPolicy with
+//     destination domains) scoped to the GitHub hostnames — no CIDR feed to keep
+//     current. These REQUIRE a CNI that enforces the corresponding DNS policy
+//     (Cilium with toFQDNs / Calico with DNS-based policy); see the operator docs.
+//
+// The FQDN modes are fail-closed: the standard NetworkPolicy still default-denies
+// GitHub egress, so if the CNI cannot enforce the native policy, GitHub egress stays
+// denied rather than opening wide. Selecting an FQDN mode therefore never silently
+// weakens the default.
+//
+// +kubebuilder:validation:Enum=CIDR;CiliumFQDN;CalicoFQDN
+type EgressPolicyMode string
+
+const (
+	// EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub
+	// IP-range allowlist, refreshed every 24h. Works on every CNI.
+	EgressPolicyModeCIDR EgressPolicyMode = "CIDR"
+	// EgressPolicyModeCiliumFQDN emits a CiliumNetworkPolicy with toFQDNs rules
+	// scoped to the GitHub hostnames. Requires Cilium with DNS-aware policy.
+	EgressPolicyModeCiliumFQDN EgressPolicyMode = "CiliumFQDN"
+	// EgressPolicyModeCalicoFQDN emits a Calico (projectcalico.org/v3) NetworkPolicy
+	// with destination-domain rules scoped to the GitHub hostnames. Requires Calico
+	// with DNS-based policy enabled.
+	EgressPolicyModeCalicoFQDN EgressPolicyMode = "CalicoFQDN"
+)
+
 // EgressProxySpec is the desired state of a standalone, optionally shared egress
 // proxy pool — v1alpha1's inline ActionsGateway.spec.proxy promoted to its own kind
 // so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
@@ -54,6 +88,17 @@ type EgressProxySpec struct {
 	// +optional
 	// +kubebuilder:default=true
 	ManagedNetworkPolicy *bool `json:"managedNetworkPolicy,omitempty"`
+
+	// EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
+	// allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
+	// reconcile, works on every CNI) or a CNI-native DNS-aware FQDN mode
+	// (CiliumFQDN / CalicoFQDN) that requires a DNS-aware policy CNI. It has no
+	// effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for
+	// the secure-by-default (fail-closed) guarantee.
+	//
+	// +optional
+	// +kubebuilder:default=CIDR
+	EgressPolicyMode EgressPolicyMode `json:"egressPolicyMode,omitempty"`
 
 	// Sharing controls cross-namespace reference to this proxy. nil means
 	// same-namespace only (the default, secure). Consent lives on the provider

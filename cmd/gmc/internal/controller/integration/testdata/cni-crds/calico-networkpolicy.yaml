@@ -1,0 +1,29 @@
+# Minimal Calico (projectcalico.org/v3) NetworkPolicy CRD stub for envtest (Q208).
+#
+# NOT the upstream Calico schema — just enough structure for the test apiserver to
+# accept the NetworkPolicy objects the GMC emits in CalicoFQDN mode so the integration
+# suite can assert emission. spec is preserve-unknown-fields, so the GMC's real
+# (un-validated here) spec round-trips. Real clusters install Calico's own CRD.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: networkpolicies.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: NetworkPolicy
+    listKind: NetworkPolicyList
+    plural: networkpolicies
+    singular: networkpolicy
+  scope: Namespaced
+  versions:
+    - name: v3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true

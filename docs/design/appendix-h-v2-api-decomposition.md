@@ -189,6 +189,17 @@ type EgressProxySpec struct {
     NoProxyCIDRs                   []string
     ManagedNetworkPolicy           *bool
 
+    // EgressPolicyMode selects how the GMC expresses the GitHub egress allowlist:
+    // CIDR (default; standard NetworkPolicy + 24h IPRangeReconcile, works on every
+    // CNI), CiliumFQDN, or CalicoFQDN (CNI-native DNS-aware policy scoped to the
+    // GitHub hostnames — requires a DNS-aware policy CNI). FQDN modes are fail-closed
+    // and additive: the standard NetworkPolicy still default-denies GitHub egress, so
+    // an unenforced FQDN policy keeps egress denied rather than opening it (Q208). No
+    // effect when ManagedNetworkPolicy is false.
+    // +kubebuilder:validation:Enum=CIDR;CiliumFQDN;CalicoFQDN
+    // +kubebuilder:default=CIDR
+    EgressPolicyMode EgressPolicyMode `json:"egressPolicyMode,omitempty"`
+
     // Sharing controls cross-namespace reference. nil ⇒ same-namespace only
     // (default, secure). Consent lives on the provider (proxy owner) side.
     Sharing *ProxySharing `json:"sharing,omitempty"`

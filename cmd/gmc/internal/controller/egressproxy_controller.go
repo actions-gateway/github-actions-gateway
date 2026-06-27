@@ -16,6 +16,12 @@ limitations under the License.
 
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=egressproxies,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=egressproxies/status,verbs=get;update;patch
+// CNI-native FQDN egress (Q208): in CiliumFQDN/CalicoFQDN mode the EgressProxy
+// reconciler creates/patches/deletes a CiliumNetworkPolicy or Calico NetworkPolicy
+// scoped to the GitHub FQDNs. These grants are no-ops on a cluster without the
+// corresponding CRD installed (the default CIDR mode emits neither object).
+// +kubebuilder:rbac:groups=cilium.io,resources=ciliumnetworkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=projectcalico.org,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // EgressProxy owns its proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
 // self-signed proxy TLS Secret via controller owner references (§H.8); the
 // deployments/services/hpa/pdb/networkpolicies/secrets write verbs are already
@@ -41,7 +47,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,6 +125,80 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	if err := r.applyNetworkPolicy(ctx, ep, buildEgressProxyNetworkPolicy(ep, githubCIDRs)); err != nil {
 		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
+	}
+	if err := r.reconcileFQDNPolicy(ctx, ep); err != nil {
+		return &provisioningError{step: "reconcile FQDN egress policy", err: err}
+	}
+	return nil
+}
+
+// reconcileFQDNPolicy emits or removes the CNI-native FQDN egress policy (Q208) to
+// match spec.egressPolicyMode. In CiliumFQDN/CalicoFQDN mode it applies the matching
+// CNI policy and removes the other one; in CIDR mode (the default) or when the GMC is
+// not managing this proxy's policy, it removes both. The opposite-mode/disabled
+// removals make a mode switch converge cleanly. Deletes tolerate a missing object and
+// a missing CRD (a CIDR-mode cluster need not have the Cilium/Calico CRDs installed),
+// so the default path never fails on their absence.
+func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
+	mode := egressModeOf(ep.Spec)
+
+	wantCilium := managed && mode == gmcv2alpha1.EgressPolicyModeCiliumFQDN
+	wantCalico := managed && mode == gmcv2alpha1.EgressPolicyModeCalicoFQDN
+
+	if wantCilium {
+		if err := r.applyCNIPolicy(ctx, ep, buildEgressProxyCiliumNetworkPolicy(ep)); err != nil {
+			return err
+		}
+	} else if err := r.deleteCNIPolicy(ctx, ep.Namespace, egressProxyFQDNPolicyName(ep), ciliumNetworkPolicyGVK); err != nil {
+		return err
+	}
+
+	if wantCalico {
+		if err := r.applyCNIPolicy(ctx, ep, buildEgressProxyCalicoNetworkPolicy(ep)); err != nil {
+			return err
+		}
+	} else if err := r.deleteCNIPolicy(ctx, ep.Namespace, egressProxyFQDNPolicyName(ep), calicoNetworkPolicyGVK); err != nil {
+		return err
+	}
+	return nil
+}
+
+// applyCNIPolicy creates or patches an unstructured CNI-native egress policy, writing
+// only the controller-managed labels + spec and stamping a controller owner reference
+// on the EgressProxy so the apiserver garbage-collects it on EgressProxy delete (§H.8).
+func (r *EgressProxyReconciler) applyCNIPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(desired.GroupVersionKind())
+	obj.SetNamespace(desired.GetNamespace())
+	obj.SetName(desired.GetName())
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.SetLabels(desired.GetLabels())
+		spec, found, err := unstructured.NestedFieldCopy(desired.Object, "spec")
+		if err != nil || !found {
+			return fmt.Errorf("desired CNI policy missing spec: %w", err)
+		}
+		if err := unstructured.SetNestedField(obj.Object, spec, "spec"); err != nil {
+			return err
+		}
+		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+	})
+	return err
+}
+
+// deleteCNIPolicy removes a CNI-native egress policy by GVK+name, tolerating both a
+// missing object (already gone) and a missing CRD (the cluster does not run that CNI),
+// so the default CIDR path is never blocked by the Cilium/Calico CRDs being absent.
+func (r *EgressProxyReconciler) deleteCNIPolicy(ctx context.Context, namespace, name string, gvk schema.GroupVersionKind) error {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(gvk)
+	obj.SetNamespace(namespace)
+	obj.SetName(name)
+	if err := r.Delete(ctx, obj); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return nil
+		}
+		return err
 	}
 	return nil
 }

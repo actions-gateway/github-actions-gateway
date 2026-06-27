@@ -226,6 +226,16 @@ The actual IP ranges are fetched at provisioning time and refreshed every 24 hou
 
 If `spec.proxy.managedNetworkPolicy: false` is set, the GMC omits the GitHub-CIDR egress rule from Policy 3 — operators using FQDN-based egress policies (Cilium, Calico) provide their own equivalent rule and the GMC stops fighting them on every IP range refresh.
 
+#### CNI-native FQDN egress mode (opt-in, Q208)
+
+On a DNS-aware policy CNI an operator can have the GMC express the proxy pool's GitHub allowlist by **hostname** instead of CIDR, removing the dependency on the 24h `api.github.com/meta` feed. A v2 `EgressProxy` selects this with `spec.egressPolicyMode`:
+
+- `CIDR` (default) — the standard NetworkPolicy + 24h IP-range reconcile described above. Works on every CNI.
+- `CiliumFQDN` — the GMC emits a `CiliumNetworkPolicy` (`cilium.io/v2`) with `toFQDNs` rules scoped to the GitHub hostnames (`api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `*.actions.githubusercontent.com`, `*.blob.core.windows.net`) on TCP/443, plus a DNS-visibility rule so Cilium's DNS proxy learns the resolved IPs.
+- `CalicoFQDN` — the GMC emits a Calico `NetworkPolicy` (`projectcalico.org/v3`) with the same hostnames as destination `domains`.
+
+In either FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but **drops the GitHub-CIDR egress rule**, and the IP-range reconcile skips the proxy. The CNI-native object is named `<proxy>-proxy-fqdn` and is owned by the `EgressProxy` for cascade GC. The posture stays **fail-closed**: because the standard NetworkPolicy still default-denies GitHub egress, a CNI that cannot enforce the FQDN policy leaves GitHub egress *denied*, never wide-open — so the opt-in cannot silently weaken the default. The modes require, respectively, Cilium with `toFQDNs` enforcement or Calico with DNS-based policy (and the corresponding CRD installed); this is an operator prerequisite documented in [security-operations.md § Expressing GitHub egress by FQDN](../operations/security-operations.md#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in). FQDN mode is scoped to the v2 `EgressProxy`; the v1 proxy and v2 direct egress stay on the CIDR path.
+
 ### DNS Resolution
 
 All in-cluster service discovery uses Kubernetes DNS (`kube-dns` / `CoreDNS`). The proxy pool is reachable from the AGC and worker pods via the `ClusterIP` Service name: `actions-gateway-proxy.<namespace>.svc.cluster.local`. The `NO_PROXY` env var includes `kubernetes.default.svc.cluster.local` and the cluster service CIDR so that Kubernetes API calls are never routed through the egress proxy.

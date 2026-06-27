@@ -133,6 +133,18 @@
   - update
   - watch
 - apiGroups:
+  - cilium.io
+  resources:
+  - ciliumnetworkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - monitoring.coreos.com
   resources:
   - servicemonitors
@@ -146,6 +158,7 @@
   - watch
 - apiGroups:
   - networking.k8s.io
+  - projectcalico.org
   resources:
   - networkpolicies
   verbs:

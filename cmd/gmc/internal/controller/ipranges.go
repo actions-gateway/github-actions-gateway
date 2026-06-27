@@ -358,6 +358,9 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
 			continue
 		}
+		if !egressUsesCIDR(ep.Spec) {
+			continue // FQDN mode (Q208): the CNI-native policy carries no CIDRs to refresh
+		}
 		if err := r.patchEgressProxyNetworkPolicy(ctx, ep, cidrs); err != nil {
 			log.Error("failed to patch EgressProxy NetworkPolicy", "namespace", ep.Namespace, "name", ep.Name, "error", err)
 		}
