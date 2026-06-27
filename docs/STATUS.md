@@ -53,10 +53,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q222"></a>Q222 | [Deflake AGC SIGTERM_DeletesAllSessions](../cmd/agc/internal/controller/integration/sigterm_test.go) | `tests` `flake` | ▶ | S | Top per [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first). PR #415 gate: DELETE-on-SIGTERM lagged past the 30s ceiling on a starved runner. Fix: ceiling 30→60s + failure dump. DELETE path robust. Escalate if recurs. |
-| <a id="Q221"></a>Q221 | [Deflake metrics-NP AllowsLabeledNamespace (calico)](../cmd/gmc/test/e2e/manager_np_test.go) | `tests` `flake` | ▶ | S | Top per [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first). PR #411: HTTP_CODE=000 on post-gate scrape. Fix: fold positive control into Q159 retry-gate pod, drop 2nd probe re-racing per-pod NP programming. Escalate if recurs. |
-| <a id="Q179"></a>Q179 | [Deflake two kindnet v1 e2e timing races](../cmd/gmc/test/e2e/isolation_test.go) | `tests` `flake` | ▶ | S | Top per [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first). PR #369 kindnet flake (calico passed): isolation probe budget 60→150 iters + wait 5m→6m; job_lifecycle worker-pod wait 4m→6m. Escalate if recurs. |
-| <a id="Q176"></a>Q176 | [Deflake E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | ▶ | S | Top of queue per [flakes-first rule](development/maintaining-backlog.md#flake-fixes-go-first). Timed out at 120s on calico, passed on rerun. Mitigated: minReplicas-floor wait 2m->5m + failure dump. Escalate if recurs. |
 | <a id="Q224"></a>Q224 | [GKE dogfood: deploy + live GAG validation](plan/gke-dogfood.md) | `milestone` `infra` | 🔲 | M | v2beta1 blocker: first live GAG install on non-kind K8s. Deploy GKE cluster (plan Parts A–E), validate job→pod→GitHub end-to-end. Workflow changes (C2+F2) follow. |
 | <a id="Q225"></a>Q225 | [Operator docs: Kata Containers for DinD workloads](operations/in-runner-image-builds.md) | `docs` | 🚫 | S | 🚫 Q224. Document runtimeClassName: kata-qemu on podTemplate, /dev/kvm machine-type requirement (N2+ on GCP), and Kata DaemonSet setup. Extend in-runner-image-builds.md or new page depending on density. |
 | <a id="Q74"></a>Q74 | [v2alpha1→v2beta1 graduation: conversion webhook](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | Beta cut, after Q191/Q196/Q197/Q224: `Hub`/`Convertible` stubs + v2beta1 served/storage version + storage migration. Distinct from the M5 fan-out tool. See [graduation](plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). |
@@ -70,6 +66,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 ## Deferred
 
 Intentionally parked items. These carry **no priority position** and are **not** picked from the top of the Queue — each waits on an explicit trigger before it returns to active work. Keeping them out of the Queue stops them from diluting the priority ordering. When an item's trigger fires, move its row back into the Queue at the position it then deserves (see [prioritize new items on entry](development/maintaining-backlog.md#prioritize-new-items-on-entry)).
+
+### Parked on external demand
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
@@ -89,3 +87,14 @@ Intentionally parked items. These carry **no priority position** and are **not**
 | <a id="Q215"></a>Q215 | [Worker cache backend (actions/cache + Docker layer cache)](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane) | `infra` | L | A concrete ARC-parity ask for build/dependency caching. Workers are storage-less today (no PVC/CSI). Add an optional PVC/object-store (S3/MinIO) cache for `actions/cache` + Docker layer cache. Needs a plan doc + security review of cross-job cache isolation. |
 | <a id="Q216"></a>Q216 | [First-class GPU runner support (GPU Operator/NFD)](design/appendix-e-capacity-planning.md) | `infra` | M | A concrete GPU runner workload/ask. priorityTiers already nominally carry GPU labels; first-class support adds nodeSelector/tolerations/RuntimeClass conventions + NVIDIA GPU Operator / Node Feature Discovery awareness (and Volcano gang-scheduling for multi-GPU jobs). |
 | <a id="Q217"></a>Q217 | [OLM / OperatorHub bundle](operations/install.md) | `infra` `docs` | M | OpenShift/OperatorHub adoption demand. Helm-only is the deliberate install stance; an OLM bundle/catalog entry waits for a concrete OperatorHub ask. Additive packaging, no core code change. |
+
+### Flake watch
+
+Flakes whose mitigation has shipped and that have **not recurred since**. They carry no priority position; the trigger to revive is the flake recurring on `main` after its fix. On recurrence, [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first) pulls the row back to the **top of the Queue** — now escalated, since the first mitigation didn't hold. Kept here (not closed) so a second occurrence is recognised as a recurrence rather than a fresh find.
+
+| ID | Item | Labels | Sz | Trigger to revive |
+|---|---|---|---|---|
+| <a id="Q222"></a>Q222 | [AGC SIGTERM_DeletesAllSessions](../cmd/agc/internal/controller/integration/sigterm_test.go) | `tests` `flake` | S | Recurs after PR #415 mitigation (DELETE-on-SIGTERM ceiling 30→60s + failure dump). DELETE path itself robust. → top of Queue, escalate. |
+| <a id="Q221"></a>Q221 | [metrics-NP AllowsLabeledNamespace (calico)](../cmd/gmc/test/e2e/manager_np_test.go) | `tests` `flake` | S | Recurs after PR #411 mitigation (fold positive control into Q159 retry-gate pod, drop 2nd probe re-racing per-pod NP programming). → top of Queue, escalate. |
+| <a id="Q179"></a>Q179 | [two kindnet v1 e2e timing races](../cmd/gmc/test/e2e/isolation_test.go) | `tests` `flake` | S | Recurs after PR #369 mitigation (isolation probe budget 60→150 iters + wait 5m→6m; job_lifecycle worker-pod wait 4m→6m). → top of Queue, escalate. |
+| <a id="Q176"></a>Q176 | [E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | S | Recurs after mitigation (minReplicas-floor wait 2m→5m + failure dump). Timed out at 120s on calico, passed on rerun. → top of Queue, escalate. |
