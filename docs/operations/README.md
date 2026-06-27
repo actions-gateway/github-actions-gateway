@@ -8,6 +8,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [backup-restore.md](backup-restore.md) | SRE, Platform engineer | Backup posture (GitOps + etcd) and a recovery runbook for restoring a deleted or corrupted `ActionsGateway` CR. |
 | [troubleshooting.md](troubleshooting.md) | SRE, Platform engineer | Symptom → diagnosis → remediation, organised by observable failure mode. |
 | [observability.md](observability.md) | SRE, Platform engineer | Prometheus metrics reference for GMC, AGC, and proxy, including standard `controller-runtime` metrics. |
+| [cost-attribution.md](cost-attribution.md) | SRE, Platform engineer, Budget owner | Live per-tenant cost attribution — map GAG's tenant namespaces and `app.kubernetes.io/*` labels to OpenCost/Kubecost allocation queries for real $/tenant. |
 | [security-operations.md](security-operations.md) | SRE, Security | Abuse-detection runbook — maps the threat model's abuse heuristics to operator alerts and compromise-response playbooks. |
 | [admission-policies.md](admission-policies.md) | Platform engineer, Security | Kyverno/Gatekeeper compatibility matrix — whether GAG pods comply with common cluster admission policies, plus sample enforce/exception policies. |
 | [tenant-onboarding.md](tenant-onboarding.md) | Platform engineer | Step-by-step checklist for onboarding a new tenant team. |
