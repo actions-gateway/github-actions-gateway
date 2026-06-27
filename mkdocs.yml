@@ -138,6 +138,7 @@ nav:
       - "Migrate v1 → v2": operations/migration-v1-to-v2.md
       - "v1alpha1 deprecation": operations/v1alpha1-deprecation.md
       - Tenant onboarding: operations/tenant-onboarding.md
+      - In-runner image builds: operations/in-runner-image-builds.md
       - Service mesh coexistence: operations/service-mesh-coexistence.md
       - Observability: operations/observability.md
       - Runbook: operations/runbook.md
