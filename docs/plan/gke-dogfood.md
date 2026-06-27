@@ -10,7 +10,7 @@ adds ≈$0.04/hr per spot worker node while jobs are running.
 |---|---|---|
 | `unit-test.yml` | `lint`, `shellcheck`, `vendor-check`, `tidy-check`, `unit-test`, `coverage` | `changes` |
 | `integration-test.yml` | `integration-test` | `changes` |
-| `e2e-test.yml` | *(nothing — requires Docker)* | all |
+| `e2e-reusable.yml` | `e2e` (kindnet + Calico, via Kata + DinD sidecar) | `changes` in callers |
 
 The `changes` (paths-filter) jobs are intentionally kept on `ubuntu-latest`.
 They are the gatekeepers for every downstream job: if they queue behind a
@@ -360,32 +360,108 @@ gcloud projects delete "$PROJECT"
 
 ---
 
-## Part F — E2e on GKE (not currently feasible)
+## Part F — E2e on GKE (Kata Containers)
 
-The e2e suite uses `kind create cluster` to provision an ephemeral Kubernetes
-cluster inside the runner. Running kind inside a GAG worker pod on GKE requires
-a Docker daemon in the pod (Docker-in-Docker), and that turns out to have a
-hard blocker.
+The e2e suite runs `kind create cluster` inside the runner pod, which requires
+a Docker daemon (Docker-in-Docker). The clean solution is
+[Kata Containers](https://katacontainers.io/): each pod gets its own
+lightweight microVM with a real Linux kernel (backed by KVM). Inside the
+microVM, Docker runs normally — no user-namespace tricks, no kernel feature
+gaps — so kind works exactly as it does on a GitHub-hosted runner.
 
-**The problem:** [nestybox/sysbox#920](https://github.com/nestybox/sysbox/issues/920)
-(opened March 2025, unresolved) — "Running KinD inside a Sysbox container no
-longer works after K8s v1.25.0." The e2e suite creates kind clusters with K8s
-1.35, so Sysbox's unprivileged DinD path is blocked.
+The security profile stays **`baseline`**: the pod itself does not need
+`privileged: true` because the Kata microVM is the isolation boundary. If
+anything escapes from within kind, it hits the microVM's kernel, not the GKE
+node.
 
-**The fallback:** privileged DinD (`securityProfile: privileged`, `privileged:
-true` on the DinD sidecar). This works mechanically, but requires the platform
-`actions-gateway.github.com/privileged-profile: allowed` namespace label — a
-deliberate security downgrade documented in
-[docs/operations/in-runner-image-builds.md](../operations/in-runner-image-builds.md)
-as a last-resort path. For a personal dogfood cluster where you are both
-platform admin and tenant, this is viable but explicitly opts out of the
-container-isolation guarantees the rest of the design provides.
+**What GKE provides:** Standard clusters support nested VMs via
+`--enable-nested-virtualization` on a node pool, which exposes `/dev/kvm` on
+the node. Kata uses `/dev/kvm` to spin up microVMs.
+[Official GKE docs.](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nested-virtualization)
 
-**The recommended position:** keep e2e on GitHub-hosted runners. The suite
-runs in ~9–10 min on free runners; there is no speed or cost problem to solve.
-If Sysbox resolves the kind v1.25+ incompatibility in a future release,
-revisiting this is straightforward — the workflow change is a single `runs-on`
-line in `e2e-reusable.yml`.
+**Machine type note:** nested virtualization on GCP requires N1, N2, or C2
+instance families. E2 (used in Parts A–B) does **not** support it. The e2e
+pool uses `n2-standard-4`.
+
+### F1. Run the one-time setup script
+
+```bash
+export CLUSTER ZONE REPO APP_ID INSTALLATION_ID   # from the Variables section
+scripts/dogfood-e2e-setup.sh
+```
+
+This script:
+1. Creates the `e2e` node pool (n2-standard-4 spot, nested virt, autoscaling 0→2, taint `dedicated=e2e:NoSchedule`)
+2. Installs the Kata DaemonSet, scoped to e2e pool nodes only (the system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install)
+3. Creates the `kata-qemu` RuntimeClass with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
+4. Creates the `gag-dogfood-e2e` namespace (baseline PSA), GitHub App Secret, ResourceQuota, and `ActionsGateway` CR with a `docker:dind` sidecar and `runtimeClassName: kata-qemu`
+
+The DinD sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only). The `runner` container sets `DOCKER_HOST=tcp://localhost:2375`. Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
+
+### F2. Workflow change
+
+In **`.github/workflows/e2e-reusable.yml`**, change line 28:
+
+```yaml
+# Before
+runs-on: ubuntu-latest
+
+# After
+runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
+```
+
+Both `e2e-test.yml` (kindnet) and `e2e-calico.yml` (Calico) call this
+reusable workflow, so one line change covers both CNI variants.
+
+Set the default variable (e2e off, cluster not yet deployed):
+
+```bash
+gh variable set GAG_E2E_RUNNER --body '"ubuntu-latest"' --repo "$REPO"
+```
+
+Commit and push the workflow change. CI is unaffected until you flip the
+variable.
+
+### F3. E2e operations
+
+```bash
+# Enable (requires system pool to be up via dogfood-start.sh first)
+scripts/dogfood-e2e-start.sh
+
+# Disable (e2e pool autoscales to 0 once in-flight jobs finish, ~10 min)
+scripts/dogfood-e2e-stop.sh
+```
+
+The e2e pool toggles independently from the CI pool — you can run only one
+or both at the same time.
+
+---
+
+## Alternatives considered for e2e DinD
+
+| Approach | Works? | Security | Notes |
+|---|---|---|---|
+| **Kata Containers** (this plan) | ✅ | Strong — KVM microVM boundary | Requires N2 node + nested virt; Kata DaemonSet install |
+| **Sysbox** | ❌ | Medium — user-namespace | [sysbox#920](https://github.com/nestybox/sysbox/issues/920): kind broke for K8s v1.25+; our e2e uses K8s 1.35 |
+| **gVisor** | ❌ | High (for workloads) | Intentionally does not support nested container runtimes |
+| **Privileged DinD** | ✅ | None — host kernel exposure | Requires `securityProfile: privileged` + platform namespace label; last resort |
+| **Keep e2e on GitHub-hosted** | ✅ | N/A | e2e runs in ~9 min for free; no speed/cost problem |
+
+---
+
+## Operations quick-reference
+
+| Action | Script |
+|---|---|
+| Start cluster + route CI to GAG | `scripts/dogfood-start.sh` |
+| Stop cluster + route CI to GitHub-hosted | `scripts/dogfood-stop.sh` |
+| Enable e2e on GAG | `scripts/dogfood-e2e-start.sh` |
+| Disable e2e on GAG | `scripts/dogfood-e2e-stop.sh` |
+| One-time e2e pool + Kata setup | `scripts/dogfood-e2e-setup.sh` |
+
+All scripts read `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`, `INSTALLATION_ID`
+for setup) from the environment. Export the Variables block once per shell
+session.
 
 ---
 
@@ -395,7 +471,11 @@ line in `e2e-reusable.yml`.
 |---|---|---|
 | Cluster at rest (0 nodes) | $0.00 | $0.00 |
 | System node only, no jobs | $0.067 | $0.27 |
-| System + 1 spot CI worker | ~$0.11 | — |
+| System + 1 spot CI worker (e2-standard-4) | ~$0.11 | — |
 | System + 4 spot CI workers (peak) | ~$0.23 | — |
+| System + 2 spot e2e nodes (n2-standard-4, peak) | ~$0.18 | — |
 
 A typical dogfood session (scale up, run a few PRs, scale down): under $0.50.
+
+**E2e cost per PR** (kindnet + Calico in parallel, ~10 min each):
+2 nodes × $0.058/hr × 10 min ≈ **$0.019**.
