@@ -360,13 +360,262 @@ gcloud projects delete "$PROJECT"
 
 ---
 
+## Part F — E2e on GKE (Sysbox)
+
+The e2e suite requires a Docker daemon inside the runner pod (for
+`docker buildx bake` and `kind create cluster`). The recommended path is
+[Sysbox](https://github.com/nestybox/sysbox) — an unprivileged container
+runtime that lets a pod run a full inner Docker daemon without
+`privileged: true`, staying within the `baseline` security profile. This is
+the same recommendation documented in
+[docs/operations/in-runner-image-builds.md](../operations/in-runner-image-builds.md).
+
+**Approach:** a Docker-in-Docker (DinD) sidecar runs `dockerd` inside the
+Sysbox pod. The runner container talks to it via `DOCKER_HOST=tcp://localhost:2375`.
+`kind` creates its cluster containers inside the DinD container; since all
+containers in a pod share a network namespace, the runner's `kubectl` can reach
+the kind API server at `localhost:<port>`.
+
+**What runs where:**
+
+| Workflow | Job | Before | After |
+|---|---|---|---|
+| `e2e-reusable.yml` | `e2e` | `ubuntu-latest` | `GAG_E2E_RUNNER` variable |
+
+Both `e2e-test.yml` (kindnet) and `e2e-calico.yml` (Calico) call the reusable
+workflow, so one `runs-on` change covers both CNI variants.
+
+### F1. Add Ubuntu e2e node pool
+
+Sysbox requires Ubuntu nodes — GKE's default COS image does not support it.
+
+```bash
+gcloud container node-pools create e2e \
+  --cluster="$CLUSTER" \
+  --zone="$ZONE" \
+  --machine-type=e2-standard-4 \
+  --image-type=UBUNTU_CONTAINERD \
+  --spot \
+  --num-nodes=0 \
+  --min-nodes=0 \
+  --max-nodes=2 \
+  --enable-autoscaling \
+  --node-taints=dedicated=e2e:NoSchedule \
+  --disk-size=100GB
+```
+
+e2-standard-4 (4 vCPU / 16 GiB) gives the runner container room for the
+DinD daemon, the kind cluster nodes, and the GAG stack running inside kind.
+max-nodes=2 matches the e2e matrix (kindnet + Calico run in parallel).
+
+### F2. Install Sysbox on e2e nodes
+
+Follow the official Sysbox Kubernetes install guide:
+https://github.com/nestybox/sysbox/blob/master/docs/user-guide/install-k8s.md
+
+Sysbox ships a DaemonSet that installs the runtime on matching nodes. Scope
+it to the e2e pool by adding a nodeSelector for
+`cloud.google.com/gke-nodepool: e2e` to the DaemonSet's pod spec before
+applying — this prevents Sysbox from trying to install on the COS-based
+system or workers pools.
+
+```bash
+# Download the DaemonSet manifest (version from the Sysbox release page)
+# Edit it to add:
+#   spec.template.spec.nodeSelector:
+#     cloud.google.com/gke-nodepool: e2e
+# Then apply:
+kubectl apply -f sysbox-deploy.yaml
+
+# Wait for the DaemonSet to be ready on e2e nodes
+# (No e2e nodes exist yet at 0 replicas; the DS will apply when nodes scale up)
+kubectl rollout status daemonset/sysbox-deploy -n kube-system --timeout=5m || true
+```
+
+### F3. Create RuntimeClass
+
+The Sysbox installer may create the RuntimeClass automatically. Verify or
+create it manually:
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: sysbox-runc
+handler: sysbox-runc
+scheduling:
+  nodeClassification:
+    tolerations:
+      - key: dedicated
+        value: e2e
+        effect: NoSchedule
+EOF
+```
+
+The `scheduling.nodeClassification.tolerations` field causes Kubernetes to
+automatically add the e2e pool toleration to any pod that uses this
+RuntimeClass — worker pods only need `runtimeClassName: sysbox-runc` in their
+spec, without manually repeating the toleration.
+
+### F4. Create e2e tenant namespace + secret
+
+```bash
+kubectl create namespace gag-dogfood-e2e
+
+kubectl label namespace gag-dogfood-e2e \
+  actions-gateway.github.com/tenant=true \
+  pod-security.kubernetes.io/enforce=baseline
+
+# The secret must be in the same namespace as the ActionsGateway CR
+security find-generic-password \
+  -a actions-gateway-test -s github-app-private-key -w \
+  | xxd -r -p > tmp/app.pem
+
+kubectl create secret generic github-app-v1 \
+  --namespace=gag-dogfood-e2e \
+  --from-literal=appId="$APP_ID" \
+  --from-literal=installationId="$INSTALLATION_ID" \
+  --from-file=privateKey=tmp/app.pem
+
+rm tmp/app.pem
+
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dogfood-e2e-quota
+  namespace: gag-dogfood-e2e
+spec:
+  hard:
+    pods: "6"
+EOF
+```
+
+### F5. Create e2e ActionsGateway CR
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: dogfood-e2e-gateway
+  namespace: gag-dogfood-e2e
+spec:
+  gitHubAppRef:
+    name: github-app-v1
+  gitHubURL: https://github.com/karlkfi/github-actions-gateway
+  securityProfile: baseline
+  proxy:
+    minReplicas: 1
+    maxReplicas: 2
+  runnerGroups:
+    - name: e2e
+      runnerLabels: ["self-hosted", "linux", "gag-ci-e2e"]
+      maxListeners: 4
+      maxWorkers: 2
+      podTemplate:
+        spec:
+          runtimeClassName: sysbox-runc
+          nodeSelector:
+            cloud.google.com/gke-nodepool: e2e
+          containers:
+            - name: runner
+              env:
+                - name: DOCKER_HOST
+                  value: tcp://localhost:2375
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: "8Gi"
+                limits:
+                  cpu: "4"
+                  memory: "14Gi"
+            - name: dind
+              image: docker:dind
+              args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+              securityContext:
+                runAsNonRoot: false   # override gap-fill; dockerd requires root
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"
+EOF
+```
+
+The `dind` sidecar starts `dockerd` on port 2375 without TLS. Since all
+containers in a pod share a network namespace, the `runner` container's
+`DOCKER_HOST=tcp://localhost:2375` reaches it directly without leaving the
+pod. `kind create cluster` uses the same socket, and the kind API server is
+accessible at `localhost:<apiserver-port>` from the runner.
+
+### F6. Workflow change
+
+In **`.github/workflows/e2e-reusable.yml`**, change line 28:
+
+```yaml
+# Before
+runs-on: ubuntu-latest
+
+# After
+runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
+```
+
+This one change routes both the kindnet (via `e2e-test.yml`) and Calico
+(via `e2e-calico.yml`) variants because both call this reusable workflow.
+
+Set the default variable (cluster off):
+
+```bash
+gh variable set GAG_E2E_RUNNER \
+  --body '"ubuntu-latest"' \
+  --repo "$REPO"
+```
+
+### F7. E2e operations
+
+Start (alongside or after starting the system pool from Part D):
+
+```bash
+# Scale e2e pool (nodes provision as jobs arrive via autoscaler)
+# No manual resize needed — autoscaler handles 0→N as jobs queue
+
+# Route e2e jobs to GAG
+gh variable set GAG_E2E_RUNNER \
+  --body '["self-hosted","linux","gag-ci-e2e"]' \
+  --repo "$REPO"
+```
+
+Stop:
+
+```bash
+gh variable set GAG_E2E_RUNNER \
+  --body '"ubuntu-latest"' \
+  --repo "$REPO"
+
+# e2e pool scales to 0 automatically when no jobs are queued (~10 min)
+```
+
+The e2e pool can be toggled independently from the CI pool (Parts D/E) — you
+can run e2e on GKE while keeping unit/integration on GitHub-hosted, or vice
+versa.
+
+---
+
 ## Cost reference
 
 | Scenario | $/hr | $/day (4 hr active) |
 |---|---|---|
 | Cluster at rest (0 nodes) | $0.00 | $0.00 |
 | System node only, no jobs | $0.067 | $0.27 |
-| System + 1 spot worker | ~$0.11 | — |
-| System + 4 spot workers (peak) | ~$0.23 | — |
+| System + 1 spot CI worker | ~$0.11 | — |
+| System + 4 spot CI workers (peak) | ~$0.23 | — |
+| System + 2 spot e2e workers (matrix) | ~$0.15 | — |
 
 A typical dogfood session (scale up, run a few PRs, scale down): under $0.50.
+
+**E2e cost per PR** (both kindnet + Calico in parallel, ~10 min each):
+2 nodes × $0.040/hr × 10 min ≈ **$0.013**.
