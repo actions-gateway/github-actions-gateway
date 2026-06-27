@@ -134,6 +134,7 @@ nav:
       - Overview: operations/README.md
       - Install: operations/install.md
       - "Air-gapped install": operations/air-gapped-install.md
+      - "GitOps install (Argo CD / Flux)": operations/gitops.md
       - Upgrade: operations/upgrade.md
       - "Migrate from ARC": operations/migration-from-arc.md
       - "Migrate v1 → v2": operations/migration-v1-to-v2.md
