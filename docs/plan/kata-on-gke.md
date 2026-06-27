@@ -122,6 +122,15 @@ Key properties:
 - kind node containers: standard `kindest/node` images, no Sysbox patches needed
 - Node-level: nested virtualization enabled in the GKE node pool config
 
+**Why kind-in-runner rather than a shared test cluster.** An alternative would run the
+e2e suite against a pre-provisioned GKE cluster rather than spinning up kind inside each
+runner pod. This eliminates the Docker-in-runner requirement but breaks parallel PR
+testing: CRDs, webhooks, and ClusterRoles are cluster-scoped, so concurrent runs collide
+unless each gets a fully isolated API server (e.g. via vcluster). kind-in-runner avoids
+this entirely — each CI run gets its own cluster, and any number of PRs can run
+simultaneously without coordination. For a project developed with multiple concurrent
+sessions this parallelism property is load-bearing.
+
 ---
 
 ## Spike acceptance criteria
@@ -147,19 +156,31 @@ node pool (with the security rationale documented so the trade-off is explicit).
 
 ## Reference architecture deliverable
 
-If the spike passes, the reference architecture (`docs/operations/kata-ci.md`) covers:
+The spike validates the approach on GKE, but the reference architecture
+(`docs/operations/kata-ci.md`) is provider-agnostic. It covers three tiers:
 
-- GKE node pool configuration: machine type requirements (n2/n2d/c2/c2d — nested virt
-  requires specific families), nested virtualization flag, node OS
-- Kata Containers installation method (DaemonSet-based installer vs. node image with
-  Kata pre-installed)
-- RuntimeClass definition and how to target it from a runner pod
-- GKE Standard vs. Autopilot trade-offs (Autopilot blocks nested virt)
-- `ActionsGateway` CR configuration to schedule e2e CI runners on the Kata node pool
-- Pod security context (the full unprivileged spec that works with Kata)
-- Observed startup overhead and how to account for it in CI timeouts
-- Fallback guidance: when Kata is not available and privileged DinD is the pragmatic
-  choice, what compensating controls reduce the blast radius
+**Tier 1 — cloud-hosted (GKE, AKS, EKS).** Nested-virtualization node pool + Kata
+RuntimeClass. Variant-specific guidance per provider: machine family requirements
+(n2/n2d/c2/c2d on GKE), Standard vs. Autopilot trade-offs (Autopilot blocks nested
+virt), Kata DaemonSet installer vs. managed add-on. Best fit for teams already
+cloud-native.
+
+**Tier 2 — bare metal and on-prem.** Kata on real hardware requires no nested
+virtualization — QEMU or Cloud Hypervisor runs directly. No machine-family constraints,
+lower overhead, and the correct path for GPU workloads: PCIe passthrough of NVIDIA or AMD
+GPUs into the Kata micro-VM works from bare metal. GKE's GPU machine families (a2, a3,
+g2) do not support nested virtualization, so GPU + Kata on cloud requires bare-metal or
+dedicated instances. This tier is the reference architecture for teams running GPU CI on
+owned hardware or cost-sensitive on-prem environments.
+
+**Tier 3 — pragmatic fallback (any provider).** Privileged DinD on a dedicated,
+locked-down node pool. Documents compensating controls explicitly: workload-identity
+scope-down, metadata-server block, network policy, node taint isolation. For teams where
+Kata is not feasible but full privilege is also unacceptable.
+
+Each tier covers: pod security context, RuntimeClass or equivalent, node requirements,
+`ActionsGateway` CR configuration to target the right pool, observed startup overhead,
+and CI timeout guidance.
 
 ---
 
