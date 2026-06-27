@@ -103,7 +103,8 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 |---|---|---|
 | `namePrefix` | `gmc` | Prefix for all GMC resource names; also the SA identity the PSA-guard policy matches. Keep as `gmc` unless running two GMCs. |
 | `replicaCount` | `2` | GMC controller-manager replicas (HA). |
-| `gmc.image.repository` | `ghcr.io/actions-gateway/gmc` | GMC image repo. |
+| `imagePullSecrets` | `[]` | Image-pull Secret references (`[{name: …}]`) for the GMC pod, to pull from a private/mirrored registry. The AGC/proxy/worker images are pulled by runtime-provisioned pods — attach their pull Secret to the tenant ServiceAccount instead (see [air-gapped-install.md](../../docs/operations/air-gapped-install.md)). |
+| `gmc.image.repository` | `ghcr.io/actions-gateway/gmc` | GMC image repo. Override (with `agc`/`proxy`) to relocate to a private mirror; keep the digest. |
 | `gmc.image.tag` | `""` | GMC tag (used only when digest is empty **and** `allowFloatingImageTags=true`). |
 | `gmc.image.digest` | `""` | GMC image digest (`sha256:…`). **Required** — rendering fails when empty unless `allowFloatingImageTags=true`. |
 | `gmc.imagePullPolicy` | `IfNotPresent` | GMC image pull policy. |

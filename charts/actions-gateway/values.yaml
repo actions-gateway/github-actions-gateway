@@ -21,7 +21,24 @@ namePrefix: gmc
 # manager's node drains. Paired with the PodDisruptionBudget below.
 replicaCount: 2
 
+# imagePullSecrets are attached to the GMC controller-manager pod so it can pull
+# the GMC image from a private/mirrored registry that requires authentication —
+# the air-gapped / egress-restricted path (see
+# docs/operations/air-gapped-install.md). Each entry references a
+# `kubernetes.io/dockerconfigjson` Secret that already exists in the install
+# namespace; create it from a file (never commit registry creds to this
+# values.yaml). Empty (default) pulls anonymously, as from public GHCR.
+# The AGC, proxy, and worker images are pulled by pods the GMC/AGC provision at
+# runtime, NOT by this chart — attach their pull Secret to the relevant tenant
+# ServiceAccount instead (see the air-gapped guide).
+# e.g. imagePullSecrets: [{name: private-registry}]
+imagePullSecrets: []
+
 # -- GMC controller-manager image (the operator this chart runs). --
+# To relocate to a private mirror, override `repository` per image (here and for
+# agc/proxy below) and keep the matching `digest` — relocation is
+# content-addressed, so the digest is unchanged. See
+# docs/operations/air-gapped-install.md.
 gmc:
   image:
     repository: ghcr.io/actions-gateway/gmc

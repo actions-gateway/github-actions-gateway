@@ -18,6 +18,14 @@ spec:
         {{- include "actions-gateway.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "actions-gateway.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      # Authenticate the GMC image pull against a private/mirrored registry
+      # (air-gapped install). The AGC/proxy/worker images are pulled by
+      # runtime-provisioned pods — wire their pull Secret on the tenant
+      # ServiceAccount, see docs/operations/air-gapped-install.md.
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         seccompProfile:

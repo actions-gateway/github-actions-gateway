@@ -14,6 +14,7 @@ Operator-facing references. Audience: on-call SRE and platform engineers running
 | [service-mesh-coexistence.md](service-mesh-coexistence.md) | Platform engineer, SRE | Running GAG alongside Istio/Linkerd/ambient — injection opt-out, sidecar lifecycle, and egress exclusions so the per-tenant proxy is honored. |
 | [migration-from-arc.md](migration-from-arc.md) | Platform engineer | Coming from Actions Runner Controller (ARC) scale-set mode — concept mapping, behavioral differences, and a worked one-runner-group migration. |
 | [install.md](install.md) | Platform engineer | Install the GMC with the `actions-gateway` Helm chart — prerequisites, digest pinning, healthy-install verification, uninstall. |
+| [air-gapped-install.md](air-gapped-install.md) | Platform engineer | Install on an air-gapped / egress-restricted cluster — relocate the images and OCI chart to a private registry (digests preserved), set per-image registry overrides + image-pull Secrets, wire pull Secrets for the runtime AGC/proxy/worker pods. |
 | [upgrade.md](upgrade.md) | Platform engineer | Upgrade and rollback procedures. Strategy intent lives in [§2.6 of the architecture doc](../design/02-architecture.md#26-upgrade-strategy). |
 | [release.md](release.md) | Maintainer | How to cut a release: tag → publish (build, push, keyless-sign, SBOM-attest) → verify → record digests → bump the chart. |
 | [../design/08-glossary.md](../design/08-glossary.md) | All | Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers). |

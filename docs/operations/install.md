@@ -161,6 +161,13 @@ helm install gag charts/actions-gateway \
 
 Do **not** set `allowFloatingImageTags=true` in production.
 
+### Air-gapped / private registry
+
+On a cluster that cannot pull from GHCR, relocate the images and chart to a
+private registry, point the chart at it, and authenticate the pulls — see
+[air-gapped-install.md](air-gapped-install.md). Digest pinning is preserved
+throughout (relocation is content-addressed).
+
 ### Without cert-manager
 
 ```sh
