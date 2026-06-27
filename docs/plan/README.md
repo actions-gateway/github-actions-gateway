@@ -71,6 +71,7 @@ Plans whose work has fully landed and which `docs/STATUS.md` no longer reference
 
 | Plan | Scope | Closed |
 |---|---|---|
+| [archive/q187-air-gapped-install.md](archive/q187-air-gapped-install.md) | Air-gapped / private-registry install: chart image-pull-secret support + per-image registry overrides (digests preserved) + air-gapped install guide | 2026-06-26 — Q187: `imagePullSecrets` on the GMC pod; runtime AGC/proxy/worker covered by the SA-attach pattern; `docs/operations/air-gapped-install.md` |
 | [archive/q205-label-metric-naming-audit.md](archive/q205-label-metric-naming-audit.md) | `app.kubernetes.io/*` recommended labels on all created objects + metric/span semconv alignment before the v2beta1 freeze | 2026-06-26 — Q205: shared `api/apilabels` helper, `renewjob_errors_total`→`renew_job_errors_total`, span attrs → `k8s.*`/`gateway.*`; envtest-asserted |
 | [archive/milestone-2-tests.md](archive/milestone-2-tests.md) | M2 unit + envtest gaps (11 items) | 2026-05-29 — banner: "All 9 gaps shipped" |
 | [archive/milestone-4-tests.md](archive/milestone-4-tests.md) | M4 builder + IPRange + webhook test gaps (8 items) | 2026-05-30 — `TestBuildNoProxy`, `TestBuildNetworkPolicy`, `TestHTTPFetcher*`, `TestBuildProxyServiceAddr`, `TestServer_ListenAndServe`, `TestIPRangeReconciler_Start` all present; `ValidateDelete` covered inline in webhook test |
