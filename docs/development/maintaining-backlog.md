@@ -20,6 +20,20 @@ Exceptions:
 - A flake whose root cause is genuinely an outside-the-repo service (GitHub API outage, registry hiccup) and that has not recurred in many runs — file but don't bump.
 - A flake whose fix is blocked on infrastructure not yet built (e.g. requires a CNI that the cluster doesn't have) — file, mark 🚫, and don't bump.
 
+### Once the mitigation ships: move it to Flake watch
+
+The flakes-first bump is for an *observed, unfixed* flake — something to pick up next. Once a mitigation has landed, the row is no longer actionable: there is nothing to do until CI proves the fix didn't hold. Leaving it at the top of the Queue makes "pick from the top" lie — the next session reads non-actionable watch rows as priority work.
+
+So when a flake's fix ships and it has not recurred since, move the row out of the Queue into the **[Flake watch](../STATUS.md#flake-watch)** subsection of [Deferred](#deferred-items-live-below-the-queue-not-in-it). Its state — *resolved unless CI proves otherwise* — is the Deferred contract: parked, no priority position, revive on an explicit trigger. The trigger is the flake recurring on `main` after the mitigation.
+
+Don't *close* it. Keeping the row preserves the memory that a fix was already attempted, so a second occurrence is recognised as a recurrence (the mitigation didn't hold → escalate) rather than mis-filed as a fresh flake.
+
+On recurrence, flakes-first applies as normal: pull the row back to the **top of the Queue**, now escalated. The lifecycle:
+
+- **Observed, unfixed** → Queue top (flakes-first); pick next.
+- **Mitigation shipped, not recurred** → Deferred § Flake watch; trigger = recurs on `main`.
+- **Recurs** → back to Queue top, escalated (the first fix was insufficient).
+
 ## Prioritize new items on entry
 
 When you identify a new item, decide its priority **before** adding it — place it at the Queue position it deserves, not at the bottom by default. The Queue is read top-to-bottom ("Pick from the top"), so position *is* the priority signal. A row appended to the bottom is a row you've silently declared the lowest priority in the project; make that an explicit judgement, not a fallback you reach for to avoid deciding.
@@ -35,7 +49,7 @@ If you genuinely can't tell where it belongs, slot it next to the nearest compar
 
 ## Deferred items live below the Queue, not in it
 
-The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit external trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon."
+The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon." (The trigger need not be *external*: "a maintainer decides X" is a valid park when we've chosen not to act until then — see the trigger-source tag below.)
 
 Such items move to the **Deferred** section below the Queue in `docs/STATUS.md`. A row belongs in Deferred when **all** of these hold:
 
@@ -47,7 +61,9 @@ Mechanics:
 
 - The Deferred table keeps each row's stable `Q`-prefixed ID and inline anchor, so cross-references (`[Q19](#Q19)`) keep resolving. IDs are not reused when an item moves sections.
 - Its columns drop `St` (every row is implicitly 💤) and replace `Notes` with **`Trigger to revive`** — one phrase naming the condition that returns it to the Queue.
+- **Prefix each `Trigger to revive` with a source tag:** `**Demand:**` (an outside operator/user must ask) · `**Event:**` (an observable outside-our-control condition — an upstream fix, a measured threshold) · `**Decision:**` (our own call; we're the blocker). The tag makes "what could we move on unilaterally?" a `grep '**Decision:**'` away, and stops a `Decision`-gated row from masquerading as if it waits on the world.
 - **When a trigger fires, move the row back into the Queue at the position it then deserves** (see [Prioritize new items on entry](#prioritize-new-items-on-entry)) — don't just flip a status in place.
+- **Section vs. tag — distinct lifecycle vs. attribute.** Give a parked group its own `###` subsection only when it has a different *revive mechanic* (e.g. [Flake watch](#once-the-mitigation-ships-move-it-to-flake-watch) auto-yanks back to the Queue *top* via flakes-first). A mere difference in trigger *source* is an attribute of one shared lifecycle — encode it as the tag above, not a subsection. Sections cost a row-move on recategorisation and force borderline items into a placement fight; tags are a one-cell edit.
 - This is the home for the three statuses that aren't actionable-now: a genuinely-parked item enters Deferred directly rather than being added to the Queue and immediately marked 💤. (A 🚫 *blocked-by-another-Queue-item* row stays in the Queue, below its blocker — see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers) — because it revives automatically the moment the blocker lands.)
 
 ## Format rules that exist to reduce churn
