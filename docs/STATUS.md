@@ -61,6 +61,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q219"></a>Q219 | [M5 live `helm install` → working-tenant validation](plan/milestone-5.md) | `milestone` `infra` `tests` | 🔲 | M | M5 track A: chart is verified offline only (helm template/kubeconform/polaris). Run a live `helm install` on kind with real App creds → working tenant (job→pod→GitHub), the last M5 verification gap. Pairs with Q15 (same cluster run). |
 | <a id="Q220"></a>Q220 | [Validate service-mesh coexistence guidance on a live cluster](operations/service-mesh-coexistence.md) | `tests` `docs` | 🔲 | M | Q206 guide's in-mesh recipes (native sidecars, egress exclusions) reasoned from code+docs, untested. Stand up Istio (sidecar/native/ambient)+Linkerd on kind; run a job through a meshed GAG ns; confirm pods terminate + egress IP preserved. |
 | <a id="Q193"></a>Q193 | [End-to-end demo / screencast](index.md) | `docs` | 🔲 | S | No demo or screencast — biggest top-of-funnel friction. Record a free end-to-end kind deploy showing job→pod→GitHub. The quantified benchmark/case-study split to Q198 (it needs a paid scale run). |
+| <a id="Q223"></a>Q223 | [Worker scale-up rate limit (anti-stampede)](design/appendix-g-future-enhancements.md#g11-worker-scale-up-rate-limiting-anti-stampede) | `infra` | 🔲 | M | Opt-in/default-off per-RunnerGroup ramp on worker-pod creation rate; complements the quota ceiling. For onset stampedes on shared egress (NAT/firewall/VPN, multi-site) — not image pulls (P2P/Q211). Distinct from proxy rate-limit (G.2/Q19). |
 ---
 
 ## Deferred
