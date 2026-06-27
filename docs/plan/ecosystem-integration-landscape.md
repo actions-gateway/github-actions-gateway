@@ -166,7 +166,7 @@ GAG facts that drive the mapping (from `docs/design/`):
 |96|Harbor|★★★★|🟠|Private registry; document pulling worker images from Harbor + signature/digest flow.|
 |97|Kaniko|★★★|🟠|Rootless in-cluster image build inside runners — pairs with `restricted` PSA. Document.|
 |98|BuildKit / buildkitd|★★★★|🟠|`docker buildx` in runners; rootless mode + isolation guidance is a real ask.|
-|99|Spegel / Dragonfly|★★★|🟠|P2P registry mirror — **big win for ephemeral worker image-pull storms** at scale; evaluate as a recommended companion.|
+|99|Spegel / Dragonfly|★★★|🟠|P2P registry mirror — **big win for ephemeral worker image-pull storms** at scale. ✅ **Done (Q211):** recommended-companion guide at [operations/p2p-image-distribution.md](../operations/p2p-image-distribution.md).|
 |100|Velero|★★★★|🟡|Backup/DR of GAG CRs and tenant namespaces; document what's safe to restore (Secrets/CA rotation caveats).|
 
 **Honorable mentions (just outside 100, still worth tracking):** NVIDIA GPU Operator + Node Feature Discovery (GPU runner tiers), MinIO / Rook-Ceph / Longhorn / OpenEBS (cache PVCs if GAG ever adds caching), OpenCost/Kubecost (per-tenant cost attribution — natural fit for GAG's tenant model), Knative/Dapr/Crossplane (adjacent platforms), ko (Go image build, already relevant to GAG's own build), ExternalDNS, Reloader (config/secret rollout — overlaps GAG's own roll-on-rotation).
@@ -196,7 +196,7 @@ Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 7. **GitOps install examples (Argo CD Application + Flux HelmRelease).** 🟠 OCI Helm chart + CRD `resource-policy: keep` has pruning gotchas worth a tested example.
 8. **KEDA-driven scaling (proxy pool and/or capacity signal).** 🟠 Already deferred (Q173); ARC users expect KEDA. Scale proxy on GitHub queue depth.
 9. **In-runner image build guidance (BuildKit/Kaniko/Sysbox + PSA profiles).** 🟠 The most common runner workload; map each build approach to the right `securityProfile`.
-10. **P2P image distribution (Spegel/Dragonfly) recommendation.** 🟠 Ephemeral workers cause image-pull storms at scale; document as a companion.
+10. **P2P image distribution (Spegel/Dragonfly) recommendation.** ✅ **Done (Q211).** Ephemeral workers cause image-pull storms at scale; recommended-companion guide at [operations/p2p-image-distribution.md](../operations/p2p-image-distribution.md) covers Spegel vs Dragonfly and the `imagePullPolicy`/digest-pin interplay.
 11. **SPIFFE/SPIRE workload-identity signer.** 🟠 Realize the pluggable signer interface beyond Vault; keyless App-JWT signing.
 12. **OLM/OperatorHub bundle.** 🟠 OpenShift reach; evaluate cost vs Helm-only stance.
 13. **Velero backup/restore guidance.** 🟡 What's safe to back up/restore (CA/Secret rotation caveats).
@@ -214,7 +214,7 @@ Ranked by value × likelihood users hit it. Bare-ID Queue items to file:
 - **GitOps-first packaging.** Treat Argo CD / Flux as primary consumers: CRDs installable separately, `resource-policy: keep` documented, server-side-apply friendliness, no Helm hooks that break GitOps.
 - **PSA + policy-engine layering.** Document that GAG uses PSA as a floor and is *compatible with* (not a replacement for) Kyverno/Gatekeeper; provide complementary policies rather than assuming none exist.
 - **Sidecar-aware lifecycle.** Where mesh injection is unavoidable, lean on Kubernetes native sidecars (restartPolicy: Always init containers, 1.29+) and document the egress-exclusion annotations.
-- **Image distribution at scale.** Recommend digest pinning (already enforced) + a P2P mirror for ephemeral pull storms; document `imagePullPolicy` interplay.
+- **Image distribution at scale.** ✅ **Done (Q211).** Recommend digest pinning (already enforced) + a P2P mirror for ephemeral pull storms; the `imagePullPolicy` interplay is documented in [operations/p2p-image-distribution.md](../operations/p2p-image-distribution.md).
 
 ---
 
