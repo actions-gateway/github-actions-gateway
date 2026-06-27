@@ -145,6 +145,7 @@ nav:
       - Observability: operations/observability.md
       - Runbook: operations/runbook.md
       - Backup & restore: operations/backup-restore.md
+      - Velero backup & restore: operations/velero-backup-restore.md
       - Troubleshooting: operations/troubleshooting.md
       - Security operations: operations/security-operations.md
       - Release: operations/release.md

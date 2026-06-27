@@ -76,7 +76,7 @@ Track in version control, per tenant namespace:
 GitOps protects the *desired* state. To also capture live status and resources not in Git, add one of:
 
 - **etcd snapshots** — a cluster-level backup (`etcdctl snapshot save`, or your managed-cluster provider's equivalent) captures every object, including the credential Secret and live CR status. This is the broadest safety net and the basis for [Scenario C](#scenario-c-full-cluster--etcd-restore). Treat the snapshot as sensitive: it contains every Secret in the cluster.
-- **Namespace-scoped backups** — a tool such as [Velero](https://velero.io/) can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for [Scenario B](#scenario-b-whole-tenant-namespace-lost).
+- **Namespace-scoped backups** — a tool such as [Velero](https://velero.io/) can back up and restore a tenant namespace (CRs, Secrets, quota) as a unit, which is convenient for [Scenario B](#scenario-b-whole-tenant-namespace-lost). For concrete Velero backup/restore commands grounded in the ownership model above — including the label selector that skips the GMC-owned children so the controllers rebuild them — see [Velero Backup and Restore](velero-backup-restore.md).
 - **Ad-hoc CR export** — for a point-in-time copy of a single gateway:
 
   ```sh
@@ -184,6 +184,7 @@ After any restore, confirm the gateway is healthy — the same checks as [Runboo
 
 ## Reference Links
 
+- [Velero Backup and Restore](velero-backup-restore.md) — tool-specific how-to for namespace-level backup/restore with Velero
 - [Runbook](runbook.md) — day-2 operations and incident response (AGC/GMC total failure)
 - [Troubleshooting](troubleshooting.md) — symptom → diagnosis → resolution
 - [Security Operations](security-operations.md) — credential handling and compromise response
