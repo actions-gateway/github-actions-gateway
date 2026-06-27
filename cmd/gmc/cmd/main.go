@@ -16,10 +16,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -31,6 +33,7 @@ import (
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
@@ -128,6 +131,15 @@ func main() {
 			"these classes and lists them here; the admission webhook rejects any other "+
 			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
 			"forbids all priorityTiers PriorityClass references.")
+	var priorityClassAllowlistConfigMap string
+	flag.StringVar(&priorityClassAllowlistConfigMap, "priority-class-allowlist-configmap", "",
+		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
+			"--allowed-priority-classes flag allowlist, watched so additions take effect "+
+			"without a GMC restart (Q188). The ConfigMap's data."+
+			controller.PriorityClassAllowlistConfigMapKey+" value lists PriorityClass names "+
+			"(comma/newline-separated). Additive and fail-safe: a missing or malformed "+
+			"ConfigMap leaves the static flag allowlist in force. Empty (default) disables "+
+			"the watch — flag-only behavior, unchanged.")
 	var apiServerCIDRs string
 	flag.StringVar(&apiServerCIDRs, "apiserver-cidrs", "",
 		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
@@ -231,10 +243,43 @@ func main() {
 		}
 	}
 
+	// The PriorityClass allowlist (Q188): a live, shared set the admission webhook
+	// reads and the ConfigMap watch (below) augments. Seeded from the static
+	// --allowed-priority-classes flag; the dynamic half starts empty until a
+	// ConfigMap is applied. Constructed here so it can be wired into both the
+	// webhook and the reconciler.
+	priorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedPriorityClasses))
+
+	podNamespace := os.Getenv("POD_NAMESPACE")
+
+	// When the PriorityClass allowlist ConfigMap watch is enabled, scope the
+	// ConfigMap informer to that single object (its namespace + name) so the GMC
+	// needs only namespaced get/list/watch on it — not cluster-wide ConfigMap
+	// read — and so an unrelated ConfigMap can never wake the reconciler. Without
+	// the feature, no ConfigMap informer is ever started, so this is a no-op.
+	cacheOptions := cache.Options{}
+	if priorityClassAllowlistConfigMap != "" {
+		if podNamespace == "" {
+			setupLog.Error(fmt.Errorf("POD_NAMESPACE is not set"),
+				"--priority-class-allowlist-configmap requires POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
+			os.Exit(1)
+		}
+		cacheOptions.ByObject = map[client.Object]cache.ByObject{
+			&corev1.ConfigMap{}: {
+				Namespaces: map[string]cache.Config{
+					podNamespace: {
+						FieldSelector: fields.OneTermEqualSelector("metadata.name", priorityClassAllowlistConfigMap),
+					},
+				},
+			},
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
+		Cache:                  cacheOptions,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "actions-gateway-gmc-leader",
@@ -418,9 +463,27 @@ func main() {
 		setupLog.Error(err, "Failed to register IP range reconciler")
 		os.Exit(1)
 	}
+
+	// PriorityClass allowlist ConfigMap watch (Q188): when enabled, reconcile the
+	// designated ConfigMap into the dynamic half of the shared allowlist so a
+	// platform admin can add an allowed PriorityClass without a flag edit + GMC
+	// rollout. Runs in every replica (the reconciler disables leader election)
+	// because every replica serves the admission webhook. Disabled by default
+	// (empty flag) — flag-only behavior, unchanged.
+	if priorityClassAllowlistConfigMap != "" {
+		if err := (&controller.PriorityClassAllowlistReconciler{
+			Client:        mgr.GetClient(),
+			ConfigMapName: priorityClassAllowlistConfigMap,
+			Namespace:     podNamespace,
+			Allowlist:     priorityClassAllowlist,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "priorityclass-allowlist")
+			os.Exit(1)
+		}
+	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, parseAllowedPriorityClasses(allowedPriorityClasses)); err != nil {
+		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, priorityClassAllowlist); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
 			os.Exit(1)
 		}

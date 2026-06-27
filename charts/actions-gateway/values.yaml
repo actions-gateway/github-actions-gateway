@@ -73,6 +73,21 @@ allowFloatingImageTags: false
 # e.g. allowedPriorityClasses: ["runner-standard", "runner-opportunistic"]
 allowedPriorityClasses: []
 
+# priorityClassAllowlist optionally lets the GMC ALSO source the PriorityClass
+# allowlist from a watched ConfigMap, so a platform admin can add an allowed class
+# without editing allowedPriorityClasses and rolling out the GMC (Q188). It is
+# additive to (never a replacement for) the static flag above, and fail-safe: a
+# missing or malformed ConfigMap leaves the static flag allowlist in force.
+priorityClassAllowlist:
+  # configMapName names a ConfigMap in the GMC's own namespace whose
+  # `data.allowedPriorityClasses` value (comma/newline-separated names) augments
+  # the static allowlist, passed to the GMC as --priority-class-allowlist-configmap.
+  # Setting it also renders a namespaced Role/RoleBinding granting the GMC
+  # get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read). Empty
+  # (default) disables the watch — flag-only behavior, unchanged. See
+  # docs/operations/security-operations.md § Priority classes.
+  configMapName: ""
+
 # apiServerCIDRs optionally scopes the AGC NetworkPolicy's Kubernetes API server
 # (443/6443) egress rule to a known apiserver CIDR set, passed to the GMC as
 # --apiserver-cidrs. By default this rule allows egress to ANY destination on
