@@ -18,7 +18,6 @@ Single source of truth for progress and priorities across the full project. `doc
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
 Last touched: 2026-06-27
-
 ---
 
 ## Progress
@@ -55,6 +54,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 |---|---|---|---|---|---|
 | <a id="Q224"></a>Q224 | [GKE dogfood: deploy + live GAG validation](plan/gke-dogfood.md) | `milestone` `infra` | 🔲 | M | v2beta1 blocker: first live GAG install on non-kind K8s. Deploy GKE cluster (plan Parts A–E), validate job→pod→GitHub end-to-end. Workflow changes (C2+F2) follow. |
 | <a id="Q225"></a>Q225 | [Operator docs: Kata Containers for DinD workloads](operations/in-runner-image-builds.md) | `docs` | 🚫 | S | 🚫 Q224. Document runtimeClassName: kata-qemu on podTemplate, /dev/kvm machine-type requirement (N2+ on GCP), and Kata DaemonSet setup. Extend in-runner-image-builds.md or new page depending on density. |
+| <a id="Q226"></a>Q226 | [Kata Containers on GKE — secure CI reference architecture](plan/kata-on-gke.md) | `security` `infra` | 🚫 | M | 🚫 Q224. OSS untrusted-PR threat + GAG dogfood requirement rule out privileged DinD. Spike: GKE nested-virt node pool + Kata RuntimeClass: kind in micro-VM, no privileged pod. Reference arch. [plan](plan/kata-on-gke.md) |
 | <a id="Q74"></a>Q74 | [v2alpha1→v2beta1 graduation: conversion webhook](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | Beta cut, after Q191/Q196/Q197/Q224: `Hub`/`Convertible` stubs + v2beta1 served/storage version + storage migration. Distinct from the M5 fan-out tool. See [graduation](plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). |
 | <a id="Q219"></a>Q219 | [M5 live `helm install` → working-tenant validation](plan/milestone-5.md) | `milestone` `infra` `tests` | 🔲 | M | M5 track A: chart is verified offline only (helm template/kubeconform/polaris). Run a live `helm install` on kind with real App creds → working tenant (job→pod→GitHub), the last M5 verification gap. |
 | <a id="Q220"></a>Q220 | [Validate service-mesh coexistence guidance on a live cluster](operations/service-mesh-coexistence.md) | `tests` `docs` | 🔲 | M | Q206 guide's in-mesh recipes (native sidecars, egress exclusions) reasoned from code+docs, untested. Stand up Istio (sidecar/native/ambient)+Linkerd on kind; run a job through a meshed GAG ns; confirm pods terminate + egress IP preserved. |
