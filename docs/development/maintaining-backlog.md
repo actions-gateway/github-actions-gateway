@@ -49,7 +49,7 @@ If you genuinely can't tell where it belongs, slot it next to the nearest compar
 
 ## Deferred items live below the Queue, not in it
 
-The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit external trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon."
+The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon." (The trigger need not be *external*: "a maintainer decides X" is a valid park when we've chosen not to act until then — see the trigger-source tag below.)
 
 Such items move to the **Deferred** section below the Queue in `docs/STATUS.md`. A row belongs in Deferred when **all** of these hold:
 
@@ -61,7 +61,9 @@ Mechanics:
 
 - The Deferred table keeps each row's stable `Q`-prefixed ID and inline anchor, so cross-references (`[Q19](#Q19)`) keep resolving. IDs are not reused when an item moves sections.
 - Its columns drop `St` (every row is implicitly 💤) and replace `Notes` with **`Trigger to revive`** — one phrase naming the condition that returns it to the Queue.
+- **Prefix each `Trigger to revive` with a source tag:** `**Demand:**` (an outside operator/user must ask) · `**Event:**` (an observable outside-our-control condition — an upstream fix, a measured threshold) · `**Decision:**` (our own call; we're the blocker). The tag makes "what could we move on unilaterally?" a `grep '**Decision:**'` away, and stops a `Decision`-gated row from masquerading as if it waits on the world.
 - **When a trigger fires, move the row back into the Queue at the position it then deserves** (see [Prioritize new items on entry](#prioritize-new-items-on-entry)) — don't just flip a status in place.
+- **Section vs. tag — distinct lifecycle vs. attribute.** Give a parked group its own `###` subsection only when it has a different *revive mechanic* (e.g. [Flake watch](#once-the-mitigation-ships-move-it-to-flake-watch) auto-yanks back to the Queue *top* via flakes-first). A mere difference in trigger *source* is an attribute of one shared lifecycle — encode it as the tag above, not a subsection. Sections cost a row-move on recategorisation and force borderline items into a placement fight; tags are a one-cell edit.
 - This is the home for the three statuses that aren't actionable-now: a genuinely-parked item enters Deferred directly rather than being added to the Queue and immediately marked 💤. (A 🚫 *blocked-by-another-Queue-item* row stays in the Queue, below its blocker — see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers) — because it revives automatically the moment the blocker lands.)
 
 ## Format rules that exist to reduce churn
