@@ -186,7 +186,7 @@ Pick the topmost row that matches your build need.
 | Workload genuinely requires a privileged Docker daemon and Sysbox is unavailable | **Privileged DinD** (last resort) | `privileged` | Yes | Needs the platform `privileged-profile: allowed` namespace label; pair with `kata`/`gvisor`. |
 | Kernel modules / host capabilities beyond DinD | **Privileged** + sandbox runtime | `privileged` | Yes | Same gating; sandbox runtime strongly recommended. |
 
-## Registry authentication (all approaches)
+## Registry authentication for all approaches
 
 Every approach needs registry credentials to pull base images and push the
 result. Mount them as a file, never an environment variable:
