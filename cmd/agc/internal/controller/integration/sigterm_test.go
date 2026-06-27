@@ -109,14 +109,29 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// WaitForSessionDelete is a channel-based wait (it returns the instant the
 	// broker processes the DELETE, not on a poll tick), so the timeout is only a
 	// safety ceiling, not the expected latency. DELETE happens asynchronously after
-	// mgr.Start returns — under a CPU-starved 2-vCPU CI runner the last goroutine's
-	// DELETE round-trip can lag well past a few seconds, which flaked the old 10s
-	// ceiling (Q120). 30s gives generous headroom while staying inside the package's
-	// 5m test timeout; a session genuinely failing to delete still fails fast on
-	// the assert once the ceiling elapses.
+	// mgr.Start returns — mgr.Start does not wait for the listener goroutines, so
+	// when <-mgrDone unblocks each goroutine may still be unwinding its poll loop
+	// and running its exit-defer DELETE (which uses a fresh context.Background with
+	// a 10s timeout, so a cancelled reconcile ctx cannot strand it). Under a
+	// CPU-starved 2-vCPU CI runner that round-trip can lag many seconds: the old
+	// 10s ceiling flaked at Q120 (→30s), and 30s itself flaked once on PR #415's
+	// integration gate. 60s gives ample headroom while staying well inside the
+	// package's 5m test timeout; a session genuinely failing to delete still fails
+	// fast on the assert once the ceiling elapses. If this recurs, escalate to a
+	// real teardown-race investigation rather than bumping again.
 	for _, sid := range sessionIDs {
-		deleted := brokerStub.WaitForSessionDelete(sid, 30*time.Second)
-		assert.Truef(t, deleted, "session %q should be deleted on SIGTERM", sid)
+		deleted := brokerStub.WaitForSessionDelete(sid, 60*time.Second)
+		if !assert.Truef(t, deleted, "session %q should be deleted on SIGTERM", sid) {
+			// Failure dump (mirrors the Q176/Q221 deflakes): on a starved runner a
+			// listener goroutine may not be scheduled to run its exit-defer DELETE
+			// within the ceiling. Capture which sessions are still active and the
+			// global active-session counter so a recurrence is diagnosable from the
+			// CI log rather than only "Should be true".
+			t.Logf("SIGTERM teardown timeout: session %q not deleted after 60s; "+
+				"still-active for owner %q=%v; global ActiveSessionCount=%d; all registered=%v",
+				sid, rgName, brokerStub.ActiveSessionsForOwner(rgName),
+				brokerStub.ActiveSessionCount(), brokerStub.RegisteredSessions())
+		}
 	}
 
 	// Close idle keep-alive connections so persistConn goroutines exit before
