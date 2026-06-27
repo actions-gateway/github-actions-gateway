@@ -53,6 +53,12 @@ markers per item.
 | [unit-tests-speed.md](unit-tests-speed.md) | Four targeted unit-test latency cuts (~6s total) | 💤 Deferred — parked as [Q17](../STATUS.md#Q17), revive when CI latency becomes the bottleneck |
 | [e2e-tests-speed.md](e2e-tests-speed.md) | E2E suite + CI-pipeline speed improvements | ✅ Done — Round 1 (§1–§14) and Round 2 (§15–§18) all shipped (the top-of-file TOC ✓ markers lag the authoritative status tables) |
 
+## Deployment
+
+| Plan | Scope | Status |
+|---|---|---|
+| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — pending workflow changes |
+
 ## Cross-cutting
 
 | Plan | Scope | Status |
