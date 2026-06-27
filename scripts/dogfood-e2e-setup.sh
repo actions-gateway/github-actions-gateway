@@ -132,8 +132,6 @@ EOF
 }
 
 apply_cr() {
-	local github_url="https://github.com/${REPO%/*}"
-
 	echo "Applying ActionsGateway CR..."
 	kubectl apply -f - <<EOF
 apiVersion: actions-gateway.github.com/v1alpha1
