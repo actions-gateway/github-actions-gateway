@@ -100,6 +100,51 @@ absolute throughput and latency with these caveats; the **sustained-sessions**,
   [docs/plan/milestone-5.md §2.6](../../../../docs/plan/milestone-5.md).
 - **Proxy HPA under burst** is a real-cluster behaviour, out of scope here.
 
+## Isolating AGC-only per-session memory (Q181)
+
+The peak-memory figure above is a deliberate **upper bound**: both the broker
+client and server run in this one process, so each session's heap also carries
+the stub's server-side per-connection buffers and per-session maps. That is fine
+for a trend, but it cannot back a precise efficiency multiple versus
+pod-per-runner controllers.
+
+`TestAGCPerSessionMemory` (`mem_test.go`) isolates the AGC's *own* per-session
+footprint without any broker stub. It replaces the `httptest.Server` with
+`memTransport` — an in-process `http.RoundTripper` that answers the OAuth,
+CreateSession, and GetMessage calls with canned responses and **no server,
+socket, or per-session server-side state**. `GET …/message` parks the caller on
+its request context, so every started listener rests in exactly one goroutine
+blocked in its long-poll — the steady idle-session state.
+
+```bash
+make mem-profile   # 1,000 parked sessions; prints bytes/session, no broker stub
+```
+
+It reports a three-point heap+stack differential:
+
+- **mBase** — shared infra only (transport, `http.Client`, registrar).
+- **mAgents** — N pooled agents + N empty `Multiplexer`s, no goroutines. The
+  `mAgents−mBase` bucket also holds the fake k8s client's retained agent
+  Secrets — an apiserver-side cost in production, so it is **held out** of the
+  headline figure.
+- **mFull** — all N listener goroutines started and parked. `mFull−mAgents` is
+  the marginal AGC cost of one more concurrent session: the goroutine stack, its
+  `broker.Client`, and its live session state — and nothing from the broker
+  server side.
+
+A representative run holds 1,000 sessions at **~12 KiB/session** (≈ 8 KiB
+goroutine stack + ≈ 4 KiB heap), well under the ~60 KiB design estimate. Set
+`MEM_HEAP_PROFILE=mem.pprof` to also dump a pprof heap profile for
+`go tool pprof` inspection. This figure is published, with the density-multiple
+derivation, in
+[appendix-a-capacity-slos.md](../../../../docs/design/appendix-a-capacity-slos.md).
+
+> **Boundary.** This isolates the AGC session *structures*. It excludes the
+> per-connection HTTP transport buffers an active long-poll holds in production
+> (a real but bounded additional cost) — which is why the published density
+> multiple keeps the conservative ~60 KiB design figure rather than the ~12 KiB
+> floor.
+
 ## Design
 
 See [docs/plan/milestone-5.md §2](../../../../docs/plan/milestone-5.md) for the
@@ -115,4 +160,6 @@ and why the harness lives here rather than in a kind e2e).
 | `harness.go` | per-tenant wiring, job driver, metric sampling |
 | `report.go` | SLO evaluation + Markdown/log report |
 | `load_test.go` | `TestAGCLoad` entrypoint (reads `LOAD_*` env knobs) |
+| `mem_transport.go` | stub-free in-process `RoundTripper` + registrar for the per-session memory probe |
+| `mem_test.go` | `TestAGCPerSessionMemory` — isolates AGC-only bytes/session (Q181), reads `MEM_*` env knobs |
 | `results/` | committed sample run; `make load-test-full` writes `latest.md` here (gitignored) |

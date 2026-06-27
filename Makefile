@@ -222,6 +222,10 @@ load-test-quick: ## Load smoke: 1,000 concurrent virtual sessions, short window 
 load-test-full: ## Load acceptance: 1,000 concurrent virtual sessions, realistic hold, writes a report
 	$(MAKE) -C cmd/agc load-test-full
 
+.PHONY: mem-profile
+mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
+	$(MAKE) -C cmd/agc mem-profile
+
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh

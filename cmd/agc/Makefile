@@ -61,6 +61,11 @@ load-test-full: ## Load acceptance: 10 tenants × 100 sessions = 1,000, realisti
 	LOAD_REPORT=$(or $(LOAD_REPORT),results/latest.md) \
 		$(LOAD_THROTTLE) go test -tags load -timeout 10m -run TestAGCLoad -v ./test/load/...
 
+.PHONY: mem-profile
+mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
+	MEM_TENANTS=$(or $(MEM_TENANTS),10) MEM_LISTENERS_PER_TENANT=$(or $(MEM_LISTENERS_PER_TENANT),100) \
+		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestAGCPerSessionMemory -v ./test/load/...
+
 .PHONY: generate
 generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
 
