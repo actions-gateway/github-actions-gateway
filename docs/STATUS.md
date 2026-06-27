@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-25
+Last touched: 2026-06-27
 
 ---
 
@@ -64,7 +64,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q209"></a>Q209 | [GitOps adoption: Argo/Flux install + ESO/Sealed-Secrets App-key](operations/install.md) | `docs` `infra` | 🔲 | S | Tested Argo CD Application + Flux HelmRelease examples (OCI chart + CRD `resource-policy:keep` pruning gotchas), plus External Secrets / Sealed Secrets examples for sourcing the App-key Secret. Eases GitOps-shop adoption; low risk. |
 | <a id="Q211"></a>Q211 | [P2P image distribution (Spegel/Dragonfly) for pull storms](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane) | `docs` `infra` | 🔲 | S | Ephemeral per-job worker pods cause image-pull storms at scale. Document Spegel/Dragonfly P2P registry mirror as a recommended companion; note `imagePullPolicy`/digest-pin interplay. Scale-readiness. |
 | <a id="Q212"></a>Q212 | [Velero backup/restore guidance](operations/install.md) | `docs` | 🔲 | S | Document what's safe to back up/restore for GAG CRs + tenant namespaces, with CA/Secret-rotation caveats (restoring a stale proxy/metrics CA Secret breaks TLS). DR story for operators. |
-| <a id="Q213"></a>Q213 | [OpenCost/Kubecost per-tenant cost attribution](design/appendix-f-cost-model.md) | `docs` `infra` | 🔲 | S | Tenant=namespace fits per-tenant cost attribution natively. Document the label conventions OpenCost/Kubecost need to split cost per tenant. Pairs with the Q192 cost story and the Q205 label audit. |
 ---
 
 ## Deferred
