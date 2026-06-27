@@ -111,12 +111,30 @@ Skipping the owned children with the `managed-by` selector sidesteps both proble
 
 ## Secret Handling Caveats
 
-The per-tenant backup contains the **GitHub App credential `Secret`** — including the App private key. In the backup it is stored exactly as in etcd: base64-encoded, **not encrypted**. Treat the Velero backup with the same sensitivity as an etcd snapshot.
+The GitHub App credential `Secret` is the **only** sensitive input in a tenant namespace that GAG cannot regenerate — the GMC rebuilds everything else (metrics TLS Secrets included) from the CR. By default a namespace backup captures that Secret exactly as in etcd: base64-encoded, **not encrypted**. So the whole "treat the backup like an etcd snapshot" burden below exists to protect that one object.
 
-- **Encrypt the backup storage at rest.** Enable server-side encryption on the `BackupStorageLocation` bucket — SSE-S3 or SSE-KMS on Amazon S3, customer-managed encryption keys on Google Cloud Storage / Azure Blob, or your provider's equivalent. This is a hard requirement for GAG backups, not a nicety, because the private key is otherwise recoverable by anyone who can read the bucket. See [backup-restore.md](backup-restore.md#primary-gitops) for the broader "never store the key in plaintext" guidance and [security-operations.md](security-operations.md) for credential handling.
+**Recommended: take the Secret out of the backup entirely.** If an external source of truth owns the App key, the in-cluster Secret becomes regenerable like every other owned object, and the Velero backup carries **no secret material at all** — which removes the encrypted-bucket requirement rather than merely mitigating it. Two common approaches:
+
+- **External Secrets Operator (ESO)** — back up the `ExternalSecret` CR (a *reference* to a vault key — AWS Secrets Manager, GCP Secret Manager, Vault, etc. — with no key material in it). After a restore, ESO re-syncs the `Secret` from the vault. This is the cleanest option: nothing sensitive ever lands in the backup. The `ExternalSecret` carries no `managed-by=actions-gateway-gmc` label, so the [restore selector](#ordering-crds--inputs-and-crs--reconcile) keeps it automatically.
+- **Sealed Secrets** — the encrypted `SealedSecret` is safe to back up (and to keep in Git), and the controller decrypts it in-cluster. The trade-off: you must separately and securely back up the controller's sealing key, or no restore can decrypt anything.
+
+With either in place, exclude the live Secret from the backup so the only copy is the externally-managed one — in a GAG tenant namespace the App key is the sole operator-supplied Secret (the metrics TLS Secrets are GMC-regenerated), so excluding Secrets wholesale is safe:
+
+```sh
+velero backup create gag-tenant-<namespace> \
+  --include-namespaces <namespace> \
+  --exclude-resources secrets
+```
+
+GAG already recommends managing the App key with ESO / Sealed Secrets / SOPS regardless of backup tool — see [backup-restore.md § Primary: GitOps](backup-restore.md#primary-gitops) and [security-operations.md](security-operations.md). Velero just inherits the payoff.
+
+**If you do keep the Secret in the backup** (no external secret store), harden it:
+
+- **Encrypt the backup storage at rest.** Enable server-side encryption on the `BackupStorageLocation` bucket — SSE-S3 or SSE-KMS on Amazon S3, customer-managed encryption keys on Google Cloud Storage / Azure Blob, or your provider's equivalent. This is a hard requirement, not a nicety, because the private key is otherwise recoverable by anyone who can read the bucket.
 - **Restrict who can read backups and run restores.** A restore re-materializes the Secret into the cluster; scope the Velero RBAC and the bucket IAM accordingly.
-- **Restic/Kopia and CSI snapshots do not apply to the GAG control plane.** Those Velero features back up *PersistentVolume data*; GAG keeps no control-plane state on volumes, so there is nothing for them to capture here. They become relevant only if a *tenant's own runner workloads* mount PVs you also want backed up — that is a separate concern from GAG DR and out of scope for this page.
-- **Prefer minting over restoring, if the key is in a vault.** If you keep the source `.pem` in a secrets vault, you can recreate the credential Secret from it (see [backup-restore.md Scenario B](backup-restore.md#scenario-b-whole-tenant-namespace-lost)) instead of relying on the Velero copy — that keeps the private key out of the backup blast radius. The trade-off is an extra manual step at restore time.
+- **Or mint on restore from a vaulted `.pem`.** If you keep the source `.pem` in a secrets vault but not under ESO, you can recreate the Secret from it at restore time (see [backup-restore.md Scenario B](backup-restore.md#scenario-b-whole-tenant-namespace-lost)) instead of relying on the Velero copy. The trade-off is an extra manual step.
+
+**Restic/Kopia and CSI snapshots do not apply to the GAG control plane.** Those Velero features back up *PersistentVolume data*; GAG keeps no control-plane state on volumes, so there is nothing for them to capture here. They become relevant only if a *tenant's own runner workloads* mount PVs you also want backed up — a separate concern from GAG DR and out of scope for this page.
 
 ---
 
