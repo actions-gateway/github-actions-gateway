@@ -75,6 +75,10 @@ func TestMain(m *testing.M) {
 			"../../../../agc/config/crd",
 			// The five v2 (actions-gateway.com) CRDs live in the neutral api module.
 			"../../../../../api/config/crd",
+			// Stub Cilium/Calico CRDs (Q208) so the FQDN-mode unstructured apply lands
+			// against the test apiserver. Minimal preserve-unknown-fields schemas — real
+			// clusters install the CNI's own CRDs.
+			"testdata/cni-crds",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,

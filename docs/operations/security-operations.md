@@ -45,6 +45,7 @@ Two detection substrates are used:
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
+  - [Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
 - [Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist](#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist)
 - [GitHub API base URL must be HTTPS](#github-api-base-url-must-be-https)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
@@ -644,11 +645,20 @@ the per-tenant proxy egress-IP attribution** for those flows. Untrusted job code
   `forward` zone** over reopening worker DNS: that keeps resolution on the
   attributable in-cluster path while still resolving the names you need.
 
-If instead you want to take over the **proxy's** own egress policy (for example
-to express GitHub egress as FQDN rules under Cilium/Calico), set
-`spec.proxy.managedNetworkPolicy: false` on the `ActionsGateway` — the GMC then
-stops managing the proxy GitHub-CIDR rule and you own keeping it current. That is
-the supported, explicit hand-off; the managed path remains the default.
+If instead you want to express the **proxy's own** GitHub egress as FQDN rules under
+a DNS-aware CNI, you have two supported options:
+
+- **First-class, GMC-managed (recommended on a v2 `EgressProxy`)** — set
+  `spec.egressPolicyMode: CiliumFQDN` (or `CalicoFQDN`) and the GMC emits the
+  CNI-native FQDN policy for you, keeping it owned and reconciled. See
+  [Expressing GitHub egress by FQDN](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
+  below.
+- **Full hand-off** — set `spec.proxy.managedNetworkPolicy: false` (v1
+  `ActionsGateway`) or `spec.managedNetworkPolicy: false` (v2 `EgressProxy`): the GMC
+  stops managing the proxy egress policy entirely and you own it. Use this when you
+  need a shape the managed FQDN mode does not emit.
+
+The managed CIDR path remains the default in all cases.
 
 ### Managing egress at scale
 
@@ -681,6 +691,54 @@ hand-written `NetworkPolicy`:
 
 The labels above are what make all of these targetable; the secure floor stays
 GMC-managed regardless.
+
+### Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in
+
+By default the GMC expresses the proxy pool's GitHub allowlist as **IP CIDR ranges**,
+refreshed from `api.github.com/meta` every 24h (`egressPolicyMode: CIDR`). This works
+on every NetworkPolicy-enforcing CNI and needs no DNS awareness. If you run a CNI that
+enforces DNS-based egress, you can instead have the GMC emit a **CNI-native FQDN
+policy** scoped to the GitHub hostnames — no CIDR feed to keep current. This is an
+opt-in on the v2 `EgressProxy`:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: shared
+  namespace: team-a
+spec:
+  egressPolicyMode: CiliumFQDN   # or CalicoFQDN; default is CIDR
+```
+
+When set to `CiliumFQDN` the GMC reconciles a `CiliumNetworkPolicy` (`cilium.io/v2`)
+with `toFQDNs` rules; `CalicoFQDN` reconciles a Calico `NetworkPolicy`
+(`projectcalico.org/v3`) with destination `domains`. Both are named `<proxy>-proxy-fqdn`,
+owned by the `EgressProxy` (garbage-collected with it), and cover the GitHub Actions
+runner endpoint families: `api.github.com`, `github.com`, `codeload.github.com`,
+`objects.githubusercontent.com`, `*.actions.githubusercontent.com`, and
+`*.blob.core.windows.net`. In an FQDN mode the standard `NetworkPolicy` drops its
+GitHub-CIDR rule (DNS + ingress are unchanged) and the 24h IP-range reconcile skips
+this proxy.
+
+**Prerequisites — this is the operator's responsibility:**
+
+| Mode | Requires | If the CNI cannot enforce it |
+| --- | --- | --- |
+| `CiliumFQDN` | Cilium with DNS-aware policy (`toFQDNs`), and the `CiliumNetworkPolicy` CRD installed | The GMC's apply fails loudly and the `EgressProxy` goes `Degraded`. GitHub egress stays **denied** (the standard NetworkPolicy default-denies it), never silently opened. |
+| `CalicoFQDN` | Calico with DNS-based policy enabled, and the `projectcalico.org/v3` `NetworkPolicy` CRD installed | As above — fail-closed. |
+
+**Secure-by-default guarantee.** Selecting an FQDN mode can never weaken egress: the
+standard NetworkPolicy still default-denies GitHub egress, so if the CNI-native policy
+is absent or unenforced, GitHub egress is denied rather than wide-open. Confirm your
+CNI actually enforces DNS-based egress before relying on it (see the
+[network isolation validation](../design/network-architecture.md#how-to-validate-network-isolation)
+procedure). `egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
+
+> FQDN mode is currently a v2 `EgressProxy` feature (the shared-egress surface). The v1
+> `ActionsGateway` proxy and v2 direct-egress (proxy-less) gateways stay on the CIDR
+> path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off
+> above.
 
 ---
 

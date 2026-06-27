@@ -75,6 +75,20 @@ spec:
               so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
               GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
             properties:
+              egressPolicyMode:
+                default: CIDR
+                description: |-
+                  EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
+                  allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
+                  reconcile, works on every CNI) or a CNI-native DNS-aware FQDN mode
+                  (CiliumFQDN / CalicoFQDN) that requires a DNS-aware policy CNI. It has no
+                  effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for
+                  the secure-by-default (fail-closed) guarantee.
+                enum:
+                - CIDR
+                - CiliumFQDN
+                - CalicoFQDN
+                type: string
               managedNetworkPolicy:
                 default: true
                 description: |-
