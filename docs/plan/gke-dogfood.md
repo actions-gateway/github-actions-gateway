@@ -170,7 +170,7 @@ helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --values tmp/values-dogfood.yaml
 
-kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=3m
+kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=3m
 ```
 
 > **GKE PriorityClass admission:** the GMC runs with
@@ -346,7 +346,7 @@ gcloud container clusters resize "$CLUSTER" \
   --node-pool=default-pool --num-nodes=1 --zone="$ZONE" --quiet
 
 # 2. Wait for GMC and AGC pods to be ready
-kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=5m
+kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=5m
 kubectl wait --for=condition=Ready pod -l app=agc -n gag-dogfood --timeout=3m
 
 # 3. Route CI jobs to GAG

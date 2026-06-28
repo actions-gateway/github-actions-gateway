@@ -140,7 +140,9 @@ preflight() {
 install_gag() {
 	local values
 	values="$(mktemp)"
-	trap 'rm -f "${values}"' EXIT
+	# Use :- so the trap is safe under `set -u` if it fires after the local
+	# goes out of scope (e.g. a set -e abort later in the function).
+	trap 'rm -f "${values:-}"' EXIT
 
 	# Dogfood/dev mode: float image tags (production pins digests). Self-signed
 	# webhook cert (no cert-manager). Keep GMC on default-pool so it goes down
@@ -169,7 +171,7 @@ EOF
 		--values "${values}"
 
 	echo "Waiting for GMC to be ready..."
-	kubectl rollout status deployment/gmc-controller \
+	kubectl rollout status deployment/gmc-controller-manager \
 		-n gmc-system --timeout=3m
 
 	rm -f "${values}"
@@ -199,7 +201,7 @@ create_namespace() {
 create_secret() {
 	local pem_file
 	pem_file="$(mktemp)"
-	trap 'rm -f "${pem_file}"' EXIT
+	trap 'rm -f "${pem_file:-}"' EXIT
 
 	echo "Retrieving GitHub App private key from keychain..."
 	security find-generic-password \

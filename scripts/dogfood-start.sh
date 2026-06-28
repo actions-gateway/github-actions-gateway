@@ -26,7 +26,7 @@ main() {
 		--node-pool=default-pool --num-nodes=1 --zone="${ZONE}" --quiet
 
 	echo "Waiting for GMC to be ready (~3 min)..."
-	kubectl rollout status deployment/gmc-controller \
+	kubectl rollout status deployment/gmc-controller-manager \
 		-n gmc-system --timeout=5m
 
 	echo "Waiting for AGC pod..."
