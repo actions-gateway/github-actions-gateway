@@ -173,8 +173,13 @@ EOF
 The v2 CRDs ship in a separate, opt-in chart (`actions-gateway-crds-v2`). The GMC
 runs its v2 controllers unconditionally, so the CRDs must be installed — and
 **at the same release as the GMC image**, because the v2 *alpha* schema drifts
-between releases (e.g. `ActionsGateway.spec.githubAppRef` on releases became
-`spec.credentials` on `main`); a mismatch makes every reconcile fail validation.
+between releases (e.g. `ActionsGateway.spec.githubAppRef` in `v1.1.0-rc.2` became
+the `spec.credentials` discriminated union in `v1.1.0-rc.3`); a mismatch makes
+every reconcile fail validation. A stale CRD that still exposes `githubAppRef`
+silently drops the credential — the GMC reads an empty App ref and provisions the
+AGC for workload-identity (Vault) instead, and the AGC crash-loops on
+`read appId: … no such file or directory`. Always upgrade this chart in lockstep
+with the GMC image (`helm upgrade`, not just `install`).
 `scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
 equivalent for the pinned `v1.1.0-rc.3`:
 
@@ -269,8 +274,10 @@ metadata:
   name: dogfood
   namespace: gag-dogfood
 spec:
-  githubAppRef:
-    name: github-app-v1
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: github-app-v1
   githubURL: https://github.com/actions-gateway/github-actions-gateway
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -287,6 +294,11 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
+          # Explicit image required: the AGC injects its DefaultWorkerImage only
+          # when it *creates* the runner container, not when the template names
+          # one (Q233). This is the upstream actions-runner image the AGC
+          # defaults to (cmd/agc/names: RunnerVersion).
+          image: ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
           resources:
             requests:
               cpu: "2"
@@ -313,8 +325,10 @@ EOF
 
 > **v2 prerequisites:** Kubernetes ≥ 1.31 (the `RunnerSet` field-selector
 > scoping, KEP-4358) and the `actions-gateway-crds-v2` chart from B3. The
-> `spec.githubAppRef` shape is the **released** v2 schema — if you pin a
-> different `$GAG_IMAGE_TAG`, match the CRD chart to that release.
+> `spec.credentials` discriminated-union shape is the `v1.1.0-rc.3` schema
+> (`rc.2` used a flat `spec.githubAppRef`) — if you pin a different
+> `$GAG_IMAGE_TAG`, match the CRD chart to that release and use its credential
+> shape.
 
 ### B8. Validate
 
@@ -327,6 +341,19 @@ kubectl get pods -n gag-dogfood   # the dogfood-agc Deployment pod should be Run
 gh api /repos/"$REPO"/actions/runners \
   --jq '.runners[] | {name, status, labels: [.labels[].name]}'
 ```
+
+> **Known blocker — job execution does not complete on `v1.1.0-rc.3` (Q234).**
+> The control plane is validated end-to-end on rc.3 (GMC + AGC roll, gateway
+> `Ready=True`, App-Secret credential path, Q229 egress-DNS token fetch, and all
+> `maxListeners` runners register). A worker pod **is** provisioned and runs to
+> `Completed`, but the job never finishes on GitHub: the AGC's per-job
+> `RenewJob` call is rejected with `401 "Not authorized for this job"`, so GitHub
+> holds the job `in_progress`, the runner stays `busy`, and post-job recycle
+> loops on `422 (runner currently running a job)`. The App's installation
+> permissions are sufficient (`actions:write`, `administration:write`,
+> `organization_self_hosted_runners:write`), so this is a job-token/`run_service_url`
+> auth issue, not a permission gap. Until Q234 is root-caused, routing real CI to
+> GAG (Parts C–D) will hang jobs. Validation reached job→pod; **not** pod→GitHub.
 
 ---
 
