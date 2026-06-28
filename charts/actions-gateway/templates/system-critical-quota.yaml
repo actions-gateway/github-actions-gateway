@@ -1,0 +1,30 @@
+{{- if and .Values.systemCriticalPriorityQuota.enabled (or (eq .Values.priorityClassName "system-cluster-critical") (eq .Values.priorityClassName "system-node-critical")) }}
+# ResourceQuota that PERMITS the GMC's system-*-critical priorityClassName under
+# the restricted PriorityClass admission config that GKE (and any cluster wired
+# the same way) enables. There, a pod may use system-node-critical /
+# system-cluster-critical only in a namespace carrying a ResourceQuota whose
+# scopeSelector matches that class — otherwise the ReplicaSet fails with
+# "insufficient quota to match these scopes: [{PriorityClass In [...]}]" and the
+# GMC Deployment never becomes Ready. This quota only PERMITS the classes: its
+# pod ceiling is deliberately generous, it is scoped to the system-critical
+# classes (so it counts nothing but the GMC's own pods), and it is inert on
+# clusters without that admission config (which already permit the classes).
+# Rendered only while priorityClassName is a system-*-critical class.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "actions-gateway.namePrefix" . }}-critical-pods
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+spec:
+  hard:
+    pods: {{ .Values.systemCriticalPriorityQuota.maxPods | quote }}
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values:
+          - system-cluster-critical
+          - system-node-critical
+{{- end }}

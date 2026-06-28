@@ -215,6 +215,32 @@ resources:
 # disables (e.g. on clusters without the built-in system-cluster-critical class).
 priorityClassName: system-cluster-critical
 
+# systemCriticalPriorityQuota ships a ResourceQuota in the install namespace that
+# PERMITS the GMC's system-*-critical priorityClassName (above) under the
+# restricted PriorityClass admission config that GKE — and any cluster wired the
+# same way — enables. There, a pod may reference system-node-critical /
+# system-cluster-critical only in a namespace that carries a ResourceQuota whose
+# scopeSelector matches that class; without it the GMC ReplicaSet fails pod
+# creation with "insufficient quota to match these scopes:
+# [{PriorityClass In [...]}]" and the Deployment never becomes Ready. This was hit
+# on a live GKE install.
+#
+# ON by default so a stock `helm install` succeeds on GKE out of the box WITHOUT
+# downgrading the secure, eviction-protected system-cluster-critical default. The
+# quota only PERMITS the classes — its pod ceiling is deliberately generous and it
+# is scoped to the system-critical classes, so it counts nothing but the GMC's own
+# pods and never constrains scheduling. It is harmless on clusters without that
+# admission config (they already permit the classes), and is rendered only while
+# priorityClassName is a system-*-critical class (so disabling the priority class
+# drops the now-pointless quota too). Set enabled: false to omit it, e.g. if you
+# manage this quota out-of-band. See docs/operations/install.md.
+systemCriticalPriorityQuota:
+  enabled: true
+  # Pod ceiling for the scoped quota. Must exceed the GMC replica count; the
+  # default is generous so the quota only ever satisfies the admission
+  # requirement, never caps scheduling.
+  maxPods: 100
+
 # nodeSelector / tolerations / affinity for the GMC pod (optional).
 nodeSelector: {}
 tolerations: []

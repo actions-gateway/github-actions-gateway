@@ -122,6 +122,8 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `certManager.selfSignedCertDurationDays` | `3650` | Validity of the self-signed cert when cert-manager is disabled. |
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |
 | `priorityClassName` | `system-cluster-critical` | GMC PriorityClass (`""` to disable). |
+| `systemCriticalPriorityQuota.enabled` | `true` | Ship a scoped `ResourceQuota` that **permits** the `system-*-critical` `priorityClassName` under GKE's restricted PriorityClass admission (without it GKE rejects the GMC pods with `insufficient quota to match these scopes`). Permit-only (generous ceiling, scoped to the system-critical classes), inert elsewhere, and rendered only while `priorityClassName` is a system-critical class. Set `false` to manage it out-of-band. |
+| `systemCriticalPriorityQuota.maxPods` | `100` | Pod ceiling for that scoped quota; generous so it only satisfies admission, never caps scheduling. |
 | `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. |
 | `topologySpreadConstraints.enabled` | `true` | Spread the GMC replicas across nodes (soft, `ScheduleAnyway`) so one node failure can't evict both. Set `false` to drop it. |
 | `topologySpreadConstraints.{maxSkew,topologyKey,whenUnsatisfiable}` | `1` / `kubernetes.io/hostname` / `ScheduleAnyway` | Spread tuning; raise to `topology.kubernetes.io/zone` on multi-zone clusters. |
