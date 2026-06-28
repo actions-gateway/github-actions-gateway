@@ -11,7 +11,7 @@ and not a restructure.
 | Layer | Concern | Status | Outcome |
 |---|---|---|---|
 | 1 | Terminology consistency | ✅ done | Glossary linked from all section READMEs; GMC/AGC expanded in appendices; rest left to glossary (decision recorded) |
-| 2 | Cross-reference architecture | ✅ done | 0 broken file links; all 127 in-page anchors validated, 5 pre-existing breaks fixed; optional link-check CI gate still open |
+| 2 | Cross-reference architecture | ✅ done | 0 broken file links; all 127 in-page anchors validated, 5 pre-existing breaks fixed; link-check CI gate delivered (Q52, `make doc-links`) |
 | 3 | Version / conditional logic | ✅ done | **6 documented metrics reconciled with code (Q51)** — `pod_creation_latency_seconds`, `managed_gateways`, `ip_range_updates_total` implemented; `reconcile_errors_total` re-pointed to the controller-runtime built-in; `proxy_replicas` marked `(planned)` |
 | 4 | Metadata / taxonomy | ✅ done | README indexes complete; k8s-audit plan added to plan index; no front matter (by decision) |
 | 5 | Navigation / hierarchy | ✅ done | Added `docs/README.md` landing page + root link; no orphans; heading hierarchy clean |
@@ -19,7 +19,8 @@ and not a restructure.
 
 **All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see
 [q51-metrics-reconcile.md](q51-metrics-reconcile.md)). The optional Layer 2
-link-check CI gate is a separate decision, not blocking.
+link-check CI gate was subsequently delivered by Q52 (`scripts/check-doc-links.sh`,
+slug-aware, wired into `make check`).
 
 ---
 
@@ -98,7 +99,7 @@ Tasks:
    (`§11.A` said `investigation`, heading is `protocol`), and 1 in `security.md` (the
    `worker-egress-proxy.md` "Implementation status" heading carried a volatile
    date+commit — stabilized the heading so the anchor is durable). Now 0 broken anchors.
-3. **(Optional) link-check CI gate.** A lightweight markdown-link-check step in
+3. **Link-check CI gate — delivered (Q52).** A slug-aware markdown link/anchor check (`scripts/check-doc-links.sh`, run by `make doc-links` in `make check`). Originally framed as a lightweight markdown-link-check step in
    `unit-test.yml` would fit the repo's recent CI-gate culture (the lint gate just
    landed). Flagged as optional — decide separately; do not bundle.
 
@@ -216,7 +217,7 @@ Outcome:
 | 5 | Orphan + heading-consistency sweep | 5 | S |
 | 6 | Implemented-vs-planned prose audit | 3 | M |
 | 7 | De-duplicate drifting blocks | 6 | S |
-| 8 | *(optional, decide separately)* link-check CI gate | 2 | S |
+| 8 | link-check CI gate — ✅ delivered (Q52, `make doc-links`) | 2 | S |
 
 Terminology renames (task 3) go in their own commit, separate from prose edits, so
 the rename is reviewable as one diff. Navigation changes ship together with the page

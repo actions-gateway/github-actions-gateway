@@ -153,8 +153,9 @@ the code moves. Keep them current:
 - **STATUS.md gets its own commit.** It is high-contention; isolating its changes keeps
   rebases trivial. Queue Notes have a hard 250-char cap (lint-enforced). Details:
   [maintaining-backlog.md](maintaining-backlog.md).
-- **Verify links render.** In-page anchors and cross-file links are not yet checked by
-  CI; confirm them against the rendered page before merging.
+- **Links and anchors are checked.** `make doc-links` (in `make check`) fails on broken
+  cross-file links and heading anchors across the docs, slug-aware. External URLs are out
+  of scope — eyeball those.
 
 ## Measuring doc quality
 
@@ -166,12 +167,12 @@ exists today, and what's proposed:
 | `make plan-index-check` — every plan doc is indexed/archived | 2 | Wired (`make check`). |
 | STATUS.md lint — Queue shape, 250-char Note cap | 1 | Wired (`make check`). |
 | Per-change doc updates via the [doc-update-matrix](doc-update-matrix.md) | 1 | Convention, enforced in review (PR self-check). |
-| Link/anchor checker in CI | 1, 2 | **Proposed** — flagged open by the [six-layer audit](../plan/docs-six-layer-audit.md). The only automated guard against link rot. |
+| `make doc-links` — broken cross-file links + heading anchors (slug-aware, Q52) | 1, 2 | Wired (`make check`). The automated guard against link rot. |
 | Periodic docs-vs-code drift audit | 1 | **Proposed** — a recurring backstop for what the per-change rule misses. |
 | Reader questions (issues, support threads) logged as coverage gaps | 3 | **Proposed** — turns real confusion into Queue items. |
 
-Treat the proposed rows as the roadmap for making quality observable; the cheapest and
-highest-value is the link checker.
+Treat the proposed rows as the roadmap for making quality observable; the highest-value
+next step is the periodic drift audit, since it catches what the per-change rule misses.
 
 ## Authoring checklist
 
