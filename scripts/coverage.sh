@@ -33,6 +33,13 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
+# shellcheck source=scripts/lib/common.sh
+source "$REPO_ROOT/scripts/lib/common.sh"
+
+# Serialize against a concurrent heavy build (queue rather than saturate cores)
+# — the same desktop-safety make test has — so make check can fold in the
+# coverage ratchet without a second, unthrottled test pass. No-op on CI/headless.
+serialize_heavy_build "$@"
 
 BASELINE_FILE="${BASELINE_FILE:-coverage-baseline.txt}"
 
@@ -74,7 +81,12 @@ EXCLUDE_RE='(zz_generated.*\.go|groupversion_info\.go|/[a-z]+test/|/test/)'
 
 MODULES=$(go work edit -json | jq -r '.Use[].DiskPath')
 
-THROTTLE_PREFIX="$("$REPO_ROOT/scripts/local-throttle.sh" prefix)"
+init_throttle # sets THROTTLE_JOBS + THROTTLE_PREFIX
+p_flag=""
+[[ -n "$THROTTLE_JOBS" ]] && p_flag="-p $THROTTLE_JOBS"
+# V / VERBOSE streams `go test -v` (matches make test) for debugging a hang.
+verbose_flag=""
+[[ -n "${V:-}${VERBOSE:-}" ]] && verbose_flag="-v"
 
 # measure_module DIR -> echoes "DIR<TAB>PCT" (PCT is "n/a" when the module has
 # no statements covered by any test, e.g. a module with no _test.go files).
@@ -88,9 +100,17 @@ measure_module() {
 
 	# Run the module's unit tests with coverage. A module with no tests produces
 	# "[no test files]" lines and an empty/headers-only profile — handled below.
-	( cd "$dir" && $THROTTLE_PREFIX go test -timeout 2m -coverprofile="$profile" ./... >/dev/null 2>&1 ) || {
-		echo "coverage: 'go test' failed in $dir" >&2
-		( cd "$dir" && $THROTTLE_PREFIX go test -timeout 2m ./... ) >&2 || true
+	# go test's per-package output goes to stderr so a green run still shows the
+	# `ok pkg` lines (make test parity) while this function's STDOUT stays the
+	# DIR<TAB>PCT the caller parses. GOMAXPROCS + -p match make test's throttle.
+	echo "==> coverage $dir" >&2
+	(
+		cd "$dir"
+		[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+		$THROTTLE_PREFIX go test -timeout 2m $p_flag $verbose_flag -coverprofile="$profile" ./... >&2
+	) || {
+		echo "coverage: 'go test' failed in $dir (output above)" >&2
 		exit 1
 	}
 
