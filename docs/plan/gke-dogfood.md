@@ -25,9 +25,9 @@ profile or paste them at the start of each terminal session.
 CLUSTER=gag-dogfood
 ZONE=us-central1-a
 PROJECT=actions-gateway-dogfood   # must be globally unique; append 4 digits if needed
-REPO=karlkfi/github-actions-gateway
+REPO=actions-gateway/github-actions-gateway
 APP_ID=3752347
-INSTALLATION_ID=<get from Part C step 1>
+INSTALLATION_ID=135739122         # actions-gateway org install (re-derive via Part C1)
 ```
 
 ---
@@ -214,7 +214,7 @@ metadata:
 spec:
   gitHubAppRef:
     name: github-app-v1
-  gitHubURL: https://github.com/karlkfi/github-actions-gateway
+  gitHubURL: https://github.com/actions-gateway/github-actions-gateway
   securityProfile: baseline
   proxy:
     minReplicas: 1
@@ -259,21 +259,23 @@ gh api /repos/"$REPO"/actions/runners \
 
 ### C1. Confirm App installation + get installation ID
 
-Ensure `actions-gateway-test` is installed on the repo:
-- GitHub.com → Settings → Applications → Installed GitHub Apps →
+Ensure `actions-gateway-test` is installed on the org:
+- GitHub.com → `actions-gateway` org → Settings → GitHub Apps →
   `actions-gateway-test` → Configure
-- Confirm `karlkfi/github-actions-gateway` is listed under
-  "Repository access"
+- Confirm repository access is "All repositories" (or that
+  `actions-gateway/github-actions-gateway` is explicitly listed)
 
-Get the installation ID:
+Get the installation ID. The `/user/installations` endpoint requires a
+GitHub-App-authorized token (the `gh` CLI's token returns HTTP 403), so use
+the org-scoped endpoint instead — it works for an org owner:
 
 ```bash
-gh api /user/installations \
+gh api /orgs/actions-gateway/installations \
   --jq '.installations[] | select(.app_id == 3752347) | {id, account: .account.login}'
 ```
 
 Set `INSTALLATION_ID` to the `id` value and re-run the secret creation in
-B5 if you had a placeholder.
+B5 if you had a placeholder. As of this writing the install is `135739122`.
 
 ### C2. Workflow changes
 

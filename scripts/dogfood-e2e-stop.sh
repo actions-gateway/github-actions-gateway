@@ -4,7 +4,7 @@
 # See docs/plan/gke-dogfood.md Part F.
 #
 # Required env vars (export before running):
-#   REPO   GitHub repo slug (e.g. karlkfi/github-actions-gateway)
+#   REPO   GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"

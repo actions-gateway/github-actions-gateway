@@ -5,7 +5,7 @@
 # Required env vars (export before running):
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
 #   ZONE      GCP zone (e.g. us-central1-a)
-#   REPO      GitHub repo slug (e.g. karlkfi/github-actions-gateway)
+#   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
