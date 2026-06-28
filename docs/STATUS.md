@@ -52,6 +52,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q232"></a>Q232 | [Cut GMC release v1.1.0-rc.3](operations/release.md) | `milestone` `infra` | 🔲 | S | Bundles Q227 (PriorityClass quota) + Q228 (v2-controller startup) + Q229 (egress-DNS), all merged to main. Unblocks Q224 + Q231 (the dogfood needs the egress-DNS fix in an image). Tag per release.md; verify publish.yml legs (build/sign/SBOM/chart). |
 | <a id="Q224"></a>Q224 | [GKE dogfood: deploy + live GAG validation](plan/gke-dogfood.md) | `milestone` `infra` | 🚫 | M | Control plane validated live on GKE (GMC, v2 CRDs, gateway reconcile, AGC provisioned). 🚫 runner validation (job→pod→GitHub) needs a GMC release w/ Q227-Q229 (rc.2 lacks them); then bump GAG_IMAGE_TAG + dogfood-start. C2 follows; e2e is Q231. |
 | <a id="Q225"></a>Q225 | [Operator docs: Kata Containers for DinD workloads](operations/in-runner-image-builds.md) | `docs` | 🚫 | S | 🚫 Q224. Document runtimeClassName: kata-qemu on podTemplate, /dev/kvm machine-type requirement (N2+ on GCP), and Kata DaemonSet setup. Extend in-runner-image-builds.md or new page depending on density. |
 | <a id="Q226"></a>Q226 | [Kata Containers on GKE — secure CI reference architecture](plan/kata-on-gke.md) | `security` `infra` | 🚫 | M | 🚫 Q224. OSS untrusted-PR threat + GAG dogfood requirement rule out privileged DinD. Spike: GKE nested-virt node pool + Kata RuntimeClass: kind in micro-VM, no privileged pod. Reference arch. [plan](plan/kata-on-gke.md) |
