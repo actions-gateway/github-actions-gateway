@@ -398,6 +398,13 @@ spec:
 			"workload NP missing DNS UDP egress rule:\n%s", workloadYAML)
 		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*53\b.*protocol:\s*TCP`),
 			"workload NP missing DNS TCP egress rule:\n%s", workloadYAML)
+		// DNS peers must include both kube-dns and the node-local-dns redirect
+		// backend used on GKE Dataplane V2 (Q229). Asserted here at the YAML level;
+		// the per-peer shape is locked by TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS.
+		Expect(workloadYAML).To(ContainSubstring("k8s-app: kube-dns"),
+			"workload NP DNS rule missing the kube-dns peer:\n%s", workloadYAML)
+		Expect(workloadYAML).To(ContainSubstring("k8s-app: node-local-dns"),
+			"workload NP DNS rule missing the node-local-dns peer (Q229: GKE Dataplane V2 redirect target):\n%s", workloadYAML)
 
 		// Proxy egress rule: port 8080 to pods matching app=actions-gateway-proxy.
 		// A regression that dropped the podSelector and allowed 8080 to any
