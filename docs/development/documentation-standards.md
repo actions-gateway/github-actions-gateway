@@ -134,6 +134,7 @@ substance is what readers judge.
 | **No links to `CLAUDE.md`** | `CLAUDE.md`/`AGENTS.md` is the agent entrypoint only. Human docs never link to it; the dependency direction is one-way (`CLAUDE.md` → `docs/`). Content humans need lives in `docs/` or `CONTRIBUTING.md`. |
 | **Table of contents** | Long docs (~400+ lines) carry a `## Table of Contents` after the intro listing h2s (plus h3 for operator docs). Anchors follow GitHub slug rules (duplicate headings get `-1`/`-2`); verify against the rendered page. |
 | **Cut filler** | Delete "in order to", "it should be noted that", "please note", and hedging preambles. A pure win for brevity and scannability. |
+| **Versioning** | Docs describe `main`; there is no versioned-docs tree. Mark not-yet-shipped behavior `(planned)` and never document it as if it ships (implemented-vs-planned). Per-release versioned docs is a [deferred decision](../STATUS.md#Q238). |
 
 ## Maintenance
 

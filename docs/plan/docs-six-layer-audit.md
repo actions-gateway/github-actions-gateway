@@ -45,6 +45,10 @@ deliberately avoids, against the CLAUDE.md "smallest change / no new patterns" r
 If any of these later becomes warranted (e.g. the docs move to a real site
 generator), that is its own decision to raise explicitly — not part of this audit.
 
+These decisions now live as standing rules in
+[documentation-standards.md](../development/documentation-standards.md), the canonical
+home for doc conventions; this section keeps the original rationale.
+
 ---
 
 ## Layer 1 — Terminology consistency · ⚠️
