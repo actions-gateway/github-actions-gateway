@@ -18,6 +18,49 @@ require_cmd() {
 	}
 }
 
+# confirm_or_exit MESSAGE — print MESSAGE then require an interactive y/yes
+# before continuing; exit non-zero on anything else. ASSUME_YES=1 skips the
+# prompt (automation). Gate billable or destructive operations with this so a
+# fat-finger is a no-op rather than a cloud spend.
+confirm_or_exit() {
+	local message="$1" reply
+	printf '%s\n' "$message"
+	if [[ "${ASSUME_YES:-}" == "1" ]]; then
+		echo "ASSUME_YES=1 set — skipping confirmation."
+		return 0
+	fi
+	read -r -p "Proceed? [y/N] " reply
+	if [[ "$reply" != "y" && "$reply" != "Y" && "$reply" != "yes" ]]; then
+		echo "Aborted — no changes made." >&2
+		exit 1
+	fi
+}
+
+# gke_get_credentials_and_verify PROJECT ZONE CLUSTER — fetch kubeconfig for the
+# named GKE cluster, then fail closed unless it became the active kubectl
+# context. Every later kubectl/helm call runs against the current context, so
+# this one assertion guards them all from landing on the wrong cluster (e.g. a
+# production context that happened to be selected). Callers must require_cmd
+# gcloud, kubectl, and gke-gcloud-auth-plugin (GKE kubeconfigs authenticate
+# through that external plugin).
+gke_get_credentials_and_verify() {
+	# Names are gke_-prefixed (not project/zone/cluster) so shellcheck's SC2153
+	# does not flag callers' ${PROJECT}/${ZONE}/${CLUSTER} as case-typos of them.
+	local gke_project="$1" gke_zone="$2" gke_cluster="$3"
+	echo "Fetching cluster credentials for ${gke_cluster}..."
+	gcloud container clusters get-credentials "$gke_cluster" \
+		--project="$gke_project" --zone="$gke_zone"
+	local expected current
+	expected="gke_${gke_project}_${gke_zone}_${gke_cluster}"
+	current="$(kubectl config current-context)"
+	if [[ "$current" != "$expected" ]]; then
+		echo "Refusing to continue: kubectl context is '${current}'," >&2
+		echo "expected '${expected}'. Aborting before any cluster writes." >&2
+		exit 1
+	fi
+	echo "Active kubectl context: ${current}"
+}
+
 # workspace_modules — print the disk path of every module in go.work, one per
 # line. The repo is a Go workspace, so go tooling runs per module (a repo-root
 # `go test ./...` does not work — see docs/development/go-workspaces.md).

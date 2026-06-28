@@ -40,12 +40,16 @@ set -euo pipefail
 # classify_cni — read newline-separated DaemonSet names on stdin (one per line,
 # basename only) and print one verdict word to stdout:
 #   pass <name>   an enforcing CNI is present (Calico, Cilium, Antrea, Weave,
-#                 kube-router, Canal) — NetworkPolicy egress/ingress is enforced.
+#                 kube-router, Canal, or GKE Dataplane V2's `anetd`) —
+#                 NetworkPolicy egress/ingress is enforced.
 #   fail <name>   kindnet (and no enforcing CNI) — NetworkPolicy is INERT.
 #   warn unknown  no recognised CNI DaemonSet — cannot determine enforcement.
 # An enforcing CNI wins over kindnet if both somehow appear (a Calico install on
 # kind replaces kindnet, but be defensive). Matching is case-insensitive and on
 # the whole name so `calico-node`, `cilium`, `antrea-agent` etc. all match.
+# GKE Dataplane V2 runs Cilium under the DaemonSet name `anetd` (size-suffixed
+# variants like `anetd-l` too); plain `netd` (non-Dataplane-V2 GKE) is NOT
+# matched — those clusters enforce NetworkPolicy via Calico (`calico-node`).
 classify_cni() {
 	local names
 	names="$(tr '[:upper:]' '[:lower:]')"
@@ -54,6 +58,8 @@ classify_cni() {
 		echo "pass Calico"
 	elif grep -qE '(^|[^a-z])cilium([^a-z]|$)' <<<"$names"; then
 		echo "pass Cilium"
+	elif grep -qE '(^|[^a-z])anetd([^a-z]|$)' <<<"$names"; then
+		echo "pass GKE Dataplane V2 (Cilium)"
 	elif grep -qE '(^|[^a-z])antrea' <<<"$names"; then
 		echo "pass Antrea"
 	elif grep -qE '(^|[^a-z])weave' <<<"$names"; then

@@ -32,6 +32,12 @@ INSTALLATION_ID=135739122         # actions-gateway org install (re-derive via P
 
 ---
 
+> **Shortcut:** Parts A3–B8 (cluster, node pools, GAG install, tenant) are
+> automated by [`scripts/dogfood-setup.sh`](../../scripts/dogfood-setup.sh) —
+> idempotent and safe to re-run with some of the work already done. Complete
+> A1–A2 first (project + billing + APIs), export the Variables block, then run
+> the script. The manual steps below document what it does, step by step.
+
 ## Part A — One-time GCP setup
 
 ### A1. Install gcloud CLI + authenticate
@@ -131,18 +137,23 @@ make validate-cluster
 
 ```bash
 cat > tmp/values-dogfood.yaml <<'EOF'
-# Dogfood / dev mode: float image tags rather than pinning digests.
+# Dogfood / dev mode: pin a released image tag rather than digests.
 # Production installs must use digest-pinned images from the release page.
+# NOTE: `latest` is never published (publish.yml builds only on v* tags), so a
+# real released tag is required — see https://github.com/actions-gateway/github-actions-gateway/pkgs/container/gmc
 allowFloatingImageTags: true
+# Single GMC replica for dogfood (production wants the default 2 for HA); frees
+# capacity on the small system node for the per-tenant AGC pod.
+replicaCount: 1
 gmc:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 agc:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 proxy:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -157,14 +168,30 @@ nodeSelector:
 EOF
 ```
 
-### B3. Install GAG chart
+### B3. Install the v2 CRDs and the GAG chart
+
+The v2 CRDs ship in a separate, opt-in chart (`actions-gateway-crds-v2`). The GMC
+runs its v2 controllers unconditionally, so the CRDs must be installed — and
+**at the same release as the GMC image**, because the v2 *alpha* schema drifts
+between releases (e.g. `ActionsGateway.spec.githubAppRef` on releases became
+`spec.credentials` on `main`); a mismatch makes every reconcile fail validation.
+`scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
+equivalent for the pinned `v1.1.0-rc.2`:
+
+```bash
+git archive v1.1.0-rc.2 charts/actions-gateway-crds-v2 | tar -x -C tmp/
+helm install actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
+  --namespace gmc-system --create-namespace
+```
+
+Then install the GMC chart:
 
 ```bash
 helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --values tmp/values-dogfood.yaml
 
-kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=3m
+kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=3m
 ```
 
 > **GKE PriorityClass admission:** the GMC runs with
@@ -180,9 +207,14 @@ kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=3m
 ```bash
 kubectl create namespace gag-dogfood
 
-# GAG requires the tenant label; baseline PSA matches our securityProfile.
+# v2 markers: tenant=managed authorizes the GMC to operate in the namespace;
+# security-profile drives the Pod Security level the GMC stamps (absent ⇒
+# baseline). Apply tenant=managed with an admin identity — the GMC must never
+# set it itself. (v1 used actions-gateway.github.com/tenant=true + an inline
+# spec.securityProfile on the CR.)
 kubectl label namespace gag-dogfood \
-  actions-gateway.github.com/tenant=true \
+  actions-gateway.com/tenant=managed \
+  actions-gateway.com/security-profile=baseline \
   pod-security.kubernetes.io/enforce=baseline
 ```
 
@@ -219,51 +251,77 @@ spec:
 EOF
 ```
 
-### B7. Create ActionsGateway CR
+### B7. Create the v2 tenant objects
+
+The v2 API decomposes the v1 monolithic `ActionsGateway` into `ActionsGateway`
+(gateway + credentials), `RunnerTemplate` (worker pod shape), and `RunnerSet`
+(runner group). This is the minimal **direct-egress** form — no `EgressProxy`,
+so workers egress directly to GitHub, still behind the default-deny egress
+NetworkPolicy (DNS + GitHub CIDR), just without a per-tenant egress IP. Attach
+an `EgressProxy` and set `spec.defaultProxyRef` on the gateway to add per-tenant
+egress IP attribution.
 
 ```bash
 kubectl apply -f - <<'EOF'
-apiVersion: actions-gateway.github.com/v1alpha1
+apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
-  name: dogfood-gateway
+  name: dogfood
   namespace: gag-dogfood
 spec:
-  gitHubAppRef:
+  githubAppRef:
     name: github-app-v1
-  gitHubURL: https://github.com/actions-gateway/github-actions-gateway
-  securityProfile: baseline
-  proxy:
-    minReplicas: 1
-    maxReplicas: 4
-  runnerGroups:
-    - name: ci
-      runnerLabels: ["self-hosted", "linux", "gag-ci"]
-      maxListeners: 8
-      maxWorkers: 4
-      podTemplate:
-        spec:
-          tolerations:
-            - key: dedicated
-              value: workers
-              effect: NoSchedule
-          containers:
-            - name: runner
-              resources:
-                requests:
-                  cpu: "2"
-                  memory: "4Gi"
-                limits:
-                  cpu: "4"
-                  memory: "8Gi"
+  githubURL: https://github.com/actions-gateway/github-actions-gateway
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata:
+  name: default
+  namespace: gag-dogfood
+spec:
+  podTemplate:
+    spec:
+      tolerations:
+        - key: dedicated
+          value: workers
+          effect: NoSchedule
+      containers:
+        - name: runner
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: ci
+  namespace: gag-dogfood
+spec:
+  gatewayRef:
+    name: dogfood
+  templateRef:
+    name: default
+  runnerLabels: ["self-hosted", "linux", "gag-ci"]
+  maxListeners: 8
+  maxWorkers: 4
 EOF
 ```
+
+> **v2 prerequisites:** Kubernetes ≥ 1.31 (the `RunnerSet` field-selector
+> scoping, KEP-4358) and the `actions-gateway-crds-v2` chart from B3. The
+> `spec.githubAppRef` shape is the **released** v2 schema — if you pin a
+> different `$GAG_IMAGE_TAG`, match the CRD chart to that release.
 
 ### B8. Validate
 
 ```bash
-kubectl get actionsgateway -n gag-dogfood dogfood-gateway
-kubectl get pods -n gag-dogfood
+# Gateway Ready=True; RunnerSet shows its template + egress mode (Direct).
+kubectl get actionsgateway,runnerset -n gag-dogfood -o wide
+kubectl get pods -n gag-dogfood   # the dogfood-agc Deployment pod should be Running
 
 # Runners should appear within ~2 min of the AGC becoming Ready
 gh api /repos/"$REPO"/actions/runners \
@@ -340,7 +398,7 @@ gcloud container clusters resize "$CLUSTER" \
   --node-pool=default-pool --num-nodes=1 --zone="$ZONE" --quiet
 
 # 2. Wait for GMC and AGC pods to be ready
-kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=5m
+kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=5m
 kubectl wait --for=condition=Ready pod -l app=agc -n gag-dogfood --timeout=3m
 
 # 3. Route CI jobs to GAG
@@ -472,15 +530,16 @@ or both at the same time.
 
 | Action | Script |
 |---|---|
+| One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood-setup.sh` |
 | Start cluster + route CI to GAG | `scripts/dogfood-start.sh` |
 | Stop cluster + route CI to GitHub-hosted | `scripts/dogfood-stop.sh` |
 | Enable e2e on GAG | `scripts/dogfood-e2e-start.sh` |
 | Disable e2e on GAG | `scripts/dogfood-e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood-e2e-setup.sh` |
 
-All scripts read `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`, `INSTALLATION_ID`
-for setup) from the environment. Export the Variables block once per shell
-session.
+All scripts read `PROJECT`, `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`,
+`INSTALLATION_ID` for the setup scripts) from the environment. Export the
+Variables block once per shell session.
 
 ---
 
