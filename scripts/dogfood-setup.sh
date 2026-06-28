@@ -353,12 +353,15 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
-          # An explicit image is required when the podTemplate names the
-          # "runner" container: the AGC injects its DefaultWorkerImage only when
-          # it has to *create* that container, not when the template already
-          # defines one (Q233). This is the upstream actions-runner image the
-          # AGC would otherwise default to (cmd/agc/names: RunnerVersion 2.335.1).
-          image: ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
+          # MUST be GAG's first-party worker wrapper, NOT the bare upstream
+          # actions-runner: the wrapper is the container ENTRYPOINT that reads
+          # the job payload from PAYLOAD_SECRET_PATH, materializes the runner
+          # config from the jitconfig, and spawns Runner.Worker. The bare
+          # upstream image lacks it and silently no-ops every job (Q235). An
+          # explicit image is also required because the AGC only injects a
+          # default when it *creates* the runner container, not when the
+          # template names one (Q233).
+          image: ghcr.io/actions-gateway/worker:${GAG_IMAGE_TAG}
           resources:
             requests:
               cpu: "2"

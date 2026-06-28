@@ -294,11 +294,13 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
-          # Explicit image required: the AGC injects its DefaultWorkerImage only
-          # when it *creates* the runner container, not when the template names
-          # one (Q233). This is the upstream actions-runner image the AGC
-          # defaults to (cmd/agc/names: RunnerVersion).
-          image: ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
+          # MUST be GAG's first-party worker wrapper (ghcr.io/actions-gateway/worker),
+          # NOT the bare upstream actions-runner: the wrapper is the ENTRYPOINT
+          # that reads the job payload + jitconfig and spawns Runner.Worker. The
+          # bare upstream image silently no-ops every job (Q235). An explicit
+          # image is also needed because the AGC only injects a default when it
+          # *creates* the runner container, not when the template names one (Q233).
+          image: ghcr.io/actions-gateway/worker:v1.1.0-rc.3@sha256:50257add62f0d8b639e6692e1cc6f93695ab74c58908cffdb34ceaf6e3a66eb1
           resources:
             requests:
               cpu: "2"
@@ -342,18 +344,17 @@ gh api /repos/"$REPO"/actions/runners \
   --jq '.runners[] | {name, status, labels: [.labels[].name]}'
 ```
 
-> **Known blocker — job execution does not complete on `v1.1.0-rc.3` (Q234).**
-> The control plane is validated end-to-end on rc.3 (GMC + AGC roll, gateway
-> `Ready=True`, App-Secret credential path, Q229 egress-DNS token fetch, and all
-> `maxListeners` runners register). A worker pod **is** provisioned and runs to
-> `Completed`, but the job never finishes on GitHub: the AGC's per-job
-> `RenewJob` call is rejected with `401 "Not authorized for this job"`, so GitHub
-> holds the job `in_progress`, the runner stays `busy`, and post-job recycle
-> loops on `422 (runner currently running a job)`. The App's installation
-> permissions are sufficient (`actions:write`, `administration:write`,
-> `organization_self_hosted_runners:write`), so this is a job-token/`run_service_url`
-> auth issue, not a permission gap. Until Q234 is root-caused, routing real CI to
-> GAG (Parts C–D) will hang jobs. Validation reached job→pod; **not** pod→GitHub.
+> **Validated end-to-end on `v1.1.0-rc.3` (2026-06-28).** Control plane (GMC +
+> AGC roll, gateway `Ready=True`, App-Secret credential path, Q229 egress-DNS
+> token fetch, all `maxListeners` runners register), worker-pod provisioning,
+> **and** a real job → worker pod → GitHub `success`. The one footgun: the
+> `RunnerTemplate` runner image **must** be GAG's first-party worker wrapper
+> (`ghcr.io/actions-gateway/worker`), not the bare upstream `actions-runner`.
+> The wrapper is the ENTRYPOINT that reads the job payload + jitconfig and
+> spawns `Runner.Worker`; the bare upstream image silently no-ops the job (the
+> worker pod exits `Completed` with empty logs and `RenewJob` 401s). Making the
+> *default* worker image functional without an explicit per-tenant override is
+> tracked as Q235.
 
 ---
 
