@@ -6,9 +6,18 @@ GAG's own e2e CI suite uses `kind create cluster` inside a runner pod (Docker-in
 
 | Phase | Status |
 |---|---|
-| Spike — prove Kata + GKE nested-virt + kind works end-to-end | ❌ Not started |
+| Spike artifacts — node-pool config, Kata install manifests, unprivileged runner pod, runbook | ✅ Authored + offline-validated (`make manifest-validate`, `make shellcheck`) |
+| Spike — live go/no-go (run the 6 acceptance criteria end-to-end) | ❌ Pending [Q224](../STATUS.md) GKE cluster + GCP credentials |
 | CI integration — replace privileged DinD in e2e-test.yml | ❌ Blocked on spike |
 | Reference architecture doc — `docs/operations/kata-ci.md` | ❌ Blocked on spike |
+
+The spike's executable artifacts are authored and statically validated offline —
+the [`gcloud` node-pool script](../../scripts/kata-node-pool.sh), the
+[Kata install + RuntimeClass + unprivileged runner manifests](../../deploy/kata-ci/),
+and the step-by-step [spike runbook](../operations/kata-ci-spike-runbook.md) that
+maps 1:1 to the six acceptance criteria below. The live go/no-go is a separate
+human step that needs a GKE Standard cluster with nested virtualization; it has
+not been run.
 
 ---
 

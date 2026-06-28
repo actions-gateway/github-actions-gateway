@@ -151,3 +151,4 @@ nav:
       - Troubleshooting: operations/troubleshooting.md
       - Security operations: operations/security-operations.md
       - Release: operations/release.md
+      - "Kata-on-GKE spike runbook": operations/kata-ci-spike-runbook.md

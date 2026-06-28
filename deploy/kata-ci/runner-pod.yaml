@@ -1,0 +1,119 @@
+# Unprivileged CI runner pod — runs dockerd + kind inside a Kata micro-VM.
+#
+# This is the security thesis of Q226 made concrete: a pod that runs a full
+# Docker daemon and a kind cluster WITHOUT any privileged context. Isolation is
+# enforced at the hypervisor layer by `runtimeClassName: kata` — each pod gets
+# its own guest kernel inside a lightweight VM, so even untrusted contributor CI
+# code cannot reach the host node's /proc, /sys, devices, or the GKE metadata
+# server's node service-account token.
+#
+# Contrast with privileged DinD (the path this replaces): there, `privileged:
+# true` grants host-kernel access and the runner becomes a direct "pwn request"
+# target. Here the host kernel is never shared, so privilege is unnecessary.
+#
+# SECURITY INVARIANT — none of the hardening below may be relaxed to
+# `privileged: true`. The Kata VM boundary is what makes a *non-privileged*
+# dockerd safe; granting host privilege would defeat the entire design and
+# regress the project's secure-by-default principle. If a field below proves too
+# tight at spike time, narrow the gap by adding a single capability (still
+# guest-scoped, still no host access) and record why — never by setting
+# privileged: true.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kata-runner
+  labels:
+    app: kata-runner
+spec:
+  # The hypervisor-isolation boundary. The RuntimeClass `scheduling.nodeSelector`
+  # (see runtimeclass.yaml) auto-pins this pod to the nested-virt node pool, so no
+  # explicit nodeSelector is needed here.
+  runtimeClassName: kata
+  restartPolicy: Never
+  # Pod-level security context — applies to all containers.
+  securityContext:
+    # runAsNonRoot is intentionally NOT set to true: a standard rootful dockerd
+    # needs uid 0. Under Kata that uid 0 is root of the *guest VM*, fully
+    # hypervisor-isolated from the host — this is exactly the property that lets
+    # us run dockerd safely without host privilege. On a normal runtime this
+    # would be unacceptable; under Kata it is the design.
+    runAsUser: 0
+    # Default seccomp filter — block the dangerous syscall surface even inside
+    # the guest (defense in depth on top of the VM boundary).
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: runner
+    # Replace with GAG's e2e runner image (the one that bundles dockerd, kind,
+    # and the test toolchain). Pin by digest in real use.
+    image: ghcr.io/actions-gateway/ci-runner:REPLACE_ME
+    imagePullPolicy: IfNotPresent
+    # Start dockerd in the background, wait for the socket, then idle so a human
+    # (or the GitHub Actions runner agent) can exec in to run `kind create
+    # cluster` and `make e2e`. No --privileged, no --insecure, no DinD flags —
+    # standard dockerd, because the VM is the isolation boundary.
+    command: ["/bin/bash", "-c"]
+    args:
+    - |
+      set -euo pipefail
+      dockerd --host=unix:///var/run/docker.sock &
+      for _ in $(seq 1 30); do
+        docker info >/dev/null 2>&1 && break
+        sleep 1
+      done
+      docker info >/dev/null
+      echo "dockerd is up; pod ready for kind + make e2e"
+      sleep infinity
+    securityContext:
+      # THE headline property of Q226: the runner runs unprivileged.
+      privileged: false
+      # Forbid gaining privileges beyond the granted set via setuid/setcap
+      # binaries (sets no_new_privs). Verify at spike time that kind's node
+      # containers still come up with this on; if a setuid path inside a kind
+      # node breaks, this single field may be relaxed (still no host access) —
+      # never escalate to privileged: true.
+      allowPrivilegeEscalation: false
+      capabilities:
+        # Drop the full capability set, then add back only the minimum a rootful
+        # dockerd needs. This list is the spike's STARTING point — acceptance
+        # criterion #2 confirms dockerd starts with it; narrow it empirically and
+        # record the final set in the reference architecture doc.
+        drop:
+        - ALL
+        add:
+        # mount/unmount, cgroup + namespace setup — the core dockerd/runc need.
+        - SYS_ADMIN
+        # docker bridge networking and iptables NAT for containers + kind.
+        - NET_ADMIN
+        # raise file-descriptor / process rlimits for the daemon.
+        - SYS_RESOURCE
+        # create the device nodes containers expect (/dev/null, loop, etc.).
+        - MKNOD
+        # change ownership of layer/overlay files during image unpack.
+        - CHOWN
+        # bypass file permission checks when managing the docker data root.
+        - DAC_OVERRIDE
+        # drop privileges into container processes.
+        - SETUID
+        - SETGID
+    resources:
+      # kind nodes + the GAG control plane need real memory; tune at spike time.
+      requests:
+        cpu: "2"
+        memory: 4Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+    volumeMounts:
+    # dockerd's data root and the runtime socket need a writable, non-host
+    # filesystem. emptyDir lives inside the Kata guest, never on the host node.
+    - name: docker-data
+      mountPath: /var/lib/docker
+    - name: docker-run
+      mountPath: /var/run
+  volumes:
+  - name: docker-data
+    emptyDir: {}
+  - name: docker-run
+    emptyDir: {}

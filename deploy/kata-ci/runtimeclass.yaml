@@ -1,0 +1,36 @@
+# Kata Containers RuntimeClass objects.
+#
+# A RuntimeClass tells the kubelet which containerd runtime handler to use for a
+# pod. kata-deploy installs the `kata-qemu` handler into containerd's config on
+# each labelled node; these objects expose it to the API. A pod opts in with
+# `runtimeClassName: kata` (or `kata-qemu`) — see runner-pod.yaml.
+#
+# We ship these explicitly (and set CREATE_RUNTIMECLASSES=false on the
+# kata-deploy DaemonSet) so the RuntimeClass surface is reviewable in-repo and
+# version-controlled, rather than created as a side effect of the installer.
+#
+# `kata` is a convenience alias mapping to the QEMU handler — the spike and the
+# runner pod reference `kata` so the handler can be retargeted (e.g. to Cloud
+# Hypervisor, `kata-clh`) by editing one object without touching every pod spec.
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+# handler MUST match a runtime configured in containerd on the node. kata-deploy
+# registers `kata-qemu` (among others); we alias `kata` to it.
+handler: kata-qemu
+scheduling:
+  # Only schedule kata pods onto nodes kata-deploy has provisioned. kata-deploy
+  # sets this label once the runtime binaries are installed on the node.
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+---
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata-qemu
+handler: kata-qemu
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
