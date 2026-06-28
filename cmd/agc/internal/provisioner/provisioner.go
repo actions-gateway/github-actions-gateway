@@ -1068,6 +1068,12 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 			Image: workerImage,
 		}}, template.Spec.Containers...)
 		runnerIdx = 0
+	} else if template.Spec.Containers[runnerIdx].Image == "" {
+		// Gap-fill: a tenant podTemplate may name the runner container but omit
+		// its image, which the API server rejects (spec.containers[].image:
+		// Required value). Fill the resolved worker image without overriding an
+		// image the tenant set explicitly.
+		template.Spec.Containers[runnerIdx].Image = workerImage
 	}
 
 	// Inject Secret volume.
