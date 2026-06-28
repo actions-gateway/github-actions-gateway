@@ -7,7 +7,7 @@ domain: actions-gateway.github.com
 layout:
 - go.kubebuilder.io/v4
 projectName: gmc
-repo: github.com/karlkfi/github-actions-gateway/gmc
+repo: github.com/actions-gateway/github-actions-gateway/gmc
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: actions-gateway.github.com
   group: actions-gateway.github.com
   kind: ActionsGateway
-  path: github.com/karlkfi/github-actions-gateway/gmc/api/v1alpha1
+  path: github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1
   version: v1alpha1
   webhooks:
     validation: true
