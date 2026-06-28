@@ -217,6 +217,14 @@ type IPRangeReconciler struct {
 	// empty keeps the rule any-destination (the secure default). Q168.
 	APIServerCIDRs []string
 
+	// V2Enabled gates the v2 NetworkPolicy refresh passes (EgressProxy and v2
+	// ActionsGateway direct egress). It is set from the startup v2alpha1 CRD
+	// detection (V2alpha1Installed): on a v1-only install the
+	// actions-gateway.com/v2alpha1 CRDs are absent, so listing those kinds would
+	// fail with "no matches for kind" on every tick. When false, the v2 passes
+	// are skipped entirely and only the v1 NetworkPolicies are refreshed. Q228.
+	V2Enabled bool
+
 	// InitialBackoff and MaxBackoff bound the capped exponential backoff used
 	// to retry the initial fetch in Start (see reconcileInitial). Zero selects
 	// defaultInitialBackoff / defaultMaxBackoff; tests set small values.
@@ -340,11 +348,21 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		}
 	}
 
+	// v2 NetworkPolicy refresh passes are gated on the opt-in
+	// actions-gateway.com/v2alpha1 CRDs being installed (detected once at startup,
+	// see V2alpha1Installed). On a v1-only install they are absent, so listing the
+	// v2 kinds below would fail with "no matches for kind" on every tick; skipping
+	// the passes keeps the loop quiet and the v1 NetworkPolicies (already refreshed
+	// above) unaffected. Q228.
+	if !r.V2Enabled {
+		return nil
+	}
+
 	// v2: patch every managed EgressProxy NetworkPolicy too. Like the v1 proxy NP,
 	// its GitHub-CIDR egress allowlist is derived from this cache, so it must be
 	// refreshed when GitHub's published ranges rotate. A List failure is logged and
-	// skipped rather than returned: a missing v2 CRD on a v1-only install must not
-	// fail the whole refresh loop and starve the v1 NetworkPolicies of updates.
+	// skipped rather than returned: a transient list error must not fail the whole
+	// refresh loop and starve the v1 NetworkPolicies of updates.
 	var epList gmcv2alpha1.EgressProxyList
 	if err := r.List(ctx, &epList); err != nil {
 		log.Error("failed to list EgressProxies", "error", err)
