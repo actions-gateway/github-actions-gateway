@@ -732,6 +732,33 @@ impact list, to be turned into plan-doc scope when scheduled:
   note all update, and one dual-read window covers both, riding the v1alpha1 serving
   window.
 
+### H.13.1. CRD packaging and conditional GMC startup
+
+The five `actions-gateway.com/v2alpha1` CRDs ship in a **separate, opt-in Helm
+chart** (`actions-gateway-crds-v2`), not the main `actions-gateway` chart. The
+split keeps the main chart's Helm release Secret under Kubernetes' 1 MiB object
+limit — the five v2 CRDs' OpenAPI schemas are large enough that bundling them
+would push it over.
+
+So a supported install can have the GMC running without the v2 CRDs present. The
+GMC makes the opt-in real on the controller side: at startup it queries the REST
+mapper for the `ActionsGateway` and `EgressProxy` v2 kinds and only registers the
+v2 controllers (`ActionsGatewayV2Reconciler`, `EgressProxyReconciler`,
+`NamespacePSAReconciler`) and the IP-range reconciler's v2 NetworkPolicy refresh
+passes when both are served. On a v1-only install it logs one info line and
+starts v1-only — rather than registering `source.Kind` watches against absent
+kinds, which would spin a "no matches for kind" retry loop and make the
+IP-range reconcile log a list error every tick. v1alpha1 reconciliation is
+unaffected either way.
+
+Detection is a one-shot startup check, so installing the CRD chart into a running
+v1-only cluster requires a GMC restart to enable the v2 controllers. The
+RunnerTemplate validating webhooks are registered unconditionally (they never
+fire until a `RunnerTemplate`/`ClusterRunnerTemplate` exists, which requires the
+CRDs), so the webhook path needs no restart. The operator-facing runbook for the
+"v2 objects not reconciling after installing the CRD chart" symptom lives in
+[troubleshooting.md](../operations/troubleshooting.md#v2-objects-not-reconciling-after-installing-the-crd-chart).
+
 ## H.14. Admin policy layer — deferred until tiering is real
 
 The decomposition above mirrors Gateway API's `Gateway → route attachment` but

@@ -50,6 +50,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
+- [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
@@ -1538,6 +1539,38 @@ The `v2alpha1` API supports **multiple `ActionsGateway`s per namespace** (unlike
 - **Per-gateway garbage collection.** Deleting one gateway removes only its own children (owner-referenced, per-gateway-named); a neighbor's gateway, AGC, and `RunnerSet`s are untouched. The one cluster-scoped child — the `agc-clusterrunnertemplate-reader.<ns>.<gateway>` `ClusterRoleBinding` — cannot carry a namespaced owner reference, so the gateway controller deletes it explicitly during teardown. If a gateway's `ClusterRoleBinding` lingers after the gateway is gone (e.g. the GMC was down during the delete), it is harmless (it binds a now-absent ServiceAccount) and safe to `kubectl delete clusterrolebinding agc-clusterrunnertemplate-reader.<ns>.<gateway>`.
 
 **Prerequisite.** The five v2 CRDs ship in the separate `actions-gateway-crds-v2` chart, not the main chart. Install it before creating any v2 object: `helm upgrade --install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`. The shipped `agc-clusterrunnertemplate-reader` ClusterRole is in the main chart.
+
+---
+
+## v2 Objects Not Reconciling After Installing the CRD Chart
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+
+**Symptom.** You created a v2 `ActionsGateway` or `EgressProxy` and nothing happens — no AGC Deployment, no proxy pool, no status conditions. The GMC log shows it came up v1-only:
+
+```text
+actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled (install the actions-gateway-crds-v2 chart and restart the GMC to enable them)
+```
+
+**Cause.** The GMC checks for the `actions-gateway.com/v2alpha1` CRDs **once at startup**. If they were absent then, it disables the v2 controllers (and the v2 IP-range refresh passes) deliberately — this is the secure, quiet default that keeps a v1-only install from spinning a "no matches for kind" retry loop. Installing the CRD chart into an already-running cluster does **not** retroactively enable them.
+
+**Remediation.**
+
+```sh
+# 1. Confirm the v2 CRDs are now installed and Established.
+kubectl get crd actionsgateways.actions-gateway.com egressproxies.actions-gateway.com
+
+# 2. Restart the GMC so it re-detects them at startup.
+kubectl rollout restart deploy -n gmc-system gmc-controller-manager
+
+# 3. Confirm the GMC now reports v2 enabled.
+kubectl logs -n gmc-system deploy/gmc-controller-manager | grep v2alpha1
+# Expected: actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers
+```
+
+After the restart the v2 controllers pick up any v2 objects already in the cluster. v1alpha1 tenants are unaffected throughout — they reconcile whether or not the v2 CRDs are installed.
+
+> **Note on older GMC builds.** A GMC predating this startup gate (before Q228) started the v2 controllers unconditionally, so on a v1-only install it logged `no matches for kind "ActionsGateway"/"EgressProxy" in version "actions-gateway.com/v2alpha1"` every ~10s and the IP-range reconciler logged `failed to list EgressProxies`. The fix is the same — install the CRD chart — or upgrade to a build with the gate, which logs a single info line instead.
 
 ---
 
