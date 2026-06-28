@@ -404,51 +404,76 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
-	// plane (Deployment/SA/RoleBinding/Service, AGC+workload NetworkPolicies,
-	// metrics certs) and wires its egress through the EgressProxy named by
-	// defaultProxyRef. It does not provision the proxy pool (the EgressProxy
-	// reconciler) or stamp PSA labels (the NamespacePSAReconciler). Single-gateway
-	// per namespace at this milestone.
-	if err := (&controller.ActionsGatewayV2Reconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		AGCImage:       agcImage,
-		AGCExtraEnv:    agcExtraEnv,
-		APIServerCIDRs: parsedAPIServerCIDRs,
-		IPCache:        ipCache,
-		Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
+	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
+	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
+	// actions-gateway-crds-v2 chart (split out so the main chart's Helm release
+	// Secret stays under 1 MiB). Detect them once at startup: on a v1-only install
+	// (the main chart alone) the kinds are absent, so registering the v2
+	// controllers unconditionally would spin a source.Kind retry loop and log "no
+	// matches for kind" on every reconcile. When absent, skip the v2 controllers
+	// and disable the v2 IPRange passes so the GMC comes up clean; v1alpha1 tenants
+	// reconcile normally either way. Installing the v2 CRDs later requires a GMC
+	// restart to enable the v2 controllers (Q228).
+	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
+	if err != nil {
+		setupLog.Error(err, "Failed to detect actions-gateway.com/v2alpha1 CRDs")
 		os.Exit(1)
 	}
-
-	// EgressProxy reconciler (v2 M2): reconciles a standalone EgressProxy into a
-	// proxy pool it owns (Deployment/Service/HPA/PDB/NetworkPolicy + self-signed
-	// proxy TLS Secret). Shares the GitHub IP-range cache with the ActionsGateway
-	// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
-	// current. Same-namespace only at this milestone.
-	if err := (&controller.EgressProxyReconciler{
-		Client:     mgr.GetClient(),
-		Scheme:     mgr.GetScheme(),
-		IPCache:    ipCache,
-		ProxyImage: proxyImage,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
-		os.Exit(1)
+	if v2Enabled {
+		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")
+	} else {
+		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
+			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
 	}
 
-	// NamespacePSA reconciler (v2 Q175): stamps the namespace Pod Security Admission
-	// labels from its actions-gateway.com/security-profile label. v2 relocates the
-	// security profile off the per-gateway ActionsGateway.spec onto the namespace
-	// (appendix-h §H.16 #7); the gmc-namespace-security-profile-guard
-	// ValidatingAdmissionPolicy guards operator edits to that label.
-	if err := (&controller.NamespacePSAReconciler{
-		Client:   mgr.GetClient(),
-		Recorder: mgr.GetEventRecorder("namespace-psa-controller"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "namespace-psa")
-		os.Exit(1)
+	if v2Enabled {
+		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
+		// plane (Deployment/SA/RoleBinding/Service, AGC+workload NetworkPolicies,
+		// metrics certs) and wires its egress through the EgressProxy named by
+		// defaultProxyRef. It does not provision the proxy pool (the EgressProxy
+		// reconciler) or stamp PSA labels (the NamespacePSAReconciler). Single-gateway
+		// per namespace at this milestone.
+		if err := (&controller.ActionsGatewayV2Reconciler{
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			AGCImage:       agcImage,
+			AGCExtraEnv:    agcExtraEnv,
+			APIServerCIDRs: parsedAPIServerCIDRs,
+			IPCache:        ipCache,
+			Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
+			os.Exit(1)
+		}
+
+		// EgressProxy reconciler (v2 M2): reconciles a standalone EgressProxy into a
+		// proxy pool it owns (Deployment/Service/HPA/PDB/NetworkPolicy + self-signed
+		// proxy TLS Secret). Shares the GitHub IP-range cache with the ActionsGateway
+		// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
+		// current. Same-namespace only at this milestone.
+		if err := (&controller.EgressProxyReconciler{
+			Client:     mgr.GetClient(),
+			Scheme:     mgr.GetScheme(),
+			IPCache:    ipCache,
+			ProxyImage: proxyImage,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
+			os.Exit(1)
+		}
+
+		// NamespacePSA reconciler (v2 Q175): stamps the namespace Pod Security Admission
+		// labels from its actions-gateway.com/security-profile label. v2 relocates the
+		// security profile off the per-gateway ActionsGateway.spec onto the namespace
+		// (appendix-h §H.16 #7); the gmc-namespace-security-profile-guard
+		// ValidatingAdmissionPolicy guards operator edits to that label. v2-only: its
+		// tenant-namespace marker is set by the v2 ActionsGateway reconcile.
+		if err := (&controller.NamespacePSAReconciler{
+			Client:   mgr.GetClient(),
+			Recorder: mgr.GetEventRecorder("namespace-psa-controller"),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "namespace-psa")
+			os.Exit(1)
+		}
 	}
 
 	if err := mgr.Add(&controller.IPRangeReconciler{
@@ -459,6 +484,11 @@ func main() {
 		Log:            slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
 		Metrics:        gmcMetrics,
 		APIServerCIDRs: parsedAPIServerCIDRs,
+		// On a v1-only install the actions-gateway.com/v2alpha1 CRDs are absent, so
+		// the v2 EgressProxy / ActionsGateway refresh passes are disabled to avoid a
+		// "no matches for kind" error on every tick (Q228). v1 NetworkPolicies are
+		// refreshed regardless.
+		V2Enabled: v2Enabled,
 	}); err != nil {
 		setupLog.Error(err, "Failed to register IP range reconciler")
 		os.Exit(1)

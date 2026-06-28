@@ -230,6 +230,36 @@ Flux `HelmRelease` examples (with the CRD-pruning gotcha handled) and shows how 
 source the GitHub App credential Secret securely — External Secrets Operator or
 Sealed Secrets — so the private key is never committed to Git.
 
+### Optional: the v2alpha1 (alpha) API CRDs
+
+The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — the
+fully supported, standard path. The **alpha** `v2alpha1` (`actions-gateway.com`)
+API ships its five CRDs in a **separate, opt-in chart**,
+`actions-gateway-crds-v2`, split out so the main chart's Helm release Secret
+stays under the 1 MiB limit. They are genuinely optional:
+
+- **You do not need them for v1.** A plain `helm install` of the main chart
+  (without `actions-gateway-crds-v2`) is a complete, supported v1-only install.
+  The GMC **detects the v2 CRDs at startup**: when they are absent it logs a
+  single info line — `actions-gateway.com/v2alpha1 CRDs not installed; v2
+  controllers disabled` — and does **not** start the v2 controllers or the v2
+  IP-range refresh passes. v1alpha1 tenants reconcile normally.
+- **To use v2,** install the CRD chart alongside the main chart (any order):
+
+  ```sh
+  helm install actions-gateway-crds-v2 \
+    oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+  ```
+
+  Detection happens once at GMC startup, so **after installing the CRDs into a
+  running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n
+  gmc-system gmc-controller-manager`) to enable the v2 controllers. On startup
+  the GMC logs `actions-gateway.com/v2alpha1 CRDs detected; enabling v2
+  controllers`.
+
+See [getting-started.md § the v2alpha1 API](../getting-started.md#optional-the-v2alpha1-api-alpha)
+for what v2 adds and the Kubernetes version requirements.
+
 ---
 
 ## Key values an operator sets

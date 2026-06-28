@@ -153,6 +153,8 @@ helm install actions-gateway-crds-v2 \
   oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
 ```
 
+The opt-in is real on the controller side too: the GMC **detects the v2 CRDs at startup**. A v1-only install (the main chart without this CRD chart) comes up clean — the GMC logs `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled` and starts only the v1 controllers; it does **not** error-loop on the missing kinds. Because detection happens once at startup, **installing the v2 CRDs into an already-running cluster requires a GMC restart** (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`) before the v2 controllers activate.
+
 The CRDs install and validate on Kubernetes ≥ 1.30, but per-gateway scoping (the `RunnerSet` `spec.gatewayRef.name` field selector, KEP-4358) requires **Kubernetes ≥ 1.31**. See the [chart README](../charts/actions-gateway-crds-v2/README.md) for details.
 
 For the v2 onboarding flow — the worked three-object example, per-gateway naming and the 52-character name cap, and the namespace-scoped security profile — see [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md), the v2 sections in [Tenant Onboarding](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace), and [Troubleshooting](operations/troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites).
