@@ -98,7 +98,7 @@ jobs:
     needs: [changes]
     # gofmt/golangci need code; lint-status needs the STATUS.md filter.
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -136,7 +136,7 @@ jobs:
   shellcheck:
     needs: [changes]
     if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 5
     # Pin the shellcheck version rather than using ubuntu-latest's preinstalled
     # one: that version drifts with the runner image and its SC2015-style
@@ -185,7 +185,7 @@ jobs:
   vendor-check:
     needs: [changes]
     if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -212,7 +212,7 @@ jobs:
   tidy-check:
     needs: [changes]
     if: needs.changes.outputs.modules == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -230,7 +230,7 @@ jobs:
   unit-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     # -race roughly doubles unit runtime vs. plain `go test`, so allow more
     # headroom than the lint job. The race detector needs cgo, which the
     # ubuntu-latest image's gcc satisfies out of the box.
@@ -258,7 +258,7 @@ jobs:
   coverage:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
