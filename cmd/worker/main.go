@@ -151,6 +151,23 @@ func installSelf(dir string) error {
 	return nil
 }
 
+// resolveWorkerBin locates the Runner.Worker binary. It prefers
+// $RUNNER_HOME_DIR/bin (the actions-runner layout) so resolution does not depend
+// on PATH — the wrapper is injected into an unmodified upstream image whose PATH
+// may not include the runner bin dir — and falls back to PATH for images that
+// place the binary elsewhere.
+func resolveWorkerBin(runnerHome string) (string, error) {
+	p := filepath.Join(runnerHome, "bin", workerBin)
+	if _, err := os.Stat(p); err == nil {
+		return p, nil
+	}
+	p, err := exec.LookPath(workerBin)
+	if err != nil {
+		return "", fmt.Errorf("find %s (looked in %s/bin and PATH): %w", workerBin, runnerHome, err)
+	}
+	return p, nil
+}
+
 // logLevelFromEnv maps LOG_LEVEL (info|debug, default info) to a slog.Level.
 func logLevelFromEnv() slog.Level {
 	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
@@ -208,21 +225,13 @@ func run() error {
 	// 4. Start Runner.Worker.
 	// ExtraFiles[0] = r1 → fd 3 in child (worker reads job message)
 	// ExtraFiles[1] = w2 → fd 4 in child (worker writes back)
-	// Resolve Runner.Worker. Prefer $RUNNER_HOME_DIR/bin (the actions-runner
-	// layout) so resolution does not depend on PATH: the wrapper is injected into
-	// an unmodified upstream image whose PATH may not include the runner bin dir.
-	// Fall back to PATH for images that place the binary elsewhere.
-	workerPath := filepath.Join(runnerHome, "bin", workerBin)
-	if _, statErr := os.Stat(workerPath); statErr != nil {
-		var lookErr error
-		workerPath, lookErr = exec.LookPath(workerBin)
-		if lookErr != nil {
-			_ = r1.Close()
-			_ = w1.Close()
-			_ = r2.Close()
-			_ = w2.Close()
-			return fmt.Errorf("find %s (looked in %s/bin and PATH): %w", workerBin, runnerHome, lookErr)
-		}
+	workerPath, err := resolveWorkerBin(runnerHome)
+	if err != nil {
+		_ = r1.Close()
+		_ = w1.Close()
+		_ = r2.Close()
+		_ = w2.Close()
+		return err
 	}
 	cmd := exec.Command(workerPath, //nolint:gosec // G204: workerPath is the discovered Runner.Worker binary, not user input
 		"spawnclient",

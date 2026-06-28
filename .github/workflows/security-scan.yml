@@ -135,6 +135,11 @@ jobs:
             dockerfile: cmd/worker/Dockerfile
             # report-only — see the per-leg exit-code note on the job above.
             exit-code: '0'
+          - name: wrapper
+            dockerfile: cmd/worker/Dockerfile.wrapper
+            # blocking: FROM scratch + the Go wrapper binary, no OS base CVEs
+            # (unlike the worker leg's actions-runner base).
+            exit-code: '1'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Pre-pull buildkit builder image
