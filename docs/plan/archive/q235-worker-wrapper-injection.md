@@ -1,25 +1,26 @@
 # Worker wrapper injection (Q235)
 
-> **Status:** ▶ Started. Tracks [Q235](../STATUS.md#Q235).
+> **Status:** ✅ Done — merged in [#437](https://github.com/actions-gateway/github-actions-gateway/pull/437); operator-doc flips followed up. Was Q235 (now closed/removed from the Queue).
 >
-> **Done:** wrapper `install` subcommand + PATH-independent `Runner.Worker`
+> **Shipped:** wrapper `install` subcommand + PATH-independent `Runner.Worker`
 > resolution; provisioner injection (image-volume + initContainer paths, command
 > override); AGC `WRAPPER_IMAGE`/`WRAPPER_DELIVERY` wiring + version detection; GMC
 > forwarding + chart `wrapper` image slot; `Dockerfile.wrapper` + bake target +
-> `publish.yml` leg; unit tests (both delivery paths + disabled + `installSelf`);
-> `release.md`. `make check` green.
+> `publish.yml` + security-scan legs; unit tests (both delivery paths + `installSelf`);
+> **e2e wired through `WRAPPER_IMG`, validated on kindnet + Calico** (the
+> image-volume path on the v1.35 kind cluster); `release.md` + the operator-doc
+> "default works" / ARC "drop-in" flips.
 >
-> **Remaining (validation tail):** an e2e case that runs a job through an
-> **injected** pod (set the e2e GMC's `WRAPPER_IMAGE`); live dogfood re-validate
-> with `workerImage` unset; then flip the operator-doc "default works" / ARC
-> "drop-in" claims (`tenant-onboarding.md`, `migration-from-arc.md`) once validated.
+> **Residual:** a live GKE + real-GitHub dogfood re-validate with `workerImage`
+> unset — gold-standard extra confidence, folded into [Q224](../../STATUS.md#Q224)
+> (it happens naturally when production CI routes to the default image).
 
 ## Problem
 
 GAG worker pods need GAG's `cmd/worker` **wrapper** as the container entrypoint:
 it reads the job payload from `PAYLOAD_SECRET_PATH`, materializes the runner
 config from the `jitconfig`, and spawns `Runner.Worker` over anonymous pipes
-(see [cmd/worker/main.go](../../cmd/worker/main.go)). Today the wrapper is baked
+(see [cmd/worker/main.go](../../../cmd/worker/main.go)). Today the wrapper is baked
 into a first-party image (`ghcr.io/actions-gateway/worker` = upstream
 `actions-runner` + the wrapper as `ENTRYPOINT`), and `names.DefaultWorkerImage`
 is the **bare upstream** `actions-runner`, which has no wrapper. Consequences:
@@ -27,7 +28,7 @@ is the **bare upstream** `actions-runner`, which has no wrapper. Consequences:
 - A **default** install (no per-tenant `workerImage`) provisions worker pods that
   silently no-op every job — the pod exits `Completed` with empty logs and the
   AGC's `RenewJob` 401s. Tests never caught it: the e2e suite always passes the
-  wrapper image explicitly. Found live in [Q224](../STATUS.md).
+  wrapper image explicitly. Found live in [Q224](../../STATUS.md).
 - An **ARC migrator's** custom/slim image (`FROM actions-runner` + tooling) is not
   drop-in: it has `Runner.Worker` but the stock entrypoint, so it must be rebuilt
   with the wrapper layered on.
@@ -44,7 +45,7 @@ the 518 MB runner is the upstream image (GitHub-hosted, widely mirrored).
 
 ### Worker pod shape
 
-The provisioner ([provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go))
+The provisioner ([provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go))
 builds every worker pod with:
 
 - **runner container** = `resolveWorkerImage(spec)` (default upstream, or per-tenant
@@ -91,9 +92,9 @@ runtime probe-and-fallback is out of scope for v1.
 
 ### Chart / GMC wiring
 
-- New `wrapper:` image block in [values.yaml](../../charts/actions-gateway/values.yaml)
+- New `wrapper:` image block in [values.yaml](../../../charts/actions-gateway/values.yaml)
   (`repository`/`tag`/`digest`), digest-pinned like `agc`/`proxy`.
-- [deployment.yaml](../../charts/actions-gateway/templates/deployment.yaml) sets
+- [deployment.yaml](../../../charts/actions-gateway/templates/deployment.yaml) sets
   `WRAPPER_IMAGE` on the GMC via the `actions-gateway.image` helper.
 - The GMC propagates `WRAPPER_IMAGE` (+ optional `WRAPPER_DELIVERY`) into each AGC
   Deployment it provisions; the AGC reads them and the provisioner uses
@@ -110,7 +111,7 @@ runtime probe-and-fallback is out of scope for v1.
 
 ## Test plan
 
-- **Unit** ([provisioner](../../cmd/agc/internal/provisioner)): image-volume path,
+- **Unit** ([provisioner](../../../cmd/agc/internal/provisioner)): image-volume path,
   init-container path, command override, `RUNNER_HOME_DIR`/`PATH` env, init-container
   hardening under `restricted`, and `WRAPPER_DELIVERY` selection (incl. version gate).
 - **E2e** (kind): a case that sets `WORKER_IMG` to the **bare upstream**
@@ -118,7 +119,7 @@ runtime probe-and-fallback is out of scope for v1.
   the regression the unit tests can't cover. Run on both the ≥1.33 (image-volume)
   and an init-fallback path.
 - **Live**: dogfood re-validate with `DefaultWorkerImage` = upstream + injection
-  (the [Q224](../STATUS.md) path), worker image **unset**.
+  (the [Q224](../../STATUS.md) path), worker image **unset**.
 
 ## Rollout
 

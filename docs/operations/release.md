@@ -246,7 +246,7 @@ same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
   `workerImage`). This is what makes `DefaultWorkerImage` (still the digest-pinned
   upstream `actions-runner`, runner version locked to `agent.version` — see
   [building.md](../development/building.md#runner-version-pin-lockstep)) actually
-  run jobs (Q235, [plan](../plan/worker-wrapper-injection.md)).
+  run jobs (Q235, [plan](../plan/archive/q235-worker-wrapper-injection.md)).
 - **`ghcr.io/actions-gateway/worker`** — the full upstream `actions-runner` + the
   wrapper as `ENTRYPOINT` (~520 MB). Kept as an optional batteries-included image;
   unnecessary once injection is enabled, since the runner image is the upstream one
