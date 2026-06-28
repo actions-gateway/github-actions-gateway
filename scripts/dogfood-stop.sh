@@ -3,6 +3,7 @@
 # See docs/plan/gke-dogfood.md Part D.
 #
 # Required env vars (export before running):
+#   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
 #   ZONE      GCP zone (e.g. us-central1-a)
 #   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
@@ -13,6 +14,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 source "${REPO_ROOT}/scripts/lib/common.sh"
 
 main() {
+	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
 	: "${ZONE:?ZONE must be set}"
 	: "${REPO:?REPO must be set}"
@@ -27,6 +29,7 @@ main() {
 
 	echo "Scaling system pool to 0 nodes..."
 	gcloud container clusters resize "${CLUSTER}" \
+		--project="${PROJECT}" \
 		--node-pool=default-pool --num-nodes=0 --zone="${ZONE}" --quiet
 
 	echo "Done. Worker nodes drain and autoscale to 0 automatically (~10 min)."

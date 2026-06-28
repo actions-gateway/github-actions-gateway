@@ -485,9 +485,9 @@ or both at the same time.
 | Disable e2e on GAG | `scripts/dogfood-e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood-e2e-setup.sh` |
 
-All scripts read `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`, `INSTALLATION_ID`
-for setup) from the environment. Export the Variables block once per shell
-session.
+All scripts read `PROJECT`, `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`,
+`INSTALLATION_ID` for the setup scripts) from the environment. Export the
+Variables block once per shell session.
 
 ---
 

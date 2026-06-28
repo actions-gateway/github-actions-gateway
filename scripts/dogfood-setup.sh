@@ -99,26 +99,14 @@ create_worker_pool() {
 }
 
 # ---------------------------------------------------------------------------
-# Part A5 — fetch kubeconfig credentials (idempotent; rewrites the context),
-# then assert the active kubectl context is the cluster we just targeted.
-# Every kubectl/helm step below runs against the current context, so this one
-# check fails closed before any install/secret can land on the wrong cluster.
+# Part A5 — fetch kubeconfig credentials and assert the active kubectl context
+# is the cluster we targeted (shared helper). Every kubectl/helm step below
+# runs against the current context, so this fails closed before any
+# install/secret can land on the wrong cluster.
 # ---------------------------------------------------------------------------
 
 get_credentials() {
-	echo "Fetching cluster credentials..."
-	gcloud container clusters get-credentials "${CLUSTER}" \
-		--project="${PROJECT}" --zone="${ZONE}"
-
-	local expected current
-	expected="gke_${PROJECT}_${ZONE}_${CLUSTER}"
-	current="$(kubectl config current-context)"
-	if [[ "${current}" != "${expected}" ]]; then
-		echo "Refusing to continue: kubectl context is '${current}'," >&2
-		echo "expected '${expected}'. Aborting before any cluster writes." >&2
-		exit 1
-	fi
-	echo "Active kubectl context: ${current}"
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 }
 
 # ---------------------------------------------------------------------------
@@ -289,26 +277,11 @@ spec:
 EOF
 }
 
-# Show the resolved target and require explicit confirmation before any
-# billable create or cluster write. ASSUME_YES=1 bypasses it for automation.
+# Show the resolved target and require explicit confirmation before any billable
+# create or cluster write (shared helper; ASSUME_YES=1 bypasses it).
 confirm_target() {
-	cat <<MSG
-About to bootstrap the dogfood environment:
-  Project: ${PROJECT}
-  Cluster: ${CLUSTER}  (zone ${ZONE})
-  Repo:    ${REPO}
-This creates/updates billable GKE resources and installs GAG into the cluster.
-MSG
-	if [[ "${ASSUME_YES:-}" == "1" ]]; then
-		echo "ASSUME_YES=1 set — skipping confirmation."
-		return
-	fi
-	local reply
-	read -r -p "Proceed? [y/N] " reply
-	if [[ "${reply}" != "y" && "${reply}" != "Y" && "${reply}" != "yes" ]]; then
-		echo "Aborted — no changes made."
-		exit 1
-	fi
+	confirm_or_exit "$(printf 'About to bootstrap the dogfood environment:\n  Project: %s\n  Cluster: %s  (zone %s)\n  Repo:    %s\nThis creates/updates billable GKE resources and installs GAG into the cluster.' \
+		"${PROJECT}" "${CLUSTER}" "${ZONE}" "${REPO}")"
 }
 
 main() {

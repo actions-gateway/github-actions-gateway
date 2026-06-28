@@ -4,10 +4,11 @@
 # See docs/plan/gke-dogfood.md Part F.
 #
 # Run once after the main cluster setup (Parts A–B of the runbook).
-# Safe to re-run: kubectl applies are idempotent; the gcloud node-pool
-# create will error if the pool already exists (intended).
+# Idempotent and safe to re-run: the e2e node-pool create is skipped if the
+# pool already exists, and every kubectl object is server-side upserted.
 #
 # Required env vars (export before running):
+#   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER          GKE cluster name (e.g. gag-dogfood)
 #   ZONE             GCP zone (e.g. us-central1-a)
 #   REPO             GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
@@ -27,11 +28,17 @@ KATA_VERSION="${KATA_VERSION:-3.14.0}"
 KATA_BASE="https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}"
 
 create_node_pool() {
+	if gcloud container node-pools describe e2e \
+		--project="${PROJECT}" --cluster="${CLUSTER}" --zone="${ZONE}" >/dev/null 2>&1; then
+		echo "Node pool 'e2e' already exists — skipping create."
+		return
+	fi
 	echo "Creating e2e node pool with nested virtualization..."
 	# n2-standard-4: N2 family is required for nested virtualization on GCP.
 	# --enable-nested-virtualization exposes /dev/kvm on the node, which
 	# Kata uses to spin up a microVM per pod.
 	gcloud container node-pools create e2e \
+		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
 		--zone="${ZONE}" \
 		--machine-type=n2-standard-4 \
@@ -101,12 +108,21 @@ create_namespace() {
 create_secret() {
 	local pem_file
 	pem_file="$(mktemp)"
-	trap 'rm -f "${pem_file}"' EXIT
+	# :- keeps the trap safe under set -u if it fires after the local goes out
+	# of scope (e.g. a set -e abort later in the script).
+	trap 'rm -f "${pem_file:-}"' EXIT
 
 	echo "Retrieving GitHub App private key from keychain..."
 	security find-generic-password \
 		-a actions-gateway-test -s github-app-private-key -w \
 		| xxd -r -p > "${pem_file}"
+
+	# Fail loudly rather than create a Secret with an empty/garbage key, which
+	# would surface later as opaque GAG auth failures.
+	if [[ ! -s "${pem_file}" ]]; then
+		echo "GitHub App private key from keychain is empty — aborting." >&2
+		exit 1
+	fi
 
 	echo "Creating GitHub App secret in gag-dogfood-e2e..."
 	kubectl create secret generic github-app-v1 \
@@ -116,6 +132,9 @@ create_secret() {
 		--from-file=privateKey="${pem_file}" \
 		--dry-run=client -o yaml \
 		| kubectl apply -f -
+
+	rm -f "${pem_file}"
+	trap - EXIT
 }
 
 apply_quota() {
@@ -189,6 +208,7 @@ EOF
 }
 
 main() {
+	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
 	: "${ZONE:?ZONE must be set}"
 	: "${REPO:?REPO must be set}"
@@ -197,10 +217,19 @@ main() {
 
 	require_cmd gcloud "https://cloud.google.com/sdk/docs/install"
 	require_cmd kubectl "https://kubernetes.io/docs/tasks/tools/"
+	require_cmd gke-gcloud-auth-plugin \
+		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 	require_cmd security "built-in macOS tool — macOS required to read keychain"
 	require_cmd xxd "built-in macOS/Linux tool"
 
+	confirm_or_exit "About to create a billable nested-virtualization e2e node pool and install Kata + the gag-dogfood-e2e tenant into project ${PROJECT}, cluster ${CLUSTER} (zone ${ZONE})."
+
 	create_node_pool
+
+	# Point kubectl at the dogfood cluster and fail closed if it is not the
+	# active context, so Kata + the App Secret never land on another cluster.
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+
 	install_kata
 	apply_runtimeclass
 	create_namespace
