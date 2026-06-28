@@ -194,6 +194,12 @@ certManager:
   enabled: false
 nodeSelector:
   cloud.google.com/gke-nodepool: default-pool
+# No PodDisruptionBudget for dogfood: with a single GMC replica the chart's
+# minAvailable: 1 permits zero voluntary disruptions, so the scale-to-0 stop
+# (gcloud ... resize --num-nodes=0) can never drain the system node — it lingers
+# Ready,SchedulingDisabled and keeps billing (Q236).
+podDisruptionBudget:
+  enabled: false
 EOF
 
 	echo "Installing/upgrading GAG chart..."

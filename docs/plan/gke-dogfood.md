@@ -165,6 +165,13 @@ certManager:
 # because the worker pool's taint blocks them without a toleration.
 nodeSelector:
   cloud.google.com/gke-nodepool: default-pool
+
+# No PodDisruptionBudget: with a single GMC replica the chart's minAvailable: 1
+# permits zero voluntary disruptions, so the Part D scale-to-0 stop could never
+# drain the system node — it would linger Ready,SchedulingDisabled and keep
+# billing (Q236).
+podDisruptionBudget:
+  enabled: false
 EOF
 ```
 
