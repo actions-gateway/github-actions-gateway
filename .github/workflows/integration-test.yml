@@ -48,7 +48,7 @@ jobs:
   integration-test:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: 15
     # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
     # tier tests against. Single-sourced here (the cache key + the `use` below both
