@@ -51,6 +51,8 @@ expect_version() {
 # CNI: enforcing CNIs pass. kindnet (the dangerous silent-failure case) fails.
 expect_cni "calico-node"$'\n'"calico-kube-controllers" pass
 expect_cni "cilium"$'\n'"cilium-operator" pass
+# GKE Dataplane V2 runs Cilium as `anetd` (with size-suffixed variants).
+expect_cni "anetd"$'\n'"anetd-l"$'\n'"kube-proxy" pass
 expect_cni "antrea-agent" pass
 expect_cni "weave-net" pass
 expect_cni "kube-router" pass
@@ -66,6 +68,9 @@ expect_cni "kube-proxy"$'\n'"node-exporter" warn
 expect_cni "" warn
 # A name that merely contains "kind" but isn't kindnet must not match.
 expect_cni "my-kind-of-agent" warn
+# Plain `netd` (non-Dataplane-V2 GKE) must NOT match `anetd` — such clusters
+# enforce NetworkPolicy via Calico, detected separately; netd alone → warn.
+expect_cni "netd"$'\n'"kube-proxy" warn
 
 # Version: 1.30+ meets, below 1.30 fails, junk is unparseable.
 expect_version "v1.30.0" meet
