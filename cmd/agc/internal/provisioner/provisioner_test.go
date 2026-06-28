@@ -531,6 +531,70 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// TestProvisioner_NamedImagelessRunnerGapFilled covers Q233: a tenant podTemplate
+// may name the "runner" container but omit its image. The provisioner must fill the
+// resolved worker image (otherwise the API server rejects the Pod with
+// spec.containers[].image: Required value) without overriding a tenant-set image.
+func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.DefaultWorkerImage = "my-custom-image:latest"
+
+	rg := newRG("mygroup", "team-a")
+	// PodTemplate names the runner container but leaves its image empty.
+	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{Name: "runner"}}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-gapfill", stubPayload(1), "")
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+	runner := runnerOf(t, pod)
+	assert.Equal(t, "my-custom-image:latest", runner.Image, "image-less runner must be gap-filled with the resolved worker image")
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
+// TestProvisioner_NamedRunnerImageNotOverridden asserts the Q233 gap-fill never
+// clobbers an image the tenant set explicitly on the runner container.
+func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+	p.DefaultWorkerImage = "my-custom-image:latest"
+
+	rg := newRG("mygroup", "team-a")
+	// PodTemplate names the runner container with an explicit image.
+	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{Name: "runner", Image: "tenant-image:pinned"}}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- p.HandlerFor(rg)(ctx, "", "plan-nooverride", stubPayload(1), "")
+	}()
+
+	require.Eventually(t, func() bool {
+		return findPod(ctx, t, fc, "team-a") != nil
+	}, 2*time.Second, 5*time.Millisecond)
+
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+	runner := runnerOf(t, pod)
+	assert.Equal(t, "tenant-image:pinned", runner.Image, "an explicitly-set runner image must not be overridden")
+
+	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
+	require.NoError(t, <-done)
+}
+
 func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
