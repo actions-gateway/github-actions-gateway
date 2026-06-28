@@ -39,7 +39,7 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # Default to the newest published release. `latest` does not exist in this
 # project's registry (publish.yml builds only on v* tags), so floating to it
 # yields ImagePullBackOff — pin a real tag instead.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.2}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.3}"
 
 # ---------------------------------------------------------------------------
 # Existence guards — make the gcloud creates (which error if the resource
@@ -139,10 +139,11 @@ preflight() {
 #
 # CRITICAL: install the CRDs from the SAME release as the GMC image
 # (GAG_IMAGE_TAG), not the local worktree. The v2 alpha API schema drifts
-# between releases (e.g. ActionsGateway spec.githubAppRef on releases became
-# spec.credentials on main); a mismatch makes every reconcile fail validation
-# ("unknown field" / "spec.X: Required value"). git-archive pins the CRDs to
-# the image's tag.
+# between releases (e.g. ActionsGateway spec.githubAppRef in v1.1.0-rc.2 became
+# the spec.credentials discriminated union in v1.1.0-rc.3); a mismatch makes
+# every reconcile fail validation ("unknown field" / "spec.X: Required value"),
+# and a stale githubAppRef CRD silently drops the credential so the AGC
+# crash-loops on a missing App key. git-archive pins the CRDs to the image's tag.
 # ---------------------------------------------------------------------------
 
 install_crds() {
@@ -332,8 +333,10 @@ metadata:
   name: dogfood
   namespace: gag-dogfood
 spec:
-  githubAppRef:
-    name: github-app-v1
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: github-app-v1
   githubURL: https://github.com/${REPO}
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -350,6 +353,12 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
+          # An explicit image is required when the podTemplate names the
+          # "runner" container: the AGC injects its DefaultWorkerImage only when
+          # it has to *create* that container, not when the template already
+          # defines one (Q233). This is the upstream actions-runner image the
+          # AGC would otherwise default to (cmd/agc/names: RunnerVersion 2.335.1).
+          image: ghcr.io/actions/actions-runner:2.335.1@sha256:08c30b0a7105f64bddfc485d2487a22aa03932a791402393352fdf674bda2c29
           resources:
             requests:
               cpu: "2"
