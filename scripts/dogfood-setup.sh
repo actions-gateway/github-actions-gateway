@@ -158,6 +158,34 @@ EOF
 		--namespace gmc-system --create-namespace \
 		--values "${values}"
 
+	# The GMC pod uses priorityClassName: system-cluster-critical (chart default,
+	# protects it from eviction). GKE — and any cluster with the restricted
+	# PriorityClass admission — only permits that class in a namespace that has a
+	# ResourceQuota scoped to it; without one the GMC ReplicaSet fails pod
+	# creation ("insufficient quota to match these scopes: [PriorityClass In
+	# ...]"). Create the permitting quota before waiting for the rollout.
+	echo "Permitting system-critical PriorityClass in gmc-system..."
+	kubectl apply -f - <<'QUOTA'
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gmc-system-critical-pods
+  namespace: gmc-system
+spec:
+  hard:
+    pods: "10"
+  scopeSelector:
+    matchExpressions:
+      - operator: In
+        scopeName: PriorityClass
+        values: ["system-node-critical", "system-cluster-critical"]
+QUOTA
+
+	# If a prior run left the ReplicaSet in pod-creation backoff (it was denied
+	# before the quota existed), restart so it retries immediately rather than
+	# waiting out the exponential backoff. No-op cost on a fresh install.
+	kubectl rollout restart deployment/gmc-controller-manager -n gmc-system
+
 	echo "Waiting for GMC to be ready..."
 	kubectl rollout status deployment/gmc-controller-manager \
 		-n gmc-system --timeout=3m
