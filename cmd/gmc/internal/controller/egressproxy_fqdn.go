@@ -124,6 +124,16 @@ func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 					dnsPodLabel:                       dnsPodValue,
 				},
 			},
+			// NodeLocal DNSCache redirect-to-pod path (Q229): on GKE Dataplane V2 the
+			// kube-dns ClusterIP is redirected to the per-node node-local-dns pod, whose
+			// identity carries k8s-app=node-local-dns, so the kube-dns endpoint above
+			// does not match it. Mirrors the standard NetworkPolicy's dnsEgressRule.
+			map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"k8s:io.kubernetes.pod.namespace": dnsNamespaceValue,
+					dnsPodLabel:                       dnsNodeLocalPodValue,
+				},
+			},
 		},
 		"toPorts": []interface{}{
 			map[string]interface{}{
@@ -184,15 +194,17 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 	// Scope to this pool's proxy pods by the app label and the per-EgressProxy
 	// identity label so it never governs another pool.
 	podSelector := fmt.Sprintf("app == '%s' && %s == '%s'", proxyAppName, egressProxyComponentLabel, ep.Name)
-	dnsSelector := fmt.Sprintf("%s == '%s'", dnsPodLabel, dnsPodValue)
 	dnsNamespaceSelector := fmt.Sprintf("%s == '%s'", dnsNamespaceLabel, dnsNamespaceValue)
 
-	dnsRule := func(protocol string) map[string]interface{} {
+	// dnsRule allows port-53 to a specific cluster-DNS pod label. node-local-dns is
+	// the redirect backend on GKE Dataplane V2, where the kube-dns ClusterIP is
+	// redirected to a per-node node-local-dns pod (Q229); without it DNS is dropped.
+	dnsRule := func(protocol, podValue string) map[string]interface{} {
 		return map[string]interface{}{
 			"action":   "Allow",
 			"protocol": protocol,
 			"destination": map[string]interface{}{
-				"selector":          dnsSelector,
+				"selector":          fmt.Sprintf("%s == '%s'", dnsPodLabel, podValue),
 				"namespaceSelector": dnsNamespaceSelector,
 				"ports":             []interface{}{int64(53)},
 			},
@@ -219,7 +231,11 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 		"spec": map[string]interface{}{
 			"selector": podSelector,
 			"types":    []interface{}{"Egress"},
-			"egress":   []interface{}{dnsRule("UDP"), dnsRule("TCP"), githubRule},
+			"egress": []interface{}{
+				dnsRule("UDP", dnsPodValue), dnsRule("TCP", dnsPodValue),
+				dnsRule("UDP", dnsNodeLocalPodValue), dnsRule("TCP", dnsNodeLocalPodValue),
+				githubRule,
+			},
 		},
 	}}
 }

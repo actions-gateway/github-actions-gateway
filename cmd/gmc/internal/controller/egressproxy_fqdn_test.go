@@ -102,6 +102,18 @@ func TestBuildEgressProxyCiliumNetworkPolicy(t *testing.T) {
 	tp0 := toPorts[0].(map[string]interface{})
 	_, hasDNS, _ := unstructured.NestedSlice(tp0, "rules", "dns")
 	assert.True(t, hasDNS, "DNS visibility rule required for Cilium toFQDNs enforcement")
+
+	// The DNS rule must select both kube-dns and the node-local-dns redirect backend
+	// (GKE Dataplane V2, Q229) as toEndpoints.
+	toEndpoints, _, _ := unstructured.NestedSlice(dnsRule, "toEndpoints")
+	require.Len(t, toEndpoints, 2, "DNS toEndpoints must cover kube-dns and node-local-dns (Q229)")
+	dnsPods := map[string]bool{}
+	for _, e := range toEndpoints {
+		ml, _, _ := unstructured.NestedStringMap(e.(map[string]interface{}), "matchLabels")
+		dnsPods[ml[dnsPodLabel]] = true
+	}
+	assert.True(t, dnsPods[dnsPodValue], "Cilium DNS rule must select kube-dns")
+	assert.True(t, dnsPods[dnsNodeLocalPodValue], "Cilium DNS rule must select node-local-dns (Q229)")
 }
 
 func assertCiliumFQDNPresent(t *testing.T, fqdns []interface{}, host, matchKey string) {
@@ -139,9 +151,19 @@ func TestBuildEgressProxyCalicoNetworkPolicy(t *testing.T) {
 	egress, found, err := unstructured.NestedSlice(u.Object, "spec", "egress")
 	require.NoError(t, err)
 	require.True(t, found)
-	require.Len(t, egress, 3, "DNS UDP + DNS TCP + GitHub domains rule")
+	require.Len(t, egress, 5, "DNS UDP/TCP to kube-dns + DNS UDP/TCP to node-local-dns + GitHub domains rule (Q229)")
 
-	githubRule := egress[2].(map[string]interface{})
+	// The DNS rules must cover both kube-dns and the node-local-dns redirect backend
+	// (GKE Dataplane V2, Q229), each on UDP and TCP.
+	dnsSelectors := map[string]bool{}
+	for _, e := range egress[:4] {
+		sel, _, _ := unstructured.NestedString(e.(map[string]interface{}), "destination", "selector")
+		dnsSelectors[sel] = true
+	}
+	assert.True(t, dnsSelectors[dnsPodLabel+" == '"+dnsPodValue+"'"], "Calico DNS rule must select kube-dns")
+	assert.True(t, dnsSelectors[dnsPodLabel+" == '"+dnsNodeLocalPodValue+"'"], "Calico DNS rule must select node-local-dns (Q229)")
+
+	githubRule := egress[4].(map[string]interface{})
 	domains, found, err := unstructured.NestedStringSlice(githubRule, "destination", "domains")
 	require.NoError(t, err)
 	require.True(t, found)

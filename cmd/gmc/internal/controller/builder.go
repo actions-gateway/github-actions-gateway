@@ -119,6 +119,23 @@ const (
 	dnsPodLabel       = "k8s-app"
 	dnsPodValue       = "kube-dns"
 
+	// dnsNodeLocalPodValue selects the NodeLocal DNSCache pods (`node-local-dns`),
+	// the third permitted DNS egress peer (Q229). On clusters where the CNI
+	// transparently redirects cluster-DNS traffic to a per-node cache *pod* — GKE
+	// Dataplane V2 (Cilium) drives this via a `RedirectService`/Cilium Local
+	// Redirect that rewrites the kube-dns ClusterIP to the local node-local-dns
+	// pod — the policy is enforced against that redirect *backend's* identity, not
+	// the kube-dns Service or pods. node-local-dns carries `k8s-app: node-local-dns`
+	// (not `kube-dns`) and, on Dataplane V2, runs with a regular pod IP and
+	// `-setupinterface=false` (no 169.254.x link-local address), so neither the
+	// kube-dns podSelector nor the link-local ipBlock below matches it and DNS is
+	// dropped. Selecting node-local-dns by its conventional label restores
+	// resolution while staying within Q105's attribution property (still cluster
+	// DNS only, port 53 only — never an arbitrary resolver). Harmless on clusters
+	// without NodeLocal DNSCache: the selector simply matches no pod. See
+	// dnsEgressRule.
+	dnsNodeLocalPodValue = "node-local-dns"
+
 	// dnsNodeLocalCIDR is the IPv4 link-local block (RFC 3927). On clusters
 	// running NodeLocal DNSCache (node-local-dns), pods send DNS to a link-local
 	// address — 169.254.20.10 by the kube-standard `__PILLAR__LOCAL__DNS__`
@@ -301,14 +318,21 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 // dnsEgressRule returns a NetworkPolicy egress rule permitting DNS (UDP/TCP 53)
 // to the cluster DNS service ONLY — never to any destination. It is shared by
 // the proxy, workload, and AGC policies so the DNS posture cannot drift between
-// them. Two `To` peers (OR'd) cover the two ways a pod reaches cluster DNS:
+// them. Three `To` peers (OR'd) cover the ways a pod reaches cluster DNS:
 //
 //  1. The kube-dns / CoreDNS Service in kube-system, matched by an AND of
 //     namespace + pod selector (the direct path on a cluster without NodeLocal
 //     DNSCache).
-//  2. The IPv4 link-local block 169.254.0.0/16, matched by an ipBlock (the path
-//     on a cluster running NodeLocal DNSCache, where pods send DNS to a
-//     link-local address served by a per-node hostNetwork cache — Q136).
+//  2. The NodeLocal DNSCache pods (`k8s-app: node-local-dns`) in kube-system,
+//     matched by an AND of namespace + pod selector. On a CNI that redirects
+//     cluster-DNS traffic to a per-node cache *pod* — GKE Dataplane V2 (Cilium)
+//     does this via a RedirectService / Cilium Local Redirect — the egress is
+//     enforced against the redirect backend's identity, which is node-local-dns,
+//     not kube-dns; without this peer DNS is silently dropped (Q229).
+//  3. The IPv4 link-local block 169.254.0.0/16, matched by an ipBlock (the path
+//     on a cluster running NodeLocal DNSCache in the classic link-local mode,
+//     where pods send DNS to a link-local address served by a per-node
+//     hostNetwork cache — Q136).
 //
 // An unrestricted port-53 rule (To: nil ≡ any server) is an unattributed
 // data-exfiltration side-channel: DNS queries can smuggle data to an
@@ -341,6 +365,19 @@ func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 				},
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{dnsPodLabel: dnsPodValue},
+				},
+			},
+			// NodeLocal DNSCache redirect-to-pod path (Q229): on a CNI that redirects
+			// the kube-dns ClusterIP to a per-node node-local-dns *pod* (GKE Dataplane
+			// V2 / Cilium Local Redirect), policy is enforced against that pod's
+			// identity. It carries k8s-app=node-local-dns, not kube-dns, so the peer
+			// above does not match it. AND of namespace + pod selector, same as kube-dns.
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{dnsNamespaceLabel: dnsNamespaceValue},
+				},
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{dnsPodLabel: dnsNodeLocalPodValue},
 				},
 			},
 			// NodeLocal DNSCache path: pods reach the per-node hostNetwork cache at a
