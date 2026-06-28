@@ -130,6 +130,21 @@ preflight() {
 }
 
 # ---------------------------------------------------------------------------
+# Parts B2–B3 (prereq) — the v2 CRDs ship in a separate, opt-in chart
+# (actions-gateway-crds-v2) because bundling them would push the main chart's
+# release Secret past its 1 MiB limit. This GMC build runs its v2 controllers
+# unconditionally, so without the v2 CRDs it error-loops and the IP-range
+# reconciler fails to list EgressProxies. Install them alongside the GMC.
+# ---------------------------------------------------------------------------
+
+install_crds() {
+	echo "Installing/upgrading v2 CRDs (actions-gateway-crds-v2)..."
+	helm upgrade --install actions-gateway-crds-v2 \
+		"${REPO_ROOT}/charts/actions-gateway-crds-v2" \
+		--namespace gmc-system --create-namespace
+}
+
+# ---------------------------------------------------------------------------
 # Parts B2–B3 — install/upgrade the GAG chart. `upgrade --install` is the
 # idempotent form of `helm install`.
 # ---------------------------------------------------------------------------
@@ -355,6 +370,7 @@ main() {
 
 	# Part B — install GAG + provision the tenant.
 	preflight
+	install_crds
 	install_gag
 	create_namespace
 	create_secret
