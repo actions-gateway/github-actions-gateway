@@ -190,10 +190,15 @@ spec:
         values: ["system-node-critical", "system-cluster-critical"]
 QUOTA
 
-	# If a prior run left the ReplicaSet in pod-creation backoff (it was denied
-	# before the quota existed), restart so it retries immediately rather than
-	# waiting out the exponential backoff. No-op cost on a fresh install.
-	kubectl rollout restart deployment/gmc-controller-manager -n gmc-system
+	# If the GMC isn't Available yet (e.g. a prior run left the ReplicaSet in
+	# pod-creation backoff from before the quota existed), restart so it retries
+	# immediately instead of waiting out the exponential backoff. Skip when it's
+	# already healthy so a re-run doesn't needlessly bounce the control plane.
+	if ! kubectl rollout status deployment/gmc-controller-manager \
+		-n gmc-system --timeout=5s >/dev/null 2>&1; then
+		echo "GMC not ready — restarting to clear any pod-creation backoff..."
+		kubectl rollout restart deployment/gmc-controller-manager -n gmc-system
+	fi
 
 	echo "Waiting for GMC to be ready..."
 	kubectl rollout status deployment/gmc-controller-manager \
