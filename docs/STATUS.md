@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-27
+Last touched: 2026-06-28
 ---
 
 ## Progress
@@ -52,11 +52,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q232"></a>Q232 | [Cut GMC release v1.1.0-rc.3](operations/release.md) | `milestone` `infra` | 🔲 | S | Bundles Q227 (PriorityClass quota) + Q228 (v2-controller startup) + Q229 (egress-DNS), all merged to main. Unblocks Q224 + Q231 (the dogfood needs the egress-DNS fix in an image). Tag per release.md; verify publish.yml legs (build/sign/SBOM/chart). |
-| <a id="Q224"></a>Q224 | [GKE dogfood: deploy + live GAG validation](plan/gke-dogfood.md) | `milestone` `infra` | 🚫 | M | Control plane validated live on GKE (GMC, v2 CRDs, gateway reconcile, AGC provisioned). 🚫 runner validation (job→pod→GitHub) needs a GMC release w/ Q227-Q229 (rc.2 lacks them); then bump GAG_IMAGE_TAG + dogfood-start. C2 follows; e2e is Q231. |
+| <a id="Q224"></a>Q224 | [GKE dogfood: deploy + live GAG validation](plan/gke-dogfood.md) | `milestone` `infra` | 🔲 | M | Control plane validated live on GKE (GMC, v2 CRDs, gateway reconcile, AGC provisioned). Release v1.1.0-rc.3 now bundles Q227-Q229: bump GAG_IMAGE_TAG to it + dogfood-start, then runner validation (job→pod→GitHub). C2 follows; e2e is Q231. |
 | <a id="Q225"></a>Q225 | [Operator docs: Kata Containers for DinD workloads](operations/in-runner-image-builds.md) | `docs` | 🚫 | S | 🚫 Q224. Document runtimeClassName: kata-qemu on podTemplate, /dev/kvm machine-type requirement (N2+ on GCP), and Kata DaemonSet setup. Extend in-runner-image-builds.md or new page depending on density. |
 | <a id="Q226"></a>Q226 | [Kata Containers on GKE — secure CI reference architecture](plan/kata-on-gke.md) | `security` `infra` | 🚫 | M | 🚫 Q224. OSS untrusted-PR threat + GAG dogfood requirement rule out privileged DinD. Spike: GKE nested-virt node pool + Kata RuntimeClass: kind in micro-VM, no privileged pod. Reference arch. [plan](plan/kata-on-gke.md) |
-| <a id="Q231"></a>Q231 | [Dogfood GAG e2e on the GKE cluster](plan/gke-dogfood.md) | `infra` `docs` | 🚫 | M | 🚫 GMC release w/ Q229 (egress-DNS) + Q227. Bring Part F / dogfood-e2e-setup.sh to v2 (still v1); land F2 (GAG_E2E_RUNNER in e2e-reusable.yml, default ubuntu-latest); decide on-demand vs always-on; re-run + route an e2e job Kata→kind→GitHub. |
+| <a id="Q231"></a>Q231 | [Dogfood GAG e2e on the GKE cluster](plan/gke-dogfood.md) | `infra` `docs` | 🚫 | M | 🚫 Q224; rc.3 image shipped. Bring Part F / dogfood-e2e-setup.sh to v2 (still v1); land F2 (GAG_E2E_RUNNER in e2e-reusable.yml, default ubuntu-latest); decide on-demand vs always-on; re-run + route an e2e job Kata→kind→GitHub. |
 | <a id="Q74"></a>Q74 | [v2alpha1→v2beta1 graduation: conversion webhook](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | Beta cut, after Q191/Q196/Q197/Q224: `Hub`/`Convertible` stubs + v2beta1 served/storage version + storage migration. Distinct from the M5 fan-out tool. See [graduation](plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). |
 | <a id="Q219"></a>Q219 | [M5 live `helm install` → working-tenant validation](plan/milestone-5.md) | `milestone` `infra` `tests` | 🔲 | M | M5 track A: chart is verified offline only (helm template/kubeconform/polaris). Run a live `helm install` on kind with real App creds → working tenant (job→pod→GitHub), the last M5 verification gap. |
 | <a id="Q220"></a>Q220 | [Validate service-mesh coexistence guidance on a live cluster](operations/service-mesh-coexistence.md) | `tests` `docs` | 🔲 | M | Q206 guide's in-mesh recipes (native sidecars, egress exclusions) reasoned from code+docs, untested. Stand up Istio (sidecar/native/ambient)+Linkerd on kind; run a job through a meshed GAG ns; confirm pods terminate + egress IP preserved. |
