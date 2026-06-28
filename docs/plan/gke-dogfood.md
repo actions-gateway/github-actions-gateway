@@ -114,6 +114,15 @@ GKE's Dataplane V2 (Cilium) passes the NetworkPolicy enforcement check.
 GKE also ships the Kubernetes Metrics Server by default (required for the
 proxy pool's HPA).
 
+> **NodeLocal DNSCache on Dataplane V2 (Q229).** If the cluster runs NodeLocal
+> DNSCache, Dataplane V2 redirects cluster-DNS traffic to the per-node
+> `node-local-dns` pod, and the tenant egress `NetworkPolicy` must allow that
+> backend or the AGC crash-loops on its first GitHub token fetch
+> (`lookup api.github.com: i/o timeout`). GAG's DNS egress rule includes the
+> `node-local-dns` peer as of Q229; use a build that has it. Diagnosis and the
+> verification command are in
+> [Troubleshooting → DNS Times Out Under the Egress NetworkPolicy](../operations/troubleshooting.md#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache).
+
 ```bash
 make validate-cluster
 ```

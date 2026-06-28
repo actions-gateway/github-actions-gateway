@@ -33,7 +33,12 @@ see the [chart README](../../charts/actions-gateway/README.md).
   architectures are not published.
 - **A CNI that enforces `NetworkPolicy`** (Calico, Cilium) for the egress/ingress
   isolation controls to take effect. `kindnet` does not enforce egress, so the
-  tenant-isolation guarantees do not hold under it.
+  tenant-isolation guarantees do not hold under it. **GKE Dataplane V2** (Cilium)
+  is supported and tested; if the cluster also runs **NodeLocal DNSCache**, use a
+  GAG build that includes the Q229 fix (its DNS egress rule allows the
+  `node-local-dns` redirect backend) — older builds drop DNS under Dataplane V2 and
+  the tenant AGC crash-loops on its first GitHub token fetch (see
+  [Troubleshooting → DNS Times Out Under the Egress NetworkPolicy](troubleshooting.md#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)).
 - **Webhook serving cert** — choose one:
   - **cert-manager** (the default, `certManager.enabled=true`). Install
     [cert-manager](https://cert-manager.io) first; it issues and rotates the

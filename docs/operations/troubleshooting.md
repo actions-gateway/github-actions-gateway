@@ -37,6 +37,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
 - [Network Connectivity Failures](#network-connectivity-failures)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
+- [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
@@ -1120,6 +1121,43 @@ kubectl logs -n kube-system -l app=kindnet --tail=200 --field-selector spec.node
 **Resolution.** Ensure `buildAGCNetworkPolicy` allows both port 443 (production Service shape) *and* port 6443 (kind / Endpoints-on-6443 clusters). The shipped policy does this. If you see this on a custom build or a hand-edited NP, add the 6443 rule. The diagnosis writeup at [`docs/development/networkpolicy-port-matching.md`](../development/networkpolicy-port-matching.md) has a minimal repro and the reasoning behind allowing both ports.
 
 If you see the same symptom for an *ingress*-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.
+
+---
+
+## DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)
+
+**Symptoms.** A tenant's AGC pod crash-loops on startup, unable to resolve `api.github.com`:
+
+```
+token fetch: Post "https://api.github.com/app/installations/<id>/access_tokens":
+  dial tcp: lookup api.github.com: i/o timeout
+startup failed: initial token fetch: context deadline exceeded
+```
+
+From a pod in the tenant namespace (which the GMC egress `NetworkPolicy` governs) DNS times out, while the *same* lookup from a pod in a namespace with no GAG policy (e.g. `default`) succeeds — so cluster DNS is healthy and the egress policy is the cause. Direct TCP to a GitHub IP on 443 from the tenant pod still works (the GitHub-CIDR egress rule is fine); **only DNS is broken**. This was first hit on the first live GAG install on GKE (Q224) running on a GKE Standard cluster with **Dataplane V2** (Cilium) and **NodeLocal DNSCache** enabled.
+
+**Cause (Q229).** On GKE Dataplane V2, NodeLocal DNSCache does not give pods a link-local resolver address — pods' `resolv.conf` still points at the `kube-dns` ClusterIP. GKE installs a `RedirectService` (`networking.gke.io/v1alpha1`, `spec.redirect.type: nodelocaldns`) that drives a Cilium Local Redirect: traffic to the `kube-dns` ClusterIP is transparently redirected to the per-node `node-local-dns` **pod**. Cilium enforces the egress `NetworkPolicy` against that redirect *backend's* identity — and the backend is `node-local-dns` (`k8s-app: node-local-dns`), **not** `kube-dns`. The GMC's DNS egress rule selected only `k8s-app: kube-dns` pods plus the link-local block `169.254.0.0/16`; neither matches a `node-local-dns` pod (on Dataplane V2 it runs with `-setupinterface=false`, so it has a regular pod IP and no link-local address), so DNS is dropped.
+
+> A supplemental `NetworkPolicy` allowing egress to the kube-dns ClusterIP CIDR does **not** help: Cilium matches `ipBlock`/CIDR egress only against the external (`world`) identity, never against in-cluster destinations such as a ClusterIP-backed pod. The selector path is the only one that works.
+
+**Resolution.** Upgrade to a GAG build that includes the fix — the GMC-generated DNS egress rule now carries a third peer selecting `k8s-app: node-local-dns` in `kube-system`, alongside the `kube-dns` selector and the link-local block. This is a strict, minimal widening (still cluster DNS only, port 53 only — it preserves the DNS-exfiltration containment of [§ Security](../design/05-security.md)) and is harmless on clusters without NodeLocal DNSCache, where the selector simply matches no pod. Confirm the shipped policy:
+
+```bash
+# The DNS (port-53) egress rule must list BOTH k8s-app: kube-dns and
+# k8s-app: node-local-dns as peers.
+kubectl get networkpolicy <gateway>-workload -n <tenant-ns> -o yaml | grep -A3 'k8s-app'
+```
+
+To verify resolution end-to-end from inside the tenant's policy, run an ephemeral pod carrying the workload label and resolve through the kube-dns ClusterIP:
+
+```bash
+kubectl run dnstest -n <tenant-ns> --image=busybox:1.36 \
+  --labels='actions-gateway/component=workload' --restart=Never -- sleep 300
+kubectl exec -n <tenant-ns> dnstest -- nslookup api.github.com
+kubectl delete pod dnstest -n <tenant-ns>
+```
+
+If you are pinned to an older GAG build and cannot upgrade immediately, the same effect can be obtained by setting `spec.proxy.managedNetworkPolicy: false` and supplying your own egress policy that allows port-53 to `node-local-dns` — but prefer upgrading, since a hand-managed policy must then track GitHub IP-range rotation itself.
 
 ---
 
