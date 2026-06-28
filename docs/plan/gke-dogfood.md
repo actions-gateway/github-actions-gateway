@@ -32,6 +32,12 @@ INSTALLATION_ID=135739122         # actions-gateway org install (re-derive via P
 
 ---
 
+> **Shortcut:** Parts A3–B8 (cluster, node pools, GAG install, tenant) are
+> automated by [`scripts/dogfood-setup.sh`](../../scripts/dogfood-setup.sh) —
+> idempotent and safe to re-run with some of the work already done. Complete
+> A1–A2 first (project + billing + APIs), export the Variables block, then run
+> the script. The manual steps below document what it does, step by step.
+
 ## Part A — One-time GCP setup
 
 ### A1. Install gcloud CLI + authenticate
@@ -472,6 +478,7 @@ or both at the same time.
 
 | Action | Script |
 |---|---|
+| One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood-setup.sh` |
 | Start cluster + route CI to GAG | `scripts/dogfood-start.sh` |
 | Stop cluster + route CI to GitHub-hosted | `scripts/dogfood-stop.sh` |
 | Enable e2e on GAG | `scripts/dogfood-e2e-start.sh` |
