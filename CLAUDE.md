@@ -121,6 +121,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Go workspace / vendoring / worktrees | `docs/development/go-workspaces.md` |
 | Writing or editing any shell script | `docs/development/bash-style.md` |
 | Updating docs after a change — CRD fields, new behaviour, admission/validation rules, operator-visible changes, security, module dependencies | `docs/development/doc-update-matrix.md` |
+| Writing, editing, or restructuring any doc — style for scannability, copy-paste-safe code blocks, conventions, maintenance | `docs/development/documentation-standards.md` |
 | Modifying CRD types (`cmd/agc/api/`, `cmd/gmc/api/`) | `docs/development/code-generation.md` |
 | Adding a label/annotation an operator sets, or a hand-set CRD field | `docs/development/kubernetes-conventions.md` |
 | Building binaries | `docs/development/building.md` |

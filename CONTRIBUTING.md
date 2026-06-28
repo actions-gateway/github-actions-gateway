@@ -120,6 +120,7 @@ After editing types under `cmd/agc/api/` or `cmd/gmc/api/`, regenerate manifests
 
 ## Documentation
 
+- Style, conventions, and maintenance for all docs live in [`docs/development/documentation-standards.md`](docs/development/documentation-standards.md) — read it before writing or restructuring a doc. The essentials:
 - After a behaviour change, update every doc the change touches — the change-type → docs mapping is in [`docs/development/doc-update-matrix.md`](docs/development/doc-update-matrix.md). Design-doc updates alone are not enough when a change alters what an operator does, configures, or observes.
 - Humans start at [`README.md`](README.md) and navigate the [`docs/`](docs/README.md) tree. Do **not** link to `CLAUDE.md`/`AGENTS.md` from any human-facing doc — that file is the entrypoint for AI agents only. Reference content humans need lives in `docs/` or this file.
 - Spell out acronyms on first use: full term, then the acronym in parentheses — e.g. "Actions Gateway Controller (AGC)".
