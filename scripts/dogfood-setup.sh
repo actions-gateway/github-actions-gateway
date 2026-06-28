@@ -136,13 +136,27 @@ preflight() {
 # release Secret past its 1 MiB limit. This GMC build runs its v2 controllers
 # unconditionally, so without the v2 CRDs it error-loops and the IP-range
 # reconciler fails to list EgressProxies. Install them alongside the GMC.
+#
+# CRITICAL: install the CRDs from the SAME release as the GMC image
+# (GAG_IMAGE_TAG), not the local worktree. The v2 alpha API schema drifts
+# between releases (e.g. ActionsGateway spec.githubAppRef on releases became
+# spec.credentials on main); a mismatch makes every reconcile fail validation
+# ("unknown field" / "spec.X: Required value"). git-archive pins the CRDs to
+# the image's tag.
 # ---------------------------------------------------------------------------
 
 install_crds() {
-	echo "Installing/upgrading v2 CRDs (actions-gateway-crds-v2)..."
+	echo "Installing/upgrading v2 CRDs from ${GAG_IMAGE_TAG} (matching the GMC image)..."
+	local crd_src
+	crd_src="$(mktemp -d)"
+	trap 'rm -rf "${crd_src:-}"' EXIT
+	git -C "${REPO_ROOT}" archive "${GAG_IMAGE_TAG}" charts/actions-gateway-crds-v2 \
+		| tar -x -C "${crd_src}"
 	helm upgrade --install actions-gateway-crds-v2 \
-		"${REPO_ROOT}/charts/actions-gateway-crds-v2" \
+		"${crd_src}/charts/actions-gateway-crds-v2" \
 		--namespace gmc-system --create-namespace
+	rm -rf "${crd_src}"
+	trap - EXIT
 }
 
 # ---------------------------------------------------------------------------
@@ -318,10 +332,8 @@ metadata:
   name: dogfood
   namespace: gag-dogfood
 spec:
-  credentials:
-    type: GitHubApp
-    githubApp:
-      name: github-app-v1
+  githubAppRef:
+    name: github-app-v1
   githubURL: https://github.com/${REPO}
 ---
 apiVersion: actions-gateway.com/v2alpha1
