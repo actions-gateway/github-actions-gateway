@@ -16,11 +16,15 @@
 # helm uses `upgrade --install`; kubectl objects are server-side upserted.
 #
 # Required env vars (export before running):
+#   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER          GKE cluster name (e.g. gag-dogfood)
 #   ZONE             GCP zone (e.g. us-central1-a)
 #   REPO             GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 #   APP_ID           GitHub App numeric ID (3752347)
 #   INSTALLATION_ID  GitHub App installation ID for this repo/org
+#
+# Optional env vars:
+#   ASSUME_YES=1     Skip the interactive "proceed?" confirmation (automation).
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -34,13 +38,13 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 
 cluster_exists() {
 	gcloud container clusters describe "${CLUSTER}" \
-		--zone="${ZONE}" >/dev/null 2>&1
+		--project="${PROJECT}" --zone="${ZONE}" >/dev/null 2>&1
 }
 
 node_pool_exists() {
 	local pool="$1"
 	gcloud container node-pools describe "${pool}" \
-		--cluster="${CLUSTER}" --zone="${ZONE}" >/dev/null 2>&1
+		--project="${PROJECT}" --cluster="${CLUSTER}" --zone="${ZONE}" >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------------------
@@ -57,6 +61,7 @@ create_cluster() {
 	# --enable-dataplane-v2: Cilium CNI that enforces NetworkPolicy (GAG needs it).
 	# No autoscaling on default-pool — it's manually scaled 0/1 to stop/start.
 	gcloud container clusters create "${CLUSTER}" \
+		--project="${PROJECT}" \
 		--zone="${ZONE}" \
 		--release-channel=regular \
 		--enable-ip-alias \
@@ -80,6 +85,7 @@ create_worker_pool() {
 	echo "Creating spot worker node pool (autoscaling 0->4)..."
 	# Taint keeps GMC/AGC/proxy off worker nodes; worker pods tolerate it.
 	gcloud container node-pools create workers \
+		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
 		--zone="${ZONE}" \
 		--machine-type=e2-standard-4 \
@@ -93,12 +99,26 @@ create_worker_pool() {
 }
 
 # ---------------------------------------------------------------------------
-# Part A5 — fetch kubeconfig credentials (idempotent; rewrites the context).
+# Part A5 — fetch kubeconfig credentials (idempotent; rewrites the context),
+# then assert the active kubectl context is the cluster we just targeted.
+# Every kubectl/helm step below runs against the current context, so this one
+# check fails closed before any install/secret can land on the wrong cluster.
 # ---------------------------------------------------------------------------
 
 get_credentials() {
 	echo "Fetching cluster credentials..."
-	gcloud container clusters get-credentials "${CLUSTER}" --zone="${ZONE}"
+	gcloud container clusters get-credentials "${CLUSTER}" \
+		--project="${PROJECT}" --zone="${ZONE}"
+
+	local expected current
+	expected="gke_${PROJECT}_${ZONE}_${CLUSTER}"
+	current="$(kubectl config current-context)"
+	if [[ "${current}" != "${expected}" ]]; then
+		echo "Refusing to continue: kubectl context is '${current}'," >&2
+		echo "expected '${expected}'. Aborting before any cluster writes." >&2
+		exit 1
+	fi
+	echo "Active kubectl context: ${current}"
 }
 
 # ---------------------------------------------------------------------------
@@ -186,6 +206,13 @@ create_secret() {
 		-a actions-gateway-test -s github-app-private-key -w \
 		| xxd -r -p >"${pem_file}"
 
+	# Fail loudly rather than create a Secret with an empty/garbage key, which
+	# would surface later as opaque GAG auth failures.
+	if [[ ! -s "${pem_file}" ]]; then
+		echo "GitHub App private key from keychain is empty — aborting." >&2
+		exit 1
+	fi
+
 	echo "Creating GitHub App secret in gag-dogfood..."
 	kubectl create secret generic github-app-v1 \
 		--namespace=gag-dogfood \
@@ -260,7 +287,30 @@ spec:
 EOF
 }
 
+# Show the resolved target and require explicit confirmation before any
+# billable create or cluster write. ASSUME_YES=1 bypasses it for automation.
+confirm_target() {
+	cat <<MSG
+About to bootstrap the dogfood environment:
+  Project: ${PROJECT}
+  Cluster: ${CLUSTER}  (zone ${ZONE})
+  Repo:    ${REPO}
+This creates/updates billable GKE resources and installs GAG into the cluster.
+MSG
+	if [[ "${ASSUME_YES:-}" == "1" ]]; then
+		echo "ASSUME_YES=1 set — skipping confirmation."
+		return
+	fi
+	local reply
+	read -r -p "Proceed? [y/N] " reply
+	if [[ "${reply}" != "y" && "${reply}" != "Y" && "${reply}" != "yes" ]]; then
+		echo "Aborted — no changes made."
+		exit 1
+	fi
+}
+
 main() {
+	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
 	: "${ZONE:?ZONE must be set}"
 	: "${REPO:?REPO must be set}"
@@ -272,6 +322,8 @@ main() {
 	require_cmd helm "https://helm.sh/docs/intro/install/"
 	require_cmd security "built-in macOS tool — macOS required to read keychain"
 	require_cmd xxd "built-in macOS/Linux tool"
+
+	confirm_target
 
 	# Part A — cluster + node pools + credentials.
 	create_cluster
