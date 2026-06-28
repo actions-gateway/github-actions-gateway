@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-time bootstrap: create the dogfood GKE cluster (system + spot worker
-# node pools), then install GAG and provision the gag-dogfood tenant
-# (namespace + GitHub App secret + ResourceQuota + ActionsGateway CR).
+# node pools), then install the v2 CRDs + GAG and provision the gag-dogfood
+# tenant on the v2 API (namespace + GitHub App secret + ResourceQuota +
+# ActionsGateway + RunnerTemplate + RunnerSet, direct egress).
 # See docs/plan/gke-dogfood.md Parts A3–B8.
 #
 # Run after the account-level GCP setup (Parts A1–A2: gcloud installed and
@@ -162,6 +163,9 @@ install_gag() {
 	# worker pool's taint. Heredoc is unquoted so ${GAG_IMAGE_TAG} expands.
 	cat >"${values}" <<EOF
 allowFloatingImageTags: true
+# Single GMC replica for dogfood — frees capacity on the small system node for
+# the per-tenant AGC pod (production wants the default 2 for HA).
+replicaCount: 1
 gmc:
   image:
     tag: ${GAG_IMAGE_TAG}
@@ -231,8 +235,12 @@ create_namespace() {
 	echo "Creating gag-dogfood tenant namespace..."
 	kubectl create namespace gag-dogfood --dry-run=client -o yaml \
 		| kubectl apply -f -
+	# v2 markers: tenant=managed authorizes the GMC to operate in the namespace;
+	# security-profile drives the Pod Security level the GMC stamps. (v1 used
+	# actions-gateway.github.com/tenant=true + an inline spec.securityProfile.)
 	kubectl label namespace gag-dogfood \
-		actions-gateway.github.com/tenant=true \
+		actions-gateway.com/tenant=managed \
+		actions-gateway.com/security-profile=baseline \
 		pod-security.kubernetes.io/enforce=baseline \
 		--overwrite
 }
@@ -292,45 +300,65 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Part B7 — the ActionsGateway CR (the `ci` runner group).
+# Part B7 — the v2 tenant objects. The v2 API decomposes the v1 monolithic
+# ActionsGateway into ActionsGateway (gateway + credentials) + RunnerTemplate
+# (worker pod shape) + RunnerSet (runner group). Minimal direct-egress form:
+# no EgressProxy, so workers egress directly to GitHub — still behind the
+# default-deny egress NetworkPolicy (DNS + GitHub CIDR), just without a stable
+# per-tenant egress IP. Attach an EgressProxy + spec.defaultProxyRef later to
+# add per-tenant IP attribution.
 # ---------------------------------------------------------------------------
 
 apply_cr() {
-	echo "Applying ActionsGateway CR..."
+	echo "Applying v2 ActionsGateway + RunnerTemplate + RunnerSet..."
 	kubectl apply -f - <<EOF
-apiVersion: actions-gateway.github.com/v1alpha1
+apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
-  name: dogfood-gateway
+  name: dogfood
   namespace: gag-dogfood
 spec:
-  gitHubAppRef:
-    name: github-app-v1
-  gitHubURL: https://github.com/${REPO}
-  securityProfile: baseline
-  proxy:
-    minReplicas: 1
-    maxReplicas: 4
-  runnerGroups:
-    - name: ci
-      runnerLabels: ["self-hosted", "linux", "gag-ci"]
-      maxListeners: 8
-      maxWorkers: 4
-      podTemplate:
-        spec:
-          tolerations:
-            - key: dedicated
-              value: workers
-              effect: NoSchedule
-          containers:
-            - name: runner
-              resources:
-                requests:
-                  cpu: "2"
-                  memory: "4Gi"
-                limits:
-                  cpu: "4"
-                  memory: "8Gi"
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: github-app-v1
+  githubURL: https://github.com/${REPO}
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate
+metadata:
+  name: default
+  namespace: gag-dogfood
+spec:
+  podTemplate:
+    spec:
+      tolerations:
+        - key: dedicated
+          value: workers
+          effect: NoSchedule
+      containers:
+        - name: runner
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: ci
+  namespace: gag-dogfood
+spec:
+  gatewayRef:
+    name: dogfood
+  templateRef:
+    name: default
+  runnerLabels: ["self-hosted", "linux", "gag-ci"]
+  maxListeners: 8
+  maxWorkers: 4
 EOF
 }
 
@@ -381,7 +409,7 @@ main() {
 	echo "Bootstrap complete. GAG is installed and the gag-dogfood tenant is up."
 	echo ""
 	echo "Verify the gateway and that runners registered (~2 min after AGC Ready):"
-	echo "  kubectl get actionsgateway -n gag-dogfood dogfood-gateway"
+	echo "  kubectl get actionsgateway,runnerset -n gag-dogfood"
 	echo "  kubectl get pods -n gag-dogfood"
 	echo "  gh api /repos/${REPO}/actions/runners \\"
 	echo "    --jq '.runners[] | {name, status, labels: [.labels[].name]}'"
