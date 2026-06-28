@@ -366,6 +366,26 @@ func main() {
 		}
 	}
 
+	// WRAPPER_IMAGE (optional) enables runtime worker-wrapper injection (Q235):
+	// forwarded to every AGC so its provisioner injects the GAG wrapper into each
+	// worker pod, letting the runner image be the unmodified upstream
+	// actions-runner. Empty disables injection (the worker image must then carry
+	// the wrapper as its own entrypoint). Digest-pinned like AGC_IMAGE unless
+	// floating tags are allowed. WRAPPER_DELIVERY (optional: imagevolume|init)
+	// overrides the AGC's version-based auto-detection.
+	if wrapperImage := os.Getenv("WRAPPER_IMAGE"); wrapperImage != "" {
+		if !allowFloatingImageTags {
+			if err := validateImageDigest("WRAPPER_IMAGE", wrapperImage); err != nil {
+				setupLog.Error(err, "image reference is not digest-pinned")
+				os.Exit(1)
+			}
+		}
+		agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{Name: "WRAPPER_IMAGE", Value: wrapperImage})
+		if d := os.Getenv("WRAPPER_DELIVERY"); d != "" {
+			agcExtraEnv = append(agcExtraEnv, corev1.EnvVar{Name: "WRAPPER_DELIVERY", Value: d})
+		}
+	}
+
 	// IPRangeCache is shared between the per-CR reconciler (read path) and
 	// the periodic IPRangeReconciler (write path). This keeps the per-CR
 	// reconcile from doing network I/O — previously every reconcile fetched

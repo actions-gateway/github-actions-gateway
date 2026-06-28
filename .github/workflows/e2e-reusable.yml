@@ -67,7 +67,7 @@ jobs:
       KIND_VERSION: v0.31.0
       KIND_BINARY_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
       KIND_NODE_IMAGE: kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
-      # All five images live in the local registry the e2e-cluster target
+      # All six images live in the local registry the e2e-cluster target
       # stands up. SHA-suffixed so kubelet's IfNotPresent cache cannot serve a
       # stale image across runs that reuse the cluster. The full ${{ github.sha }}
       # is used here (not the Makefile's short SHA default) so the tags match
@@ -83,6 +83,7 @@ jobs:
       PROXY_IMG: 127.0.0.1:5000/proxy:e2e-${{ github.sha }}
       FAKEGITHUB_IMG: 127.0.0.1:5000/fakegithub:e2e-${{ github.sha }}
       WORKER_IMG: 127.0.0.1:5000/worker:e2e-${{ github.sha }}
+      WRAPPER_IMG: 127.0.0.1:5000/wrapper:e2e-${{ github.sha }}
       # The curl-based test pods (proxy connectivity, cross-tenant isolation,
       # metrics scrape) otherwise pull curlimages/curl live from Docker Hub on
       # the kind nodes, which flakes under Hub anonymous rate limits (HTTP 429).

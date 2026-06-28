@@ -34,7 +34,7 @@ GMC and AGC provision **at runtime**.
 > The project also publishes a first-party `ghcr.io/actions-gateway/worker`; if a
 > tenant uses it, mirror that ref instead. Either way the worker image is set per
 > tenant on the `RunnerGroup`, so it is configured during tenant onboarding, not
-> at chart install. See [release.md § The worker image](release.md#the-worker-image-and-defaultworkerimage).
+> at chart install. See [release.md § The worker images](release.md#the-worker-images-wrapper-and-worker).
 
 Copy the four image digests from the
 [release notes](https://github.com/actions-gateway/github-actions-gateway/releases)

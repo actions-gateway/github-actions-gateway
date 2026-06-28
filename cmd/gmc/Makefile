@@ -16,6 +16,7 @@ YEAR           ?= $(shell date +%Y)
 GMC_IMG     ?= 127.0.0.1:5000/gmc:e2e
 AGC_IMG     ?= 127.0.0.1:5000/agc:e2e
 PROXY_IMG   ?= 127.0.0.1:5000/proxy:e2e
+WRAPPER_IMG ?= 127.0.0.1:5000/wrapper:e2e
 
 ENVTEST_K8S_VERSION ?= 1.35.x
 
@@ -117,13 +118,14 @@ CHART_DIR    := $(REPO_ROOT)/charts/actions-gateway
 # install step is needed.
 .PHONY: deploy
 deploy: ## Deploy the GMC into the current kube-context via the Helm chart (dev/CI: floating image tags)
-	GMC_IMG='$(GMC_IMG)'; AGC_IMG='$(AGC_IMG)'; PROXY_IMG='$(PROXY_IMG)'; \
+	GMC_IMG='$(GMC_IMG)'; AGC_IMG='$(AGC_IMG)'; PROXY_IMG='$(PROXY_IMG)'; WRAPPER_IMG='$(WRAPPER_IMG)'; \
 	helm upgrade --install $(HELM_RELEASE) "$(CHART_DIR)" \
 		--namespace gmc-system --create-namespace \
 		--set allowFloatingImageTags=true \
 		--set gmc.image.repository="$${GMC_IMG%:*}",gmc.image.tag="$${GMC_IMG##*:}" \
 		--set agc.image.repository="$${AGC_IMG%:*}",agc.image.tag="$${AGC_IMG##*:}" \
-		--set proxy.image.repository="$${PROXY_IMG%:*}",proxy.image.tag="$${PROXY_IMG##*:}"
+		--set proxy.image.repository="$${PROXY_IMG%:*}",proxy.image.tag="$${PROXY_IMG##*:}" \
+		--set wrapper.image.repository="$${WRAPPER_IMG%:*}",wrapper.image.tag="$${WRAPPER_IMG##*:}"
 
 .PHONY: undeploy
 undeploy: ## Remove the GMC Helm release from the current kube-context (CRDs retained: resource-policy keep)

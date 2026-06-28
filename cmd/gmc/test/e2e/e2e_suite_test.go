@@ -45,6 +45,7 @@ var (
 	proxyImage      string
 	fakegithubImage string
 	workerImage     string
+	wrapperImage    string
 	// curlImage is the image used by the curl-based test pods (proxy
 	// connectivity, cross-tenant isolation, metrics scrape). It defaults to the
 	// upstream Docker Hub ref for local runs; CI overrides E2E_CURL_IMAGE to a
@@ -72,6 +73,7 @@ type suiteData struct {
 	ProxyImage      string `json:"proxyImage"`
 	FakegithubImage string `json:"fakegithubImage"`
 	WorkerImage     string `json:"workerImage"`
+	WrapperImage    string `json:"wrapperImage"`
 	CurlImage       string `json:"curlImage"`
 	RSAKeyPEM       []byte `json:"rsaKeyPEM"`
 }
@@ -89,6 +91,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImg := envOrDefault("PROXY_IMG", "127.0.0.1:5000/proxy:e2e")
 		fakegithubImg := envOrDefault("FAKEGITHUB_IMG", "127.0.0.1:5000/fakegithub:e2e")
 		workerImg := envOrDefault("WORKER_IMG", "127.0.0.1:5000/worker:e2e")
+		wrapperImg := envOrDefault("WRAPPER_IMG", "127.0.0.1:5000/wrapper:e2e")
 		curlImg := envOrDefault("E2E_CURL_IMAGE", "curlimages/curl:8.10.1")
 
 		By("generating test RSA private key")
@@ -108,6 +111,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImage = proxyImg
 		fakegithubImage = fakegithubImg
 		workerImage = workerImg
+		wrapperImage = wrapperImg
 		curlImage = curlImg
 
 		configureKubectlKubeRC()
@@ -123,6 +127,7 @@ var _ = SynchronizedBeforeSuite(
 			ProxyImage:      proxyImg,
 			FakegithubImage: fakegithubImg,
 			WorkerImage:     workerImg,
+			WrapperImage:    wrapperImg,
 			CurlImage:       curlImg,
 			RSAKeyPEM:       rsaKeyPEM,
 		})
@@ -138,6 +143,7 @@ var _ = SynchronizedBeforeSuite(
 		proxyImage = sd.ProxyImage
 		fakegithubImage = sd.FakegithubImage
 		workerImage = sd.WorkerImage
+		wrapperImage = sd.WrapperImage
 		curlImage = sd.CurlImage
 		testRSAKeyPEM = sd.RSAKeyPEM
 	},
@@ -181,6 +187,7 @@ func setupGMC() {
 		fmt.Sprintf("GMC_IMG=%s", gmcImage),
 		fmt.Sprintf("AGC_IMG=%s", agcImage),
 		fmt.Sprintf("PROXY_IMG=%s", proxyImage),
+		fmt.Sprintf("WRAPPER_IMG=%s", wrapperImage),
 	)
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "deploy GMC")

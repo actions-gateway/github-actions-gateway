@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+# ^ BuildKit frontend pinned by digest (kept in step with cmd/worker/Dockerfile).
+## The GAG worker-wrapper image (Q235): a FROM-scratch image holding only the
+## cmd/worker wrapper binary (~2 MB). The AGC provisioner injects it into every
+## worker pod at runtime — as a read-only OCI image volume (K8s >=1.33) or copied
+## in by an initContainer (`wrapper install <dir>`) — so the runner container can
+## be the unmodified upstream actions-runner (or any tenant workerImage) instead
+## of a baked-in wrapper image. The full runner+wrapper image is built separately
+## from cmd/worker/Dockerfile.
+##
+## Stage 1: build the static wrapper binary (identical build to the full image,
+## so the two share the cmd/worker source and produce byte-identical wrappers).
+FROM --platform=$BUILDPLATFORM golang:1.26@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3 AS builder
+WORKDIR /src
+# Build context is the repo root so the workspace vendor/ is available.
+COPY . .
+ARG TARGETOS TARGETARCH
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags=-buildid= -o /wrapper ./cmd/worker
+
+## Stage 2: the binary alone on scratch. The wrapper is at /wrapper so the image
+## volume exposes it at <mount>/wrapper and the initContainer runs
+## `/wrapper install <mount>`. No shell, no OS — nothing to pull but the binary.
+FROM scratch
+ARG REVISION="unknown"
+ARG VERSION="dev"
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="wrapper" \
+      org.opencontainers.image.description="GAG worker-wrapper binary, injected into worker pods (Q235)" \
+      org.opencontainers.image.licenses="Apache-2.0"
+# License attribution for the statically linked vendored deps (no OS layer to
+# carry its own). /licenses is the Red Hat/OpenShift container-certification
+# convention; regenerate THIRD-PARTY-NOTICES with `make third-party-notices`.
+COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
+COPY --from=builder /wrapper /wrapper
+ENTRYPOINT ["/wrapper"]

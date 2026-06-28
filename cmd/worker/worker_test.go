@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -440,4 +441,102 @@ exit 0
 	require.Equal(t, want, got,
 		"Runner.Worker must be invoked with exactly [spawnclient, %d, %d]",
 		workerReadFD, workerWriteFD)
+}
+
+func TestInstallSelf_CopiesExecutable(t *testing.T) {
+	dir := t.TempDir()
+	if err := installSelf(dir); err != nil {
+		t.Fatalf("installSelf: %v", err)
+	}
+	dst := filepath.Join(dir, "wrapper")
+	fi, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("stat installed wrapper: %v", err)
+	}
+	if fi.Size() == 0 {
+		t.Fatal("installed wrapper is empty")
+	}
+	if fi.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("installed wrapper is not executable: mode %v", fi.Mode())
+	}
+}
+
+func TestResolveWorkerBin_FoundInRunnerHome(t *testing.T) {
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(bin, "Runner.Worker")
+	if err := os.WriteFile(want, []byte("x"), 0o600); err != nil { // only Stat'd by resolveWorkerBin
+		t.Fatal(err)
+	}
+	got, err := resolveWorkerBin(home)
+	if err != nil {
+		t.Fatalf("resolveWorkerBin: %v", err)
+	}
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestResolveWorkerBin_FallbackToPath(t *testing.T) {
+	pathDir := t.TempDir()
+	onPath := filepath.Join(pathDir, "Runner.Worker")
+	// Must be executable: exec.LookPath only resolves files with an exec bit.
+	if err := os.WriteFile(onPath, []byte("x"), 0o700); err != nil { //nolint:gosec // G306: a PATH fixture must be executable
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", pathDir)
+	// runnerHome has no bin/Runner.Worker → must fall back to PATH.
+	got, err := resolveWorkerBin(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolveWorkerBin: %v", err)
+	}
+	if got != onPath {
+		t.Fatalf("got %q, want %q", got, onPath)
+	}
+}
+
+func TestResolveWorkerBin_NotFound(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // empty dir → Runner.Worker not on PATH
+	if _, err := resolveWorkerBin(t.TempDir()); err == nil {
+		t.Fatal("expected error when Runner.Worker is absent from RUNNER_HOME_DIR/bin and PATH")
+	}
+}
+
+func TestInstallSelf_BadDir(t *testing.T) {
+	// A path whose parent is a regular file → MkdirAll fails.
+	f := filepath.Join(t.TempDir(), "afile")
+	if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := installSelf(filepath.Join(f, "sub")); err == nil {
+		t.Fatal("expected error installing under a file path")
+	}
+}
+
+func TestEnvOr(t *testing.T) {
+	if got := envOr("WK_UNSET_VAR_XYZ", "fallback"); got != "fallback" {
+		t.Fatalf("unset: got %q, want fallback", got)
+	}
+	t.Setenv("WK_SET_VAR_XYZ", "value")
+	if got := envOr("WK_SET_VAR_XYZ", "fallback"); got != "value" {
+		t.Fatalf("set: got %q, want value", got)
+	}
+}
+
+func TestLogLevelFromEnv(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "debug")
+	if got := logLevelFromEnv(); got != slog.LevelDebug {
+		t.Fatalf("debug: got %v, want %v", got, slog.LevelDebug)
+	}
+	t.Setenv("LOG_LEVEL", "info")
+	if got := logLevelFromEnv(); got != slog.LevelInfo {
+		t.Fatalf("info: got %v, want %v", got, slog.LevelInfo)
+	}
+	t.Setenv("LOG_LEVEL", "")
+	if got := logLevelFromEnv(); got != slog.LevelInfo {
+		t.Fatalf("default: got %v, want %v", got, slog.LevelInfo)
+	}
 }

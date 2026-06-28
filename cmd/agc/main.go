@@ -51,7 +51,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -429,6 +431,14 @@ func run() error {
 	if img := os.Getenv("WORKER_IMAGE"); img != "" {
 		prov.DefaultWorkerImage = img
 	}
+	// WRAPPER_IMAGE enables runtime wrapper injection (Q235): the runner image is
+	// the unmodified upstream actions-runner (or any tenant image) and the GAG
+	// wrapper is delivered into each worker pod. Empty disables injection (the
+	// worker image must then carry the wrapper as its own entrypoint).
+	if img := os.Getenv("WRAPPER_IMAGE"); img != "" {
+		prov.WrapperImage = img
+		prov.UseImageVolume = useImageVolume(mgr.GetConfig(), os.Getenv("WRAPPER_DELIVERY"))
+	}
 	prov.TokenFunc = tokenMgr.Token
 
 	// Detect worker-pod completion off the shared Pod informer rather than
@@ -534,4 +544,37 @@ func run() error {
 
 	ctrl.Log.Info("starting AGC manager")
 	return mgr.Start(ctx)
+}
+
+// useImageVolume decides the worker-wrapper delivery mechanism (Q235). The
+// WRAPPER_DELIVERY override wins ("imagevolume" or "init"); otherwise
+// ("auto"/unset) it uses an OCI image volume when the API server is >= 1.33
+// (where the ImageVolume feature is beta and on by default), falling back to an
+// initContainer below that or when the version cannot be determined.
+func useImageVolume(cfg *rest.Config, override string) bool {
+	switch strings.ToLower(strings.TrimSpace(override)) {
+	case "imagevolume":
+		return true
+	case "init":
+		return false
+	}
+	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		slog.Warn("wrapper delivery: discovery client unavailable; using initContainer", "error", err)
+		return false
+	}
+	v, err := dc.ServerVersion()
+	if err != nil {
+		slog.Warn("wrapper delivery: server version unavailable; using initContainer", "error", err)
+		return false
+	}
+	major, errMajor := strconv.Atoi(strings.TrimRight(v.Major, "+"))
+	minor, errMinor := strconv.Atoi(strings.TrimRight(v.Minor, "+"))
+	if errMajor != nil || errMinor != nil {
+		slog.Warn("wrapper delivery: unparseable server version; using initContainer", "version", v.GitVersion)
+		return false
+	}
+	useIV := major > 1 || (major == 1 && minor >= 33)
+	slog.Info("wrapper delivery resolved", "imageVolume", useIV, "serverVersion", v.GitVersion)
+	return useIV
 }

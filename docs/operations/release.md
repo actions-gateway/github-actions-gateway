@@ -16,8 +16,9 @@ at install time — see [tenant-onboarding.md](tenant-onboarding.md) and the
 
 A release is a `vX.Y.Z` git tag plus its outputs:
 
-- The four first-party images — `gmc`, `agc`, `proxy`, `worker` — pushed to GHCR
-  (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
+- The five first-party images — `gmc`, `agc`, `proxy`, `worker`, `wrapper` — pushed
+  to GHCR (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit
+  SHA.
   Each is **multi-arch** (`linux/amd64` + `linux/arm64`): the pushed artifact is
   an OCI image **index**, and the digest recorded everywhere (run summary,
   release notes, chart pins) is the index digest — the kubelet resolves the
@@ -68,7 +69,7 @@ The maintainer's job is to cut the tag and verify the result.
 ## One-time setup (first release only)
 
 1. **GHCR package visibility.** The first publish *creates* the
-   `ghcr.io/actions-gateway/{gmc,agc,proxy,worker}` image packages **and the
+   `ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper}` image packages **and the
    `ghcr.io/actions-gateway/charts/actions-gateway` chart package**. They inherit
    the repository's visibility and may start **private**. For third parties to run
    `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each
@@ -232,19 +233,28 @@ in [upgrade.md](upgrade.md). A bad tag can be superseded by a higher patch
 release; do not retag an existing `vX.Y.Z` (it would break the digest↔tag binding
 consumers rely on).
 
-## The worker image and `DefaultWorkerImage`
+## The worker images: `wrapper` and `worker`
 
-`publish.yml` builds and signs `ghcr.io/actions-gateway/worker` (the wrapper that
-feeds the job payload into `Runner.Worker`). Note that the AGC's
-`DefaultWorkerImage`
-([provisioner.go](../../cmd/agc/internal/provisioner/provisioner.go)) currently
-defaults to the **upstream** `ghcr.io/actions/actions-runner` image
-(digest-pinned, with its runner version locked to the `agent.version` the AGC
-registers — see [building.md](../development/building.md#runner-version-pin-lockstep)),
-not this signed first-party worker — so a default install does not run the signed
-worker unless a tenant sets `RunnerGroup.Spec.WorkerImage` to it. Signing it is still
-correct supply-chain hygiene; whether the default should point at the signed
-first-party worker is a separate decision tracked on the backlog.
+`publish.yml` builds and signs **two** worker-related images, both holding the
+same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
+
+- **`ghcr.io/actions-gateway/wrapper`** — a ~2 MB `FROM scratch` image with just
+  the wrapper binary. The GMC forwards it to every AGC (`WRAPPER_IMAGE`), whose
+  provisioner injects it into each worker pod — as a read-only OCI image volume
+  (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be
+  the **unmodified upstream `ghcr.io/actions/actions-runner`** (or any tenant
+  `workerImage`). This is what makes `DefaultWorkerImage` (still the digest-pinned
+  upstream `actions-runner`, runner version locked to `agent.version` — see
+  [building.md](../development/building.md#runner-version-pin-lockstep)) actually
+  run jobs (Q235, [plan](../plan/worker-wrapper-injection.md)).
+- **`ghcr.io/actions-gateway/worker`** — the full upstream `actions-runner` + the
+  wrapper as `ENTRYPOINT` (~520 MB). Kept as an optional batteries-included image;
+  unnecessary once injection is enabled, since the runner image is the upstream one
+  with the wrapper injected. Retiring it is tracked separately.
+
+Both are digest-pinned in the chart (`wrapper.image.digest` like `agc`/`proxy`),
+so a release must publish the `wrapper` image and pin its digest for the default
+install to run jobs.
 
 ## PR CI vs publish — what runs where
 

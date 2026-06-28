@@ -41,7 +41,7 @@ variable "GHA_CACHE" {
 }
 
 group "default" {
-  targets = ["gmc", "agc", "proxy", "fakegithub", "worker"]
+  targets = ["gmc", "agc", "proxy", "fakegithub", "worker", "wrapper"]
 }
 
 // _common holds the settings every target inherits. The output `type=registry`
@@ -97,4 +97,15 @@ target "worker" {
   tags       = ["${IMAGE_REGISTRY}/worker:e2e-${GIT_SHA}"]
   cache-from = GHA_CACHE != "" ? ["type=gha,scope=worker"] : []
   cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=worker"] : []
+}
+
+// wrapper is the ~2 MB scratch image holding just the cmd/worker wrapper binary,
+// injected into worker pods at runtime so the runner image can be the unmodified
+// upstream actions-runner (Q235).
+target "wrapper" {
+  inherits   = ["_common"]
+  dockerfile = "cmd/worker/Dockerfile.wrapper"
+  tags       = ["${IMAGE_REGISTRY}/wrapper:e2e-${GIT_SHA}"]
+  cache-from = GHA_CACHE != "" ? ["type=gha,scope=wrapper"] : []
+  cache-to   = GHA_CACHE != "" ? ["type=gha,mode=max,scope=wrapper"] : []
 }
