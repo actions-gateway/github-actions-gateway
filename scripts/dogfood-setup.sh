@@ -319,6 +319,12 @@ main() {
 
 	require_cmd gcloud "https://cloud.google.com/sdk/docs/install"
 	require_cmd kubectl "https://kubernetes.io/docs/tasks/tools/"
+	# GKE kubeconfigs authenticate via this external plugin; without it every
+	# kubectl call fails. Check up front so a first run fails before creating
+	# any billable resources rather than after (install: gcloud components
+	# install gke-gcloud-auth-plugin).
+	require_cmd gke-gcloud-auth-plugin \
+		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 	require_cmd helm "https://helm.sh/docs/intro/install/"
 	require_cmd security "built-in macOS tool — macOS required to read keychain"
 	require_cmd xxd "built-in macOS/Linux tool"
