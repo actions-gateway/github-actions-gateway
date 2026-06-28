@@ -75,7 +75,7 @@ namespace: team-a                       namespace: team-a
 | `runnerScaleSetName` / the install name you put in `runs-on` | `runnerGroups[].runnerLabels` (a label **set**) | The routing model differs — see [Job routing](#job-routing-the-one-that-bites). |
 | `runnerGroup` (the GitHub runner-group name) | n/a | GAG registers runners by **label**, not by a GitHub runner group. There is no `runnerGroup` field. |
 | `spec.template` (pod template, a `PodTemplateSpec`) | `runnerGroups[].podTemplate` (the same `PodTemplateSpec`) | `resources`, `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints`, `runtimeClassName`, `securityContext`, `volumes`, init/sidecar containers transfer **one-to-one**. Renamed `template` → `podTemplate` only to keep the type unambiguous. |
-| runner container image (chart default `ghcr.io/actions/actions-runner`) | `runnerGroups[].workerImage` (same default) | Identical default image, so a stock scale set needs no image change. |
+| runner container image (ARC default `ghcr.io/actions/actions-runner`) | `runnerGroups[].workerImage` → GAG's first-party `ghcr.io/actions-gateway/worker` | **Not drop-in.** GAG worker pods run a thin wrapper entrypoint, so the bare `actions/runner` — or a custom image built on it — won't run jobs until the wrapper is added. See [Your runner image needs GAG's wrapper](#your-runner-image-needs-gags-wrapper) below. |
 | `maxRunners` (per scale set) | `runnerGroups[].maxWorkers` (per group) + the **namespace `ResourceQuota`** | The real cap is the platform-owned quota, shared across groups; `maxWorkers` is the per-group ceiling. See [Quotas](#quotas-and-scheduling). |
 | `minRunners` (warm pool to mask cold start) | n/a — **not needed** | The goroutine listener never goes cold, so there is no cold-start to mask; GAG always scales workers to zero between jobs. Dropping `minRunners > 0` is what removes your idle GPU/compute pods. |
 | `containerMode: kubernetes` / `dind` | a `podTemplate` choice + `securityProfile` | GAG always runs one worker pod per job. Docker-in-Docker needs `securityProfile: privileged` (a platform-granted opt-in); see [Security profiles](#security-profiles). |
@@ -83,6 +83,38 @@ namespace: team-a                       namespace: team-a
 | Pod Security / NetworkPolicy / RBAC hand-built around ARC | reconciled from the one CR by the GMC | GAG ships these as secure-by-default; you do not assemble them per tenant ([Why GAG → Secure by default](../why-gag.md#secure-by-default)). |
 | (no ARC equivalent) | `runnerGroups[].priorityTiers` | A guaranteed floor of preempting slots for a runner type under a shared quota — the thing ARC's per-scale-set `maxRunners` cannot express. |
 | (no ARC equivalent) | per-tenant egress proxy pool / dedicated egress IPs | See [Egress isolation](#egress-isolation-the-big-difference). |
+
+### Your runner image needs GAG's wrapper
+
+This is the one image difference from ARC. GAG's AGC **pre-acquires** each job from
+the GitHub broker and hands it to the pod, rather than letting the pod's runner
+register and poll. So the worker container runs a small **wrapper entrypoint**
+(the entrypoint of `ghcr.io/actions-gateway/worker`) that reads the job payload
+and launches `Runner.Worker` — not the stock runner startup. A bare
+`ghcr.io/actions/actions-runner` (or a custom image built on it) starts, finds no
+job it recognizes, and exits without running anything. Two paths:
+
+- **Stock runner:** point `workerImage` at GAG's default `ghcr.io/actions-gateway/worker`
+  — the upstream `actions/runner` plus the wrapper (same pinned runner version,
+  ~2 MB larger, signed + SBOM'd).
+- **Custom / slim image** (your `FROM ghcr.io/actions/actions-runner` + tooling):
+  layer the wrapper on. Your tools and userland carry over **unchanged** — once
+  `Runner.Worker` starts, the job runs identically:
+
+  ```dockerfile
+  FROM your-existing-arc-image
+  COPY --from=ghcr.io/actions-gateway/worker /usr/local/bin/wrapper /usr/local/bin/wrapper
+  ENTRYPOINT ["/usr/local/bin/wrapper"]
+  ```
+
+  The image must be `actions/runner`-derived (it must contain `Runner.Worker`) —
+  the same agent requirement ARC has, so any image that works on ARC qualifies.
+
+> **Docker-in-Docker:** the wrapper replaces the image entrypoint, so an
+> `actions-runner-dind` image's bundled `dockerd` startup is **skipped**. Run DinD
+> as a **sidecar** container with `securityProfile: privileged` instead (see
+> [Security profiles](#security-profiles)) — that is GAG's DinD model regardless
+> of the worker image.
 
 ---
 
