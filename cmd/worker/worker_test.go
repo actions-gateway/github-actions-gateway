@@ -464,11 +464,11 @@ func TestInstallSelf_CopiesExecutable(t *testing.T) {
 func TestResolveWorkerBin_FoundInRunnerHome(t *testing.T) {
 	home := t.TempDir()
 	bin := filepath.Join(home, "bin")
-	if err := os.MkdirAll(bin, 0o755); err != nil {
+	if err := os.MkdirAll(bin, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(bin, "Runner.Worker")
-	if err := os.WriteFile(want, []byte("x"), 0o755); err != nil {
+	if err := os.WriteFile(want, []byte("x"), 0o600); err != nil { // only Stat'd by resolveWorkerBin
 		t.Fatal(err)
 	}
 	got, err := resolveWorkerBin(home)
@@ -483,7 +483,8 @@ func TestResolveWorkerBin_FoundInRunnerHome(t *testing.T) {
 func TestResolveWorkerBin_FallbackToPath(t *testing.T) {
 	pathDir := t.TempDir()
 	onPath := filepath.Join(pathDir, "Runner.Worker")
-	if err := os.WriteFile(onPath, []byte("x"), 0o755); err != nil {
+	// Must be executable: exec.LookPath only resolves files with an exec bit.
+	if err := os.WriteFile(onPath, []byte("x"), 0o700); err != nil { //nolint:gosec // G306: a PATH fixture must be executable
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", pathDir)
@@ -507,7 +508,7 @@ func TestResolveWorkerBin_NotFound(t *testing.T) {
 func TestInstallSelf_BadDir(t *testing.T) {
 	// A path whose parent is a regular file → MkdirAll fails.
 	f := filepath.Join(t.TempDir(), "afile")
-	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := installSelf(filepath.Join(f, "sub")); err == nil {
