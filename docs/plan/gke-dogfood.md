@@ -137,18 +137,20 @@ make validate-cluster
 
 ```bash
 cat > tmp/values-dogfood.yaml <<'EOF'
-# Dogfood / dev mode: float image tags rather than pinning digests.
+# Dogfood / dev mode: pin a released image tag rather than digests.
 # Production installs must use digest-pinned images from the release page.
+# NOTE: `latest` is never published (publish.yml builds only on v* tags), so a
+# real released tag is required — see https://github.com/actions-gateway/github-actions-gateway/pkgs/container/gmc
 allowFloatingImageTags: true
 gmc:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 agc:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 proxy:
   image:
-    tag: latest
+    tag: v1.1.0-rc.2
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.

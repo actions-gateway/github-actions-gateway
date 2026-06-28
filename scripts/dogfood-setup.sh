@@ -25,11 +25,20 @@
 #
 # Optional env vars:
 #   ASSUME_YES=1     Skip the interactive "proceed?" confirmation (automation).
+#   GAG_IMAGE_TAG    GAG control-plane image tag (default below). The publish
+#                    pipeline only builds on v* release tags and never pushes
+#                    `latest`, so a real released tag is required — bump this as
+#                    new releases land. Tags: https://github.com/actions-gateway/github-actions-gateway/pkgs/container/gmc
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+
+# Default to the newest published release. `latest` does not exist in this
+# project's registry (publish.yml builds only on v* tags), so floating to it
+# yields ImagePullBackOff — pin a real tag instead.
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.2}"
 
 # ---------------------------------------------------------------------------
 # Existence guards — make the gcloud creates (which error if the resource
@@ -132,21 +141,21 @@ install_gag() {
 	# goes out of scope (e.g. a set -e abort later in the function).
 	trap 'rm -f "${values:-}"' EXIT
 
-	# Dogfood/dev mode: float image tags (production pins digests). Self-signed
-	# webhook cert (no cert-manager). Keep GMC on default-pool so it goes down
-	# when that pool scales to 0; AGC/proxy inherit scheduling via the worker
-	# pool's taint.
-	cat >"${values}" <<'EOF'
+	# Dogfood/dev mode: pin a released image tag (production pins digests).
+	# Self-signed webhook cert (no cert-manager). Keep GMC on default-pool so it
+	# goes down when that pool scales to 0; AGC/proxy inherit scheduling via the
+	# worker pool's taint. Heredoc is unquoted so ${GAG_IMAGE_TAG} expands.
+	cat >"${values}" <<EOF
 allowFloatingImageTags: true
 gmc:
   image:
-    tag: latest
+    tag: ${GAG_IMAGE_TAG}
 agc:
   image:
-    tag: latest
+    tag: ${GAG_IMAGE_TAG}
 proxy:
   image:
-    tag: latest
+    tag: ${GAG_IMAGE_TAG}
 certManager:
   enabled: false
 nodeSelector:
