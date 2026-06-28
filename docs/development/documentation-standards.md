@@ -47,8 +47,10 @@ a wrong or missing answer. In rough order of leverage:
 5. **Usable.** Scannable, copy-paste-safe, free of filler — see [Write for
    scanning](#write-for-scanning) and [Commands and code blocks](#commands-and-code-blocks).
    Necessary, cheap to get wrong, but not a substitute for 1–4.
-6. **Trustworthy in tone.** Honest about limitations, failure modes, and "not yet
-   implemented." Trust is what makes a reader rely on 1–5.
+6. **Trustworthy in tone.** Specific and evidence-backed, not promotional, and honest
+   about limitations, failure modes, and "not yet implemented" — see [Write with
+   substance](#write-with-substance-dont-read-as-ai-slop). Trust is what makes a reader
+   rely on 1–5 instead of discounting the project on sight.
 
 ## Write for scanning
 
@@ -88,6 +90,38 @@ A reader copies a block and runs it. Make that safe.
 - **Introduce, then show.** A one-line lead-in ending in a colon, then the block. Put
   explanation *before* the block, not as a wall of text after it.
 - Shell snippets follow the repo [bash conventions](bash-style.md).
+
+## Write with substance (don't read as AI slop)
+
+Readers discount a project on sight when its docs pattern-match to generated filler —
+they bounce before they ever try the code. The tells they actually react to are
+**substance-level, not punctuation**: an em-dash or a bold-lead bullet is fine (this
+page uses both, deliberately). What reads as slop is padding, puffery, and claims
+without evidence. Earn trust by being specific and honest.
+
+- **Specifics over adjectives.** Replace "robust, scalable, high-performance" with the
+  number, the command, or the named limit. "Multiplexes thousands of sessions as
+  goroutines" beats "powerful and efficient." A real command, metric, or link to the
+  code/test is the strongest anti-slop signal there is.
+- **Plain verbs.** Prefer "is / has / does" over marketing verbs ("serves as", "boasts",
+  "leverages", "empowers", "offers a seamless experience"). Cut the puffery vocabulary —
+  *delve, showcase, foster, robust, seamless, comprehensive, cutting-edge, powerful*.
+- **No padding, no treadmill.** Every paragraph adds new information. Delete
+  section-summary restatement, "challenges and future prospects" speculation, and the
+  optimistic wrap-up that says nothing. If a 500-word section carries 100 words of fact,
+  cut it to 100.
+- **Drop the rhetorical tics.** No "not just X, but Y"; no forced rule-of-three lists; no
+  "it's important to note"; no manufactured significance ("marks a pivotal shift").
+- **Honest, not promotional.** State limitations, known gaps, and "not yet implemented"
+  plainly (goal 6). A doc that admits what doesn't work yet reads as written by someone
+  who actually ran it.
+- **Formatting in moderation.** Bold the keyword, not the sentence; sentence-case
+  headings, not Title Case; no emoji as bullets or status markers. Mechanical,
+  every-line formatting is itself a tell.
+
+The anti-pattern is cargo-culting the surface tells — purging every em-dash, banning all
+bold — while leaving the padding and puffery untouched. That fixes nothing: the
+substance is what readers judge.
 
 ## Conventions
 
@@ -154,5 +188,6 @@ Before opening a docs PR, check against the goals — not just formatting:
 - [ ] **Usable (5):** answer-first; enumerations are lists and comparisons are tables;
       code/command blocks are copy-paste-runnable with consistent placeholders; no walls
       of text or filler.
-- [ ] **Trustworthy (6):** honest about limitations and "not yet implemented"; acronyms
-      expanded on first use; terms match the glossary; no links to `CLAUDE.md`.
+- [ ] **Trustworthy (6):** specific and evidence-backed, not promotional (doesn't read
+      as AI slop); honest about limitations and "not yet implemented"; acronyms expanded
+      on first use; terms match the glossary; no links to `CLAUDE.md`.
