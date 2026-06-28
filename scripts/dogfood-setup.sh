@@ -39,7 +39,7 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # Default to the newest published release. `latest` does not exist in this
 # project's registry (publish.yml builds only on v* tags), so floating to it
 # yields ImagePullBackOff — pin a real tag instead.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.2}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.3}"
 
 # ---------------------------------------------------------------------------
 # Existence guards — make the gcloud creates (which error if the resource

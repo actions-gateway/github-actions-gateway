@@ -147,13 +147,13 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: v1.1.0-rc.2
+    tag: v1.1.0-rc.3
 agc:
   image:
-    tag: v1.1.0-rc.2
+    tag: v1.1.0-rc.3
 proxy:
   image:
-    tag: v1.1.0-rc.2
+    tag: v1.1.0-rc.3
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -176,10 +176,10 @@ runs its v2 controllers unconditionally, so the CRDs must be installed — and
 between releases (e.g. `ActionsGateway.spec.githubAppRef` on releases became
 `spec.credentials` on `main`); a mismatch makes every reconcile fail validation.
 `scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
-equivalent for the pinned `v1.1.0-rc.2`:
+equivalent for the pinned `v1.1.0-rc.3`:
 
 ```bash
-git archive v1.1.0-rc.2 charts/actions-gateway-crds-v2 | tar -x -C tmp/
+git archive v1.1.0-rc.3 charts/actions-gateway-crds-v2 | tar -x -C tmp/
 helm install actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
   --namespace gmc-system --create-namespace
 ```
