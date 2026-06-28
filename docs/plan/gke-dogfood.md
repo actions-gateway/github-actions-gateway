@@ -158,6 +158,14 @@ helm install gag charts/actions-gateway \
 kubectl rollout status deployment/gmc-controller -n gmc-system --timeout=3m
 ```
 
+> **GKE PriorityClass admission:** the GMC runs with
+> `priorityClassName: system-cluster-critical`, which GKE permits only in a
+> namespace carrying a matching scoped `ResourceQuota` — without one the GMC pods
+> fail with `insufficient quota to match these scopes`. The chart ships that
+> permit-only quota (`gmc-critical-pods`) by default
+> (`systemCriticalPriorityQuota.enabled=true`), so no manual `kubectl apply` is
+> needed here. See [install.md](../operations/install.md#gke-and-other-restricted-priorityclass-clusters).
+
 ### B4. Create tenant namespace
 
 ```bash

@@ -10,6 +10,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 
 - [How to Validate a Fresh Deployment](#how-to-validate-a-fresh-deployment)
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
+- [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
 - [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
@@ -127,6 +128,34 @@ DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
 - **Offline rendering:** any well-formed digest satisfies the check, e.g. `--set-string gmc.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111`.
 
 Note the contrast with the AGC/proxy images: those are validated by the GMC **at startup** (a floating tag there crash-loops the GMC — see [install.md § Pin images by digest](install.md#pin-images-by-digest)), while the GMC's own image is validated by the chart **at render time**.
+
+---
+
+## GMC Pods Rejected: `insufficient quota to match these scopes` (PriorityClass)
+
+**Symptoms.** After `helm install`, the GMC Deployment never reaches Ready. There are no GMC pods, and the ReplicaSet emits a `FailedCreate` event:
+
+```
+kubectl describe replicaset -n gmc-system -l app.kubernetes.io/name=gmc
+# Events:
+#   Warning  FailedCreate  ...  Error creating: pods "gmc-controller-manager-..." is forbidden:
+#   insufficient quota to match these scopes:
+#   [{PriorityClass In [system-node-critical system-cluster-critical]}]
+```
+
+**Cause.** The cluster's API server enables the restricted `PriorityClass` admission config (GKE Standard does this by default), which permits `system-node-critical` / `system-cluster-critical` pods **only** in a namespace carrying a `ResourceQuota` whose `scopeSelector` matches those classes. The GMC runs with `priorityClassName: system-cluster-critical` by default — a deliberate secure default that protects the control plane from eviction — so without a permitting quota in the install namespace, the apiserver rejects every GMC pod.
+
+**Resolution.** The chart ships the permitting quota by default, so this should not occur on a current chart. If you hit it:
+
+- **Confirm the quota is enabled.** The chart renders `<namePrefix>-critical-pods` (default `gmc-critical-pods`) when `systemCriticalPriorityQuota.enabled=true` (the default) and `priorityClassName` is a system-critical class:
+
+  ```sh
+  kubectl get resourcequota -n gmc-system gmc-critical-pods
+  ```
+
+  If it is missing, you likely installed with `--set systemCriticalPriorityQuota.enabled=false`. Re-run the install/upgrade without that override (it defaults to `true`). See [install.md § GKE and other restricted-PriorityClass clusters](install.md#gke-and-other-restricted-priorityclass-clusters).
+- **Do not** work around the rejection by clearing `priorityClassName` — that removes the GMC's eviction protection (a security regression). Keep `system-cluster-critical` and let the quota permit it.
+- **If you manage the quota out-of-band** (e.g. a cluster-wide policy), ensure it exists in the install namespace and its `scopeSelector` matches the system-critical classes before installing.
 
 ---
 

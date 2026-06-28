@@ -184,6 +184,39 @@ The chart generates a self-signed webhook serving cert and wires the `caBundle`
 itself. Review the rotation trade-off in
 [Prerequisites](#prerequisites) before choosing this path.
 
+### GKE and other restricted-PriorityClass clusters
+
+GKE Standard (and any cluster whose API server enables the restricted
+`PriorityClass` admission config) permits the `system-node-critical` /
+`system-cluster-critical` priority classes **only** in a namespace that carries a
+`ResourceQuota` whose `scopeSelector` matches them. The GMC runs with
+`priorityClassName: system-cluster-critical` by default — a deliberate secure
+default that protects the control plane from eviction — so without such a quota
+GKE rejects the GMC ReplicaSet's pods with:
+
+```
+FailedCreate: insufficient quota to match these scopes:
+  [{PriorityClass In [system-node-critical system-cluster-critical]}]
+```
+
+and the Deployment never becomes Ready.
+
+**No action required: the chart handles this for you.** It ships a scoped,
+permit-only `ResourceQuota` (`<namePrefix>-critical-pods`, default
+`gmc-critical-pods`) in the install namespace by default
+(`systemCriticalPriorityQuota.enabled=true`), so a stock `helm install` brings
+the GMC to Ready on GKE out of the box without downgrading the
+`system-cluster-critical` default. The quota only *permits* the classes — its pod
+ceiling is generous and scoped to the system-critical classes, so it counts
+nothing but the GMC's own pods and never caps scheduling — and it is inert on
+clusters that don't enforce the restriction (they already permit the classes). It
+renders only while `priorityClassName` is a system-critical class.
+
+Set `--set systemCriticalPriorityQuota.enabled=false` only if you manage this
+quota out-of-band (e.g. a cluster-wide policy already provisions it). Do **not**
+work around the admission rejection by clearing `priorityClassName` — that drops
+the GMC's eviction protection.
+
 ### GitOps (Argo CD / Flux)
 
 To install the chart declaratively from Git instead of running `helm install` by
@@ -209,6 +242,7 @@ digests. The knobs an operator is most likely to override:
 | `metrics.serviceMonitor.enabled` | `false` | Set `true` if you run Prometheus Operator and want a `ServiceMonitor`. |
 | `metrics.tls.certManager.enabled` | `true` | Leave on for a cert-manager-issued metrics cert that the `ServiceMonitor` verifies. Set `false` (or `certManager.enabled=false`) to scrape the self-signed metrics cert with `insecureSkipVerify` — a documented MITM trade-off, see [observability.md](observability.md#verifying-the-metrics-scrape-tls-gmc-manager). |
 | `networkPolicy.enabled` | `true` | Leave on; needs an enforcing CNI (see prerequisites). |
+| `systemCriticalPriorityQuota.enabled` | `true` | Leave on; ships the scoped `ResourceQuota` that lets the GMC's `system-cluster-critical` pods schedule under GKE's restricted PriorityClass admission (see [GKE and other restricted-PriorityClass clusters](#gke-and-other-restricted-priorityclass-clusters)). Set `false` only if you provision that quota out-of-band. |
 
 A `values.schema.json` validates these at install/lint time (digest format,
 enum values, etc.). The **full reference** — every value with its default and

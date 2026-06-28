@@ -16,6 +16,13 @@
     },
     "allowFloatingImageTags": { "type": "boolean" },
     "priorityClassName": { "type": "string" },
+    "systemCriticalPriorityQuota": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "maxPods": { "type": "integer", "minimum": 1 }
+      }
+    },
     "apiServerCIDRs": {
       "type": "array",
       "items": { "$ref": "#/definitions/cidr" }
