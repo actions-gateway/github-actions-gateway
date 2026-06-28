@@ -1,6 +1,18 @@
 # Worker wrapper injection (Q235)
 
 > **Status:** ▶ Started. Tracks [Q235](../STATUS.md#Q235).
+>
+> **Done:** wrapper `install` subcommand + PATH-independent `Runner.Worker`
+> resolution; provisioner injection (image-volume + initContainer paths, command
+> override); AGC `WRAPPER_IMAGE`/`WRAPPER_DELIVERY` wiring + version detection; GMC
+> forwarding + chart `wrapper` image slot; `Dockerfile.wrapper` + bake target +
+> `publish.yml` leg; unit tests (both delivery paths + disabled + `installSelf`);
+> `release.md`. `make check` green.
+>
+> **Remaining (validation tail):** an e2e case that runs a job through an
+> **injected** pod (set the e2e GMC's `WRAPPER_IMAGE`); live dogfood re-validate
+> with `workerImage` unset; then flip the operator-doc "default works" / ARC
+> "drop-in" claims (`tenant-onboarding.md`, `migration-from-arc.md`) once validated.
 
 ## Problem
 
