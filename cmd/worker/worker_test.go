@@ -441,3 +441,21 @@ exit 0
 		"Runner.Worker must be invoked with exactly [spawnclient, %d, %d]",
 		workerReadFD, workerWriteFD)
 }
+
+func TestInstallSelf_CopiesExecutable(t *testing.T) {
+	dir := t.TempDir()
+	if err := installSelf(dir); err != nil {
+		t.Fatalf("installSelf: %v", err)
+	}
+	dst := filepath.Join(dir, "wrapper")
+	fi, err := os.Stat(dst)
+	if err != nil {
+		t.Fatalf("stat installed wrapper: %v", err)
+	}
+	if fi.Size() == 0 {
+		t.Fatal("installed wrapper is empty")
+	}
+	if fi.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("installed wrapper is not executable: mode %v", fi.Mode())
+	}
+}

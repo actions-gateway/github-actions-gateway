@@ -70,6 +70,16 @@ proxy:
     repository: ghcr.io/actions-gateway/proxy
     tag: ""
     digest: ""
+# wrapper is the worker-wrapper image (Q235): a ~2 MB scratch image holding just
+# the cmd/worker wrapper binary. The GMC forwards it to every AGC, which injects
+# it into each worker pod so the runner container can be the unmodified upstream
+# actions-runner (or any tenant workerImage) instead of a baked-in wrapper image.
+# Digest-pinned like agc/proxy; floating tags need allowFloatingImageTags.
+wrapper:
+  image:
+    repository: ghcr.io/actions-gateway/wrapper
+    tag: ""
+    digest: ""
 
 # allowFloatingImageTags=true passes --allow-floating-image-tags to the GMC
 # (disabling the AGC_IMAGE/PROXY_IMAGE digest-pinning requirement) AND lets

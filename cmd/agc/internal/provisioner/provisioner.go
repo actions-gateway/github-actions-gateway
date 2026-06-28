@@ -144,6 +144,17 @@ const (
 	jitConfigKey    = "jitconfig"
 	runnerContainer = "runner"
 
+	// wrapperVolumeName / wrapperMountDir / wrapperInitName describe how the GAG
+	// worker wrapper is injected into a worker pod (Q235) so the runner container
+	// can be the unmodified upstream actions-runner image. The wrapper binary lands
+	// at wrapperMountDir/wrapper either via a read-only OCI image volume (≥1.33) or
+	// an initContainer that runs `wrapper install wrapperMountDir` into an emptyDir;
+	// the runner container's command is overridden to that path.
+	wrapperVolumeName = "gag-wrapper"
+	wrapperMountDir   = "/opt/actions-gateway"
+	wrapperBinName    = "wrapper"
+	wrapperInitName   = "gag-wrapper-install"
+
 	// proxyCAVolumeName / proxyCAMountPath / proxyCAFileName describe how the
 	// per-tenant egress-proxy CA cert is projected into the worker pod. The
 	// runner image's default OS trust store does not include the
@@ -209,6 +220,23 @@ type Provisioner struct {
 	QuotaRetryDelay    time.Duration
 	PollInterval       time.Duration
 	DefaultWorkerImage string
+
+	// WrapperImage is the GAG worker-wrapper image (ghcr.io/actions-gateway/wrapper,
+	// a ~2 MB scratch image holding just the wrapper binary). When non-empty, the
+	// provisioner injects the wrapper into every worker pod and overrides the
+	// runner container's command to run it — so the runner image can be the
+	// unmodified upstream actions-runner (or any actions/runner-derived image)
+	// rather than a baked-in wrapper image (Q235). Empty disables injection: the
+	// worker image is then expected to carry the wrapper as its own entrypoint
+	// (the pre-Q235 behaviour, kept for tests and the legacy worker image).
+	WrapperImage string
+	// UseImageVolume selects the wrapper delivery mechanism when WrapperImage is
+	// set: true mounts WrapperImage as a read-only OCI image volume (K8s ≥ 1.33,
+	// no init container — lowest latency); false copies the binary in via an
+	// initContainer + emptyDir (works on any version). main.go resolves this from
+	// the cluster version and the WRAPPER_DELIVERY override before constructing
+	// the Provisioner.
+	UseImageVolume bool
 	// WorkerSA is the ServiceAccount name assigned to worker pods.
 	WorkerSA string
 
@@ -1107,6 +1135,14 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
 
+	// Inject the GAG worker wrapper (Q235) so the runner image can be an
+	// unmodified upstream actions-runner. No-op when WrapperImage is unset
+	// (legacy: the worker image carries the wrapper as its own entrypoint). Must
+	// run before applySecurityDefaults so the initContainer is hardened too.
+	if p.WrapperImage != "" {
+		p.injectWrapper(&template.Spec, runnerIdx)
+	}
+
 	// Overwrite reserved fields (controller-enforced invariants).
 	sa := p.WorkerSA
 	autoMount := false
@@ -1164,6 +1200,56 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 
 	return pod
+}
+
+// injectWrapper delivers the GAG worker wrapper into the pod and points the
+// runner container's command at it, so the runner image can be the unmodified
+// upstream actions-runner (or any actions/runner-derived image) instead of a
+// baked-in wrapper image (Q235). The binary is exposed at wrapperMountDir/wrapper
+// either as a read-only OCI image volume (UseImageVolume; K8s ≥ 1.33, no init
+// container) or copied into an emptyDir by an initContainer that self-installs
+// from the wrapper image. Called from buildPod before applySecurityDefaults so
+// the initContainer inherits the secure-by-default SecurityContext.
+func (p *Provisioner) injectWrapper(spec *corev1.PodSpec, runnerIdx int) {
+	if p.UseImageVolume {
+		spec.Volumes = append(spec.Volumes, corev1.Volume{
+			Name: wrapperVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Image: &corev1.ImageVolumeSource{
+					Reference:  p.WrapperImage,
+					PullPolicy: corev1.PullIfNotPresent,
+				},
+			},
+		})
+	} else {
+		spec.Volumes = append(spec.Volumes, corev1.Volume{
+			Name:         wrapperVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		// The scratch wrapper image has no shell/cp, so the binary copies itself
+		// into the shared emptyDir via its `install` subcommand.
+		spec.InitContainers = append(spec.InitContainers, corev1.Container{
+			Name:    wrapperInitName,
+			Image:   p.WrapperImage,
+			Command: []string{"/" + wrapperBinName, "install", wrapperMountDir},
+			VolumeMounts: []corev1.VolumeMount{{
+				Name:      wrapperVolumeName,
+				MountPath: wrapperMountDir,
+			}},
+		})
+	}
+
+	c := &spec.Containers[runnerIdx]
+	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+		Name:      wrapperVolumeName,
+		MountPath: wrapperMountDir,
+		ReadOnly:  true,
+	})
+	// Override the image entrypoint with the injected wrapper. Clear Args too: a
+	// command override drops the image's default CMD, and any tenant-set Args were
+	// meant for the original entrypoint, not the wrapper.
+	c.Command = []string{wrapperMountDir + "/" + wrapperBinName}
+	c.Args = nil
 }
 
 // applySecurityDefaults stamps a secure-by-default SecurityContext onto the

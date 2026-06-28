@@ -93,6 +93,12 @@ spec:
           value: {{ include "actions-gateway.image" .Values.agc.image | quote }}
         - name: PROXY_IMAGE
           value: {{ include "actions-gateway.image" .Values.proxy.image | quote }}
+        # WRAPPER_IMAGE enables runtime worker-wrapper injection (Q235): the GMC
+        # forwards it to every AGC, which injects the wrapper into each worker pod
+        # so the runner image can be the unmodified upstream actions-runner.
+        # Digest-pinned like AGC_IMAGE/PROXY_IMAGE unless allowFloatingImageTags.
+        - name: WRAPPER_IMAGE
+          value: {{ include "actions-gateway.image" .Values.wrapper.image | quote }}
         ports:
         - containerPort: 8081
           name: health

@@ -101,10 +101,54 @@ func main() {
 	// (info|debug, default info) is the single level source the GMC can crank per
 	// tenant without a code change (logging-audit Theme G).
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: logLevelFromEnv()})))
+	// Install mode: copy this binary into a shared volume so a runner container —
+	// an unmodified upstream actions-runner image with no wrapper of its own — can
+	// exec it. Used by the initContainer wrapper-delivery path; the OCI
+	// image-volume path mounts the binary read-only and skips this. Usage:
+	//   wrapper install <dir>
+	if len(os.Args) == 3 && os.Args[1] == "install" {
+		if err := installSelf(os.Args[2]); err != nil {
+			slog.Error("wrapper install failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		slog.Error("worker wrapper failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+// installSelf copies the running wrapper executable into dir as "wrapper" (mode
+// 0o755). The initContainer wrapper-delivery path runs `wrapper install <dir>`
+// against a shared volume so the runner container can exec the binary from there.
+func installSelf(dir string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate self: %w", err)
+	}
+	src, err := os.Open(self)
+	if err != nil {
+		return fmt.Errorf("open self: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	dst := filepath.Join(dir, "wrapper")
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755) //nolint:gosec // G302: an entrypoint binary must be executable
+	if err != nil {
+		return fmt.Errorf("create %s: %w", dst, err)
+	}
+	if _, err := io.Copy(out, src); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("copy wrapper: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", dst, err)
+	}
+	slog.Info("wrapper installed", "path", dst)
+	return nil
 }
 
 // logLevelFromEnv maps LOG_LEVEL (info|debug, default info) to a slog.Level.
@@ -164,13 +208,21 @@ func run() error {
 	// 4. Start Runner.Worker.
 	// ExtraFiles[0] = r1 → fd 3 in child (worker reads job message)
 	// ExtraFiles[1] = w2 → fd 4 in child (worker writes back)
-	workerPath, err := exec.LookPath(workerBin)
-	if err != nil {
-		_ = r1.Close()
-		_ = w1.Close()
-		_ = r2.Close()
-		_ = w2.Close()
-		return fmt.Errorf("find Runner.Worker: %w", err)
+	// Resolve Runner.Worker. Prefer $RUNNER_HOME_DIR/bin (the actions-runner
+	// layout) so resolution does not depend on PATH: the wrapper is injected into
+	// an unmodified upstream image whose PATH may not include the runner bin dir.
+	// Fall back to PATH for images that place the binary elsewhere.
+	workerPath := filepath.Join(runnerHome, "bin", workerBin)
+	if _, statErr := os.Stat(workerPath); statErr != nil {
+		var lookErr error
+		workerPath, lookErr = exec.LookPath(workerBin)
+		if lookErr != nil {
+			_ = r1.Close()
+			_ = w1.Close()
+			_ = r2.Close()
+			_ = w2.Close()
+			return fmt.Errorf("find %s (looked in %s/bin and PATH): %w", workerBin, runnerHome, lookErr)
+		}
 	}
 	cmd := exec.Command(workerPath, //nolint:gosec // G204: workerPath is the discovered Runner.Worker binary, not user input
 		"spawnclient",
