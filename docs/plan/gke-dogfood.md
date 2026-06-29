@@ -147,13 +147,13 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: v1.1.0-rc.4
+    tag: v1.1.0-rc.5
 agc:
   image:
-    tag: v1.1.0-rc.4
+    tag: v1.1.0-rc.5
 proxy:
   image:
-    tag: v1.1.0-rc.4
+    tag: v1.1.0-rc.5
 # WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
 # every AGC, which injects the wrapper into each worker pod so the runner
 # container can be the unmodified upstream actions-runner. Pin it: the chart's
@@ -161,7 +161,7 @@ proxy:
 # and ImagePullBackOffs the injection.
 wrapper:
   image:
-    tag: v1.1.0-rc.4
+    tag: v1.1.0-rc.5
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -196,10 +196,10 @@ AGC for workload-identity (Vault) instead, and the AGC crash-loops on
 `read appId: … no such file or directory`. Always upgrade this chart in lockstep
 with the GMC image (`helm upgrade`, not just `install`).
 `scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
-equivalent for the pinned `v1.1.0-rc.4`:
+equivalent for the pinned `v1.1.0-rc.5`:
 
 ```bash
-git archive v1.1.0-rc.4 charts/actions-gateway-crds-v2 | tar -x -C tmp/
+git archive v1.1.0-rc.5 charts/actions-gateway-crds-v2 | tar -x -C tmp/
 helm install actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
   --namespace gmc-system --create-namespace
 ```
@@ -361,19 +361,20 @@ gh api /repos/"$REPO"/actions/runners \
   --jq '.runners[] | {name, status, labels: [.labels[].name]}'
 ```
 
-> **Validated on `v1.1.0-rc.4` (2026-06-28).** Control plane (GMC + AGC roll,
-> gateway `Ready=True`, App-Secret credential path, Q229 egress-DNS token fetch,
-> baseline listener online — the multiplexer keeps **one** idle listener and
+> **Validated on `v1.1.0-rc.5` (2026-06-29).** Control plane (GMC + AGC roll to
+> rc.5, gateway `Ready=True`, App-Secret credential path, Q229 egress-DNS token
+> fetch, baseline listener online — the multiplexer keeps **one** idle listener and
 > scales up to `maxListeners` on job demand, so a single online runner at rest is
 > healthy, not stuck), **production CI routing** (`GAG_RUNNER` →
-> `["self-hosted","linux","gag-ci"]`; the re-run's jobs dispatched to `gag-ci`,
-> the listener pool ramped 1 → 5, the `workers` spot pool autoscaled `0 → 2`),
+> `["self-hosted","linux","gag-ci"]`; a `gh run rerun` dispatched its job to
+> `gag-ci`, the runner went busy, the `workers` spot pool autoscaled `0 → 1`),
 > and **Q235 worker-wrapper injection**: with the `RunnerTemplate` runner
 > container named but image-less, the AGC gap-filled the bare upstream
-> `ghcr.io/actions/actions-runner` (Q233), injected `ghcr.io/actions-gateway/wrapper`
-> as a read-only OCI image volume at `/opt/actions-gateway`, set the container
-> command to `/opt/actions-gateway/wrapper`, and the runner **executed the job and
-> reported to GitHub**.
+> `ghcr.io/actions/actions-runner` (Q233), injected `ghcr.io/actions-gateway/wrapper:v1.1.0-rc.5`
+> as a read-only OCI image volume at `/opt/actions-gateway` (native image volume,
+> no initContainer), and set the container command to `/opt/actions-gateway/wrapper`.
+> rc.5's deltas over rc.4 are the Q219 proxy-CA registration fix (a no-op for this
+> direct-egress dogfood) and the Q240 worker exit-code fix.
 >
 > **Known gap — the bare default image can't run *this* repo's CI.** Every
 > unit/integration job runs `make …`, but the upstream `actions-runner` image has
