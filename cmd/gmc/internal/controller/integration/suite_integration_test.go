@@ -18,6 +18,7 @@ import (
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
@@ -58,6 +59,31 @@ var (
 	cancel        context.CancelFunc
 	webhookCancel context.CancelFunc
 )
+
+// egressTestAllowlist is the platform egress allowlist (Q242 G.1) the suite's
+// EgressProxy validating webhook is wired to. Its static set is deliberately broad
+// enough to permit every destination the reconciler tests request — golang.org
+// covers proxy.golang.org; the CIDRs cover the requested 10.x and 199.36.153.x/30
+// subnets — so those tests are not blocked by admission. The dedicated admission
+// test (v2_egressproxy_admission_test.go) asserts rejection of destinations outside
+// this set.
+var egressTestAllowlist = allowlist.NewEgressDestination(
+	[]string{"golang.org"},
+	mustParseCIDRs("10.0.0.0/8", "199.36.153.0/24"),
+)
+
+// mustParseCIDRs parses CIDR strings for suite setup, panicking on a bad entry.
+func mustParseCIDRs(ss ...string) []*net.IPNet {
+	out := make([]*net.IPNet, 0, len(ss))
+	for _, s := range ss {
+		_, n, err := net.ParseCIDR(s)
+		if err != nil {
+			panic(fmt.Sprintf("parse CIDR %q: %v", s, err))
+		}
+		out = append(out, n)
+	}
+	return out
+}
 
 func TestMain(m *testing.M) {
 	ctx, cancel = context.WithCancel(context.Background())
@@ -159,6 +185,15 @@ func startValidatingWebhook() error {
 	// create in the suite would fail with a connection error.
 	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhooks: %w", err)
+	}
+	// The same ValidatingWebhookConfiguration also carries the EgressProxy webhook
+	// (Q242 G.1, failurePolicy=Fail), so this server must serve its path or every
+	// EgressProxy create in the suite would fail closed. It is wired to a fixed
+	// static allowlist (egressTestAllowlist) broad enough to permit the destinations
+	// the reconciler tests request; the dedicated admission test asserts off-allowlist
+	// rejection against the same set.
+	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist); err != nil {
+		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
 
 	var mgrCtx context.Context

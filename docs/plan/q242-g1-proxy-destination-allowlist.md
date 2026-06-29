@@ -323,8 +323,11 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    (additive, fail-safe — mirror `--priority-class-allowlist-configmap`);
    GMC validating webhook rejects any `destinationFQDNs` not covered by the FQDN
    allowlist (suffix match), any `destinationCIDRs` not contained in the CIDR
-   allowlist (subnet containment), and any host-suffix entry without an FQDN mode.
-   Both empty = deny-all-non-GitHub.
+   allowlist (subnet containment). The host-suffix-without-FQDN-mode rejection is
+   handled by the CRD CEL rule (#460). Both empty = deny-all-non-GitHub.
+   **(Done:** `allowlist.EgressDestinationAllowlist` + `EgressDestinationAllowlistReconciler`
+   + `EgressProxyCustomValidator`; chart flags/ConfigMap/Role wiring; envtest admission
+   tests. Operator how-to in `security-operations.md` shipped with this deliverable.**)**
 5. Docs: [`05-security.md`](../design/05-security.md) (threat-model row + the
    trade-offs above + move G.1 out of Appendix G),
    [`network-architecture.md`](../design/network-architecture.md),

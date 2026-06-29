@@ -73,6 +73,24 @@ spec:
         # Additive to --allowed-priority-classes; fail-safe on a missing/bad CM.
         - --priority-class-allowlist-configmap={{ . }}
         {{- end }}
+        {{- with .Values.allowedEgressFQDNs }}
+        # Q242 G.1: platform allowlist of FQDN suffixes a tenant EgressProxy may
+        # request in spec.destinationFQDNs. Empty/unset forbids all non-GitHub
+        # FQDN destinations (secure default).
+        - --allowed-egress-fqdns={{ join "," . }}
+        {{- end }}
+        {{- with .Values.allowedEgressCIDRs }}
+        # Q242 G.1: platform allowlist of CIDRs a tenant EgressProxy may request in
+        # spec.destinationCIDRs (subnet containment). Empty/unset forbids all
+        # non-GitHub CIDR destinations.
+        - --allowed-egress-cidrs={{ join "," . }}
+        {{- end }}
+        {{- with .Values.egressDestinationAllowlist.configMapName }}
+        # Q242 G.1: also source the egress destination allowlist from this ConfigMap
+        # in the GMC namespace, watched so additions take effect without a restart.
+        # Additive to the flags above; fail-safe on a missing/bad CM.
+        - --egress-destination-allowlist-configmap={{ . }}
+        {{- end }}
         {{- with .Values.apiServerCIDRs }}
         # Opt-in tightening (Q145): scope the AGC NetworkPolicy apiserver
         # (443/6443) egress to these CIDRs. Empty/unset keeps any-destination —
