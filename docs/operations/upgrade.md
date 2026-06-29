@@ -299,7 +299,8 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 
 # Upgrade in place to a newer published chart version (carries CRD field changes — see below)
 helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \

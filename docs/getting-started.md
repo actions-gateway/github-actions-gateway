@@ -17,10 +17,11 @@ helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-All three images must be **pinned by digest** — the chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on floating AGC/proxy tags — so pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
+All four images must be **pinned by digest** — the chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on floating AGC/proxy/wrapper tags (the worker-wrapper image is on by default) — so pin them as above (or pass `--set allowFloatingImageTags=true` for dev/test only). See the [chart README](../charts/actions-gateway/README.md) for the full values reference and the cert-manager toggle.
 
 > **Dev/CI.** The Helm chart is the single install path — there is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local `charts/actions-gateway` path for the `oci://…` ref above; `make deploy` (used by the e2e suite) wraps the same `helm install` with floating image tags for local iteration.
 

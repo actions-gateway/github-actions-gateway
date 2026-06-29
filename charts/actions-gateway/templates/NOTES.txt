@@ -6,9 +6,10 @@ Verify the controller is running:
 
 {{ if not .Values.allowFloatingImageTags -}}
 IMPORTANT — image digests required:
-  The GMC rejects floating AGC_IMAGE/PROXY_IMAGE tags and will crash-loop until
-  they are pinned by sha256 digest. Set these before/at install:
-    --set agc.image.digest=sha256:... --set proxy.image.digest=sha256:...
+  The GMC rejects floating AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE tags and will
+  crash-loop until they are pinned by sha256 digest. Set these before/at install:
+    --set agc.image.digest=sha256:... --set proxy.image.digest=sha256:... \
+    --set wrapper.image.digest=sha256:...
   (or allowFloatingImageTags=true for DEV/TEST ONLY).
 {{ end -}}
 

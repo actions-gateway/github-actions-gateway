@@ -11,7 +11,7 @@ image-digest pinning, and the healthy-install verification all apply unchanged h
 Two things move into Git:
 
 1. **The chart install** — the published, cosign-signed `actions-gateway` OCI Helm
-   chart, rendered by your GitOps controller with the three image digests pinned.
+   chart, rendered by your GitOps controller with the four image digests pinned.
 2. **The GitHub App credential Secret** — sourced the GitOps way so the raw private
    key is **never** committed to Git. Use [External Secrets Operator](#sourcing-the-github-app-secret-external-secrets-operator)
    (pulls from your secret manager) or [Sealed Secrets](#sourcing-the-github-app-secret-sealed-secrets)
@@ -55,7 +55,7 @@ chart refactor.
 ## Argo CD
 
 The chart is an OCI artifact, so the Argo CD `Application` points its Helm source
-at the GHCR registry path. Copy the three image digests from the
+at the GHCR registry path. Copy the four image digests from the
 [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0)
 — the chart ships **no** baked-in digests (an unconfigured render is rejected,
 fail-closed).
@@ -85,6 +85,8 @@ spec:
           value: sha256:<agc>
         - name: proxy.image.digest
           value: sha256:<proxy>
+        - name: wrapper.image.digest
+          value: sha256:<wrapper>
   destination:
     server: https://kubernetes.default.svc
     namespace: gmc-system
@@ -174,6 +176,9 @@ spec:
     proxy:
       image:
         digest: sha256:<proxy>
+    wrapper:
+      image:
+        digest: sha256:<wrapper>
 ```
 
 ### HelmRepository (type: oci) alternative

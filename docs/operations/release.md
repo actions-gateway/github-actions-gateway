@@ -223,7 +223,8 @@ digests pinned via `--set`, exactly as
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway --version X.Y.Z \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
 ## Rollback
