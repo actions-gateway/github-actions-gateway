@@ -109,10 +109,10 @@ other security-relevant tenant-settable field:
   the box no tenant can open egress at all, identical to how an empty
   `--allowed-priority-classes` forbids every `priorityClassName`.
 
-  *(Alternative considered: one flat `--allowed-egress-destinations` that
+  *(Alternative rejected: one flat `--allowed-egress-destinations` that
   parse-detects CIDR-vs-FQDN per entry, as the `noProxyCIDRs` field already does.
-  Rejected for the CRD-symmetry + unambiguous-semantics reasons above, but it is a
-  viable simpler variant if a single flag is preferred — a sub-decision for review.)*
+  Simpler — one flag — but it loses CRD symmetry and conflates two different match
+  rules; we go with the two typed flags above.)*
 
 A tenant can thus *request* a destination on their `EgressProxy` for GitOps
 ergonomics, but only the platform decides what is actually permitted; a request
@@ -317,8 +317,9 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    onto a mirror, but the docs steer them there for remote third-party deps and
    reserve the allowlist for what a mirror can't proxy. Governance is the
    `--allowed-priority-classes` shape (two flags + one ConfigMap, both empty =
-   deny-all-non-GitHub, admission-gated). **Remaining sub-decision:** two typed
-   flags (recommended, CRD-symmetric) vs one flat parse-detecting flag.
+   deny-all-non-GitHub, admission-gated). **Sub-decision resolved: two typed flags**
+   (`--allowed-egress-fqdns` + `--allowed-egress-cidrs`) — CRD-symmetric and
+   unambiguous, over the one-flat-flag variant.
 2. ~~FQDN-only vs CIDR variant~~ **Resolved: support both** (host-suffix +
    `destinationCIDRs`), per review — internal IP-only hosts and cloud private-API
    CIDRs need the IP form; public package hosts need the FQDN form.
