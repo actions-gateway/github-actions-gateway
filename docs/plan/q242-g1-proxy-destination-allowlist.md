@@ -57,11 +57,11 @@ would force operators to invent DNS or give up; a CIDR-only one can't express a
 moving package host. So:
 
 ```go
-// DestinationAllowlist lists EXTRA, non-GitHub DNS host suffixes this proxy may
+// DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes this proxy may
 // forward worker CONNECT traffic to (e.g. proxy.golang.org). Host-suffix entries
 // REQUIRE an FQDN egressPolicyMode, since the pod-egress layer expresses them as
 // toFQDNs rules. +optional +kubebuilder:validation:MaxItems=64
-DestinationAllowlist []string `json:"destinationAllowlist,omitempty"`
+DestinationFQDNs []string `json:"destinationFQDNs,omitempty"`
 
 // DestinationCIDRs lists EXTRA, non-GitHub IP ranges this proxy may forward to
 // (e.g. an internal 10.x subnet with no DNS, or a cloud private-API CIDR like
@@ -91,7 +91,7 @@ Two enforcement surfaces, one source of truth:
    proxy via env (read in [`cmd/proxy/main.go`](../../cmd/proxy/main.go) into new
    `Server` fields). `handleConnect` (proxy.go:309), before the dial at proxy.320:
    - matches the CONNECT host (normalized, port-stripped) against the GitHub set +
-     `DestinationAllowlist` suffixes; and
+     `DestinationFQDNs` suffixes; and
    - for `DestinationCIDRs`, **resolves the host and checks the resolved IP is in
      range** (a literal-IP target is checked directly). Dialing that resolved IP
      (rather than re-resolving by name) also closes the DNS-rebinding window — so
@@ -105,7 +105,7 @@ no worker-side change is needed; this only widens what that proxy will carry.
 
 ## Security posture (secure-by-default)
 
-- **Empty default = no change.** `destinationAllowlist: []` is GitHub-only,
+- **Empty default = no change.** `destinationFQDNs: []` is GitHub-only,
   byte-for-byte today's behavior. The feature is purely additive opt-in.
 - **Admin-governed, never tenant-openable.** The field is on the operator-owned
   `EgressProxy` (referenced by `proxyRef` / `defaultProxyRef`). A tenant editing
@@ -130,11 +130,11 @@ no worker-side change is needed; this only widens what that proxy will carry.
 
 ## Deliverables (when approved)
 
-1. `api/v2alpha1/egressproxy_types.go` — `DestinationAllowlist` (host suffixes) +
+1. `api/v2alpha1/egressproxy_types.go` — `DestinationFQDNs` (host suffixes) +
    `DestinationCIDRs` (IP ranges) fields + CEL `XValidation` (host-suffix entries
    require an FQDN mode; entries are valid host suffixes / CIDRs respectively);
    regenerate deepcopy + CRD.
-2. `cmd/proxy/proxy.go` + `cmd/proxy/main.go` — `Server.DestinationAllowlist` +
+2. `cmd/proxy/proxy.go` + `cmd/proxy/main.go` — `Server.DestinationFQDNs` +
    `Server.DestinationCIDRs`, env wiring, the CONNECT check (host-suffix match +
    resolve-and-check-IP-in-CIDR, dialing the validated IP) + a
    `actions_gateway_proxy_connect_denied_total` counter; unit tests.
@@ -151,7 +151,7 @@ no worker-side change is needed; this only widens what that proxy will carry.
    NetworkPolicy carries the CIDRs, admission rejects host-suffix-without-FQDN-mode).
 6. **Dogfood application (closes Q224):** attach an `EgressProxy` with
    `egressPolicyMode: CiliumFQDN` (GKE Dataplane V2 is Cilium) and
-   `destinationAllowlist: [proxy.golang.org, sum.golang.org]`, set the gateway's
+   `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set the gateway's
    `defaultProxyRef`, and confirm `vendor-check` / `tidy-check` go green on
    `gag-ci`.
 
