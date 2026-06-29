@@ -52,6 +52,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q241"></a>Q241 | [Cut next release (rc.5/v1.1.0) with the Q219 proxy-CA fix](operations/release.md) | `infra` `bug` | 🔲 | S | rc.4 (latest tag) ships the Q219 proxy-CA bug: proxied installs (v1, or v2+EgressProxy) can't register runners. Fix on main (31c99fb), unreleased — cut the next tag to publish it. Dogfood unaffected (direct-egress). |
 | <a id="Q224"></a>Q224 | [GKE dogfood: route production CI (green CI blocked)](plan/gke-dogfood.md) | `milestone` `infra` | 🚫 | M | Live rc.4 turn-on validated: routing→gag-ci, listener+workers autoscale, Q235 injection (bare upstream+wrapper, job ran→GitHub). Green CI blocked on [Q239](#Q239): repo make-based CI fails make-not-found (no toolchain). On-demand. |
 | <a id="Q239"></a>Q239 | [Build-capable dogfood runner image (run repo CI green)](plan/gke-dogfood.md) | `infra` `tests` | 🔲 | M | Repo unit/integration jobs run `make …`; the bare upstream actions-runner (Q235 injection default) lacks make/build-essential → exit 127. Build+publish a build-capable runner image, set as RunnerTemplate workerImage. Unblocks [Q224](#Q224). |
 | <a id="Q225"></a>Q225 | [Operator docs: Kata Containers for DinD workloads](operations/in-runner-image-builds.md) | `docs` | 🔲 | S | Document runtimeClassName: kata-qemu on podTemplate, /dev/kvm machine-type requirement (N2+ on GCP), and Kata DaemonSet setup. Extend in-runner-image-builds.md or new page depending on density. |
