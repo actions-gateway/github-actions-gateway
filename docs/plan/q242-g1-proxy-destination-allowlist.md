@@ -337,8 +337,14 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    `integration-test` job is later migrated**, bake the version-pinned binaries
    into the runner image at build time (run `setup-envtest use` during
    `docker build`, set `KUBEBUILDER_ASSETS`) — reproducible, zero runtime egress —
-   rather than allowlisting the download host. Tracked with that migration, not
-   this feature.
+   rather than allowlisting the download host. **Caveat:** envtest locates the
+   binaries via the `KUBEBUILDER_ASSETS` *directory* env var, not `$PATH`, and
+   `make test-integration` recomputes it by running `setup-envtest use` against a
+   repo-relative `--bin-dir` that is empty on a fresh checkout — so a plain `COPY`
+   into the image isn't enough; the integration target must be pointed at the
+   baked dir (pre-set `KUBEBUILDER_ASSETS`, or seed `setup-envtest`'s store /
+   `--bin-dir` there) or it re-downloads. Tracked with that migration, not this
+   feature.
 4. ~~DNS-rebinding revalidation in v1 or defer?~~ **Resolved: in v1** — it falls
    out of the `destinationCIDRs` resolve-and-dial-the-validated-IP path.
 5. **Scope:** EgressProxy only (v2), matching Q208? v1 / v2-direct-egress out of
