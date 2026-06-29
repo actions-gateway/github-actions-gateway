@@ -353,6 +353,19 @@ A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the Runner
 
 **Worker image — the default works out of the box.** A plain install runs jobs with no `workerImage` set: the AGC **injects** GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream `ghcr.io/actions/actions-runner` (the default) or **any `actions/runner`-derived image**. The wrapper is what feeds the mounted job payload + JIT config into `Runner.Worker`; injecting it means the runner image no longer has to carry it. Set `workerImage` only to use a **custom** image (your own tools, a pinned digest) — the wrapper is injected into that too. The upstream `actions-runner` (and GAG's images built on it) run as UID 1001, so on every profile except `privileged` the AGC stamps `runAsNonRoot: true` and gap-fills `runAsUser: 1001` automatically. If you point `workerImage` at a **custom** image whose user is **not** UID 1001 — a different named user, or one that runs as root — set `securityContext.runAsUser` (or `runAsNonRoot: false` for a root-based image) on the runner container in the `podTemplate`; otherwise kubelet rejects the pod with `CreateContainerConfigError`. See [troubleshooting: worker pod fails to start after secure-by-default SecurityContext](troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).
 
+**Building a build-capable `workerImage`.** The default upstream `actions-runner` is deliberately minimal — it ships the runner agent but **no build toolchain** (`make`, a C compiler, language SDKs). A job that shells out to `make` on it fails `exit 127: make: command not found`, where the GitHub-hosted `ubuntu-latest` image would have had those tools preinstalled. The fix is the same as on Actions Runner Controller (ARC): build your own image `FROM` the upstream runner with the tools your jobs need, and set it as `workerImage`. Because the AGC injects the wrapper on top of **any** base, your image carries only your toolchain — nothing GAG-specific:
+
+```dockerfile
+FROM ghcr.io/actions/actions-runner:<pinned version>@sha256:<digest>
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+USER runner   # keep the non-root UID 1001 the AGC expects
+```
+
+A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood-runner-build.sh`](../../scripts/dogfood-runner-build.sh)); it adds just enough to run a `make`-based Go CI. **It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan. Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the `RunnerGroup` `VersionTooOld` condition.
+
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block. Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml
