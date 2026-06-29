@@ -93,8 +93,10 @@ other security-relevant tenant-settable field:
   - `--allowed-egress-cidrs` — permitted IP ranges. A request matches by
     **subnet containment** (allowing `10.0.0.0/8` permits a requested
     `10.1.0.0/16`); `destinationCIDRs` is validated against this.
-  Both may also be sourced from a watched ConfigMap (keys `fqdns:` / `cidrs:`),
-  additive + fail-safe, exactly like `--priority-class-allowlist-configmap`.
+  Both may also be sourced from a **single** watched ConfigMap with two keys
+  (`fqdns:` / `cidrs:`) — named by one `--egress-destination-allowlist-configmap`
+  flag, one object / one watch / one RBAC grant, **not** two ConfigMaps —
+  additive + fail-safe, exactly like the single `--priority-class-allowlist-configmap`.
 - The GMC validating webhook **rejects** any `destinationFQDNs` entry not covered
   by `--allowed-egress-fqdns`, and any `destinationCIDRs` entry not contained in
   `--allowed-egress-cidrs`.
@@ -182,8 +184,9 @@ no worker-side change is needed; this only widens what that proxy will carry.
    pass both lists to the proxy Deployment; append host suffixes to the FQDN
    policy and CIDRs as `ipBlock`/`toCIDR` peers.
 4. **Platform allowlist (the governance gate).** GMC `--allowed-egress-fqdns` +
-   `--allowed-egress-cidrs` flags + optional watched ConfigMap (keys `fqdns:`/
-   `cidrs:`; additive, fail-safe — mirror `--priority-class-allowlist-configmap`);
+   `--allowed-egress-cidrs` flags + one optional watched ConfigMap with two keys
+   (`fqdns:`/`cidrs:`), named by `--egress-destination-allowlist-configmap`
+   (additive, fail-safe — mirror `--priority-class-allowlist-configmap`);
    GMC validating webhook rejects any `destinationFQDNs` not covered by the FQDN
    allowlist (suffix match), any `destinationCIDRs` not contained in the CIDR
    allowlist (subnet containment), and any host-suffix entry without an FQDN mode.
