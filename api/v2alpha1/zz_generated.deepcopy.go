@@ -300,6 +300,16 @@ func (in *EgressProxySpec) DeepCopyInto(out *EgressProxySpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.DestinationFQDNs != nil {
+		in, out := &in.DestinationFQDNs, &out.DestinationFQDNs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.DestinationCIDRs != nil {
+		in, out := &in.DestinationCIDRs, &out.DestinationCIDRs
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Sharing != nil {
 		in, out := &in.Sharing, &out.Sharing
 		*out = new(ProxySharing)

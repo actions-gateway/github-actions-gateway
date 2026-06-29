@@ -247,6 +247,55 @@ func TestV2_EgressProxy_MinReplicasExceedingMaxRejected(t *testing.T) {
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for minReplicas > maxReplicas, got %v", err)
 }
 
+// TestV2_EgressProxy_DestinationFQDNsRequireFQDNMode asserts the Q242 G.1
+// cross-field rule: a host-suffix destinationFQDNs entry under the default CIDR
+// egressPolicyMode is rejected, because the standard NetworkPolicy cannot express
+// host suffixes (only an FQDN-aware CNI policy can).
+func TestV2_EgressProxy_DestinationFQDNsRequireFQDNMode(t *testing.T) {
+	const ns = "v2-ep-fqdn-mode"
+	createNamespace(t, ns)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "bad-fqdn", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{DestinationFQDNs: []string{"proxy.golang.org"}},
+	}
+	err := k8sClient.Create(ctx, ep)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for destinationFQDNs without an FQDN egressPolicyMode, got %v", err)
+}
+
+// TestV2_EgressProxy_DestinationFQDNsAcceptedWithFQDNMode is the positive half:
+// the same destinationFQDNs are accepted once an FQDN egressPolicyMode is set.
+func TestV2_EgressProxy_DestinationFQDNsAcceptedWithFQDNMode(t *testing.T) {
+	const ns = "v2-ep-fqdn-ok"
+	createNamespace(t, ns)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "ok-fqdn", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			DestinationFQDNs: []string{"proxy.golang.org", "sum.golang.org"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+}
+
+// TestV2_EgressProxy_DestinationCIDRsAllowedInAnyMode confirms CIDR entries carry
+// no mode coupling — they become ipBlock peers and are valid under the default
+// CIDR egressPolicyMode.
+func TestV2_EgressProxy_DestinationCIDRsAllowedInAnyMode(t *testing.T) {
+	const ns = "v2-ep-cidr"
+	createNamespace(t, ns)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "cidr-default", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"10.0.0.0/8", "199.36.153.8/30"}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+}
+
 // TestV2_CoexistsWithV1 proves both API groups are served at once: a v1alpha1 and a
 // v2alpha1 ActionsGateway live in the same namespace without contention (they are
 // distinct CRDs in distinct groups). This is the M1 no-behavior-change non-goal.
