@@ -14,7 +14,7 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 | [trivy-scan.sh](trivy-scan.sh) | Build each image locally and scan with trivy. Backs `make trivy-scan`; mirrors the CI `trivy` matrix. |
 | [polaris-scan.sh](polaris-scan.sh) | Render the Helm chart (digest-pinned) and audit posture with polaris. Backs `make polaris-scan`; mirrors the CI `polaris` job. |
 | [manifest-validate.sh](manifest-validate.sh) | yamllint + kubeconform + helm lint + the fail-closed digest-pinning assertion over the install artifact. Backs `make manifest-validate`; mirrors the CI `validate` job. |
-| [verify-release.sh](verify-release.sh) | Verify the cosign signatures of a published release (4 images + chart). Backs `make verify-release`. |
+| [verify-release.sh](verify-release.sh) | Verify the cosign signatures of a published release (5 images + chart). Backs `make verify-release`. |
 | [download-cosign.sh](download-cosign.sh) | Download the pinned cosign release binary for the current platform. Backs the Makefile's `$(COSIGN)` rule. |
 | [gen-third-party-notices.sh](gen-third-party-notices.sh) | Regenerate (or `--check`) THIRD-PARTY-NOTICES from the committed vendor/ trees. Backs `make third-party-notices(-check)`. |
 | [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`), by `make check`, and by the pre-commit hook. |
