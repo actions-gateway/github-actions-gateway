@@ -19,9 +19,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Lint every Dockerfile with hadolint. All five currently pass at the strictest
+# Lint every Dockerfile with hadolint. All six currently pass at the strictest
 # (style) threshold, so failure-threshold is set there to catch any regression —
 # missing digest pins, a relaxed USER, an unpinned base tag — at PR time.
+# (scripts/dogfood/runner/Dockerfile is a dev/reference image, not a shipped one,
+# but it's gated too so the example people copy stays lint-clean.)
 jobs:
   hadolint:
     runs-on: ubuntu-latest
@@ -35,6 +37,7 @@ jobs:
           - cmd/proxy/Dockerfile
           - cmd/worker/Dockerfile
           - test/fakegithub/Dockerfile
+          - scripts/dogfood/runner/Dockerfile
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: hadolint ${{ matrix.dockerfile }}

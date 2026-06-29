@@ -41,6 +41,14 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # yields ImagePullBackOff — pin a real tag instead.
 GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.4}"
 
+# Optional build-capable worker image for the RunnerTemplate (Q239). When set,
+# the runner container pins this image instead of staying image-less; the AGC
+# then skips its DefaultWorkerImage gap-fill but still injects the Q235 wrapper.
+# Build + push one with scripts/dogfood-runner-build.sh. Empty (the default)
+# keeps the bare upstream actions-runner, on which this repo's make-based CI
+# fails make-command-not-found.
+DOGFOOD_RUNNER_IMAGE="${DOGFOOD_RUNNER_IMAGE:-}"
+
 # ---------------------------------------------------------------------------
 # Existence guards — make the gcloud creates (which error if the resource
 # already exists) idempotent by checking first.
@@ -340,6 +348,13 @@ EOF
 
 apply_cr() {
 	echo "Applying v2 ActionsGateway + RunnerTemplate + RunnerSet..."
+	# When DOGFOOD_RUNNER_IMAGE is set, pin it on the runner container; otherwise
+	# leave the container image-less so the AGC gap-fills DefaultWorkerImage.
+	local runner_image_field=""
+	if [[ -n "${DOGFOOD_RUNNER_IMAGE}" ]]; then
+		echo "  runner container pinned to ${DOGFOOD_RUNNER_IMAGE}"
+		runner_image_field="          image: ${DOGFOOD_RUNNER_IMAGE}"
+	fi
 	kubectl apply -f - <<EOF
 apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
@@ -367,16 +382,16 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
-          # Named but deliberately image-less: this exercises the Q235 injection
-          # default. The AGC gap-fills the resolved worker image on a named
-          # image-less runner container (Q233), which resolves to the built-in
-          # upstream actions-runner digest (DefaultWorkerImage), and injects the
-          # GAG worker wrapper (WRAPPER_IMAGE) into the pod so that unmodified
-          # upstream image can run jobs. NOTE: the bare upstream image has no
-          # build toolchain (no make/build-essential), so this repo's own
-          # make-based CI fails with make-command-not-found on it. To run the
-          # repo's CI green, set an explicit build-capable workerImage here
-          # (upstream actions-runner + build-essential); injection still applies.
+${runner_image_field}
+          # The runner container is image-less by default: that exercises the
+          # Q235 injection default, where the AGC gap-fills the resolved worker
+          # image on a named image-less container (Q233) — the built-in upstream
+          # actions-runner digest (DefaultWorkerImage) — and injects the GAG
+          # worker wrapper (WRAPPER_IMAGE) so that unmodified upstream image runs
+          # jobs. The bare upstream image has no build toolchain, so this repo's
+          # own make-based CI fails make-command-not-found on it; export
+          # DOGFOOD_RUNNER_IMAGE (built by scripts/dogfood-runner-build.sh) to pin
+          # a build-capable image above instead (Q239). Injection still applies.
           resources:
             requests:
               cpu: "2"

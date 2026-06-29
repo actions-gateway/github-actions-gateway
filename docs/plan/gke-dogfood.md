@@ -375,16 +375,27 @@ gh api /repos/"$REPO"/actions/runners \
 > command to `/opt/actions-gateway/wrapper`, and the runner **executed the job and
 > reported to GitHub**.
 >
-> **Known gap — the bare default image can't run *this* repo's CI.** Every
-> unit/integration job runs `make …`, but the upstream `actions-runner` image has
-> no build toolchain (`make`, `build-essential`), so the jobs fail
-> `exit 127: make: command not found`. The workflows use `actions/setup-go` (Go is
-> fine) but assume `make` is pre-installed, as on GitHub-hosted `ubuntu-latest`.
-> Running the repo's own CI green on the dogfood needs a **build-capable runner
-> image** (upstream `actions-runner` + `apt-get install build-essential`, or
-> equivalent) set as the `RunnerTemplate` `workerImage` — injection still applies
-> (the wrapper injects onto any base). Tracked as a follow-up Queue item; routing
-> and injection themselves are validated.
+> **Build-capable runner image (Q239).** The bare upstream `actions-runner` has no
+> build toolchain (`make`, a C compiler), so this repo's `make`-based jobs fail
+> `exit 127: make: command not found` on it — the workflows assume `make` is
+> preinstalled, as on GitHub-hosted `ubuntu-latest`. The fix is a build-capable
+> `workerImage`: [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile)
+> adds `build-essential` (+ `curl`/`xz`/`sudo` for the shellcheck job's pinned-binary
+> self-install) on top of the pinned upstream runner. Build and push it with
+> [`scripts/dogfood-runner-build.sh`](../../scripts/dogfood-runner-build.sh), then
+> export `DOGFOOD_RUNNER_IMAGE=ghcr.io/actions-gateway/dogfood-runner:<tag>` before
+> running `scripts/dogfood-setup.sh` — the `RunnerTemplate` pins it and the AGC still
+> injects the Q235 wrapper on top. **Validated `2026-06-29`:** the `shellcheck` job,
+> which failed `make: command not found` on the bare image, ran green on
+> `dogfood-runner:2.335.1` with the wrapper injected (`make` 4.3, `gcc` 13.3.0).
+>
+> **Residual blocker for `vendor-check` / `tidy-check`.** Those two jobs re-fetch Go
+> modules from `proxy.golang.org` on a cold cache, which the GitHub-only worker
+> egress allowlist blocks — independent of the toolchain. The offline-capable jobs
+> (`lint`, `shellcheck`, `unit-test`, `coverage`) build from `vendor/` and pull
+> Go/shellcheck from GitHub releases, so the image unblocks those. Fetching modules
+> the attribution-preserving way needs the proxy destination allowlist (G.1) — see
+> the Queue. Until then, keep `vendor-check`/`tidy-check` on `ubuntu-latest`.
 
 ---
 
