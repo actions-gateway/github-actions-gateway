@@ -118,7 +118,8 @@ into `.build/`):
 make verify-release VERSION=vX.Y.Z
 ```
 
-This verifies the four image signatures plus the chart (whose tag is `X.Y.Z`,
+This verifies the five image signatures (`gmc`, `agc`, `proxy`, `worker`,
+`wrapper`) plus the chart (whose tag is `X.Y.Z`,
 without the leading `v`) against the publish workflow's keyless identity. It
 needs no credentials once the GHCR packages are public. The equivalent explicit
 commands (and SBOM attestation retrieval) live in

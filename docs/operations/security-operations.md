@@ -1062,7 +1062,8 @@ label every image already carries.
 
 ## Image provenance: signature & SBOM verification
 
-The four first-party images (`gmc`, `agc`, `proxy`, `worker`) are published to
+The five first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`) are
+published to
 GHCR by the [`publish.yml`](../../.github/workflows/publish.yml) workflow on every
 `v*` release tag (the maintainer-facing cut-a-release procedure is in
 [release.md](release.md)). Each one is:
