@@ -13,6 +13,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
+- [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
 - [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
@@ -248,6 +249,41 @@ automatically on the next reconcile (the GMC watches the owned RunnerGroups):
 - `CredentialUnavailable` → see [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration).
 - `Degraded` / `RunnerVersionTooOld` → see [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs).
 - `WorkersUnschedulable` → see [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable).
+
+---
+
+## Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy
+
+**Symptoms.** A freshly onboarded tenant reaches `Ready=True` with the proxy
+(`PROXYREADY`) and AGC pods running, but **no runner ever appears** in the repo/org
+runner list, the `RunnerGroup` shows `ActiveSessions` empty/0, the gateway reports
+`RunnerGroupsDegraded`, and the AGC log repeats:
+
+```
+EnsureAgents failed ... register agent: generate jit config:
+Post "https://api.github.com/.../actions/runners/generate-jitconfig":
+proxyconnect tcp: tls: failed to verify certificate:
+x509: certificate signed by unknown authority
+```
+
+The installation-token fetch **succeeds** (`initial token acquired` appears in the
+log just before the failures), so this is specific to agent **registration**, not
+credentials — distinguishing it from [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration).
+
+**Cause.** The AGC routes its own GitHub API traffic through the per-tenant egress
+proxy, whose serving certificate is the GMC's self-signed per-tenant CA. In
+**`v1.1.0-rc.4` and earlier**, the AGC's runner-registration HTTP client was
+constructed before that proxy CA was added to the process trust store, so it
+trusted only the system roots and could not complete the TLS handshake to the
+proxy. It affects any **proxied** AGC — every `v1alpha1` `ActionsGateway`, and a
+`v2` `RunnerSet` whenever an `EgressProxy` is attached. Direct-egress (no proxy)
+tenants are unaffected (which is why it does not reproduce without a proxy).
+
+**Resolution.** Upgrade the AGC image to a release **after `v1.1.0-rc.4`**, where
+the registration client is built lazily — after the proxy CA is trusted. There is
+no clean configuration workaround on `rc.4` for a proxied tenant; switching the
+tenant to direct egress sidesteps the bug but gives up the proxy's egress
+isolation, so prefer the upgrade.
 
 ---
 

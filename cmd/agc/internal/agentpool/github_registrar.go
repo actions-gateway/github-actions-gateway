@@ -38,6 +38,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
@@ -62,13 +63,24 @@ type GithubRegistrar struct {
 
 // defaultRegistrarClient is the bounded fallback used when HTTPClient is nil.
 // Shared so the nil path does not allocate a fresh connection pool per call.
-var defaultRegistrarClient = httpx.NewClient()
+//
+// Built lazily (sync.OnceValue), NOT at package init, on purpose: the AGC installs
+// the per-tenant egress proxy's self-signed CA into http.DefaultTransport early in
+// main() — AFTER this package's vars are initialized. httpx.NewClient clones
+// http.DefaultTransport at call time, so an eager `httpx.NewClient()` here would
+// capture the pre-patch transport (system roots only) and a runner registration
+// routed through the proxy would fail the TLS handshake with "certificate signed by
+// unknown authority". Deferring construction to first use — which happens during a
+// reconcile, well after the patch — captures the proxy-trusting transport (Q219).
+// Calling it via the accessor below also means a revert to an eager `*http.Client`
+// will not compile.
+var defaultRegistrarClient = sync.OnceValue(httpx.NewClient)
 
 func (r *GithubRegistrar) httpClient() *http.Client {
 	if r.HTTPClient != nil {
 		return r.HTTPClient
 	}
-	return defaultRegistrarClient
+	return defaultRegistrarClient()
 }
 
 // Register registers a new runner agent with GitHub using the JIT config API

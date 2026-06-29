@@ -58,7 +58,13 @@ var tracer = otel.Tracer(tracing.InstrumentationName)
 
 // defaultProvisionerClient is the bounded fallback used when Provisioner.HTTPClient
 // is nil. Shared so the nil path does not allocate a connection pool per call.
-var defaultProvisionerClient = httpx.NewClient()
+//
+// Built lazily (sync.OnceValue), NOT at package init, for the same reason as
+// agentpool's defaultRegistrarClient: the AGC patches http.DefaultTransport with the
+// per-tenant egress proxy CA in main(), after this package's vars initialize. An
+// eager clone would trust only the system roots and fail any GitHub call routed
+// through the proxy with "certificate signed by unknown authority" (Q219).
+var defaultProvisionerClient = sync.OnceValue(httpx.NewClient)
 
 const (
 	// LabelRunnerGroup is stamped on every worker pod (and job Secret) with the
@@ -931,7 +937,7 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 
 	hc := p.HTTPClient
 	if hc == nil {
-		hc = defaultProvisionerClient
+		hc = defaultProvisionerClient()
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
