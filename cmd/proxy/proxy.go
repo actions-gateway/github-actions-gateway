@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -57,10 +58,24 @@ type Server struct {
 	TLSCertFile string
 	TLSKeyFile  string
 
+	// AllowedHostSuffixes and AllowedCIDRs are the CONNECT destination allowlist
+	// (Q242 G.1). They hold the FULL permitted set the GMC injects — the GitHub
+	// hosts/ranges PLUS any operator-allowlisted destinationFQDNs/destinationCIDRs.
+	// When BOTH are empty the proxy is transport-only: any CONNECT target is
+	// tunneled and the proxy pod's NetworkPolicy is the sole destination gate (the
+	// historical behavior). When either is set, a CONNECT target must match an
+	// allowed host suffix or resolve into an allowed CIDR, else it is refused 403.
+	AllowedHostSuffixes []string
+	AllowedCIDRs        []*net.IPNet
+	// dnsResolver resolves CONNECT hostnames for the CIDR allowlist check; nil uses
+	// net.DefaultResolver. Injected in tests.
+	dnsResolver ipResolver
+
 	connectionsActive *prometheus.GaugeVec
 	connectionsTotal  *prometheus.CounterVec
 	dialErrors        *prometheus.CounterVec
 	tunnelDuration    *prometheus.HistogramVec
+	connectDenied     *prometheus.CounterVec
 
 	// metricsGatherer is the registry the /metrics endpoint serves — the same
 	// one the proxy metrics above are registered on, so a custom registry (tests,
@@ -74,6 +89,12 @@ type Server struct {
 	// actually reach the CONNECT port. Mirrors the §11.D GMC webhook
 	// readiness fix.
 	ready chan struct{}
+}
+
+// ipResolver is the subset of *net.Resolver the CONNECT CIDR allowlist check
+// needs; an interface so tests can inject a deterministic resolver.
+type ipResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
 const (
@@ -105,7 +126,11 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		Help:    "Duration of CONNECT tunnels in seconds, observed at tunnel close.",
 		Buckets: []float64{0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600},
 	}, nil)
-	reg.MustRegister(active, total, dialErr, tunnelDur)
+	denied := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "actions_gateway_proxy_connect_denied_total",
+		Help: "CONNECT requests refused because the destination is not on the allowlist.",
+	}, nil)
+	reg.MustRegister(active, total, dialErr, tunnelDur, denied)
 
 	// Serve from the same registry the metrics were registered on. A
 	// *prometheus.Registry satisfies both Registerer and Gatherer; the default
@@ -124,6 +149,7 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		connectionsTotal:  total,
 		dialErrors:        dialErr,
 		tunnelDuration:    tunnelDur,
+		connectDenied:     denied,
 		metricsGatherer:   gatherer,
 		ready:             make(chan struct{}),
 	}
@@ -306,6 +332,78 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// checkDestination enforces the CONNECT allowlist (Q242 G.1). It returns the
+// address to dial and whether the destination is permitted. With no allowlist
+// configured it is a no-op (transport-only): any destination is permitted and
+// the original host:port is returned. With an allowlist, a hostname matching an
+// allowed suffix is permitted and dialed by name (the FQDN egress policy is the
+// hard gate); otherwise, if it resolves into an allowed CIDR, the validated IP
+// is pinned as the dial target (defeating a rebinding resolver between this
+// check and the dial); a literal-IP target is permitted only if it falls in an
+// allowed CIDR. Anything else is refused.
+func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAddr string, allowed bool) {
+	if len(s.AllowedHostSuffixes) == 0 && len(s.AllowedCIDRs) == 0 {
+		return hostport, true
+	}
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return "", false
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+
+	if ip := net.ParseIP(host); ip != nil {
+		// Literal IP: only a CIDR rule can permit it — a host suffix can't match an IP.
+		if ipInAny(ip, s.AllowedCIDRs) {
+			return hostport, true
+		}
+		return "", false
+	}
+
+	if matchesHostSuffix(host, s.AllowedHostSuffixes) {
+		return hostport, true
+	}
+
+	if len(s.AllowedCIDRs) > 0 {
+		resolver := s.dnsResolver
+		if resolver == nil {
+			resolver = net.DefaultResolver
+		}
+		if addrs, err := resolver.LookupIPAddr(ctx, host); err == nil {
+			for _, a := range addrs {
+				if ipInAny(a.IP, s.AllowedCIDRs) {
+					return net.JoinHostPort(a.IP.String(), port), true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// matchesHostSuffix reports whether host equals or is a subdomain of any suffix
+// (so an allowed "golang.org" permits "proxy.golang.org").
+func matchesHostSuffix(host string, suffixes []string) bool {
+	for _, suf := range suffixes {
+		suf = strings.ToLower(strings.Trim(suf, "."))
+		if suf == "" {
+			continue
+		}
+		if host == suf || strings.HasSuffix(host, "."+suf) {
+			return true
+		}
+	}
+	return false
+}
+
+// ipInAny reports whether ip falls within any of the CIDRs.
+func ipInAny(ip net.IP, cidrs []*net.IPNet) bool {
+	for _, c := range cidrs {
+		if c != nil && c.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodConnect {
 		http.Error(w, "only CONNECT is supported", http.StatusMethodNotAllowed)
@@ -317,7 +415,19 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		dialTimeout = 10 * time.Second
 	}
 
-	upstream, err := net.DialTimeout("tcp", r.Host, dialTimeout)
+	dialAddr, allowed := s.checkDestination(r.Context(), r.Host)
+	if !allowed {
+		s.connectDenied.WithLabelValues().Inc()
+		log := s.Log
+		if log == nil {
+			log = slog.Default()
+		}
+		log.Warn("CONNECT destination not allowed", "host", r.Host)
+		http.Error(w, "destination not allowed", http.StatusForbidden)
+		return
+	}
+
+	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
 		s.dialErrors.WithLabelValues().Inc()
 		log := s.Log
