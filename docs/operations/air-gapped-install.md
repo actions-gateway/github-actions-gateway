@@ -18,17 +18,25 @@ credentials are **never** committed to `values.yaml`.
 
 ## What you relocate
 
-GAG references four images plus the OCI Helm chart. Only the GMC image is pulled
-by the chart itself; the AGC, proxy, and worker images are pulled by pods the
-GMC and AGC provision **at runtime**.
+GAG references five images plus the OCI Helm chart. Only the GMC image is pulled
+by the chart itself; the AGC, proxy, wrapper, and worker images are pulled by
+pods the GMC and AGC provision **at runtime**.
 
 | Image | Public ref | Pulled by | Where you point it at the mirror |
 |---|---|---|---|
 | **GMC** | `ghcr.io/actions-gateway/gmc` | the chart's GMC Deployment | `gmc.image.repository` + `gmc.image.digest` (chart value) |
 | **AGC** | `ghcr.io/actions-gateway/agc` | per-tenant AGC Deployments (GMC-provisioned) | `agc.image.repository` + `agc.image.digest` (chart value; GMC injects it as `AGC_IMAGE`) |
 | **Proxy** | `ghcr.io/actions-gateway/proxy` | per-tenant egress-proxy pools (GMC-provisioned) | `proxy.image.repository` + `proxy.image.digest` (chart value; GMC injects it as `PROXY_IMAGE`) |
+| **Wrapper** | `ghcr.io/actions-gateway/wrapper` | worker pods (init container the AGC injects, or a read-only image volume) | `wrapper.image.repository` + `wrapper.image.digest` (chart value; GMC injects it as `WRAPPER_IMAGE`, forwarded to each AGC) |
 | **Worker** | `ghcr.io/actions/actions-runner` (default) | worker pods (AGC-provisioned) | `RunnerGroup.spec.workerImage` per tenant — **not** a chart value |
 | **Helm chart** | `oci://ghcr.io/actions-gateway/charts/actions-gateway` | `helm install` | the `oci://` ref you pass to `helm` |
+
+> The **wrapper** is on by default: the chart always sets `WRAPPER_IMAGE`, and
+> the GMC rejects a floating wrapper tag at startup exactly as it does for
+> `agc`/`proxy`, so you must mirror it and pin `wrapper.image.digest` like the
+> others. It is a tiny (~2 MB) `FROM scratch` image the AGC injects into each
+> worker pod, letting the runner container be the unmodified upstream
+> `actions-runner`. See [release.md § The worker images](release.md#the-worker-images-wrapper-and-worker).
 
 > The worker default is the upstream digest-pinned `ghcr.io/actions/actions-runner`.
 > The project also publishes a first-party `ghcr.io/actions-gateway/worker`; if a
@@ -36,7 +44,7 @@ GMC and AGC provision **at runtime**.
 > tenant on the `RunnerGroup`, so it is configured during tenant onboarding, not
 > at chart install. See [release.md § The worker images](release.md#the-worker-images-wrapper-and-worker).
 
-Copy the four image digests from the
+Copy the five image digests from the
 [release notes](https://github.com/actions-gateway/github-actions-gateway/releases)
 for the version you are installing. Throughout this guide, replace
 `registry.internal/gag` with your private registry path.
@@ -56,9 +64,9 @@ carries the cosign signature and SBOM/provenance attestations along with the
 image, so prefer it when you want to keep verifying provenance after relocation:
 
 ```sh
-# Replace <gmc>/<agc>/<proxy> with the digests from the release notes, and X.Y.Z
-# with the release version.
-for img in gmc agc proxy; do
+# Replace <gmc>/<agc>/<proxy>/<wrapper> with the digests from the release notes,
+# and X.Y.Z with the release version.
+for img in gmc agc proxy wrapper; do
   cosign copy \
     ghcr.io/actions-gateway/$img:X.Y.Z \
     registry.internal/gag/$img:X.Y.Z
@@ -156,18 +164,21 @@ helm install gag oci://registry.internal/gag/charts/actions-gateway \
   --set agc.image.digest=sha256:<agc> \
   --set proxy.image.repository=registry.internal/gag/proxy \
   --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.repository=registry.internal/gag/wrapper \
+  --set wrapper.image.digest=sha256:<wrapper> \
   --set 'imagePullSecrets[0].name=private-registry'
 ```
 
 - `imagePullSecrets` is attached to the **GMC pod only** — that is the one
   workload this chart runs.
-- `agc.image.*` / `proxy.image.*` set the references the GMC **injects** into the
-  AGC and proxy pods it provisions; relocating the repository here is enough for
-  the GMC to pull them from the mirror. Their *pull Secret* is wired separately in
-  [step 5](#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker).
+- `agc.image.*` / `proxy.image.*` / `wrapper.image.*` set the references the GMC
+  **injects** into the gateways it provisions — the AGC and proxy pods, and the
+  wrapper init container in every worker pod; relocating the repository here is
+  enough for the GMC to pull them from the mirror. Their *pull Secret* is wired
+  separately in [step 5](#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker).
 - Digest pinning is unchanged — `gmc.image.digest` is still mandatory (rendering
-  fails without it) and the GMC still rejects floating AGC/proxy tags at startup.
-  Do **not** reach for `allowFloatingImageTags`; relocation keeps the digest.
+  fails without it) and the GMC still rejects floating AGC/proxy/wrapper tags at
+  startup. Do **not** reach for `allowFloatingImageTags`; relocation keeps the digest.
 
 > Many `--set` flags are easier to manage in a values file. Put the
 > `repository`/`digest`/`imagePullSecrets` overrides in `air-gapped-values.yaml`
@@ -196,7 +207,8 @@ GATEWAY=my-gateway   # = the ActionsGateway CR name
 kubectl patch serviceaccount "$GATEWAY" -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
-# Worker pods run as "<gateway>-worker".
+# Worker pods run as "<gateway>-worker" — this SA also pulls the injected
+# wrapper init container, so no separate wrapper Secret/SA is needed.
 kubectl patch serviceaccount "${GATEWAY}-worker" -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
@@ -251,8 +263,8 @@ kubectl get deploy -n gmc-system gmc-controller-manager \
   -o jsonpath='{range .spec.template.spec.containers[0].env[?(@.name=="AGC_IMAGE")]}{.value}{"\n"}{end}'
 # Expected: registry.internal/gag/agc@sha256:<agc>
 
-# After creating a tenant gateway: its AGC / proxy / worker pods pull from the
-# mirror with no ImagePullBackOff.
+# After creating a tenant gateway: its AGC / proxy / worker pods (and the
+# injected wrapper init container) pull from the mirror with no ImagePullBackOff.
 kubectl get pods -n team-a
 ```
 
