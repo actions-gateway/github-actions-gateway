@@ -1,11 +1,16 @@
 # Q242 — G.1 Proxy-Enforced Destination Allowlist (worker dependency egress)
 
-> **Status: DESIGN — awaiting sign-off. No implementation has landed.** This
-> promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
+> **Status: DESIGN — feature accepted; design under review. No implementation has
+> landed.** This promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:
 > letting CI jobs reach their build dependencies (package registries, module
-> proxies, test-asset hosts) without forfeiting the per-tenant egress model.
+> proxies, test-asset hosts) without forfeiting the per-tenant egress model. The
+> core go/no-go is **decided (accept)** with the [Trade-offs](#trade-offs-why-this-needs-sign-off)
+> recorded, a [bounded scope](#scope-we-accept--and-the-scope-creep-we-decline),
+> and the [in-cluster mirror recommended first](#recommended-path-in-cluster-caching-mirror-first);
+> what remains is review of the design details (the flag-shape sub-decision and
+> the envtest-assets question).
 
 ## Goal
 
@@ -170,6 +175,100 @@ no worker-side change is needed; this only widens what that proxy will carry.
 - **GitHub stays implicit.** GitHub is always allowed; the lists only add
   destinations, so they can never *remove* GitHub access.
 
+## Trade-offs (why this needs sign-off)
+
+Accepting this feature is accepting a **deliberate, bounded relaxation** of the
+GitHub-only egress posture. It is worth it because the alternative is forcing
+every operator who needs a dependency off-platform or off-isolation — but the
+costs are real and permanent, so they are recorded here.
+
+**What we gain**
+
+- Solves the single most common operator ask (worker dependency egress) while
+  keeping per-tenant egress-IP **attribution** and DNS-exfil **containment** —
+  the properties the cheap alternatives (punt to GitHub-hosted, widen worker
+  CIDRs, `managedNetworkPolicy: false`) each throw away.
+- Secure-by-default: empty allowlist = today's behavior, byte-for-byte.
+- Reuses the already-signed-off `--allowed-priority-classes` governance shape — no
+  new paradigm.
+- Defense-in-depth (proxy CONNECT check + CNI/NetworkPolicy from one field; the
+  CIDR path folds in DNS-rebinding revalidation).
+
+**What we pay**
+
+- **A real hole, however narrow.** A compromised worker (malicious dependency,
+  job RCE) can now exfiltrate to any allowlisted destination. The allowlist
+  bounds it; it does not eliminate it. This is the core trade.
+- **The proxy is no longer purely transport-only.** Appendix G kept it
+  byte-forwarding on purpose ("every conditional in the data path is a future
+  bug"). We add host parsing, allowlist matching, and a **DNS resolve per CONNECT**
+  for CIDR entries — more code, more latency, more CVE surface in a
+  security-critical hot path.
+- **DNS-based allowlisting is inherently leaky.** `toFQDNs` depends on DNS
+  interception + CNI enforcement, a resolve/connect TOCTOU window, and blurs on
+  CDN/shared-IP hosts. It looks more precise than it is.
+- **A new admin footgun.** A too-broad entry (`*.googleapis.com`, a wide CIDR, a
+  CDN that hosts arbitrary content) silently reopens broad egress. The guardrail
+  is only as good as the entries.
+- **Maintenance cost** of the proxy data-path code and the webhook, for an
+  opt-in feature, on an adoption-only project's finite maintainer budget.
+
+## Recommended path: in-cluster caching mirror first
+
+We do **not** force operators onto an in-cluster mirror — G.1 exists so they
+don't have to — but the docs must **lead with the mirror as the recommended,
+more-secure, lower-maintenance option** for *remote third-party dependencies*
+(Go modules, npm, PyPI, crates, container layers), and present the destination
+allowlist as the escape hatch for what a mirror can't cover. The reasoning,
+which the operator guide must state plainly:
+
+- **More secure.** Workers egress only to a stable **in-cluster** pod; the
+  worker NetworkPolicy never has to name an external destination at all. The
+  mirror — not every worker — holds the (narrow, auditable) outbound path, and it
+  can be pre-populated and run air-gapped.
+- **Lower-maintenance / less breakage.** Remote dependency IPs and even hostnames
+  churn; a CIDR/FQDN allowlist of *public* hosts rots and breaks builds when a
+  registry shifts ranges. A mirror's address is stable forever, so the egress
+  policy never changes when upstreams move.
+- **Better behavior.** Caching cuts repeat fetches, survives upstream outages, and
+  gives a single audit point.
+
+So the allowlist is **best reserved for what a mirror genuinely cannot proxy**:
+live cloud-provider APIs (`*.googleapis.com`, metadata/IMDS, KMS), internal
+services reachable only by IP, and one-off stable endpoints. Public package
+ecosystems should be steered to a mirror (Athens for Go, Verdaccio for npm, a
+registry pull-through for images) — and the dogfood itself should ultimately
+demonstrate *both* (the allowlist for the immediate fix, a Go module proxy as the
+"do it the durable way" follow-up). This guidance is a **required** part of the
+docs deliverable, not a footnote.
+
+## Scope we accept — and the scope-creep we decline
+
+Accepting G.1 is a **bounded** commitment. To keep the proxy auditable and the
+maintenance load finite, the following are explicitly **in scope** now, and the
+rest are **declined by default** (each with the trigger that would reopen it).
+
+**In scope (this work):** the two typed destination fields; the platform
+allowlist (two flags + one ConfigMap); admission gating; FQDN-suffix + CIDR-
+containment matching; the CONNECT check with CIDR resolve-and-revalidate; a
+`*_connect_denied_total` counter; the mirror-first operator guidance.
+
+**Declined by default** (do *not* build as part of accepting G.1; revisit only on
+the stated trigger):
+
+| Tempting extension | Why it's declined | Trigger to revisit |
+|---|---|---|
+| Per-`RunnerSet` (tenant-self-service) destinations | Re-opens the tenant-openable hole the allowlist exists to close; governance must stay platform-level | A concrete multi-team ask *and* a per-set admission story |
+| Wildcard / regex destinations beyond suffix + CIDR | Powerful footgun; `*.evil-cdn.com`-class mistakes; harder to audit | A real destination set that suffix+CIDR genuinely can't express |
+| Per-destination **rate limiting / quotas** | Belongs at a mirror or a mesh, not the transport proxy; adds state to a stateless hot path | Abuse observed that the mirror can't absorb |
+| HTTP **path/method-level** rules | The proxy is CONNECT-only (no TLS termination); inspecting paths means MITM — a non-goal | Never, without a separate explicit TLS-terminating design |
+| Upstream **auth / credential injection** | Turns the proxy into a secrets handler; large new attack surface | A separate design with its own threat model |
+| **Audit log** of every *allowed* connection | The denied-counter covers the security signal; full connection logging is a SIEM/mesh concern | An operator compliance requirement |
+
+The principle: G.1 adds **destination allowlisting and nothing else** to the
+proxy. Anything that wants inspection, mutation, statefulness, or tenant-level
+egress authority is out of band and routes to a mirror, a mesh, or its own design.
+
 ## Deliverables (when approved)
 
 1. `api/v2alpha1/egressproxy_types.go` — `DestinationFQDNs` (host suffixes) +
@@ -191,11 +290,14 @@ no worker-side change is needed; this only widens what that proxy will carry.
    allowlist (suffix match), any `destinationCIDRs` not contained in the CIDR
    allowlist (subnet containment), and any host-suffix entry without an FQDN mode.
    Both empty = deny-all-non-GitHub.
-5. Docs: [`05-security.md`](../design/05-security.md) (threat-model row +
-   move G.1 out of Appendix G), [`network-architecture.md`](../design/network-architecture.md),
+5. Docs: [`05-security.md`](../design/05-security.md) (threat-model row + the
+   trade-offs above + move G.1 out of Appendix G),
+   [`network-architecture.md`](../design/network-architecture.md),
    [`security-operations.md`](../operations/security-operations.md) (operator
-   how-to, incl. the allowlist flag/ConfigMap), CRD reference; flip the Appendix
-   G.1 entry to "implemented."
+   how-to for the allowlist flags/ConfigMap **that leads with the in-cluster-mirror
+   recommendation** and presents the allowlist as the escape hatch — required, not
+   a footnote; include per-ecosystem mirror pointers: Athens/Verdaccio/registry
+   pull-through), CRD reference; flip the Appendix G.1 entry to "implemented."
 6. Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit,
    normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
    NetworkPolicy carries the CIDRs, admission **rejects an off-allowlist entry**
@@ -209,12 +311,14 @@ no worker-side change is needed; this only widens what that proxy will carry.
 
 ## Open questions for sign-off
 
-1. **Approve the platform-allowlist governance model** (GMC
-   `--allowed-egress-fqdns` + `--allowed-egress-cidrs`, both empty =
-   deny-all-non-GitHub, tenant requests gated by admission — the
-   `--allowed-priority-classes` pattern)? This is the core trade-off and the
-   secure-by-default question; the rest follows from it. **Sub-decision:** two
-   typed flags (recommended, CRD-symmetric) vs one flat parse-detecting flag.
+1. ~~Approve the feature / platform-allowlist governance model at all?~~
+   **Decided: accept**, with the Trade-offs recorded above, the bounded scope
+   below, and the in-cluster-mirror recommended first. We will not force operators
+   onto a mirror, but the docs steer them there for remote third-party deps and
+   reserve the allowlist for what a mirror can't proxy. Governance is the
+   `--allowed-priority-classes` shape (two flags + one ConfigMap, both empty =
+   deny-all-non-GitHub, admission-gated). **Remaining sub-decision:** two typed
+   flags (recommended, CRD-symmetric) vs one flat parse-detecting flag.
 2. ~~FQDN-only vs CIDR variant~~ **Resolved: support both** (host-suffix +
    `destinationCIDRs`), per review — internal IP-only hosts and cloud private-API
    CIDRs need the IP form; public package hosts need the FQDN form.
