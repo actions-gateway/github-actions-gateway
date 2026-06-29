@@ -45,6 +45,7 @@ const (
 // GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",message="minReplicas must not exceed maxReplicas"
+// +kubebuilder:validation:XValidation:rule="!has(self.destinationFQDNs) || self.destinationFQDNs.size() == 0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == 'CiliumFQDN' || self.egressPolicyMode == 'CalicoFQDN'))",message="destinationFQDNs requires egressPolicyMode CiliumFQDN or CalicoFQDN"
 type EgressProxySpec struct {
 	// MinReplicas is the floor of the proxy pool's HPA.
 	//
@@ -99,6 +100,29 @@ type EgressProxySpec struct {
 	// +optional
 	// +kubebuilder:default=CIDR
 	EgressPolicyMode EgressPolicyMode `json:"egressPolicyMode,omitempty"`
+
+	// DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may
+	// forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always
+	// allowed and need not be listed; empty (the default) means GitHub-only.
+	// Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
+	// since the pod-egress layer expresses them as toFQDNs rules. Opening egress
+	// beyond GitHub is an admin decision: the GMC rejects any entry not on its
+	// --allowed-egress-fqdns platform allowlist (empty allowlist denies all).
+	// G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	DestinationFQDNs []string `json:"destinationFQDNs,omitempty"`
+
+	// DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to
+	// (e.g. an internal 10.x subnet with no DNS, or a cloud private-API range).
+	// CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers
+	// (CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not
+	// contained in its --allowed-egress-cidrs platform allowlist (empty denies all).
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	DestinationCIDRs []string `json:"destinationCIDRs,omitempty"`
 
 	// Sharing controls cross-namespace reference to this proxy. nil means
 	// same-namespace only (the default, secure). Consent lives on the provider

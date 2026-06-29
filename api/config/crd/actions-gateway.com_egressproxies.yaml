@@ -70,6 +70,31 @@ spec:
               so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
               GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
             properties:
+              destinationCIDRs:
+                description: |-
+                  DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to
+                  (e.g. an internal 10.x subnet with no DNS, or a cloud private-API range).
+                  CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers
+                  (CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not
+                  contained in its --allowed-egress-cidrs platform allowlist (empty denies all).
+                items:
+                  type: string
+                maxItems: 64
+                type: array
+              destinationFQDNs:
+                description: |-
+                  DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may
+                  forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always
+                  allowed and need not be listed; empty (the default) means GitHub-only.
+                  Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
+                  since the pod-egress layer expresses them as toFQDNs rules. Opening egress
+                  beyond GitHub is an admin decision: the GMC rejects any entry not on its
+                  --allowed-egress-fqdns platform allowlist (empty allowlist denies all). See
+                  docs/plan/q242-g1-proxy-destination-allowlist.md.
+                items:
+                  type: string
+                maxItems: 64
+                type: array
               egressPolicyMode:
                 default: CIDR
                 description: |-
@@ -200,6 +225,10 @@ spec:
             - message: minReplicas must not exceed maxReplicas
               rule: '!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas
                 <= self.maxReplicas'
+            - message: destinationFQDNs requires egressPolicyMode CiliumFQDN or CalicoFQDN
+              rule: '!has(self.destinationFQDNs) || self.destinationFQDNs.size() ==
+                0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == ''CiliumFQDN''
+                || self.egressPolicyMode == ''CalicoFQDN''))'
           status:
             description: |-
               EgressProxyStatus is the observed state of an EgressProxy, following the uniform
