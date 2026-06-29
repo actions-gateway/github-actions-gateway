@@ -234,8 +234,12 @@ which the operator guide must state plainly:
   gives a single audit point.
 
 So the allowlist is **best reserved for what a mirror genuinely cannot proxy**:
-live cloud-provider APIs (`*.googleapis.com`, metadata/IMDS, KMS), internal
-services reachable only by IP, and one-off stable endpoints. Public package
+a *specific* live cloud-provider API (a single host like `kms.<region>.amazonaws.com`,
+or a Private-Google-Access CIDR like `199.36.153.8/30` — **never** a wildcard like
+`*.googleapis.com`, which would cover `storage.googleapis.com/<any-bucket>` and
+reopen broad exfil; and **not** the metadata/IMDS endpoint, which workers should
+stay blocked from), internal services reachable only by IP, and one-off stable
+endpoints. Public package
 ecosystems should be steered to a mirror (Athens for Go, Verdaccio for npm, a
 registry pull-through for images) — and the dogfood itself should ultimately
 demonstrate *both* (the allowlist for the immediate fix, a Go module proxy as the
