@@ -67,6 +67,19 @@ var githubEgressFQDNs = []string{
 	"*.blob.core.windows.net",
 }
 
+// egressFQDNs returns the full FQDN allowlist an FQDN-mode CNI policy must permit:
+// the implicit GitHub hostnames (always allowed) plus the operator's extra
+// destinationFQDNs (Q242 G.1). The extras are valid only in an FQDN mode (the CRD's
+// CEL rule rejects destinationFQDNs without CiliumFQDN/CalicoFQDN), so they only ever
+// reach the CNI-native policy. A fresh slice is returned so callers never mutate the
+// shared githubEgressFQDNs backing array.
+func egressFQDNs(ep *gmcv2alpha1.EgressProxy) []string {
+	out := make([]string, 0, len(githubEgressFQDNs)+len(ep.Spec.DestinationFQDNs))
+	out = append(out, githubEgressFQDNs...)
+	out = append(out, ep.Spec.DestinationFQDNs...)
+	return out
+}
+
 // egressModeOf returns the effective egress policy mode, treating the empty string as
 // the CIDR default (so a hand-built object that skipped apiserver defaulting still
 // behaves like a defaulted one).
@@ -107,8 +120,9 @@ func toUnstructuredLabels(in map[string]string) map[string]interface{} {
 // makes its selected endpoints default-deny for egress, so everything else is denied —
 // the same secure-by-default posture as the standard NetworkPolicy's CIDR rule.
 func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
-	fqdnRules := make([]interface{}, 0, len(githubEgressFQDNs))
-	for _, f := range githubEgressFQDNs {
+	allFQDNs := egressFQDNs(ep)
+	fqdnRules := make([]interface{}, 0, len(allFQDNs))
+	for _, f := range allFQDNs {
 		if strings.Contains(f, "*") {
 			fqdnRules = append(fqdnRules, map[string]interface{}{"matchPattern": f})
 		} else {
@@ -185,8 +199,9 @@ func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 // declares types: [Egress] with no Allow rule beyond these, so Calico default-denies
 // all other egress — matching the CIDR default's posture.
 func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
-	domains := make([]interface{}, 0, len(githubEgressFQDNs))
-	for _, f := range githubEgressFQDNs {
+	allFQDNs := egressFQDNs(ep)
+	domains := make([]interface{}, 0, len(allFQDNs))
+	for _, f := range allFQDNs {
 		domains = append(domains, f)
 	}
 

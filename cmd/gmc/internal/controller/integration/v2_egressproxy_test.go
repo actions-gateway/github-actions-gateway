@@ -221,6 +221,109 @@ func TestV2_EgressProxy_RecreatesDeletedChild(t *testing.T) {
 	}, 10*time.Second, 200*time.Millisecond, "deleted proxy Deployment should be recreated with the owner reference intact")
 }
 
+// containerEnv returns the proxy container's env as a name→value map.
+func containerEnv(t *testing.T, dep appsv1.Deployment) map[string]string {
+	t.Helper()
+	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
+	out := map[string]string{}
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		out[e.Name] = e.Value
+	}
+	return out
+}
+
+// npHasCIDRPeer reports whether np carries a port-443 ipBlock egress rule for the
+// exact CIDR (used to assert an operator destinationCIDRs entry lands as a peer).
+func npHasCIDRPeer(np networkingv1.NetworkPolicy, cidr string) bool {
+	for _, rule := range np.Spec.Egress {
+		on443 := false
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 443 {
+				on443 = true
+			}
+		}
+		if !on443 {
+			continue
+		}
+		for _, peer := range rule.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == cidr {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestV2_EgressProxy_DestinationCIDRsInjected proves the Q242 G.1 deliverable-3
+// plumbing in the default CIDR mode: an EgressProxy that lists destinationCIDRs gets
+// (1) the proxy CONNECT allowlist env injected — host suffixes carry the implicit
+// GitHub hostnames and PROXY_ALLOWED_CIDRS carries the operator's range — and (2) the
+// standard NetworkPolicy carries the range as a 443 ipBlock egress peer.
+func TestV2_EgressProxy_DestinationCIDRsInjected(t *testing.T) {
+	const ns = "v2-ep-dest-cidrs"
+	createNamespace(t, ns)
+
+	ipCache := &controller.IPRangeCache{}
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	ipCache.Set([]net.IPNet{*cidr})
+	startEgressProxyReconciler(t, ipCache)
+
+	const destCIDR = "10.20.0.0/16"
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{destCIDR}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	name := proxyChildName(egressProxyName)
+	var np networkingv1.NetworkPolicy
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+
+	// (1) Deployment env: allowlist injected, GitHub by hostname + operator CIDR.
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep))
+	env := containerEnv(t, dep)
+	require.Contains(t, env, "PROXY_ALLOWED_HOST_SUFFIXES", "opting in must inject the host-suffix allowlist")
+	assert.Contains(t, env["PROXY_ALLOWED_HOST_SUFFIXES"], "api.github.com", "GitHub stays reachable by hostname")
+	assert.Equal(t, destCIDR, env["PROXY_ALLOWED_CIDRS"], "operator destinationCIDRs flow to PROXY_ALLOWED_CIDRS")
+
+	// (2) Standard NetworkPolicy: the operator CIDR is a 443 ipBlock peer, alongside
+	// the seeded GitHub CIDR rule.
+	assert.True(t, npHasCIDRPeer(np, destCIDR), "destinationCIDRs must become an ipBlock egress peer")
+	assert.True(t, npHasCIDRPeer(np, "140.82.112.0/20"), "GitHub CIDR egress must remain")
+}
+
+// TestV2_EgressProxy_NoDestinationsTransportOnly proves the secure-by-default,
+// backward-compatible path: an EgressProxy with no extra destinations injects NO
+// CONNECT allowlist env, so the proxy stays transport-only and the NetworkPolicy is
+// the sole egress gate (byte-for-byte the pre-G.1 behavior).
+func TestV2_EgressProxy_NoDestinationsTransportOnly(t *testing.T) {
+	const ns = "v2-ep-transport-only"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	name := proxyChildName(egressProxyName)
+	var dep appsv1.Deployment
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy Deployment should be created")
+
+	env := containerEnv(t, dep)
+	assert.NotContains(t, env, "PROXY_ALLOWED_HOST_SUFFIXES", "no destinations ⇒ no host-suffix allowlist (transport-only)")
+	assert.NotContains(t, env, "PROXY_ALLOWED_CIDRS", "no destinations ⇒ no CIDR allowlist (transport-only)")
+}
+
 // findCondition returns the named condition or nil.
 func findCondition(conds []metav1.Condition, condType string) *metav1.Condition {
 	for i := range conds {
