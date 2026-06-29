@@ -115,6 +115,33 @@ priorityClassAllowlist:
   # docs/operations/security-operations.md § Priority classes.
   configMapName: ""
 
+# allowedEgressFQDNs / allowedEgressCIDRs are the platform allowlist of non-GitHub
+# destinations a tenant EgressProxy may request via spec.destinationFQDNs /
+# spec.destinationCIDRs (Q242 G.1). They are passed to the GMC as
+# --allowed-egress-fqdns / --allowed-egress-cidrs; the EgressProxy admission webhook
+# rejects any destination not covered (FQDN suffix match / CIDR subnet containment).
+# GitHub is always allowed implicitly. Both empty (default) forbid every non-GitHub
+# destination — the secure default. Prefer an in-cluster caching mirror for remote
+# third-party dependencies and reserve the allowlist for what a mirror cannot proxy;
+# see docs/operations/security-operations.md § Worker egress destinations.
+# e.g. allowedEgressFQDNs: ["proxy.golang.org", "sum.golang.org"]
+allowedEgressFQDNs: []
+allowedEgressCIDRs: []
+
+# egressDestinationAllowlist optionally lets the GMC ALSO source the egress
+# destination allowlist from a watched ConfigMap, so a platform admin can add a
+# permitted destination without editing the flags above and rolling out the GMC
+# (Q242 G.1). Additive to (never a replacement for) the static flags, and fail-safe:
+# a missing or malformed ConfigMap leaves the static flag allowlists in force.
+egressDestinationAllowlist:
+  # configMapName names a ConfigMap in the GMC's own namespace whose `data.fqdns`
+  # and `data.cidrs` values (comma/newline-separated) augment the static allowlists,
+  # passed to the GMC as --egress-destination-allowlist-configmap. Setting it also
+  # renders a namespaced Role/RoleBinding granting the GMC get/list/watch on that one
+  # ConfigMap. Empty (default) disables the watch — flag-only behavior. See
+  # docs/operations/security-operations.md § Worker egress destinations.
+  configMapName: ""
+
 # apiServerCIDRs optionally scopes the AGC NetworkPolicy's Kubernetes API server
 # (443/6443) egress rule to a known apiserver CIDR set, passed to the GMC as
 # --apiserver-cidrs. By default this rule allows egress to ANY destination on

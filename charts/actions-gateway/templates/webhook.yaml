@@ -71,6 +71,30 @@ webhooks:
     service:
       name: webhook-service
       namespace: {{ .Release.Namespace }}
+      path: /validate-actions-gateway-com-v2alpha1-egressproxy
+    {{- if not .Values.certManager.enabled }}
+    {{- include "actions-gateway.webhookCerts" . }}
+    caBundle: {{ b64enc $.agWebhookCerts.caCert }}
+    {{- end }}
+  failurePolicy: Fail
+  name: vegressproxy-v2alpha1.kb.io
+  rules:
+  - apiGroups:
+    - actions-gateway.com
+    apiVersions:
+    - v2alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - egressproxies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: {{ .Release.Namespace }}
       path: /validate-actions-gateway-com-v2alpha1-runnertemplate
     {{- if not .Values.certManager.enabled }}
     {{- include "actions-gateway.webhookCerts" . }}

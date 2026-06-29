@@ -50,6 +50,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-actions-gateway-com-v2alpha1-egressproxy
+  failurePolicy: Fail
+  name: vegressproxy-v2alpha1.kb.io
+  rules:
+  - apiGroups:
+    - actions-gateway.com
+    apiVersions:
+    - v2alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - egressproxies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-actions-gateway-com-v2alpha1-runnertemplate
   failurePolicy: Fail
   name: vrunnertemplate-v2alpha1.kb.io

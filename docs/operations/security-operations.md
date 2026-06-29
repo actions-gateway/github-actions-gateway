@@ -46,6 +46,7 @@ Two detection substrates are used:
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
   - [Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
+- [Worker egress destinations: the egress allowlist](#worker-egress-destinations-the-egress-allowlist)
 - [Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist](#tightening-agc-apiserver-egress-the-apiserver-cidrs-allowlist)
 - [GitHub API base URL must be HTTPS](#github-api-base-url-must-be-https)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
@@ -739,6 +740,128 @@ procedure). `egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
 > `ActionsGateway` proxy and v2 direct-egress (proxy-less) gateways stay on the CIDR
 > path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off
 > above.
+
+---
+
+## Worker egress destinations: the egress allowlist
+
+By default a worker can reach **only GitHub** through its per-tenant egress proxy —
+the proxy pool's NetworkPolicy permits the GitHub endpoints and nothing else. Jobs
+that fetch off-platform build dependencies (Go modules from `proxy.golang.org`, an
+internal artifact host, a cloud private-API endpoint) therefore fail on egress, not
+toolchain. The egress allowlist (Q242 G.1) lets a **platform admin** open a small,
+explicit set of non-GitHub destinations while keeping per-tenant egress-IP
+attribution and the DNS-exfil containment intact.
+
+### Prefer an in-cluster caching mirror first
+
+For **remote third-party dependencies** (Go modules, npm, PyPI, crates, container
+layers), reach for an **in-cluster caching mirror** before the allowlist:
+
+- **More secure** — workers egress only to a stable in-cluster pod; the worker
+  NetworkPolicy never names an external destination. The mirror (not every worker)
+  holds the narrow, auditable outbound path, and it can be pre-populated and run
+  air-gapped.
+- **Lower-maintenance** — upstream IPs and hostnames churn; a public-host allowlist
+  rots and breaks builds when a registry shifts ranges. A mirror's address is stable
+  forever.
+- **Better behavior** — caching cuts repeat fetches, survives upstream outages, and
+  gives a single audit point.
+
+Per-ecosystem mirrors: **Athens** (Go module proxy), **Verdaccio** (npm), a registry
+**pull-through cache** (container images). Reserve the destination allowlist for what
+a mirror genuinely cannot proxy: a *specific* live cloud-provider API
+(`kms.<region>.amazonaws.com`, a Private-Google-Access CIDR like `199.36.153.8/30`),
+internal services reachable only by IP, and one-off stable endpoints. **Never** a
+wildcard like `*.googleapis.com` (it covers `storage.googleapis.com/<any-bucket>` and
+reopens broad exfil), and **not** the metadata/IMDS endpoint.
+
+### How the allowlist works
+
+The destinations are governed by two **platform-owned** GMC allowlists, mirroring the
+[`allowed-priority-classes`](#priority-classes-the-allowed-priority-classes-allowlist)
+model. The `EgressProxy` is a tenant-authorable CR, so a tenant may *request* a
+destination, but only the platform decides what is permitted — a request outside the
+allowlist is rejected at admission:
+
+- `--allowed-egress-fqdns` (chart: `allowedEgressFQDNs`) — permitted FQDN **suffixes**.
+  A request matches if it equals or is a subdomain of an entry (allowing `golang.org`
+  permits `proxy.golang.org`). Gates `EgressProxy.spec.destinationFQDNs`.
+- `--allowed-egress-cidrs` (chart: `allowedEgressCIDRs`) — permitted IP ranges. A
+  request matches by **subnet containment** (allowing `10.0.0.0/8` permits a requested
+  `10.1.0.0/16`). Gates `EgressProxy.spec.destinationCIDRs`.
+
+**Both empty (the default) forbids every non-GitHub destination** — the secure
+default. GitHub is always allowed implicitly; the lists only add.
+
+```yaml
+# values.yaml — platform admin opens proxy.golang.org/sum.golang.org for Go builds.
+allowedEgressFQDNs:
+  - golang.org          # covers proxy.golang.org, sum.golang.org (subdomain match)
+allowedEgressCIDRs: []  # none permitted
+```
+
+A tenant then requests the destination on their `EgressProxy`. FQDN destinations
+require an FQDN `egressPolicyMode` (the CRD rejects `destinationFQDNs` in CIDR mode,
+since the pod-egress layer expresses them as `toFQDNs` rules); CIDR destinations work
+in any mode:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: shared
+  namespace: team-a
+spec:
+  egressPolicyMode: CiliumFQDN
+  destinationFQDNs: [proxy.golang.org, sum.golang.org]   # rejected unless covered by --allowed-egress-fqdns
+  destinationCIDRs: []                                   # rejected unless contained in --allowed-egress-cidrs
+```
+
+The GMC then (1) adds the destinations to the proxy pool's egress policy — FQDNs to
+the CNI-native `toFQDNs`/`domains` set, CIDRs as `ipBlock` peers on the standard
+NetworkPolicy — and (2) injects them into the proxy's CONNECT allowlist so the proxy
+permits exactly the GitHub set plus these destinations (an `EgressProxy` with no extra
+destinations stays transport-only, unchanged). A denied CONNECT increments
+`actions_gateway_proxy_connect_denied_total`.
+
+> **Allowlisting opens the *policy*, not the *route*.** A `destinationCIDRs` entry
+> lifts the egress-policy block; it does not make the destination reachable. The
+> Private-Google-Access VIPs in particular require subnet-level Private Google Access
+> plus Cloud DNS and a route — cluster networking G.1 does not configure.
+
+### Self-service additions via a watched ConfigMap
+
+To add a permitted destination without editing the flags and rolling out the GMC,
+point the GMC at a ConfigMap in its own namespace whose `fqdns`/`cidrs` keys **augment**
+the static flags (additive and fail-safe — a missing or malformed ConfigMap leaves the
+flag allowlists in force):
+
+```yaml
+# values.yaml
+egressDestinationAllowlist:
+  configMapName: gmc-egress-destination-allowlist   # renders --egress-destination-allowlist-configmap
+```
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gmc-egress-destination-allowlist
+  namespace: <gmc-namespace>
+data:
+  fqdns: |
+    proxy.golang.org
+    sum.golang.org
+  cidrs: |
+    199.36.153.8/30
+```
+
+Setting `configMapName` also renders a namespaced Role/RoleBinding granting the GMC
+get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read). The effective
+allowlist is the union of the flags and the ConfigMap, enforced by the EgressProxy
+validating webhook on every create/update — a destination outside it is rejected with
+a message naming the effective allowlist.
 
 ---
 

@@ -140,6 +140,32 @@ func main() {
 			"(comma/newline-separated). Additive and fail-safe: a missing or malformed "+
 			"ConfigMap leaves the static flag allowlist in force. Empty (default) disables "+
 			"the watch — flag-only behavior, unchanged.")
+	var allowedEgressFQDNs string
+	flag.StringVar(&allowedEgressFQDNs, "allowed-egress-fqdns", "",
+		"Comma-separated allowlist of FQDN host suffixes a tenant EgressProxy may "+
+			"request in spec.destinationFQDNs (Q242 G.1). A request matches if it equals "+
+			"or is a subdomain of an entry (allowing golang.org permits proxy.golang.org). "+
+			"The admission webhook rejects any destinationFQDNs entry not covered here. "+
+			"GitHub is always allowed implicitly; empty (default) forbids all non-GitHub "+
+			"FQDN destinations.")
+	var allowedEgressCIDRs string
+	flag.StringVar(&allowedEgressCIDRs, "allowed-egress-cidrs", "",
+		"Comma-separated allowlist of CIDR ranges a tenant EgressProxy may request in "+
+			"spec.destinationCIDRs (Q242 G.1). A request matches by subnet containment "+
+			"(allowing 10.0.0.0/8 permits a requested 10.1.0.0/16). The admission webhook "+
+			"rejects any destinationCIDRs entry not contained here. Each entry must be a "+
+			"valid CIDR; a malformed value fails startup. Empty (default) forbids all "+
+			"non-GitHub CIDR destinations.")
+	var egressDestinationAllowlistConfigMap string
+	flag.StringVar(&egressDestinationAllowlistConfigMap, "egress-destination-allowlist-configmap", "",
+		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
+			"--allowed-egress-fqdns/--allowed-egress-cidrs flag allowlists, watched so "+
+			"additions take effect without a GMC restart (Q242 G.1). The ConfigMap's "+
+			"data."+controller.EgressDestinationFQDNsConfigMapKey+" and data."+
+			controller.EgressDestinationCIDRsConfigMapKey+" values list FQDN suffixes and "+
+			"CIDRs (comma/newline-separated). Additive and fail-safe: a missing or "+
+			"malformed ConfigMap leaves the static flag allowlists in force. Empty "+
+			"(default) disables the watch — flag-only behavior.")
 	var apiServerCIDRs string
 	flag.StringVar(&apiServerCIDRs, "apiserver-cidrs", "",
 		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
@@ -250,27 +276,50 @@ func main() {
 	// webhook and the reconciler.
 	priorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedPriorityClasses))
 
+	// The platform egress destination allowlist (Q242 G.1): the EgressProxy admission
+	// webhook reads it and the ConfigMap watch (below) augments it. Seeded from the
+	// static --allowed-egress-fqdns/--allowed-egress-cidrs flags; the dynamic half
+	// starts empty until a ConfigMap is applied. A malformed --allowed-egress-cidrs
+	// value fails startup rather than silently dropping a guardrail entry.
+	egressCIDRs, err := parseAllowedEgressCIDRs(allowedEgressCIDRs)
+	if err != nil {
+		setupLog.Error(err, "Invalid --allowed-egress-cidrs")
+		os.Exit(1)
+	}
+	egressDestinationAllowlist := allowlist.NewEgressDestination(parseAllowedPriorityClasses(allowedEgressFQDNs), egressCIDRs)
+
 	podNamespace := os.Getenv("POD_NAMESPACE")
 
-	// When the PriorityClass allowlist ConfigMap watch is enabled, scope the
-	// ConfigMap informer to that single object (its namespace + name) so the GMC
-	// needs only namespaced get/list/watch on it — not cluster-wide ConfigMap
-	// read — and so an unrelated ConfigMap can never wake the reconciler. Without
-	// the feature, no ConfigMap informer is ever started, so this is a no-op.
-	cacheOptions := cache.Options{}
+	// When either allowlist ConfigMap watch is enabled, scope the ConfigMap informer
+	// to the GMC's own namespace so the GMC needs only namespaced get/list/watch — not
+	// cluster-wide ConfigMap read. With a single watched ConfigMap we further pin the
+	// informer to that one object by name; with two distinct ConfigMaps (the
+	// PriorityClass and egress-destination watches naming different objects) we scope
+	// to the namespace and let each reconciler's predicate narrow to its own object.
+	// Without either feature, no ConfigMap informer is ever started, so this is a no-op.
+	watchedConfigMaps := map[string]bool{}
 	if priorityClassAllowlistConfigMap != "" {
+		watchedConfigMaps[priorityClassAllowlistConfigMap] = true
+	}
+	if egressDestinationAllowlistConfigMap != "" {
+		watchedConfigMaps[egressDestinationAllowlistConfigMap] = true
+	}
+	cacheOptions := cache.Options{}
+	if len(watchedConfigMaps) > 0 {
 		if podNamespace == "" {
 			setupLog.Error(fmt.Errorf("POD_NAMESPACE is not set"),
-				"--priority-class-allowlist-configmap requires POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
+				"--priority-class-allowlist-configmap / --egress-destination-allowlist-configmap require POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
 			os.Exit(1)
+		}
+		cmConfig := cache.Config{}
+		if len(watchedConfigMaps) == 1 {
+			for name := range watchedConfigMaps {
+				cmConfig.FieldSelector = fields.OneTermEqualSelector("metadata.name", name)
+			}
 		}
 		cacheOptions.ByObject = map[client.Object]cache.ByObject{
 			&corev1.ConfigMap{}: {
-				Namespaces: map[string]cache.Config{
-					podNamespace: {
-						FieldSelector: fields.OneTermEqualSelector("metadata.name", priorityClassAllowlistConfigMap),
-					},
-				},
+				Namespaces: map[string]cache.Config{podNamespace: cmConfig},
 			},
 		}
 	}
@@ -531,6 +580,21 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	// Egress destination allowlist ConfigMap watch (Q242 G.1): same shape as the
+	// PriorityClass watch above — reconcile the designated ConfigMap into the dynamic
+	// half of the shared egress allowlist so a platform admin can add a permitted
+	// destination without a flag edit + GMC rollout. Disabled by default (empty flag).
+	if egressDestinationAllowlistConfigMap != "" {
+		if err := (&controller.EgressDestinationAllowlistReconciler{
+			Client:        mgr.GetClient(),
+			ConfigMapName: egressDestinationAllowlistConfigMap,
+			Namespace:     podNamespace,
+			Allowlist:     egressDestinationAllowlist,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create controller", "controller", "egress-destination-allowlist")
+			os.Exit(1)
+		}
+	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, priorityClassAllowlist); err != nil {
@@ -541,6 +605,12 @@ func main() {
 		// kinds (the rejection v1 did by silent override at pod-build time).
 		if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerTemplate")
+			os.Exit(1)
+		}
+		// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs
+		// against the platform egress allowlist (deny-all-non-GitHub by default).
+		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "EgressProxy")
 			os.Exit(1)
 		}
 	}
@@ -585,6 +655,27 @@ func parseAllowedPriorityClasses(raw string) []string {
 		}
 	}
 	return names
+}
+
+// parseAllowedEgressCIDRs splits the --allowed-egress-cidrs flag value
+// (comma-separated CIDRs) into parsed networks, failing on any malformed entry so a
+// typo fails startup rather than silently dropping a guardrail entry (Q242 G.1). An
+// empty or whitespace-only value yields a nil slice — the secure default that, with
+// an empty --allowed-egress-fqdns, forbids every non-GitHub destination.
+func parseAllowedEgressCIDRs(raw string) ([]*net.IPNet, error) {
+	var cidrs []*net.IPNet
+	for _, part := range strings.Split(raw, ",") {
+		entry := strings.TrimSpace(part)
+		if entry == "" {
+			continue
+		}
+		_, n, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR %q: %w", entry, err)
+		}
+		cidrs = append(cidrs, n)
+	}
+	return cidrs, nil
 }
 
 // parseAPIServerCIDRs splits the --apiserver-cidrs flag value (comma-separated
