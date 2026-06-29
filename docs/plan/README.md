@@ -30,7 +30,7 @@ The five-milestone delivery from
 | [security.md](security.md) | OWASP-style code review with finding-level workstreams | ✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, [Q11](../STATUS.md#Q11)). Phase 1 live `kind` validation covered by the M3/M4 live runs |
 | [worker-egress-proxy.md](worker-egress-proxy.md) | Worker traffic must route through per-tenant proxy pool | ✅ Done — NetworkPolicy split shipped (commit `4932ce7`); proxied worker→GitHub egress live-validated via M4 §12 |
 | [kata-on-gke.md](kata-on-gke.md) | Kata Containers on GKE: spike + reference architecture for unprivileged kind-in-runner CI ([Q226](../STATUS.md#Q226)) | ❌ Open |
-| [q242-g1-proxy-destination-allowlist.md](q242-g1-proxy-destination-allowlist.md) | G.1: admin-set destination allowlist (FQDN host suffixes + CIDRs) on the per-tenant egress proxy so CI jobs reach build dependencies (e.g. `proxy.golang.org`, internal/cloud-private IP ranges) without forfeiting per-tenant egress attribution | ⓘ Design — awaiting sign-off; promotes Appendix G.1 from the non-committed Q19 bundle |
+| [q242-g1-proxy-destination-allowlist.md](q242-g1-proxy-destination-allowlist.md) | G.1: admin-set destination allowlist (FQDN host suffixes + CIDRs) on the per-tenant egress proxy so CI jobs reach build dependencies (e.g. `proxy.golang.org`, internal/cloud-private IP ranges) without forfeiting per-tenant egress attribution | ❌ Open — approved; v2beta1 blocker ([Q242](../STATUS.md#Q242)), promoted from Appendix G.1 / the Q19 bundle |
 
 ## Test plans
 

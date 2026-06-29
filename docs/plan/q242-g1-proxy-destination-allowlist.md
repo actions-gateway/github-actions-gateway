@@ -1,7 +1,7 @@
 # Q242 — G.1 Proxy-Enforced Destination Allowlist (worker dependency egress)
 
-> **Status: DESIGN — feature accepted; design under review. No implementation has
-> landed.** This promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
+> **Status: APPROVED — planned as v2beta1 blocker [Q242](../STATUS.md). No
+> implementation has landed yet.** This promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:
 > letting CI jobs reach their build dependencies (package registries, module
