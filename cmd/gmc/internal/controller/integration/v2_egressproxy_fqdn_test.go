@@ -11,6 +11,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,6 +118,71 @@ func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
 	// The other-mode (Calico) policy must not exist.
 	_, err = getCNIPolicy(t, ns, fqdnName, calicoGVK)
 	assert.True(t, apierrors.IsNotFound(err), "Calico policy must be absent in CiliumFQDN mode, got %v", err)
+}
+
+// TestV2_EgressProxy_CiliumFQDNExtraDestinations proves the Q242 G.1 deliverable-3
+// plumbing in CiliumFQDN mode: an operator destinationFQDNs entry is appended to the
+// CiliumNetworkPolicy toFQDNs set and to the proxy CONNECT host-suffix env, and a
+// destinationCIDRs entry lands as an ipBlock peer on the standard NetworkPolicy
+// (which is applied in FQDN mode too) and in PROXY_ALLOWED_CIDRS.
+func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
+	const ns = "v2-ep-cilium-extra"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	const destFQDN = "proxy.golang.org"
+	const destCIDR = "199.36.153.8/30"
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+			DestinationFQDNs: []string{destFQDN},
+			DestinationCIDRs: []string{destCIDR},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	fqdnName := egressProxyName + "-proxy-fqdn"
+	var cnp *unstructured.Unstructured
+	require.Eventually(t, func() bool {
+		var gerr error
+		cnp, gerr = getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+		return gerr == nil
+	}, 10*time.Second, 100*time.Millisecond, "CiliumNetworkPolicy should be emitted")
+
+	// The extra FQDN is appended to the GitHub toFQDNs set (as a matchName entry).
+	egress, found, err := unstructured.NestedSlice(cnp.Object, "spec", "egress")
+	require.NoError(t, err)
+	require.True(t, found)
+	githubRule := egress[len(egress)-1].(map[string]interface{})
+	fqdns, found, err := unstructured.NestedSlice(githubRule, "toFQDNs")
+	require.NoError(t, err)
+	require.True(t, found)
+	sawExtra, sawGitHub := false, false
+	for _, f := range fqdns {
+		switch f.(map[string]interface{})["matchName"] {
+		case destFQDN:
+			sawExtra = true
+		case "api.github.com":
+			sawGitHub = true
+		}
+	}
+	assert.True(t, sawExtra, "toFQDNs must include the operator destinationFQDNs entry")
+	assert.True(t, sawGitHub, "toFQDNs must still include the implicit GitHub hostnames")
+
+	// Deployment env: opted in, GitHub + extra FQDN in host suffixes, CIDR set.
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &dep))
+	env := containerEnv(t, dep)
+	assert.Contains(t, env["PROXY_ALLOWED_HOST_SUFFIXES"], destFQDN)
+	assert.Contains(t, env["PROXY_ALLOWED_HOST_SUFFIXES"], "api.github.com")
+	assert.Equal(t, destCIDR, env["PROXY_ALLOWED_CIDRS"])
+
+	// Standard NetworkPolicy (applied in FQDN mode too) carries the CIDR ipBlock.
+	var np networkingv1.NetworkPolicy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &np))
+	assert.True(t, npHasCIDRPeer(np, destCIDR), "destinationCIDRs must become an ipBlock peer even in FQDN mode")
 }
 
 func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {

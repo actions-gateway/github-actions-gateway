@@ -18,6 +18,7 @@ package controller
 
 import (
 	"net"
+	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -135,6 +136,47 @@ func egressProxyResources(ep *gmcv2alpha1.EgressProxy) corev1.ResourceRequiremen
 	return res
 }
 
+// proxyAllowlistEnv returns the CONNECT destination-allowlist env (Q242 G.1) for
+// the proxy container, or nil when the operator has not opted in.
+//
+// The proxy's CONNECT check is defense-in-depth on top of the pod-egress policy
+// (the hard gate). To keep existing proxies byte-for-byte unchanged, the env is
+// injected ONLY when the EgressProxy lists at least one extra destination
+// (destinationFQDNs/destinationCIDRs); with no extras the proxy stays
+// transport-only and the NetworkPolicy alone gates egress.
+//
+// When opted in, the proxy must permit the FULL set the egress policy allows, so:
+//   - PROXY_ALLOWED_HOST_SUFFIXES carries the implicit GitHub hostnames PLUS the
+//     operator's destinationFQDNs. Workers always reach GitHub by hostname, so the
+//     GitHub set is expressed as host suffixes here regardless of egressPolicyMode;
+//     the ~7400 GitHub CIDRs are deliberately NOT injected (no worker CONNECTs to
+//     GitHub by literal IP, and an env var of thousands of CIDRs would be unwieldy).
+//   - PROXY_ALLOWED_CIDRS carries the operator's destinationCIDRs only.
+func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy) []corev1.EnvVar {
+	if len(ep.Spec.DestinationFQDNs) == 0 && len(ep.Spec.DestinationCIDRs) == 0 {
+		return nil
+	}
+	suffixes := make([]string, 0, len(githubEgressFQDNs)+len(ep.Spec.DestinationFQDNs))
+	for _, f := range githubEgressFQDNs {
+		suffixes = append(suffixes, proxyHostSuffix(f))
+	}
+	suffixes = append(suffixes, ep.Spec.DestinationFQDNs...)
+
+	env := []corev1.EnvVar{{Name: "PROXY_ALLOWED_HOST_SUFFIXES", Value: strings.Join(suffixes, ",")}}
+	if len(ep.Spec.DestinationCIDRs) > 0 {
+		env = append(env, corev1.EnvVar{Name: "PROXY_ALLOWED_CIDRS", Value: strings.Join(ep.Spec.DestinationCIDRs, ",")})
+	}
+	return env
+}
+
+// proxyHostSuffix normalizes an FQDN-policy entry into the bare host suffix the
+// proxy's CONNECT suffix matcher expects: a leading "*." wildcard becomes the
+// parent domain (the matcher already treats every entry as a subdomain suffix, so
+// "actions.githubusercontent.com" matches "x.actions.githubusercontent.com").
+func proxyHostSuffix(fqdn string) string {
+	return strings.TrimPrefix(fqdn, "*.")
+}
+
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
 // It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
 // required cross-node anti-affinity, self-signed proxy TLS mount, /healthz +
@@ -206,10 +248,10 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
 						},
-						Env: []corev1.EnvVar{
+						Env: append([]corev1.EnvVar{
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
 							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
-						},
+						}, proxyAllowlistEnv(ep)...),
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      proxyTLSVolumeName,
 							MountPath: proxyTLSMountPath,
@@ -312,6 +354,24 @@ func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []ne
 		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(githubCIDRs))
 		for _, cidr := range githubCIDRs {
 			c := cidr.String()
+			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
+		}
+		egress = append(egress, networkingv1.NetworkPolicyEgressRule{
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(443))}},
+			To:    peers,
+		})
+	}
+
+	// Operator-allowlisted extra CIDRs (Q242 G.1) are native ipBlock peers on the
+	// standard NetworkPolicy, which is applied in EVERY egress mode — so a CIDR
+	// destination works without a DNS-aware CNI and regardless of how GitHub egress
+	// is expressed (CIDR rule here vs. toFQDNs on the CNI-native policy). FQDN-mode
+	// proxies still get the standard NetworkPolicy, so these peers are honored there
+	// too (NetworkPolicies are additive). Gated on managedNetworkPolicy: when the GMC
+	// is not managing this proxy's policy, it adds nothing for the operator to layer.
+	if managed && len(ep.Spec.DestinationCIDRs) > 0 {
+		peers := make([]networkingv1.NetworkPolicyPeer, 0, len(ep.Spec.DestinationCIDRs))
+		for _, c := range ep.Spec.DestinationCIDRs {
 			peers = append(peers, networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: c}})
 		}
 		egress = append(egress, networkingv1.NetworkPolicyEgressRule{

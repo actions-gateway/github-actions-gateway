@@ -130,16 +130,27 @@ Two enforcement surfaces, one source of truth:
      same shape as the GitHub-CIDR rule) or Cilium `toCIDR` in FQDN mode — so CIDRs
      work in **every** mode, no DNS-aware CNI needed.
    If the CNI can't enforce, egress stays denied (fail-closed, same Q208 guarantee).
-2. **Proxy CONNECT check (defense-in-depth).** The GMC passes both lists to the
-   proxy via env (read in [`cmd/proxy/main.go`](../../cmd/proxy/main.go) into new
-   `Server` fields). `handleConnect` (proxy.go:309), before the dial at proxy.320:
-   - matches the CONNECT host (normalized, port-stripped) against the GitHub set +
-     `DestinationFQDNs` suffixes; and
-   - for `DestinationCIDRs`, **resolves the host and checks the resolved IP is in
-     range** (a literal-IP target is checked directly). Dialing that resolved IP
-     (rather than re-resolving by name) also closes the DNS-rebinding window — so
-     the resolve-and-revalidate hardening is *built in* for the CIDR path, not a
-     deferred extra. Anything matching neither is rejected `403`.
+2. **Proxy CONNECT check (defense-in-depth).** The GMC passes the proxy the
+   **full** permitted set via two env vars — `PROXY_ALLOWED_HOST_SUFFIXES` and
+   `PROXY_ALLOWED_CIDRS` (read in [`cmd/proxy/main.go`](../../cmd/proxy/main.go)
+   into `Server.AllowedHostSuffixes` / `Server.AllowedCIDRs`). The full set is the
+   implicit GitHub hostnames **plus** the operator's `destinationFQDNs`
+   (host-suffix env) and `destinationCIDRs` (CIDR env); GitHub is carried as host
+   suffixes regardless of `egressPolicyMode` since workers always reach it by name,
+   and the bulky GitHub CIDR feed is *not* injected. The GMC injects this env **only
+   when the EgressProxy lists at least one extra destination** — with none, both env
+   vars are absent and the proxy stays transport-only (byte-for-byte today's
+   behavior; the NetworkPolicy is the sole gate). `checkDestination` (proxy.go),
+   before the dial in `handleConnect`:
+   - with no allowlist env, permits every destination (transport-only);
+   - otherwise matches the CONNECT host (normalized, port-stripped) against the
+     allowed host suffixes (GitHub + `destinationFQDNs`); and
+   - for the allowed CIDRs (`destinationCIDRs`), **resolves the host and checks the
+     resolved IP is in range** (a literal-IP target is checked directly), then dials
+     **that validated IP** rather than re-resolving by name — closing the
+     DNS-rebinding window, so resolve-and-revalidate is *built in* for the CIDR path.
+     Anything matching neither is rejected `403` and counted on
+     `actions_gateway_proxy_connect_denied_total`.
 
 Worker traffic already flows through the proxy for proxied tenants — the AGC
 provisioner injects `HTTPS_PROXY` into worker containers
@@ -288,13 +299,24 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    `DestinationCIDRs` (IP ranges) fields + CEL `XValidation` (host-suffix entries
    require an FQDN mode; entries are valid host suffixes / CIDRs respectively);
    regenerate deepcopy + CRD.
-2. `cmd/proxy/proxy.go` + `cmd/proxy/main.go` — `Server.DestinationFQDNs` +
-   `Server.DestinationCIDRs`, env wiring, the CONNECT check (host-suffix match +
-   resolve-and-check-IP-in-CIDR, dialing the validated IP) + a
-   `actions_gateway_proxy_connect_denied_total` counter; unit tests.
+2. `cmd/proxy/proxy.go` + `cmd/proxy/main.go` — `Server.AllowedHostSuffixes` +
+   `Server.AllowedCIDRs`, fed from the `PROXY_ALLOWED_HOST_SUFFIXES` /
+   `PROXY_ALLOWED_CIDRS` env vars. These hold the **full** GMC-injected allowed set
+   (GitHub hosts + the operator's extras), not just the extras; **both empty ⇒
+   transport-only** (any CONNECT tunneled, NetworkPolicy is the gate). The CONNECT
+   check (`checkDestination`: host-suffix match + resolve-and-check-IP-in-CIDR,
+   dialing the validated IP) + a `actions_gateway_proxy_connect_denied_total`
+   counter; unit tests. **(Merged: #461.)**
 3. `cmd/gmc/internal/controller/egressproxy_builder.go` + `egressproxy_fqdn.go` —
-   pass both lists to the proxy Deployment; append host suffixes to the FQDN
-   policy and CIDRs as `ipBlock`/`toCIDR` peers.
+   inject `PROXY_ALLOWED_HOST_SUFFIXES` (GitHub hostnames + `destinationFQDNs`) and
+   `PROXY_ALLOWED_CIDRS` (`destinationCIDRs`) into the proxy Deployment **only when
+   the EgressProxy lists ≥1 extra destination** (else no env ⇒ transport-only,
+   backward-compatible); append `destinationFQDNs` to the FQDN policy's
+   `toFQDNs`/domains and `destinationCIDRs` as `ipBlock` peers on the standard
+   NetworkPolicy (applied in every mode, so CIDRs need no DNS-aware CNI). The bulky
+   GitHub CIDR feed is not injected into the proxy env — GitHub is reachable by
+   hostname via the suffix list. **(Merged: #460 for the CRD fields; this PR for the
+   GMC plumbing.)**
 4. **Platform allowlist (the governance gate).** GMC `--allowed-egress-fqdns` +
    `--allowed-egress-cidrs` flags + one optional watched ConfigMap with two keys
    (`fqdns:`/`cidrs:`), named by `--egress-destination-allowlist-configmap`
