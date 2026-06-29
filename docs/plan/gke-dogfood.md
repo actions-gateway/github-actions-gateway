@@ -147,13 +147,21 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: v1.1.0-rc.3
+    tag: v1.1.0-rc.4
 agc:
   image:
-    tag: v1.1.0-rc.3
+    tag: v1.1.0-rc.4
 proxy:
   image:
-    tag: v1.1.0-rc.3
+    tag: v1.1.0-rc.4
+# WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
+# every AGC, which injects the wrapper into each worker pod so the runner
+# container can be the unmodified upstream actions-runner. Pin it: the chart's
+# default wrapper tag is empty, which renders wrapper:latest (never published)
+# and ImagePullBackOffs the injection.
+wrapper:
+  image:
+    tag: v1.1.0-rc.4
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -188,10 +196,10 @@ AGC for workload-identity (Vault) instead, and the AGC crash-loops on
 `read appId: … no such file or directory`. Always upgrade this chart in lockstep
 with the GMC image (`helm upgrade`, not just `install`).
 `scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
-equivalent for the pinned `v1.1.0-rc.3`:
+equivalent for the pinned `v1.1.0-rc.4`:
 
 ```bash
-git archive v1.1.0-rc.3 charts/actions-gateway-crds-v2 | tar -x -C tmp/
+git archive v1.1.0-rc.4 charts/actions-gateway-crds-v2 | tar -x -C tmp/
 helm install actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
   --namespace gmc-system --create-namespace
 ```
@@ -301,13 +309,15 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
-          # MUST be GAG's first-party worker wrapper (ghcr.io/actions-gateway/worker),
-          # NOT the bare upstream actions-runner: the wrapper is the ENTRYPOINT
-          # that reads the job payload + jitconfig and spawns Runner.Worker. The
-          # bare upstream image silently no-ops every job (Q235). An explicit
-          # image is also needed because the AGC only injects a default when it
-          # *creates* the runner container, not when the template names one (Q233).
-          image: ghcr.io/actions-gateway/worker:v1.1.0-rc.3@sha256:50257add62f0d8b639e6692e1cc6f93695ab74c58908cffdb34ceaf6e3a66eb1
+          # Named but deliberately image-less (Q235 injection default). The AGC
+          # gap-fills the resolved worker image on a named image-less runner
+          # container (Q233) — here the built-in upstream actions-runner digest
+          # (DefaultWorkerImage) — and injects the GAG worker wrapper
+          # (WRAPPER_IMAGE) into the pod, so that unmodified upstream image runs
+          # jobs. NOTE: the bare upstream image has no build toolchain, so this
+          # repo's make-based CI fails `make: command not found` on it (see the
+          # Known gap below). For green CI, set a build-capable workerImage here;
+          # injection still applies on top of any base.
           resources:
             requests:
               cpu: "2"
@@ -351,17 +361,30 @@ gh api /repos/"$REPO"/actions/runners \
   --jq '.runners[] | {name, status, labels: [.labels[].name]}'
 ```
 
-> **Validated end-to-end on `v1.1.0-rc.3` (2026-06-28).** Control plane (GMC +
-> AGC roll, gateway `Ready=True`, App-Secret credential path, Q229 egress-DNS
-> token fetch, all `maxListeners` runners register), worker-pod provisioning,
-> **and** a real job → worker pod → GitHub `success`. The one footgun: the
-> `RunnerTemplate` runner image **must** be GAG's first-party worker wrapper
-> (`ghcr.io/actions-gateway/worker`), not the bare upstream `actions-runner`.
-> The wrapper is the ENTRYPOINT that reads the job payload + jitconfig and
-> spawns `Runner.Worker`; the bare upstream image silently no-ops the job (the
-> worker pod exits `Completed` with empty logs and `RenewJob` 401s). Making the
-> *default* worker image functional without an explicit per-tenant override is
-> tracked as Q235.
+> **Validated on `v1.1.0-rc.4` (2026-06-28).** Control plane (GMC + AGC roll,
+> gateway `Ready=True`, App-Secret credential path, Q229 egress-DNS token fetch,
+> baseline listener online — the multiplexer keeps **one** idle listener and
+> scales up to `maxListeners` on job demand, so a single online runner at rest is
+> healthy, not stuck), **production CI routing** (`GAG_RUNNER` →
+> `["self-hosted","linux","gag-ci"]`; the re-run's jobs dispatched to `gag-ci`,
+> the listener pool ramped 1 → 5, the `workers` spot pool autoscaled `0 → 2`),
+> and **Q235 worker-wrapper injection**: with the `RunnerTemplate` runner
+> container named but image-less, the AGC gap-filled the bare upstream
+> `ghcr.io/actions/actions-runner` (Q233), injected `ghcr.io/actions-gateway/wrapper`
+> as a read-only OCI image volume at `/opt/actions-gateway`, set the container
+> command to `/opt/actions-gateway/wrapper`, and the runner **executed the job and
+> reported to GitHub**.
+>
+> **Known gap — the bare default image can't run *this* repo's CI.** Every
+> unit/integration job runs `make …`, but the upstream `actions-runner` image has
+> no build toolchain (`make`, `build-essential`), so the jobs fail
+> `exit 127: make: command not found`. The workflows use `actions/setup-go` (Go is
+> fine) but assume `make` is pre-installed, as on GitHub-hosted `ubuntu-latest`.
+> Running the repo's own CI green on the dogfood needs a **build-capable runner
+> image** (upstream `actions-runner` + `apt-get install build-essential`, or
+> equivalent) set as the `RunnerTemplate` `workerImage` — injection still applies
+> (the wrapper injects onto any base). Tracked as a follow-up Queue item; routing
+> and injection themselves are validated.
 
 ---
 

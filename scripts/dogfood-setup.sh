@@ -39,7 +39,7 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # Default to the newest published release. `latest` does not exist in this
 # project's registry (publish.yml builds only on v* tags), so floating to it
 # yields ImagePullBackOff — pin a real tag instead.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.3}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.4}"
 
 # ---------------------------------------------------------------------------
 # Existence guards — make the gcloud creates (which error if the resource
@@ -188,6 +188,14 @@ agc:
   image:
     tag: ${GAG_IMAGE_TAG}
 proxy:
+  image:
+    tag: ${GAG_IMAGE_TAG}
+# The GMC forwards WRAPPER_IMAGE to every AGC, which injects the wrapper into
+# each worker pod so the runner container can be the unmodified upstream
+# actions-runner (Q235 injection default). Pin it to the release tag: the chart
+# default tag is empty, which renders ghcr.io/.../wrapper:latest — a tag this
+# registry never publishes — so injection would ImagePullBackOff without this.
+wrapper:
   image:
     tag: ${GAG_IMAGE_TAG}
 certManager:
@@ -359,15 +367,16 @@ spec:
           effect: NoSchedule
       containers:
         - name: runner
-          # MUST be GAG's first-party worker wrapper, NOT the bare upstream
-          # actions-runner: the wrapper is the container ENTRYPOINT that reads
-          # the job payload from PAYLOAD_SECRET_PATH, materializes the runner
-          # config from the jitconfig, and spawns Runner.Worker. The bare
-          # upstream image lacks it and silently no-ops every job (Q235). An
-          # explicit image is also required because the AGC only injects a
-          # default when it *creates* the runner container, not when the
-          # template names one (Q233).
-          image: ghcr.io/actions-gateway/worker:${GAG_IMAGE_TAG}
+          # Named but deliberately image-less: this exercises the Q235 injection
+          # default. The AGC gap-fills the resolved worker image on a named
+          # image-less runner container (Q233), which resolves to the built-in
+          # upstream actions-runner digest (DefaultWorkerImage), and injects the
+          # GAG worker wrapper (WRAPPER_IMAGE) into the pod so that unmodified
+          # upstream image can run jobs. NOTE: the bare upstream image has no
+          # build toolchain (no make/build-essential), so this repo's own
+          # make-based CI fails with make-command-not-found on it. To run the
+          # repo's CI green, set an explicit build-capable workerImage here
+          # (upstream actions-runner + build-essential); injection still applies.
           resources:
             requests:
               cpu: "2"
