@@ -1,16 +1,17 @@
 # Q242 — G.1 Proxy-Enforced Destination Allowlist (worker dependency egress)
 
-> **Status: APPROVED — planned as v2beta1 blocker [Q242](../STATUS.md). No
-> implementation has landed yet.** This promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
+> **Status: APPROVED — v2beta1 blocker [Q242](../STATUS.md). Deliverables 1–6
+> shipped (#460 CRD fields, #461 proxy CONNECT check, #462 GMC injection, #463
+> platform allowlist + admission webhook, and the design/operator docs); only
+> deliverable 7 (the GKE dogfood turn-on that closes Q224) remains.** This
+> promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:
 > letting CI jobs reach their build dependencies (package registries, module
 > proxies, test-asset hosts) without forfeiting the per-tenant egress model. The
-> core go/no-go is **decided (accept)** with the [Trade-offs](#trade-offs-why-this-needs-sign-off)
+> core go/no-go was **decided (accept)** with the [Trade-offs](#trade-offs-why-this-needs-sign-off)
 > recorded, a [bounded scope](#scope-we-accept--and-the-scope-creep-we-decline),
-> and the [in-cluster mirror recommended first](#recommended-path-in-cluster-caching-mirror-first);
-> what remains is review of the design details (the flag-shape sub-decision and
-> the envtest-assets question).
+> and the [in-cluster mirror recommended first](#recommended-path-in-cluster-caching-mirror-first).
 
 ## Goal
 
@@ -336,6 +337,11 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    recommendation** and presents the allowlist as the escape hatch — required, not
    a footnote; include per-ecosystem mirror pointers: Athens/Verdaccio/registry
    pull-through), CRD reference; flip the Appendix G.1 entry to "implemented."
+   **(Done:** 05-security threat row + Q242 blockquote; network-architecture
+   "Worker egress to allowlisted non-GitHub destinations" subsection; the
+   security-operations operator how-to shipped with deliverable 4 (#463);
+   Appendix G.1 flipped to "✅ Implemented" stub. CRD field reference is the godoc
+   on the `EgressProxySpec` fields (#460).**)**
 6. Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit,
    normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
    NetworkPolicy carries the CIDRs, admission **rejects an off-allowlist entry**
