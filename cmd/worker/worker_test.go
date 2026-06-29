@@ -540,3 +540,32 @@ func TestLogLevelFromEnv(t *testing.T) {
 		t.Fatalf("default: got %v, want %v", got, slog.LevelInfo)
 	}
 }
+
+func TestTranslateWorkerExitCode(t *testing.T) {
+	// Runner.Worker exits 100 + (int)TaskResult. The two results GitHub still
+	// concludes as `success` map to 0 so the worker pod ends Succeeded (Q240);
+	// every other code (failed/canceled/skipped job, or a crashed worker) passes
+	// through verbatim so the pod stays Failed and visible.
+	cases := []struct {
+		name string
+		in   int
+		want int
+	}{
+		{"succeeded (100) -> 0", 100, 0},
+		{"succeeded-with-issues (101) -> 0", 101, 0},
+		{"failed (102) passes through", 102, 102},
+		{"canceled (103) passes through", 103, 103},
+		{"skipped (104) passes through", 104, 104},
+		{"plain success 0 passes through", 0, 0},
+		{"generic error 1 passes through", 1, 1},
+		{"SIGKILL/OOM 137 passes through", 137, 137},
+		{"SIGSEGV 139 passes through", 139, 139},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := translateWorkerExitCode(tc.in); got != tc.want {
+				t.Fatalf("translateWorkerExitCode(%d) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}

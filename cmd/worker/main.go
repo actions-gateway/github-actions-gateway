@@ -20,7 +20,11 @@
 //     concurrently (the write blocks until Runner.Worker reads).
 //  6. Drain pipe-out to prevent the worker from blocking on writes.
 //  7. Relay Runner.Worker stdout/stderr to our own stdout/stderr.
-//  8. Exit with the same exit code as Runner.Worker.
+//  8. Translate Runner.Worker's exit code: a successful job exits 100 (not 0),
+//     because Runner.Worker returns TaskResultUtil.TranslateToReturnCode(result)
+//     == 100 + (int)TaskResult and TaskResult.Succeeded == 0. We map the success
+//     codes back to 0 so Kubernetes marks the worker pod Succeeded; non-success
+//     and fault codes pass through verbatim. See translateWorkerExitCode.
 //
 // Wire format (ProcessChannel / StreamString in the runner source,
 // src/Runner.Common/ProcessChannel.cs and StreamString.cs):
@@ -65,6 +69,19 @@ const (
 	// as positional CLI arguments. Go's ExtraFiles[0] → fd 3, [1] → fd 4.
 	workerReadFD  = 3
 	workerWriteFD = 4
+
+	// returnCodeOffset mirrors TaskResultUtil._returnCodeOffset in the runner
+	// source (src/Runner.Common/Util/TaskResultUtil.cs). Runner.Worker encodes
+	// its job result as an exit code of returnCodeOffset + (int)TaskResult, so a
+	// successful job (TaskResult.Succeeded == 0) exits exactly returnCodeOffset.
+	returnCodeOffset = 100
+
+	// exitSucceeded and exitSucceededWithIssues are the Runner.Worker exit codes
+	// for the two job results that GitHub still concludes as `success`:
+	// TaskResult.Succeeded (0) and TaskResult.SucceededWithIssues (1). The
+	// wrapper maps these to a 0 process exit so the worker pod ends Succeeded.
+	exitSucceeded           = returnCodeOffset
+	exitSucceededWithIssues = returnCodeOffset + 1
 
 	// proxyCABundleFile is the file name (under RUNNER_HOME_DIR) where the
 	// wrapper writes the combined system + per-tenant-proxy CA bundle.
@@ -285,14 +302,42 @@ func run() error {
 		slog.Warn("payload write error", "error", werr)
 	}
 
-	// 8. Propagate Runner.Worker exit code.
+	// 8. Translate and propagate Runner.Worker's exit code.
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			os.Exit(exitErr.ExitCode())
+			os.Exit(translateWorkerExitCode(exitErr.ExitCode()))
 		}
 		return fmt.Errorf("Runner.Worker: %w", waitErr)
 	}
 	return nil
+}
+
+// translateWorkerExitCode maps a Runner.Worker process exit code onto the exit
+// code the wrapper itself should return.
+//
+// Runner.Worker does not use the conventional 0-is-success exit convention: it
+// returns TaskResultUtil.TranslateToReturnCode(result) == 100 + (int)TaskResult
+// (actions/runner src/Runner.Common/Util/TaskResultUtil.cs), so a job that
+// concludes `success` exits 100, not 0. In the upstream architecture
+// Runner.Listener consumes this code, translates it back, and exits 0 itself —
+// the 100-offset never escapes the process tree. Because the wrapper spawns
+// Runner.Worker directly it must do the same, otherwise every successful job
+// leaves the container at exit 100 and Kubernetes marks the worker pod Failed —
+// cosmetic (the AGC provisioner never inspects the exit code), but it makes
+// successful jobs look like failures to operators and their dashboards (Q240).
+//
+// Only the two results GitHub still concludes as `success` — Succeeded (100) and
+// SucceededWithIssues (101) — are mapped to 0. Every other code passes through
+// verbatim: a genuinely failed, canceled, or skipped job keeps its 100-offset
+// code, and a crashed worker keeps its signal/fault code, so those pods still
+// end Failed and remain visible for investigation.
+func translateWorkerExitCode(code int) int {
+	switch code {
+	case exitSucceeded, exitSucceededWithIssues:
+		return 0
+	default:
+		return code
+	}
 }
 
 // writeJobMessage writes a NewJobRequest message to w using the wire format
