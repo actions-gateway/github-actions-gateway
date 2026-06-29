@@ -72,8 +72,31 @@ DestinationCIDRs []string `json:"destinationCIDRs,omitempty"`
 ```
 
 Both default empty (GitHub-only — today's behavior). GitHub is always allowed;
-the lists only add. Opening egress beyond GitHub is an ADMIN decision: both fields
-live on the operator-owned `EgressProxy` and are never tenant-settable.
+the lists only add.
+
+**Who governs the destinations — the critical point.** The `EgressProxy` is a
+**namespace-scoped, tenant-authorable** CR (only the cluster-scoped
+`ClusterRunnerTemplate` is platform-only — appendix-h §H). So these fields cannot
+be trusted as "admin-only" just because they sit on the `EgressProxy`: a tenant
+with write access to their namespace could otherwise open their own egress to
+anywhere, which the egress sign-off (Q168) and Appendix G forbid ("never
+tenant-openable by default"; "no mode in which a worker can reach arbitrary
+internet"). The fields are therefore **gated by a platform-owned allowlist**,
+exactly mirroring the `--allowed-priority-classes` model (Q132/Q188) for the
+other security-relevant tenant-settable field:
+
+- A GMC flag `--allowed-egress-destinations` (+ optional watched ConfigMap,
+  additive + fail-safe, like `--priority-class-allowlist-configmap`) enumerates
+  the FQDNs/CIDRs the platform permits cluster-wide.
+- The GMC validating webhook **rejects** any `destinationFQDNs`/`destinationCIDRs`
+  entry not on that platform allowlist.
+- **Empty allowlist forbids every non-GitHub destination** (secure default) — out
+  of the box no tenant can open egress at all, identical to how an empty
+  `--allowed-priority-classes` forbids every `priorityClassName`.
+
+A tenant can thus *request* a destination on their `EgressProxy` for GitOps
+ergonomics, but only the platform decides what is actually permitted; a request
+outside the allowlist fails admission.
 
 Two enforcement surfaces, one source of truth:
 
@@ -107,11 +130,14 @@ no worker-side change is needed; this only widens what that proxy will carry.
 
 - **Empty default = no change.** `destinationFQDNs: []` is GitHub-only,
   byte-for-byte today's behavior. The feature is purely additive opt-in.
-- **Admin-governed, never tenant-openable.** The field is on the operator-owned
-  `EgressProxy` (referenced by `proxyRef` / `defaultProxyRef`). A tenant editing
-  a RunnerSet cannot open egress. This mirrors Appendix G line 377 ("must stay an
-  explicit admin opt-in, never tenant-openable by default") and the existing
-  `noProxyCIDRs` "rejected by the GMC admission path" treatment.
+- **Platform-governed, not tenant-openable — via an allowlist, not ownership.**
+  The `EgressProxy` is tenant-authorable, so governance comes from the GMC
+  `--allowed-egress-destinations` allowlist + validating-webhook rejection (see
+  above), not from the CR's ownership. Empty allowlist = deny-all-non-GitHub.
+  This is the same platform-ownership model the design already uses for the only
+  other security-relevant tenant-settable field — `priorityClassName` /
+  `--allowed-priority-classes` (Q132/Q188) — and satisfies Appendix G's "never
+  tenant-openable by default" without pretending the CR is admin-only.
 - **Attribution + containment preserved.** Traffic still exits the per-tenant
   proxy IPs (attribution intact) and DNS still resolves on the in-cluster path
   (no new exfil channel) — the two things a direct worker-egress hole would
@@ -140,25 +166,34 @@ no worker-side change is needed; this only widens what that proxy will carry.
    `actions_gateway_proxy_connect_denied_total` counter; unit tests.
 3. `cmd/gmc/internal/controller/egressproxy_builder.go` + `egressproxy_fqdn.go` —
    pass both lists to the proxy Deployment; append host suffixes to the FQDN
-   policy and CIDRs as `ipBlock`/`toCIDR` peers; GMC admission rejecting a
-   host-suffix entry without an FQDN mode.
-4. Docs: [`05-security.md`](../design/05-security.md) (threat-model row +
+   policy and CIDRs as `ipBlock`/`toCIDR` peers.
+4. **Platform allowlist (the governance gate).** GMC `--allowed-egress-destinations`
+   flag + optional watched ConfigMap (additive, fail-safe — mirror
+   `--priority-class-allowlist-configmap`); GMC validating webhook rejects any
+   `destinationFQDNs`/`destinationCIDRs` entry not on it (and rejects a host-suffix
+   entry without an FQDN mode). Empty allowlist = deny-all-non-GitHub.
+5. Docs: [`05-security.md`](../design/05-security.md) (threat-model row +
    move G.1 out of Appendix G), [`network-architecture.md`](../design/network-architecture.md),
    [`security-operations.md`](../operations/security-operations.md) (operator
-   how-to), CRD reference; flip the Appendix G.1 entry to "implemented."
-5. Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit,
+   how-to, incl. the allowlist flag/ConfigMap), CRD reference; flip the Appendix
+   G.1 entry to "implemented."
+6. Tests: unit (host-suffix + CIDR allow/deny, resolve-check, GitHub-implicit,
    normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
-   NetworkPolicy carries the CIDRs, admission rejects host-suffix-without-FQDN-mode).
-6. **Dogfood application (closes Q224):** attach an `EgressProxy` with
-   `egressPolicyMode: CiliumFQDN` (GKE Dataplane V2 is Cilium) and
-   `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set the gateway's
+   NetworkPolicy carries the CIDRs, admission **rejects an off-allowlist entry**
+   and a host-suffix-without-FQDN-mode, empty allowlist denies all non-GitHub).
+7. **Dogfood application (closes Q224):** set the GMC
+   `--allowed-egress-destinations` to `proxy.golang.org,sum.golang.org`, attach an
+   `EgressProxy` with `egressPolicyMode: CiliumFQDN` (GKE Dataplane V2 is Cilium)
+   and `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set the gateway's
    `defaultProxyRef`, and confirm `vendor-check` / `tidy-check` go green on
    `gag-ci`.
 
 ## Open questions for sign-off
 
-1. **Is opening proxy egress beyond GitHub acceptable as an admin opt-in at all?**
-   This is the core trade-off (secure-by-default rule → needs explicit sign-off).
+1. **Approve the platform-allowlist governance model** (GMC
+   `--allowed-egress-destinations`, empty = deny-all-non-GitHub, tenant requests
+   gated by admission — the `--allowed-priority-classes` pattern)? This is the
+   core trade-off and the secure-by-default question; the rest follows from it.
 2. ~~FQDN-only vs CIDR variant~~ **Resolved: support both** (host-suffix +
    `destinationCIDRs`), per review — internal IP-only hosts and cloud private-API
    CIDRs need the IP form; public package hosts need the FQDN form.
