@@ -323,10 +323,17 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
 2. ~~FQDN-only vs CIDR variant~~ **Resolved: support both** (host-suffix +
    `destinationCIDRs`), per review — internal IP-only hosts and cloud private-API
    CIDRs need the IP form; public package hosts need the FQDN form.
-3. **envtest assets.** `unit-test`/integration may need kube-apiserver/etcd from
-   `storage.googleapis.com` / `dl.k8s.io`. Bake the version-pinned binaries into
-   the runner image (reproducible, zero egress — recommended) or add those hosts
-   to the allowlist? (To confirm by running `unit-test` on the Q239 image.)
+3. ~~envtest assets — does `unit-test` need an egress hole for them?~~ **Resolved:
+   no, not for the four offline jobs.** `cmd/agc/Makefile` is explicit —
+   `test: ## Run unit tests (no envtest required)`; only `test-integration` uses
+   envtest, via `setup-envtest use` (which *downloads* the kube-apiserver/etcd
+   binaries — the `setup-envtest` *tool* is vendored, the binaries are not). So
+   envtest is irrelevant to lint/shellcheck/unit-test/coverage. **When the heavier
+   `integration-test` job is later migrated**, bake the version-pinned binaries
+   into the runner image at build time (run `setup-envtest use` during
+   `docker build`, set `KUBEBUILDER_ASSETS`) — reproducible, zero runtime egress —
+   rather than allowlisting the download host. Tracked with that migration, not
+   this feature.
 4. ~~DNS-rebinding revalidation in v1 or defer?~~ **Resolved: in v1** — it falls
    out of the `destinationCIDRs` resolve-and-dial-the-validated-IP path.
 5. **Scope:** EgressProxy only (v2), matching Q208? v1 / v2-direct-egress out of
