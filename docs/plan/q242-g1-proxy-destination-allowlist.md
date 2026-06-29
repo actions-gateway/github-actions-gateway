@@ -327,8 +327,13 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    no, not for the four offline jobs.** `cmd/agc/Makefile` is explicit —
    `test: ## Run unit tests (no envtest required)`; only `test-integration` uses
    envtest, via `setup-envtest use` (which *downloads* the kube-apiserver/etcd
-   binaries — the `setup-envtest` *tool* is vendored, the binaries are not). So
-   envtest is irrelevant to lint/shellcheck/unit-test/coverage. **When the heavier
+   binaries — the `setup-envtest` *tool* is vendored, the binaries are not). They
+   can't be "vendored as source": they're prebuilt binaries of external projects
+   (`k8s.io/kubernetes`' apiserver isn't buildable as a library dep; etcd is its
+   own binary), and the suites *deliberately* use a real apiserver — a vendored
+   fake client can't reproduce the defaulting/no-op-dedup/CEL/`IsConflict`
+   semantics the integration tier exists to test. So envtest is irrelevant to
+   lint/shellcheck/unit-test/coverage. **When the heavier
    `integration-test` job is later migrated**, bake the version-pinned binaries
    into the runner image at build time (run `setup-envtest use` during
    `docker build`, set `KUBEBUILDER_ASSETS`) — reproducible, zero runtime egress —
