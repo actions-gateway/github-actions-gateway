@@ -17,61 +17,31 @@ constraints changed."
 
 ## G.1. Proxy-Enforced Destination Allowlist
 
-**Current behavior.** The egress proxy ([§2.3](02-architecture.md#23-tier-3--egress-proxy-pool))
-is a pure HTTPS `CONNECT` tunneler. It accepts any `r.Host` and dials
-it. Destination policy lives entirely in the `NetworkPolicy` attached
-to the proxy pods, which restricts outbound TCP to GitHub IP ranges
-plus DNS.
+> **✅ Implemented (Q242).** This enhancement was promoted to committed work
+> and shipped — it is the attribution-preserving answer to the most common
+> operator ask (letting CI jobs reach their build dependencies without
+> forfeiting the per-tenant egress model). It is retained here as a stub so
+> existing cross-references resolve; the live design and operator docs are
+> authoritative.
 
-**Why it was left out.** The proxy is intentionally a transport
-component, not a policy enforcement point. Two reasons drove that
-choice:
+A platform admin can allow a v2 `EgressProxy` to forward worker traffic to a
+small, explicit set of **non-GitHub** destinations — by DNS host suffix
+(`spec.destinationFQDNs`) and by CIDR (`spec.destinationCIDRs`) — while keeping
+per-tenant egress-IP attribution and the DNS-exfil containment. The destinations
+are gated by a **platform-owned** allowlist (GMC `--allowed-egress-fqdns` /
+`--allowed-egress-cidrs` + an optional watched ConfigMap) enforced by a
+validating webhook; **both empty = deny-all-non-GitHub** (the secure default).
+They widen one source into two enforcement surfaces — `ipBlock` / `toFQDNs` on
+the pod-egress policy (the hard gate) and the proxy CONNECT allowlist as
+defense-in-depth (with DNS-rebinding revalidation on the CIDR path). The docs
+**lead with an in-cluster caching mirror** as the recommended path and reserve
+the allowlist for what a mirror can't proxy.
 
-1. **Single source of truth.** NetworkPolicy already restricts proxy
-   egress to GitHub CIDRs. Adding a host-suffix allowlist in the proxy
-   would create two overlapping policy surfaces that have to agree.
-2. **Operational simplicity.** A stateless byte-forwarding proxy with
-   no policy code is trivial to reason about, version, and replace.
-   Every conditional in the data path is a future bug.
-
-**Gap.** Defense-in-depth. NetworkPolicy enforcement is a function of
-the cluster's CNI and can be disabled per-tenant via
-`spec.proxy.managedNetworkPolicy: false`. If a tenant opts out, or if
-the CNI doesn't enforce egress policy, or if GitHub's published IP
-ranges expand to cover broader public-cloud blocks, the proxy has no
-fallback restriction of its own.
-
-**What "added" would look like.**
-
-- A new optional field on `ProxyConfig`, e.g.
-  `destinationAllowlist: [github.com, githubusercontent.com, ghe.io]`.
-- The Gateway Manager Controller (GMC) propagates it to the proxy via an env var or config volume.
-- The proxy parses the CONNECT target hostname, normalizes it
-  (lowercase, strip port), and rejects any host not matching one of
-  the configured suffixes.
-- Optional refinement: post-DNS check to defeat DNS rebinding —
-  resolve the host inside the proxy and re-validate the resolved IP
-  against the GitHub CIDRs that NetworkPolicy uses.
-
-Estimated cost: ~150 lines of Go + tests; a new CRD field with CEL
-validation; one extra round-trip in the connect path (negligible
-relative to upstream RTT).
-
-**What would trigger building it.**
-
-- A tenant or operator asks to disable `managedNetworkPolicy` and the
-  platform team wants a guardrail layer that doesn't depend on
-  per-tenant NetworkPolicy.
-- A CNI in use by the deployment doesn't enforce egress policy
-  reliably (some CNIs default to policy-disabled or have known
-  enforcement edge cases).
-- An incident shows that GitHub's `/meta` IP ranges expanded in a way
-  that made the NetworkPolicy effectively too broad to function as a
-  policy gate.
-
-Until one of those triggers fires, the operational simplicity of
-"transport-only proxy + NetworkPolicy as the single policy surface" is
-worth more than the marginal defense-in-depth.
+- Trade-offs and threat model: [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped)
+  (Worker Exfiltration via an Allowlisted Non-GitHub Destination).
+- Network shape: [network-architecture.md § Worker egress to allowlisted non-GitHub destinations](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1).
+- Operator runbook: [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist).
+- Full design + deliverables: [Q242 plan](../plan/q242-g1-proxy-destination-allowlist.md).
 
 **Related security finding.** [docs/plan/security.md](../plan/security.md)
 M-2.
