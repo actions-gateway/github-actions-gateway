@@ -2,6 +2,8 @@ package httpx_test
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"net"
 	"net/http"
@@ -36,6 +38,35 @@ func TestNewClientWithTimeout(t *testing.T) {
 		if got := httpx.NewClientWithTimeout(d).Timeout; got != httpx.DefaultTimeout {
 			t.Fatalf("NewClientWithTimeout(%s).Timeout = %s, want %s", d, got, httpx.DefaultTimeout)
 		}
+	}
+}
+
+// TestNewClient_ReflectsPostInitDefaultTransport guards Q219: the AGC patches
+// http.DefaultTransport with the per-tenant egress proxy's CA early in main(),
+// AFTER package-level vars initialize. Any client that must traverse that proxy
+// (the runner registrar, the worker provisioner) therefore has to be built lazily,
+// at first use, so httpx.NewClient clones the *patched* transport rather than the
+// pre-patch one. This test pins the foundational property the lazy build relies on:
+// NewClient captures http.DefaultTransport at call time, preserving its
+// TLSClientConfig (the proxy trust pool). An eagerly-built client would miss a
+// later patch and fail the proxy TLS handshake with "unknown authority".
+func TestNewClient_ReflectsPostInitDefaultTransport(t *testing.T) {
+	orig := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = orig })
+
+	// Simulate main()'s post-init patch: install a custom RootCAs pool (the proxy
+	// CA, in production) onto a fresh clone of the default transport.
+	pool := x509.NewCertPool()
+	patched := orig.(*http.Transport).Clone()
+	patched.TLSClientConfig = &tls.Config{RootCAs: pool}
+	http.DefaultTransport = patched
+
+	tr, ok := httpx.NewClient().Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("Transport = %T, want *http.Transport", httpx.NewClient().Transport)
+	}
+	if tr.TLSClientConfig == nil || tr.TLSClientConfig.RootCAs != pool {
+		t.Fatal("NewClient did not capture the post-init http.DefaultTransport proxy CA pool")
 	}
 }
 
