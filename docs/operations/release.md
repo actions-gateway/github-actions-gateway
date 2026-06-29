@@ -165,8 +165,9 @@ A provenance verification failure is the same **stop-ship** signal as a
 `publish.yml` writes each image's immutable `ghcr.io/.../<name>@sha256:…` ref to
 the **run summary** (the "Record published digest" step). These are the
 **multi-arch index digests** — the single ref that serves both amd64 and arm64
-nodes. Copy those four refs — operators pin the workload to the digest, not the
-mutable `vX.Y.Z` tag. You can also resolve a digest directly:
+nodes. Copy those five refs (`gmc`, `agc`, `proxy`, `worker`, `wrapper`) —
+operators pin the workload to the digest, not the mutable `vX.Y.Z` tag. You can
+also resolve a digest directly:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
@@ -175,7 +176,7 @@ docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
 
 ### 5. Cut the GitHub Release
 
-Create the GitHub Release for the tag. In the notes, include the four
+Create the GitHub Release for the tag. In the notes, include the five
 `name@sha256:…` digests from step 4 and the `cosign verify` command from step 3,
 so a consumer can verify provenance and pin digests without reading this runbook.
 
