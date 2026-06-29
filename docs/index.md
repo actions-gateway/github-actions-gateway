@@ -39,7 +39,8 @@ helm install gag \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
 </div>

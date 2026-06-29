@@ -123,13 +123,14 @@ DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
     --namespace gmc-system \
     --set gmc.image.digest=sha256:<gmc> \
     --set agc.image.digest=sha256:<agc> \
-    --set proxy.image.digest=sha256:<proxy>
+    --set proxy.image.digest=sha256:<proxy> \
+    --set wrapper.image.digest=sha256:<wrapper>
   ```
 
-- **Dev/test only:** `--set allowFloatingImageTags=true` allows a floating tag for the GMC image *and* disables the GMC's startup digest check on the AGC/proxy images. Never use it in production.
+- **Dev/test only:** `--set allowFloatingImageTags=true` allows a floating tag for the GMC image *and* disables the GMC's startup digest check on the AGC/proxy/wrapper images. Never use it in production.
 - **Offline rendering:** any well-formed digest satisfies the check, e.g. `--set-string gmc.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111`.
 
-Note the contrast with the AGC/proxy images: those are validated by the GMC **at startup** (a floating tag there crash-loops the GMC — see [install.md § Pin images by digest](install.md#pin-images-by-digest)), while the GMC's own image is validated by the chart **at render time**.
+Note the contrast with the AGC/proxy/wrapper images: those are validated by the GMC **at startup** (a floating tag there crash-loops the GMC — see [install.md § Pin images by digest](install.md#pin-images-by-digest)), while the GMC's own image is validated by the chart **at render time**.
 
 ---
 

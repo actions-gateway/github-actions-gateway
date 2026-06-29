@@ -53,7 +53,7 @@ see the [chart README](../../charts/actions-gateway/README.md).
   `ActionsGateway` CR you create after install (see
   [Getting Started](../getting-started.md)). You only need the App registered
   and installed before onboarding a tenant, not before installing the chart.
-- **Image digests** for the GMC, AGC, and proxy images (see
+- **Image digests** for the GMC, AGC, proxy, and worker-wrapper images (see
   [Pin images by digest](#pin-images-by-digest) below).
 
 ---
@@ -107,10 +107,11 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the three image digests from the
+Copy the four image digests from the
 [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.0.0)
 (the chart ships **no** baked-in digests — empty digests are the fail-closed
 secure default, so an unconfigured render is rejected). Verify the chart and
@@ -127,7 +128,8 @@ image signatures before installing — see
 >   --namespace gmc-system --create-namespace \
 >   --set gmc.image.digest=sha256:<gmc> \
 >   --set agc.image.digest=sha256:<agc> \
->   --set proxy.image.digest=sha256:<proxy>
+>   --set proxy.image.digest=sha256:<proxy> \
+>   --set wrapper.image.digest=sha256:<wrapper>
 > ```
 
 `gag` is the Helm release name and `gmc-system` is the install namespace; both
@@ -138,7 +140,7 @@ that prefix.
 
 ### Pin images by digest
 
-Digest pinning is enforced for all three images, at two layers. This is the
+Digest pinning is enforced for all four images, at two layers. This is the
 secure default: a digest is immutable, so neither the controller nor a tenant
 gateway can ever run from a tag that was silently re-pointed.
 
@@ -148,12 +150,16 @@ gateway can ever run from a tag that was silently re-pointed.
   when `gmc.image.digest` is empty. See the
   [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest)
   if you hit this.
-- **AGC/proxy images — enforced at GMC startup.** The GMC **rejects floating
-  `AGC_IMAGE` / `PROXY_IMAGE` tags and crash-loops** until the AGC and proxy
-  images are pinned by digest.
+- **AGC/proxy/wrapper images — enforced at GMC startup.** The GMC **rejects
+  floating `AGC_IMAGE` / `PROXY_IMAGE` / `WRAPPER_IMAGE` tags and crash-loops**
+  until the AGC, proxy, and worker-wrapper images are pinned by digest. The
+  worker-wrapper (Q235) is on by default — the chart always sets `WRAPPER_IMAGE`,
+  so leaving `wrapper.image.digest` empty falls back to the floating
+  `ghcr.io/actions-gateway/wrapper:latest` tag and the GMC fails closed at
+  startup exactly as it does for a floating AGC/proxy tag.
 
-Pin `gmc.image.digest`, `agc.image.digest`, and `proxy.image.digest` as shown
-above.
+Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and
+`wrapper.image.digest` as shown above.
 
 For **dev/test only**, you can bypass the pin:
 
@@ -161,7 +167,8 @@ For **dev/test only**, you can bypass the pin:
 helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --set allowFloatingImageTags=true \
-  --set gmc.image.tag=<tag> --set agc.image.tag=<tag> --set proxy.image.tag=<tag>
+  --set gmc.image.tag=<tag> --set agc.image.tag=<tag> \
+  --set proxy.image.tag=<tag> --set wrapper.image.tag=<tag>
 ```
 
 Do **not** set `allowFloatingImageTags=true` in production.
@@ -182,7 +189,8 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
 The chart generates a self-signed webhook serving cert and wires the `caBundle`
@@ -264,13 +272,13 @@ for what v2 adds and the Kubernetes version requirements.
 
 ## Key values an operator sets
 
-The chart ships secure, HA defaults; most installs only set the three image
+The chart ships secure, HA defaults; most installs only set the four image
 digests. The knobs an operator is most likely to override:
 
 | Key | Default | When you change it |
 |---|---|---|
-| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` | `""` | Always — pin all three by digest. The chart refuses to render while `gmc.image.digest` is empty. |
-| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time GMC check and startup-time AGC/proxy check). |
+| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` / `wrapper.image.digest` | `""` | Always — pin all four by digest. The chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on a floating `agc`/`proxy`/`wrapper` tag. |
+| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time GMC check and startup-time AGC/proxy/wrapper check). |
 | `certManager.enabled` | `true` | Set `false` to use the self-signed webhook cert instead of cert-manager. |
 | `namePrefix` | `gmc` | Only when running a second GMC in the same cluster. |
 | `replicaCount` | `2` | Lower to `1` only in dev; production wants HA + leader election. |
@@ -316,12 +324,13 @@ kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resourc
 # 5. No errors in the GMC manager logs.
 kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=30
 # Look for: "Starting workers" / "successfully acquired lease"; no repeated
-# "AGC_IMAGE must be pinned by digest" (that means a floating-tag crash-loop).
+# "AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest" (a floating-tag
+# crash-loop — most often a forgotten wrapper.image.digest).
 ```
 
 If the GMC pods are in `CrashLoopBackOff` with an image-pinning error, you
-installed with a floating AGC/proxy tag and without `allowFloatingImageTags` —
-re-run the install with the three digests pinned (see
+installed with a floating AGC/proxy/wrapper tag and without
+`allowFloatingImageTags` — re-run the install with all four digests pinned (see
 [Pin images by digest](#pin-images-by-digest)). For other failure modes, see
 [troubleshooting.md](troubleshooting.md).
 

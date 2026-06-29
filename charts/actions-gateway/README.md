@@ -46,7 +46,7 @@ not chart resources.
   controls to take effect. `kindnet` does not enforce egress.
 - **cert-manager** *if* `certManager.enabled=true` (the default). Not required
   when you set `certManager.enabled=false`.
-- **Image digests** for the GMC, AGC, and proxy images (see below).
+- **Image digests** for the GMC, AGC, proxy, and worker-wrapper images (see below).
 
 ## Install
 
@@ -55,20 +55,26 @@ helm install gag charts/actions-gateway \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Digest pinning is enforced for all three images — this is the secure default:
+Digest pinning is enforced for all four images — this is the secure default:
 
 - **GMC (render time):** the chart **fails to render** with
   `gmc.image must be pinned by digest …` when `gmc.image.digest` is empty, so
   the controller image can never silently fall back to a mutable `:latest` tag.
-- **AGC/proxy (startup time):** the GMC **rejects floating
-  `AGC_IMAGE`/`PROXY_IMAGE` tags** and crash-loops until they are pinned.
+- **AGC/proxy/wrapper (startup time):** the GMC **rejects floating
+  `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` tags** and crash-loops until they are
+  pinned. The worker-wrapper (Q235) is on by default — the chart always sets
+  `WRAPPER_IMAGE`, so an empty `wrapper.image.digest` falls back to the floating
+  `ghcr.io/actions-gateway/wrapper:latest` tag and the GMC fails closed at
+  startup, exactly like a floating AGC/proxy tag.
 
-Pin `gmc.image.digest`, `agc.image.digest`, and `proxy.image.digest` before
-installing, or pass `--set allowFloatingImageTags=true` — the one explicit
-opt-out covering both layers — for **dev/test only**.
+Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and
+`wrapper.image.digest` before installing, or pass
+`--set allowFloatingImageTags=true` — the one explicit opt-out covering both
+layers — for **dev/test only**.
 
 ### Without cert-manager
 
@@ -78,7 +84,8 @@ helm install gag charts/actions-gateway \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
-  --set proxy.image.digest=sha256:<proxy>
+  --set proxy.image.digest=sha256:<proxy> \
+  --set wrapper.image.digest=sha256:<wrapper>
 ```
 
 The chart generates a self-signed webhook serving cert and wires the webhook
@@ -110,7 +117,8 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `gmc.imagePullPolicy` | `IfNotPresent` | GMC image pull policy. |
 | `agc.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/agc`, `""`, `""` | Image the GMC **injects** into provisioned AGCs. Digest required by default. |
 | `proxy.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/proxy`, `""`, `""` | Image the GMC **injects** into provisioned proxy pools. Digest required by default. |
-| `allowFloatingImageTags` | `false` | Dev/test opt-out of digest pinning: lets the chart render `gmc.image` from a floating tag and disables the GMC's AGC/proxy pin check. **Do not enable in production.** |
+| `wrapper.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/wrapper`, `""`, `""` | Worker-wrapper image (Q235) the GMC forwards to every AGC, which injects it into each worker pod. On by default — the chart always sets `WRAPPER_IMAGE`, so the GMC crash-loops on an empty (→ floating) digest. Digest required by default. |
+| `allowFloatingImageTags` | `false` | Dev/test opt-out of digest pinning: lets the chart render `gmc.image` from a floating tag and disables the GMC's AGC/proxy/wrapper pin check. **Do not enable in production.** |
 | `leaderElection.enabled` | `true` | Pass `--leader-elect`. Keep on when `replicaCount > 1`. |
 | `metrics.enabled` | `true` | Expose the HTTPS `:8443` metrics endpoint + Service. |
 | `metrics.serviceMonitor.enabled` | `false` | Emit a Prometheus-Operator ServiceMonitor (needs its CRD). |
