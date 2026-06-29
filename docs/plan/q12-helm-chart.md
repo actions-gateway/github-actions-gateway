@@ -143,6 +143,12 @@ as part of the [Milestone 4 live validation session](milestone-4.md#12-live-mult
 With this, Q12's last open piece is closed; chart publishing remains
 tracked separately as Q98.
 
+A later **production-posture re-validation** on the current chart (digest-pinned
+`v1.1.0-rc.4` images, no dev opt-outs, the clean no-workaround tenant path) ran as
+[M5 Q219](milestone-5.md#15-live-validation-q219--2026-06-28) and surfaced + fixed
+an AGC egress-proxy trust bug that blocked runner registration on every proxied
+install.
+
 ## Out of scope (documented future slices)
 
 - CI drift check that re-renders the chart and diffs against the kustomize

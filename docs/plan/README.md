@@ -21,7 +21,7 @@ The five-milestone delivery from
 | [milestone-2.md](milestone-2.md) | AGC controller, reconciler, agent pool, token manager | ✅ Done — full session lifecycle exercised end-to-end by M3's real-GitHub dispatch e2e; goleak coverage landed |
 | [milestone-3.md](milestone-3.md) | Worker pod, Named Pipe handoff, pod provisioner, eviction retry | ✅ Done — Investigation A (Named Pipe) complete; Q6 Tier-C real-GitHub dispatch validated 2026-05-30 |
 | [milestone-4.md](milestone-4.md) | GMC, ActionsGateway CRD, proxy binary, webhook, TLS pinning | ✅ Done — all success criteria live-validated on a real `kind` cluster 2026-06-11/12 (§12) |
-| [milestone-5.md](milestone-5.md) | Hardening + 1,000-session load testing + posture audit + packaging | ⚠️ Packaging (Q12), load harness (Q13), polaris + kube-bench (Q14) all shipped; only gVisor isolation validation ([Q15](../STATUS.md#Q15)) + live `helm install` ([Q219](../STATUS.md#Q219)) remain |
+| [milestone-5.md](milestone-5.md) | Hardening + 1,000-session load testing + posture audit + packaging | ⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation ([Q15](../STATUS.md#Q15), deferred) |
 
 ## Security
 

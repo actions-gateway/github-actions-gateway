@@ -41,11 +41,14 @@ inherits those and concentrates on what remains.
 
 ## Status at a glance
 
-Last refreshed 2026-05-25. The "security" half of M5 landed inside
+Last refreshed 2026-06-28. The "security" half of M5 landed inside
 [security.md](security.md) workstreams W2/W7/W8 — the GMC already
 stamps PSA labels, provisions per-tenant ResourceQuotas, and ships
-hardened pod specs for AGC + proxy. What remains is packaging,
-load-testing, and the posture audit.
+hardened pod specs for AGC + proxy. Packaging is now **live-validated**
+end-to-end (Q219, §1.5); load-testing (Q13) and the posture audit (Q14)
+already landed. The only remaining M5 items are intentionally deferred
+to a staging cluster: the 1,000-session proxy-HPA-under-burst run and
+gVisor isolation validation ([Q15](../STATUS.md#Q15)).
 
 | Sub-item | Status | Notes |
 |---|---|---|
@@ -54,7 +57,7 @@ load-testing, and the posture audit.
 | Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
 | Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
-| Production Helm chart (`charts/actions-gateway/`) | ⚠️ Partial | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12): GMC core (CRDs, RBAC, webhook, VAP, NetworkPolicies) — `helm lint` + `helm template` + `kubeconform` clean offline, both cert modes. Live `helm install`→working-tenant validation pending (track A, needs creds + kind); polaris posture scan landed (Q14 — §3.2), CI drift check folds into Q66. `cmd/*/config/` kustomize bases stay the dev source-of-truth |
+| Production Helm chart (`charts/actions-gateway/`) | ✅ Done | Chart exists ([q12-helm-chart.md](q12-helm-chart.md), Q12) and is now **live-validated** end-to-end on kind: a digest-pinned secure-default `helm install` + cert-manager produced a working v1alpha1 tenant whose job ran to GitHub-side success (Q219, §1.5). polaris posture scan landed (Q14 — §3.2). `cmd/*/config/` kustomize bases stay the dev source-of-truth |
 | `cmd/agc/test/load/` load harness | ✅ Done | Q13 — in-process listener-core harness (§2); `make load-test-quick`/`load-test-full`, single-use re-registration modelled (Q114) |
 | 1,000 concurrent sessions × 10 tenants — load test | ✅ Done (in-process) | Q13 — 1,000 sustained sessions across 10 tenants pinned in-process (§2.2); real-pod/cross-tenant-network scale stays the staging-cluster item (§2.6) |
 | Proxy HPA verified under burst | ⚠️ Partial | Unit/integration coverage and e2e §7.3 spec for 50-job burst exist; 1,000-session scale not run |
@@ -171,6 +174,55 @@ charts/actions-gateway/
 The kustomize bases under `cmd/*/config/` stay in place as the dev/CI
 source of truth and the scaffolding input for the chart (§1.1); they are
 not published.
+
+### 1.5 Live validation (Q219) — 2026-06-28
+
+The DoD's "produces a working tenant from a single `helm install`" gate was
+proven on a 3-node kind cluster (kindnet, cert-manager) against the real GitHub
+App `actions-gateway-test` (App ID 3752347, installation 135739122) and repo
+`actions-gateway/gateway-test`. This run is distinct from the two prior partial
+proofs: the [M4 §12 run](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)
+needed four manual workarounds (Q114–Q117, since fixed) on an older API, and the
+[GKE rc.4 dogfood](gke-dogfood.md) ran in **dev posture** (floating tags +
+self-signed cert) and **direct egress**. Q219 closes the remaining gap: the
+**production posture** on the **proxied** primary API.
+
+**Install (secure default, no dev opt-outs).** `helm install` of the current chart
+with `gmc`/`agc`/`proxy`/`wrapper` all pinned by **digest** (published `v1.1.0-rc.4`
+images) — no `allowFloatingImageTags` — and `certManager.enabled=true`. cert-manager
+issued `webhook-server-cert`; the GMC rolled out 2/2. The `actions-gateway-crds-v2`
+chart was installed at the matching tag so the GMC's v2 controllers had their kinds.
+
+**Tenant (clean path, zero workarounds).** A namespace marked
+`actions-gateway.github.com/tenant=true`, a `github-app-creds` Secret
+(`appId`/`installationId`/`privateKey`), and a `v1alpha1` `ActionsGateway` carrying
+just `gitHubAppRef` + `gitHubURL` + a `runnerGroups[0]` with `runnerLabels: ["e2e"]`.
+**No `--allow-agc-extra-env`** (Q116 made `gitHubURL` first-class) and **no
+per-tenant `runAsUser`** (Q115 gap-fills it) — confirming both earlier workarounds
+are retired. The gateway reached `Ready=True`, proxy 2/2, AGC 1/1.
+
+**Bug found and fixed (the headline result).** On the proxied secure-default path the
+AGC could fetch its installation token but **failed every runner registration** with
+`proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by
+unknown authority` — so no runner ever came online. Root cause: the AGC's
+registration/provisioner fallback HTTP clients were package-level vars built at
+package-init, **before** `main()` installs the egress-proxy CA into
+`http.DefaultTransport`, so they trusted only the system roots. Fixed by building
+them lazily (`sync.OnceValue`), with an `httpx` regression test and an operator
+[troubleshooting entry](../operations/troubleshooting.md#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy).
+This bug shipped in `v1.1.0-rc.4` and breaks every proxied (v1, or v2-with-EgressProxy)
+install; the dogfood missed it by running direct-egress. **Q219's live install is
+exactly what surfaced it.**
+
+**End-to-end after the fix.** With the patched AGC image the runner registered
+(`ActiveSessions ≥ 1`) and appeared `online` in the repo runner list; a real
+`workflow_dispatch` job acquired a worker pod and concluded **success**
+([run 28350404745](https://github.com/actions-gateway/gateway-test/actions/runs/28350404745)),
+with all worker log/result uploads routed through the proxy at 4/4. The post-job
+agent re-registered (Q114 self-heal), deleting the tenant CR deregistered its
+runners, and `helm uninstall` **retained both CRDs** (`helm.sh/resource-policy:
+keep`). One secondary observation filed separately: the worker pod ends in `Failed`
+phase (runner container exit 100) despite the job succeeding.
 
 ---
 
