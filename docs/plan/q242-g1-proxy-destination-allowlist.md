@@ -57,9 +57,9 @@ real CI dependencies need both: package/module hosts resolve by DNS
 (`proxy.golang.org`), but internal services are often reachable only by **IP with
 no internal DNS**, and cloud private API endpoints resolve into known **CIDR
 ranges** on a private network (e.g. GCP Private Google Access →
-`restricted.googleapis.com` lands in `199.36.153.8/30`). An FQDN-only allowlist
-would force operators to invent DNS or give up; a CIDR-only one can't express a
-moving package host. So:
+`private.googleapis.com` is `199.36.153.8/30`, `restricted.googleapis.com`
+`199.36.153.4/30`). An FQDN-only allowlist would force operators to invent DNS or
+give up; a CIDR-only one can't express a moving package host. So:
 
 ```go
 // DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes this proxy may
@@ -174,6 +174,15 @@ no worker-side change is needed; this only widens what that proxy will carry.
   FQDN form instead.
 - **GitHub stays implicit.** GitHub is always allowed; the lists only add
   destinations, so they can never *remove* GitHub access.
+- **Allowlisting opens the *policy*, not the *route*.** A `destinationCIDRs` entry
+  lifts the egress-policy block; it does not make the destination reachable.
+  The Private-Google-Access VIPs (`199.36.153.x/30`) in particular are **not
+  reachable by default** — they require subnet-level Private Google Access enabled
+  plus Cloud DNS + a route, and they exist for nodes *without* external IPs;
+  GKE nodes that have an external IP reach Google APIs over public IPs instead.
+  So the operator's cluster networking (PGA/DNS/routes) is a prerequisite G.1 does
+  not configure. (Not relevant to the dogfood: its nodes have external IPs and it
+  allowlists only `proxy.golang.org`/`sum.golang.org`, no Google-API access.)
 
 ## Trade-offs (why this needs sign-off)
 
