@@ -19,10 +19,21 @@
 #   - curl, ca-certificates, xz-utils, sudo: the shellcheck job downloads a
 #     pinned shellcheck tarball (.tar.xz) from a GitHub release and `sudo install`s
 #     it; setup-go likewise pulls Go from the actions/go-versions GitHub release.
-# Both downloads are github.com traffic, which the tenant egress NetworkPolicy
-# permits. The vendor-check/tidy-check jobs are NOT unblocked by this image —
-# they re-fetch modules from proxy.golang.org on a cold cache, which the
-# GitHub-only egress allowlist blocks; that needs a GOPROXY/egress follow-up.
+#
+# Egress note (Q246): those downloads are GitHub *release assets*, which
+# 302-redirect from github.com to objects.githubusercontent.com (185.199.108.0/22).
+# That is GitHub-dedicated space, NOT shared Fastly, and the tenant egress
+# NetworkPolicy already permits it — the GMC's IP-range feed merges GitHub
+# /meta's api+actions+web keys, and the `web` range contains 185.199.108.0/22
+# (cmd/gmc/internal/controller/ipranges.go). So the download is allowed; do NOT
+# "fix" a timeout by widening the allowlist or baking the asset in. If a fetch
+# does time out, suspect the cold-start IP-range-cache race (Q61) or node CPU
+# exhaustion (Q247), not a missing allowlist entry.
+#
+# The vendor-check/tidy-check jobs are NOT unblocked by this image — they
+# re-fetch modules from proxy.golang.org on a cold cache, which the GitHub-only
+# egress allowlist blocks; that is handled by the in-cluster Athens Go module
+# proxy (Q244), not here.
 #
 # Pinned to the same runner version + multi-arch index digest as
 # cmd/worker/Dockerfile and cmd/agc/names (RunnerVersion / WorkerImageDigest) so
