@@ -31,11 +31,21 @@ spec:
               value: sync
             - name: ATHENS_LOG_LEVEL
               value: info
-            # Workers verify checksums via Athens; workers set GONOSUMDB=* so they
-            # don't query sum.golang.org directly. Athens itself reaches sum.golang.org
-            # (free egress — no workload NetworkPolicy on this pod).
+            # Workers verify downloaded modules against the committed go.sum; setting
+            # GONOSUMDB=* on the workers skips the remote checksum database. Athens
+            # should not do its own checksum verification (it would reject modules whose
+            # sum.golang.org entry doesn't match proxy.golang.org's current bytes, causing
+            # false 404s for valid modules in go.sum). Integrity is enforced by go.sum.
+            # Athens-level config vars and the equivalent Go env vars (passed to the
+            # go subprocess Athens spawns when fetching modules from upstream).
+            - name: ATHENS_GONOSUMDB
+              value: "*"
             - name: ATHENS_GONOSUMCHECK
-              value: ""
+              value: "*"
+            - name: GONOSUMDB
+              value: "*"
+            - name: GONOSUMCHECK
+              value: "*"
           volumeMounts:
             - name: storage
               mountPath: /var/lib/athens
