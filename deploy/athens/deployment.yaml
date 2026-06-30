@@ -19,7 +19,9 @@ spec:
       # and stays up when spot workers are scaled to zero.
       containers:
         - name: athens
-          image: gomods/athens:v0.15.1
+          # v0.18.0 bundles Go 1.26.2; older tags shipped EOL Go (v0.15.1 had
+          # 1.20.14) that Athens uses to rebuild module zips on direct fetches.
+          image: gomods/athens:v0.18.0
           ports:
             - containerPort: 3000
           env:
@@ -59,8 +61,12 @@ spec:
               mountPath: /var/lib/athens
           resources:
             requests:
-              cpu: "250m"
-              memory: "256Mi"
+              # Kept small so Athens reliably co-schedules with the AGC on the single
+              # system node, whose CPU-request budget is tight during CI worker bursts.
+              # Athens is I/O-bound (serving cached zips from the PVC); the generous
+              # limits still allow bursting for cold-cache `go mod download` fetches.
+              cpu: "100m"
+              memory: "192Mi"
             limits:
               cpu: "1"
               memory: "1Gi"
