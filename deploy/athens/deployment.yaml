@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: athens
+  namespace: gag-dogfood
+  labels:
+    app: athens
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: athens
+  template:
+    metadata:
+      labels:
+        app: athens
+    spec:
+      # No toleration for dedicated=workers, so this lands on the system node pool
+      # and stays up when spot workers are scaled to zero.
+      containers:
+        - name: athens
+          image: gomods/athens:v0.15.1
+          ports:
+            - containerPort: 3000
+          env:
+            - name: ATHENS_STORAGE_TYPE
+              value: disk
+            - name: ATHENS_DISK_STORAGE_ROOT
+              value: /var/lib/athens
+            - name: ATHENS_DOWNLOAD_MODE
+              value: sync
+            - name: ATHENS_LOG_LEVEL
+              value: info
+            # Workers verify checksums via Athens; workers set GONOSUMDB=* so they
+            # don't query sum.golang.org directly. Athens itself reaches sum.golang.org
+            # (free egress — no workload NetworkPolicy on this pod).
+            - name: ATHENS_GONOSUMCHECK
+              value: ""
+          volumeMounts:
+            - name: storage
+              mountPath: /var/lib/athens
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: athens-storage

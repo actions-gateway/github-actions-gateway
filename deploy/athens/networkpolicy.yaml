@@ -1,0 +1,28 @@
+# Allow worker pods to reach Athens on port 3000.
+#
+# The GMC-managed workload NetworkPolicy restricts egress for pods labelled
+# actions-gateway/component=workload to DNS + the egress proxy (or GitHub CIDRs
+# in direct mode). That policy does not allow port 3000. This additive policy
+# opens the one extra rule needed: workload pods → Athens pods on 3000.
+#
+# Athens pods (app=athens) are not labelled actions-gateway/component=workload,
+# so they are not covered by the workload NetworkPolicy and retain free egress
+# to fetch modules from proxy.golang.org and validate against sum.golang.org.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: athens-worker-access
+  namespace: gag-dogfood
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: athens
+      ports:
+        - protocol: TCP
+          port: 3000

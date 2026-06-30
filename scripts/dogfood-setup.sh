@@ -337,6 +337,23 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Part B6b — Athens in-cluster Go module proxy (Q244). Athens caches Go
+# modules so vendor-check/tidy-check can run on GAG runners without external
+# egress to proxy.golang.org. The Athens pod (app=athens) is not labelled
+# actions-gateway/component=workload, so it is not covered by the workload
+# NetworkPolicy and retains free egress to fetch modules. Worker pods reach
+# Athens via an additive NetworkPolicy in deploy/athens/networkpolicy.yaml
+# that opens port 3000 from workload pods to Athens pods. Workers are wired
+# via GOPROXY/GONOSUMDB env vars in the RunnerTemplate (Part B7 below).
+# ---------------------------------------------------------------------------
+
+apply_athens() {
+	echo "Applying Athens in-cluster Go module cache..."
+	kubectl apply -k "${REPO_ROOT}/deploy/athens"
+	echo "  Waiting for Athens to be ready..."
+	kubectl rollout status deployment/athens -n gag-dogfood --timeout=120s
+}
+
 # Part B7 — the v2 tenant objects. The v2 API decomposes the v1 monolithic
 # ActionsGateway into ActionsGateway (gateway + credentials) + RunnerTemplate
 # (worker pod shape) + RunnerSet (runner group). Minimal direct-egress form:
@@ -392,6 +409,16 @@ ${runner_image_field}
           # own make-based CI fails make-command-not-found on it; export
           # DOGFOOD_RUNNER_IMAGE (built by scripts/dogfood-runner-build.sh) to pin
           # a build-capable image above instead (Q239). Injection still applies.
+          env:
+            # Route Go module fetches through Athens (Q244). Workers cannot reach
+            # proxy.golang.org directly (egress NetworkPolicy, GKE DPv2 no FQDN NP).
+            # Athens fetches from upstream on first request and caches to PVC.
+            # GONOSUMDB=* prevents direct sum.golang.org queries from workers;
+            # Athens validates checksums when it fetches from proxy.golang.org.
+            - name: GOPROXY
+              value: "http://athens.gag-dogfood.svc.cluster.local:3000,off"
+            - name: GONOSUMDB
+              value: "*"
           resources:
             requests:
               cpu: "2"
@@ -457,6 +484,7 @@ main() {
 	create_namespace
 	create_secret
 	apply_quota
+	apply_athens
 	apply_cr
 
 	echo ""
@@ -473,6 +501,9 @@ main() {
 	echo "  2. Route CI to GAG:   scripts/dogfood-start.sh"
 	echo "  3. Take it offline:   scripts/dogfood-stop.sh"
 	echo "  4. One-time e2e pool: scripts/dogfood-e2e-setup.sh"
+	echo ""
+	echo "vendor-check and tidy-check are now routed to GAG runners. Athens"
+	echo "pre-warms on first request — expect a slower first run per module."
 }
 
 main "$@"

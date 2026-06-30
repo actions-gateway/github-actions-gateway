@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: athens-storage
+  namespace: gag-dogfood
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 20Gi
+  # GKE default: standard-rwo (Balanced PD, ReadWriteOnce, faster than standard).
+  storageClassName: standard-rwo
