@@ -23,7 +23,7 @@ profile or paste them at the start of each terminal session.
 
 ```bash
 CLUSTER=gag-dogfood
-ZONE=us-central1-a
+ZONE=us-central1-b
 PROJECT=actions-gateway-dogfood   # must be globally unique; append 4 digits if needed
 REPO=actions-gateway/github-actions-gateway
 APP_ID=3752347
@@ -271,6 +271,46 @@ spec:
 EOF
 ```
 
+### B6b. Deploy Athens in-cluster Go module cache
+
+`vendor-check` and `tidy-check` re-fetch Go modules from `proxy.golang.org` on
+a cold cache. GKE Dataplane V2's managed Cilium lacks the `CiliumNetworkPolicy`
+CRD, so the `CiliumFQDN` egress mode is unusable here; a CIDR allowlist for
+Google-fronted hosts like `proxy.golang.org` would be a footgun (it opens all
+of Google's frontend). Athens sidesteps both constraints: it runs in-cluster
+with free egress and serves cached modules to workers over a plain HTTP port
+that does not need a CNI FQDN backend.
+
+Athens is not covered by the workload `NetworkPolicy` (`actions-gateway/component: workload`
+label). Workers reach it via an additive `NetworkPolicy` that opens port 3000
+from workload pods to Athens pods. The Service is named `go-module-proxy`
+(not `athens`) to avoid Kubernetes injecting `ATHENS_PORT=tcp://...` into
+pods in the namespace — Athens misreads that as its listen address.
+
+```bash
+kubectl apply -k deploy/athens
+kubectl rollout status deployment/athens -n gag-dogfood --timeout=120s
+```
+
+Verify Athens is healthy:
+
+```bash
+kubectl get pods -n gag-dogfood -l app=athens
+kubectl logs -n gag-dogfood -l app=athens --tail=20
+```
+
+Athens pre-warms lazily — the first `vendor-check`/`tidy-check` run is slower
+while modules download; subsequent runs are cache hits from the PVC.
+
+> **Why plain HTTP (no TLS)?** Athens serves public Go module zips; there is
+> nothing confidential in transit. Integrity is upheld by the Go toolchain's
+> `go.sum` verification — every module downloaded from Athens is checked against
+> the committed `go.sum` regardless of `GONOSUMDB`, so a tampered response is
+> caught before it reaches the build. Adding TLS would require cert management
+> (cert-manager or a self-signed CA wired into every worker image) for no
+> meaningful security gain in this single-tenant cluster. Revisit if Athens is
+> extended to a shared multi-tenant cluster or used to serve private modules.
+
 ### B7. Create the v2 tenant objects
 
 The v2 API decomposes the v1 monolithic `ActionsGateway` into `ActionsGateway`
@@ -318,6 +358,15 @@ spec:
           # repo's make-based CI fails `make: command not found` on it (see the
           # Known gap below). For green CI, set a build-capable workerImage here;
           # injection still applies on top of any base.
+          env:
+            # Athens in-cluster Go module proxy (Q244). Workers cannot reach
+            # proxy.golang.org directly (egress NetworkPolicy, GKE DPv2 no FQDN NP).
+            # GONOSUMDB=* prevents direct sum.golang.org queries; Athens validates
+            # checksums when it fetches from proxy.golang.org upstream.
+            - name: GOPROXY
+              value: "http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off"
+            - name: GONOSUMDB
+              value: "*"
           resources:
             requests:
               cpu: "2"
@@ -390,25 +439,22 @@ gh api /repos/"$REPO"/actions/runners \
 > which failed `make: command not found` on the bare image, ran green on
 > `dogfood-runner:2.335.1` with the wrapper injected (`make` 4.3, `gcc` 13.3.0).
 >
-> **Residual blocker for `vendor-check` / `tidy-check`.** Those two jobs re-fetch Go
-> modules from `proxy.golang.org` on a cold cache, which the GitHub-only worker
-> egress allowlist blocks — independent of the toolchain. The offline-capable jobs
-> (`lint`, `shellcheck`, `unit-test`, `coverage`) build from `vendor/` and pull
-> Go/shellcheck from GitHub releases, so the image unblocks those.
+> **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
+> Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
+> caches Go modules so workers never need to reach `proxy.golang.org` directly.
+> Athens pods (app=athens) are not covered by the workload NetworkPolicy and have
+> free egress; workers reach Athens via an additive NetworkPolicy (port 3000) and
+> are wired with `GOPROXY=http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off`
+> plus `GONOSUMDB=*` in the RunnerTemplate.
 >
-> **The proxy destination allowlist (Q242 G.1) shipped, but its `CiliumFQDN` mode
-> does NOT work on this cluster.** GKE Dataplane V2's *managed* Cilium does not
+> **Background (for reference):** GKE Dataplane V2's *managed* Cilium does not
 > expose the `cilium.io/v2 CiliumNetworkPolicy` CRD (dropped since GKE
 > 1.21.5-gke.1300), so an `EgressProxy` with `egressPolicyMode: CiliumFQDN` goes
-> `Degraded` (`no matches for kind "CiliumNetworkPolicy"`, verified 2026-06-29 — the
-> fail-closed posture worked, nothing opened). `destinationCIDRs` is no substitute
-> for `proxy.golang.org`/`sum.golang.org` (Google-fronted ⇒ a CIDR allowlist opens
-> all of Google's frontend). Two ways to close this, both on the Queue: (a) an
-> **in-cluster Go module cache** (Athens — the design-recommended path, works on GKE
-> today); (b) a **GKEFQDN backend** emitting `networking.gke.io FQDNNetworkPolicy`
-> (`--enable-fqdn-network-policy`). Detail + the provider matrix:
+> `Degraded` (`no matches for kind "CiliumNetworkPolicy"`, verified 2026-06-29).
+> `destinationCIDRs` is no substitute for `proxy.golang.org`/`sum.golang.org`
+> (Google-fronted ⇒ a CIDR allowlist opens all of Google's frontend). The FQDN
+> intent/mechanism split (Q245) remains open. Detail + provider matrix:
 > [Q242 plan § Provider FQDN-egress fragmentation](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
-> Until one lands, keep `vendor-check`/`tidy-check` on `ubuntu-latest`.
 
 ---
 
