@@ -70,10 +70,11 @@ RUN set -eux; \
     base="shellcheck-${SHELLCHECK_VERSION}"; \
     url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"; \
     curl -fsSL "$url" -o /tmp/sc.tar.xz; \
-    echo "${SHELLCHECK_SHA256}  /tmp/sc.tar.xz" | sha256sum -c -; \
+    printf '%s  /tmp/sc.tar.xz\n' "${SHELLCHECK_SHA256}" > /tmp/sc.sha256; \
+    sha256sum -c /tmp/sc.sha256; \
     tar -xf /tmp/sc.tar.xz -C /tmp; \
     install "/tmp/${base}/shellcheck" /usr/local/bin/shellcheck; \
-    rm -rf /tmp/sc.tar.xz "/tmp/${base}"; \
+    rm -rf /tmp/sc.tar.xz /tmp/sc.sha256 "/tmp/${base}"; \
     shellcheck --version
 # The upstream actions-runner base ends as USER runner (UID 1001); pin it
 # explicitly so the non-root guarantee is local to this Dockerfile and survives
