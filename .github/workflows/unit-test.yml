@@ -156,16 +156,30 @@ jobs:
       - name: install pinned shellcheck
         run: |
           set -euo pipefail
-          base="shellcheck-${SHELLCHECK_VERSION}"
-          url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"
-          for attempt in 1 2 3; do
-            if curl -fsSL "$url" -o "$RUNNER_TEMP/sc.tar.xz"; then break; fi
-            echo "download attempt $attempt failed; retrying" >&2; sleep 5
-          done
-          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/sc.tar.xz" | sha256sum -c -
-          tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
-          sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
-          shellcheck --version
+          # Skip the download when this EXACT pinned version is already present —
+          # the GAG dogfood runner image bakes it (Q246), because the GitHub
+          # release asset 302-redirects to objects.githubusercontent.com, a CDN
+          # off the worker's GitHub-CIDR egress allowlist, so a runtime fetch
+          # times out. The whole-line version match means ubuntu-latest's
+          # (differently versioned) preinstalled shellcheck still triggers the
+          # download + pin, preserving the reproducible-version guarantee.
+          want="${SHELLCHECK_VERSION#v}"
+          if command -v shellcheck >/dev/null 2>&1 \
+              && shellcheck --version 2>/dev/null | grep -qx "version: ${want}"; then
+            echo "shellcheck ${SHELLCHECK_VERSION} already installed; skipping download"
+            shellcheck --version
+          else
+            base="shellcheck-${SHELLCHECK_VERSION}"
+            url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"
+            for attempt in 1 2 3; do
+              if curl -fsSL "$url" -o "$RUNNER_TEMP/sc.tar.xz"; then break; fi
+              echo "download attempt $attempt failed; retrying" >&2; sleep 5
+            done
+            echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/sc.tar.xz" | sha256sum -c -
+            tar -xf "$RUNNER_TEMP/sc.tar.xz" -C "$RUNNER_TEMP"
+            sudo install "$RUNNER_TEMP/${base}/shellcheck" /usr/local/bin/shellcheck
+            shellcheck --version
+          fi
       - name: shellcheck scripts
         run: make shellcheck
       - name: scripts behavioural tests (make scripts-test)

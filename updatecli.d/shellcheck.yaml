@@ -1,9 +1,10 @@
-# Keep the shellcheck version + checksum in .github/workflows/unit-test.yml
-# current. shellcheck publishes no checksum file, so the checksum source hashes
-# the release tarball directly (scripts/updatecli/sha256-of-url.sh). updatecli
-# bumps SHELLCHECK_VERSION and SHELLCHECK_SHA256 together in one PR — the
-# version+checksum pair Dependabot cannot track. Run by
-# .github/workflows/updatecli.yml.
+# Keep the shellcheck version + checksum current in BOTH
+# .github/workflows/unit-test.yml (the CI install step) and
+# scripts/dogfood/runner/Dockerfile (the baked-in copy, Q246). shellcheck
+# publishes no checksum file, so the checksum source hashes the release tarball
+# directly (scripts/updatecli/sha256-of-url.sh). updatecli bumps the version and
+# checksum across both files together in one PR — the version+checksum pair
+# Dependabot cannot track. Run by .github/workflows/updatecli.yml.
 #
 # shellcheck is a lint gate: a new release can add findings, so the bump PR may
 # go red. That is the intended signal — a human adopts the new version (fixing or
@@ -68,4 +69,22 @@ targets:
     spec:
       file: .github/workflows/unit-test.yml
       matchpattern: '(SHELLCHECK_SHA256: )[0-9a-f]{64}'
+      replacepattern: '${1}{{ source "shellcheckChecksum" }}'
+  dockerfileVersion:
+    name: 'SHELLCHECK_VERSION ARG in the dogfood runner Dockerfile'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/dogfood/runner/Dockerfile
+      matchpattern: '(ARG SHELLCHECK_VERSION=)v\d+\.\d+\.\d+'
+      replacepattern: '${1}{{ source "shellcheckVersion" }}'
+  dockerfileChecksum:
+    name: 'SHELLCHECK_SHA256 ARG in the dogfood runner Dockerfile'
+    kind: file
+    disablesourceinput: true
+    scmid: workflow
+    spec:
+      file: scripts/dogfood/runner/Dockerfile
+      matchpattern: '(ARG SHELLCHECK_SHA256=)[0-9a-f]{64}'
       replacepattern: '${1}{{ source "shellcheckChecksum" }}'

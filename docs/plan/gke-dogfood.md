@@ -439,6 +439,20 @@ gh api /repos/"$REPO"/actions/runners \
 > which failed `make: command not found` on the bare image, ran green on
 > `dogfood-runner:2.335.1` with the wrapper injected (`make` 4.3, `gcc` 13.3.0).
 >
+> **Release-asset CDN egress (Q246).** GitHub *release-asset* downloads
+> 302-redirect from `github.com` to `objects.githubusercontent.com`, a
+> Fastly-fronted CDN that is **not** in the tenant's GitHub-CIDR egress
+> allowlist — so a runtime fetch from the worker times out (and a CIDR allowlist
+> for a CDN would be a footgun, the same reason `proxy.golang.org` went to
+> Athens). The fix mirrors the Athens approach: bake the asset in at build time,
+> where the build host has unrestricted egress. The pinned **shellcheck** binary
+> is now baked into the runner image, and the workflow's install step skips the
+> download when that exact version is already present. **Remaining:**
+> `setup-go`'s Go-toolchain download (from the `actions/go-versions` release)
+> hits the same CDN; baking it in (the runner's hosted-tool-cache) is the
+> follow-up that closes the offline jobs' last egress dependency. Both tracked on
+> Q246.
+>
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
 > Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.

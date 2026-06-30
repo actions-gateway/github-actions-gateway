@@ -16,13 +16,24 @@
 # `exit 127: make: command not found`. This image adds just enough to run the
 # offline-capable migrated jobs (lint, shellcheck, unit-test, coverage):
 #   - build-essential: make + a C toolchain (the -race unit suite needs cgo/gcc)
-#   - curl, ca-certificates, xz-utils, sudo: the shellcheck job downloads a
-#     pinned shellcheck tarball (.tar.xz) from a GitHub release and `sudo install`s
-#     it; setup-go likewise pulls Go from the actions/go-versions GitHub release.
-# Both downloads are github.com traffic, which the tenant egress NetworkPolicy
-# permits. The vendor-check/tidy-check jobs are NOT unblocked by this image —
-# they re-fetch modules from proxy.golang.org on a cold cache, which the
-# GitHub-only egress allowlist blocks; that needs a GOPROXY/egress follow-up.
+#   - curl, ca-certificates, xz-utils: fetch + unpack the pinned shellcheck
+#     tarball at BUILD time (see the bake-in step below)
+#   - sudo: retained for parity with the GitHub-hosted runner; the shellcheck
+#     job uses it only on its download fallback path
+#
+# Egress caveat (Q246): GitHub *release-asset* downloads 302-redirect from
+# github.com to objects.githubusercontent.com — a Fastly-fronted CDN that is NOT
+# in the tenant's GitHub-CIDR egress allowlist, so a runtime download from the
+# worker times out. (An earlier version of this comment wrongly assumed the
+# download was permitted github.com traffic.) The fix is to bake release assets
+# in at build time, where the build host has unrestricted egress: the pinned
+# shellcheck binary is baked below, and the workflow's install step skips the
+# download when this exact version is already present. setup-go's Go-toolchain
+# download (from the actions/go-versions release) hits the same CDN and is the
+# remaining offline-job egress dependency — tracked on Q246.
+#
+# The vendor-check/tidy-check jobs are unblocked separately by the in-cluster
+# Athens Go module proxy (Q244), not by this image.
 #
 # Pinned to the same runner version + multi-arch index digest as
 # cmd/worker/Dockerfile and cmd/agc/names (RunnerVersion / WorkerImageDigest) so
@@ -45,6 +56,25 @@ RUN apt-get update \
         sudo \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
+# Bake the pinned shellcheck (Q246). Downloading it at runtime on the worker
+# fails: the GitHub release asset 302-redirects to objects.githubusercontent.com,
+# off the tenant's GitHub-CIDR egress allowlist (see the Egress caveat above).
+# Baking it here — on a build host with unrestricted egress — removes that
+# runtime dependency; the workflow's install step skips the download when this
+# exact version is already present. Keep ARG version+checksum in lockstep with
+# SHELLCHECK_VERSION / SHELLCHECK_SHA256 in .github/workflows/unit-test.yml —
+# updatecli bumps all four together (updatecli.d/shellcheck.yaml).
+ARG SHELLCHECK_VERSION=v0.11.0
+ARG SHELLCHECK_SHA256=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+RUN set -eux; \
+    base="shellcheck-${SHELLCHECK_VERSION}"; \
+    url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/${base}.linux.x86_64.tar.xz"; \
+    curl -fsSL "$url" -o /tmp/sc.tar.xz; \
+    echo "${SHELLCHECK_SHA256}  /tmp/sc.tar.xz" | sha256sum -c -; \
+    tar -xf /tmp/sc.tar.xz -C /tmp; \
+    install "/tmp/${base}/shellcheck" /usr/local/bin/shellcheck; \
+    rm -rf /tmp/sc.tar.xz "/tmp/${base}"; \
+    shellcheck --version
 # The upstream actions-runner base ends as USER runner (UID 1001); pin it
 # explicitly so the non-root guarantee is local to this Dockerfile and survives
 # a base-image change.
