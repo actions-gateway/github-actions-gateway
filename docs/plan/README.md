@@ -60,6 +60,7 @@ markers per item.
 | Plan | Scope | Status |
 |---|---|---|
 | [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — pending workflow changes |
+| [dogfood-runner-rightsizing.md](dogfood-runner-rightsizing.md) | Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e) | ❌ Open — measurement pending |
 
 ## Cross-cutting
 
