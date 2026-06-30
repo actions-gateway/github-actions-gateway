@@ -31,21 +31,29 @@ spec:
               value: sync
             - name: ATHENS_LOG_LEVEL
               value: info
-            # Workers verify downloaded modules against the committed go.sum; setting
-            # GONOSUMDB=* on the workers skips the remote checksum database. Athens
-            # should not do its own checksum verification (it would reject modules whose
-            # sum.golang.org entry doesn't match proxy.golang.org's current bytes, causing
-            # false 404s for valid modules in go.sum). Integrity is enforced by go.sum.
-            # Athens-level config vars and the equivalent Go env vars (passed to the
-            # go subprocess Athens spawns when fetching modules from upstream).
-            - name: ATHENS_GONOSUMDB
-              value: "*"
+            # Fetch upstream modules through proxy.golang.org, not direct-from-VCS.
+            # This overrides Athens' built-in default (GoBinaryEnvVars =
+            # ["GOPROXY=direct"]), which forces its internal `go` subprocess to clone
+            # each module from its origin and rebuild the zip locally. Athens' bundled
+            # (older) Go computes a different module hash than the notarized one for
+            # modules declaring a newer go directive (e.g. ginkgo/v2@v2.32.0, go 1.25),
+            # so its own checksum check rejects the rebuild as a mismatch. The public
+            # proxy instead serves the immutable, notarized zip whose hash matches
+            # sum.golang.org and our committed go.sum — the check passes. The proxy is
+            # also faster (pre-built zips over a CDN) and more available (one upstream
+            # vs. every module's origin host). A plain container-level GOPROXY env var
+            # does NOT work — Athens overrides it for the subprocess via this config.
+            # No ",direct" fallback: the env-var form of this TOML array splits on
+            # commas, and every dependency we use is public and mirrored by the proxy.
+            - name: ATHENS_GO_BINARY_ENV_VARS
+              value: GOPROXY=https://proxy.golang.org
+            # Athens verifies fetched modules against sum.golang.org — it has free
+            # egress (no workload NetworkPolicy on this pod). Empty GONOSUMCHECK means
+            # "verify every module"; integrity is enforced end-to-end. Workers, which
+            # have no egress to sum.golang.org, instead set GONOSUMDB=* and rely on the
+            # committed go.sum.
             - name: ATHENS_GONOSUMCHECK
-              value: "*"
-            - name: GONOSUMDB
-              value: "*"
-            - name: GONOSUMCHECK
-              value: "*"
+              value: ""
           volumeMounts:
             - name: storage
               mountPath: /var/lib/athens
