@@ -300,6 +300,15 @@ kubectl logs -n gag-dogfood -l app=athens --tail=20
 Athens pre-warms lazily — the first `vendor-check`/`tidy-check` run is slower
 while modules download; subsequent runs are cache hits from the PVC.
 
+> **Why plain HTTP (no TLS)?** Athens serves public Go module zips; there is
+> nothing confidential in transit. Integrity is upheld by the Go toolchain's
+> `go.sum` verification — every module downloaded from Athens is checked against
+> the committed `go.sum` regardless of `GONOSUMDB`, so a tampered response is
+> caught before it reaches the build. Adding TLS would require cert management
+> (cert-manager or a self-signed CA wired into every worker image) for no
+> meaningful security gain in this single-tenant cluster. Revisit if Athens is
+> extended to a shared multi-tenant cluster or used to serve private modules.
+
 ### B7. Create the v2 tenant objects
 
 The v2 API decomposes the v1 monolithic `ActionsGateway` into `ActionsGateway`

@@ -8,6 +8,15 @@
 # Athens pods (app=athens) are not labelled actions-gateway/component=workload,
 # so they are not covered by the workload NetworkPolicy and retain free egress
 # to fetch modules from proxy.golang.org and validate against sum.golang.org.
+#
+# Plain HTTP (no TLS) is intentional here. Athens serves public Go module zips;
+# confidentiality is not a concern. Integrity is upheld by the Go toolchain's
+# go.sum verification — every downloaded module is checked against the committed
+# go.sum regardless of GONOSUMDB — so a tampered response would be caught before
+# it ever reaches the build. Adding TLS would require cert management (cert-manager
+# or a self-signed CA wired into every worker) for no meaningful security gain in
+# this single-tenant dogfood cluster. Revisit if Athens is extended to a shared
+# multi-tenant cluster or used to serve private modules.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
