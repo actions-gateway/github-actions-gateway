@@ -726,8 +726,21 @@ this proxy.
 
 | Mode | Requires | If the CNI cannot enforce it |
 | --- | --- | --- |
-| `CiliumFQDN` | Cilium with DNS-aware policy (`toFQDNs`), and the `CiliumNetworkPolicy` CRD installed | The GMC's apply fails loudly and the `EgressProxy` goes `Degraded`. GitHub egress stays **denied** (the standard NetworkPolicy default-denies it), never silently opened. |
+| `CiliumFQDN` | A **self-managed** Cilium with DNS-aware policy (`toFQDNs`) **and the `cilium.io/v2 CiliumNetworkPolicy` CRD installed** | The GMC's apply fails loudly and the `EgressProxy` goes `Degraded`. GitHub egress stays **denied** (the standard NetworkPolicy default-denies it), never silently opened. |
 | `CalicoFQDN` | Calico with DNS-based policy enabled, and the `projectcalico.org/v3` `NetworkPolicy` CRD installed | As above — fail-closed. |
+
+> **Managed "Cilium" platforms usually do NOT support `CiliumFQDN`.** The CRD test is
+> literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
+> **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE
+> 1.21.5-gke.1300) — `CiliumFQDN` there goes `Degraded` (verified 2026-06-29).
+> Managed platforms ship their own FQDN mechanism that GAG does **not yet** emit
+> (GKE `FQDNNetworkPolicy`; AKS `CiliumClusterwideNetworkPolicy` via Advanced
+> Container Networking Services; EKS DNS-based `ClusterNetworkPolicy` on Auto Mode;
+> OpenShift OVN `EgressFirewall` `dnsName`). On those clusters, prefer an
+> **in-cluster caching mirror** (see § Worker egress destinations — the recommended
+> path for remote dependencies regardless) or set `managedNetworkPolicy: false` and
+> layer your own CNI policy. Per-provider backend support is tracked in the
+> [Q242 plan](../plan/q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
 
 **Secure-by-default guarantee.** Selecting an FQDN mode can never weaken egress: the
 standard NetworkPolicy still default-denies GitHub egress, so if the CNI-native policy

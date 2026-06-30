@@ -346,12 +346,28 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
    NetworkPolicy carries the CIDRs, admission **rejects an off-allowlist entry**
    and a host-suffix-without-FQDN-mode, empty allowlist denies all non-GitHub).
-7. **Dogfood application (closes Q224):** set the GMC
-   `--allowed-egress-fqdns` to `proxy.golang.org,sum.golang.org`, attach an
-   `EgressProxy` with `egressPolicyMode: CiliumFQDN` (GKE Dataplane V2 is Cilium)
-   and `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set the gateway's
-   `defaultProxyRef`, and confirm `vendor-check` / `tidy-check` go green on
-   `gag-ci`.
+7. **Dogfood application (closes Q224) — BLOCKED on GKE, see below.** The plan was:
+   set the GMC `--allowed-egress-fqdns` to `proxy.golang.org,sum.golang.org`, attach
+   an `EgressProxy` with `egressPolicyMode: CiliumFQDN` and
+   `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set `defaultProxyRef`, and
+   confirm `vendor-check` / `tidy-check` go green on `gag-ci`.
+
+   **Turn-on attempted 2026-06-29 and blocked — the "GKE Dataplane V2 is Cilium ⇒
+   CiliumFQDN works" assumption is wrong (verified live).** GKE Dataplane V2's
+   *managed* Cilium does **not** expose the `cilium.io/v2 CiliumNetworkPolicy` CRD
+   (dropped since GKE 1.21.5-gke.1300); the EgressProxy went `Degraded` with
+   `no matches for kind "CiliumNetworkPolicy"` — the fail-closed posture worked
+   exactly as designed (egress stayed denied, nothing opened). `destinationCIDRs` is
+   no substitute for `proxy.golang.org`/`sum.golang.org` (Google-fronted ⇒ a CIDR
+   allowlist would open all of Google's frontend — the footgun the design forbids).
+   GKE's own FQDN egress is `networking.gke.io/v1alpha1 FQDNNetworkPolicy` (enable via
+   `--enable-fqdn-network-policy`), a different kind GAG does not yet emit. See the
+   [provider FQDN-egress fragmentation](#provider-fqdn-egress-fragmentation-post-implementation-finding)
+   section. Two ways to close Q224, both tracked on the Queue: (a) an **in-cluster Go
+   module cache** (Athens) — works on GKE today, the design-recommended path; (b) a
+   **GKEFQDN backend** for GAG. The dev images built for the attempt
+   (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:e2e-322446b`) carry all merged
+   Q242 work; the cluster is scaled to 0 and `GAG_RUNNER` was left `ubuntu-latest`.
 
 ## Open questions for sign-off
 
@@ -399,3 +415,45 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
 `make check` (gofmt + lint + unit, incl. the new proxy + builder unit tests) +
 the GMC envtest integration suite (env propagation, FQDN-policy emission,
 admission rejection). Final end-to-end proof on the GKE dogfood per deliverable 6.
+
+## Provider FQDN-egress fragmentation (post-implementation finding)
+
+The dogfood turn-on (deliverable 7) surfaced that `egressPolicyMode`'s FQDN
+variants encode a **CNI-native object kind**, and that kind is fragmented per CNI
+*and per managed platform* — a managed offering branded "Cilium" does not
+necessarily accept the upstream `CiliumNetworkPolicy` CRD. Researched 2026-06-29:
+
+| Environment | In-cluster FQDN-egress mechanism | API kind | Enable | Scope |
+|---|---|---|---|---|
+| Self-managed Cilium | toFQDNs | `cilium.io/v2` `CiliumNetworkPolicy` | install Cilium | namespaced (GAG emits this — `CiliumFQDN`) |
+| Self-managed Calico (DNS policy) | destination domains | `projectcalico.org/v3` `NetworkPolicy` | enable DNS policy | namespaced (GAG emits this — `CalicoFQDN`) |
+| **GKE Dataplane V2** | FQDNNetworkPolicy | `networking.gke.io/v1alpha1` `FQDNNetworkPolicy` | `--enable-fqdn-network-policy` | namespaced (alpha); **no `CiliumNetworkPolicy` CRD** |
+| AKS (Azure CNI Powered by Cilium) | FQDN filtering | `cilium.io/v2` `CiliumClusterwideNetworkPolicy` | Advanced Container Networking Services + k8s ≥1.29 | **cluster-wide**; partial wildcard |
+| EKS (VPC CNI, GA Dec 2025) | DNS-based network policy | EKS `ClusterNetworkPolicy` | VPC CNI ≥1.21.1 + EKS Auto Mode + k8s ≥1.29 | **cluster-wide**; new |
+| OpenShift (OVN-Kubernetes) | EgressFirewall `dnsName` (+ `DNSNameResolver`) | `k8s.ovn.org` `EgressFirewall` | built-in | namespaced; 30-min TTL TOCTOU |
+
+Three consequences:
+
+1. **The per-CNI enum doesn't scale.** Adding GKE means a 4th `egressPolicyMode`
+   value, AKS a 5th, etc. The enum conflates *intent* ("allow by FQDN") with
+   *mechanism* ("emit kind X") and is tenant-facing — a tenant should not have to
+   know the cluster's CNI. The space also moves fast (EKS shipped Dec 2025; GKE is
+   still `v1alpha1`).
+2. **Scope divergence breaks the per-namespace model.** AKS-FQDN
+   (`CiliumClusterwideNetworkPolicy`) and EKS (`ClusterNetworkPolicy`) are
+   **cluster-scoped**, which the GMC's namespaced per-`EgressProxy` ownership cannot
+   express directly — those backends need the GMC to own/merge a cluster-scoped
+   object (a different ownership/GC model). This is fine for the security model
+   (the allowlist is platform-governed anyway), but it changes who owns the object.
+3. **Proposed API split (decide before adding a 4th backend).** Collapse the
+   tenant-facing field to `egressPolicyMode: CIDR | FQDN` (intent only), and add a
+   platform-set GMC flag `--fqdn-policy-backend=cilium|calico|gke|none` (same
+   governance shape as `--allowed-egress-fqdns`). Adding a provider becomes a new
+   emitter + flag value — no tenant-facing enum churn, no CEL changes, and an
+   unsupported/`none` backend is an explicit fail-closed answer rather than a
+   `Degraded` surprise. The existing `CiliumFQDN`/`CalicoFQDN` values would be
+   deprecated/aliased into `FQDN` + the backend flag during the v2beta1 graduation
+   (Q74), where conversion machinery already lands. Tracked on the Queue:
+   - the FQDN intent/mechanism API split (this proposal);
+   - a `gke` backend emitting `networking.gke.io/v1alpha1 FQDNNetworkPolicy`;
+   - the in-cluster Go-module cache (Athens) to close Q224 without waiting on either.

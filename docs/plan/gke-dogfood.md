@@ -394,9 +394,21 @@ gh api /repos/"$REPO"/actions/runners \
 > modules from `proxy.golang.org` on a cold cache, which the GitHub-only worker
 > egress allowlist blocks — independent of the toolchain. The offline-capable jobs
 > (`lint`, `shellcheck`, `unit-test`, `coverage`) build from `vendor/` and pull
-> Go/shellcheck from GitHub releases, so the image unblocks those. Fetching modules
-> the attribution-preserving way needs the proxy destination allowlist (G.1) — see
-> the Queue. Until then, keep `vendor-check`/`tidy-check` on `ubuntu-latest`.
+> Go/shellcheck from GitHub releases, so the image unblocks those.
+>
+> **The proxy destination allowlist (Q242 G.1) shipped, but its `CiliumFQDN` mode
+> does NOT work on this cluster.** GKE Dataplane V2's *managed* Cilium does not
+> expose the `cilium.io/v2 CiliumNetworkPolicy` CRD (dropped since GKE
+> 1.21.5-gke.1300), so an `EgressProxy` with `egressPolicyMode: CiliumFQDN` goes
+> `Degraded` (`no matches for kind "CiliumNetworkPolicy"`, verified 2026-06-29 — the
+> fail-closed posture worked, nothing opened). `destinationCIDRs` is no substitute
+> for `proxy.golang.org`/`sum.golang.org` (Google-fronted ⇒ a CIDR allowlist opens
+> all of Google's frontend). Two ways to close this, both on the Queue: (a) an
+> **in-cluster Go module cache** (Athens — the design-recommended path, works on GKE
+> today); (b) a **GKEFQDN backend** emitting `networking.gke.io FQDNNetworkPolicy`
+> (`--enable-fqdn-network-policy`). Detail + the provider matrix:
+> [Q242 plan § Provider FQDN-egress fragmentation](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
+> Until one lands, keep `vendor-check`/`tidy-check` on `ubuntu-latest`.
 
 ---
 
