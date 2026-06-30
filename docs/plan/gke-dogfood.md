@@ -23,12 +23,18 @@ profile or paste them at the start of each terminal session.
 
 ```bash
 CLUSTER=gag-dogfood
-ZONE=us-central1-b
+ZONE=us-east1-b                   # moved from us-central1-b 2026-06-30 (region-wide e2-standard-2 stockout)
 PROJECT=actions-gateway-dogfood   # must be globally unique; append 4 digits if needed
 REPO=actions-gateway/github-actions-gateway
 APP_ID=3752347
 INSTALLATION_ID=135739122         # actions-gateway org install (re-derive via Part C1)
 ```
+
+> **Zone choice:** `ZONE` moved from `us-central1-b` to `us-east1-b` on
+> 2026-06-30 after `us-central1` went region-wide `ZONE_RESOURCE_POOL_EXHAUSTED`
+> for `e2-standard-2`. GCP exposes no capacity API — there is no way to query a
+> zone's free capacity ahead of time, so pick a zone empirically: if cluster or
+> node-pool creation fails with a stockout error, try another zone/region.
 
 ---
 
@@ -541,7 +547,9 @@ gcloud container clusters resize "$CLUSTER" \
 
 # 2. Wait for GMC and AGC pods to be ready
 kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout=5m
-kubectl wait --for=condition=Ready pod -l app=agc -n gag-dogfood --timeout=3m
+kubectl wait --for=condition=Ready pod \
+  -l app.kubernetes.io/name=actions-gateway-controller,app.kubernetes.io/instance=dogfood \
+  -n gag-dogfood --timeout=3m
 
 # 3. Route CI jobs to GAG
 gh variable set GAG_RUNNER \

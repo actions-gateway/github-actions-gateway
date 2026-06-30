@@ -5,7 +5,7 @@
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
-#   ZONE      GCP zone (e.g. us-central1-b)
+#   ZONE      GCP zone (e.g. us-east1-b)
 #   REPO      GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 set -euo pipefail
 
@@ -40,7 +40,8 @@ main() {
 
 	echo "Waiting for AGC pod..."
 	kubectl wait --for=condition=Ready pod \
-		-l app=agc -n gag-dogfood --timeout=3m
+		-l app.kubernetes.io/name=actions-gateway-controller,app.kubernetes.io/instance=dogfood \
+		-n gag-dogfood --timeout=3m
 
 	echo "Routing CI jobs to GAG..."
 	gh variable set GAG_RUNNER \
