@@ -45,10 +45,11 @@ spec:
             # also faster (pre-built zips over a CDN) and more available (one upstream
             # vs. every module's origin host). A plain container-level GOPROXY env var
             # does NOT work — Athens overrides it for the subprocess via this config.
-            # No ",direct" fallback: the env-var form of this TOML array splits on
-            # commas, and every dependency we use is public and mirrored by the proxy.
+            # The ",direct" fallback still resolves any module proxy.golang.org does
+            # not mirror; Athens splits this var on ";", so the comma stays inside the
+            # GOPROXY value (matching Go's own default GOPROXY).
             - name: ATHENS_GO_BINARY_ENV_VARS
-              value: GOPROXY=https://proxy.golang.org
+              value: GOPROXY=https://proxy.golang.org,direct
             # Athens verifies fetched modules against sum.golang.org — it has free
             # egress (no workload NetworkPolicy on this pod). Empty GONOSUMCHECK means
             # "verify every module"; integrity is enforced end-to-end. Workers, which
