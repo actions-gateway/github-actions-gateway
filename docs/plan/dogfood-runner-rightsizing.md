@@ -139,9 +139,45 @@ The chosen sequence is **functional validation first, security hardening later**
 
 Setup for step 1 (no nested virt): a dedicated `e2-standard-8` spot e2e pool
 (taint `dedicated=e2e`, autoscale 0→2); a `gag-dogfood-e2e` namespace labelled
-`security-profile=privileged`; a v2 `ActionsGateway` + `RunnerTemplate` (runner +
-a `privileged: true` `docker:dind` sidecar, `DOCKER_HOST=tcp://localhost:2375`) +
-`RunnerSet` (`gag-ci-e2e`); and `e2e-reusable.yml` wired to `GAG_E2E_RUNNER`.
+`security-profile=privileged`; a v2 `ActionsGateway` + a cluster-scoped
+`ClusterRunnerTemplate` (runner + a `privileged: true` `docker:dind` sidecar,
+`DOCKER_HOST=tcp://localhost:2375`) + `RunnerSet` (`gag-ci-e2e`); and
+`e2e-reusable.yml` wired to `GAG_E2E_RUNNER`.
+
+### Validation findings (2026-06-30)
+
+- **Privileged DinD works on GKE COS cgroup v2.** The DinD daemon came up clean
+  (`storage-driver=overlay2`, daemon initialized, listening on `:2375`) — the main
+  unknown is cleared. GAG *can* host DinD e2e without Kata.
+- **v2 routes privileged through a platform-owned `ClusterRunnerTemplate`, gated
+  four ways.** A namespaced (tenant) `RunnerTemplate` rejects privileged
+  containers; the shape must be a cluster-scoped `ClusterRunnerTemplate`. The
+  namespace needs `tenant=managed`, `security-profile=privileged`, the
+  `allow-profile-downgrade=allowed` annotation, **and** the platform
+  `privileged-profile=allowed` label — none tenant-settable (secure-by-default
+  working as intended).
+- **e2e needs broad non-GitHub egress.** The job pulls from `get.helm.sh`
+  (`setup-helm`), Docker Hub (curl/vault/buildkit), `quay.io` (Calico), and
+  `registry.k8s.io` (metrics-server) — all blocked by GAG's default-deny +
+  GitHub-only workload `NetworkPolicy`, and **v2 has no managed-NP opt-out**.
+
+### Egress: interim workaround + deferred hardening
+
+- **Interim (accepted):** an **additive allow-all-egress `NetworkPolicy`** on the
+  `gag-dogfood-e2e` workload pods (unions with GAG's managed default-deny to open
+  egress). This is a **deliberate, documented property of the DinD variant**
+  (trusted CI only) — **never** for untrusted PRs (that's the Kata variant's job).
+- **Collecting the allowlist:** the e2e job's external destinations are gathered
+  (from the job + `dockerd` logs; the deps are also pinned in `e2e-reusable.yml`)
+  to seed a future precise allowlist.
+- **Durable hardening (deferred, backlog):** the destinations are CDN-fronted
+  (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a
+  precise **FQDN** allowlist can't be *enforced* on GKE Dataplane V2 today — its
+  managed Cilium has no `CiliumNetworkPolicy`, and GKE's `FQDNNetworkPolicy` is
+  alpha and GAG doesn't emit it ([Q245](../STATUS.md#Q245)). The durable answer is
+  an **in-cluster pull-through mirror** (collapses e2e egress to one in-cluster
+  destination — air-gappable, no CDN rot), pairing with the Kata variant for
+  untrusted jobs.
 
 ## Phase 1 results — general workers (2026-06-30, first pass)
 
