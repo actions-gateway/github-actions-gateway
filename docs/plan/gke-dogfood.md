@@ -23,7 +23,7 @@ profile or paste them at the start of each terminal session.
 
 ```bash
 CLUSTER=gag-dogfood
-ZONE=us-central1-a
+ZONE=us-central1-b
 PROJECT=actions-gateway-dogfood   # must be globally unique; append 4 digits if needed
 REPO=actions-gateway/github-actions-gateway
 APP_ID=3752347
@@ -283,7 +283,9 @@ that does not need a CNI FQDN backend.
 
 Athens is not covered by the workload `NetworkPolicy` (`actions-gateway/component: workload`
 label). Workers reach it via an additive `NetworkPolicy` that opens port 3000
-from workload pods to Athens pods.
+from workload pods to Athens pods. The Service is named `go-module-proxy`
+(not `athens`) to avoid Kubernetes injecting `ATHENS_PORT=tcp://...` into
+pods in the namespace — Athens misreads that as its listen address.
 
 ```bash
 kubectl apply -k deploy/athens
@@ -362,7 +364,7 @@ spec:
             # GONOSUMDB=* prevents direct sum.golang.org queries; Athens validates
             # checksums when it fetches from proxy.golang.org upstream.
             - name: GOPROXY
-              value: "http://athens.gag-dogfood.svc.cluster.local:3000,off"
+              value: "http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off"
             - name: GONOSUMDB
               value: "*"
           resources:
@@ -442,7 +444,7 @@ gh api /repos/"$REPO"/actions/runners \
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.
 > Athens pods (app=athens) are not covered by the workload NetworkPolicy and have
 > free egress; workers reach Athens via an additive NetworkPolicy (port 3000) and
-> are wired with `GOPROXY=http://athens.gag-dogfood.svc.cluster.local:3000,off`
+> are wired with `GOPROXY=http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off`
 > plus `GONOSUMDB=*` in the RunnerTemplate.
 >
 > **Background (for reference):** GKE Dataplane V2's *managed* Cilium does not

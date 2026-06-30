@@ -1,7 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: athens
+  # Named go-module-proxy, not athens: a service named "athens" causes Kubernetes
+  # to inject ATHENS_PORT=tcp://clusterip:3000 into pods in the namespace, which
+  # Athens reads as its own listen address and fails with "too many colons".
+  name: go-module-proxy
   namespace: gag-dogfood
 spec:
   selector:
