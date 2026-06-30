@@ -439,6 +439,20 @@ gh api /repos/"$REPO"/actions/runners \
 > which failed `make: command not found` on the bare image, ran green on
 > `dogfood-runner:2.335.1` with the wrapper injected (`make` 4.3, `gcc` 13.3.0).
 >
+> **Release-asset egress is already allowlisted (Q246 — misdiagnosis).** GitHub
+> *release-asset* downloads (the `shellcheck` tarball, `setup-go`'s Go toolchain)
+> 302-redirect from `github.com` to `objects.githubusercontent.com` →
+> `185.199.108.0/22`. That is GitHub-dedicated space (not shared Fastly), and the
+> worker egress `NetworkPolicy` **already permits it**: the GMC IP-range feed
+> merges GitHub `/meta`'s `api`+`actions`+`web` keys, and the `web` range
+> contains `185.199.108.0/22`
+> ([`ipranges.go`](../../cmd/gmc/internal/controller/ipranges.go)). So Q246's
+> original "workers can't reach the CDN, add it to the egress allowlist" premise
+> is wrong — do **not** widen the allowlist or bake the asset into the runner
+> image. A download that times out is far more likely the cold-start
+> IP-range-cache race (Q61) or the node CPU exhaustion that Q247 says co-occurred;
+> confirm which on a live run before acting on Q246.
+>
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
 > Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.
