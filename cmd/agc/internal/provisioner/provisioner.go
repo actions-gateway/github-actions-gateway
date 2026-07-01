@@ -116,8 +116,8 @@ const (
 	// Aligned with the Actions Runner Controller (ARC) gha-runner-scale-set chart,
 	// which defaults to ghcr.io/actions/actions-runner. Tenants copy-pasting from
 	// ARC examples see the same image name. Operators override at AGC startup via
-	// --worker-image (env: WORKER_IMAGE); the per-RunnerGroup workerImage field
-	// overrides further.
+	// the WORKER_IMAGE environment variable (set by the GMC on the AGC Deployment);
+	// the per-RunnerGroup workerImage field overrides further.
 	//
 	// Sourced from names.DefaultWorkerImage (built from names.RunnerVersion) so the
 	// runner version stays locked to the agent.version the AGC registers and to the
@@ -991,7 +991,7 @@ func ceilingCheck(spec *ResolvedSpec, activePods int32) (priorityClass string, h
 }
 
 // resolveWorkerImage returns the worker image used for a provision: the
-// per-RunnerGroup override, else the AGC --worker-image flag, else the
+// per-RunnerGroup override, else the WORKER_IMAGE environment variable, else the
 // digest-pinned built-in default. Shared by buildPod and the version-label
 // computation so both agree on which image (hence which runner version) a pod runs.
 func (p *Provisioner) resolveWorkerImage(spec *ResolvedSpec) string {
