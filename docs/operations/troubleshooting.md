@@ -1024,6 +1024,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 - Network connectivity issues between the AGC and GitHub (via proxy).
 - GitHub API is temporarily unavailable.
 - The runner job lock window expired before the renewer could refresh (AGC was slow or restarting).
+- **AGC versions before the Q247 fix** renewed with the wrong job identifier (the broker envelope's `MessageID` instead of the job's `RunnerRequestID`), so *every* renewal returned an error and **no** lock was ever refreshed. The tell is a *sustained, non-transient* error rate that tracks the acquired-job rate — every job that outlives GitHub's lock window (roughly one renewal interval) is then recycled and redelivered to a sibling session, so you also see duplicate worker pods for one job and completed jobs that fail with `conclusion: failure`, no failed step, no logs, and a `TaskOrchestrationJobNotFoundException` at `CompleteJobAsync`. Long jobs expose it; sub-window jobs finish before the lock lapses.
 
 **Diagnostics.**
 
@@ -1039,11 +1040,12 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy
 ```
 
 **Resolution.**
+- **Sustained errors on every job (the Q247 signature above): upgrade** to a gateway version with the Q247 fix, which renews by `RunnerRequestID`. On affected versions no renewal succeeds, so there is no interim mitigation short of the upgrade — jobs longer than the lock window keep failing.
 - Transient GitHub API errors: the renewer retries; monitor until the rate returns to zero.
 - Proxy pool unhealthy: fix the proxy pool (see [Proxy Pool Not Scaling](#proxy-pool-not-scaling)).
 - If the AGC restarted mid-job: jobs whose lock expired will have been cancelled by GitHub. These require manual re-run. Check `actions_gateway_eviction_retries_exhausted_total` for any jobs that were also evicted.
 
-Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single transient error on a long-running job is rarely fatal.
+Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single *transient* error on a long-running job is rarely fatal; a *sustained* error on every job is the Q247 signature above, not a transient blip.
 
 ---
 
