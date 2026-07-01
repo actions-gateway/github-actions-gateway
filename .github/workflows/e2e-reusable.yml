@@ -109,14 +109,14 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.work
 
       # The e2e suite deploys the GMC via `helm upgrade --install` of
       # charts/actions-gateway (Q142 — Helm is the sole install path), so helm
       # must be on PATH. Pinned via the same action manifest-validate.yml uses.
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
       - name: Install kind ${{ env.KIND_VERSION }}
         # Pinned release binary + checksum instead of `go install ...@latest`:
@@ -160,7 +160,7 @@ jobs:
         # run, which is both slow and a flake source under Hub rate limits.
         # Keyed on the digest-pinned image so a kind bump invalidates it.
         id: kind-node-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/kind-node-image
           key: kind-node-${{ env.KIND_NODE_IMAGE }}
@@ -193,7 +193,7 @@ jobs:
         # Avoids even the single runner-side Docker Hub pull on warm runs.
         # Keyed on the pinned upstream tag so a curl bump invalidates it.
         id: curl-image-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/curl-image
           key: curl-image-${{ env.E2E_CURL_UPSTREAM }}
@@ -225,7 +225,7 @@ jobs:
         # The workload-identity e2e's in-cluster test Vault. Keyed on the pinned
         # upstream tag so a Vault bump invalidates it.
         id: vault-image-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/vault-image
           key: vault-image-${{ env.E2E_VAULT_UPSTREAM }}
@@ -253,7 +253,7 @@ jobs:
         # Calico-only. Keyed on CALICO_VERSION so a Calico bump invalidates it.
         if: inputs.kind_cni == 'calico'
         id: calico-image-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/calico-images
           key: calico-images-${{ env.CALICO_VERSION }}
@@ -280,7 +280,7 @@ jobs:
         # CERTMANAGER_VERSION so a bump invalidates it. The cached dir holds the
         # image tar and the image list, so a hit needs no manifest fetch.
         id: cert-manager-image-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/cert-manager-images
           key: cert-manager-images-${{ env.CERTMANAGER_VERSION }}
@@ -305,7 +305,7 @@ jobs:
         # The cached dir holds the image tar and the image list, so a hit needs
         # no manifest fetch.
         id: metrics-server-image-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/metrics-server-images
           key: metrics-server-images-${{ env.METRICSSERVER_VERSION }}
