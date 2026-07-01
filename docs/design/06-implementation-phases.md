@@ -62,7 +62,7 @@ See [docs/plan/milestone-4.md](../plan/milestone-4.md) for the implementation pl
 
 See [docs/plan/milestone-5.md](../plan/milestone-5.md) for the implementation plan and current status.
 
-* **Deliverable:** Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, per-tenant ResourceQuotas, optional gVisor `RuntimeClass` configuration (see [Appendix B](appendix-b-worker-isolation.md)), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under `test/load/` that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running.
+* **Deliverable:** Production Helm chart or Kustomize overlays with locked-down Pod Security Standards, optional gVisor `RuntimeClass` configuration (see [Appendix B](appendix-b-worker-isolation.md)), hardened proxy pod specs (read-only root filesystem, no capabilities), and a multi-tenant load harness under `test/load/` that simulates multiple tenants in parallel against a staging cluster with the full GMC+AGC stack running. (The per-tenant namespace `ResourceQuota` is provisioned out-of-band by the platform admin — the GAG chart does not ship it; the GMC operates within it but never creates or mutates it. See Q130.)
 * **Success Criteria:** 1,000 concurrent virtual runner sessions across 10 simulated tenants sustain a burst load with zero dropped messages, no cross-tenant resource visibility, and no deadlocked Go channels. The proxy HPA scales up under load and returns to `minReplicas` within 5 minutes of load subsiding. A `kube-bench` or `polaris` scan returns no critical findings.
 
 ---
