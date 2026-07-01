@@ -46,6 +46,11 @@ jobs:
               - 'go.work'
               - 'go.work.sum'
               - 'scripts/**'
+              # Dogfood/GKE tooling is never exercised by the kind e2e job (it
+              # provisions the GAG-hosted DinD runner, a separate deploy target),
+              # so a change there must not trigger this job. dorny/paths-filter
+              # evaluates '!' negations in order after the includes above.
+              - '!scripts/dogfood/**'
               - 'Makefile'
               - 'docker-bake.hcl'
               - '.github/workflows/e2e-test.yml'

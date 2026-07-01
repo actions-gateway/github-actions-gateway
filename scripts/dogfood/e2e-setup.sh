@@ -246,7 +246,7 @@ main() {
 	echo "  2. Set the default (off) variable:"
 	echo "       gh variable set GAG_E2E_RUNNER --body '\"ubuntu-latest\"' --repo ${REPO}"
 	echo "  3. Commit and push the workflow change."
-	echo "  4. When ready to enable e2e on GAG: scripts/dogfood-e2e-start.sh"
+	echo "  4. When ready to enable e2e on GAG: scripts/dogfood/e2e-start.sh"
 }
 
 main "$@"

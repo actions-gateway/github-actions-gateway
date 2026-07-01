@@ -44,7 +44,7 @@ GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.5}"
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC
 # then skips its DefaultWorkerImage gap-fill but still injects the Q235 wrapper.
-# Build + push one with scripts/dogfood-runner-build.sh. Empty (the default)
+# Build + push one with scripts/dogfood/runner-build.sh. Empty (the default)
 # keeps the bare upstream actions-runner, on which this repo's make-based CI
 # fails make-command-not-found.
 DOGFOOD_RUNNER_IMAGE="${DOGFOOD_RUNNER_IMAGE:-}"
@@ -407,7 +407,7 @@ ${runner_image_field}
           # worker wrapper (WRAPPER_IMAGE) so that unmodified upstream image runs
           # jobs. The bare upstream image has no build toolchain, so this repo's
           # own make-based CI fails make-command-not-found on it; export
-          # DOGFOOD_RUNNER_IMAGE (built by scripts/dogfood-runner-build.sh) to pin
+          # DOGFOOD_RUNNER_IMAGE (built by scripts/dogfood/runner-build.sh) to pin
           # a build-capable image above instead (Q239). Injection still applies.
           env:
             # Route Go module fetches through Athens (Q244). Workers cannot reach
@@ -498,9 +498,9 @@ main() {
 	echo ""
 	echo "Next steps:"
 	echo "  1. Land the Part C2 workflow changes (runs-on -> vars.GAG_RUNNER)."
-	echo "  2. Route CI to GAG:   scripts/dogfood-start.sh"
-	echo "  3. Take it offline:   scripts/dogfood-stop.sh"
-	echo "  4. One-time e2e pool: scripts/dogfood-e2e-setup.sh"
+	echo "  2. Route CI to GAG:   scripts/dogfood/start.sh"
+	echo "  3. Take it offline:   scripts/dogfood/stop.sh"
+	echo "  4. One-time e2e pool: scripts/dogfood/e2e-setup.sh"
 	echo ""
 	echo "vendor-check and tidy-check are now routed to GAG runners. Athens"
 	echo "pre-warms on first request — expect a slower first run per module."

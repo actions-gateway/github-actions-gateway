@@ -9,13 +9,13 @@
 # See scripts/dogfood/runner/Dockerfile and docs/plan/gke-dogfood.md.
 #
 # Pushes to ghcr.io/actions-gateway/dogfood-runner. Set it as the dogfood
-# RunnerTemplate's workerImage (scripts/dogfood-setup.sh wires this when
+# RunnerTemplate's workerImage (scripts/dogfood/setup.sh wires this when
 # DOGFOOD_RUNNER_IMAGE is exported). Single-arch linux/amd64 — the dogfood
 # workers pool is e2-standard-4 (amd64).
 #
 # Usage:
-#   scripts/dogfood-runner-build.sh                 # build + push :<runner-version>
-#   IMAGE_TAG=test scripts/dogfood-runner-build.sh  # override the tag
+#   scripts/dogfood/runner-build.sh                 # build + push :<runner-version>
+#   IMAGE_TAG=test scripts/dogfood/runner-build.sh  # override the tag
 #
 # Requires: docker (with buildx), gh (authenticated; supplies the GHCR token).
 set -euo pipefail
@@ -62,7 +62,7 @@ main() {
 	docker buildx imagetools inspect "${ref}" --format '{{json .Manifest.Digest}}'
 	echo
 	echo "Set it as the dogfood worker image and re-apply the tenant objects:"
-	echo "  DOGFOOD_RUNNER_IMAGE=${ref} scripts/dogfood-setup.sh"
+	echo "  DOGFOOD_RUNNER_IMAGE=${ref} scripts/dogfood/setup.sh"
 }
 
 main "$@"
