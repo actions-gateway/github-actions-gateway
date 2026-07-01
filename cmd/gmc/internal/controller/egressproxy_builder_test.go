@@ -18,6 +18,7 @@ package controller
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -209,4 +210,76 @@ func TestBuildEgressProxyCertSecret(t *testing.T) {
 	assert.Equal(t, []byte("cert"), sec.Data[corev1.TLSCertKey])
 	assert.Equal(t, []byte("key"), sec.Data[corev1.TLSPrivateKeyKey])
 	assert.Equal(t, "shared", sec.Labels[egressProxyComponentLabel])
+}
+
+// TestProxyHostSuffix_StripsWildcardPrefix asserts the FQDN-policy wildcard
+// convention ("*.example.com") is normalized to the bare parent domain the
+// proxy's CONNECT suffix matcher expects, while a plain hostname is unchanged.
+func TestProxyHostSuffix_StripsWildcardPrefix(t *testing.T) {
+	assert.Equal(t, "actions.githubusercontent.com", proxyHostSuffix("*.actions.githubusercontent.com"))
+	assert.Equal(t, "github.com", proxyHostSuffix("github.com"))
+}
+
+// TestProxyAllowlistEnv_NilWhenNoExtras locks in that the CONNECT allowlist env
+// (Q242 G.1) is opt-in: an EgressProxy with no destinationFQDNs/destinationCIDRs
+// must produce no env vars at all, keeping existing proxies byte-for-byte
+// unchanged.
+func TestProxyAllowlistEnv_NilWhenNoExtras(t *testing.T) {
+	ep := newEP("shared", "team-a", nil)
+	assert.Nil(t, proxyAllowlistEnv(ep))
+}
+
+// TestProxyAllowlistEnv_FQDNsOnly asserts that opting in via destinationFQDNs
+// alone produces PROXY_ALLOWED_HOST_SUFFIXES carrying the implicit GitHub host
+// suffixes (wildcards normalized) plus the operator's extra FQDNs, and no
+// PROXY_ALLOWED_CIDRS (no destinationCIDRs supplied).
+func TestProxyAllowlistEnv_FQDNsOnly(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
+	})
+	env := proxyAllowlistEnv(ep)
+	require.Len(t, env, 1)
+	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
+
+	suffixes := strings.Split(env[0].Value, ",")
+	assert.Contains(t, suffixes, "api.github.com")
+	assert.Contains(t, suffixes, "github.com")
+	assert.Contains(t, suffixes, "codeload.github.com")
+	assert.Contains(t, suffixes, "objects.githubusercontent.com")
+	// Wildcard GitHub entries must be normalized (leading "*." stripped).
+	assert.Contains(t, suffixes, "actions.githubusercontent.com")
+	assert.Contains(t, suffixes, "blob.core.windows.net")
+	assert.NotContains(t, suffixes, "*.actions.githubusercontent.com")
+	// Operator's extra FQDN is appended verbatim.
+	assert.Contains(t, suffixes, "npm.pkg.example.com")
+}
+
+// TestProxyAllowlistEnv_CIDRsAddSecondEnvVar asserts that supplying
+// destinationCIDRs adds PROXY_ALLOWED_CIDRS alongside the host-suffix env,
+// carrying exactly the operator's CIDRs (never the GitHub CIDR set).
+func TestProxyAllowlistEnv_CIDRsAddSecondEnvVar(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
+		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8", "192.168.1.0/24"}
+	})
+	env := proxyAllowlistEnv(ep)
+	require.Len(t, env, 2)
+	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
+	assert.Equal(t, "PROXY_ALLOWED_CIDRS", env[1].Name)
+	assert.Equal(t, "10.0.0.0/8,192.168.1.0/24", env[1].Value)
+}
+
+// TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes asserts that opting in
+// via destinationCIDRs alone still emits the GitHub host-suffix allowlist (the
+// implicit GitHub set is unconditional whenever the env is emitted at all).
+func TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8"}
+	})
+	env := proxyAllowlistEnv(ep)
+	require.Len(t, env, 2)
+	assert.Equal(t, "PROXY_ALLOWED_HOST_SUFFIXES", env[0].Name)
+	assert.Contains(t, env[0].Value, "github.com")
+	assert.Equal(t, "PROXY_ALLOWED_CIDRS", env[1].Name)
+	assert.Equal(t, "10.0.0.0/8", env[1].Value)
 }

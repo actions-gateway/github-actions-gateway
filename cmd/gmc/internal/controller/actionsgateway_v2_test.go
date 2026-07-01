@@ -29,6 +29,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -629,6 +630,53 @@ func TestGenerateMetricsCertsV2_ParsesAndCoversAGCService(t *testing.T) {
 	// CA + both leaves are present.
 	assert.NotEmpty(t, b.caPEM)
 	assert.NotEmpty(t, b.clientCertPEM)
+}
+
+// TestAGCResources_NilOverrideReturnsDefaults asserts that a v2 ActionsGateway
+// with no spec.agcResources override reproduces the platform default AGC
+// container resources unchanged.
+func TestAGCResources_NilOverrideReturnsDefaults(t *testing.T) {
+	res := agcResources(nil)
+	assert.Equal(t, resource.MustParse("500m"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("2Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("2"), res.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("4Gi"), res.Limits[corev1.ResourceMemory])
+}
+
+// TestAGCResources_PartialOverrideMergesPerKey asserts the override is merged
+// key-by-key over the defaults (mirroring proxyResources' semantics): a tenant
+// that only overrides one knob keeps the platform default for every other key.
+func TestAGCResources_PartialOverrideMergesPerKey(t *testing.T) {
+	override := &corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
+	}
+	res := agcResources(override)
+	// Overridden key applied.
+	assert.Equal(t, resource.MustParse("8Gi"), res.Limits[corev1.ResourceMemory])
+	// Every other key keeps the default.
+	assert.Equal(t, resource.MustParse("500m"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("2Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("2"), res.Limits[corev1.ResourceCPU])
+}
+
+// TestAGCResources_FullOverrideWins asserts an override that sets every key
+// fully replaces the defaults.
+func TestAGCResources_FullOverrideWins(t *testing.T) {
+	override := &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		},
+	}
+	res := agcResources(override)
+	assert.Equal(t, resource.MustParse("1"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("1Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("4"), res.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("8Gi"), res.Limits[corev1.ResourceMemory])
 }
 
 // --- helpers ---
