@@ -68,6 +68,7 @@ markers per item.
 |---|---|---|
 | [docs.md](docs.md) | Documentation roadmap across phases | ✅ Done — all Phase 1/2/3 items shipped except alerting.md, deferred as [Q18](../STATUS.md#Q18) |
 | [docs-six-layer-audit.md](docs-six-layer-audit.md) | Six-layer consistency audit of `docs/` (terminology, cross-refs, nav, reuse) | ✅ Done — all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision |
+| [q237-docs-quality-audit.md](q237-docs-quality-audit.md) | Six-goal quality audit of the published docset: 57 ranked findings (36 goal-1 docs-vs-code drift, 17 high) with remediation batches | ✅ Done — audit complete (Q237); fixes filed as follow-on Queue items |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only |
 | [k8s-best-practices.md](k8s-best-practices.md) | Project-wide Kubernetes best-practices audit (RBAC, pod security, controller correctness, CRD polish, manifests, observability, supply chain) | ✅ Done — fixes shipped (was STATUS Queue Q30–Q36, all completed); kept active (still referenced by Q74's graduation work) |
 | [worker-sidecar-reap-warning.md](worker-sidecar-reap-warning.md) | Non-blocking warning + status condition + metric when a worker template has a regular (non-native) sidecar that can block pod reaping; name-list opt-out; steer to native sidecars (no reaper) | ❌ Open — [Q249](../STATUS.md#Q249) |
