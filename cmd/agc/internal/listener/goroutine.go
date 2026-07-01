@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -619,7 +618,15 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	if renewInterval == 0 {
 		renewInterval = 60 * time.Second
 	}
-	jobID := strconv.FormatInt(msg.MessageID, 10)
+	// RenewJob's jobId is the job's RunnerRequestID — the same value AcquireJob
+	// sends as jobMessageId — NOT the broker envelope's numeric MessageID. Sending
+	// the MessageID renews a job the run service does not recognize, so the lock is
+	// never actually renewed: on any job that outlives GitHub's lock TTL the job is
+	// recycled and redelivered to a sibling session (a duplicate worker pod), while
+	// this worker runs to completion and then orphans at CompleteJobAsync with
+	// TaskOrchestrationJobNotFoundException (Q247). Short jobs finish before the TTL
+	// lapses, which is why only long jobs (e.g. e2e) exposed it.
+	jobID := jobBody.RunnerRequestID
 	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
 		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval)
 	// Cancel the renew loop and wait for it to exit before returning, so the
