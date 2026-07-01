@@ -183,4 +183,4 @@ For the runner side, `gh run list --repo <org>/<repo>` and `gh run view <id> --j
 
 ## Cleanup
 
-`make e2e-clean` deletes the cluster and the local registry. The `.build/` directory persists across sessions; remove it if you suspect stale tool binaries.
+`make e2e-clean` deletes the cluster and the local registry, and also removes `.build/`. Other targets leave `.build/` in place, so it otherwise persists across sessions — remove it manually (`rm -rf .build`) if you suspect stale tool binaries and aren't running the full `make e2e-clean`.

@@ -40,7 +40,7 @@ differs by design:
 |---|---|---|---|
 | **Worker — `baseline`** *(default)* | AGC | tenant | Ephemeral, per-job, run-to-completion |
 | **Worker — `restricted`** | AGC | tenant | As above, hardened tenant opt-in |
-| **Worker — `privileged`** | AGC | tenant | As above, escape-hatch tenant opt-in (DinD, host caps) |
+| **Worker — `privileged`** | AGC | tenant | As above, escape-hatch tenant opt-in (Docker-in-Docker (DinD), host caps) |
 | **Egress proxy** | GMC | tenant | Long-running per-tenant `Deployment` |
 | **AGC (v1alpha1)** | GMC | tenant | Long-running per-tenant control plane |
 | **AGC (v2alpha1)** | GMC | tenant | As above; adds resource defaults |
@@ -187,7 +187,7 @@ workloads.
 
 If you already run a strict cluster baseline (e.g. the Kyverno
 `require-ro-rootfs` / `disallow-capabilities-strict` policies, or a Gatekeeper
-PSP-style constraint), apply the matching exception so GAG pods are not caught:
+PodSecurityPolicy (PSP)-style constraint), apply the matching exception so GAG pods are not caught:
 
 ```bash
 # Kyverno PolicyException — requires Kyverno's PolicyExceptions feature enabled.

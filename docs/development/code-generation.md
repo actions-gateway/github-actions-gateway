@@ -4,7 +4,7 @@
 
 Whenever you modify CRD types (`api/` for the shared v2 kinds, `cmd/agc/api/` or `cmd/gmc/api/` for the v1 kinds), run the corresponding targets. Also run `make manifests` whenever you add or remove RBAC verbs/resources in a controller.
 
-The v2 (`actions-gateway.com`) `v2alpha1` kinds live in the neutral `api/` module shared by both controllers (Q164); the v1 (`actions-gateway.github.com`) kinds stay split across `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`. `make -C <module> generate` is per-module, so editing a v2 type means regenerating the `api/` module, not the controller modules. The root `make generate` runs all three (`api`, `gmc`, `agc`) in order.
+The v2 (`actions-gateway.com`) `v2alpha1` kinds live in the neutral `api/` module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (`actions-gateway.github.com`) kinds stay split across `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`. `make -C <module> generate` is per-module, so editing a v2 type means regenerating the `api/` module, not the controller modules. The root `make generate` runs all three (`api`, `gmc`, `agc`) in order.
 
 ## API module (the shared v2 kinds)
 

@@ -530,7 +530,7 @@ Triage the report against this operator's needs:
   satisfies the workload half: the chart ships GMC NetworkPolicies
   (`networkPolicy.enabled=true`) and the GMC stamps Pod Security Admission
   labels per tenant `securityProfile`. Confirm the cluster has a
-  NetworkPolicy-enforcing CNI (Calico/Cilium; kindnet does **not** enforce) and
+  NetworkPolicy-enforcing Container Network Interface (CNI) (Calico/Cilium; kindnet does **not** enforce) and
   the `PodSecurity` admission plugin enabled, or those controls are inert. To
   prove enforcement on a live cluster, run the negative probes in
   [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) —
