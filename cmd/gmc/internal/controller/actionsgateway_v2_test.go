@@ -667,3 +667,80 @@ func findApiserverEgressRule(np *networkingv1.NetworkPolicy) *networkingv1.Netwo
 	}
 	return nil
 }
+
+// TestActionsGatewayV2Reconcile_PreservesEgressWhenCacheEmpty is the Q246/Q61
+// regression: a reconcile that runs before the IP-range cache has completed its first
+// api.github.com/meta fetch (an empty snapshot — the state at GMC startup) must not
+// blank an already-programmed direct-egress GitHub allowlist. Before the fix the
+// per-CR reconcile rebuilt the workload/AGC NetworkPolicies from the empty cache and
+// stripped every GitHub CIDR, default-denying worker and AGC egress to GitHub until
+// IPRangeReconciler repatched — the live-observed "release-asset download times out"
+// symptom.
+func TestActionsGatewayV2Reconcile_PreservesEgressWhenCacheEmpty(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+	ag := v2Gateway("gw", "team-a", "github-app", "") // no defaultProxyRef ⇒ direct
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ns, secret, ag).WithStatusSubresource(ag).Build()
+
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	cache := &IPRangeCache{}
+	cache.Set([]net.IPNet{*cidr})
+
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", IPCache: cache}
+	ctx := context.Background()
+
+	// Steady state: cache populated ⇒ NPs carry the GitHub allowlist.
+	reconcileV2Gateway(t, r, "team-a", "gw")
+	var anp, wnp networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
+	require.True(t, hasGitHubCIDREgress(&anp, "140.82.112.0/20"), "precondition: AGC NP programmed")
+	require.True(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"), "precondition: workload NP programmed")
+
+	// Simulate a GMC restart: the in-memory cache starts empty until the first fetch.
+	cache.Set(nil)
+	reconcileV2Gateway(t, r, "team-a", "gw")
+
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
+	assert.True(t, hasGitHubCIDREgress(&anp, "140.82.112.0/20"),
+		"empty cache must not blank the already-programmed AGC GitHub allowlist (Q246/Q61)")
+	assert.True(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"),
+		"empty cache must not blank the already-programmed workload GitHub allowlist (Q246/Q61)")
+	// The apiserver egress rule is unrelated to the cache and stays either way.
+	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
+}
+
+// TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache asserts the other
+// half of the Q246/Q61 contract: a first-ever reconcile with an empty cache still
+// creates the direct-egress NetworkPolicies, fail-closed (no GitHub rule). That is
+// safe — no worker pod exists that early — and secure-by-default (egress is never
+// opened); IPRangeReconciler patches the GitHub rule in once its first fetch lands.
+func TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+	ag := v2Gateway("gw", "team-a", "github-app", "") // direct
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ns, secret, ag).WithStatusSubresource(ag).Build()
+
+	cache := &IPRangeCache{} // never fetched ⇒ empty snapshot
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", IPCache: cache}
+	ctx := context.Background()
+
+	reconcileV2Gateway(t, r, "team-a", "gw")
+
+	var anp, wnp networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp),
+		"AGC NP is created even before the cache is ready")
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp),
+		"workload NP is created even before the cache is ready")
+	assert.False(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"), "fresh install: no GitHub rule yet (fail-closed)")
+	// Egress is restricted, not open: workers still reach DNS and the apiserver rule
+	// remains on the AGC NP; the GitHub allowlist simply arrives on the IPRange patch.
+	assert.True(t, hasDNSEgress(&wnp), "workload NP still permits DNS")
+	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
+}

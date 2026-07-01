@@ -636,11 +636,17 @@ kubectl get actionsgateway <gateway-name> -n <namespace> -o jsonpath='{range .sp
 
 **Likely cause.** The IP Range Reconciler's initial `api.github.com/meta` fetch failed or stalled at GMC startup. The cached ranges seed each proxy `NetworkPolicy`'s `ipBlock` allowlist; until the first fetch lands, the allowlist is empty. The reconciler retries the initial fetch on a capped exponential backoff (1s→30s), so a transient outage normally self-heals within seconds — but a sustained inability to reach `api.github.com` from the GMC pod (egress firewall, DNS, or a long GitHub outage) leaves the allowlist empty until connectivity returns.
 
+For **direct-egress** gateways (no `defaultProxyRef`) the same GitHub allowlist lives on the `<gateway>-workload` and `<gateway>-agc` policies instead of a proxy policy, so the empty-allowlist symptom applies to worker and AGC egress there. A gateway that has already been programmed **keeps** its allowlist across a GMC restart: the per-gateway reconcile preserves an existing direct-egress policy's rules while the cache is still warming, rather than rebuilding it from the empty cache (which would have blanked the allowlist for the seconds until the first fetch lands — a window that widened under node CPU pressure and caused release-asset downloads to time out right after a restart). Only a **first-ever** provision with a not-yet-populated cache shows the empty allowlist, and it self-heals on the first fetch.
+
 **Diagnostics.**
 
 ```sh
-# Inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
+# Proxied gateway: inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
 kubectl get networkpolicy -n <namespace> actions-gateway-proxy \
+  -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
+
+# Direct-egress gateway: check the workload (and AGC) policy instead.
+kubectl get networkpolicy -n <namespace> <gateway>-workload \
   -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
 
 # Look for retry warnings in the GMC log.
@@ -649,7 +655,7 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager \
 ```
 
 **Resolution.**
-- Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing proxy `NetworkPolicy`.
+- Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing `NetworkPolicy`.
 - If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set `spec.proxy.managedNetworkPolicy: false` so the reconciler leaves the policy alone.
 
 ---

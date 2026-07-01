@@ -458,9 +458,32 @@ gh api /repos/"$REPO"/actions/runners \
 > ([`ipranges.go`](../../cmd/gmc/internal/controller/ipranges.go)). So Q246's
 > original "workers can't reach the CDN, add it to the egress allowlist" premise
 > is wrong — do **not** widen the allowlist or bake the asset into the runner
-> image. A download that times out is far more likely the cold-start
-> IP-range-cache race (Q61) or the node CPU exhaustion that Q247 says co-occurred;
-> confirm which on a live run before acting on Q246.
+> image.
+>
+> **Q246 root cause — the Q61 cold-start cache race (confirmed live, fixed).** A
+> cold live run on `gag-dogfood` (`2026-07-01`, direct-egress gateway) settled it —
+> full evidence in
+> [`archive/q246-release-asset-timeout-live-diagnosis.md`](archive/q246-release-asset-timeout-live-diagnosis.md).
+> Four live observations: (1) a workload-labelled pod downloads the shellcheck
+> release asset over the 302→`objects.githubusercontent.com`→`185.199.108.133` hop
+> in **0.32 s (HTTP 200)** when the NP is programmed — egress is not the problem;
+> (2) scaling the system pool 0→1 forced a fresh GMC and the `dogfood-workload` NP
+> **dropped from 7337 CIDRs to 1 for ~25 s** — the per-CR reconcile
+> (`ActionsGatewayV2Reconciler.applyNetworkPolicy`, a `CreateOrPatch` that
+> overwrites `Spec.Egress` wholesale) rebuilt the policy from the still-empty
+> IP-range cache before `IPRangeReconciler`'s first `/meta` fetch landed and
+> repatched; (3) with the GitHub rule absent the identical download **times out
+> (`curl` rc=28)** — the exact Q246 symptom — and returns to HTTP 200 once
+> restored; (4) a *warm* GMC restart did **not** blank (the fetch won the race), so
+> the window's width scales with GMC-startup + fetch latency, which the Q247 node
+> CPU exhaustion lengthens (and can re-trigger by restarting GMC mid-run). So the
+> cause is **(a) the Q61 race**; **(b) Q247 CPU is only an amplifier** (already
+> fixed; node right-sizing is Q248). Egress succeeds regardless of CPU whenever the
+> NP carries the rule. **Fix:** the per-CR reconcile now **preserves an existing
+> direct-egress NP's allowlist while the cache is empty** instead of blanking it (a
+> not-yet-created NP stays fail-closed) — so no GMC restart, under any load, strips
+> a live worker's or the AGC's GitHub egress. Secure-by-default preserved (egress
+> is never widened). Regression tests in `actionsgateway_v2_test.go`.
 >
 > **Q247 root cause — RenewJob used the wrong jobId (fixed).** Every job routed
 > to a GAG runner failed at the *job-lifecycle* level: the worker ran the full
