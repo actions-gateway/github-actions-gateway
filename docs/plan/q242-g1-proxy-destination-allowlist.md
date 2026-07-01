@@ -2,8 +2,11 @@
 
 > **Status: APPROVED — v2beta1 blocker [Q242](../STATUS.md). Deliverables 1–6
 > shipped (#460 CRD fields, #461 proxy CONNECT check, #462 GMC injection, #463
-> platform allowlist + admission webhook, and the design/operator docs); only
-> deliverable 7 (the GKE dogfood turn-on that closes Q224) remains.** This
+> platform allowlist + admission webhook, and the design/operator docs).
+> Deliverable 7 (the GKE dogfood turn-on that closes Q224) was performed 2026-07-01:
+> every CI job runs green on `gag-ci` individually and Q246/Q247 hold, but the
+> *concurrent* full CI matrix is blocked by an AGC agent-pool recycling issue under
+> burst load (Q259), so Q242 and Q224 stay open. See deliverable 7 below.** This
 > promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:
@@ -346,28 +349,48 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    normalization) + GMC envtest (env propagation, FQDN policy carries the hosts,
    NetworkPolicy carries the CIDRs, admission **rejects an off-allowlist entry**
    and a host-suffix-without-FQDN-mode, empty allowlist denies all non-GitHub).
-7. **Dogfood application (closes Q224) — BLOCKED on GKE, see below.** The plan was:
-   set the GMC `--allowed-egress-fqdns` to `proxy.golang.org,sum.golang.org`, attach
-   an `EgressProxy` with `egressPolicyMode: CiliumFQDN` and
-   `destinationFQDNs: [proxy.golang.org, sum.golang.org]`, set `defaultProxyRef`, and
-   confirm `vendor-check` / `tidy-check` go green on `gag-ci`.
-
-   **Turn-on attempted 2026-06-29 and blocked — the "GKE Dataplane V2 is Cilium ⇒
-   CiliumFQDN works" assumption is wrong (verified live).** GKE Dataplane V2's
+7. **Dogfood application (closes Q224) — turn-up performed 2026-07-01; concurrent
+   green still blocked (Q259).** CiliumFQDN was correctly avoided: GKE Dataplane V2's
    *managed* Cilium does **not** expose the `cilium.io/v2 CiliumNetworkPolicy` CRD
-   (dropped since GKE 1.21.5-gke.1300); the EgressProxy went `Degraded` with
-   `no matches for kind "CiliumNetworkPolicy"` — the fail-closed posture worked
-   exactly as designed (egress stayed denied, nothing opened). `destinationCIDRs` is
-   no substitute for `proxy.golang.org`/`sum.golang.org` (Google-fronted ⇒ a CIDR
-   allowlist would open all of Google's frontend — the footgun the design forbids).
-   GKE's own FQDN egress is `networking.gke.io/v1alpha1 FQDNNetworkPolicy` (enable via
-   `--enable-fqdn-network-policy`), a different kind GAG does not yet emit. See the
-   [provider FQDN-egress fragmentation](#provider-fqdn-egress-fragmentation-post-implementation-finding)
-   section. Two ways to close Q224, both tracked on the Queue: (a) an **in-cluster Go
-   module cache** (Athens) — works on GKE today, the design-recommended path; (b) a
-   **GKEFQDN backend** for GAG. The dev images built for the attempt
-   (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:e2e-322446b`) carry all merged
-   Q242 work; the cluster is scaled to 0 and `GAG_RUNNER` was left `ubuntu-latest`.
+   (dropped since GKE 1.21.5-gke.1300; verified 2026-06-29 — an EgressProxy with
+   `egressPolicyMode: CiliumFQDN` went `Degraded`/fail-closed), and `destinationCIDRs`
+   is no substitute for `proxy.golang.org`/`sum.golang.org` (Google-fronted ⇒ a CIDR
+   allowlist would open all of Google's frontend). So the dogfood runs **direct egress +
+   the in-cluster Athens Go-module cache (Q244)** — the design-recommended mirror-first
+   path, which works on GKE today. The Q242 allowlist is therefore a **designed no-op**
+   on this direct-egress dogfood; the merged Q242 code (CRD `destinationFQDNs`/
+   `destinationCIDRs`, GMC injection, validating webhook) is nonetheless in place on the
+   rc.6 control plane (`ghcr.io/actions-gateway/{gmc,agc}:v1.1.0-rc.6`). The GKEFQDN
+   enforcement backend stays a separate item ([Q245](#provider-fqdn-egress-fragmentation-post-implementation-finding)).
+
+   **Validated 2026-07-01 (`gag-dogfood`, direct egress, rc.6 GMC/AGC):**
+   - Every migrated CI job — `vendor-check`, `tidy-check`, `unit-test` (`-race`),
+     `coverage`, `integration-test`, plus `lint`/`shellcheck` — runs **green on
+     `gag-ci`** when given a worker (verified per-job via single-job reruns).
+   - **Q246 holds:** the `dogfood-workload` NetworkPolicy carried the full GitHub
+     allowlist (**7340** CIDR egress peers) throughout, never blanked; no release-asset
+     download timeout (shellcheck's release tarball → `objects.githubusercontent.com`
+     and setup-go's toolchain both fetched successfully).
+   - **Q247 holds for jobs that run:** `integration-test` (~12 min, the longest job)
+     renewed its lock and completed green; the RunnerSet recovered to baseline after
+     every disruption with no orphaned worker pods.
+
+   **Still blocked — the *concurrent* full matrix (Q259).** Bursting the whole CI
+   matrix onto `gag-ci` at once does **not** go green, even with ample node capacity
+   (confirmed: after lowering worker CPU requests 2→1 and pre-scaling the `workers`
+   pool, nodes sat at 35%/9% CPU with zero Pending pods). Under the burst the AGC
+   agent-pool cannot recycle consumed runners (GitHub `422 "Runner … is currently
+   running a job and cannot be deleted"`), so online listeners are not replenished,
+   GitHub dispatches ~1 job at a time, and the queued jobs hit GitHub's ~15-min
+   unstarted-job timeout (cancelled) while a stuck job's token is invalidated
+   (`RenewJob 401 "Not authorized for this job"` → 600s death). This is an **AGC
+   concurrency / agent-pool recycling issue under burst load** (Q247/Q249/Q254 family),
+   tracked as **Q259** — **not** node capacity (Q248) and **not** a Q242/Q246 defect.
+   Evidence: run 28513106734 (unit-test.yml), run 28510907609 (integration-test.yml);
+   full diagnosis in the [GKE dogfood runbook](gke-dogfood.md). Until Q259 is fixed,
+   Q224's "route production CI green" is not met, so **Q224 and this deliverable stay
+   open**. First run also hit a one-off **spot-VM preemption** (transient) — the
+   `workers` pool is spot.
 
 ## Open questions for sign-off
 

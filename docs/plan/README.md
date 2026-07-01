@@ -60,7 +60,7 @@ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — pending workflow changes |
+| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — turn-up done 2026-07-01 (every CI job green per-job on `gag-ci`, Q246/Q247 hold); concurrent CI matrix blocked on [Q259](../STATUS.md#Q259) |
 | [dogfood-runner-rightsizing.md](dogfood-runner-rightsizing.md) | Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e) | ❌ Open — measurement pending |
 
 ## Cross-cutting

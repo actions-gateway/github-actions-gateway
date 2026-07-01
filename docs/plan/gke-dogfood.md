@@ -434,6 +434,31 @@ gh api /repos/"$REPO"/actions/runners \
 > `RenewJob` calls so a hung renewal can't wedge the loop). rc.6 also carries the
 > Q242 G.1 egress destination allowlist, a no-op for this direct-egress dogfood.
 >
+> **Production CI green — per-job yes, concurrent matrix blocked on Q259 (2026-07-01).**
+> A same-day turn-up routed the real repo's CI to `gag-ci` (`GAG_RUNNER →
+> ["self-hosted","linux","gag-ci"]`) and confirmed **every** migrated job —
+> `vendor-check`, `tidy-check`, `unit-test` (`-race`), `coverage`, `integration-test`,
+> `lint`, `shellcheck` — runs **green** on `gag-ci` when given a worker (verified via
+> single-job reruns). **Q246 held** (the `dogfood-workload` NetworkPolicy carried 7340
+> GitHub CIDR egress peers throughout, never blanked; no release-asset download timeout —
+> shellcheck's release tarball and setup-go's toolchain both fetched fine) and **Q247
+> held for jobs that run** (`integration-test`, ~12 min, renewed its lock and completed
+> green; RunnerSet recovered to baseline with no orphaned pods). **But the *concurrent*
+> full matrix does not go green:** bursting all jobs onto `gag-ci` at once serializes to
+> ~1 worker even with ample node room (nodes at 35%/9% CPU, zero Pending pods after
+> lowering worker CPU requests 2→1 and pre-scaling the `workers` pool). Under the burst
+> the AGC agent-pool cannot recycle consumed runners (GitHub `422 "Runner … is currently
+> running a job and cannot be deleted"`), so online listeners are not replenished, GitHub
+> dispatches ~1 job at a time, and the queued jobs hit GitHub's ~15-min unstarted-job
+> timeout (cancelled) while a stuck job's token is invalidated (`RenewJob 401 "Not
+> authorized for this job"` → 600s death). Root cause is an **AGC concurrency /
+> agent-pool recycling issue under burst load** (Q247/Q249/Q254 family) — **not** node
+> capacity (Q248) and **not** a Q242/Q246 defect — tracked as **Q259**. One earlier run
+> also hit a transient **spot-VM preemption** (the `workers` pool is spot). Evidence:
+> runs `28513106734` (unit-test.yml) and `28510907609` (integration-test.yml). Until
+> Q259 is fixed, Q224's "route production CI green" is **not** met, so Q224 and Q242 stay
+> open.
+>
 > **Build-capable runner image (Q239).** The bare upstream `actions-runner` has no
 > build toolchain (`make`, a C compiler), so this repo's `make`-based jobs fail
 > `exit 127: make: command not found` on it — the workflows assume `make` is
