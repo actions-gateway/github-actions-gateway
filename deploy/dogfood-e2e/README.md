@@ -26,8 +26,8 @@ deploy/dogfood-e2e/
 | Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** |
 
 Both use one build-capable runner image
-([`scripts/dogfood/e2e-runner/Dockerfile`](../../scripts/dogfood/e2e-runner/Dockerfile) —
-docker CLI + buildx + helm + kubectl + jq) and the wired
+(`scripts/dogfood/e2e-runner/Dockerfile` —
+docker CLI + buildx + helm + kubectl + jq; added by the Q231 wiring PR) and the wired
 [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) (`GAG_E2E_RUNNER`).
 
 To see the difference: `diff -r overlays/dind overlays/kata`, or diff the rendered
