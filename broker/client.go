@@ -63,6 +63,20 @@ func (e *SessionExpiredError) Error() string {
 	return fmt.Sprintf("broker: session expired (HTTP %d)", e.StatusCode)
 }
 
+// JobNotFoundError is returned by RenewJob when the run service responds with
+// 404 Not Found or 410 Gone, indicating the job (and its lock) no longer exists
+// server-side — GitHub has recycled or reassigned it. This is a *definitive*,
+// unrecoverable loss of the lock (unlike a transient network error or a 5xx),
+// so callers should stop renewing and tear the worker down rather than let it
+// run on to completion and orphan (Q254).
+type JobNotFoundError struct {
+	StatusCode int
+}
+
+func (e *JobNotFoundError) Error() string {
+	return fmt.Sprintf("broker: job not found (HTTP %d)", e.StatusCode)
+}
+
 // Client is the low-level HTTP client for the GitHub broker protocol.
 // All methods are context-aware and propagate cancellation.
 //
@@ -493,6 +507,12 @@ func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData Ren
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// 404/410 mean the job's lock no longer exists server-side (GitHub recycled or
+	// reassigned it): a definitive, unrecoverable loss the caller must treat as a
+	// teardown signal, not a transient retry (Q254).
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return nil, &JobNotFoundError{StatusCode: resp.StatusCode}
+	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("broker: RenewJob: unexpected status %d: %s", resp.StatusCode, capBody(body, 200))

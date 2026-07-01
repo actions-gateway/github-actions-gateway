@@ -649,7 +649,16 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// jobToken authorizes the renewal: the run service rejects the broker session
 	// token for per-job renewal (401 "Not authorized for this job") even though it
 	// accepted the same token to claim the job — the third and final Q247 facet.
-	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID, jobToken,
+	// Derive a per-job context the renew loop can cancel. When the loop detects the
+	// job's lock is definitively lost (a definitive job-gone response or a sustained
+	// run of renewal failures), it calls cancelJob so the JobHandler's context is
+	// cancelled and the worker tears down — rather than running on to completion as
+	// an orphan pod while GitHub recycles the job and redelivers it to a sibling
+	// session (a duplicate acquire). On the normal path cancelJob fires via defer
+	// once the job completes (a no-op teardown of an already-finished worker) (Q254).
+	jobCtx, cancelJob := context.WithCancel(ctx)
+	defer cancelJob()
+	stop, renewDone := StartRenewLoop(jobCtx, cancelJob, cfg.Broker, runServiceURL, planID, jobID, jobToken,
 		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval, cfg.controlPlaneTimeout())
 	// Cancel the renew loop and wait for it to exit before returning, so the
 	// goroutine never outlives the job it renews.
@@ -660,7 +669,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
-		return acquired, cfg.JobHandler(ctx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		return acquired, cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
 	}
 	return acquired, nil
 }
@@ -756,8 +765,18 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 // (counted as a non-fatal RenewJob error), and the loop proceeds to the next tick,
 // so a single slow renewal costs one renewal, not all of them. A zero value leaves
 // the call unbounded (test/stub use only).
+//
+// cancelJob tears the worker down when the job's lock is definitively lost: a
+// definitive job-gone response (broker.JobNotFoundError, 404/410) or a sustained
+// run of renewFailureThreshold consecutive renewal failures. Without it the loop
+// would keep logging every failure as non-fatal and the worker would run on to
+// completion as an orphan pod while GitHub recycles the job and redelivers it to a
+// sibling session (a duplicate acquire) — the Q247 residual. A single/transient
+// failure stays non-fatal and is retried (GitHub grants ~10 min per renewal
+// window). cancelJob may be nil (test/stub use); teardown is then a no-op.
 func StartRenewLoop(
 	ctx context.Context,
+	cancelJob context.CancelFunc,
 	client *broker.Client,
 	runServiceURL, planID, jobID, jobToken string,
 	metrics *Metrics,
@@ -770,6 +789,7 @@ func StartRenewLoop(
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
+		var consecutiveFailures int
 		for {
 			select {
 			case <-stopCtx.Done():
@@ -788,18 +808,64 @@ func StartRenewLoop(
 					AuthToken: jobToken,
 				})
 				cancelCall()
-				if err != nil {
+				if err == nil {
+					consecutiveFailures = 0
+					continue
+				}
+				// A renewal aborted only because the loop itself is shutting down
+				// (stop() cancelled stopCtx mid-call) is not a lock failure — don't
+				// count it toward teardown; just exit.
+				if stopCtx.Err() != nil {
+					return
+				}
+				consecutiveFailures++
+				if metrics != nil {
+					metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
+				}
+				if reason := renewTeardownReason(err, consecutiveFailures); reason != "" {
 					if metrics != nil {
-						metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
+						metrics.RenewJobTeardownsTotal.WithLabelValues(namespace, reason).Inc()
 					}
 					if log != nil {
-						log.Warn("RenewJob error (non-fatal)", "error", err)
+						log.Error("RenewJob: job lock definitively lost; cancelling worker to avoid an orphan pod and a sibling duplicate-acquire (Q254)",
+							"reason", reason, "consecutiveFailures", consecutiveFailures, "error", err)
 					}
+					if cancelJob != nil {
+						cancelJob()
+					}
+					return
+				}
+				if log != nil {
+					log.Warn("RenewJob error (non-fatal)", "error", err, "consecutiveFailures", consecutiveFailures)
 				}
 			}
 		}
 	}()
 	return cancel, doneCh
+}
+
+// renewFailureThreshold is the number of consecutive RenewJob failures that trips
+// a worker teardown. With the default 60s renew interval and GitHub's ~10-minute
+// lock TTL, 5 consecutive failures (~5 min of a sustained outage) is well past any
+// single transient blip, yet still tears the worker down before the lock lapses at
+// ~10 min — so the orphan pod is gone before GitHub can recycle the job and
+// redeliver it to a sibling session (the duplicate-acquire window) (Q254).
+const renewFailureThreshold = 5
+
+// renewTeardownReason returns a non-empty metric reason when a RenewJob error
+// means the job's lock is unrecoverably lost and the worker must be cancelled: a
+// definitive job-gone response (broker.JobNotFoundError, 404/410), or a sustained
+// run of consecutive failures reaching renewFailureThreshold. It returns "" for a
+// transient failure that should stay non-fatal and be retried.
+func renewTeardownReason(err error, consecutiveFailures int) string {
+	var notFound *broker.JobNotFoundError
+	if errors.As(err, &notFound) {
+		return "job_not_found"
+	}
+	if consecutiveFailures >= renewFailureThreshold {
+		return "consecutive_failures"
+	}
+	return ""
 }
 
 func setCondition(cfg Config, condType string, status metav1.ConditionStatus, reason, msg string) {

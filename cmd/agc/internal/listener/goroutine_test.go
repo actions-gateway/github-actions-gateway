@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -869,7 +870,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -900,7 +901,7 @@ func TestRenewLoop_StopsOnStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, "", "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 	stop() // should not hang
 
 	// done must close once the loop goroutine exits after stop().
@@ -935,7 +936,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -976,7 +977,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Stop before any tick fires.
 	stop()
@@ -1037,7 +1038,7 @@ func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
 	// 60s renewal interval (fake-clock driven); 100ms per-call timeout (real time),
 	// well under the interval as production requires. The first call blocks longer
 	// than 100ms, so the timeout — not the response — must free the loop.
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
 
 	// Two renewal attempts prove the loop was not wedged by the first (hung) call:
 	// the second can only fire once the per-call timeout aborts the first.
@@ -1050,6 +1051,179 @@ func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
 	}
 
 	unblock()
+	stop()
+	<-done
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_DefinitiveJobNotFoundTearsDown is the Q254 definitive-loss gate.
+// The run service answers /renewjob with 404 (the job's lock no longer exists —
+// GitHub recycled or reassigned it), which is unrecoverable. A single such
+// response must immediately cancel the worker's job context (so the pod tears down
+// instead of orphaning) rather than being retried like a transient blip — and must
+// do so without waiting for the consecutive-failure threshold.
+func TestRenewLoop_DefinitiveJobNotFoundTearsDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			calls.Add(1)
+			w.WriteHeader(http.StatusNotFound) // run service: the job is gone
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// jobCtx models the worker's job context; the loop must cancel it on a
+	// definitive job-gone response so the JobHandler unwinds and the pod tears down.
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, log, 60*time.Second, 0)
+
+	// A single 404 must trigger teardown — advance one interval to fire the tick.
+	require.Eventually(t, func() bool {
+		clk.Advance(60 * time.Second)
+		select {
+		case <-jobCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, time.Millisecond, "a definitive job-not-found must cancel the worker's job context")
+	<-done
+
+	assert.Equal(t, int32(1), calls.Load(), "one 404 must trigger teardown; the loop must not renew again")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "job_not_found")),
+		"definitive-loss teardown counter must fire once with reason=job_not_found")
+	assert.Contains(t, logBuf.String(), "job lock definitively lost", "expected the distinct teardown log line")
+
+	stop()
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_ConsecutiveFailuresTearDown is the Q254 sustained-failure gate.
+// Every /renewjob call fails (server error / lost lock). After a sustained run of
+// consecutive failures reaching the threshold the loop must cancel the worker so
+// the orphan pod is gone before GitHub recycles the job and redelivers it to a
+// sibling session — rather than logging every failure as non-fatal forever.
+func TestRenewLoop_ConsecutiveFailuresTearDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			calls.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
+
+	// Drive renewals until the sustained-failure threshold cancels the worker.
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		select {
+		case <-jobCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}, 3*time.Second, time.Millisecond, "a sustained run of renewal failures must cancel the worker")
+	<-done
+
+	// Teardown fires exactly once the threshold is reached, then the loop stops —
+	// so the failure count equals the threshold and does not run on.
+	assert.Equal(t, int32(5), calls.Load(), "teardown must trip at the consecutive-failure threshold (5)")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "consecutive_failures")),
+		"definitive-loss teardown counter must fire once with reason=consecutive_failures")
+
+	stop()
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_TransientFailuresDoNotTearDown asserts the Q254 change stays
+// conservative: a burst of failures below the threshold, followed by a success
+// that resets the counter, must never cancel the worker. GitHub grants ~10 min per
+// renewal window, so a single blip is expected and non-fatal.
+func TestRenewLoop_TransientFailuresDoNotTearDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			// Fail 4 in a row (one below the 5-failure threshold), then recover.
+			// The success must reset the consecutive-failure counter.
+			if calls.Add(1) <= 4 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
+
+	// Drive at least 8 renewals — 4 failures then successes — well past what a
+	// single blip needs to prove it never trips the threshold.
+	for i := 0; i < 8; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(5 * time.Second)
+			return calls.Load() >= int32(i+1)
+		}, 2*time.Second, time.Millisecond, "expected RenewJob call %d", i+1)
+	}
+
+	// No teardown: the job context stays live and the counter is untouched.
+	assert.NoError(t, jobCtx.Err(), "transient failures below the threshold must not cancel the worker")
+	assert.Equal(t, float64(0),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "consecutive_failures")),
+		"no teardown expected for transient failures")
+
 	stop()
 	<-done
 	clk.Stop()
@@ -1358,6 +1532,9 @@ func newTestMetrics() *listener.Metrics {
 		RenewJobErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_renewjob_errors_total",
 		}, []string{"namespace"}),
+		RenewJobTeardownsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_renewjob_teardowns_total",
+		}, []string{"namespace", "reason"}),
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_message_poll_errors_total",
 		}, []string{"namespace", "reason"}),
