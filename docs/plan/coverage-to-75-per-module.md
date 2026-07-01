@@ -1,6 +1,6 @@
 # Per-module unit-test coverage → ≥75%
 
-Tracked as [Q255](../STATUS.md#Q255).
+**Status: ✅ Done (Q255, 2026-07-01).** Every Go module now measures ≥75% hand-written unit-test coverage: api 100%, broker 82.1%, cmd/agc 75.1%, cmd/gmc 75.0%, cmd/probe 81.0%, cmd/proxy 76.7%, cmd/worker 81.2%, githubapp 84.2%. Delivered via an agent Workflow (see [Execution](#execution--single-agent-workflow)); `probe.run()` was extracted behind an injected token provider + `getenv` (`runProbe`) to make the session orchestration unit-testable, and `parseProbeConfig` was extracted earlier for the same reason.
 
 ---
 
