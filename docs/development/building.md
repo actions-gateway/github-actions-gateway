@@ -4,8 +4,8 @@ All binaries are built into `.build/` at the repo root (gitignored). Use the roo
 
 ```bash
 make build        # build all binaries → .build/agc, .build/gmc, .build/probe, .build/proxy
-make build-agc    # build only the AGC controller
-make build-gmc    # build only the GMC controller
+make build-agc    # build only the AGC (Actions Gateway Controller)
+make build-gmc    # build only the GMC (Gateway Manager Controller)
 make build-probe  # build only the probe
 make build-proxy  # build only the egress proxy
 ```

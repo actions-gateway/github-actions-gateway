@@ -469,7 +469,7 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy -o wide
 kubectl get hpa -n <namespace>
 
 # No spike in token or renewjob errors after the rollout
-# Metrics: token_refresh_errors_total, renew_job_errors_total
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total
 ```
 
 ### Rollback
@@ -540,7 +540,7 @@ kubectl get actionsgateway --all-namespaces
 # Metric: actions_gateway_active_sessions per namespace
 
 # No spike in errors
-# Metrics: token_refresh_errors_total, renew_job_errors_total, reconcile_errors_total
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total, controller_runtime_reconcile_errors_total
 
 # Pod creation latency within SLO
 # Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))

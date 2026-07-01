@@ -137,10 +137,10 @@ Most of these ladder up to one outcome — [**lower cost**](design/appendix-f-co
 
     Hardening reconciled by default:
 
-    - `baseline` PSA per namespace
+    - `baseline` Pod Security Admission (PSA) per namespace
     - Default-deny NetworkPolicies
     - Credentials never in env vars
-    - Signed images + SBOM + SLSA
+    - Signed images + Software Bill of Materials (SBOM) + SLSA
 
 -   :material-account-cog:{ .lg .middle } __Tenant runner self-service__ <span class="gag-v2-badge">v2</span>
 

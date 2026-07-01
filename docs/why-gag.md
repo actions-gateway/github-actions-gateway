@@ -70,7 +70,7 @@ letting tenants run their own runners.
 
     Every tenant is a manual checklist:
 
-    - namespace, quota, RBAC, scale sets, NetworkPolicies, egress
+    - namespace, quota, Role-Based Access Control (RBAC), scale sets, NetworkPolicies, egress
     - per-team setup; every later change is a ticket
 
 </div>
@@ -135,7 +135,7 @@ ships as reconciled defaults, not a post-install project.
 
     Untrusted job code is boxed in by default:
 
-    - `baseline` Pod Security Admission per namespace
+    - `baseline` Pod Security Admission (PSA) per namespace
     - Default-deny network — DNS + own proxy only
     - App keys read-only; never in env, never cached
     - Controller writes confined to tenant namespaces
@@ -158,7 +158,7 @@ ships as reconciled defaults, not a post-install project.
 
     - Default-deny ingress, cluster-only DNS
     - Per-tenant egress IPs, mutual-TLS metrics
-    - Signed images + SBOM + SLSA provenance
+    - Signed images + Software Bill of Materials (SBOM) + Supply-chain Levels for Software Artifacts (SLSA) provenance
 
 </div>
 </div>
@@ -223,7 +223,7 @@ spec:
     Defaults to `baseline`; use `restricted` for stricter isolation or
     `privileged` only for workloads like docker-in-docker. See
     [Security](design/05-security.md).
-3.  The per-tenant egress proxy pool is HPA-managed between these bounds; all
+3.  The per-tenant egress proxy pool is Horizontal Pod Autoscaler (HPA)-managed between these bounds; all
     GitHub traffic exits through it on dedicated IPs.
 4.  The single `ResourceQuota` every runner group shares is **platform-owned** —
     the platform admin sets it on the namespace, not on this CR, so it is a real
