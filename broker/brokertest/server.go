@@ -32,6 +32,7 @@ type Server struct {
 	failSessionOwner    string                                  // when non-empty, 401 POST /session for owners with this prefix
 	acquireJobResponse  any                                     // custom AcquireJob response; nil uses default
 	acquireCount        atomic.Int64
+	ackCount            atomic.Int64
 	renewJobCount       atomic.Int64
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
@@ -53,6 +54,12 @@ func New() *Server {
 	mux.HandleFunc("/message", s.handleMessage)
 	mux.HandleFunc("/acquirejob", s.handleAcquireJob)
 	mux.HandleFunc("/renewjob", s.handleRenewJob)
+	// The VSTS Task Agent delete-message ("acknowledge") endpoint lives under the
+	// pool path: DELETE {poolBase}/messages/{id}. The probe calls it immediately
+	// after AcquireJob returns client-side, so it is an observable "acquire
+	// returned" signal (AcknowledgeCalls) that a test can wait on without racing
+	// the still-in-flight AcquireJob request (Q258).
+	mux.HandleFunc("/_apis/distributedtask/pools/", s.handleDeleteMessage)
 	s.server = httptest.NewServer(mux)
 	s.URL = s.server.URL + "/"
 	return s
@@ -174,6 +181,14 @@ func (s *Server) WaitForFirstPoll(sessionID string, timeout time.Duration) bool 
 // AcquireJobCalls returns the number of times /acquirejob was called.
 func (s *Server) AcquireJobCalls() int {
 	return int(s.acquireCount.Load())
+}
+
+// AcknowledgeCalls returns the number of delete-message ("acknowledge") calls
+// served — DELETE {poolBase}/messages/{id}. The probe issues this call only
+// after AcquireJob has returned client-side, so observing it reach 1 guarantees
+// the AcquireJob round-trip completed and its context is safe to cancel (Q258).
+func (s *Server) AcknowledgeCalls() int {
+	return int(s.ackCount.Load())
 }
 
 // RenewJobCalls returns the number of times /renewjob was called.
@@ -347,6 +362,18 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleDeleteMessage serves the VSTS Task Agent delete-message
+// ("acknowledge") endpoint: DELETE {poolBase}/messages/{id}?sessionId=... It
+// counts only DELETEs to a /messages/ path so unrelated pool traffic is ignored,
+// and always replies 200 — the probe records the status but does not depend on
+// it. See AcknowledgeCalls for why tests use this as a post-acquire signal.
+func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/messages/") {
+		s.ackCount.Add(1)
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleRenewJob serves POST /renewjob — returns a synthetic RenewJob response.

@@ -430,16 +430,18 @@ func TestProbeAcknowledge_ReturnsCompactHTTPStatus(t *testing.T) {
 		HTTPClient: s.HTTPClient(),
 	}
 
-	// brokertest registers /session, /message, /acquirejob, /renewjob, and
-	// /token, but not the /messages/{id} delete-acknowledge route — so this
-	// call reaches the stub's ServeMux and falls through to its default
-	// 404 handler. What's under test is that probeAcknowledge issues the
-	// DELETE with the right auth header and reports the response status back
-	// as a compact "HTTP-<code>" string rather than erroring out, since the
-	// caller only logs this as an informational finding (Investigation A).
+	// brokertest serves the VSTS delete-message ("acknowledge") route under
+	// {poolBase}/messages/{id} with a 200 OK. What's under test is that
+	// probeAcknowledge issues the DELETE with the right auth header and reports
+	// the response status back as a compact "HTTP-<code>" string rather than
+	// erroring out, since the caller only logs this as an informational finding
+	// (Investigation A).
 	status := probeAcknowledge(context.Background(), discardLogger(), bc, 42, "session-abc")
-	if status != "HTTP-404" {
-		t.Errorf("probeAcknowledge = %q, want HTTP-404 (no dedicated handler on the stub)", status)
+	if status != "HTTP-200" {
+		t.Errorf("probeAcknowledge = %q, want HTTP-200 (stub acknowledges the delete)", status)
+	}
+	if got := s.AcknowledgeCalls(); got != 1 {
+		t.Errorf("AcknowledgeCalls = %d, want 1", got)
 	}
 }
 
@@ -1028,13 +1030,21 @@ func TestRunProbe_HappyPath(t *testing.T) {
 		BillingOwnerID:  "owner-1",
 	})
 
-	// Wait for AcquireJob to be called, then cancel so runProbe proceeds past
-	// its blocking <-ctx.Done() and returns.
+	// Wait until AcquireJob has returned *client-side* before cancelling, then
+	// cancel so runProbe proceeds past its blocking <-ctx.Done() and returns.
+	//
+	// We must not trigger on AcquireJobCalls(): the stub increments that counter
+	// at the start of its handler, before the response is written, so observing
+	// it == 1 can race a still-in-flight AcquireJob POST on the shared ctx —
+	// cancelling then aborts the request and runProbe fails (Q258). The probe
+	// calls the delete-message ("acknowledge") endpoint immediately *after*
+	// AcquireJob returns, so AcknowledgeCalls() reaching 1 guarantees the
+	// round-trip completed and the context is safe to cancel.
 	acquireDeadline := time.After(5 * time.Second)
-	for s.AcquireJobCalls() == 0 {
+	for s.AcknowledgeCalls() == 0 {
 		select {
 		case <-acquireDeadline:
-			t.Fatal("timed out waiting for AcquireJob to be called")
+			t.Fatal("timed out waiting for AcquireJob to complete (acknowledge call)")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
