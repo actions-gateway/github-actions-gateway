@@ -43,11 +43,35 @@ Exactly one entrypoint fails the test: `probe.run()`. Everywhere else the risky 
 
 ---
 
-## Sequencing rule
+## Execution — single agent Workflow
 
-Per session guidance: **do not change production code and tests in the same commit** where avoidable. The only production-code change in this plan is the `probe.run()` refactor (Workstream E), which is split into two PRs — a behavior-preserving refactor whose *existing tests stay green and unchanged* (proof the refactor is safe), then a test-only follow-up. Every other workstream is test-only.
+This lands as **one branch → one PR**, produced by a single agent Workflow rather than one-PR-per-module. The workstreams below are the fan-out units.
 
-After each workstream lands, run `make cover-update` and commit the raised `coverage-baseline.txt` floor in its own isolated commit so the ratchet defends the gain.
+**Why a Workflow (and why one PR).** The compute hazard on a GUI dev machine is *running* tests, not writing them. So the agents **author only — they never run tests**; a single validation stage runs `make cover` + `make check` once, at the end. That makes this the cheapest possible option on local compute: exactly **one** throttled test run total, versus one per module with separate PRs or chips. The machine-wide `serialize_heavy_build` flock and `local-throttle.sh` (`utility` QoS, cores−2) keep even that run desktop-safe. The files each workstream touches are disjoint, so parallel authoring into the shared worktree is conflict-free.
+
+**Shape (pipeline with one barrier):**
+
+```
+Wave 1 (parallel authoring, disjoint files):
+  ├─ api/v2alpha1/types_test.go              (Workstream A)
+  ├─ cmd/worker/worker_test.go additions     (Workstream B)
+  ├─ cmd/gmc test files                       (Workstreams C + D)
+  └─ cmd/probe refactor: extract parseProbeConfig  (Workstream E1 — production code)
+        │  ── barrier: E2 needs the refactor ──
+Wave 2:  cmd/probe tests                       (Workstream E2)
+        │  ── barrier ──
+Validate: ONE `make cover` + `make check`      (only test run)
+Repair:   on failure → fix agents → re-validate
+```
+
+**Honoring "don't change production code and tests in the same commit."** The Workflow produces file changes; the main loop makes the commits, grouped so the constraint holds at the *commit* level inside the one PR:
+
+1. `cmd/probe` refactor (E1) — its own commit; `probe`'s **existing tests stay unchanged** and green, proving the refactor is behavior-preserving.
+2. All new test files (A, B, C, D, E2) — test-only commit(s), no production-code change.
+3. `make cover-update` — the raised `coverage-baseline.txt` floors, isolated commit.
+4. `docs/STATUS.md` (delete the Q255 row) — isolated commit, per the high-contention rule.
+
+**Blind-authoring risk.** Agents write tests without executing them, so compile errors or wrong assertions surface only at the validation stage. The validate→repair loop absorbs that; the cost is agent tokens, not local compute (the machine stays quiet until the single final run).
 
 ---
 
@@ -92,32 +116,20 @@ The bulk of the +8.7pp. All pure logic, unit-testable without a cluster:
 
 `Reconcile`/`SetupWithManager` (0%) stay for the existing `internal/controller/integration/` envtest suite — add a couple of reconcile cases there only if C+D fall short of +8.7pp.
 
-### E — `cmd/probe` → ≥75% (the one refactor, **two PRs**)
+### E — `cmd/probe` → ≥75% (the one refactor, **two commits**)
 
-**PR E1 — refactor only, behavior-preserving.** Extract from `run()`:
+**E1 — refactor only, behavior-preserving** (its own commit). Extract from `run()`:
 - `parseProbeConfig(getenv func(string) string) (probeConfig, error)` — the ~60-line env/config block (app ID/installation ID parsing, PEM load, broker URL/v2 selection, pool ID) with all its error branches.
 - keep the `investigate*`/`probeAcknowledge` broker calls at package scope (they already are).
 
-`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations). **Existing tests stay green and unchanged** — that is the safety proof. No new tests in this PR.
+`run()` shrinks to thin orchestration (mint token → open session → dispatch investigations). **Existing tests stay green and unchanged** — that is the safety proof. No new tests in this commit.
 
-**PR E2 — tests only.** Unit-test:
+**E2 — tests only.** Unit-test:
 - `parseProbeConfig` branches (missing var, unparseable int, bad PEM, v2-URL override, pool-ID default/override).
 - pure helpers `backoffDelay`, `jitter` (bounds), `mustEnv`, `loadPEM` (inline PEM / `@file` / error).
 - `investigateSessionReuse`, `investigateJobDelivery`, `probeAcknowledge` against the `broker/brokertest` stub.
 
 Lifts `probe` past 75%; `main()`/the residual `run()` orchestration stay uncovered by design.
-
----
-
-## PR sequence
-
-1. **A** — `api` tests → `cover-update`
-2. **B** — `cmd/worker` tests (+ `cmd/agc` buffer) → `cover-update`
-3. **C+D** — `cmd/gmc` tests → `cover-update`
-4. **E1** — `cmd/probe` refactor (tests unchanged)
-5. **E2** — `cmd/probe` tests → `cover-update`
-
-Each is scoped to one module/concern. A/B/C+D/E2 are pure test additions; E1 is a pure refactor. No PR mixes production-code and test changes.
 
 ---
 
