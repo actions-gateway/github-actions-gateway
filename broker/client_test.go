@@ -411,6 +411,27 @@ func TestRenewJob_NonOKResponse(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
+func TestRenewJob_JobNotFound(t *testing.T) {
+	t.Parallel()
+	// 404 and 410 both mean the job's lock is gone server-side; RenewJob must
+	// surface a typed JobNotFoundError so the renew loop can tear the worker down
+	// instead of retrying an unrecoverable lock (Q254).
+	for _, status := range []int{http.StatusNotFound, http.StatusGone} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+
+		c := newTestClient(srv)
+		_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{})
+		srv.Close()
+
+		require.Error(t, err)
+		var notFound *broker.JobNotFoundError
+		require.ErrorAs(t, err, &notFound, "status %d must map to JobNotFoundError", status)
+		assert.Equal(t, status, notFound.StatusCode)
+	}
+}
+
 func TestRenewJob_StopsOnCancel(t *testing.T) {
 	t.Parallel()
 	// Start a renew loop in a goroutine and cancel the context; verify the

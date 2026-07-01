@@ -17,7 +17,10 @@ type Metrics struct {
 	TokenRefreshesTotal        *prometheus.CounterVec
 	TokenRefreshErrorsTotal    *prometheus.CounterVec
 	RenewJobErrorsTotal        *prometheus.CounterVec
-	MessagePollErrorsTotal     *prometheus.CounterVec
+	// Q254: incremented when the per-job renew loop cancels the worker because the
+	// job's lock is definitively lost, by reason (job_not_found, consecutive_failures).
+	RenewJobTeardownsTotal *prometheus.CounterVec
+	MessagePollErrorsTotal *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
 	PodCreationLatency       *prometheus.HistogramVec
 	JobDuration              *prometheus.HistogramVec
@@ -72,6 +75,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_renew_job_errors_total",
 			Help: "Total number of RenewJob non-OK responses.",
 		}, []string{"namespace"}),
+
+		RenewJobTeardownsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_renew_job_teardowns_total",
+			Help: "Workers cancelled by the renew loop because the job lock was definitively lost, by reason (job_not_found, consecutive_failures).",
+		}, []string{"namespace", "reason"}),
 
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_message_poll_errors_total",
@@ -136,6 +144,7 @@ func NewMetrics() *Metrics {
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,
+		m.RenewJobTeardownsTotal,
 		m.MessagePollErrorsTotal,
 		m.PodCreationLatency,
 		m.JobDuration,
