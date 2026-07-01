@@ -2,7 +2,7 @@
 
 **Status:** ✅ done — cause confirmed (a) Q61 cache race; minimal fix implemented (this session)
 **Owner:** worker session
-**Parent:** [gke-dogfood.md](gke-dogfood.md) (Q246 note), blocks [Q224](../STATUS.md)
+**Parent:** [gke-dogfood.md](../gke-dogfood.md) (Q246 note), blocks [Q224](../../STATUS.md)
 
 ## Goal (one sentence)
 Confirm on a live GKE cold run whether the dogfood release-asset download
@@ -14,7 +14,7 @@ co-occurred — and act on the confirmed cause only.
 Release-asset downloads 302-redirect `github.com` → `objects.githubusercontent.com`
 → `185.199.108.0/22`, which the worker egress NetworkPolicy already permits
 (GMC merges GitHub `/meta` api+actions+web; `web` contains that range —
-[`ipranges.go`](../../cmd/gmc/internal/controller/ipranges.go)). So the
+[`ipranges.go`](../../../cmd/gmc/internal/controller/ipranges.go)). So the
 original "widen the allowlist / bake the asset into the image" premise is
 wrong. Verified live: at steady state the `dogfood-workload` NP carries 7337
 CIDR peers including `185.199.108.0/22`.
