@@ -39,7 +39,7 @@ reason to multiply node pools.
 
 | Driver | Decision |
 |---|---|
-| `e2e` needs nested virtualization (Kata/DinD: N-series + `/dev/kvm`) | **Distinct node pool — mandatory, hardware-driven.** Already exists (`dogfood-e2e-setup.sh`). |
+| `e2e` needs nested virtualization (Kata/DinD: N-series + `/dev/kvm`) | **Distinct node pool — mandatory, hardware-driven.** Already exists (`dogfood/e2e-setup.sh`). |
 | All other jobs (lint, unit-test, coverage, integration, trivial) | **One general worker node size** bin-packs them all — a 10s `shellcheck` pod and a 4-vCPU `-race` pod schedule onto the same node. Do **not** create node pools per job size. |
 | Trivial jobs (`shellcheck`/`vendor-check`/`tidy-check`, 10–20s) holding large slots | **Optional 2nd "small" pod tier** — only if Phase 1 shows the packing waste is material. |
 
@@ -113,7 +113,7 @@ baseline; adjust.
 
 **Phase 5 — Persist.** Bake the final `requests`/`limits` into the
 `RunnerTemplate`(s) and the node sizes into
-[`scripts/dogfood-setup.sh`](../../scripts/dogfood-setup.sh) + the
+[`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) + the
 [runbook](gke-dogfood.md); record the measurement table here, then archive this
 plan.
 

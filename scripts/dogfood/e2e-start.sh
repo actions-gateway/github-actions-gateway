@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Route e2e CI jobs to GAG self-hosted runners (Kata-backed, on GKE).
-# The system pool must already be running (run dogfood-start.sh first).
+# The system pool must already be running (run dogfood/start.sh first).
 # See docs/plan/gke-dogfood.md Part F.
 #
 # Required env vars (export before running):

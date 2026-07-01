@@ -39,7 +39,7 @@ INSTALLATION_ID=135739122         # actions-gateway org install (re-derive via P
 ---
 
 > **Shortcut:** Parts A3–B8 (cluster, node pools, GAG install, tenant) are
-> automated by [`scripts/dogfood-setup.sh`](../../scripts/dogfood-setup.sh) —
+> automated by [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh) —
 > idempotent and safe to re-run with some of the work already done. Complete
 > A1–A2 first (project + billing + APIs), export the Variables block, then run
 > the script. The manual steps below document what it does, step by step.
@@ -201,7 +201,7 @@ silently drops the credential — the GMC reads an empty App ref and provisions 
 AGC for workload-identity (Vault) instead, and the AGC crash-loops on
 `read appId: … no such file or directory`. Always upgrade this chart in lockstep
 with the GMC image (`helm upgrade`, not just `install`).
-`scripts/dogfood-setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
+`scripts/dogfood/setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
 equivalent for the pinned `v1.1.0-rc.5`:
 
 ```bash
@@ -438,9 +438,9 @@ gh api /repos/"$REPO"/actions/runners \
 > `workerImage`: [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile)
 > adds `build-essential` (+ `curl`/`xz`/`sudo` for the shellcheck job's pinned-binary
 > self-install) on top of the pinned upstream runner. Build and push it with
-> [`scripts/dogfood-runner-build.sh`](../../scripts/dogfood-runner-build.sh), then
+> [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh), then
 > export `DOGFOOD_RUNNER_IMAGE=ghcr.io/actions-gateway/dogfood-runner:<tag>` before
-> running `scripts/dogfood-setup.sh` — the `RunnerTemplate` pins it and the AGC still
+> running `scripts/dogfood/setup.sh` — the `RunnerTemplate` pins it and the AGC still
 > injects the Q235 wrapper on top. **Validated `2026-06-29`:** the `shellcheck` job,
 > which failed `make: command not found` on the bare image, ran green on
 > `dogfood-runner:2.335.1` with the wrapper injected (`make` 4.3, `gcc` 13.3.0).
@@ -525,7 +525,7 @@ gh api /repos/"$REPO"/actions/runners \
 > after sustained renewal failure — is tracked as Q254.
 >
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
-> Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
+> Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood/setup.sh`)
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.
 > Athens pods (app=athens) are not covered by the workload NetworkPolicy and have
 > free egress; workers reach Athens via an additive NetworkPolicy (port 3000) and
@@ -679,7 +679,7 @@ pool uses `n2-standard-4`.
 
 ```bash
 export CLUSTER ZONE REPO APP_ID INSTALLATION_ID   # from the Variables section
-scripts/dogfood-e2e-setup.sh
+scripts/dogfood/e2e-setup.sh
 ```
 
 This script:
@@ -717,11 +717,11 @@ variable.
 ### F3. E2e operations
 
 ```bash
-# Enable (requires system pool to be up via dogfood-start.sh first)
-scripts/dogfood-e2e-start.sh
+# Enable (requires system pool to be up via dogfood/start.sh first)
+scripts/dogfood/e2e-start.sh
 
 # Disable (e2e pool autoscales to 0 once in-flight jobs finish, ~10 min)
-scripts/dogfood-e2e-stop.sh
+scripts/dogfood/e2e-stop.sh
 ```
 
 The e2e pool toggles independently from the CI pool — you can run only one
@@ -745,12 +745,12 @@ or both at the same time.
 
 | Action | Script |
 |---|---|
-| One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood-setup.sh` |
-| Start cluster + route CI to GAG | `scripts/dogfood-start.sh` |
-| Stop cluster + route CI to GitHub-hosted | `scripts/dogfood-stop.sh` |
-| Enable e2e on GAG | `scripts/dogfood-e2e-start.sh` |
-| Disable e2e on GAG | `scripts/dogfood-e2e-stop.sh` |
-| One-time e2e pool + Kata setup | `scripts/dogfood-e2e-setup.sh` |
+| One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood/setup.sh` |
+| Start cluster + route CI to GAG | `scripts/dogfood/start.sh` |
+| Stop cluster + route CI to GitHub-hosted | `scripts/dogfood/stop.sh` |
+| Enable e2e on GAG | `scripts/dogfood/e2e-start.sh` |
+| Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |
+| One-time e2e pool + Kata setup | `scripts/dogfood/e2e-setup.sh` |
 
 All scripts read `PROJECT`, `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`,
 `INSTALLATION_ID` for the setup scripts) from the environment. Export the
