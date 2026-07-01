@@ -39,7 +39,7 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # Default to the newest published release. `latest` does not exist in this
 # project's registry (publish.yml builds only on v* tags), so floating to it
 # yields ImagePullBackOff — pin a real tag instead.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.5}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.6}"
 
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC
