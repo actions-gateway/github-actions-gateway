@@ -201,15 +201,15 @@ For each tenant namespace, first create the pull Secret there (repeat step 3 wit
 
 ```sh
 TENANT_NS=team-a
-GATEWAY=my-gateway   # = the ActionsGateway CR name
 
-# AGC pods run as the per-gateway AGC ServiceAccount "<gateway>".
-kubectl patch serviceaccount "$GATEWAY" -n "$TENANT_NS" \
+# AGC pods run as the fixed AGC ServiceAccount "actions-gateway-controller"
+# (one per tenant namespace; the name is not derived from the gateway name).
+kubectl patch serviceaccount actions-gateway-controller -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
-# Worker pods run as "<gateway>-worker" — this SA also pulls the injected
+# Worker pods run as "actions-gateway-worker" — this SA also pulls the injected
 # wrapper init container, so no separate wrapper Secret/SA is needed.
-kubectl patch serviceaccount "${GATEWAY}-worker" -n "$TENANT_NS" \
+kubectl patch serviceaccount actions-gateway-worker -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
 # Proxy pods run as the namespace "default" ServiceAccount.
@@ -217,8 +217,9 @@ kubectl patch serviceaccount default -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 ```
 
-The GMC creates the `<gateway>` and `<gateway>-worker` ServiceAccounts when it
-reconciles the `ActionsGateway` CR; create the gateway first, then patch. The
+The GMC creates the `actions-gateway-controller` and `actions-gateway-worker`
+ServiceAccounts when it reconciles the `ActionsGateway` CR; create the gateway
+first, then patch. The
 patch **survives GMC reconciliation** — the GMC only manages those SAs' labels
 and owner reference, never their `imagePullSecrets` — and it never touches the
 `default` SA at all.

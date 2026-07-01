@@ -161,29 +161,31 @@ kubectl get runtimeclass kata-qemu
 ## Configure the worker podTemplate
 
 Point the worker pods at the runtime by setting `runtimeClassName` on the
-`ActionsGateway` worker `podTemplate`. No privileged context, no host
-namespaces, and no profile escalation are involved:
+runner group's worker `podTemplate` (`spec.runnerGroups[].podTemplate`). No
+privileged context, no host namespaces, and no profile escalation are involved:
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1
+apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
   name: build-gateway
 spec:
-  securityProfile: baseline        # the default — Kata needs no escalation
-  worker:
-    podTemplate:
-      spec:
-        runtimeClassName: kata-qemu
-        # The runtime label is enforced by the RuntimeClass scheduling
-        # rule above; add a matching nodeSelector only if you also want it
-        # explicit on the pod.
-        containers:
-          - name: runner
-            # A normal runner image with dockerd inside — no privileged
-            # flag, no /var/run/docker.sock host mount.
-            securityContext:
-              privileged: false
+  securityProfile: baseline            # the default — Kata needs no escalation
+  runnerGroups:
+    - name: kata-builders
+      runnerLabels: ["self-hosted", "kata"]
+      podTemplate:                     # worker pod config lives per runner group
+        spec:
+          runtimeClassName: kata-qemu
+          # The runtime label is enforced by the RuntimeClass scheduling
+          # rule above; add a matching nodeSelector only if you also want it
+          # explicit on the pod.
+          containers:
+            - name: runner
+              # A normal runner image with dockerd inside — no privileged
+              # flag, no /var/run/docker.sock host mount.
+              securityContext:
+                privileged: false
 ```
 
 The AGC honours a tenant-set `runtimeClassName` and applies no override

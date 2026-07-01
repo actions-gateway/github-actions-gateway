@@ -146,7 +146,7 @@ A full `make e2e-up` run is ~10 minutes per cycle. To iterate on a single compon
 
 1. Stand up the cluster + cert-manager + GMC once with `E2E_SKIP_TEARDOWN=true ginkgo run --focus '<spec>' ...`. The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.
 2. Rebuild the changed component only: `docker buildx bake --file docker-bake.hcl --set "<target>.tags=127.0.0.1:5000/<name>:<unique-tag>" <target>`.
-3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WORKER_IMAGE` on the GMC).
+3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` on the GMC).
 4. Force a fresh pod: `kubectl delete pod -l <selector>`.
 5. Test the path with a label-matched `kubectl run` debug pod (above).
 

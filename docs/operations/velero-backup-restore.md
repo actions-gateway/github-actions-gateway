@@ -32,7 +32,7 @@ Two scopes matter:
 
 | Scope | What | How it is captured |
 | --- | --- | --- |
-| Cluster-wide (once per cluster) | The GAG Custom Resource Definitions (CRDs) in API group `actions-gateway.github.com` (`actionsgateways`, `egressproxies`, `runnergroups`, `runnersets`, `runnertemplates`, `clusterrunnertemplates`). | A CRD backup — or, preferably, the Helm CRD chart tracked in Git. |
+| Cluster-wide (once per cluster) | The GAG Custom Resource Definitions (CRDs). The current v2 CRDs — `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, `clusterrunnertemplates` — are in API group `actions-gateway.com`; a cluster still serving the legacy v1alpha1 API also carries `actionsgateways` and `runnergroups` under `actions-gateway.github.com`. | A CRD backup — or, preferably, the Helm CRD chart tracked in Git. |
 | Per-tenant namespace | The `ActionsGateway` CR, any referenced `EgressProxy` CR, the GitHub App credential `Secret`, the `Namespace` (with its security-profile label), and the `ResourceQuota`. | A namespace backup, scheduled per tenant. |
 
 Everything else in the tenant namespace — the Actions Gateway Controller (AGC) `Deployment`, ServiceAccounts, RoleBinding, metrics `Service`, NetworkPolicies, metrics TLS `Secret`s, and the `RunnerGroup` CR — is **owned and reconciled by the GMC** and does not need to be in the restore path. Those objects all carry the label `app.kubernetes.io/managed-by=actions-gateway-gmc`, which is exactly the selector the restore step uses to skip them.
