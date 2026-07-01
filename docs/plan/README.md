@@ -43,6 +43,7 @@ run commands live in
 | Plan | Scope | Status |
 |---|---|---|
 | [milestone-1-tests.md](milestone-1-tests.md) | M1 unit-test coverage gaps | ✅ Done — all five gaps closed |
+| [coverage-to-75-per-module.md](coverage-to-75-per-module.md) | Every Go module's hand-written unit-test coverage to ≥75% ([Q255](../STATUS.md#Q255)) | ❌ Open |
 
 ## Speed improvements
 
