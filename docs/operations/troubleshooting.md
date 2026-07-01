@@ -1018,7 +1018,7 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 ## RenewJob Failures Rising
 
-**Symptoms.** `actions_gateway_renew_job_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion.
+**Symptoms.** `actions_gateway_renew_job_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion. On current versions, a **definitively lost** lock also increments `actions_gateway_renew_job_teardowns_total` and the AGC self-cancels the worker (see the self-cancel note below).
 
 **Likely causes.**
 - Network connectivity issues between the AGC and GitHub (via proxy).
@@ -1028,6 +1028,13 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 - **AGC versions before the Q247 *residual* fix** ran each `RenewJob` call inline with no per-call timeout. Under heavy worker-node load (CPU/egress saturation) a single `/renewjob` call can black-hole — the connection is accepted but never answered — and, because the next renewal cannot start until the call returns, that one hung call starves *every* subsequent renewal. The tell is a long job failing at *exactly* GitHub's ~10-minute lock window (the initial lock TTL, never refreshed) with a **single** worker pod that keeps running past the cutoff — distinct from the wrong-jobId signature above, which produces *duplicate* pods. Fixed versions bound each renewal with the control-plane timeout, so a hung call aborts (one `renew_job_errors_total` increment) and the loop renews on schedule.
 - **AGC versions before the Q247 *auth* fix** renewed with the broker session (OAuth) token instead of the job-scoped token GitHub issues in the `acquirejob` response (the `SystemVssConnection` endpoint's `AccessToken`). GitHub accepts the session token to *claim* a job but rejects it for *renewing* that job's lock, so *every* renewal returns **`401 {"source":"actions-run-service","errorMessage":"Not authorized for this job"}`** from the very first call. The tell is identical to the residual signature — a long job failing at *exactly* the ~10-minute lock window with a **single** worker pod — but the AGC log shows every `RenewJob` returning that specific 401 (not a timeout, not a wrong jobId). Fixed versions present the job-scoped token, so renewals return 200 and the lock is refreshed.
 
+**Self-cancel on a definitively lost lock (current behavior, Q254).** On a lock the renewer can prove is *unrecoverably* lost, the AGC no longer lets the worker run on to completion as an orphan pod. Two triggers:
+
+- **Definitive job-gone.** The run service answers `/renewjob` with `404`/`410` (the job's lock no longer exists — GitHub recycled or reassigned it). A single such response is enough.
+- **Sustained failure run.** Renewal fails for **5 consecutive** intervals (~5 min at the default 60s cadence) — a network partition or a persistently unreachable run service. This is well past any single transient blip, and it tears down before the ~10-minute lock TTL lapses.
+
+On either trigger the AGC cancels the job's context so the worker pod tears down promptly, logs a distinct error line (`job lock definitively lost; cancelling worker …`), and increments `actions_gateway_renew_job_teardowns_total{reason="job_not_found"|"consecutive_failures"}`. Tearing the orphan down *before* the lock lapses closes the residual window in which GitHub could recycle the job and redeliver it to a sibling session (a duplicate worker pod for one job). A *single/transient* renewal failure still stays non-fatal and is retried.
+
 **Diagnostics.**
 
 ```sh
@@ -1036,6 +1043,10 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 # Check AGC logs for renewal errors and job IDs
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "renewjob"
+
+# Definitive-loss teardowns (worker self-cancelled), split by reason
+# Metric: sum by (reason) (rate(actions_gateway_renew_job_teardowns_total[15m]))
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "job lock definitively lost"
 
 # Confirm the proxy pool is healthy
 kubectl get pods -n <namespace> -l app=actions-gateway-proxy
@@ -1048,8 +1059,9 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy
 - Transient GitHub API errors: the renewer retries; monitor until the rate returns to zero.
 - Proxy pool unhealthy: fix the proxy pool (see [Proxy Pool Not Scaling](#proxy-pool-not-scaling)).
 - If the AGC restarted mid-job: jobs whose lock expired will have been cancelled by GitHub. These require manual re-run. Check `actions_gateway_eviction_retries_exhausted_total` for any jobs that were also evicted.
+- **`actions_gateway_renew_job_teardowns_total` rising (a self-cancel, Q254 behavior above):** the worker was torn down because its lock was definitively lost — this is the AGC *avoiding* an orphan pod, not a new fault. Investigate the *underlying* cause via the split reason: `reason="job_not_found"` means GitHub reassigned/recycled the job (often downstream of a lock that already lapsed for one of the Q247 reasons, or genuine cancellation); `reason="consecutive_failures"` means renewal was unreachable for ~5 min — treat it like a sustained error rate above (proxy/egress or GitHub reachability). The affected job is re-run by GitHub on the sibling session that picks it up.
 
-Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single *transient* error on a long-running job is rarely fatal; a *sustained* error on every job is the Q247 signature above, not a transient blip.
+Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single *transient* error on a long-running job is rarely fatal; a *sustained* error on every job is the Q247 signature above, not a transient blip. When a lock is *definitively* lost, current versions self-cancel the worker (Q254 behavior above) rather than orphaning it.
 
 ---
 
