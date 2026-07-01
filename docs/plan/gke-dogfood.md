@@ -459,6 +459,29 @@ gh api /repos/"$REPO"/actions/runners \
 > IP-range-cache race (Q61) or the node CPU exhaustion that Q247 says co-occurred;
 > confirm which on a live run before acting on Q246.
 >
+> **Q247 root cause — RenewJob used the wrong jobId (fixed).** Every job routed
+> to a GAG runner failed at the *job-lifecycle* level: the worker ran the full
+> job, then `JobRunner.CompleteJobAsync` threw
+> `TaskOrchestrationJobNotFoundException` ("workflow instance not found"), the
+> run showed `conclusion: failure` with no failed step and no logs, and multiple
+> worker pods appeared for one job. Root cause: the AGC's per-job renewal loop
+> ([`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go), `handleJob`)
+> sent the broker envelope's numeric `MessageID` as the run-service `jobId`
+> instead of the job's `RunnerRequestID` — the value `AcquireJob` already sends
+> as `jobMessageId` and the value the run service keys `/renewjob` on. The run
+> service does not recognize the envelope id, so `RenewJob` never renewed the
+> lock; the error was swallowed as non-fatal and the worker kept running. On any
+> job that outlived GitHub's lock TTL, GitHub recycled the job and redelivered it
+> to a **sibling** session — a duplicate worker pod — while the original ran to
+> completion and orphaned at CompleteJob. Short jobs finished before the TTL
+> lapsed, which is why only the long (~10 min) e2e job exposed it deterministically
+> and the general non-e2e jobs hit it intermittently (the "stuck at N active
+> sessions after recycling" symptom in Q247). The one-line fix (renew by
+> `RunnerRequestID`) plus a full-`Run` regression test landed in the AGC listener;
+> a green dogfood e2e on GAG (PR #476's branch) is the live confirmation. This was
+> **not** the DinD/config/egress/CPU issue the co-occurring node exhaustion
+> suggested — it reproduces in isolation against the broker HTTP stub.
+>
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
 > Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.

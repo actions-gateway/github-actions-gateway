@@ -995,6 +995,115 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// TestListener_RenewJobUsesRunnerRequestID drives a real job through the full
+// Run path and asserts that the per-job renewal targets the job's
+// RunnerRequestID — the same value AcquireJob sends as jobMessageId — and NOT
+// the broker envelope's numeric MessageID. Sending the MessageID renews a job
+// the run service does not recognize, so the lock never renews: on a job that
+// outlives GitHub's lock TTL the job is recycled and redelivered to a sibling
+// (a duplicate worker pod) while this worker orphans at CompleteJobAsync with
+// TaskOrchestrationJobNotFoundException (Q247). MessageID and RunnerRequestID
+// are deliberately distinct here so a regression cannot pass by coincidence.
+func TestListener_RenewJobUsesRunnerRequestID(t *testing.T) {
+	const (
+		wantJobID = "req-renew-abc123"
+		msgID     = int64(987654321)
+	)
+
+	oauthSrv := oauthStub()
+
+	renewJobID := make(chan string, 1)
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobID,
+		RunServiceURL:   brokerSrv.URL, // must resolve so AcquireJob + RenewJob hit the stub
+	})
+
+	jobDelivered := atomic.Bool{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   msgID,
+				MessageType: "RunnerJobRequest",
+				Body:        string(body),
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetRenew(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.RenewJobRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		select {
+		case renewJobID <- req.JobID:
+		default:
+		}
+		defaultRenewJob(w)
+	})
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	// JobHandler blocks until the renew tick has been observed, so the renew loop
+	// is live while we advance the clock.
+	release := make(chan struct{})
+	cfg := listener.Config{
+		Group:         "grp",
+		Namespace:     "ns",
+		Agent:         makeAgent(t, oauthSrv.URL),
+		Broker:        bc,
+		HTTPClient:    oauthSrv.Client(),
+		Clock:         clk,
+		RunnerOS:      "Linux",
+		RenewInterval: 60 * time.Second,
+		IsLastPoller:  func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+			<-release
+			return nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// Advance past the 60s renew interval to fire the renewal, then assert the
+	// jobId it carried.
+	var got string
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		select {
+		case got = <-renewJobID:
+			return true
+		default:
+			return false
+		}
+	}, 3*time.Second, time.Millisecond, "expected a RenewJob call")
+	assert.Equal(t, wantJobID, got, "RenewJob must target the job's RunnerRequestID, not the broker MessageID")
+
+	close(release)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 // ── Gap 6: refreshBrokerToken failure ────────────────────────────────────────
 
 func TestListener_OAuthTokenFetchError(t *testing.T) {
