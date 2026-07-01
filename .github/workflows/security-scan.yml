@@ -74,7 +74,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.work
       # `make vulncheck` (scripts/go-vulncheck.sh) is the single source of truth
@@ -181,7 +181,7 @@ jobs:
       # key always misses and writes a fresh entry, while restore-keys load the
       # most recent prior DB so a refresh is incremental, not a cold pull.
       - name: cache trivy data
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.trivy-cache
           key: trivy-data-${{ github.run_id }}
@@ -234,7 +234,7 @@ jobs:
       POLARIS_SHA256: c264fc682fe612732e8a97680451d6e5f6b6fb920936215d6bb9ef387c7eadce
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: install polaris
         run: |
           set -euo pipefail

@@ -84,7 +84,7 @@ jobs:
       KUBECONFORM_CACHE: ${{ github.workspace }}/.kubeconform-cache
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: install yamllint
         run: python3 -m pip install --user "yamllint==${YAMLLINT_VERSION}"
       - name: install kubeconform
@@ -101,7 +101,7 @@ jobs:
       # fully offline; the key changes only when MANIFEST_K8S_VERSION (pinned in
       # scripts/manifest-validate.sh) does.
       - name: cache kubeconform schemas
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.KUBECONFORM_CACHE }}
           key: kubeconform-schemas-1.30.0
