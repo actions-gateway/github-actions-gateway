@@ -14,9 +14,10 @@ make -C api generate   # regenerates zz_generated.deepcopy.go + the five v2 CRD 
 
 The `api/` module owns only API artifacts: DeepCopy methods and the five v2 CRD manifests (`ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`). It emits **no** RBAC or webhook manifests — those markers live on the controllers/webhooks in `cmd/gmc` and `cmd/agc` and are generated there.
 
-## AGC
+## AGC (two steps required)
 
 ```bash
+make -C cmd/agc generate   # regenerates zz_generated.deepcopy.go
 make -C cmd/agc manifests  # regenerates CRD YAML and RBAC manifests
 ```
 

@@ -1872,42 +1872,47 @@ kubectl run dbg-connect --rm -i --restart=Never --quiet \
 
 ## Prometheus Not Scraping Proxy or AGC Metrics
 
-**Symptom.** The proxy and AGC `/metrics` endpoints (both on `:8081`) return no
-data in Prometheus, or scrape targets show as `down` with a connection
-timeout/refused — despite the pods being healthy.
+**Symptom.** The proxy and AGC `/metrics` endpoints (served over mutual TLS on
+`:8443`) return no data in Prometheus, or scrape targets show as `down` with a
+connection timeout/refused — despite the pods being healthy.
 
 **Cause.** Each tenant namespace runs under a default-deny ingress posture. The
-GMC's per-tenant NetworkPolicies admit `:8081` ingress *only* from namespaces
+GMC's per-tenant NetworkPolicies admit `:8443` ingress *only* from namespaces
 labelled `metrics: enabled` (the same convention the GMC's own
 `allow-metrics-traffic` NetworkPolicy uses). If the namespace your Prometheus
-runs in is not labelled, its scrapes are dropped. Kubelet liveness/readiness
-probes are unaffected — they originate from the node, which every supported CNI
-exempts from NetworkPolicy enforcement.
+runs in is not labelled, its scrapes are dropped before the TLS handshake.
+Kubelet liveness/readiness probes are unaffected — they hit `:8081`
+(`/healthz` + `/readyz`) from the node, which every supported CNI exempts from
+NetworkPolicy enforcement.
 
 ```bash
 # 1. Confirm the monitoring namespace carries the scrape label.
 kubectl get ns <prometheus-namespace> -o jsonpath='{.metadata.labels.metrics}{"\n"}'
 # Expected: enabled
 
-# 2. Inspect the per-tenant NP ingress rules — each should list an 8081 rule
+# 2. Inspect the per-tenant NP ingress rules — each should list an 8443 rule
 #    whose `from` is a namespaceSelector on metrics=enabled.
 kubectl get networkpolicy -n <tenant-namespace> \
   actions-gateway-proxy actions-gateway-controller \
   -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.ingress}{"\n"}{end}'
 
-# 3. Reproduce a scrape from a pod in the monitoring namespace (allowed) and an
-#    unlabelled namespace (denied) to confirm the policy, not the listener.
+# 3. Distinguish an NP drop from a missing client cert: scrape from the
+#    monitoring namespace without a cert (-k skips server-cert verification).
+#    A `tls: certificate required` error means the NP admits you — fix the cert
+#    per the TLS runbook below. A timeout means the label/NP still drops you.
 kubectl run dbg-scrape --rm -i --restart=Never --quiet \
   -n <prometheus-namespace> --image=curlimages/curl --command -- \
-  curl -sS --max-time 5 http://actions-gateway-proxy.<tenant-namespace>.svc:8081/metrics | head
+  curl -sS --max-time 5 -k https://actions-gateway-proxy.<tenant-namespace>.svc:8443/metrics
 ```
 
 **Resolution.**
 - Label the namespace your Prometheus runs in: `kubectl label ns <prometheus-namespace> metrics=enabled`.
-- The proxy and AGC `/metrics` endpoints are unauthenticated plain HTTP; the
-  NetworkPolicy namespace selector is the only access control. Keep the
-  `metrics: enabled` label off namespaces that should not see per-tenant
-  traffic-volume metrics.
+- The proxy and AGC `/metrics` endpoints are served over **mutual TLS on `:8443`**
+  (Q69), so the scraper also needs the per-tenant client certificate — see
+  [Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
+  for fetching the bundle. The `metrics: enabled` label gates *ingress*; the
+  client cert *authenticates* the scraper. Keep the label off namespaces that
+  should not see per-tenant traffic-volume metrics.
 
 **Same label gates the GMC manager metrics.** Since the §E manifest-defaults
 work, the GMC install ships the manager NetworkPolicy enabled by default, which

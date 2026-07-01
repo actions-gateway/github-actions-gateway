@@ -1174,14 +1174,16 @@ label every image already carries.
   carries its own license files for its components; the `/licenses/` files we add
   cover only the wrapper binary and its dependencies.
 
-- **Inspect it on a running pod.** The files are plain text owned root-readable,
-  so any container can read them:
+- **Inspect it on a running pod.** The files are plain text at `/licenses/`. The
+  worker image ships a shell + coreutils + tar, so `exec`-cat and `kubectl cp`
+  work on a worker pod:
 
   ```bash
-  kubectl exec deploy/gmc -- cat /licenses/LICENSE
-  # distroless images (agc/gmc/proxy) have no shell; use the worker base's shell,
-  # or copy a file out of any of them:
-  kubectl cp <namespace>/<pod>:/licenses/THIRD-PARTY-NOTICES ./THIRD-PARTY-NOTICES
+  kubectl exec -n <tenant-ns> <worker-pod> -- cat /licenses/LICENSE
+  kubectl cp <tenant-ns>/<worker-pod>:/licenses/THIRD-PARTY-NOTICES ./THIRD-PARTY-NOTICES
+  # The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither
+  # exec-cat nor kubectl cp works on them — read their /licenses from the repo
+  # root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).
   ```
 
 - **How it is kept current.** `THIRD-PARTY-NOTICES` lives at the repo root and is

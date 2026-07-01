@@ -10,7 +10,7 @@ is automated, by what, and where the manual edges are.
 
 | Surface | Where it's pinned | Update channel |
 |---|---|---|
-| Go module deps (9 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml) |
+| Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml). Note: `api/` (the shared v2 kinds module) is **not yet** listed in `dependabot.yml`, so it currently receives no automated `gomod` bumps. |
 | GitHub Actions (`uses:` SHAs) | `.github/workflows/*.yml` | **Dependabot** (`github-actions`, weekly, grouped) |
 | Docker base images (`FROM` digests) | `cmd/*/Dockerfile`, `test/fakegithub/Dockerfile` | **Dependabot** (`docker`, weekly, grouped) |
 | kind version + binary checksum | `KIND_VERSION` / `KIND_BINARY_SHA256` in [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) | **updatecli** ([`updatecli.d/kind.yaml`](../../updatecli.d/kind.yaml), weekly) |

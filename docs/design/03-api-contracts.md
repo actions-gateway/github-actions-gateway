@@ -58,7 +58,7 @@ type ProxyConfig struct {
     // Resource requests are required for the HPA to compute CPU utilization
     // percentages — without them the HPA metric shows as <unknown> and
     // autoscaling does not function.
-    // Defaults: requests 10m CPU / 32Mi memory; limits 100m CPU / 64Mi memory.
+    // Defaults: requests 10m CPU / 32Mi memory; limits 500m CPU / 64Mi memory.
     // +optional
     Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
@@ -417,7 +417,7 @@ type RunnerGroupSpec struct {
     // this RunnerGroup. For most RunnerGroups the default is sufficient; increase
     // it only if jobs are being lost during acquisition bursts.
     //
-    // +kubebuilder:default=10
+    // +kubebuilder:default=1
     // +kubebuilder:validation:Minimum=1
     MaxListeners int32 `json:"maxListeners,omitempty"`
 
@@ -531,9 +531,10 @@ type RunnerGroupSpec struct {
     // aligned with the ARC gha-runner-scale-set chart default). Its runner
     // version is the single source of truth in cmd/agc/names (RunnerVersion),
     // which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC's
-    // agent.version matches the running runner binary. Operators override it at
-    // AGC startup via the --worker-image flag; tenants can then override further
-    // per-RunnerGroup with this field without affecting other groups.
+    // agent.version matches the running runner binary. Operators override it via
+    // the WORKER_IMAGE environment variable (set by the GMC on the AGC
+    // Deployment); tenants can then override further per-RunnerGroup with this
+    // field without affecting other groups.
     // +optional
     WorkerImage string `json:"workerImage,omitempty"`
 
