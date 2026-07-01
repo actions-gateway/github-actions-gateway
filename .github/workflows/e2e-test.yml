@@ -45,12 +45,17 @@ jobs:
               - 'vendor/**'
               - 'go.work'
               - 'go.work.sum'
-              - 'scripts/**'
-              # Dogfood/GKE tooling is never exercised by the kind e2e job (it
-              # provisions the GAG-hosted DinD runner, a separate deploy target),
-              # so a change there must not trigger this job. dorny/paths-filter
-              # evaluates '!' negations in order after the includes above.
-              - '!scripts/dogfood/**'
+              # All of scripts/ EXCEPT scripts/dogfood/. dorny/paths-filter ORs
+              # its patterns (filter.ts: patterns.some), so a leading-'!' item is
+              # NOT a subtraction — picomatch reads '!scripts/dogfood/**' as "match
+              # anything outside dogfood", which OR's to true for nearly every file.
+              # Instead enumerate positively: top-level scripts (scripts/*) plus any
+              # non-dogfood subdir (scripts/!(dogfood)/**, an extglob — MatchOptions
+              # leaves extglob enabled). Dogfood/GKE tooling is never run by the kind
+              # e2e job (it provisions the GAG-hosted DinD runner, a separate deploy
+              # target), so a dogfood-only change must not trigger this job.
+              - 'scripts/*'
+              - 'scripts/!(dogfood)/**'
               - 'Makefile'
               - 'docker-bake.hcl'
               - '.github/workflows/e2e-test.yml'
