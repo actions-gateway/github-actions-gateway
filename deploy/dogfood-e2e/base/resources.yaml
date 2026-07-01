@@ -1,0 +1,44 @@
+# Shared, isolation-agnostic tenant objects. The overlay patches in the
+# security profile (namespace) and the worker shape (RunnerSet.templateRef).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gag-dogfood-e2e
+  labels:
+    # Authorizes the GMC to operate in this namespace. The security profile is
+    # isolation-specific and set by the overlay (dind=privileged, kata=baseline).
+    actions-gateway.com/tenant: managed
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dogfood-e2e-quota
+  namespace: gag-dogfood-e2e
+spec:
+  hard:
+    pods: "6"
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata:
+  name: dogfood-e2e
+  namespace: gag-dogfood-e2e
+spec:
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: github-app-v1 # Secret created out-of-band (see ../README.md)
+  githubURL: https://github.com/actions-gateway/github-actions-gateway
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: ci-e2e
+  namespace: gag-dogfood-e2e
+spec:
+  gatewayRef:
+    name: dogfood-e2e
+  # templateRef is supplied by the overlay — the isolation-specific worker shape.
+  runnerLabels: ["self-hosted", "linux", "gag-ci-e2e"]
+  maxListeners: 2
+  maxWorkers: 2

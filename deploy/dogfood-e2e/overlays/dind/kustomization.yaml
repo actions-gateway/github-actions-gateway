@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Privileged-DinD isolation variant — no nested virt, no Kata.
+#
+# TRUSTED CI ONLY. The worker runs a privileged dockerd (host-kernel exposure)
+# and broad egress. For untrusted PRs use the Kata variant (../kata). See ../../README.md.
+#
+# The delta vs any other overlay is exactly: the namespace security profile
+# (below), the ClusterRunnerTemplate worker shape, and the egress policy.
+resources:
+  - ../../base
+  - resources.yaml
+patches:
+  # Namespace -> privileged. All four gates in one object so the GMC's
+  # ValidatingAdmissionPolicies admit it (the security-profile downgrade needs
+  # the annotation; privileged needs the platform eligibility label).
+  - patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: gag-dogfood-e2e
+        labels:
+          actions-gateway.com/security-profile: privileged
+          pod-security.kubernetes.io/enforce: privileged
+          actions-gateway.com/privileged-profile: allowed
+        annotations:
+          actions-gateway.com/allow-profile-downgrade: allowed
+  # Point the RunnerSet at the privileged ClusterRunnerTemplate.
+  - patch: |
+      apiVersion: actions-gateway.com/v2alpha1
+      kind: RunnerSet
+      metadata:
+        name: ci-e2e
+        namespace: gag-dogfood-e2e
+      spec:
+        templateRef:
+          name: dogfood-e2e-privileged
+          kind: ClusterRunnerTemplate
