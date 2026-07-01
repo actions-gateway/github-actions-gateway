@@ -21,7 +21,7 @@ could have told you.
 | Tier | What runs | When | Typical cost | Source of truth |
 |---|---|---|---|---|
 | **Pre-commit hook** | `gofmt` on staged `.go` files; `docs/STATUS.md` format lint when that file is staged | every `git commit` | ~0.5s | [`.githooks/pre-commit`](../../.githooks/pre-commit) |
-| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + unit tests, all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
+| **`make check`** | `gofmt` + `golangci-lint` + `STATUS.md` lint + plan-index/no-plan-refs drift + single-Go-version + `shellcheck` + chart CRD/RBAC/webhook drift + `scripts-test` + doc link/anchor check + unit tests (with the coverage ratchet), all modules | manual, before requesting review | minutes cold / seconds warm | [`Makefile`](../../Makefile) `check` target |
 | **CI** | the above **plus** integration (envtest), end-to-end (e2e, `kind`), `govulncheck`, and `trivy` image scans | on every pull request and push to `main` | full | [`.github/workflows/`](../../.github/workflows/) |
 
 Installation: `make hooks` (or [`scripts/setup.sh`](../../scripts/setup.sh), which
@@ -83,7 +83,7 @@ verbosity. CLAUDE.md tells contributors which tier proves which bug class.
 Local verdict equals CI verdict by deliberate construction:
 - `make trivy-scan` is "mirrored exactly by the CI `trivy` job so local and CI verdicts match" ([`Makefile`](../../Makefile)).
 - `make vulncheck` "matches the CI `govulncheck` gate."
-- `make check` runs the same gofmt + `golangci-lint` + `STATUS.md` lint + unit tests as [`unit-test.yml`](../../.github/workflows/unit-test.yml), so a green `make check` means a green unit-test workflow.
+- `make check` runs the same gofmt + `golangci-lint` + `STATUS.md` lint + unit tests as [`unit-test.yml`](../../.github/workflows/unit-test.yml) (plus additional gates it supersets — `shellcheck`, chart CRD/RBAC/webhook drift, plan-index/no-plan-refs, doc link/anchor check, and the coverage ratchet — each mirrored by its own CI workflow), so a green `make check` means a green unit-test workflow.
 
 This parity is what makes the fast local signal worth trusting.
 
@@ -99,10 +99,13 @@ The article's core principle is visibly practiced. [`.golangci.yml`](../../.gola
 states its scope is to "catch regressions of the bugs and idiom violations
 tracked in Queue items 38–41." `scripts/lint-status.sh` exists solely because
 the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
-The `claude-workspace-guard` PreToolUse hook is real-time backpressure on file
-operations, and `claude-branch-guard` is the same on git operations — prompting
-before commits, pushes, or destructive commands on a protected branch. Each is a
-repeated correction turned into an automated gate.
+The workspace-guard PreToolUse hook is real-time backpressure on file
+operations, and branch-guard is the same on git operations — prompting
+before commits, pushes, or destructive commands on a protected branch. (These
+two guards are harness/`CLAUDE.md`-level, not repo-tracked hook scripts; the
+repo does track two PreToolUse hooks of its own, `scripts/claude-go-throttle-hook.sh`
+and `scripts/claude-no-subagent-workers-hook.sh`.) Each is a repeated correction
+turned into an automated gate.
 
 ### Compress success, expand failure — A−
 The agent-loop path is non-verbose by default (native compress-success /

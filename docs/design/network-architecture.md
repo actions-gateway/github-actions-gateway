@@ -24,7 +24,7 @@ This document covers the network topology of a deployed gateway: which component
     Worker Pod ──(5)─────────┘
 ```
 
-All GitHub-bound traffic — from both the AGC and worker pods — is routed through the per-tenant egress proxy pool. Kubernetes API traffic from the AGC travels directly in-cluster and bypasses the proxy.
+In the proxied topology described here — a gateway with an attached `EgressProxy` — all GitHub-bound traffic from both the AGC and worker pods is routed through the per-tenant egress proxy pool. Kubernetes API traffic from the AGC travels directly in-cluster and bypasses the proxy. (The v2 direct-egress, proxy-less mode routes GitHub traffic straight from the pods instead of through a proxy pool; see [Proxy-less onboarding (direct egress)](../operations/tenant-onboarding.md#proxy-less-onboarding-direct-egress).)
 
 ---
 
