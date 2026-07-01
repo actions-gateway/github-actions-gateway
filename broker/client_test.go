@@ -198,6 +198,83 @@ func TestAcquireJob_FallsBackToPlanIDFromBody(t *testing.T) {
 	assert.Equal(t, "plan-from-body", result.Plan.PlanID)
 }
 
+// Fixed, non-secret token values for the Q247 RenewJob/AcquireJob auth tests.
+// Referenced as identifiers at every use site so gosec's hardcoded-credential
+// heuristic (G101) fires only on these declarations, suppressed here — rather than
+// at each map/struct literal that carries the value.
+const (
+	jobAuthToken   = "job-scoped-token" //nolint:gosec // G101: fixed test value, not a real credential
+	otherAuthToken = "other-endpoint"   //nolint:gosec // G101: fixed test value, not a real credential
+)
+
+func TestAcquireJob_ExtractsJobAuthToken(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// The run service returns the job-scoped token in the SystemVssConnection
+		// endpoint's AccessToken authorization parameter (Q247).
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-1"},
+			"resources": map[string]any{
+				"endpoints": []map[string]any{
+					{
+						"name": "SomeOtherEndpoint",
+						"authorization": map[string]any{
+							"parameters": map[string]string{"AccessToken": otherAuthToken},
+						},
+					},
+					{
+						"name": "SystemVssConnection",
+						"url":  "https://run.example/job",
+						"authorization": map[string]any{
+							"scheme":     "OAuth",
+							"parameters": map[string]string{"AccessToken": jobAuthToken},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	result, _, err := c.AcquireJob(context.Background(), srv.URL, broker.JobAcquisitionRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, jobAuthToken, result.JobAuthToken(),
+		"must extract the AccessToken from the SystemVssConnection endpoint")
+}
+
+func TestAcquireJobResponse_JobAuthToken(t *testing.T) {
+	t.Parallel()
+	t.Run("case-insensitive endpoint name and param key", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"resources": {"endpoints": [
+				{"name": "systemvssconnection", "authorization": {"parameters": {"accesstoken": "tok"}}}
+			]}
+		}`), &r))
+		assert.Equal(t, "tok", r.JobAuthToken())
+	})
+	t.Run("no SystemVssConnection endpoint returns empty", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"plan": {"planId": "p"},
+			"resources": {"endpoints": [
+				{"name": "Other", "authorization": {"parameters": {"AccessToken": "tok"}}}
+			]}
+		}`), &r))
+		assert.Empty(t, r.JobAuthToken())
+	})
+	t.Run("no resources returns empty", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{"plan": {"planId": "p"}}`), &r))
+		assert.Empty(t, r.JobAuthToken())
+	})
+}
+
 func TestAcquireJob_UsesRunServiceURL(t *testing.T) {
 	t.Parallel()
 	// runServiceSrv is a separate server from the broker — AcquireJob must
@@ -258,6 +335,67 @@ func TestRenewJob_UsesRunServiceURL(t *testing.T) {
 	_, err := c.RenewJob(context.Background(), runServiceSrv.URL, broker.RenewJobRequest{PlanID: "p", JobID: "j"})
 	require.NoError(t, err)
 	assert.True(t, renewHit)
+}
+
+func TestRenewJob_UsesJobAuthToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{
+		PlanID:    "p",
+		JobID:     "j",
+		AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// The job-scoped token authorizes per-job renewal; the broker session token is
+	// rejected 401 "Not authorized for this job" (Q247).
+	assert.Equal(t, "Bearer "+jobAuthToken, gotAuth)
+}
+
+func TestRenewJob_FallsBackToClientTokenWithoutJobToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{PlanID: "p", JobID: "j"})
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer test-token", gotAuth)
+}
+
+func TestRenewJob_AuthTokenNotInBody(t *testing.T) {
+	t.Parallel()
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{
+		PlanID:    "p",
+		JobID:     "j",
+		AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// AuthToken is an auth header, never a body field — it must not leak into the
+	// serialized request body.
+	assert.NotContains(t, body, "AuthToken")
+	assert.NotContains(t, body, "authToken")
 }
 
 func TestRenewJob_NonOKResponse(t *testing.T) {

@@ -869,7 +869,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -900,7 +900,7 @@ func TestRenewLoop_StopsOnStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 	stop() // should not hang
 
 	// done must close once the loop goroutine exits after stop().
@@ -935,7 +935,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -976,7 +976,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Stop before any tick fires.
 	stop()
@@ -1037,7 +1037,7 @@ func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
 	// 60s renewal interval (fake-clock driven); 100ms per-call timeout (real time),
 	// well under the interval as production requires. The first call blocks longer
 	// than 100ms, so the timeout — not the response — must free the loop.
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
 
 	// Two renewal attempts prove the loop was not wedged by the first (hung) call:
 	// the second can only fire once the per-call timeout aborts the first.
@@ -1154,6 +1154,138 @@ func TestListener_RenewJobUsesRunnerRequestID(t *testing.T) {
 		}
 	}, 3*time.Second, time.Millisecond, "expected a RenewJob call")
 	assert.Equal(t, wantJobID, got, "RenewJob must target the job's RunnerRequestID, not the broker MessageID")
+
+	close(release)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_RenewJobUsesJobToken drives a real job through the full Run path
+// and asserts that every per-job renewal is authorized with the job-scoped token
+// from the acquirejob response (the SystemVssConnection AccessToken) — NOT the
+// broker session token. The run service accepts the session token to *claim* a job
+// (acquirejob) but rejects it for *renewing* the job's lock with 401 "Not
+// authorized for this job"; the lock then lapses at its ~10-minute TTL and GitHub
+// recycles the job (the third and final Q247 facet). The job token here is
+// deliberately distinct from the broker OAuth token so the pre-fix behaviour
+// (sending the session token) cannot pass: every renewal would 401 and renewOK
+// would stay zero.
+func TestListener_RenewJobUsesJobToken(t *testing.T) {
+	const (
+		wantJobID = "req-jobtoken-1"
+		// must differ from the broker OAuth token
+		wantJobToken = "job-scoped-actoken-xyz" //nolint:gosec // G101: fixed test value, not a real credential
+	)
+
+	oauthSrv := oauthStub() // issues "stub-runner-token" as the broker session token
+
+	var (
+		renewOK     atomic.Int32
+		renewUnauth atomic.Int32
+	)
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobID,
+		RunServiceURL:   brokerSrv.URL, // must resolve so AcquireJob + RenewJob hit the stub
+	})
+
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        string(body),
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	// AcquireJob returns the job-scoped token in the SystemVssConnection endpoint —
+	// the shape the real run service returns and the worker/runner consumes.
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-1")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-1"},
+			"resources": map[string]any{
+				"endpoints": []map[string]any{{
+					"name": "SystemVssConnection",
+					"url":  brokerSrv.URL,
+					"authorization": map[string]any{
+						"scheme":     "OAuth",
+						"parameters": map[string]string{"AccessToken": wantJobToken},
+					},
+				}},
+			},
+		})
+	})
+	mux.SetRenew(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+wantJobToken {
+			renewUnauth.Add(1)
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"source":"actions-run-service","statusCode":401,"errorMessage":"Not authorized for this job"}`))
+			return
+		}
+		renewOK.Add(1)
+		defaultRenewJob(w)
+	})
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	// JobHandler blocks until the renewals have fired, so the renew loop stays live
+	// while we advance the clock across the simulated job.
+	release := make(chan struct{})
+	cfg := listener.Config{
+		Group:         "grp",
+		Namespace:     "ns",
+		Agent:         makeAgent(t, oauthSrv.URL),
+		Broker:        bc,
+		HTTPClient:    oauthSrv.Client(),
+		Clock:         clk,
+		RunnerOS:      "Linux",
+		RenewInterval: 60 * time.Second,
+		IsLastPoller:  func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+			<-release
+			return nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// Simulate a job that outlives the ~10-minute lock TTL: drive 11 renewal ticks
+	// (11 minutes at the 60s cadence). Every one must be authorized with the job
+	// token — pre-fix, RenewJob sends the broker session token and every renewal
+	// 401s, so the lock lapses at 10 minutes and GitHub recycles the job (Q247).
+	const wantRenewals = 11
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		return renewOK.Load() >= wantRenewals
+	}, 5*time.Second, time.Millisecond, "expected >=%d authorized renewals across a >10-min job", wantRenewals)
+	assert.Zero(t, renewUnauth.Load(),
+		"no renewal may be rejected as unauthorized; RenewJob must present the job-scoped token, not the broker session token (Q247)")
 
 	close(release)
 	cancel()

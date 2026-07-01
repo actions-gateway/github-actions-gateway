@@ -469,11 +469,22 @@ func (c *Client) AcquireJob(ctx context.Context, runServiceURL string, reqData J
 
 // RenewJob renews the job lock on the run service URL. Must be called every
 // 60 seconds after AcquireJob succeeds. runServiceURL must come from
-// RunnerJobRequestBody.RunServiceURL, not from Client.BrokerURL.
+// RunnerJobRequestBody.RunServiceURL, not from Client.BrokerURL. Set
+// reqData.AuthToken to the acquirejob response's job-scoped token
+// (AcquireJobResponse.JobAuthToken); without it the run service rejects the
+// renewal with 401 "Not authorized for this job" (Q247).
 func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData RenewJobRequest) (*RenewJobResponse, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, runServiceURL+"/renewjob", reqData)
 	if err != nil {
 		return nil, err
+	}
+	// A job's lock is renewed with the job-scoped token minted at acquisition (the
+	// SystemVssConnection AccessToken from the acquirejob response), not the broker
+	// session token: the run service returns 401 "Not authorized for this job" for
+	// the session token even though it accepted that same token to *claim* the job
+	// (Q247). Fall back to Client.Token when the caller has no job token.
+	if reqData.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+reqData.AuthToken)
 	}
 
 	resp, err := c.httpClient().Do(req)

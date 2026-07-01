@@ -176,6 +176,13 @@ func Checks() []Check {
 			Asserts:  "A body encrypted as base64(IV‖AES-256-CBC(PKCS#7)) round-trips through DecryptMessageBody into a RunnerJobRequestBody.",
 			Run:      checkMessageBodyCrypto,
 		},
+		{
+			ID:       "C16",
+			Title:    "Renew job uses the job-scoped token",
+			Contract: "§3.3/§3.4 POST /renewjob auth",
+			Asserts:  "RenewJob presents the acquirejob response's SystemVssConnection AccessToken (JobAuthToken); the broker session token is rejected 401 (Q247).",
+			Run:      checkRenewJobToken,
+		},
 	}
 }
 
@@ -422,6 +429,58 @@ func checkRenewJob(ctx context.Context) error {
 	}
 	if !resp.LockedUntil.After(before) {
 		return fmt.Errorf("lockedUntil %s is not after the renew time %s", resp.LockedUntil, before)
+	}
+	return nil
+}
+
+func checkRenewJobToken(ctx context.Context) error {
+	const (
+		jobToken     = "job-scoped-actoken"   //nolint:gosec // G101: fixed test value, not a real credential
+		sessionToken = "broker-session-token" //nolint:gosec // G101: fixed test value, not a real credential
+	)
+	// A stub run service that returns the job token in the SystemVssConnection
+	// endpoint on acquire, and authorizes renewjob only with that token — the real
+	// run service rejects the session token for per-job renewal (Q247).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/acquirejob":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"plan": map[string]string{"planId": "plan-1"},
+				"resources": map[string]any{"endpoints": []map[string]any{{
+					"name":          "SystemVssConnection",
+					"url":           "http://run.invalid",
+					"authorization": map[string]any{"parameters": map[string]string{"AccessToken": jobToken}},
+				}}},
+			})
+		case "/renewjob":
+			if r.Header.Get("Authorization") != "Bearer "+jobToken {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"errorMessage":"Not authorized for this job"}`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	base := strings.TrimRight(srv.URL, "/")
+
+	c := &broker.Client{Token: sessionToken, HTTPClient: srv.Client()}
+	resp, _, err := c.AcquireJob(ctx, base, broker.JobAcquisitionRequest{JobMessageID: "req-1"})
+	if err != nil {
+		return fmt.Errorf("AcquireJob: %w", err)
+	}
+	if resp.JobAuthToken() != jobToken {
+		return fmt.Errorf("JobAuthToken = %q, want %q (SystemVssConnection AccessToken)", resp.JobAuthToken(), jobToken)
+	}
+	// Renewing with the job token succeeds.
+	if _, err := c.RenewJob(ctx, base, broker.RenewJobRequest{PlanID: "plan-1", JobID: "req-1", AuthToken: resp.JobAuthToken()}); err != nil {
+		return fmt.Errorf("RenewJob with job token: %w", err)
+	}
+	// Renewing with only the broker session token is rejected — the Q247 failure.
+	if _, err := c.RenewJob(ctx, base, broker.RenewJobRequest{PlanID: "plan-1", JobID: "req-1"}); err == nil {
+		return fmt.Errorf("RenewJob with the session token must be rejected (Q247), got success")
 	}
 	return nil
 }

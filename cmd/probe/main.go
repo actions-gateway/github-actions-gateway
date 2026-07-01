@@ -297,7 +297,10 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("AcquireJob: %w", err)
 	}
-	logger.Info("job acquired", "planId", acqResp.Plan.PlanID)
+	// The run service authorizes per-job renewal with the SystemVssConnection
+	// token from this response, not the broker session token (Q247).
+	jobToken := acqResp.JobAuthToken()
+	logger.Info("job acquired", "planId", acqResp.Plan.PlanID, "hasJobToken", jobToken != "")
 
 	// ── 7. Print full payload (pipe to testdata/job_payload.json) ────────────
 	fmt.Println(string(rawPayload))
@@ -314,8 +317,9 @@ func run(logger *slog.Logger) error {
 				return
 			case t := <-ticker.C:
 				renewResp, renewErr := bc.RenewJob(ctx, jobReq.RunServiceURL, broker.RenewJobRequest{
-					PlanID: acqResp.Plan.PlanID,
-					JobID:  jobReq.RunnerRequestID,
+					PlanID:    acqResp.Plan.PlanID,
+					JobID:     jobReq.RunnerRequestID,
+					AuthToken: jobToken,
 				})
 				if renewErr != nil {
 					logger.Error("RenewJob failed", "error", renewErr, "tick", t)

@@ -772,7 +772,7 @@ These endpoints are called by each AGC instance. The GMC has no direct relations
 | **POST** | `{broker_url}/sessions` | AGC Goroutine | Registers a virtual runner and obtains a `sessionId`. Rejected with `400 Bad Request` if the runner version in the request body is below GitHub's enforced minimum. |
 | **GET** | `{broker_url}/message?sessionId={id}` | AGC Goroutine | Opens a 50-second long-poll connection. Returns `202 Accepted` with empty body when no job is queued; returns a `RunnerJobRequest` message when a job is available. |
 | **POST** | `{run_service_url}/acquirejob` | AGC Goroutine | Claims the job within the 2-minute delivery window. Must be called before pod creation. On success returns the full job instructions payload; `planId` is in both the `x-plan-id` response header (primary) and `.plan.planId` in the body (fallback). |
-| **POST** | `{run_service_url}/renewjob` | AGC per-job background goroutine | Renews the job lock every 60 seconds. Each renewal extends the lock by ~10 minutes. Must run continuously from after `acquirejob` until the job completes or is cancelled — failure to renew causes GitHub to cancel the job. |
+| **POST** | `{run_service_url}/renewjob` | AGC per-job background goroutine | Renews the job lock every 60 seconds. Each renewal extends the lock by ~10 minutes. Must run continuously from after `acquirejob` until the job completes or is cancelled — failure to renew causes GitHub to cancel the job. **Auth:** present the job-scoped token from the `acquirejob` response (the `SystemVssConnection` endpoint's `AccessToken`), NOT the broker session token — the run service rejects the session token here with 401 "Not authorized for this job" even though it accepted it to claim the job (Q247). |
 | **POST** | `{broker_url}/acknowledge` | AGC Goroutine | Post-dispatch telemetry notification to the broker (`AcknowledgeRunnerRequestAsync` in the official runner source). Confirmed in Milestone 1 (Investigation A) as **not required for correct job delivery** — `acquirejob` alone is the atomic claim. The v2 broker host does not expose the v1 VSTS delete-message endpoint; the correct v2 path is `POST {brokerURL}acknowledge?sessionId={sessionId}` with body `{"runnerRequestId": "…"}`. Callers MAY skip this call; it has no effect on job delivery semantics. |
 
 **Retry policy for `GET /message`:** Based on `MessageListener.cs` in the official runner source, the AGC session goroutine should implement a two-tier random backoff on errors: up to 5 consecutive errors use [15s, 30s] jitter; beyond 5 errors the window widens to [30s, 60s]. After 50 consecutive empty-body (202) responses within 30 minutes, apply the same [15s, 30s] backoff as a server-anomaly guard. **Non-retriable errors** (surface as a `RunnerGroup` status Condition, do not retry in a tight loop): session not found, pool not found, unauthorized, access denied. **Special case:** a session-expired error should trigger session recreation before resuming the poll loop.
@@ -809,25 +809,58 @@ type JobAcquisitionRequest struct {
     BillingOwnerID string `json:"billingOwnerId"`
 }
 
+// ServiceEndpoint is one entry in AcquireJobResponse.Resources.Endpoints. The
+// SystemVssConnection endpoint's AccessToken authorization parameter is the
+// job-scoped bearer token used to renew this job's lock (see RenewJobRequest).
+type ServiceEndpoint struct {
+    Name          string `json:"name"` // e.g. "SystemVssConnection"
+    URL           string `json:"url"`
+    Authorization struct {
+        Scheme     string            `json:"scheme"`
+        Parameters map[string]string `json:"parameters"` // ["AccessToken"] holds the token
+    } `json:"authorization"`
+}
+
 // AcquireJobResponse is the response from POST {run_service_url}/acquirejob.
 // The full body contains all job instructions forwarded opaquely to the Runner.Worker.
-// The AGC only extracts planId for lock renewal; everything else is passed through.
-// planId is returned in two places: prefer the x-plan-id response header; fall back
-// to .plan.planId in the body if the header is absent.
+// The AGC extracts planId for lock renewal and the job-scoped token that authorizes
+// it (JobAuthToken, the SystemVssConnection AccessToken); everything else is passed
+// through. planId is returned in two places: prefer the x-plan-id response header;
+// fall back to .plan.planId in the body if the header is absent.
 type AcquireJobResponse struct {
     Plan struct {
         PlanID string `json:"planId"`
     } `json:"plan"`
+    // Resources.Endpoints carries the job's service endpoints. The SystemVssConnection
+    // endpoint's AccessToken authorization parameter is the job-scoped bearer token
+    // that renewjob (below) must present — see the RenewJob auth note. JobAuthToken()
+    // is a helper that finds that endpoint and returns its AccessToken.
+    Resources struct {
+        Endpoints []ServiceEndpoint `json:"endpoints"`
+    } `json:"resources"`
     // Remainder of the body is the complete job instructions payload forwarded to the worker.
 }
 
 // RenewJobRequest is the request body for POST {run_service_url}/renewjob.
 // Must be called every 60 seconds after acquirejob succeeds.
+//
+// Auth: the renewal is authorized with the job-scoped token from the acquirejob
+// response (AcquireJobResponse.JobAuthToken — the SystemVssConnection AccessToken),
+// carried in the Authorization header, NOT with the broker session token. The run
+// service accepts the session token to *claim* a job but rejects it for *renewing*
+// that job's lock with 401 "Not authorized for this job", so on a job that outlives
+// the initial ~10-minute lock TTL the lock never renews and GitHub recycles the job
+// at exactly the TTL boundary (Q247). This mirrors the runner, which renews via a
+// RunServer connection built from the message's SystemVssConnection endpoint
+// (VssUtil.GetVssCredential), not the listener OAuth token.
 type RenewJobRequest struct {
     // PlanID comes from the acquirejob response. Prefer the x-plan-id response header;
     // fall back to AcquireJobResponse.Plan.PlanID if the header is absent.
     PlanID string `json:"planId"`
     JobID  string `json:"jobId"` // = RunnerJobRequestBody.RunnerRequestID
+    // AuthToken is the job-scoped bearer token (JobAuthToken). Carried in the
+    // Authorization header, never serialized into the body.
+    AuthToken string `json:"-"`
 }
 
 // RenewJobResponse is returned by POST {run_service_url}/renewjob.

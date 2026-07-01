@@ -570,6 +570,11 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		payload       []byte
 		planID        = "stub"
 		runServiceURL = jobBody.RunServiceURL
+		// jobToken is the job-scoped bearer token the run service returns in the
+		// acquirejob response (the SystemVssConnection AccessToken). RenewJob must
+		// present it: the run service rejects the broker session token for per-job
+		// lock renewal with 401 "Not authorized for this job" (Q247).
+		jobToken string
 	)
 
 	// Call AcquireJob if we have a runServiceURL. Bounded by the control-plane
@@ -604,6 +609,16 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		}
 		planID = resp.Plan.PlanID
 		payload = rawBytes
+		jobToken = resp.JobAuthToken()
+		if jobToken == "" {
+			// The run service authorizes per-job renewal with this token; without it
+			// RenewJob falls back to the broker session token, which the run service
+			// rejects with 401 "Not authorized for this job", so the lock lapses at
+			// its ~10-minute TTL (Q247). Warn so a protocol drift that drops the token
+			// is visible rather than silently re-orphaning long jobs.
+			log.Warn("AcquireJob response carried no SystemVssConnection token; " +
+				"RenewJob will fall back to the broker token and the run service may reject the renewal (Q247)")
+		}
 	} else {
 		payload = []byte(msg.Body)
 	}
@@ -631,7 +646,10 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// black-holed renewal (egress path saturated under load) aborts instead of
 	// wedging the loop and starving every later renewal until the lock lapses (the
 	// Q247 residual — an exactly-~10-minute orphan even with the correct jobId).
-	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
+	// jobToken authorizes the renewal: the run service rejects the broker session
+	// token for per-job renewal (401 "Not authorized for this job") even though it
+	// accepted the same token to claim the job — the third and final Q247 facet.
+	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID, jobToken,
 		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval, cfg.controlPlaneTimeout())
 	// Cancel the renew loop and wait for it to exit before returning, so the
 	// goroutine never outlives the job it renews.
@@ -721,6 +739,14 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 // completes to avoid goroutine leaks; they may then wait on done if they need to
 // guarantee the goroutine has stopped before releasing shared resources.
 //
+// jobToken is the job-scoped bearer token from the acquirejob response
+// (AcquireJobResponse.JobAuthToken). Each RenewJob call presents it instead of the
+// broker session token: the run service rejects the session token for per-job lock
+// renewal with 401 "Not authorized for this job" even though it accepted the same
+// token to claim the job, so without jobToken every renewal fails and the lock
+// lapses at its ~10-minute TTL (Q247). An empty jobToken falls back to the client's
+// session token (test/stub use, or a run service that authorizes renewal with it).
+//
 // renewCallTimeout bounds each individual RenewJob call. It MUST be smaller than
 // renewInterval and smaller than GitHub's lock TTL. The renewal call runs inline
 // in the loop, so an unbounded call that black-holes (egress-proxy path saturated
@@ -733,7 +759,7 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 func StartRenewLoop(
 	ctx context.Context,
 	client *broker.Client,
-	runServiceURL, planID, jobID string,
+	runServiceURL, planID, jobID, jobToken string,
 	metrics *Metrics,
 	namespace string,
 	clk Clock,
@@ -757,8 +783,9 @@ func StartRenewLoop(
 					callCtx, cancelCall = context.WithTimeout(stopCtx, renewCallTimeout)
 				}
 				_, err := client.RenewJob(callCtx, runServiceURL, broker.RenewJobRequest{
-					PlanID: planID,
-					JobID:  jobID,
+					PlanID:    planID,
+					JobID:     jobID,
+					AuthToken: jobToken,
 				})
 				cancelCall()
 				if err != nil {

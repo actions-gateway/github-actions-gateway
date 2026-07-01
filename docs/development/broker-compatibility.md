@@ -11,7 +11,7 @@ to be added after the beta cut.
 
 ## Result
 
-**15/15 contracts verified.**
+**16/16 contracts verified.**
 
 All documented broker contracts pass against the in-process broker model.
 
@@ -51,6 +51,7 @@ make compat-report
 | C13 | §3.3 acknowledge (M1 Investigation A) | The full create→poll→acquire→renew→delete lifecycle completes with zero acknowledge calls. | ✅ PASS |
 | C14 | §3.2 encryptionKey (RSA-OAEP SHA-1) | A session key wrapped with RSA-OAEP(SHA-1) — the .NET runner default — round-trips through DecryptSessionKey. | ✅ PASS |
 | C15 | §3.4 encrypted message body | A body encrypted as base64(IV‖AES-256-CBC(PKCS#7)) round-trips through DecryptMessageBody into a RunnerJobRequestBody. | ✅ PASS |
+| C16 | §3.3/§3.4 POST /renewjob auth | RenewJob presents the acquirejob response's SystemVssConnection AccessToken (JobAuthToken); the broker session token is rejected 401 (Q247). | ✅ PASS |
 
 ## Scope and the live probe
 

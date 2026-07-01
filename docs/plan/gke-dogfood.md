@@ -499,9 +499,30 @@ gh api /repos/"$REPO"/actions/runners \
 > them. Regression test asserts a second renewal fires while the first is still
 > hung (impossible if the loop is wedged). This is the co-occurring node-exhaustion
 > interaction the original Q247 note flagged, now closed as a code fix rather than
-> a capacity workaround. The remaining defense-in-depth gap — tearing down the
-> worker when a lock is *definitively* lost after sustained renewal failure — is
-> tracked as Q254.
+> a capacity workaround.
+>
+> **Q247 auth — RenewJob used the wrong token (fixed).** With both prior fixes
+> live (`agc:q247-3edc85e`), the renewal loop fired correctly but *every* `RenewJob`
+> was rejected by GitHub with `401 {"source":"actions-run-service","errorMessage":
+> "Not authorized for this job"}`, repeating every ~40s for both agent indices, and
+> long jobs again failed at *exactly* 600s. Root cause: `RenewJob` authenticated
+> with the broker session (OAuth) token — the same token used for `CreateSession`/
+> `GetMessage`/`AcquireJob` — but the run service authorizes *per-job* lock renewal
+> only with the job-scoped token it issues in the `acquirejob` response (the
+> `SystemVssConnection` endpoint's `AccessToken`). It accepts the session token to
+> *claim* a job but rejects it to *renew* one, which is why acquire succeeded and
+> every renewal 401'd from the first call (ruling out token expiry). This mirrors
+> the real runner, which renews via a `RunServer` connection built from the message's
+> `SystemVssConnection` endpoint (`VssUtil.GetVssCredential`), not the listener
+> OAuth token. Fix: `AcquireJob` now parses the endpoint token
+> (`AcquireJobResponse.JobAuthToken`) and the listener threads it into every
+> `RenewJob` call as the `Authorization` bearer (`RenewJobRequest.AuthToken`),
+> falling back to the session token only when absent. Merge gate: a full-`Run`
+> listener test drives a simulated >10-minute job whose renew endpoint 401s on any
+> non-job token and asserts every renewal is authorized; the fakegithub broker and
+> the broker-compat suite (new contract C16) model the same auth. The remaining
+> defense-in-depth gap — tearing down the worker when a lock is *definitively* lost
+> after sustained renewal failure — is tracked as Q254.
 >
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
 > Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
