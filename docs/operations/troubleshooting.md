@@ -36,6 +36,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Token Refresh Errors Spiking](#token-refresh-errors-spiking)
 - [RenewJob Failures Rising](#renewjob-failures-rising)
 - [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
+- [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner)
 - [Network Connectivity Failures](#network-connectivity-failures)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
@@ -1106,6 +1107,28 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSess
   Expect `409 Already exists` registration errors for any agent that never ran a job — its record survives server-side under an ID the AGC no longer knows. Delete the survivor from GitHub first: find its ID with `gh api '.../actions/runners?name=<group>-<index>'`, then `gh api -X DELETE .../actions/runners/<id>`. Fixed versions resolve this 409 automatically.
 
 **On fixed versions,** a sustained rise of `actions_gateway_agent_recycle_errors_total` means the AGC cannot re-register agents (registration API unreachable, installation token failures, or revoked GitHub App runner-administration permission) — listener capacity shrinks until recycles succeed. Check AGC logs for `recycle` errors and verify the App's runner permissions.
+
+---
+
+## Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)
+
+**Symptoms.** Each job runs green *individually*, but bursting a whole CI matrix onto the gateway at once serializes to roughly one running worker even with ample node room (nodes well under capacity, zero `Pending` pods). Queued jobs sit unstarted until GitHub cancels them at its ~15-minute unstarted-job timeout; an already-running job whose token is invalidated dies with `RenewJob 401 "Not authorized for this job"`.
+
+**Cause.** After a single-use JIT runner completes a job, GitHub auto-removes the ephemeral runner record — but for a few to tens of seconds it still reports the runner as running and answers a delete with `422 "Runner … is currently running a job and cannot be deleted"`. Because the AGC re-registers each agent under a **stable name**, the lingering record also makes the re-registration conflict (`409`). Under a burst, many agents recycle at once and hit this window together. On gateway versions before the Q259 fix the AGC treated the `422` as fatal: the post-job recycle failed, the listener goroutine exited, and a non-permanent replacement listener is not restarted — so every completed job permanently dropped a polling slot until only the permanent baseline remained. GitHub then had one online runner to dispatch to, so it dispatched ~1 job at a time.
+
+**Diagnostics.**
+
+```sh
+# Recycle errors climbing in lockstep with a burst (pre-fix: fatal 422s)
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "currently running|recycle"
+
+# Metric: actions_gateway_agent_recycle_errors_total — spikes during the burst on pre-fix versions
+# Metric: actions_gateway_active_sessions             — collapses toward 1 as replacements exit
+```
+
+**Resolution.**
+- **Upgrade** to a gateway version with the Q259 fix. Fixed versions treat the `422 "currently running"` as transient: `Pool.Recycle` retries the re-registration with a bounded, jittered backoff (waiting for GitHub to release the just-consumed runner) instead of failing, so the listener keeps its polling slot and concurrency is sustained. A recycle that finally succeeds after the wait increments `actions_gateway_agent_recycles_total{trigger="post_job"}` as usual.
+- **On fixed versions,** `actions_gateway_agent_recycle_errors_total` still rises only if a runner *never* releases within the retry bound — a genuine fault (registration API unreachable, or the runner is truly wedged running server-side), not the normal post-job race. Investigate as in the section above.
 
 ---
 

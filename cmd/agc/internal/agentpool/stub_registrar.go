@@ -21,6 +21,14 @@ type StubRegistrar struct {
 	encodedJITConfig string
 	registerErr      error // returned by every Register while set (test hook)
 	registerCalls    int
+	// busy maps an agentID to the number of remaining Deregister calls that must
+	// return *RunnerBusyError before the record is finally deleted, mimicking
+	// GitHub's transient 422 "runner is currently running a job and cannot be
+	// deleted" after a single-use JIT job completes (Q259). A negative count
+	// stays busy forever (models a runner that never releases). Set by
+	// SimulateRunnerBusy.
+	busy            map[int64]int
+	deregisterCalls int
 }
 
 // NewStubRegistrar returns a StubRegistrar with a synthetic agent ID counter.
@@ -35,6 +43,7 @@ func NewStubRegistrarWithURLs(authURL, brokerURL string) *StubRegistrar {
 	r := &StubRegistrar{
 		registered: make(map[int64]string),
 		names:      make(map[string]int64),
+		busy:       make(map[int64]int),
 		authURL:    authURL,
 		brokerURL:  brokerURL,
 	}
@@ -87,6 +96,29 @@ func (r *StubRegistrar) SimulateServerDelete(agentID int64) {
 	}
 }
 
+// SimulateRunnerBusy makes the next attempts Deregister calls for agentID return
+// *RunnerBusyError (GitHub's transient 422 "runner is currently running a job
+// and cannot be deleted" after a single-use JIT job completes, Q259) without
+// deleting the record; the following call deletes it normally. The record is
+// left in place so re-registration under its name conflicts (409) until it
+// releases, exactly as GitHub behaves during the auto-removal window. A negative
+// attempts count stays busy forever (models a runner that never releases). Test
+// hook.
+func (r *StubRegistrar) SimulateRunnerBusy(agentID int64, attempts int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.busy[agentID] = attempts
+}
+
+// DeregisterCalls returns the number of Deregister invocations, including those
+// that returned *RunnerBusyError. Test observability — proves the recycle retry
+// loop is bounded and does not spin.
+func (r *StubRegistrar) DeregisterCalls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.deregisterCalls
+}
+
 func (r *StubRegistrar) Register(_ context.Context, _ string, params RegisterParams) (*AgentCredentials, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -112,6 +144,17 @@ func (r *StubRegistrar) Register(_ context.Context, _ string, params RegisterPar
 func (r *StubRegistrar) Deregister(_ context.Context, _ string, agentID int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.deregisterCalls++
+	// Still-running race: GitHub refuses the delete with 422 while the just-
+	// consumed single-use JIT runner lingers (Q259). Leave the record in place so
+	// the record's name stays taken (a re-register 409s) until it releases.
+	if rem, ok := r.busy[agentID]; ok && rem != 0 {
+		if rem > 0 {
+			r.busy[agentID] = rem - 1
+		}
+		return &RunnerBusyError{AgentID: agentID}
+	}
+	delete(r.busy, agentID)
 	if name, ok := r.registered[agentID]; ok {
 		delete(r.registered, agentID)
 		delete(r.names, name)
