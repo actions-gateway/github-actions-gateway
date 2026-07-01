@@ -42,6 +42,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
 | [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 | [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
+| [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ⚠️ |
 
 ---

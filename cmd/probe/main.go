@@ -55,73 +55,16 @@ func main() {
 
 func run(logger *slog.Logger) error {
 	// ── 1. Read credentials from environment ────────────────────────────────
-	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	cfg, err := parseProbeConfig(os.Getenv)
 	if err != nil {
 		return err
-	}
-	appID, err := strconv.ParseInt(appIDStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse GITHUB_APP_ID: %w", err)
-	}
-	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
-	if err != nil {
-		return err
-	}
-	installID, err := strconv.ParseInt(installIDStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
-	}
-	pemPath, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
-	if err != nil {
-		return err
-	}
-	pemBytes, err := loadPEM(pemPath)
-	if err != nil {
-		return fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
-	}
-	brokerURL, err := mustEnv("GITHUB_BROKER_URL")
-	if err != nil {
-		return err
-	}
-	runnerVersion, err := mustEnv("GITHUB_RUNNER_VERSION")
-	if err != nil {
-		return err
-	}
-	agentName, err := mustEnv("GITHUB_AGENT_NAME")
-	if err != nil {
-		return err
-	}
-	agentIDStr, err := mustEnv("GITHUB_AGENT_ID")
-	if err != nil {
-		return err
-	}
-	agentID, err := strconv.ParseInt(agentIDStr, 10, 64)
-	if err != nil {
-		return fmt.Errorf("parse GITHUB_AGENT_ID: %w", err)
-	}
-	runnerOS := os.Getenv("GITHUB_RUNNER_OS")
-	runnerArch := os.Getenv("GITHUB_RUNNER_ARCH")
-	useV2Flow := os.Getenv("GITHUB_USE_VSTS_FLOW") != "true"
-	// In v2 flow, the broker API lives at serverUrlV2, not serverUrl.
-	if useV2Flow {
-		if v2URL := os.Getenv("GITHUB_BROKER_URL_V2"); v2URL != "" {
-			brokerURL = v2URL
-		}
-	}
-	poolID := 1
-	if v := os.Getenv("GITHUB_POOL_ID"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("parse GITHUB_POOL_ID: %w", err)
-		}
-		poolID = n
 	}
 
-	// ── 2. Mint installation access token ───────────────────────────────────
+	// ── 2. Create the installation token provider ────────────────────────────
 	creds := githubapp.Credentials{
-		AppID:          appID,
-		PrivateKeyPEM:  pemBytes,
-		InstallationID: installID,
+		AppID:          cfg.AppID,
+		PrivateKeyPEM:  cfg.PrivateKeyPEM,
+		InstallationID: cfg.InstallationID,
 	}
 	// The probe talks to real GitHub, so token exchange must use HTTPS; a
 	// non-HTTPS GITHUB_API_BASE_URL is rejected (no dev/test opt-in here).
@@ -133,6 +76,36 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	return runProbe(ctx, logger, cfg, provider, os.Getenv)
+}
+
+// tokenProvider mints a GitHub App installation access token. It is the single
+// dependency of runProbe that reaches real GitHub, so it is injected as an
+// interface to keep the probe session orchestration unit-testable against a
+// broker stub. The provider returned by githubapp.NewInstallationTokenProvider
+// satisfies it.
+type tokenProvider interface {
+	Token(context.Context) (string, error)
+}
+
+// runProbe carries out the probe session lifecycle — mint the installation
+// token, obtain the broker/runner OAuth token, create a broker session,
+// long-poll for a job, acquire it, and run the optional investigations —
+// against the broker at cfg.BrokerURL. The token provider and getenv are
+// injected (rather than reaching real GitHub / os.Getenv directly) so the whole
+// flow can be exercised in unit tests with a broker test stub; run wires the
+// real provider and os.Getenv.
+func runProbe(ctx context.Context, logger *slog.Logger, cfg probeConfig, provider tokenProvider, getenv func(string) string) error {
+	brokerURL := cfg.BrokerURL
+	runnerVersion := cfg.RunnerVersion
+	agentName := cfg.AgentName
+	agentID := cfg.AgentID
+	runnerOS := cfg.RunnerOS
+	runnerArch := cfg.RunnerArch
+	useV2Flow := cfg.UseV2Flow
+	poolID := cfg.PoolID
+
+	// ── 2. Mint installation access token ───────────────────────────────────
 	token, err := provider.Token(ctx)
 	if err != nil {
 		return fmt.Errorf("get installation token: %w", err)
@@ -154,8 +127,8 @@ func run(logger *slog.Logger) error {
 	// the CreateSession response later. It is nil when credential files are absent.
 	var runnerKey *rsa.PrivateKey
 	var brokerToken string
-	credsFile := os.Getenv("GITHUB_RUNNER_CREDENTIALS_FILE")
-	rsaFile := os.Getenv("GITHUB_RUNNER_RSA_PARAMS_FILE")
+	credsFile := getenv("GITHUB_RUNNER_CREDENTIALS_FILE")
+	rsaFile := getenv("GITHUB_RUNNER_RSA_PARAMS_FILE")
 	if credsFile != "" && rsaFile != "" {
 		runnerCreds, err := githubapp.ParseRunnerCredentials(credsFile)
 		if err != nil {
@@ -256,7 +229,7 @@ func run(logger *slog.Logger) error {
 			}
 		}
 		if len(sessionKey) == 0 {
-			sessionKeyB64 := os.Getenv("GITHUB_SESSION_KEY")
+			sessionKeyB64 := getenv("GITHUB_SESSION_KEY")
 			if sessionKeyB64 != "" {
 				sessionKey, err = base64.StdEncoding.DecodeString(sessionKeyB64)
 				if err != nil {
@@ -342,7 +315,7 @@ func run(logger *slog.Logger) error {
 	// Set PROBE_SESSION_REUSE_TEST=true and queue a second workflow job before
 	// running. The probe re-enters GetMessage on the same sessionId and reports
 	// whether the session is still valid. Findings feed §8.C of milestone-1.md.
-	if os.Getenv("PROBE_SESSION_REUSE_TEST") == "true" {
+	if getenv("PROBE_SESSION_REUSE_TEST") == "true" {
 		investigateSessionReuse(ctx, logger, bc, sessionID)
 	}
 
@@ -351,7 +324,7 @@ func run(logger *slog.Logger) error {
 	// running. The probe registers a second session after the first job is
 	// acquired and checks whether the second job is delivered. Findings feed
 	// §8.D of milestone-1.md.
-	if os.Getenv("PROBE_JOB_DELIVERY_TEST") == "true" {
+	if getenv("PROBE_JOB_DELIVERY_TEST") == "true" {
 		investigateJobDelivery(ctx, logger, bc, agentID, agentName, runnerVersion)
 	}
 
@@ -539,13 +512,101 @@ func jitter(lo, hi time.Duration) time.Duration {
 	return lo + time.Duration(rand.Int63n(int64(hi-lo+1))) //nolint:gosec // G404: retry jitter, not a security-sensitive value
 }
 
-// mustEnv returns the value of the named environment variable or an error.
-func mustEnv(name string) (string, error) {
-	v := os.Getenv(name)
-	if v == "" {
-		return "", fmt.Errorf("required environment variable %s is not set", name)
+// probeConfig holds the fully parsed and validated configuration read from the
+// environment. It is produced by parseProbeConfig and consumed by run.
+type probeConfig struct {
+	AppID          int64
+	InstallationID int64
+	PrivateKeyPEM  []byte
+	BrokerURL      string
+	RunnerVersion  string
+	AgentName      string
+	AgentID        int64
+	RunnerOS       string
+	RunnerArch     string
+	UseV2Flow      bool
+	PoolID         int
+}
+
+// parseProbeConfig reads and validates all probe configuration from the
+// injected getenv function (normally os.Getenv). It performs the same parsing,
+// validation, ordering, and error wrapping as the inline logic it replaced,
+// which keeps the environment handling unit-testable without touching os.Getenv
+// directly. PEM literals are loaded via loadPEM and stay off disk.
+func parseProbeConfig(getenv func(string) string) (probeConfig, error) {
+	var cfg probeConfig
+
+	mustEnv := func(name string) (string, error) {
+		v := getenv(name)
+		if v == "" {
+			return "", fmt.Errorf("required environment variable %s is not set", name)
+		}
+		return v, nil
 	}
-	return v, nil
+
+	appIDStr, err := mustEnv("GITHUB_APP_ID")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.AppID, err = strconv.ParseInt(appIDStr, 10, 64)
+	if err != nil {
+		return probeConfig{}, fmt.Errorf("parse GITHUB_APP_ID: %w", err)
+	}
+	installIDStr, err := mustEnv("GITHUB_APP_INSTALLATION_ID")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.InstallationID, err = strconv.ParseInt(installIDStr, 10, 64)
+	if err != nil {
+		return probeConfig{}, fmt.Errorf("parse GITHUB_APP_INSTALLATION_ID: %w", err)
+	}
+	pemPath, err := mustEnv("GITHUB_APP_PRIVATE_KEY")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.PrivateKeyPEM, err = loadPEM(pemPath)
+	if err != nil {
+		return probeConfig{}, fmt.Errorf("load GITHUB_APP_PRIVATE_KEY: %w", err)
+	}
+	cfg.BrokerURL, err = mustEnv("GITHUB_BROKER_URL")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.RunnerVersion, err = mustEnv("GITHUB_RUNNER_VERSION")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.AgentName, err = mustEnv("GITHUB_AGENT_NAME")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	agentIDStr, err := mustEnv("GITHUB_AGENT_ID")
+	if err != nil {
+		return probeConfig{}, err
+	}
+	cfg.AgentID, err = strconv.ParseInt(agentIDStr, 10, 64)
+	if err != nil {
+		return probeConfig{}, fmt.Errorf("parse GITHUB_AGENT_ID: %w", err)
+	}
+	cfg.RunnerOS = getenv("GITHUB_RUNNER_OS")
+	cfg.RunnerArch = getenv("GITHUB_RUNNER_ARCH")
+	cfg.UseV2Flow = getenv("GITHUB_USE_VSTS_FLOW") != "true"
+	// In v2 flow, the broker API lives at serverUrlV2, not serverUrl.
+	if cfg.UseV2Flow {
+		if v2URL := getenv("GITHUB_BROKER_URL_V2"); v2URL != "" {
+			cfg.BrokerURL = v2URL
+		}
+	}
+	cfg.PoolID = 1
+	if v := getenv("GITHUB_POOL_ID"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return probeConfig{}, fmt.Errorf("parse GITHUB_POOL_ID: %w", err)
+		}
+		cfg.PoolID = n
+	}
+
+	return cfg, nil
 }
 
 // loadPEM returns the PEM bytes from either a file path or a PEM literal.

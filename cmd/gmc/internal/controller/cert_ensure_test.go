@@ -1,8 +1,16 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,6 +19,30 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// nearExpiryCertPEM returns a self-signed cert PEM that expires in 1 hour —
+// well inside proxyCertRenewBefore/metricsCertRenewBefore (30 days) — so tests
+// can drive the "near expiry" renewal branch without waiting on real time.
+func nearExpiryCertPEM(t *testing.T) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	tmpl := &x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "near-expiry"},
+		NotBefore:             time.Now().Add(-2 * time.Hour),
+		NotAfter:              time.Now().Add(1 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	require.NoError(t, pem.Encode(&buf, &pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	return buf.Bytes()
+}
 
 // These tests exercise ensureProxyCert / ensureMetricsCerts against a fake
 // client — the issue/no-op/regenerate branches that carry the Q88 debug
@@ -68,6 +100,32 @@ func TestEnsureProxyCert_RegeneratesWhenUnparseable(t *testing.T) {
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: proxyTLSSecretName}, &sec))
 	_, err := parseCertPEM(sec.Data[corev1.TLSCertKey])
 	require.NoError(t, err, "an unparseable cert must be regenerated into a parseable one")
+}
+
+// TestEnsureProxyCert_RegeneratesWhenNearExpiry verifies a parseable but
+// soon-to-expire cert (inside proxyCertRenewBefore) is proactively re-issued
+// rather than left to expire.
+func TestEnsureProxyCert_RegeneratesWhenNearExpiry(t *testing.T) {
+	scheme := applyTestScheme(t)
+	ag := applyTestAG()
+	stale := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ag.Namespace, Name: proxyTLSSecretName},
+		Type:       corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       nearExpiryCertPEM(t),
+			corev1.TLSPrivateKeyKey: []byte("placeholder"),
+		},
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale).Build()
+	r := applyTestReconciler(t, c, scheme)
+
+	require.NoError(t, r.ensureProxyCert(context.Background(), ag))
+
+	var sec corev1.Secret
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: proxyTLSSecretName}, &sec))
+	cert, err := parseCertPEM(sec.Data[corev1.TLSCertKey])
+	require.NoError(t, err)
+	assert.True(t, cert.NotAfter.After(time.Now().Add(300*24*time.Hour)), "the near-expiry cert must be replaced with a freshly issued, long-lived one")
 }
 
 func TestEnsureMetricsCerts_IssuesWhenMissing(t *testing.T) {
