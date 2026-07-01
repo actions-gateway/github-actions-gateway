@@ -541,6 +541,276 @@ func TestLogLevelFromEnv(t *testing.T) {
 	}
 }
 
+// TestInstallSelf_DestinationIsDirectory covers the os.OpenFile branch of
+// installSelf: dir is creatable (MkdirAll succeeds because dir already
+// exists), but the "wrapper" destination path is itself a directory, so
+// OpenFile(O_CREATE|O_WRONLY|O_TRUNC) fails with EISDIR.
+func TestInstallSelf_DestinationIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "wrapper"), 0o750))
+
+	err := installSelf(dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create")
+}
+
+// TestInstallSelf_HappyPath_CopiesRunningBinaryExecutable verifies the full
+// success path into a fresh temp dir: the copied "wrapper" file exists,
+// is non-empty, and carries the 0o755 executable mode installSelf requests
+// regardless of the source binary's own mode.
+func TestInstallSelf_HappyPath_CopiesRunningBinaryExecutable(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, installSelf(dir))
+
+	dst := filepath.Join(dir, "wrapper")
+	fi, err := os.Stat(dst)
+	require.NoError(t, err)
+	assert.Positive(t, fi.Size(), "copied wrapper must not be empty")
+	assert.Equal(t, os.FileMode(0o755), fi.Mode().Perm(),
+		"installed wrapper must be mode 0o755 regardless of the running test binary's own mode")
+}
+
+// TestResolveWorkerBin_NeitherRunnerHomeNorPathHasIt is a second flavor of the
+// not-found case: runnerHome/bin does not even exist (as opposed to existing
+// but lacking the binary), and PATH is empty. Both lookup strategies must
+// fail and the error must name both places searched.
+func TestResolveWorkerBin_NeitherRunnerHomeNorPathHasIt(t *testing.T) {
+	t.Setenv("PATH", "")
+	runnerHome := t.TempDir() // no bin/ subdirectory at all
+	_, err := resolveWorkerBin(runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Runner.Worker")
+	assert.Contains(t, err.Error(), runnerHome)
+}
+
+// TestMaterializeJITConfig_ReadErrorOtherThanNotExist covers the branch at
+// main.go:395: a jitconfig file that exists but can't be read for a reason
+// other than absence (here, permission denied) must surface as a wrapped
+// error, not be silently skipped like the missing-file case.
+func TestMaterializeJITConfig_ReadErrorOtherThanNotExist(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	jitPath := filepath.Join(payloadDir, jitConfigFile)
+	require.NoError(t, os.WriteFile(jitPath, []byte("irrelevant"), 0o600))
+	require.NoError(t, os.Chmod(jitPath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(jitPath, 0o600) }) // allow TempDir cleanup to remove it
+
+	err := materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read jitconfig")
+}
+
+// TestMaterializeJITConfig_MkdirAllFails covers main.go:413-415: runnerHome
+// cannot be created because its parent path component is a regular file, not
+// a directory.
+func TestMaterializeJITConfig_MkdirAllFails(t *testing.T) {
+	payloadDir := t.TempDir()
+	parent := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o600))
+	runnerHome := filepath.Join(parent, "runner-home")
+
+	blob := encodeFixtureBlob(t, map[string]string{".runner": `{}`})
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte(blob), 0o600))
+
+	err := materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "create runner home")
+}
+
+// TestMaterializeJITConfig_PerFileBase64DecodeError covers main.go:423-425:
+// the outer blob is valid base64/JSON, but one entry's value is not valid
+// base64, so decoding that individual file's content fails.
+func TestMaterializeJITConfig_PerFileBase64DecodeError(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+
+	raw, err := json.Marshal(map[string]string{".runner": "not-valid-base64!!"})
+	require.NoError(t, err)
+	blob := base64.StdEncoding.EncodeToString(raw)
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte(blob), 0o600))
+
+	err = materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode .runner")
+}
+
+// TestMaterializeJITConfig_WriteFileFails covers main.go:428-430: the target
+// file path for a runner-config entry is occupied by a directory, so
+// os.WriteFile fails.
+func TestMaterializeJITConfig_WriteFileFails(t *testing.T) {
+	payloadDir := t.TempDir()
+	runnerHome := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(runnerHome, ".runner"), 0o750))
+
+	blob := encodeFixtureBlob(t, map[string]string{".runner": `{"agentId":1}`})
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte(blob), 0o600))
+
+	err := materializeJITConfig(payloadDir, runnerHome)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "write")
+}
+
+// TestInstallProxyCATrust_ReadErrorOtherThanNotExist covers main.go:475: the
+// CA cert path exists but can't be read (permission denied), which must
+// error rather than be treated as the tolerated "no proxy configured" no-op.
+func TestInstallProxyCATrust_ReadErrorOtherThanNotExist(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	runnerHome := t.TempDir()
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("cert"), 0o600))
+	require.NoError(t, os.Chmod(caPath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(caPath, 0o600) })
+
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.Error(t, err)
+	assert.Nil(t, env)
+	assert.Contains(t, err.Error(), "read proxy CA cert")
+}
+
+// TestInstallProxyCATrust_ReadSystemCABundleErrorPropagates covers
+// main.go:484-486: readSystemCABundle returning a non-NotExist error must
+// abort installProxyCATrust before anything is written.
+func TestInstallProxyCATrust_ReadSystemCABundleErrorPropagates(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	staging := t.TempDir()
+	unreadable := filepath.Join(staging, "ca-certificates.crt")
+	require.NoError(t, os.WriteFile(unreadable, []byte("sys"), 0o600))
+	require.NoError(t, os.Chmod(unreadable, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	withSystemCABundleCandidates(t, []string{unreadable})
+
+	runnerHome := t.TempDir()
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("proxy-cert"), 0o600))
+
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.Error(t, err)
+	assert.Nil(t, env)
+	assert.Contains(t, err.Error(), "read system CA bundle")
+
+	entries, rerr := os.ReadDir(runnerHome)
+	require.NoError(t, rerr)
+	assert.Empty(t, entries, "no bundle must be written when the system CA read fails")
+}
+
+// TestInstallProxyCATrust_MkdirAllFails covers main.go:498-500: runnerHome's
+// parent path component is a regular file, so MkdirAll fails after the
+// combined bundle bytes were already built in memory.
+func TestInstallProxyCATrust_MkdirAllFails(t *testing.T) {
+	withSystemCABundleCandidates(t, []string{filepath.Join(t.TempDir(), "missing")})
+
+	parent := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o600))
+	runnerHome := filepath.Join(parent, "runner-home")
+
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("proxy-cert"), 0o600))
+
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.Error(t, err)
+	assert.Nil(t, env)
+	assert.Contains(t, err.Error(), "create runner home")
+}
+
+// TestInstallProxyCATrust_WriteFileFails covers main.go:502-504: the
+// destination bundle path is occupied by a directory, so the final
+// os.WriteFile fails.
+func TestInstallProxyCATrust_WriteFileFails(t *testing.T) {
+	withSystemCABundleCandidates(t, []string{filepath.Join(t.TempDir(), "missing")})
+
+	runnerHome := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(runnerHome, proxyCABundleFile), 0o750))
+
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("proxy-cert"), 0o600))
+
+	env, err := installProxyCATrust(caPath, runnerHome)
+	require.Error(t, err)
+	assert.Nil(t, env)
+	assert.Contains(t, err.Error(), "write combined CA bundle")
+}
+
+// TestReadSystemCABundle_ErrorOtherThanNotExist covers main.go:527-529
+// directly: a candidate path exists but is unreadable, which must surface as
+// an error rather than be treated like a missing candidate.
+func TestReadSystemCABundle_ErrorOtherThanNotExist(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	unreadable := filepath.Join(t.TempDir(), "ca-bundle.crt")
+	require.NoError(t, os.WriteFile(unreadable, []byte("x"), 0o600))
+	require.NoError(t, os.Chmod(unreadable, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o600) })
+	withSystemCABundleCandidates(t, []string{unreadable})
+
+	b, err := readSystemCABundle()
+	require.Error(t, err)
+	assert.Nil(t, b)
+	assert.Contains(t, err.Error(), "read")
+}
+
+// TestRun_ReadPayloadErrorIsWrapped covers main.go:202-204: run() wraps
+// readPayload's error with "read payload: " context rather than propagating
+// it bare. No subprocess is ever reached because the payload read happens
+// first.
+func TestRun_ReadPayloadErrorIsWrapped(t *testing.T) {
+	t.Setenv("PAYLOAD_SECRET_PATH", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("RUNNER_HOME_DIR", t.TempDir())
+
+	err := run()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read payload")
+}
+
+// TestRun_MaterializeJITConfigErrorIsWrapped covers main.go:211-213: a
+// jitconfig blob that fails to decode must short-circuit run() with a
+// "materialize JIT config: " wrapped error before any pipes or subprocess
+// are created.
+func TestRun_MaterializeJITConfigErrorIsWrapped(t *testing.T) {
+	payloadDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, payloadFile), []byte(`{}`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte("not-base64!!"), 0o600))
+
+	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
+	t.Setenv("RUNNER_HOME_DIR", t.TempDir())
+
+	err := run()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "materialize JIT config")
+}
+
+// TestRun_InstallProxyCATrustErrorIsWrapped covers main.go:224-226: a
+// PROXY_CA_CERT_PATH that exists but is unreadable must short-circuit run()
+// with an "install proxy CA trust: " wrapped error before any pipes or
+// subprocess are created.
+func TestRun_InstallProxyCATrustErrorIsWrapped(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission checks don't apply when running as root")
+	}
+	payloadDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, payloadFile), []byte(`{}`), 0o600))
+
+	caPath := filepath.Join(t.TempDir(), "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("cert"), 0o600))
+	require.NoError(t, os.Chmod(caPath, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(caPath, 0o600) })
+
+	t.Setenv("PAYLOAD_SECRET_PATH", payloadDir)
+	t.Setenv("RUNNER_HOME_DIR", t.TempDir())
+	t.Setenv("PROXY_CA_CERT_PATH", caPath)
+
+	err := run()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "install proxy CA trust")
+}
+
 func TestTranslateWorkerExitCode(t *testing.T) {
 	// Runner.Worker exits 100 + (int)TaskResult. The two results GitHub still
 	// concludes as `success` map to 0 so the worker pod ends Succeeded (Q240);

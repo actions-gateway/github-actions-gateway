@@ -1360,3 +1360,51 @@ func TestBuildAGCDeployment_ProxyCACertMount(t *testing.T) {
 	assert.Equal(t, proxyCACertMountPath, caMount.MountPath)
 	assert.True(t, caMount.ReadOnly)
 }
+
+// TestSecurityProfileOrDefault_FallsBackWhenUnset locks in that a hand-applied
+// ActionsGateway CR without spec.securityProfile still gets the baseline PSA
+// enforcement level rather than an empty (unenforced) profile — the CRD's
+// +kubebuilder:default only applies via the apiserver, not to objects built
+// directly in tests or migration tooling.
+func TestSecurityProfileOrDefault_FallsBackWhenUnset(t *testing.T) {
+	assert.Equal(t, "baseline", securityProfileOrDefault(""))
+}
+
+func TestSecurityProfileOrDefault_ExplicitValueWins(t *testing.T) {
+	assert.Equal(t, "restricted", securityProfileOrDefault("restricted"))
+	assert.Equal(t, "privileged", securityProfileOrDefault("privileged"))
+}
+
+// TestWorkerLabels_RecommendedAndOwnerSet asserts workerLabels stamps the
+// runner component/name onto the recommended app.kubernetes.io/* set, plus the
+// owner-name/owner-ns pair that scopes per-tenant selectors — the same shape
+// componentLabels produces for the AGC and proxy tiers.
+func TestWorkerLabels_RecommendedAndOwnerSet(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	labels := workerLabels(ag)
+
+	assert.Equal(t, appNameWorker, labels["app.kubernetes.io/name"])
+	assert.Equal(t, ag.Name, labels["app.kubernetes.io/instance"])
+	assert.Equal(t, componentRunnerLabel, labels["app.kubernetes.io/component"])
+	assert.Equal(t, labelManagerValue, labels[labelManagedBy])
+	assert.Equal(t, ag.Name, labels["actions-gateway/owner-name"])
+	assert.Equal(t, ag.Namespace, labels["actions-gateway/owner-ns"])
+	// Worker objects carry no build version — only worker pods/Secrets stamped
+	// directly by the AGC do.
+	_, hasVersion := labels["app.kubernetes.io/version"]
+	assert.False(t, hasVersion, "workerLabels must not set a version label")
+}
+
+// TestBuildWorkerServiceAccount_NameNamespaceAndLabels asserts the worker
+// ServiceAccount is named/namespaced per the gateway and carries workerLabels
+// (not managedLabels) so it groups with the runner tier, not the AGC.
+func TestBuildWorkerServiceAccount_NameNamespaceAndLabels(t *testing.T) {
+	ag := newTestAG("gateway", "team-a")
+	sa := buildWorkerServiceAccount(ag)
+
+	assert.Equal(t, workerSAName, sa.Name)
+	assert.Equal(t, ag.Namespace, sa.Namespace)
+	assert.Equal(t, componentRunnerLabel, sa.Labels["app.kubernetes.io/component"],
+		"worker ServiceAccount must carry the runner component label, not the controller's")
+	assert.Equal(t, ag.Name, sa.Labels["actions-gateway/owner-name"])
+}

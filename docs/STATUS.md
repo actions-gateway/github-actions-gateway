@@ -42,6 +42,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Docker image speed](plan/docker-image-speed.md) | `speed` | ✅ |
 | [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 | [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
+| [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ⚠️ |
 
 ---
@@ -100,7 +101,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 
 ### Flake watch
 
-Flakes whose mitigation has shipped and that have **not recurred since**. They carry no priority position; the trigger to revive is the flake recurring on `main` after its fix. On recurrence, [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first) pulls the row back to the **top of the Queue** — now escalated, since the first mitigation didn't hold. Kept here (not closed) so a second occurrence is recognised as a recurrence rather than a fresh find.
+Flakes whose mitigation has shipped and that have **not recurred since**, plus rare first sightings not yet worth fixing. They carry no priority position; the trigger to revive is the flake recurring on `main` after its fix. On recurrence, [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first) pulls the row back to the **top of the Queue** — now escalated, since the first mitigation didn't hold. Kept here (not closed) so a second occurrence is recognised as a recurrence rather than a fresh find.
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
@@ -108,3 +109,4 @@ Flakes whose mitigation has shipped and that have **not recurred since**. They c
 | <a id="Q221"></a>Q221 | [metrics-NP AllowsLabeledNamespace (calico)](../cmd/gmc/test/e2e/manager_np_test.go) | `tests` `flake` | S | Recurs after PR #411 mitigation (fold positive control into Q159 retry-gate pod, drop 2nd probe re-racing per-pod NP programming). → top of Queue, escalate. |
 | <a id="Q179"></a>Q179 | [two kindnet v1 e2e timing races](../cmd/gmc/test/e2e/isolation_test.go) | `tests` `flake` | S | Recurs after PR #369 mitigation (isolation probe budget 60→150 iters + wait 5m→6m; job_lifecycle worker-pod wait 4m→6m). → top of Queue, escalate. |
 | <a id="Q176"></a>Q176 | [E2E_GMC_HPADrivesScaleUp (calico)](../cmd/gmc/test/e2e/hpa_pdb_test.go) | `tests` `flake` | S | Recurs after mitigation (minReplicas-floor wait 2m→5m + failure dump). Timed out at 120s on calico, passed on rerun. → top of Queue, escalate. |
+| <a id="Q256"></a>Q256 | [e2e bake: local registry drops connection mid-push](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | S | First seen 2026-07-01 (#487 e2e-calico): kind local registry (127.0.0.1:5000) reset/refused mid image-push in bake; kindnet passed same commit; green on rerun. No fix yet. If it recurs: bake-push retry or registry restart-policy — not HA. |

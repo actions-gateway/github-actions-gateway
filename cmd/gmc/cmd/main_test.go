@@ -6,6 +6,113 @@ import (
 	"time"
 )
 
+func TestParseAllowedPriorityClasses(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{name: "empty yields nil (secure default)", raw: "", want: nil},
+		{name: "whitespace only yields nil", raw: "  ,  , ", want: nil},
+		{name: "single class", raw: "system-cluster-critical", want: []string{"system-cluster-critical"}},
+		{
+			name: "multiple with whitespace and empties",
+			raw:  " high-priority ,, low-priority ",
+			want: []string{"high-priority", "low-priority"},
+		},
+		{name: "duplicate entries preserved", raw: "a,a", want: []string{"a", "a"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseAllowedPriorityClasses(tt.raw)
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("parseAllowedPriorityClasses(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+			if tt.want == nil && got != nil {
+				t.Errorf("parseAllowedPriorityClasses(%q) = %v, want nil", tt.raw, got)
+			}
+		})
+	}
+}
+
+func TestParseAllowedEgressCIDRs(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    []string
+		wantErr bool
+	}{
+		{name: "empty yields nil (secure default)", raw: "", want: nil},
+		{name: "whitespace only yields nil", raw: "  ,  , ", want: nil},
+		{name: "single CIDR", raw: "10.0.0.0/8", want: []string{"10.0.0.0/8"}},
+		{
+			name: "multiple with whitespace and empties",
+			raw:  " 10.0.0.0/8 ,, 172.16.0.0/12 ",
+			want: []string{"10.0.0.0/8", "172.16.0.0/12"},
+		},
+		{name: "IPv6 CIDR", raw: "fd00::/8", want: []string{"fd00::/8"}},
+		{name: "bare IP without mask is rejected", raw: "10.0.0.1", wantErr: true},
+		{name: "garbage is rejected", raw: "not-a-cidr", wantErr: true},
+		{name: "one bad entry fails the whole flag", raw: "10.0.0.0/8,bogus", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseAllowedEgressCIDRs(tt.raw)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("parseAllowedEgressCIDRs(%q) = %v, nil; want error", tt.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAllowedEgressCIDRs(%q) returned error: %v", tt.raw, err)
+			}
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("parseAllowedEgressCIDRs(%q) = %v, want nil", tt.raw, got)
+				}
+				return
+			}
+			gotStrs := make([]string, len(got))
+			for i, n := range got {
+				gotStrs[i] = n.String()
+			}
+			if strings.Join(gotStrs, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("parseAllowedEgressCIDRs(%q) = %v, want %v", tt.raw, gotStrs, tt.want)
+			}
+		})
+	}
+}
+
+func TestMustEnv(t *testing.T) {
+	t.Run("set returns the value", func(t *testing.T) {
+		t.Setenv("GMC_TEST_MUST_ENV", "some-value")
+		got, err := mustEnv("GMC_TEST_MUST_ENV")
+		if err != nil {
+			t.Fatalf("mustEnv() returned error: %v", err)
+		}
+		if got != "some-value" {
+			t.Errorf("mustEnv() = %q, want %q", got, "some-value")
+		}
+	})
+
+	t.Run("unset returns an error", func(t *testing.T) {
+		// Ensure the variable is not set in the environment (t.Setenv with
+		// os.Unsetenv is not available pre-1.17 semantics, but Setenv("") still
+		// leaves it "set but empty", which mustEnv treats identically to unset).
+		t.Setenv("GMC_TEST_MUST_ENV_UNSET", "")
+		got, err := mustEnv("GMC_TEST_MUST_ENV_UNSET")
+		if err == nil {
+			t.Errorf("mustEnv() = %q, nil; want error", got)
+		}
+		if got != "" {
+			t.Errorf("mustEnv() = %q, want empty string on error", got)
+		}
+	})
+}
+
 func TestValidateImageDigest(t *testing.T) {
 	const validDigest = "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
