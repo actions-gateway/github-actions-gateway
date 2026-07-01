@@ -378,7 +378,7 @@ Upgrade each tenant's AGC one at a time. If tenants are independent, you may par
 
 The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL. To rely on this:
 
-- Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the default).
+- Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default).
 - Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period. Use `kubectl rollout restart` or `kubectl set image` instead.
 
 **Step 2: Update the AGC image**

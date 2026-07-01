@@ -552,8 +552,10 @@ type RunnerGroupSpec struct {
     // the metric actions_gateway_eviction_retries_exhausted_total is
     // incremented but no further rerun attempt is made.
     //
+    // Defaults to 2 when omitted. This default is applied in-code by the AGC,
+    // not via a CRD +kubebuilder:default marker.
+    //
     // +optional
-    // +kubebuilder:default=2
     // +kubebuilder:validation:Minimum=0
     // +kubebuilder:validation:Maximum=10
     MaxEvictionRetries *int32 `json:"maxEvictionRetries,omitempty"`
@@ -564,10 +566,11 @@ type RunnerGroupSpec struct {
     // sufficient for most cases.
     //
     // Accepts standard Go duration strings: "5s", "30s", "2m". Values below
-    // "1s" are rejected at admission.
+    // "1s" are rejected at admission. Defaults to "5s" when omitted; this
+    // default is applied in-code by the AGC, not via a CRD +kubebuilder:default
+    // marker.
     //
     // +optional
-    // +kubebuilder:default="5s"
     EvictionRetryDelay *metav1.Duration `json:"evictionRetryDelay,omitempty"`
 
     // MaxQuotaRetries controls how many times the AGC retries pod creation when
@@ -580,8 +583,10 @@ type RunnerGroupSpec struct {
     // error fails the provision call immediately without incrementing the
     // exhausted counter (disabled is a policy choice, not a budget failure).
     //
+    // Defaults to 5 when omitted. This default is applied in-code by the AGC,
+    // not via a CRD +kubebuilder:default marker.
+    //
     // +optional
-    // +kubebuilder:default=5
     // +kubebuilder:validation:Minimum=0
     // +kubebuilder:validation:Maximum=20
     MaxQuotaRetries *int32 `json:"maxQuotaRetries,omitempty"`
@@ -591,10 +596,10 @@ type RunnerGroupSpec struct {
     // a running job time to finish and free quota before the next attempt.
     //
     // Accepts standard Go duration strings: "30s", "1m". Values below "1s" are
-    // rejected at admission.
+    // rejected at admission. Defaults to "30s" when omitted; this default is
+    // applied in-code by the AGC, not via a CRD +kubebuilder:default marker.
     //
     // +optional
-    // +kubebuilder:default="30s"
     QuotaRetryDelay *metav1.Duration `json:"quotaRetryDelay,omitempty"`
 
     // CompletedPodTTL is how long a worker pod that has reached a terminal

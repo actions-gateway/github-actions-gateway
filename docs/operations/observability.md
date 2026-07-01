@@ -330,9 +330,12 @@ remove the files when finished.)
 
 ### Proxy metrics
 
-The per-tenant egress proxy exposes its own metrics on its health/metrics
-port (`:8081`, restricted by the L-8 NetworkPolicy — see
-[security.md L-8](../plan/security.md)). Each proxy is a separate scrape
+The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual
+TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy
+metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls) above), and
+restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
+The proxy's `:8081` port serves only the plaintext health probes (`/healthz`,
+`/readyz`), not metrics. Each proxy is a separate scrape
 target; these metrics carry no intrinsic `namespace` label, so attach one
 via the `ServiceMonitor`/scrape config if you need per-tenant attribution.
 

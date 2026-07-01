@@ -190,9 +190,11 @@ On the AGC side, once the broker supports this:
 **What would trigger building it.** GitHub updates the broker protocol
 to include X25519 ECDH session key exchange, or publishes an API
 allowing Ed25519 agents to participate in encrypted sessions. The probe
-binary (`cmd/probe -key-type ed25519`) is the detection mechanism: a
-`session OK` result with a non-empty `EncryptionKey` for an Ed25519
-agent would indicate the broker is sending a key the agent can use.
+binary (`cmd/probe`, configured entirely through its `GITHUB_RUNNER_*`
+environment — it takes no command-line flags) is the detection harness:
+pointed at an Ed25519 agent's credentials, a `session OK` result with a
+non-empty `EncryptionKey` would indicate the broker is sending a key the
+agent can use.
 
 **Related finding.** [docs/plan/security.md](../plan/security.md) M-11,
 D-5.
