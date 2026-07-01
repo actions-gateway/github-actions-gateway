@@ -482,6 +482,27 @@ gh api /repos/"$REPO"/actions/runners \
 > **not** the DinD/config/egress/CPU issue the co-occurring node exhaustion
 > suggested — it reproduces in isolation against the broker HTTP stub.
 >
+> **Q247 residual — an unbounded renewal call wedges the loop (fixed).** After the
+> jobId fix, a live dogfood run still failed at *exactly* the ~10-minute mark
+> (job started 03:21:27Z, GitHub marked it `failure` at 03:31:27Z = 600s) with a
+> single worker pod that ran well past the cutoff. The job died at the *initial*
+> AcquireJob lock TTL, meaning no renewal ever landed even with the correct jobId.
+> Cause: the per-job renewal loop (`StartRenewLoop`) ran each `RenewJob` call
+> inline with **no per-call timeout**, unlike `AcquireJob`/`createSession`, which
+> bound every call with `controlPlaneTimeout`. Under the e2e's node CPU/egress
+> saturation a single `/renewjob` call black-holes (TCP accepted, no response), and
+> because the next tick cannot fire until the call returns, that one wedged call
+> starves *every* subsequent renewal until the lock lapses at 600s. Fix: bound each
+> renewal call with the same `controlPlaneTimeout` (30s) — a hung call now aborts
+> (counted as the existing non-fatal `renew_job_errors_total`) and the loop issues
+> the next renewal on schedule, so one slow renewal costs one renewal, not all of
+> them. Regression test asserts a second renewal fires while the first is still
+> hung (impossible if the loop is wedged). This is the co-occurring node-exhaustion
+> interaction the original Q247 note flagged, now closed as a code fix rather than
+> a capacity workaround. The remaining defense-in-depth gap — tearing down the
+> worker when a lock is *definitively* lost after sustained renewal failure — is
+> tracked as Q254.
+>
 > **`vendor-check` / `tidy-check` unblocked by Athens (Q244, implemented).** An
 > Athens in-cluster Go module proxy (`deploy/athens/`, applied by `dogfood-setup.sh`)
 > caches Go modules so workers never need to reach `proxy.golang.org` directly.

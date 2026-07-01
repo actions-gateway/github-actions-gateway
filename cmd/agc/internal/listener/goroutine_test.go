@@ -869,7 +869,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -900,7 +900,7 @@ func TestRenewLoop_StopsOnStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
 	stop() // should not hang
 
 	// done must close once the loop goroutine exits after stop().
@@ -935,7 +935,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -976,7 +976,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Stop before any tick fires.
 	stop()
@@ -987,6 +987,72 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, int32(0), calls.Load(), "no RenewJob calls expected after stop")
 
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals is the Q247 residual gate.
+// The first /renewjob call black-holes (never responds), simulating a renewal
+// whose egress path is saturated under heavy worker load (the CPU exhaustion that
+// co-occurred with the dogfood e2e). Without a per-call timeout the renewal loop
+// runs that call inline and wedges — no later tick can fire, so the job's lock
+// lapses at its initial ~10-minute TTL and GitHub recycles the job even though the
+// jobId is correct (#481). With the per-call timeout the hung call is aborted and
+// counted as a non-fatal error, and the loop is free to issue the next renewal.
+// The test asserts a SECOND renewal attempt is made while the first is still hung,
+// which is impossible if the loop is wedged on the first call.
+func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			if calls.Add(1) == 1 {
+				// Hang the first renewal until the client's per-call deadline
+				// cancels it (r.Context().Done) or the test releases it in cleanup.
+				select {
+				case <-release:
+				case <-r.Context().Done():
+				}
+			}
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 60s renewal interval (fake-clock driven); 100ms per-call timeout (real time),
+	// well under the interval as production requires. The first call blocks longer
+	// than 100ms, so the timeout — not the response — must free the loop.
+	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
+
+	// Two renewal attempts prove the loop was not wedged by the first (hung) call:
+	// the second can only fire once the per-call timeout aborts the first.
+	for i := 0; i < 2; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(60 * time.Second)
+			return calls.Load() >= int32(i+1)
+		}, 3*time.Second, 5*time.Millisecond,
+			"expected renewal attempt %d — the loop must not wedge on a hung renewal", i+1)
+	}
+
+	unblock()
+	stop()
+	<-done
+	clk.Stop()
 	srv.Close()
 	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
 		tr.CloseIdleConnections()

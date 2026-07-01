@@ -627,8 +627,12 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// TaskOrchestrationJobNotFoundException (Q247). Short jobs finish before the TTL
 	// lapses, which is why only long jobs (e.g. e2e) exposed it.
 	jobID := jobBody.RunnerRequestID
+	// Bound each RenewJob call with the same per-call deadline as AcquireJob, so a
+	// black-holed renewal (egress path saturated under load) aborts instead of
+	// wedging the loop and starving every later renewal until the lock lapses (the
+	// Q247 residual — an exactly-~10-minute orphan even with the correct jobId).
 	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
-		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval)
+		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval, cfg.controlPlaneTimeout())
 	// Cancel the renew loop and wait for it to exit before returning, so the
 	// goroutine never outlives the job it renews.
 	defer func() { stop(); <-renewDone }()
@@ -716,6 +720,16 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 // once the loop goroutine has fully exited. Callers must call stop when the job
 // completes to avoid goroutine leaks; they may then wait on done if they need to
 // guarantee the goroutine has stopped before releasing shared resources.
+//
+// renewCallTimeout bounds each individual RenewJob call. It MUST be smaller than
+// renewInterval and smaller than GitHub's lock TTL. The renewal call runs inline
+// in the loop, so an unbounded call that black-holes (egress-proxy path saturated
+// under heavy worker load — the Q247 residual) would wedge the goroutine and
+// starve every subsequent tick until it returned, letting the job's lock lapse at
+// the initial ~10-minute TTL even when the jobId is correct. A bounded call aborts
+// (counted as a non-fatal RenewJob error), and the loop proceeds to the next tick,
+// so a single slow renewal costs one renewal, not all of them. A zero value leaves
+// the call unbounded (test/stub use only).
 func StartRenewLoop(
 	ctx context.Context,
 	client *broker.Client,
@@ -724,7 +738,7 @@ func StartRenewLoop(
 	namespace string,
 	clk Clock,
 	log *slog.Logger,
-	renewInterval time.Duration,
+	renewInterval, renewCallTimeout time.Duration,
 ) (stop func(), done <-chan struct{}) {
 	stopCtx, cancel := context.WithCancel(ctx)
 	doneCh := make(chan struct{})
@@ -738,10 +752,15 @@ func StartRenewLoop(
 				if runServiceURL == "" {
 					continue // M2 stub: no real run service URL
 				}
-				_, err := client.RenewJob(stopCtx, runServiceURL, broker.RenewJobRequest{
+				callCtx, cancelCall := stopCtx, context.CancelFunc(func() {})
+				if renewCallTimeout > 0 {
+					callCtx, cancelCall = context.WithTimeout(stopCtx, renewCallTimeout)
+				}
+				_, err := client.RenewJob(callCtx, runServiceURL, broker.RenewJobRequest{
 					PlanID: planID,
 					JobID:  jobID,
 				})
+				cancelCall()
 				if err != nil {
 					if metrics != nil {
 						metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
