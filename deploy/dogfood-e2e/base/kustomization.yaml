@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Isolation-agnostic base for the GAG dogfood e2e tenant, shared by every
+# isolation variant under ../overlays/. An overlay adds only the worker-isolation
+# delta (the ClusterRunnerTemplate + namespace security profile + egress), so
+# `diff -r overlays/dind overlays/kata` is exactly the tradeoff.
+#
+# The GitHub App credential Secret is NOT here — it is a credential, created
+# out-of-band. See ../README.md.
+resources:
+  - resources.yaml
