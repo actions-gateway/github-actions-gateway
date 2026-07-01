@@ -92,7 +92,7 @@ restricted by machine family:
 | Requirement | Detail |
 |---|---|
 | Cluster mode | **GKE Standard.** Autopilot does **not** allow nested virtualization. |
-| Machine family | **N1, N2, N2D, C2, C2D** support nested virtualization. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
+| Machine family | **N2, N2D, C2, C2D** support nested virtualization and are the families the shipped [`scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) accepts. **N1** also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
 | Node-pool flag | Create the pool with `--enable-nested-virtualization`. |
 | Node label | Label eligible nodes (e.g. `katacontainers.io/kata-runtime=true`) so the Kata install and the worker pods schedule only there. |
 

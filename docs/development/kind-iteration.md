@@ -8,7 +8,7 @@ Reference for iterating against a real kind cluster — when unit tests and envt
 make e2e-cluster          # 3-node kind cluster + local OCI registry (idempotent)
 make apply-cert-manager   # cert-manager (the GMC webhook depends on it)
 make wait-cert-manager
-make e2e-images           # builds and pushes gmc/agc/proxy/worker/fakegithub
+make e2e-images           # builds and pushes gmc/agc/proxy/worker/wrapper/fakegithub
 ```
 
 The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `127.0.0.1:5000/*` against the host registry. (The literal IPv4 loopback is used, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently with "connection refused".)

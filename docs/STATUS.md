@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-06-29
+Last touched: 2026-07-01
 ---
 
 ## Progress
@@ -64,7 +64,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q249"></a>Q249 | [Warn on reap-blocking worker sidecars](plan/worker-sidecar-reap-warning.md) | `infra` | 🔲 | M | DinD-e2e finding: a regular (non-native) sidecar keeps the worker pod alive after the runner exits, stranding maxWorkers ([Q247](#Q247)). Warn (non-blocking admission) + RunnerSet condition + metric; name-list opt-out; nudge to native sidecars. |
 | <a id="Q254"></a>Q254 | [Tear down the worker when a job lock is definitively lost](operations/troubleshooting.md#renewjob-failures-rising) | `infra` | 🔲 | S | Post-Q247, StartRenewLoop logs a sustained RenewJob failure (network/lost lock) as non-fatal and never cancels the worker — orphan pod + sibling dup-acquire still possible. Cancel the job ctx after N failures or a definitive job-not-found. |
 | <a id="Q253"></a>Q253 | [appendix-e capacity-planning: resolve v1/v2 API-version straddle](design/appendix-e-capacity-planning.md) | `docs` `bug` | 🔲 | M | Split from Q250 (high goal-1): E.9 frames AGC sizing via v2 `spec.agcResources` but worked-example YAMLs use v1alpha1 `spec.runnerGroups[].podTemplate` + bare `apiVersion: v1`. No API version accepts them; pick one, rewrite consistently. |
-| <a id="Q251"></a>Q251 | [Fix stale defaults & counts docs drift (docs audit Batch B)](plan/q237-docs-quality-audit.md#remediation) | `docs` | 🔲 | M | 16 medium goal-1 findings from the Q237 audit: stale make-check/image/test-gate counts, non-existent kubebuilder default markers, categorical egress claim, terminationGracePeriod default, observability :8081→:8443. Re-confirm each vs code. |
 | <a id="Q252"></a>Q252 | [Docs usability & tone polish (docs audit Batch C)](plan/q237-docs-quality-audit.md#remediation) | `docs` | 🔲 | S | goal-5 (4) + goal-6 (10) findings from the Q237 audit: acronym-on-first-use, copy-paste hazards, minor promotional tone. Low reader impact; sweep in one pass. |
 | <a id="Q74"></a>Q74 | [v2alpha1→v2beta1 graduation: conversion webhook](plan/k8s-best-practices.md#d-crd-design-polish-) | `infra` | 🔲 | S | Beta cut, after Q191/Q196/Q197/Q224/Q242/Q243: `Hub`/`Convertible` stubs + v2beta1 served/storage version + storage migration. Distinct from the M5 fan-out tool. See [graduation](plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). |
 | <a id="Q220"></a>Q220 | [Validate service-mesh coexistence guidance on a live cluster](operations/service-mesh-coexistence.md) | `tests` `docs` | 🔲 | M | Q206 guide's in-mesh recipes (native sidecars, egress exclusions) reasoned from code+docs, untested. Stand up Istio (sidecar/native/ambient)+Linkerd on kind; run a job through a meshed GAG ns; confirm pods terminate + egress IP preserved. |
