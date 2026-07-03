@@ -26,6 +26,7 @@ Other helpers:
 
 | Script | Purpose |
 |---|---|
+| [check-tools.sh](check-tools.sh) | Verify the CLI tools the project needs (required / e2e / extended tiers) are installed and on PATH; for each miss, print a per-OS install command or the exact dir to add to PATH. Cross-platform (brew/apt/url). Backs `make doctor`. Exits nonzero if a required tool is missing. |
 | [setup.sh](setup.sh) | One-time post-clone setup: initialise Go module dependencies and verify the build. Re-run after any dependency change. |
 | [go-work-tidy.sh](go-work-tidy.sh) | Run `go mod tidy` across every module in the Go workspace sequentially. See [docs/development/go-workspaces.md](../docs/development/go-workspaces.md). |
 | [kind-with-registry.sh](kind-with-registry.sh) | Idempotent: start a local OCI registry and a `kind` cluster wired to use it. Foundation for Tier A/B e2e tests — see [docs/development/kind-iteration.md](../docs/development/kind-iteration.md). |

@@ -20,6 +20,8 @@ Capture knowledge durably, don't leave it in chat. When the user states a standi
 
 Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
 
+**Never install host binary dependencies yourself, and never work around a missing one** (no hardcoded absolute tool paths, no inline `PATH` mutation). If a task needs a CLI tool that `scripts/check-tools.sh` doesn't list, stop and surface it to the user; once approved, add it to that script's registry (and to `CONTRIBUTING.md` prerequisites if it's `required`-tier) so every contributor knows to install it and `make doctor` validates it. Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` module (`tools/tools.go`, built by `make tools`) as-needed when that's genuinely its home — but not as a substitute for a real host dependency.
+
 ## Workflow
 
 1. **Before making changes** — review `DESIGN.md` and any relevant docs in `docs/` to confirm the plan matches the design intent. If picking the next task: run `gh pr list` first and skip any Queue item already covered by an open PR; verify 🚫 blockers are still real (grep for the blocker's deliverables — a previous session may have completed it without flipping the Queue row); mark M/L items ▶ Started in `docs/STATUS.md`.
@@ -72,6 +74,7 @@ The fourth hook guards a different tool: **no-subagent-workers** (`scripts/claud
 
 [`docs/development/testing.md`](docs/development/testing.md) is the canonical reference: per-module run commands (`go test ./...` from the repo root does **not** work — Go workspace), test-tier selection, the integration/e2e tiers, and the heavier gates.
 
+- **A CLI tool isn't on `PATH`? Run `scripts/check-tools.sh` (or `make doctor`), don't hardcode an absolute path.** It reports missing vs installed-but-off-PATH tools with per-OS install commands and the exact dir to add to `PATH`. Surface its guidance and prompt the user to install or fix their `PATH` — never work around it by invoking a tool via a hardcoded absolute path (e.g. `/Applications/Docker.app/.../kubectl`) or by mutating `PATH` inline for one command.
 - **Run `make check` before concluding work or requesting review.** The one-command fast gate: gofmt + golangci-lint + shellcheck + `docs/STATUS.md` lint + unit tests — everything CI's `unit-test.yml` enforces except its `-race` step (reproduce that with `make test-race` when a change touches the concurrency core). A sub-second subset also runs at commit time via the pre-commit hook (`make hooks` installs it; bypass once with `git commit --no-verify`).
 - **Throttle direct `go` invocations.** An unthrottled `go build`/`go test` — `-race` above all — can saturate a dev Mac and crash the GUI (WindowServer watchdog; it has actually happened — Q92). Prefer `make` targets (they auto-throttle); the go-throttle hook auto-prefixes bare commands; for compound forms add the prefix yourself:
   ```bash

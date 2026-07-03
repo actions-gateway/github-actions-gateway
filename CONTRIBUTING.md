@@ -7,6 +7,10 @@
 - [kind](https://kind.sigs.k8s.io/) (for the local e2e cluster)
 - `make`
 
+Verify your toolchain at any time with `scripts/check-tools.sh` (or `make doctor`). It checks the tools the project needs — grouped into `required` (the fast `make check` loop), `e2e`, and `extended` (heavier gates, dogfood) tiers — and for anything missing prints a per-OS install command or, when a tool is installed but not on your `PATH`, the exact directory to add. It exits nonzero if a required tool is missing, so it also works as a CI/setup preflight.
+
+That registry is also the project's **approved list of host CLI dependencies**. If new work needs a tool that isn't listed, raise it before relying on it — once agreed, add a row to [`scripts/check-tools.sh`](scripts/check-tools.sh) (and to the prerequisites above when it's a hard requirement) so every contributor and `make doctor` stay in sync. Go build- and codegen-time tools are handled differently: pin them in the vendored [`tools/`](tools/README.md) module rather than adding a host dependency.
+
 **Optional — AI-assisted development (Claude Code):** Two skills from [`karlkfi/claude-skills`](https://github.com/karlkfi/claude-skills) are recommended:
 
 - [`model-advisor`](https://github.com/karlkfi/claude-skills/tree/main/model-advisor) — model and thinking-level recommendations at session start and on task shifts.

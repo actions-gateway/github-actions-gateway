@@ -129,6 +129,13 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 	git config core.hooksPath .githooks
 	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
 
+# Diagnose the local toolchain: report which required/e2e/extended CLI tools are
+# missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.
+# Runnable without the vendored tool binaries, so it works on a fresh clone.
+.PHONY: doctor
+doctor: ## Check required CLI tools are installed and on PATH (install/PATH-fix hints for any missing)
+	scripts/check-tools.sh
+
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods
 	$(MAKE) -C api generate
