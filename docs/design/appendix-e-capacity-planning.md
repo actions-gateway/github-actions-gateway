@@ -175,19 +175,19 @@ New runner requirement arriving:
 
 The AGC is a single-pod controller that holds all listener goroutine state in memory. It cannot be horizontally scaled to multiple replicas without distributing that state — a significant complexity increase that is not in scope for this design. The scaling levers available to operators are vertical scaling, optional VPA right-sizing, and sharding across multiple `ActionsGateway` CRs.
 
-**Vertical scaling (manual).** The primary tuning surface is the AGC pod's resource footprint, set per gateway via `spec.agcResources` on the v2 `ActionsGateway` (Q171). The working memory consumed by listener goroutines at peak burst is:
+**Vertical scaling (manual).** The primary tuning surface is the AGC pod's resource footprint. The working memory consumed by listener goroutines at peak burst is:
 
 ```
 peak_goroutine_memory ≈ sum(maxListeners across all RunnerGroups) × 60 KiB
 ```
 
-For example, 50 RunnerGroups each with `maxListeners: 10` → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The platform default sizing (see [Appendix A](appendix-a-capacity-slos.md)) is a `2Gi` memory **request** with a `4Gi` memory **limit** — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded. If an operator adds many RunnerGroups with high `maxListeners` values and begins observing `container OOMKilled` events or high GC pressure (visible via `go_gc_duration_seconds` in Prometheus), raising `spec.agcResources.requests.memory` and `limits.memory` is the correct first response.
+For example, 50 RunnerGroups each with `maxListeners: 10` → 500 concurrent goroutines at peak → ~30 MiB of goroutine working set. The recommended sizing (see [Appendix A](appendix-a-capacity-slos.md)) is a `2Gi` memory **request** with a `4Gi` memory **limit** — the request is a generous scheduling reservation absorbing Go runtime overhead and heap churn during reconcile storms, and the limit sits well above the working set so transient bursts don't OOMKill the single-pod control plane while a true runaway is still bounded. On the v1 API the GMC stamps no resources on the AGC pod, so the platform applies this sizing on the AGC Deployment through its Helm/Kustomize overlay (or a namespace `LimitRange` that supplies default requests). If an operator adds many RunnerGroups with high `maxListeners` values and begins observing `container OOMKilled` events or high GC pressure (visible via `go_gc_duration_seconds` in Prometheus), raising the AGC Deployment's `resources.limits.memory` is the correct first response.
 
-CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on `GET /message` long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The platform default `2`-core CPU **limit** is sufficient for most deployments; raise `spec.agcResources.limits.cpu` only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile activity.
+CPU consumption is predominantly I/O-bound — goroutines spend nearly all of their time blocked on `GET /message` long-polls. CPU pressure appears only during reconcile churn (many RunnerGroups being created or deleted simultaneously) or during a token refresh storm. The recommended `2`-core CPU **limit** is sufficient for most deployments; raise the AGC Deployment's `resources.limits.cpu` only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile activity.
 
 **Optional VPA right-sizing.** A [Vertical Pod Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler) in `Auto` mode will observe the AGC's actual CPU and memory usage over time and adjust its resource requests automatically. This is useful for operators who want the AGC to self-tune rather than set limits manually, especially in early-production environments where workload shape is still stabilizing. The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listener goroutines deregister their sessions via `DELETE /sessions`, and the AGC re-registers them within GitHub's 2-minute redelivery window on restart (see [§4.2](04-operational-flows.md#42-job-execution-flow-agc) and the `SessionReacquisition` SLO in [Appendix A](appendix-a-capacity-slos.md)).
 
-> **`spec.agcResources` (Q171).** The v2 `ActionsGateway` exposes an optional `agcResources` field of the standard `corev1.ResourceRequirements` shape for tenant-controlled per-gateway AGC sizing. It is an additive, per-key override of the platform default (requests `cpu: 500m` / `memory: 2Gi`, limits `cpu: 2` / `memory: 4Gi` — the [Appendix A](appendix-a-capacity-slos.md) sizing): set only the request/limit knobs you want to change and the rest keep the default. Omitting the field reproduces the platform default unchanged. See [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources) for the operator-facing how-to and the recommended floor.
+> **v2 promotes AGC sizing to a CR field — `spec.agcResources` (Q171).** This appendix describes the v1 API (`actions-gateway.github.com/v1alpha1`), where AGC sizing is platform-applied on the Deployment as above. The v2 `ActionsGateway` (`actions-gateway.com/v2alpha1`) instead exposes an optional `agcResources` field of the standard `corev1.ResourceRequirements` shape for tenant-controlled per-gateway sizing, and makes the [Appendix A](appendix-a-capacity-slos.md) sizing (requests `cpu: 500m` / `memory: 2Gi`, limits `cpu: 2` / `memory: 4Gi`) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged. See [Appendix H](appendix-h-v2-api-decomposition.md) for the v2 decomposition and [tenant-onboarding](../operations/tenant-onboarding.md#tuning-agc-control-plane-resources) for the operator-facing how-to and the recommended floor.
 
 **Horizontal sharding.** When the number of RunnerGroups or their aggregate `maxListeners` exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see [E.6](#e6-when-to-shard-across-installations)) — the correct scale path is to shard into a second `ActionsGateway` CR in a new namespace with a separate GitHub App installation. Each shard has its own AGC pod, its own rate-limit budget, and its own independent listener goroutine pool. See [E.6](#e6-when-to-shard-across-installations) for shard triggers and the standard namespace partitioning pattern.
 
@@ -218,13 +218,23 @@ spec:
     pods: "85"           # 10 + 20 + 50 + 5 headroom
 ```
 
-The tenant's `ActionsGateway` then declares only the runner groups (no quota field):
+The tenant's `ActionsGateway` then declares the runner groups (no quota field).
+An embedded `runnerGroups[]` entry has no `name` field — the GMC derives each
+RunnerGroup's name from its first `runnerLabels` entry, so keep the distinguishing
+label first to give every group a distinct name:
 
 ```yaml
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: ml-team-gateway
+  namespace: ml-team
 spec:
+  gitHubAppRef:
+    name: github-app
+  gitHubURL: https://github.com/my-org
   runnerGroups:
-    - name: train-gpu8x
-      runnerLabels: ["self-hosted", "gpu-8x"]
+    - runnerLabels: ["gpu-8x", "self-hosted"]   # → RunnerGroup ml-team-gateway-gpu-8x
       maxListeners: 12   # peak 10, +2 margin
       maxWorkers: 10
       podTemplate:
@@ -235,8 +245,7 @@ spec:
                 limits:
                   nvidia.com/gpu: "8"
 
-    - name: eval-gpu2x
-      runnerLabels: ["self-hosted", "gpu-2x"]
+    - runnerLabels: ["gpu-2x", "self-hosted"]   # → RunnerGroup ml-team-gateway-gpu-2x
       maxListeners: 22   # peak 20, +2 margin
       priorityTiers:
         - priorityClassName: runner-critical
@@ -251,8 +260,7 @@ spec:
                 limits:
                   nvidia.com/gpu: "2"
 
-    - name: cpu-preprocess
-      runnerLabels: ["self-hosted", "cpu-preprocess"]
+    - runnerLabels: ["cpu-preprocess", "self-hosted"]   # → RunnerGroup ml-team-gateway-cpu-preprocess
       maxListeners: 10   # rarely bursts, default is fine
       maxWorkers: 50
 ```
@@ -285,10 +293,17 @@ spec:
 ```
 
 ```yaml
+apiVersion: actions-gateway.github.com/v1alpha1
+kind: ActionsGateway
+metadata:
+  name: backend-team-gateway
+  namespace: backend-team
 spec:
+  gitHubAppRef:
+    name: github-app
+  gitHubURL: https://github.com/my-org
   runnerGroups:
-    - name: integration-tests
-      runnerLabels: ["self-hosted", "linux"]
+    - runnerLabels: ["linux", "self-hosted"]   # → RunnerGroup backend-team-gateway-linux
       maxListeners: 12   # peak burst 10, +2 margin
       maxWorkers: 10
       podTemplate:
