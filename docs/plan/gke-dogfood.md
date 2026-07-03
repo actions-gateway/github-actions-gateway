@@ -533,6 +533,68 @@ gh api /repos/"$REPO"/actions/runners \
 > NOT yet unblocked/closed.** The Q259 `422 "still running"` recycle churn is a
 > separate, secondary symptom and is unaffected by this fix.
 >
+> **Q260 fix live-validated INEFFECTIVE — the concurrent matrix STILL wedges
+> (2026-07-03, re-route #2).** A fresh AGC image built off `main`@`c850764` (=#503,
+> the Q260 dedup fix) — `ghcr.io/actions-gateway/agc:e2e-c850764`
+> (digest `sha256:989644a114e39f98108125a2ed4157aec8a8b4611abd68f6e84d747745efcc19`),
+> GMC/proxy/wrapper unchanged at `v1.1.0-rc.6` — was deployed by patching the GMC's
+> `AGC_IMAGE` env; the CI AGC rolled to it (verified: running pod's `imageID`
+> matches the pushed digest), gateway `Ready=True`, baseline listener online. The
+> concurrent matrix was re-routed (`GAG_RUNNER → ["self-hosted","linux","gag-ci"]`)
+> and a 7-job burst fired (rerun of unit-test.yml `28678275088` = 6 jobs + rerun of
+> integration-test.yml `28678275106` = 1 job). Worker capacity was **not** the
+> constraint: `workers` pool pre-scaled to 3 `e2-standard-4`, worker CPU requests
+> lowered `2→1`, zero Pending worker pods. **The burst wedged exactly as before.**
+> At burst start `activeSessions` scaled up to 8 (`maxListeners`) as designed, but
+> then **5 distinct sibling sessions** (`agentIndex` 2–6, 5 different `sessionId`s)
+> all failed `provisioner: create Secret job-3e6a971f-62ec-4bba-bdd5-b928ba9e63f7-9a91092: secrets "…" already exists`
+> on the **identical** worker Secret — i.e. 6 sessions raced the *same* job (1 won,
+> 5 burned their runner slot). The pool then collapsed `activeSessions 8 → 2`; GitHub
+> showed 5 runners `busy:true` but `status:offline` (ci-2…ci-6) with **no** worker
+> pod; only ~1–2 worker pods ever ran; and `unit-test`/`vendor-check`/`tidy-check`/
+> `coverage`/`lint` stranded `in_progress` on the dead runners. The Q259 `422 "…still
+> running a job and cannot be deleted"` recycle churn (runner ids 1884/1886/1887) and
+> the Q254 `RenewJob: job lock definitively lost` (`job_not_found` 404, cancelling the
+> winning worker) both reappeared as secondary symptoms.
+>
+> **Root cause — the Q260 dedup keys on the wrong identifier.** The Multiplexer's
+> in-flight claim registry keys on `RunnerRequestID` and claims it **pre-**`AcquireJob`
+> ([`goroutine.go:570`](../../cmd/agc/internal/listener/goroutine.go)). But the
+> colliding per-job worker Secret is named from the job's **`planID`**
+> (`resp.Plan.PlanID`, from the AcquireJob **response**), and the pre-acquire broker
+> message ([`RunnerJobRequestBody`](../../broker/types.go), fields
+> `RunnerRequestID` + `RunServiceURL` + `BillingOwnerID`) carries **no** plan id.
+> GitHub's broker fan-out delivers one job (one `planID`) to sibling sessions as
+> messages with **distinct** `RunnerRequestID`s — so each sibling's
+> `claimJob(distinctReqID)` succeeds, all pass the gate, all acquire, and all collide
+> on the shared `planID` Secret. Since the claim registry is shared across siblings
+> (`cfg.ClaimJob = m.claimJob`), 5 sessions passing the gate proves their
+> `RunnerRequestID`s differed; and `RunnerRequestID` is non-empty (RenewJob keys on it
+> and single jobs renew fine), ruling out the empty-key path. The fix's model —
+> "same delivery ⇒ same `RunnerRequestID`" — does not hold in production; the
+> regression test `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` feeds one
+> **shared** `RunnerRequestID` to all 5 sessions, so it passes green while the live
+> broker assigns per-delivery ids and the wedge survives. **A working dedup must key
+> on job identity that (a) collapses across fan-out siblings and (b) determines the
+> Secret** — i.e. `planID`, which is only known *post*-acquire. Candidate fixes for
+> the Q260 follow-up: claim on `planID` immediately after `AcquireJob` but before
+> provisioning, releasing the acquire + deregistering the runner cleanly on a lost
+> claim (so the slot isn't left `busy`/offline); or investigate whether the per-job
+> `RunServiceURL` (documented "per-job … must not be cached globally across jobs") is
+> stable across siblings and usable as the pre-acquire dedup key. **Q224's "route
+> production CI green" is still NOT met — Q224 and Q242 remain open/blocked, and Q260
+> is reopened (its first fix is ineffective).**
+>
+> **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
+> image (Q239 regression).** The `shellcheck` job failed `make: command not found`
+> because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills
+> the bare upstream `ghcr.io/actions/actions-runner:2.335.1` (no build toolchain)
+> rather than the build-capable `dogfood-runner` image (Q239, validated 2026-06-29).
+> This blocks green CI independently of Q260: a future turn-up must run
+> `scripts/dogfood/setup.sh` with `DOGFOOD_RUNNER_IMAGE` exported (or patch the
+> `RunnerTemplate` `workerImage`) so `make`-based jobs can pass. Not a new bug — the
+> cluster lost the Q239 config across a re-setup.
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
