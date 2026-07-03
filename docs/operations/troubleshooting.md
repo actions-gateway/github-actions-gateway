@@ -1130,6 +1130,32 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "curren
 - **Upgrade** to a gateway version with the Q259 fix. Fixed versions treat the `422 "currently running"` as transient: `Pool.Recycle` retries the re-registration with a bounded, jittered backoff (waiting for GitHub to release the just-consumed runner) instead of failing, so the listener keeps its polling slot and concurrency is sustained. A recycle that finally succeeds after the wait increments `actions_gateway_agent_recycles_total{trigger="post_job"}` as usual.
 - **On fixed versions,** `actions_gateway_agent_recycle_errors_total` still rises only if a runner *never* releases within the retry bound — a genuine fault (registration API unreachable, or the runner is truly wedged running server-side), not the normal post-job race. Investigate as in the section above.
 
+> **If the burst still serializes to ~1 worker after the Q259 fix, see the next
+> section (Q260) — a distinct duplicate-acquisition cause.**
+
+---
+
+## Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)
+
+**Symptoms.** As above, a whole CI matrix bursted onto the gateway serializes to roughly one running worker — but this variant persists *even on a gateway with the Q259 recycle fix*. The distinguishing tell is in the AGC logs: several sessions of the same RunnerGroup (distinct `agentIndex` / `sessionId`) all fail provisioning the **same** job with `provisioner: create Secret job-<planid>: secrets "…" already exists`. In GitHub's runner list the losing runners show `busy` but `offline` with **no** worker pod; their sessions then die. Remaining jobs sit `in_progress` (assigned to the now-dead duplicate runners) until GitHub's ~15-minute unstarted-job timeout.
+
+**Cause.** Under a burst, GitHub's broker can fan the **same** `RunnerJobRequest` out to several sibling long-poll sessions of one RunnerGroup (at-least-once delivery). On gateway versions before the Q260 fix, every recipient independently ran `acquirejob` — succeeding and marking its runner **busy** — and then entered the provisioner, where the per-job worker Secret name is derived from the job's plan ID. The first session created the Secret; the rest collided (`already exists`), failed provisioning, and died *with their runner slot already consumed*. Net effect: one worker runs the job while the other slots are burned, collapsing the pool to the baseline listener. This is distinct from the Q259 post-job recycle churn (which may still be visible as a secondary `422 "currently running"` signal).
+
+**Diagnostics.**
+
+```sh
+# Multiple sessions provisioning the SAME job (the duplicate-acquisition signature)
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "already exists|duplicate job delivery"
+
+# Metric: actions_gateway_jobs_duplicate_delivery_total — on fixed versions, this
+#   rises (deliveries safely deduplicated) INSTEAD of runner slots being burned.
+# Metric: actions_gateway_active_sessions — collapses toward 1 on pre-fix versions.
+```
+
+**Resolution.**
+- **Upgrade** to a gateway version with the Q260 fix. Fixed versions dedup a job across the RunnerGroup's sibling sessions **before** `acquirejob`: the first session to claim a job id provisions it, and any sibling handed the same delivery skips the acquire entirely (so its runner stays online and idle for other work rather than going `busy` but pod-less) and increments `actions_gateway_jobs_duplicate_delivery_total`. A steady low rate of that counter during bursts is the fix working as intended.
+- **No operator action** is needed on fixed versions — the dedup is automatic and per-RunnerGroup. If the burst still serializes with `jobs_duplicate_delivery_total` flat and `jobs_acquired_total` not climbing, the bottleneck is elsewhere (worker-node capacity, namespace `ResourceQuota`, or the Q259 recycle path) — work through those sections.
+
 ---
 
 ## Network Connectivity Failures

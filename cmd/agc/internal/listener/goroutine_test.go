@@ -1523,6 +1523,9 @@ func newTestMetrics() *listener.Metrics {
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_jobs_admission_rejected_total",
 		}, []string{"namespace", "runner_group"}),
+		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_jobs_duplicate_delivery_total",
+		}, []string{"namespace", "runner_group"}),
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_token_refreshes_total",
 		}, []string{"namespace"}),
@@ -1630,6 +1633,67 @@ func TestListener_AdmissionRejected(t *testing.T) {
 		return testutil.ToFloat64(m.JobsAdmissionRejectedTotal.WithLabelValues("default", "test-rg")) >= 1
 	}, 2*time.Second, 10*time.Millisecond, "admission rejection counter should be incremented")
 	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called when admission is rejected")
+
+	cancel()
+	<-done
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// ── Q260: duplicate-delivery dedup gate ──────────────────────────────────────
+
+// TestListener_DuplicateJobDeliverySkipsAcquire verifies that when the dedup
+// gate refuses the claim — a sibling session in this AGC already owns the job —
+// the listener skips AcquireJob entirely (so its runner slot is not burned) and
+// increments the duplicate-delivery counter. This is the per-job counterpart of
+// the Q59 admission gate: without it, a job GitHub's broker fanned out to
+// several sibling sessions would be AcquireJob'd by every recipient, marking
+// each runner busy and colliding on the shared per-job worker Secret (Q260).
+func TestListener_DuplicateJobDeliverySkipsAcquire(t *testing.T) {
+	oauthSrv := oauthStub()
+	var acquireCalled atomic.Bool
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	var delivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		acquireCalled.Store(true)
+		defaultAcquireJob(w)
+	})
+
+	m := newTestMetrics()
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Metrics = m
+	cfg.IsLastPoller = func() bool { return true }
+	// A sibling already owns this job: the claim is always refused. The gate is
+	// keyed by the job's RunnerRequestID (jobMsgWithURL sets "req-1").
+	cfg.ClaimJob = func(jobID string) (func(), bool) {
+		assert.Equal(t, "req-1", jobID)
+		return nil, false
+	}
+	// If AcquireJob were reached the JobHandler would fire; it must not.
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		t.Error("JobHandler must not run for a deduplicated duplicate delivery")
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "duplicate-delivery counter should be incremented")
+	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called for a deduplicated job (slot must not be burned)")
 
 	cancel()
 	<-done

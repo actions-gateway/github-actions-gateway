@@ -511,6 +511,28 @@ gh api /repos/"$REPO"/actions/runners \
 > unit-test.yml `28671804298` + integration-test.yml `28671804300`, and unit-test.yml
 > `28547170012` (2nd burst).
 >
+> **Q260 fix (code-complete 2026-07-03; live re-validation pending).** The AGC now
+> deduplicates a job across the sibling listener sessions of one RunnerGroup
+> **before** `AcquireJob`. The Multiplexer owns a per-group in-flight claim
+> registry keyed by the job's `RunnerRequestID` (present in the broker message
+> pre-acquire); `handleJob` claims the id before acquiring, and a sibling handed
+> the same fan-out delivery finds it already claimed and **skips the acquire
+> entirely** — so its runner stays online and idle instead of going `busy` but
+> pod-less, and no two sessions ever reach the colliding per-job worker Secret.
+> The claim is released when the job finishes (or the acquire is abandoned), so a
+> later GitHub redelivery is still provisionable. A new counter
+> `actions_gateway_jobs_duplicate_delivery_total{namespace,runner_group}` records
+> each deduplicated delivery (steady low rate under bursts = the gate working).
+> The dedup runs before the Q59 admission gate, so a duplicate costs neither a
+> capacity slot nor an acquire. Regression tests: a single-listener gate test
+> (`TestListener_DuplicateJobDeliverySkipsAcquire`) and a Multiplexer concurrency
+> test (`TestMultiplexer_DuplicateJobDeliveryProvisionsOnce`) that fails without
+> the fix (all 5 sibling sessions provision one job; peak-concurrent-provisions =
+> 5) and passes with it (= 1). **The wedge only reproduces under a real burst, so
+> end-to-end confirmation is deferred to the next dogfood turn-up — Q224/Q242 are
+> NOT yet unblocked/closed.** The Q259 `422 "still running"` recycle churn is a
+> separate, secondary symptom and is unaffected by this fix.
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
