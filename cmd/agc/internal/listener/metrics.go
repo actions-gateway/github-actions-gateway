@@ -14,6 +14,10 @@ type Metrics struct {
 	// Q59: pre-acquisition admission control. Incremented when the capacity gate
 	// rejects a delivered job (acquire skipped, job left queued for redelivery).
 	JobsAdmissionRejectedTotal *prometheus.CounterVec
+	// Q260: duplicate broker delivery. Incremented when a delivered job is already
+	// being provisioned by a sibling session in this AGC, so this session skips
+	// AcquireJob rather than burning its runner slot on a colliding provision.
+	JobsDuplicateDeliveryTotal *prometheus.CounterVec
 	TokenRefreshesTotal        *prometheus.CounterVec
 	TokenRefreshErrorsTotal    *prometheus.CounterVec
 	RenewJobErrorsTotal        *prometheus.CounterVec
@@ -59,6 +63,11 @@ func NewMetrics() *Metrics {
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_jobs_admission_rejected_total",
 			Help: "Jobs left queued at GitHub because the pre-acquisition capacity gate was full (acquire skipped for redelivery).",
+		}, []string{"namespace", "runner_group"}),
+
+		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_jobs_duplicate_delivery_total",
+			Help: "Duplicate job deliveries deduplicated: the job was already being provisioned by a sibling session in this AGC, so AcquireJob was skipped to avoid burning a runner slot (Q260).",
 		}, []string{"namespace", "runner_group"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -141,6 +150,7 @@ func NewMetrics() *Metrics {
 		m.JobsAcquiredTotal,
 		m.JobAcquisitionErrors,
 		m.JobsAdmissionRejectedTotal,
+		m.JobsDuplicateDeliveryTotal,
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,

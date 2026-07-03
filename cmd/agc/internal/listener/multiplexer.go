@@ -54,6 +54,19 @@ type Multiplexer struct {
 	stopped bool
 	factory ConfigFactory
 	log     *slog.Logger
+
+	// jobClaimsMu guards jobClaims. It is separate from mu so the hot per-job
+	// claim/release path never contends with spawn/Stop bookkeeping.
+	jobClaimsMu sync.Mutex
+	// jobClaims holds the RunnerRequestIDs currently being provisioned by some
+	// listener goroutine of this RunnerGroup. It deduplicates a job that GitHub's
+	// broker fans out to multiple sibling sessions under a concurrent burst: the
+	// first goroutine to claim an id provisions it, and siblings that see it
+	// already claimed skip AcquireJob so they do not burn a runner slot on a
+	// colliding provision (Q260). Entries are removed when the owning goroutine
+	// finishes the job (or abandons the acquire), so the map tracks only in-flight
+	// jobs.
+	jobClaims map[string]struct{}
 	// RestartDelay is the backoff before restarting a crashed permanent listener
 	// goroutine. Zero defaults to one second. Override to a smaller value in tests.
 	RestartDelay time.Duration
@@ -67,6 +80,7 @@ func NewMultiplexer(factory ConfigFactory, maxListeners int32, log *slog.Logger)
 	m := &Multiplexer{
 		active:     make(map[int]*listenerState),
 		restarting: make(map[int]*listenerState),
+		jobClaims:  make(map[string]struct{}),
 		factory:    factory,
 		log:        log,
 	}
@@ -139,6 +153,31 @@ func (m *Multiplexer) setPolling(state *listenerState, polling bool) {
 	}
 }
 
+// claimJob reserves exclusive provisioning of jobID within this RunnerGroup.
+// ok is false when a sibling goroutine already holds the claim — a duplicate
+// broker delivery of the same job under a concurrent burst — in which case the
+// caller must skip AcquireJob so it does not burn a runner slot on a job another
+// session is already provisioning (Q260). On ok=true the returned release must
+// be called exactly once when the job completes or the acquire is abandoned, so
+// a later GitHub redelivery of the same id can be provisioned again; release is
+// idempotent.
+func (m *Multiplexer) claimJob(jobID string) (release func(), ok bool) {
+	m.jobClaimsMu.Lock()
+	defer m.jobClaimsMu.Unlock()
+	if _, held := m.jobClaims[jobID]; held {
+		return nil, false
+	}
+	m.jobClaims[jobID] = struct{}{}
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			m.jobClaimsMu.Lock()
+			delete(m.jobClaims, jobID)
+			m.jobClaimsMu.Unlock()
+		})
+	}, true
+}
+
 // Stop cancels all listener goroutines — including any permanent baseline
 // waiting out its restart backoff — and waits for them to exit cleanly. The
 // Multiplexer is retired afterwards: Start and SpawnReplacement become no-ops.
@@ -186,6 +225,9 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 	cfg.IsLastPoller = func() bool { return m.PollerCount() <= 1 }
 	cfg.SpawnReplacement = func(ctx context.Context) { m.SpawnReplacement(ctx) }
 	cfg.SetPolling = func(polling bool) { m.setPolling(state, polling) }
+	// Dedup duplicate broker deliveries of one job across this group's sibling
+	// sessions (Q260). Shared across all goroutines the Multiplexer spawns.
+	cfg.ClaimJob = m.claimJob
 
 	go func() {
 		defer close(state.done)

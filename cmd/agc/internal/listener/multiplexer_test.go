@@ -15,6 +15,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -627,6 +628,98 @@ func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
 	close(jobBlock)
 	cancel()
 	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestMultiplexer_DuplicateJobDeliveryProvisionsOnce is the Q260 regression: when
+// GitHub's broker fans the SAME job out to every sibling session of one
+// RunnerGroup under a concurrent burst, the Multiplexer's shared job-claim
+// registry must ensure exactly one session provisions it. Without the claim,
+// every recipient AcquireJobs the job (marking its runner busy) and then enters
+// the provisioner, colliding on the shared per-job worker Secret — so all but one
+// runner slot is burned (busy but pod-less) and the pool collapses to a single
+// worker. Here the JobHandler stands in for the provisioner and records the peak
+// number of sessions running the job at once; the invariant is that it never
+// exceeds one, and the losing siblings are counted as deduplicated.
+func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
+	const maxListeners = 5
+
+	oauthSrv := oauthStub()
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	// Every poll delivers the identical job (jobMsgWithURL uses a fixed
+	// RunnerRequestID), simulating the broker fan-out under a burst.
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+	})
+	// AcquireJob always succeeds — the point is that only the winner should ever
+	// reach it; the default handler returns 200 with a stub plan.
+
+	m := newTestMetrics()
+	release := make(chan struct{})
+	var handlerActive, handlerMax atomic.Int32
+	factory := func(_ int) listener.Config {
+		agent := makeAgent(t, oauthSrv.URL)
+		bc := &broker.Client{
+			BrokerURL:  brokerSrv.URL,
+			UseV2Flow:  true,
+			HTTPClient: brokerSrv.Client(),
+		}
+		return listener.Config{
+			Group:         "test-rg",
+			Namespace:     "default",
+			Agent:         agent,
+			Broker:        bc,
+			HTTPClient:    oauthSrv.Client(),
+			Metrics:       m,
+			IdleThreshold: 1_000_000, // never idle-exit during the assertions
+			RenewInterval: time.Hour, // no renewal traffic during the test
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+				n := handlerActive.Add(1)
+				for {
+					old := handlerMax.Load()
+					if n <= old || handlerMax.CompareAndSwap(old, n) {
+						break
+					}
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				handlerActive.Add(-1)
+				return nil
+			},
+		}
+	}
+
+	mgr := listener.NewMultiplexer(factory, maxListeners, nil)
+	mgr.RestartDelay = time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	require.NoError(t, mgr.Start(ctx))
+	// Force maxListeners concurrent pollers up front (the burst pre-scales the
+	// pool), rather than waiting for the winner's post-acquire SpawnReplacement.
+	for i := 0; i < maxListeners-1; i++ {
+		mgr.SpawnReplacement(ctx)
+	}
+
+	// The losing siblings are deduplicated: at least maxListeners-1 duplicate
+	// deliveries must be skipped.
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= float64(maxListeners-1)
+	}, 3*time.Second, 10*time.Millisecond, "losing sibling sessions should be deduplicated")
+
+	// The core invariant: never more than one session provisions the job at once.
+	// Without the claim, all maxListeners sessions would run the handler together.
+	assert.Equal(t, int32(1), handlerMax.Load(),
+		"exactly one session may provision a given job under a duplicate-delivery burst")
+
+	close(release)
+	cancel()
+	mgr.Stop()
 	drainHTTP(oauthSrv, brokerSrv)
 	goleak.VerifyNone(t)
 }
