@@ -52,34 +52,34 @@ reproduce identically on any machine, even with no transcripts present.
 
 ## Results
 
-Latest snapshot **2026-06-20** (project day 35; first commit 2026-05-16). "Day 7"
+Latest snapshot **2026-07-03** (project day 48; first commit 2026-05-16). "Day 7"
 is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the
-[day-22 follow-up][post2]; "Day 35" is the current snapshot the charts here back.
+[day-22 follow-up][post2]; "Day 48" is the current snapshot the charts here back.
 
 > **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the
-> 2026-06-20 snapshot. Re-running `compute_metrics.py` advances the token/message
+> 2026-07-03 snapshot. Re-running `compute_metrics.py` advances the token/message
 > series as new sessions accrue (the merge rule only ever revises upward); leave
 > it un-run to keep these figures, or re-run and refresh the charts to roll
 > forward to a new dated snapshot.
 
-| Metric | Day 7 | Day 22 | Day 35 | Source |
+| Metric | Day 7 | Day 22 | Day 48 | Source |
 |---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **114.7M** | transcripts + est. |
-| └ measured only | — | 53.7M | 112.2M | transcripts |
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | **187.7M** | transcripts + est. |
+| └ measured only | — | 53.7M | 185.2M | transcripts |
 | └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **3.91B** | transcripts + est. |
-| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~42×** | transcripts |
-| Git commits | 232 | 617 | **792** | git |
-| Tests (`func Test*`) | 269 | 393 | **547** | git |
-| Lines of Go (code) | 15.5k | 20.9k | **28.9k** | git |
-| Lines of Go (comments) | 2.3k | 4.2k | **7.5k** | git |
-| Markdown (non-blank) | 14.3k | 14.0k | **20.3k** | git |
-| YAML (hand-written) | 1.5k | 2.3k | **4.2k** | git |
-| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **6.4k** | git |
-| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 75% / Sonnet 19% / Fable 5%** | transcripts |
+| └ incl. cache reads | — | 2.02B | **6.86B** | transcripts + est. |
+| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~45×** | transcripts |
+| Git commits | 232 | 617 | **965** | git |
+| Tests (`func Test*`) | 269 | 393 | **976** | git |
+| Lines of Go (code) | 15.5k | 20.9k | **49.6k** | git |
+| Lines of Go (comments) | 2.3k | 4.2k | **14.2k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | **30.9k** | git |
+| YAML (hand-written) | 1.5k | 2.3k | **6.8k** | git |
+| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **10.2k** | git |
+| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 4.8 74% / Sonnet 13% / Opus 4.7 9% / Fable 3%** | transcripts |
 
 The headline tokens figure **includes the ~2.5M estimated backfill** for the
-archived first three days; the measured-only floor is 112.2M. Live totals (with
+archived first three days; the measured-only floor is 185.2M. Live totals (with
 the measured / estimated split) are always in
 [`data/summary.json`](data/summary.json).
 
@@ -105,8 +105,8 @@ and each model also carries its own hatch pattern.
 
 ### Tokens spent vs. lines authored (the magnitude)
 ![Cumulative tokens far above cumulative lines authored, log scale](charts/tokens_vs_lines.png)
-Log y so both ends are visible at once: ~115M cumulative tokens ride well above
-~60k lines authored (a linear axis crushes the lines to an invisible sliver). The
+Log y so both ends are visible at once: ~188M cumulative tokens ride well above
+~98k lines authored (a linear axis crushes the lines to an invisible sliver). The
 gold-shaded gap between the two curves is the ~1,900 tokens/line — on a log axis a
 ratio is a vertical gap. "Lines authored" is all hand-written output — Go (code +
 tests), Markdown, hand-written YAML, and scripts & web; generated CRD YAML,
@@ -130,7 +130,7 @@ order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
 ![Cumulative cache traffic](charts/cumulative_cache.png)
-Cumulative cache reads (3.79B) vs writes (91M). Write once, replay ~42×.
+Cumulative cache reads (6.67B) vs writes (149M). Write once, replay ~45×.
 
 ## Data files
 
@@ -175,7 +175,7 @@ full provenance.
   (2026-05-19), so their token usage is gone from the logs. Those days are
   **backfilled** from the Pro-era per-commit rate and flagged `estimated=1`
   (see "Backfilled (estimated) days" above). The ~2.5M backfill is a modeled
-  figure, not a measurement — the defensible measured-only floor is 111.5M. The
+  figure, not a measurement — the defensible measured-only floor is 185.2M. The
   git series is fully measured from 2026-05-16.
 - **Tokens-per-line is a proxy.** The denominator is all hand-authored output —
   Go (code + tests), Markdown, hand-written YAML, and scripts & web (shell,
