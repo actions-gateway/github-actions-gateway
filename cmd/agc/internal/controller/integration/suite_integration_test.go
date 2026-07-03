@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -89,6 +91,12 @@ func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationT
 	}, nil
 }
 
+// sharedListenerMetrics returns the process-wide listener.Metrics, constructed
+// once. listener.NewMetrics registers with the controller-runtime metrics
+// registry, so it must be created a single time per test binary; counters
+// accumulate across tests, so assertions read before/after deltas.
+var sharedListenerMetrics = sync.OnceValue(listener.NewMetrics)
+
 // brokerRegistrar returns credentials pointing to the stub server.
 type brokerRegistrar struct {
 	stub   *brokertest.Server
@@ -122,6 +130,10 @@ type provisionerOptions struct {
 	// baselineRecheckInterval overrides the reconciler's baseline re-check cadence
 	// (Q137). Zero leaves the production default.
 	baselineRecheckInterval time.Duration
+	// metrics, when non-nil, is attached to the reconciler so the listener
+	// goroutines record into it (e.g. the Q260 duplicate-delivery counter). Nil
+	// leaves metrics unwired, as most suites do not assert on them.
+	metrics *listener.Metrics
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
@@ -203,6 +215,8 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 		},
 		// Q137 baseline re-check cadence; zero leaves the production default.
 		BaselineRecheckInterval: opts.baselineRecheckInterval,
+		// Q260: wire the listener metrics when a test wants to assert on them.
+		Metrics: opts.metrics,
 	}
 
 	if opts.enabled {

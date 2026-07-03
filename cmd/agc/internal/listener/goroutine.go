@@ -116,19 +116,25 @@ type Config struct {
 	// provisioner's post-acquire ceilingCheck as the only (backstop) limit.
 	Admit AdmitFunc
 	// ClaimJob deduplicates provisioning of one job across the sibling listener
-	// goroutines of this RunnerGroup (Q260). GitHub's broker can deliver the same
-	// RunnerJobRequest to several sessions under a concurrent burst; without a
-	// claim every recipient AcquireJobs it — marking its runner busy — and then
-	// collides on the shared per-job worker Secret, so all but one session fail
-	// provisioning with their runner slot already burned (busy but offline, no
-	// worker pod). ClaimJob is called with the job's RunnerRequestID before
-	// AcquireJob: ok=false means a sibling in this AGC already owns the job, so
-	// the listener skips the acquire entirely (its runner stays online and idle
-	// for other work) rather than burning the slot. On ok=true the returned
-	// release is called exactly once when the job finishes or the acquire is
-	// abandoned, so a later GitHub redelivery can be provisioned again. Nil
-	// disables dedup (stub-only tests, or a delivery with no RunnerRequestID).
-	ClaimJob func(jobID string) (release func(), ok bool)
+	// goroutines of this RunnerGroup (Q260). Under a concurrent burst GitHub's
+	// broker fans one job out to several sibling sessions as messages with
+	// DISTINCT RunnerRequestIDs; each sibling acquires its own delivery and the
+	// AcquireJob response carries the SAME planID, so without a claim every
+	// recipient then races to create the shared per-job worker Secret
+	// "job-<planID>" — one wins and the rest collide ("already exists"), fail
+	// provisioning, and die with their runner slot already burned (busy but
+	// offline, no worker pod). ClaimJob is therefore called with the job's planID
+	// AFTER AcquireJob (planID is only known post-acquire) but BEFORE provisioning:
+	// ok=false means a sibling in this AGC is already provisioning this planID, so
+	// the listener skips provisioning and returns acquired=true, letting the caller
+	// recycle its consumed single-use runner back online (slot reclaimed cleanly)
+	// rather than colliding on the Secret. On ok=true the returned release is
+	// called exactly once when the job finishes or is abandoned, so a later GitHub
+	// redelivery can be provisioned again. Keying on planID (not the pre-acquire
+	// RunnerRequestID, which differs per sibling and so never deduped the fan-out —
+	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
+	// disables dedup (stub-only tests, or a response with no planID).
+	ClaimJob func(planID string) (release func(), ok bool)
 	Clock    Clock
 	Log      *slog.Logger
 
@@ -557,31 +563,6 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		log.Warn("could not parse job body; skipping AcquireJob", "error", err)
 	}
 
-	// Dedup gate (Q260): claim this job id BEFORE AcquireJob so only one sibling
-	// session in this AGC ever acquires and provisions it. GitHub's broker can
-	// fan the same RunnerJobRequest out to several sessions under a concurrent
-	// burst; without this every recipient would AcquireJob it (marking its runner
-	// busy), then collide on the shared per-job worker Secret and fail
-	// provisioning with its runner slot already burned — collapsing the pool to a
-	// single worker (the Q260 wedge). A losing session skips the acquire entirely,
-	// so its runner stays online and idle for other work rather than going busy
-	// but pod-less. Keyed by RunnerRequestID (present pre-acquire) so the slot is
-	// never burned; the claim is held for the whole job and released on return.
-	if cfg.ClaimJob != nil && jobBody.RunnerRequestID != "" {
-		release, ok := cfg.ClaimJob(jobBody.RunnerRequestID)
-		if !ok {
-			if cfg.Metrics != nil {
-				cfg.Metrics.JobsDuplicateDeliveryTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
-			}
-			// High-volume under a burst of duplicate deliveries; Debug, with the
-			// metric as the operator-facing signal (Q87, Theme D).
-			log.Debug("duplicate job delivery: job already claimed by a sibling session; skipping AcquireJob to avoid burning a runner slot",
-				"runnerRequestID", jobBody.RunnerRequestID)
-			return false, nil
-		}
-		defer release()
-	}
-
 	// Admission gate (Q59): reserve worker capacity BEFORE AcquireJob claims the
 	// job from GitHub. If the gate is full, skip the acquire so the job stays
 	// queued at GitHub and is redelivered to a sibling session with capacity —
@@ -660,6 +641,40 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		}
 	} else {
 		payload = []byte(msg.Body)
+	}
+
+	// Dedup gate (Q260): claim this job by its planID — the job identity that
+	// collapses across GitHub's broker fan-out and names the shared worker Secret
+	// — AFTER AcquireJob (planID is only known post-acquire) but BEFORE
+	// provisioning. Under a concurrent burst the broker fans one job out to several
+	// sibling sessions as messages with DISTINCT RunnerRequestIDs; each sibling
+	// acquires its own delivery and the response carries the SAME planID, so
+	// without this every sibling would race to create the per-job worker Secret
+	// "job-<planID>" — one wins, the rest collide ("already exists"), fail
+	// provisioning, and die with their runner slot burned (busy but pod-less),
+	// collapsing the pool to a single worker (the Q260 wedge). A losing sibling
+	// skips provisioning and returns acquired=true so its consumed single-use
+	// runner is recycled back online (slot reclaimed cleanly) rather than left
+	// busy/offline. The claim is held for the whole job and released on return, so
+	// a later GitHub redelivery is provisionable again. Keying on planID — not the
+	// pre-acquire RunnerRequestID, which differs per sibling and so never deduped
+	// the fan-out (the ineffective first fix, c850764) — is what converges the
+	// siblings onto one provision.
+	if cfg.ClaimJob != nil && acquired && planID != "" {
+		release, ok := cfg.ClaimJob(planID)
+		if !ok {
+			if cfg.Metrics != nil {
+				cfg.Metrics.JobsDuplicateDeliveryTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+			}
+			// High-volume under a burst of duplicate deliveries; Debug, with the
+			// metric as the operator-facing signal (Q87, Theme D). acquired stays
+			// true so the caller recycles the consumed runner (slot reclaimed);
+			// SpawnReplacement/renew/provision are all skipped for the loser.
+			log.Debug("duplicate job delivery: planID already claimed by a sibling session; skipping provisioning and recycling the runner slot",
+				"planID", planID, "runnerRequestID", jobBody.RunnerRequestID)
+			return acquired, nil
+		}
+		defer release()
 	}
 
 	// Notify multiplexer to spawn a replacement listener before blocking on job handler.
