@@ -201,6 +201,66 @@ model.
   in [Kata DinD / image-build workloads](kata-dind-workloads.md). Prefer
   this over Approach 4 whenever the daemon is genuinely required.
 
+## Sidecar containers must be native sidecars (Q249)
+
+Several approaches above run the build engine as a **sidecar container** — a
+`docker:dind` daemon (Approach 4), a `moby/buildkit:*-rootless` sidecar
+(Approach 1), or any long-running helper alongside the runner container. How
+you declare that sidecar decides whether the worker pod can ever finish.
+
+A Kubernetes pod terminates only once **every** regular `spec.containers[]`
+entry has exited. A build sidecar such as `dockerd` runs forever, so if you
+declare it as a **regular container** the pod never reaches `Completed` after
+the runner container exits — it lingers, and the AGC keeps counting the
+runner slot against the `RunnerSet`'s `maxWorkers`. Under a concurrent matrix
+the pool strands (the same failure class as a pod stuck Pending). **Declare
+long-running build sidecars as native sidecars instead:**
+
+```yaml
+spec:
+  template:
+    spec:
+      # A native sidecar is a restartPolicy: Always INIT container. Kubernetes
+      # (>= 1.29, GA 1.33) tears it down when the runner container exits, so the
+      # pod completes on its own — no custom reaper needed.
+      initContainers:
+        - name: dind
+          image: docker:dind
+          restartPolicy: Always      # <- this is what makes it a native sidecar
+          securityContext:
+            privileged: true          # Approach 4 only; needs the privileged profile
+      containers:
+        - name: runner
+          image: my-runner:latest
+```
+
+**How GAG surfaces a misconfiguration.** When a `RunnerTemplate` /
+`ClusterRunnerTemplate` carries a regular (non-native) sidecar, GAG warns —
+it never blocks:
+
+- **At `kubectl apply`** the validating webhook prints a non-blocking
+  `Warning:` naming the sidecar (the template is still created).
+- **On the `RunnerSet`** the advisory `PossibleReapBlockingSidecar=True`
+  condition is set (it does **not** gate `Ready`), and the
+  `actions_gateway_reap_blocking_sidecar_templates` gauge rises — see
+  [observability](observability.md#full-metrics-reference).
+
+**Opt-out for sidecars you know exit cleanly.** If a sidecar genuinely
+terminates on its own when the job ends (so it never blocks reaping), silence
+all three outlets for it by naming it in the template's annotation — a
+comma-separated list, not a blanket boolean, so a newly added, unacknowledged
+sidecar still warns:
+
+```yaml
+metadata:
+  annotations:
+    actions-gateway.com/self-exiting-sidecars: "metrics-agent,log-shipper"
+```
+
+Prefer converting to a native sidecar over acknowledging: the acknowledgment
+asserts an exit behaviour you must keep true, whereas a native sidecar makes
+Kubernetes enforce clean teardown for you.
+
 ## Decision table
 
 Pick the topmost row that matches your build need.

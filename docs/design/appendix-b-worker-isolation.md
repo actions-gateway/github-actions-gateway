@@ -75,6 +75,14 @@ spec:
 
 The cluster must have the corresponding `RuntimeClass` object installed and at least one node carrying the appropriate handler. The Gateway Manager Controller (GMC) does not install RuntimeClasses or runtime handlers — that is a cluster-admin operation.
 
+## B.5. Sidecar containers and pod reaping (Q249)
+
+A worker pod is one runner container plus, optionally, sidecars. A Kubernetes pod terminates only when **every** regular `spec.containers[]` entry has exited, so a sidecar that runs for the life of the job — a `docker:dind` daemon, a rootless BuildKit sidecar, a metrics agent — keeps the pod alive after the runner container finishes if it is declared as a **regular container**. The pod lingers, and because GAG counts a pod as an active session until it reaps, the runner slot stays charged against the `RunnerSet`'s `maxWorkers` — the same stranding class as [Q247](../STATUS.md) (a pod left behind after its job is gone). Under a concurrent matrix the pool collapses to the pods that happened to reap.
+
+GAG does **not** solve this with a bespoke reaper — it relies on the upstream mechanism. A **native sidecar** ([KEP-753](https://github.com/kubernetes/enhancements/tree/master/keps/sig-node/753-sidecar-containers): a `restartPolicy: Always` init container, beta/on-by-default in Kubernetes 1.29, GA in 1.33) is torn down by the kubelet when the main container exits, so the pod completes on its own. Operators declare long-running build sidecars that way.
+
+Because nothing in a pod spec declares that a container "runs forever" (`dockerd` never exits; `busybox true` exits at once), the detection is necessarily a **heuristic** — "a regular, non-runner container may block reaping." That is why every outlet is a **non-blocking warning**, never a rejection: an admission `Warning:`, the advisory `PossibleReapBlockingSidecar` condition on the `RunnerSet`, and the `actions_gateway_reap_blocking_sidecar_templates` gauge. A per-template `actions-gateway.com/self-exiting-sidecars` name-list annotation acknowledges sidecars the operator asserts exit cleanly, silencing all three for the named containers only (a name-list, not a boolean, so a newly added footgun still warns). The operator-facing how-to lives in [in-runner image builds § Sidecar containers must be native sidecars](../operations/in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
+
 ---
 
 ← [Appendix A](appendix-a-capacity-slos.md) | [Back to index](README.md) | Next: [Appendix C — AI-Assisted Implementation →](appendix-c-ai-implementation.md)

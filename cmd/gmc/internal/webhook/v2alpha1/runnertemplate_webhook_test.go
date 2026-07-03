@@ -227,6 +227,71 @@ func TestClusterRunnerTemplateCustomValidator_ValidateDelete(t *testing.T) {
 	require.NoError(t, err, "delete is a no-op")
 }
 
+// TestReapBlockingSidecarWarning asserts the Q249 admission warning is emitted for a
+// regular sidecar, suppressed by a native sidecar or the opt-out annotation, and —
+// critically — never blocks admission in any case.
+func TestReapBlockingSidecarWarning(t *testing.T) {
+	runner := corev1.Container{Name: "runner"}
+	dind := corev1.Container{Name: "dind"}
+	always := corev1.ContainerRestartPolicyAlways
+	nativeDind := corev1.Container{Name: "dind", RestartPolicy: &always}
+
+	withSidecar := func(annotations map[string]string, containers, initContainers []corev1.Container) *agcv2alpha1.RunnerTemplate {
+		return &agcv2alpha1.RunnerTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt", Namespace: "team-a", Annotations: annotations},
+			Spec:       *specWith(containers, initContainers),
+		}
+	}
+
+	t.Run("regular sidecar warns but is not blocked", func(t *testing.T) {
+		v := &RunnerTemplateCustomValidator{}
+		obj := withSidecar(nil, []corev1.Container{runner, dind}, nil)
+		warnings, err := v.ValidateCreate(context.Background(), obj)
+		require.NoError(t, err, "a reap-blocking sidecar must never block admission")
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "dind")
+		assert.Contains(t, warnings[0], agcv2alpha1.SelfExitingSidecarsAnnotation)
+	})
+
+	t.Run("native sidecar does not warn", func(t *testing.T) {
+		v := &RunnerTemplateCustomValidator{}
+		obj := withSidecar(nil, []corev1.Container{runner}, []corev1.Container{nativeDind})
+		warnings, err := v.ValidateCreate(context.Background(), obj)
+		require.NoError(t, err)
+		assert.Empty(t, warnings)
+	})
+
+	t.Run("opt-out annotation suppresses the warning", func(t *testing.T) {
+		v := &RunnerTemplateCustomValidator{}
+		obj := withSidecar(map[string]string{agcv2alpha1.SelfExitingSidecarsAnnotation: "dind"},
+			[]corev1.Container{runner, dind}, nil)
+		warnings, err := v.ValidateCreate(context.Background(), obj)
+		require.NoError(t, err)
+		assert.Empty(t, warnings)
+	})
+
+	t.Run("warning also emitted on update", func(t *testing.T) {
+		v := &RunnerTemplateCustomValidator{}
+		obj := withSidecar(nil, []corev1.Container{runner, dind}, nil)
+		warnings, err := v.ValidateUpdate(context.Background(), obj, obj)
+		require.NoError(t, err)
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "dind")
+	})
+
+	t.Run("cluster template warns on a regular sidecar without blocking", func(t *testing.T) {
+		v := &ClusterRunnerTemplateCustomValidator{}
+		obj := &agcv2alpha1.ClusterRunnerTemplate{
+			ObjectMeta: metav1.ObjectMeta{Name: "dind-golden"},
+			Spec:       *specWith([]corev1.Container{runner, dind}, nil),
+		}
+		warnings, err := v.ValidateCreate(context.Background(), obj)
+		require.NoError(t, err)
+		require.Len(t, warnings, 1)
+		assert.Contains(t, warnings[0], "dind")
+	})
+}
+
 // TestLogRejection asserts that logRejection both returns the original error
 // unmodified and emits a single audit line naming the kind, operation,
 // namespace, name, and reason — the trail every admission denial above

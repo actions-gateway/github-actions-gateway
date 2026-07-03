@@ -1,12 +1,34 @@
 # Warn on Reap-Blocking Worker Sidecars
 
-> **Status: ❌ Open — planned.** Tracked as [Q249](../STATUS.md#Q249). Discovered
+> **Status: ✅ Done — shipped 2026-07-03 (Q249).** Discovered
 > during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a
 > `docker:dind` sidecar declared as a **regular** container kept the worker pod
 > at `1/2` after the runner exited, so the AGC counted it as an active session
-> and `maxWorkers` saturated — the [Q247](../STATUS.md#Q247) stranding symptom,
+> and `maxWorkers` saturated — the [Q247](../../STATUS.md#Q247) stranding symptom,
 > reproduced deterministically. This surfaces that misconfiguration at admission
 > + status + metrics and steers operators to native sidecars. **No custom reaper.**
+>
+> **What shipped.** Shared detection helper `ReapBlockingSidecars` +
+> `SelfExitingSidecarsAnnotation` / `RunnerContainerName` constants in the neutral
+> `api/v2alpha1` module ([sidecar.go](../../../api/v2alpha1/sidecar.go)). Three
+> non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating-
+> webhook admission **Warning** on RunnerTemplate/ClusterRunnerTemplate create+update
+> ([runnertemplate_webhook.go](../../../cmd/gmc/internal/webhook/v2alpha1/runnertemplate_webhook.go));
+> (b) the advisory `PossibleReapBlockingSidecar` RunnerSet condition, set/cleared from
+> the resolved template by the AGC reconciler
+> ([runnerset_controller.go](../../../cmd/agc/internal/controller/runnerset_controller.go));
+> (c) the `actions_gateway_reap_blocking_sidecar_templates` gauge. Tested at the tier
+> that observes each: unit (helper, condition+metric), GMC webhook unit (warning
+> emitted/suppressed, never blocks), and AGC envtest integration (condition True/False
+> end-to-end + set still reaches Ready). Docs: operator how-to in
+> [in-runner-image-builds.md](../../operations/in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249),
+> troubleshooting + observability + kata cross-ref, design note in
+> [appendix-b §B.5](../../design/appendix-b-worker-isolation.md).
+>
+> **Prerequisite (§ below) — verified not in scope to fix:** the Q235 wrapper
+> injection appends to `initContainers` and never touches an operator's
+> `restartPolicy: Always` init container, so a native sidecar an operator authors is
+> preserved. No fix needed; kept as the load-bearing assumption.
 
 ## Goal
 
@@ -45,7 +67,7 @@ The upstream mechanism only works if GAG doesn't break it: the AGC must
 (b) **preserve** a `restartPolicy: Always` init container an operator authored,
 through the Q235 wrapper injection (which already manipulates
 `initContainers` / OCI image volumes — see
-[archive/q235-worker-wrapper-injection.md](archive/q235-worker-wrapper-injection.md)).
+[q235-worker-wrapper-injection.md](q235-worker-wrapper-injection.md)).
 Confirm both; if the AGC reorders or strips the field, fix that first — it is the
 load-bearing part.
 
@@ -96,10 +118,10 @@ punish legitimate self-exiting sidecars. Admission *warnings* (`kubectl` prints
    the reconciler from the *resolved* template.
 4. **Metric** (gauge; e.g. `actions_gateway_reap_blocking_sidecar_templates`).
 5. Docs: operator guidance in
-   [in-runner-image-builds.md](../operations/in-runner-image-builds.md) /
-   [kata-dind-workloads.md](../operations/kata-dind-workloads.md) — the
+   [in-runner-image-builds.md](../../operations/in-runner-image-builds.md) /
+   [kata-dind-workloads.md](../../operations/kata-dind-workloads.md) — the
    native-sidecar requirement (K8s ≥1.29) + the acknowledgment annotation; a
-   design note in [appendix-b-worker-isolation.md](../design/appendix-b-worker-isolation.md).
+   design note in [appendix-b-worker-isolation.md](../../design/appendix-b-worker-isolation.md).
 6. Tests: webhook warning emitted / suppressed by the annotation; condition
    set + cleared; metric; a native sidecar (`restartPolicy: Always` init
    container) is **not** flagged; the runner-only case is not flagged.
@@ -114,7 +136,7 @@ tests.
   its own change if broken.
 - **Un-clean-session GC backstop** — a pod left behind by a *crash* or a
   *superseded/orphaned* job (not a misconfig) strands regardless of sidecar
-  shape. That belongs to **[Q247](../STATUS.md#Q247)**; the fix there is light
+  shape. That belongs to **[Q247](../../STATUS.md#Q247)**; the fix there is light
   GC (owner-reference / TTL / reconcile-time cleanup of pods whose session is
   gone), still **not** a bespoke reaper.
 

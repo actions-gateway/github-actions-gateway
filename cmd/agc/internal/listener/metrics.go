@@ -39,6 +39,11 @@ type Metrics struct {
 	// the agent pool's reconcile repair pass)
 	AgentRecyclesTotal      *prometheus.CounterVec
 	AgentRecycleErrorsTotal *prometheus.CounterVec
+	// Q249: number of regular (non-native) sidecar containers in a RunnerSet's
+	// resolved worker template that may block pod reaping (emitted by the RunnerSet
+	// reconciler). A non-zero value warns of the Q247 stranding class; native
+	// sidecars or the self-exiting-sidecars acknowledgment annotation clear it.
+	ReapBlockingSidecarTemplates *prometheus.GaugeVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -144,6 +149,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_agent_recycle_errors_total",
 			Help: "Failed attempts to re-register a single-use JIT agent.",
 		}, []string{"namespace", "runner_group"}),
+
+		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_reap_blocking_sidecar_templates",
+			Help: "Number of regular (non-native) sidecar containers in a RunnerSet's resolved worker template that may block pod reaping (Q249); native sidecars or the self-exiting-sidecars acknowledgment annotation clear it.",
+		}, []string{"namespace", "runner_set"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -166,6 +176,7 @@ func NewMetrics() *Metrics {
 		m.WorkerPodsReaped,
 		m.AgentRecyclesTotal,
 		m.AgentRecycleErrorsTotal,
+		m.ReapBlockingSidecarTemplates,
 	)
 	return m
 }

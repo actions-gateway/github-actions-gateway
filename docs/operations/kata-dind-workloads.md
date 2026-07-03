@@ -221,6 +221,14 @@ is the same mechanism described here applied on top of `privileged`; see
   modules, specific `/dev` devices, or GPU passthrough need extra Kata
   configuration (and, for GPU, bare-metal or dedicated instances — the
   cloud GPU families lack nested virtualization).
+- **Run `dockerd` inside the runner container, not as a regular sidecar.**
+  The pattern above keeps the daemon a nested process of the single `runner`
+  container, so the pod reaps cleanly when the job ends. If you instead split
+  the daemon into a separate sidecar container, declare it as a **native
+  sidecar** (`restartPolicy: Always` init container) — a regular sidecar runs
+  forever and keeps the worker pod from reaping, stranding the runner slot.
+  See [In-runner image builds § Sidecar containers must be native
+  sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
 - **Validate before relying on it for production CI.** The end-to-end Kata
   path on GKE is staged through the
   [spike runbook](kata-ci-spike-runbook.md) and has not yet been run live
