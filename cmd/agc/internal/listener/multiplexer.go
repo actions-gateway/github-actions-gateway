@@ -58,14 +58,15 @@ type Multiplexer struct {
 	// jobClaimsMu guards jobClaims. It is separate from mu so the hot per-job
 	// claim/release path never contends with spawn/Stop bookkeeping.
 	jobClaimsMu sync.Mutex
-	// jobClaims holds the RunnerRequestIDs currently being provisioned by some
-	// listener goroutine of this RunnerGroup. It deduplicates a job that GitHub's
-	// broker fans out to multiple sibling sessions under a concurrent burst: the
-	// first goroutine to claim an id provisions it, and siblings that see it
-	// already claimed skip AcquireJob so they do not burn a runner slot on a
-	// colliding provision (Q260). Entries are removed when the owning goroutine
-	// finishes the job (or abandons the acquire), so the map tracks only in-flight
-	// jobs.
+	// jobClaims holds the planIDs currently being provisioned by some listener
+	// goroutine of this RunnerGroup. It deduplicates a job that GitHub's broker
+	// fans out to multiple sibling sessions under a concurrent burst: the fan-out
+	// delivers distinct RunnerRequestIDs but one shared planID, so the first
+	// goroutine to claim the planID provisions it, and siblings that see it already
+	// claimed skip provisioning (and recycle their runner) rather than colliding on
+	// the shared "job-<planID>" worker Secret (Q260). Entries are removed when the
+	// owning goroutine finishes the job (or abandons it), so the map tracks only
+	// in-flight jobs.
 	jobClaims map[string]struct{}
 	// RestartDelay is the backoff before restarting a crashed permanent listener
 	// goroutine. Zero defaults to one second. Override to a smaller value in tests.
@@ -153,26 +154,26 @@ func (m *Multiplexer) setPolling(state *listenerState, polling bool) {
 	}
 }
 
-// claimJob reserves exclusive provisioning of jobID within this RunnerGroup.
+// claimJob reserves exclusive provisioning of planID within this RunnerGroup.
 // ok is false when a sibling goroutine already holds the claim — a duplicate
-// broker delivery of the same job under a concurrent burst — in which case the
-// caller must skip AcquireJob so it does not burn a runner slot on a job another
-// session is already provisioning (Q260). On ok=true the returned release must
-// be called exactly once when the job completes or the acquire is abandoned, so
-// a later GitHub redelivery of the same id can be provisioned again; release is
-// idempotent.
-func (m *Multiplexer) claimJob(jobID string) (release func(), ok bool) {
+// broker delivery of the same job (same planID, different RunnerRequestID) under
+// a concurrent burst — in which case the caller must skip provisioning and
+// recycle its runner instead of colliding on the shared "job-<planID>" Secret
+// (Q260). On ok=true the returned release must be called exactly once when the
+// job completes or is abandoned, so a later GitHub redelivery of the same planID
+// can be provisioned again; release is idempotent.
+func (m *Multiplexer) claimJob(planID string) (release func(), ok bool) {
 	m.jobClaimsMu.Lock()
 	defer m.jobClaimsMu.Unlock()
-	if _, held := m.jobClaims[jobID]; held {
+	if _, held := m.jobClaims[planID]; held {
 		return nil, false
 	}
-	m.jobClaims[jobID] = struct{}{}
+	m.jobClaims[planID] = struct{}{}
 	var once sync.Once
 	return func() {
 		once.Do(func() {
 			m.jobClaimsMu.Lock()
-			delete(m.jobClaims, jobID)
+			delete(m.jobClaims, planID)
 			m.jobClaimsMu.Unlock()
 		})
 	}, true
@@ -225,8 +226,9 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 	cfg.IsLastPoller = func() bool { return m.PollerCount() <= 1 }
 	cfg.SpawnReplacement = func(ctx context.Context) { m.SpawnReplacement(ctx) }
 	cfg.SetPolling = func(polling bool) { m.setPolling(state, polling) }
-	// Dedup duplicate broker deliveries of one job across this group's sibling
-	// sessions (Q260). Shared across all goroutines the Multiplexer spawns.
+	// Dedup duplicate broker deliveries of one job (same planID) across this
+	// group's sibling sessions (Q260). Shared across all goroutines the Multiplexer
+	// spawns.
 	cfg.ClaimJob = m.claimJob
 
 	go func() {

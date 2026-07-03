@@ -585,6 +585,31 @@ gh api /repos/"$REPO"/actions/runners \
 > production CI green" is still NOT met — Q224 and Q242 remain open/blocked, and Q260
 > is reopened (its first fix is ineffective).**
 >
+> **Q260 re-fix (code-complete 2026-07-03; live re-validation pending).** The dedup is
+> re-keyed from `RunnerRequestID` to **`planID`** and moved from pre-`AcquireJob` to
+> **post-acquire, pre-provision** ([`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)
+> handleJob; the Multiplexer's shared claim registry now holds planIDs). Because planID
+> is only known post-acquire, a losing sibling still acquires, then finds the planID
+> already claimed and **skips provisioning**, returning `acquired=true` so its consumed
+> single-use runner is recycled back online (slot reclaimed cleanly) — no collision on
+> the `job-<planID>` Secret, no burned slot. The pre-acquire RunnerRequestID gate is
+> **removed** (it never fired in production — siblings' ids differ — and the planID gate
+> subsumes its only correct case, since any two deliveries that would collide on the
+> Secret share a planID). `actions_gateway_jobs_duplicate_delivery_total` is retained,
+> now counting a post-acquire planID-claim skip. Regression tests re-key onto the live
+> shape (distinct RunnerRequestIDs, one shared planID) and were **verified to fail against
+> the c850764 behaviour**: the reworked Multiplexer unit test
+> (`TestMultiplexer_DuplicateJobDeliveryProvisionsOnce`, peak-provisions 1 vs 5), the
+> single-listener gate test (`TestListener_DuplicateJobDeliverySkipsProvisioning`, now
+> asserts the loser *does* acquire but does not provision and keys on `plan-stub`), and a
+> new **envtest** integration test
+> (`TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID`) that drives the real provisioner +
+> API server: one session wins and holds the planID claim while a distinct-RunnerRequestID
+> sibling is deduped rather than hitting the real Secret `AlreadyExists`. **The wedge only
+> reproduces under a real burst, so end-to-end confirmation is still deferred to the next
+> dogfood turn-up — Q224/Q242 stay open/blocked and Q260 stays open until then.**
+> Plan: [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md).
+>
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`
 > because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills

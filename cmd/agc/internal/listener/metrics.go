@@ -14,9 +14,10 @@ type Metrics struct {
 	// Q59: pre-acquisition admission control. Incremented when the capacity gate
 	// rejects a delivered job (acquire skipped, job left queued for redelivery).
 	JobsAdmissionRejectedTotal *prometheus.CounterVec
-	// Q260: duplicate broker delivery. Incremented when a delivered job is already
-	// being provisioned by a sibling session in this AGC, so this session skips
-	// AcquireJob rather than burning its runner slot on a colliding provision.
+	// Q260: duplicate broker delivery. Incremented when an acquired job's planID is
+	// already being provisioned by a sibling session in this AGC, so this session
+	// skips provisioning (and recycles its runner) rather than colliding on the
+	// shared "job-<planID>" worker Secret.
 	JobsDuplicateDeliveryTotal *prometheus.CounterVec
 	TokenRefreshesTotal        *prometheus.CounterVec
 	TokenRefreshErrorsTotal    *prometheus.CounterVec
@@ -67,7 +68,7 @@ func NewMetrics() *Metrics {
 
 		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_jobs_duplicate_delivery_total",
-			Help: "Duplicate job deliveries deduplicated: the job was already being provisioned by a sibling session in this AGC, so AcquireJob was skipped to avoid burning a runner slot (Q260).",
+			Help: "Duplicate job deliveries deduplicated: the job's planID was already being provisioned by a sibling session in this AGC, so provisioning was skipped (and the runner recycled) to avoid colliding on the shared per-job worker Secret (Q260).",
 		}, []string{"namespace", "runner_group"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{

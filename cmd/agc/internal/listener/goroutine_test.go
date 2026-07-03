@@ -326,8 +326,17 @@ func closeHTTP(srv *httptest.Server) {
 // jobMsgWithURL returns a TaskAgentMessage whose Body contains a RunnerJobRequestBody
 // with RunServiceURL set to brokerSrvURL (so AcquireJob hits the stub server).
 func jobMsgWithURL(brokerSrvURL string) broker.TaskAgentMessage {
+	return jobMsgWithReqID(brokerSrvURL, "req-1")
+}
+
+// jobMsgWithReqID is jobMsgWithURL with an explicit RunnerRequestID. Under GitHub's
+// broker fan-out each sibling session of one job receives a DISTINCT RunnerRequestID
+// (while the AcquireJob response carries one shared planID), so the Q260 dedup tests
+// use this to give each delivery its own id — the exact shape the RunnerRequestID-keyed
+// first fix (c850764) failed to deduplicate.
+func jobMsgWithReqID(brokerSrvURL, reqID string) broker.TaskAgentMessage {
 	body, _ := json.Marshal(broker.RunnerJobRequestBody{
-		RunnerRequestID: "req-1",
+		RunnerRequestID: reqID,
 		RunServiceURL:   brokerSrvURL,
 	})
 	return broker.TaskAgentMessage{
@@ -1643,14 +1652,15 @@ func TestListener_AdmissionRejected(t *testing.T) {
 
 // ── Q260: duplicate-delivery dedup gate ──────────────────────────────────────
 
-// TestListener_DuplicateJobDeliverySkipsAcquire verifies that when the dedup
-// gate refuses the claim — a sibling session in this AGC already owns the job —
-// the listener skips AcquireJob entirely (so its runner slot is not burned) and
-// increments the duplicate-delivery counter. This is the per-job counterpart of
-// the Q59 admission gate: without it, a job GitHub's broker fanned out to
-// several sibling sessions would be AcquireJob'd by every recipient, marking
-// each runner busy and colliding on the shared per-job worker Secret (Q260).
-func TestListener_DuplicateJobDeliverySkipsAcquire(t *testing.T) {
+// TestListener_DuplicateJobDeliverySkipsProvisioning verifies the post-acquire
+// dedup gate (Q260): when the claim is refused — a sibling session in this AGC is
+// already provisioning this job's planID — the listener skips provisioning (the
+// JobHandler must not run) and increments the duplicate-delivery counter, yet it
+// still ran AcquireJob first because the planID is only known post-acquire. The
+// gate keys on the planID from the AcquireJob response ("plan-stub"), NOT the
+// pre-acquire RunnerRequestID — that is the fix over c850764, whose RunnerRequestID
+// key never collapsed the broker fan-out (siblings get distinct request ids).
+func TestListener_DuplicateJobDeliverySkipsProvisioning(t *testing.T) {
 	oauthSrv := oauthStub()
 	var acquireCalled atomic.Bool
 	mux := &brokerMux{}
@@ -1674,13 +1684,16 @@ func TestListener_DuplicateJobDeliverySkipsAcquire(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Metrics = m
 	cfg.IsLastPoller = func() bool { return true }
-	// A sibling already owns this job: the claim is always refused. The gate is
-	// keyed by the job's RunnerRequestID (jobMsgWithURL sets "req-1").
-	cfg.ClaimJob = func(jobID string) (func(), bool) {
-		assert.Equal(t, "req-1", jobID)
+	// A sibling already owns this planID: the claim is always refused. The gate is
+	// keyed by the planID from the acquire response (defaultAcquireJob → "plan-stub"),
+	// so it is exercised AFTER AcquireJob — not the pre-acquire RunnerRequestID.
+	var claimKey atomic.Value
+	cfg.ClaimJob = func(planID string) (func(), bool) {
+		claimKey.Store(planID)
 		return nil, false
 	}
-	// If AcquireJob were reached the JobHandler would fire; it must not.
+	// The loser must not provision (no worker Secret/pod), so the JobHandler that
+	// stands in for the provisioner must never fire.
 	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
 		t.Error("JobHandler must not run for a deduplicated duplicate delivery")
 		return nil
@@ -1693,7 +1706,10 @@ func TestListener_DuplicateJobDeliverySkipsAcquire(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= 1
 	}, 2*time.Second, 10*time.Millisecond, "duplicate-delivery counter should be incremented")
-	assert.False(t, acquireCalled.Load(), "AcquireJob must not be called for a deduplicated job (slot must not be burned)")
+	// The dedup is post-acquire: AcquireJob ran, and the claim keyed on the
+	// response's planID rather than the pre-acquire RunnerRequestID ("req-1").
+	assert.True(t, acquireCalled.Load(), "AcquireJob runs before the planID-keyed dedup gate")
+	assert.Equal(t, "plan-stub", claimKey.Load(), "dedup must key on the acquired planID, not the RunnerRequestID")
 
 	cancel()
 	<-done
