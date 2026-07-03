@@ -33,6 +33,14 @@ const (
 	// attribution trade-off an operator opted into by not attaching an EgressProxy, so
 	// "no proxy" is an auditable state rather than an inferred one.
 	ConditionEgressUnattributed = "EgressUnattributed"
+	// ConditionPossibleReapBlockingSidecar is an advisory condition (abnormal-is-True)
+	// set True on a RunnerSet whose resolved worker template carries a regular
+	// (non-native) sidecar container that may keep the worker pod alive after the
+	// runner container exits, so the pod never reaps and the runner slot counts against
+	// maxWorkers (Q249, the Q247 stranding class). It does NOT gate Ready — the check is
+	// a heuristic and native sidecars are the fix, not enforcement. The message names
+	// the offending containers; the SelfExitingSidecarsAnnotation opt-out clears it.
+	ConditionPossibleReapBlockingSidecar = "PossibleReapBlockingSidecar"
 )
 
 // Egress proxy mode reported in status.proxyMode (§H.10). It makes "no proxy" an
@@ -136,4 +144,11 @@ const (
 	// ReasonProxiedEgress is the EgressUnattributed=False reason: a proxy resolved, so
 	// egress is attributed to the proxy's stable per-tenant IPs.
 	ReasonProxiedEgress = "ProxiedEgress"
+	// ReasonReapBlockingSidecar is the PossibleReapBlockingSidecar=True reason: the
+	// resolved template has one or more regular, unacknowledged sidecar containers.
+	ReasonReapBlockingSidecar = "ReapBlockingSidecar"
+	// ReasonNoReapBlockingSidecar is the PossibleReapBlockingSidecar=False reason: the
+	// resolved template has no reap-blocking sidecar (or every one is acknowledged
+	// self-exiting, or converted to a native sidecar).
+	ReasonNoReapBlockingSidecar = "NoReapBlockingSidecar"
 )

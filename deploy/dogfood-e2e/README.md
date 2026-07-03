@@ -63,7 +63,9 @@ Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '["self-hosted","linux",
   container, K8s ≥1.29). A regular sidecar's `dockerd` never exits, so the pod
   never completes, the AGC keeps the session active, and `maxWorkers` strands.
   Validated: the AGC preserves the native-sidecar init container through its Q235
-  wrapper injection. See [Q249](../../docs/STATUS.md#Q249).
+  wrapper injection. GAG warns (non-blocking) when a template declares a regular
+  reap-blocking sidecar — see [Q249: reap-blocking-sidecar warning](../../docs/plan/archive/worker-sidecar-reap-warning.md)
+  and [Sidecar containers must be native sidecars](../../docs/operations/in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
 - **Privileged is platform-gated four ways** — the namespace needs
   `tenant=managed`, `security-profile=privileged`, the platform
   `privileged-profile=allowed` label, **and** the `allow-profile-downgrade=allowed`

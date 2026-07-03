@@ -27,6 +27,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
+- [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
@@ -739,6 +740,29 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 **What happened.** A service-mesh sidecar was injected into the worker pod. GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit. A classic mesh sidecar never exits on its own, so the pod stays `Running` forever and falls through both reaper paths (`completedPodTTL` covers terminal pods; `pendingPodDeadline` covers `Pending` pods — neither covers a stuck `Running` pod).
 
 **Resolution.** Opt the GAG tenant namespace out of the mesh, or — if mesh membership is mandatory — switch to native sidecars (Kubernetes 1.28+) or a sidecar-less/ambient data plane. The full per-mesh configuration (Istio sidecar + ambient, Linkerd, Cilium, generic) is in [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md). Note that mesh opt-out/exclusion annotations set on the RunnerGroup `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
+
+A mesh sidecar is *injected* at admission, so it is not in the `RunnerTemplate` and GAG cannot warn about it ahead of time — the runtime symptom above is the only signal. A **build/DinD sidecar you declare in the template** is different: GAG detects it and warns proactively — see the next section.
+
+---
+
+## RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)
+
+**Symptoms.** A `RunnerSet` reports the advisory condition `PossibleReapBlockingSidecar=True` (`kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions}'`), the `actions_gateway_reap_blocking_sidecar_templates` gauge is `> 0`, and/or `kubectl apply` of the `RunnerTemplate`/`ClusterRunnerTemplate` printed a `Warning:` naming a sidecar container. Left unfixed, the symptom is the same `READY 1/2` stranding as the mesh-sidecar case above: worker pods linger after the job and the set wedges at `maxWorkers`.
+
+**What happened.** The resolved worker template carries a **regular** (non-native) sidecar container besides the `runner` container — e.g. a `docker:dind` daemon or a BuildKit sidecar declared under `spec.containers[]`. A pod terminates only when every regular container exits, so a sidecar that runs for the life of the job keeps the pod from reaping (Q249). The condition, gauge, and admission warning are **advisory only** — they never block template creation or gate the set's `Ready` — because the "runs forever" property can't be proven from a pod spec.
+
+**Resolution.**
+
+- **Preferred — convert to a native sidecar.** Move the sidecar to `spec.initContainers[]` with `restartPolicy: Always` (Kubernetes ≥ 1.29). The kubelet tears it down when the `runner` container exits, so the pod completes on its own. The template shape is in [In-runner image builds § Sidecar containers must be native sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
+- **If the sidecar genuinely exits on its own** when the job ends, acknowledge it in the template's `actions-gateway.com/self-exiting-sidecars` annotation (a comma-separated name-list). This silences the warning, the condition, and the gauge for the named containers only — a newly added, unacknowledged sidecar still warns.
+
+```bash
+# See which containers a set's condition is flagging
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="PossibleReapBlockingSidecar")].message}'
+# Which templates are flagged, fleet-wide
+# PromQL: actions_gateway_reap_blocking_sidecar_templates > 0
+```
 
 ---
 

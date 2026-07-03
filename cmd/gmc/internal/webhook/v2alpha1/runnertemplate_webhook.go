@@ -97,6 +97,24 @@ func isPrivileged(sc *corev1.SecurityContext) bool {
 	return sc != nil && sc.Privileged != nil && *sc.Privileged
 }
 
+// reapBlockingSidecarWarnings returns a NON-BLOCKING admission warning when a
+// template carries a regular (non-native) sidecar container that may keep the worker
+// pod alive after the runner container exits, stranding the runner slot (Q249, the
+// Q247 stranding class). It is deliberately a warning, never a rejection: the
+// heuristic is undecidable (nothing in a pod spec says a container "runs forever"), so
+// a hard block would punish legitimate self-exiting sidecars. The
+// SelfExitingSidecarsAnnotation opt-out silences it per named sidecar. Returns nil
+// when there is nothing to warn about, so admission proceeds cleanly.
+func reapBlockingSidecarWarnings(spec *agcv2alpha1.RunnerTemplateSpec, annotations map[string]string) admission.Warnings {
+	names := agcv2alpha1.ReapBlockingSidecars(spec, annotations)
+	if len(names) == 0 {
+		return nil
+	}
+	return admission.Warnings{fmt.Sprintf(
+		"worker pod sidecar container(s) %s are regular containers, not native sidecars: a regular container that runs past the job (e.g. a DinD dockerd) keeps the worker pod from reaping, so the runner slot counts against maxWorkers and the pool can strand. Declare them as native sidecars (restartPolicy: Always init containers, Kubernetes >= 1.29) so the pod terminates when the runner exits, or — if they exit cleanly on their own — acknowledge them in the %s annotation to silence this warning.",
+		strings.Join(names, ", "), agcv2alpha1.SelfExitingSidecarsAnnotation)}
+}
+
 // logRejection records a server-side audit line whenever an admission request is
 // denied, mirroring the v1 ActionsGateway webhook. Denials are rare and
 // security-relevant, so the trail is logged at Info. The error text is a validation
@@ -118,20 +136,22 @@ func logRejection(ctx context.Context, kind, op, namespace, name string, err err
 // +kubebuilder:object:generate=false
 type RunnerTemplateCustomValidator struct{}
 
-// ValidateCreate rejects a RunnerTemplate carrying reserved pod fields.
+// ValidateCreate rejects a RunnerTemplate carrying reserved pod fields and emits a
+// non-blocking reap-blocking-sidecar warning (Q249).
 func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&obj.Spec, true); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
-	return nil, nil
+	return reapBlockingSidecarWarnings(&obj.Spec, obj.Annotations), nil
 }
 
-// ValidateUpdate applies the same reserved-pod-field checks on update.
+// ValidateUpdate applies the same reserved-pod-field checks and reap-blocking-sidecar
+// warning on update.
 func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&newObj.Spec, true); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
-	return nil, nil
+	return reapBlockingSidecarWarnings(&newObj.Spec, newObj.Annotations), nil
 }
 
 // ValidateDelete is a no-op.
@@ -150,20 +170,21 @@ func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agc
 // +kubebuilder:object:generate=false
 type ClusterRunnerTemplateCustomValidator struct{}
 
-// ValidateCreate rejects a ClusterRunnerTemplate carrying reserved proxy env vars.
+// ValidateCreate rejects a ClusterRunnerTemplate carrying reserved proxy env vars and
+// emits a non-blocking reap-blocking-sidecar warning (Q249).
 func (v *ClusterRunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.ClusterRunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&obj.Spec, false); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
-	return nil, nil
+	return reapBlockingSidecarWarnings(&obj.Spec, obj.Annotations), nil
 }
 
-// ValidateUpdate applies the same checks on update.
+// ValidateUpdate applies the same checks and reap-blocking-sidecar warning on update.
 func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.ClusterRunnerTemplate) (admission.Warnings, error) {
 	if err := validateReservedPodFields(&newObj.Spec, false); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
-	return nil, nil
+	return reapBlockingSidecarWarnings(&newObj.Spec, newObj.Annotations), nil
 }
 
 // ValidateDelete is a no-op.
