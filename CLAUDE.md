@@ -64,6 +64,8 @@ Four `PreToolUse` hooks run on tool calls. Three guard Bash commands; their deni
 
 The fourth hook guards a different tool: **no-subagent-workers** (`scripts/claude-no-subagent-workers-hook.sh`) fires on `Agent`/`Task` spawns and *asks* (soft, not a block) when a spawn looks like a parallel-dispatch worker — own worktree, or PR-producing verbs in the prompt — steering it to a task chip instead (see `docs/development/parallel-dispatch.md`). Read-only agent types (`Explore`, `Plan`) pass untouched.
 
+**Avoid large heredocs in Bash commands** — a big `cat <<'EOF' … EOF` (or any multi-line inline body) can defeat the hooks that parse the command string, turning an otherwise-safe call into a spurious prompt or a parse failure. Write the content with the Write tool to a file (a temp file under the gitignored `tmp/` for throwaway content) and have the Bash command read that file instead.
+
 **Never `cd "$(git rev-parse --show-toplevel)"`** — the `$(…)` command substitution prompts under both branch-guard and workspace-guard. The Bash tool already starts each session at the worktree root (which *is* the git toplevel) and cwd persists between calls, so the reset is almost always a no-op anyway. Don't *assume* cwd stayed at root — make the assumption unnecessary: **isolate every directory change in a subshell** (`(cd cmd/agc && go test ./...)`) so the parent cwd can't drift and no defensive reset is ever needed. On the rare occasion you genuinely must reset cwd, `cd` to the **literal** worktree path (no `$(…)`/`$VAR`/`~`) — it's just as position-independent as recomputing the root, but prompt-free.
 
 ## Testing
