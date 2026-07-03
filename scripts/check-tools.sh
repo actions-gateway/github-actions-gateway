@@ -136,9 +136,9 @@ find_offpath() {
 # profile_file — best-guess shell profile to add a PATH export to.
 profile_file() {
   case "$(basename "${SHELL:-}")" in
-    zsh)  printf '~/.zshenv' ;;
-    bash) printf '~/.bashrc' ;;
-    *)    printf '~/.profile' ;;
+    zsh)  printf '%s/.zshenv' "$HOME" ;;
+    bash) printf '%s/.bashrc' "$HOME" ;;
+    *)    printf '%s/.profile' "$HOME" ;;
   esac
 }
 
@@ -164,7 +164,7 @@ while IFS='|' read -r name tier brew apt url custom; do
   # Not on PATH. Distinguish "installed but off PATH" from "not installed".
   if dir="$(find_offpath "$name")"; then
     printf '  %sPATH%s %-24s installed at %s but not on PATH\n' "$ylw" "$rst" "$name" "$dir"
-    printf '       %sadd it:%s export PATH="%s:$PATH"   %s(in %s)%s\n' \
+    printf "       %sadd it:%s export PATH=\"%s:\$PATH\"   %s(in %s)%s\n" \
       "$bold" "$rst" "$dir" "$dim" "$(profile_file)" "$rst"
   else
     local_cmd="$(recommend_install "$brew" "$apt" "$url" "$custom")"
@@ -189,6 +189,6 @@ if (( missing_required == 0 )); then
 else
   printf '%s%d required tool(s) missing — the dev loop will not work until they are installed.%s\n' \
     "$red" "$missing_required" "$rst"
-  printf 'After a PATH change, restart your shell (or `source` the profile above) and re-run this script.\n'
+  printf 'After a PATH change, restart your shell (or re-source the profile) and re-run this script.\n'
 fi
 exit "$missing_required"
