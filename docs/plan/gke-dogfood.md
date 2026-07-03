@@ -459,6 +459,27 @@ gh api /repos/"$REPO"/actions/runners \
 > Q259 is fixed, Q224's "route production CI green" is **not** met, so Q224 and Q242 stay
 > open.
 >
+> **Q259 root cause + fix (code-fixed 2026-07-01; live re-validation pending).** Traced
+> end-to-end: after a single-use JIT runner completes a job, GitHub auto-removes the
+> ephemeral record but for a few to tens of seconds still answers a delete with `422
+> "Runner … is currently running a job and cannot be deleted"`, and — because the AGC
+> re-registers under a **stable name** (Q114) — the lingering record makes the
+> re-registration `409`. `Pool.Recycle`'s 409-resolution deregister then hit the same
+> `422` and returned it as a **fatal** error, so the post-job recycle failed, the
+> listener goroutine exited, and the Multiplexer does **not** restart a non-permanent
+> replacement — every completed job permanently dropped a polling slot until only the
+> permanent baseline remained, collapsing GitHub dispatch to ~1 online runner. Under a
+> burst all agents hit this window at once. **Fix (`cmd/agc/internal/agentpool`):** a
+> typed `RunnerBusyError` for the transient `422`, and a **bounded, jittered backoff**
+> in `Pool.Recycle` that waits for GitHub to release the just-consumed runner before
+> re-registering (ctx-cancellable; on give-up the existing
+> `actions_gateway_agent_recycle_errors_total` fires). Q114 single-use + stable-name and
+> secure-by-default are preserved (`generate-jitconfig` 409s *before* minting, so retries
+> orphan nothing). Unit + listener-suite regression tests cover the retry-through and
+> bounded-give-up paths. **The live symptom only reproduced under real burst, so
+> end-to-end confirmation is deferred to the next dogfood turn-up — Q224/Q242 are NOT
+> yet unblocked/closed.**
+>
 > **Build-capable runner image (Q239).** The bare upstream `actions-runner` has no
 > build toolchain (`make`, a C compiler), so this repo's `make`-based jobs fail
 > `exit 127: make: command not found` on it — the workflows assume `make` is
