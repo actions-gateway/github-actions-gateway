@@ -480,6 +480,44 @@ gh api /repos/"$REPO"/actions/runners \
 > end-to-end confirmation is deferred to the next dogfood turn-up — Q224/Q242 are NOT
 > yet unblocked/closed.**
 >
+> **Q259 fix live-validated present, but concurrent matrix STILL wedges — new root
+> cause Q260 (2026-07-03).** The next turn-up deployed the Q259 fix to the AGC
+> (image `ghcr.io/actions-gateway/agc:e2e-2310a31`, built from `main`@`2310a31` = #500;
+> GMC/proxy/wrapper stayed `v1.1.0-rc.6`) and re-routed the matrix. The Q259 fix **is**
+> present and behaves as designed — the recycle path now logs `agentpool: recycle of
+> parked consumed agent failed; will retry next reconcile` (the bounded retry) instead
+> of a fatal listener exit. Individual jobs still run **green** (`lint` completed
+> `success` on `gag-ci`). **But the concurrent burst does not go green — it wedges the
+> same way, and the dominant cause is NOT the post-job recycle Q259 fixed.** Reproduced
+> across **two independent bursts** (a 7-job unit-test+integration burst, then a 6-job
+> unit-test burst against an already-warm pool — so not a cold-start artifact): at burst
+> start **multiple listener agents acquire and try to provision the *identical* job**.
+> The AGC logs 5 distinct sessions (`agentIndex` 1–5, 5 different `sessionId`s) all
+> failing `provisioner: create Secret job-<jobid>-<suffix>: secrets "…" already exists`
+> for the **same** worker Secret name (e.g. `job-d03513f7-aa20-416c-a037-197a4a4c9d06-980b169`).
+> One agent wins and runs the job; the other 4–5 burn runner slots (GitHub shows them
+> `busy` but `offline`, no worker pod) and their sessions die. Net effect: **only ~1
+> worker pod ever runs**, the remaining jobs are stranded `in_progress` (assigned to the
+> now-dead duplicate runners) until GitHub's ~15-min unstarted-job timeout, and the pool
+> collapses to `activeSessions=1` (baseline listener). The Q259 `422 "…still running a
+> job and cannot be deleted"` recycle churn is also still present (e.g. `runner id 1828`),
+> but it is now the *secondary* symptom — the primary wedge is **duplicate job
+> acquisition under burst** (multiple `AcquireJob`/provision on one job message),
+> distinct from the post-job recycle Q259 addressed. **Not capacity:** worker nodes were
+> pre-scaled (`workers` pool → 3 spot `e2-standard-4`; the `SSD_TOTAL_GB` regional quota
+> of 500 GB caps pre-scaling at ~3–4 workers — see Q248), zero Pending worker pods from
+> capacity. Tracked as **Q260**. **Q224's "route production CI green" is still not met, so
+> Q224 and Q242 remain open/blocked.** Evidence: AGC logs (`agc:e2e-2310a31`), reruns of
+> unit-test.yml `28671804298` + integration-test.yml `28671804300`, and unit-test.yml
+> `28547170012` (2nd burst).
+>
+> **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
+> keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
+> which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
+> system node — the CI AGC stays `Pending` (`Insufficient cpu`). Turn-ups that only
+> need the CI matrix should scale `default-pool` to **2** nodes (done here) or suspend
+> the e2e tenant; the `SSD_TOTAL_GB=500` quota then bounds the `workers` pool to ~3.
+>
 > **Build-capable runner image (Q239).** The bare upstream `actions-runner` has no
 > build toolchain (`make`, a C compiler), so this repo's `make`-based jobs fail
 > `exit 127: make: command not found` on it — the workflows assume `make` is
