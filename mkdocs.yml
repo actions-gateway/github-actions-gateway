@@ -110,6 +110,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Why GAG: why-gag.md
+  - Demo: demo.md
   - Get started: getting-started.md
   - Roadmap: roadmap.md
   - Design:

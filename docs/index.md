@@ -23,6 +23,7 @@ hide:
 <p class="gag-tagline">An Actions Runner Controller (ARC) alternative for multi-tenant Kubernetes. Free up GPU nodes the moment a job finishes, keep critical jobs scheduling even on a full cluster, and let tenants self-manage runners under safe per-tenant quotas.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
+[Watch the demo](demo.md){ .md-button }
 [Why GAG?](why-gag.md){ .md-button }
 [View on GitHub](https://github.com/actions-gateway/github-actions-gateway){ .md-button }
 

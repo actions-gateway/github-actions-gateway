@@ -120,3 +120,40 @@ costs bytes: it's encoded with `img2webp -m6 -q74` (≈15% smaller than magick a
 matched quality, and q74 is indistinguishable from q80 on the soft plume) to
 keep it reasonable. The MP4 stays opaque (H.264 has no alpha) and is cropped
 tighter than the 1.91:1 WebP to drop the side margins for a feed video.
+
+## End-to-end demo cast — `demo-local-kind.svg` / `.cast`
+
+The animated terminal recording on the [Demo](../demo.md) page. Like the marks
+above it is **generated, not hand-edited by hand in the SVG**: the source of
+truth is the asciinema **cast v2** file, and the SVG is rendered from it.
+
+| Artefact | Committed? | What it is |
+| --- | --- | --- |
+| `generate-demo-cast.py` | yes | Emits the cast. The screenplay (commands + outputs + pacing) lives here. |
+| `demo-local-kind.cast` | yes (~9 KB) | asciinema v2 cast — one JSON header line + `[t,"o","…"]` event lines. |
+| `demo-local-kind.svg` | yes (~125 KB) | Self-contained animated SVG rendered from the cast; embedded on the demo page. |
+
+**Truthfulness:** every command and every line of output in the screenplay is
+transcribed from a **real run** on a kind cluster against **real GitHub** — no
+invented output. It was *not* recorded with the `asciinema` binary (a live
+recorder); the cast is authored directly so the timing is controlled and no live
+session is captured. If you re-run the flow and the tool output drifts, update
+the screenplay so a reproducer still sees matching output. Keep every token, PEM,
+and registration secret out of the screenplay (the GitHub App key is passed as
+`--from-file=privateKey=app.pem`, never inlined).
+
+Regenerate (needs `python3` and Docker; no host binaries are installed — the SVG
+renderer runs in a throwaway Node container). Run from `docs/assets/`:
+
+```sh
+python3 generate-demo-cast.py            # writes demo-local-kind.cast
+
+# Render the cast → self-contained animated SVG via svg-term-cli in a container
+docker run --rm -v "$PWD:/data" -w /data node:20-alpine \
+  sh -c "npx --yes svg-term-cli@2.1.1 --in demo-local-kind.cast \
+           --out demo-local-kind.svg --window --width 92 --height 30"
+```
+
+Commands are revealed whole (not typed char-by-char) on purpose: a typing
+animation multiplies the SVG's text nodes ~one-per-character and bloats the asset
+several-fold for little gain on a docs page.
