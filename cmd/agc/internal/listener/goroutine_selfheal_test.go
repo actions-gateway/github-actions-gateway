@@ -17,6 +17,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -70,10 +71,10 @@ func TestListener_PostJobRecyclesAgent(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
 	cfg.MarkAgentConsumed = func() { consumedMarks.Add(1) }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		assert.Equal(t, int32(1), consumedMarks.Load(),
 			"agent must be marked consumed before the job handler blocks")
-		return nil
+		return "", nil
 	}
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		recycles.Add(1)
@@ -314,7 +315,9 @@ func TestListener_PostJobRecycleFailureExitsRetriable(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 	cfg.RecycleAgent = func(_ context.Context) (*agentpool.Agent, error) {
 		return nil, errors.New("github registration API down")
 	}

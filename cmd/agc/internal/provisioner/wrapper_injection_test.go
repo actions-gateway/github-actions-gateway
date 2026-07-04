@@ -54,7 +54,7 @@ func TestProvisioner_WrapperInjection_ImageVolume(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-iv", stubPayload(1), "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-iv", stubPayload(1), "") }()
 	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
@@ -94,7 +94,7 @@ func TestProvisioner_WrapperInjection_InitContainer(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-init", stubPayload(1), "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-init", stubPayload(1), "") }()
 	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
@@ -130,7 +130,7 @@ func TestProvisioner_WrapperInjection_Disabled(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-off", stubPayload(1), "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-off", stubPayload(1), "") }()
 	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)

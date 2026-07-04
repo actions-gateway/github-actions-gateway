@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -62,7 +63,51 @@ type EventRecorder interface {
 // materialize .runner / .credentials / .credentials_rsaparams in /home/runner/
 // before invoking Runner.Worker. May be empty when the agent was created by a
 // registrar that does not produce a JIT blob (e.g. stub-only tests).
-type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error
+//
+// The returned broker.TaskResult is the handler's POD-PHASE PROXY of the job's
+// outcome (PodFailed→failed, else succeeded) — NOT the workflow's real
+// succeeded/failed, which only the worker's runner binary knows and reports for the
+// winner's own delivery. The AGC uses it solely as the result to report when it fans
+// completion out to the deduped sibling deliveries of a fanned-out job (Q260 Option
+// A); an empty result (an error before the pod reached a terminal phase) is treated
+// as succeeded by that fan-out. The error return is the provisioning error as
+// before (recoverable; the poll loop logs and continues).
+type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) (broker.TaskResult, error)
+
+// SiblingDelivery identifies one deduped sibling delivery of a fanned-out job so the
+// winner can complete it on GitHub's books when its job finishes (Q260 Option A).
+// Each field is the sibling's OWN per-delivery value: RunnerRequestID is the
+// delivery's job id (distinct per sibling under fan-out), and RunServiceURL /
+// JobToken are what completejob needs to resolve that specific assignment.
+type SiblingDelivery struct {
+	RunnerRequestID string
+	RunServiceURL   string
+	JobToken        string
+}
+
+// ClaimResult is returned by Config.ClaimJob for one delivery of a job (Q260). It
+// reports whether this caller won the planID claim — and, for the winner, how to
+// reconcile the deduped-away sibling deliveries on GitHub's books when the job
+// finishes (Option A).
+type ClaimResult struct {
+	// Won is true for the first caller to claim planID — the goroutine that
+	// provisions and runs the job. False for a deduped sibling (loser).
+	Won bool
+	// Complete is called exactly once by the winner when its job finishes or is
+	// abandoned. It records the winner's terminal result on the claim (so a late
+	// redelivery within the linger window resolves with the same result),
+	// transitions the claim into its post-completion linger, and returns the deduped
+	// sibling deliveries registered so far so the winner can fan completjob out to
+	// each. It is idempotent. Nil for a loser.
+	Complete func(result broker.TaskResult) []SiblingDelivery
+	// LateResult is set for a LOSER whose planID has ALREADY concluded — a late
+	// redelivery arriving during the linger window, after the winner is gone. The
+	// caller resolves its own delivery immediately with this result rather than
+	// waiting for a winner that has already finished. Empty for a winner, or for a
+	// loser whose winner is still running (that loser was registered on the claim
+	// for the winner to complete).
+	LateResult broker.TaskResult
+}
 
 // AdmitFunc gates job acquisition on available worker capacity (Q59). It is
 // called after a job is delivered but before AcquireJob claims it from GitHub.
@@ -136,26 +181,33 @@ type Config struct {
 	// the pod is reaped provisions again. Keying on planID (not the pre-acquire
 	// RunnerRequestID, which differs per sibling and so never deduped the fan-out —
 	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
-	// disables dedup (stub-only tests, or a response with no planID).
-	ClaimJob func(planID string) (release func(), ok bool)
-	// CompleteAbandonedDeliveries, when true, makes a deduplicated duplicate
-	// delivery (the Q260 loser, which the ClaimJob gate refuses) call completejob on
-	// its OWN delivery's jobID before recycling — so GitHub does not leave the
-	// acquired-but-unrun per-delivery assignment dangling until its ~15-minute
-	// unstarted-job timeout and cancel the whole job even after the winning sibling
-	// completed it (Q260 follow-up item 2).
+	// disables dedup (stub-only tests, or a response with no planID). Passing this
+	// caller's own delivery lets the winner reconcile it on GitHub's books under
+	// Option A (see ClaimResult, SiblingDelivery, and FanoutCompletion).
+	ClaimJob func(planID string, delivery SiblingDelivery) ClaimResult
+	// FanoutCompletion, when true, makes the WINNER of a fanned-out job fan
+	// completejob out to every deduped sibling delivery when its job finishes (Q260
+	// Option A). Under a concurrent burst GitHub fans one logical job (one planID)
+	// out to N sibling sessions as N deliveries with distinct RunnerRequestIDs; the
+	// planID dedup (ClaimJob) collapses them to ONE runner, but the other N−1
+	// acquired deliveries dangle and GitHub cancels the whole job at its ~15-minute
+	// unstarted-job timeout even after the winner completed it. When enabled, the
+	// winner issues completejob for each tracked sibling — keyed on the sibling's OWN
+	// RunnerRequestID and job token — with the winner's pod-phase-proxy result, and a
+	// late redelivery arriving during the linger window is resolved with the recorded
+	// terminal result. Losers do NOT complete early (that was the rejected #513
+	// per-loser-immediate path, live-tested worse than the default).
 	//
-	// OFF BY DEFAULT. The run service's per-delivery completion semantics are not
-	// yet live-confirmed: if completion is scoped by planID (not jobID) the loser's
-	// call could finalize the winner's still-running job, a strict regression. This
-	// outward call is therefore gated behind an explicit opt-in
-	// (AGC env AGC_COMPLETE_ABANDONED_DELIVERIES) pending a dogfood turn-up that
-	// confirms the semantics AND validates the fix (Q260 follow-up item 1). The
-	// operator runbook is the Q260 redelivery-accounting limitation in
-	// docs/operations/troubleshooting.md.
-	CompleteAbandonedDeliveries bool
-	Clock                       Clock
-	Log                         *slog.Logger
+	// OFF BY DEFAULT (secure-by-default). The run service's per-delivery completion
+	// semantics are not yet live-confirmed: if completion is scoped by planID (not
+	// jobID) the pod-phase proxy could green a red workflow whose worker exited 0.
+	// This outward behavior is therefore gated behind an explicit opt-in
+	// (AGC env AGC_FANOUT_COMPLETION) pending the re-route #5 dogfood experiment that
+	// confirms the semantics AND validates the fix. The operator runbook is the Q260
+	// redelivery-accounting limitation in docs/operations/troubleshooting.md.
+	FanoutCompletion bool
+	Clock            Clock
+	Log              *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -679,9 +731,20 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// pre-acquire RunnerRequestID, which differs per sibling and so never deduped
 	// the fan-out (the ineffective first fix, c850764) — is what converges the
 	// siblings onto one provision.
+	//
+	// jobResult is the winner's pod-phase-proxy result, reported when it fans
+	// completion out to the deduped sibling deliveries on completion (Q260 Option A).
+	// It defaults to succeeded and is overwritten by the JobHandler's terminal
+	// result below; it is unused on the loser path.
+	jobResult := broker.TaskResultSucceeded
 	if cfg.ClaimJob != nil && acquired && planID != "" {
-		release, ok := cfg.ClaimJob(planID)
-		if !ok {
+		delivery := SiblingDelivery{
+			RunnerRequestID: jobBody.RunnerRequestID,
+			RunServiceURL:   runServiceURL,
+			JobToken:        jobToken,
+		}
+		claim := cfg.ClaimJob(planID, delivery)
+		if !claim.Won {
 			if cfg.Metrics != nil {
 				cfg.Metrics.JobsDuplicateDeliveryTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
 			}
@@ -691,21 +754,31 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			// SpawnReplacement/renew/provision are all skipped for the loser.
 			log.Debug("duplicate job delivery: planID already claimed by a sibling session; skipping provisioning and recycling the runner slot",
 				"planID", planID, "runnerRequestID", jobBody.RunnerRequestID)
-			// Q260 follow-up (guarded): the loser already ran AcquireJob, so GitHub
-			// holds a per-delivery job assignment for it. Left dangling, GitHub
-			// cancels the whole job at its ~15-minute unstarted-job timeout even
-			// after the winner completes. When enabled, release this delivery via
-			// completejob on the loser's OWN jobID (jobBody.RunnerRequestID) — which
-			// is distinct from the winner's, so under the per-delivery lock model
-			// (Q247) it resolves only this phantom assignment. Off by default until
-			// the run service's per-delivery completion semantics are live-confirmed
-			// (see Config.CompleteAbandonedDeliveries).
-			if cfg.CompleteAbandonedDeliveries && runServiceURL != "" {
-				completeAbandonedDelivery(ctx, cfg, log, runServiceURL, planID, jobBody.RunnerRequestID, jobToken)
+			// Q260 Option A (guarded): the loser already ran AcquireJob, so GitHub
+			// holds a per-delivery assignment for it. If the winner is still running,
+			// this delivery was registered on the claim and the winner completes it on
+			// finish. If the job ALREADY concluded (a late redelivery within the
+			// linger window, when the winner is gone), resolve this delivery here with
+			// the winner's recorded result — keyed on this delivery's OWN jobID
+			// (distinct from the winner's), so under the per-delivery lock model
+			// (Q247) it resolves only this assignment. Off by default until the run
+			// service's per-delivery completion semantics are live-confirmed (see
+			// Config.FanoutCompletion).
+			if cfg.FanoutCompletion && claim.LateResult != "" && runServiceURL != "" {
+				completeSiblingDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
 			}
 			return acquired, nil
 		}
-		defer release()
+		// Winner: when the job finishes, conclude the claim (always — this replaces
+		// the pre-Option-A release, so the claim still lingers past completion for
+		// the #512 redelivery dedup) and, when enabled, fan completjob out to every
+		// deduped sibling delivery so none dangles at GitHub's unstarted-job timeout.
+		defer func() {
+			siblings := claim.Complete(jobResult)
+			if cfg.FanoutCompletion && runServiceURL != "" && len(siblings) > 0 {
+				<-completeSiblingDeliveries(ctx, cfg, log, planID, siblings, jobResult)
+			}
+		}()
 	}
 
 	// Notify multiplexer to spawn a replacement listener before blocking on job handler.
@@ -754,43 +827,76 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
-		return acquired, cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		result, jobErr := cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		// Record the pod-phase proxy for the winner's deferred sibling fan-out; keep
+		// the succeeded default on an empty result (the pod never reached a terminal
+		// phase — e.g. a provisioning error), matching "PodFailed→failed, else
+		// succeeded" (Q260 Option A).
+		if result != "" {
+			jobResult = result
+		}
+		return acquired, jobErr
 	}
 	return acquired, nil
 }
 
-// completeAbandonedDelivery releases a deduplicated duplicate delivery's job
-// assignment via completejob so GitHub does not leave it dangling until the
-// ~15-minute unstarted-job timeout (Q260 follow-up). jobID is the loser delivery's
-// OWN RunnerRequestID, distinct from the winner's; the result is Skipped (honest:
-// acquired, ran nothing). Best-effort: the call is bounded by the control-plane
-// timeout and failures are logged and counted, never fatal — the runner still
-// recycles its slot. Gated by Config.CompleteAbandonedDeliveries; see that field
-// for why this outward call is off by default.
-func completeAbandonedDelivery(ctx context.Context, cfg Config, log *slog.Logger, runServiceURL, planID, jobID, jobToken string) {
+// completeSiblingDeliveries fans completjob out to every deduped sibling delivery
+// of a fanned-out job concurrently, on a background goroutine, and returns a done
+// channel closed once all completions have been attempted (Q260 Option A). It is
+// async per CLAUDE.md's channel convention: the winner may block on the channel (as
+// handleJob does, so its recycle happens after the assignments are resolved) or
+// ignore it. Each call is bounded and best-effort — see completeSiblingDelivery.
+func completeSiblingDeliveries(ctx context.Context, cfg Config, log *slog.Logger, planID string, siblings []SiblingDelivery, result broker.TaskResult) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var wg sync.WaitGroup
+		for _, sib := range siblings {
+			wg.Add(1)
+			go func(sib SiblingDelivery) {
+				defer wg.Done()
+				completeSiblingDelivery(ctx, cfg, log, planID, sib, result)
+			}(sib)
+		}
+		wg.Wait()
+	}()
+	return done
+}
+
+// completeSiblingDelivery resolves one deduped sibling delivery's job assignment via
+// completejob so GitHub does not leave it dangling until the ~15-minute
+// unstarted-job timeout and cancel the whole job even after the winner completed it
+// (Q260 Option A). sib.RunnerRequestID is the sibling delivery's OWN jobID, distinct
+// from the winner's; under the per-delivery lock model (Q247) completing it resolves
+// only that assignment. result is the winner's pod-phase proxy. Best-effort: the
+// call is bounded by the control-plane timeout and failures are logged and counted,
+// never fatal — the runner still recycles its slot. Reached only when
+// Config.FanoutCompletion is enabled; see that field for why this outward call is
+// off by default.
+func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, planID string, sib SiblingDelivery, result broker.TaskResult) {
 	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
 	defer cancel()
-	err := cfg.Broker.CompleteJob(cctx, runServiceURL, broker.CompleteJobRequest{
+	err := cfg.Broker.CompleteJob(cctx, sib.RunServiceURL, broker.CompleteJobRequest{
 		PlanID:    planID,
-		JobID:     jobID,
-		Result:    broker.TaskResultSkipped,
-		AuthToken: jobToken,
+		JobID:     sib.RunnerRequestID,
+		Result:    result,
+		AuthToken: sib.JobToken,
 	})
 
 	outcome := "completed"
 	var notFound *broker.JobNotFoundError
 	switch {
 	case err == nil:
-		log.Debug("released abandoned duplicate delivery via completejob so GitHub does not cancel the job at its unstarted-job timeout",
-			"planID", planID, "jobID", jobID)
+		log.Debug("completed a deduped sibling delivery via completejob so GitHub does not cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", sib.RunnerRequestID, "result", result)
 	case errors.As(err, &notFound):
-		// The assignment is already gone server-side — nothing left to release.
-		log.Debug("abandoned duplicate delivery already resolved server-side",
-			"planID", planID, "jobID", jobID)
+		// The assignment is already gone server-side — nothing left to resolve.
+		log.Debug("deduped sibling delivery already resolved server-side",
+			"planID", planID, "jobID", sib.RunnerRequestID)
 	default:
 		outcome = "error"
-		log.Warn("failed to release abandoned duplicate delivery; GitHub may cancel the job at its unstarted-job timeout",
-			"planID", planID, "jobID", jobID, "error", err)
+		log.Warn("failed to complete a deduped sibling delivery; GitHub may cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", sib.RunnerRequestID, "error", err)
 	}
 	if cfg.Metrics != nil {
 		cfg.Metrics.AbandonedDeliveryCompletionsTotal.WithLabelValues(cfg.Namespace, cfg.Group, outcome).Inc()

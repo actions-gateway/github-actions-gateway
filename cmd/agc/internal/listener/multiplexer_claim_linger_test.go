@@ -3,6 +3,8 @@ package listener
 import (
 	"testing"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
 // TestMultiplexer_ClaimLinger_DedupsLateRedelivery exercises the Q260 redelivery
@@ -24,35 +26,84 @@ func TestMultiplexer_ClaimLinger_DedupsLateRedelivery(t *testing.T) {
 	m.ClaimLinger = 5 * time.Minute
 
 	// The winner claims the planID.
-	release, ok := m.claimJob(planID)
-	if !ok {
+	winner := m.claimJob(planID, SiblingDelivery{})
+	if !winner.Won {
 		t.Fatal("winner should acquire the claim on a fresh planID")
 	}
 
 	// A sibling delivered the same planID mid-flight is deduped (in-flight claim).
-	if _, ok := m.claimJob(planID); ok {
+	if r := m.claimJob(planID, SiblingDelivery{}); r.Won {
 		t.Fatal("a concurrent sibling must be deduped while the claim is in-flight")
 	}
 
-	// The winner completes: release does NOT free the planID immediately — it
+	// The winner completes: Complete does NOT free the planID immediately — it
 	// lingers for ClaimLinger past completion.
-	release()
+	winner.Complete(broker.TaskResultSucceeded)
 
 	// A late redelivery arriving well within the linger window (the winner's pod is
 	// still lingering, unreaped) is deduped rather than reclaiming and colliding.
 	now = now.Add(1 * time.Minute)
-	if _, ok := m.claimJob(planID); ok {
+	if r := m.claimJob(planID, SiblingDelivery{}); r.Won {
 		t.Fatal("a late redelivery within the pod-linger window must be deduped (Q260 residual)")
 	}
 
 	// Once the linger window elapses (the pod has been reaped), a genuine
 	// redelivery of the same planID is provisionable again.
 	now = now.Add(m.ClaimLinger)
-	release2, ok := m.claimJob(planID)
-	if !ok {
+	winner2 := m.claimJob(planID, SiblingDelivery{})
+	if !winner2.Won {
 		t.Fatal("after the linger window elapses the planID must be reclaimable")
 	}
-	release2()
+	winner2.Complete(broker.TaskResultSucceeded)
+}
+
+// TestMultiplexer_FanoutClaim_TracksSiblingsAndLateRedelivery exercises the Q260
+// Option A registry behavior. Siblings deduped while the winner runs are registered
+// and returned to the winner by Complete (so the winner can fan completion out to
+// each). After the winner concludes, a late redelivery of the same planID arriving
+// within the linger window is NOT registered for the now-gone winner — it is handed
+// the winner's recorded terminal result so the caller resolves its own delivery.
+func TestMultiplexer_FanoutClaim_TracksSiblingsAndLateRedelivery(t *testing.T) {
+	const planID = "plan-fan"
+	now := time.Unix(0, 0)
+	m := NewMultiplexer(func(int) Config { return Config{} }, 1, nil)
+	m.now = func() time.Time { return now }
+	m.ClaimLinger = 5 * time.Minute
+
+	winner := m.claimJob(planID, SiblingDelivery{RunnerRequestID: "d1"})
+	if !winner.Won {
+		t.Fatal("winner should acquire the claim")
+	}
+
+	// Two siblings deduped while the winner runs: each registered for the winner,
+	// neither winning nor carrying a late result.
+	for _, id := range []string{"d2", "d3"} {
+		r := m.claimJob(planID, SiblingDelivery{RunnerRequestID: id})
+		if r.Won || r.LateResult != "" {
+			t.Fatalf("sibling %q should be a registered loser, got Won=%v LateResult=%q", id, r.Won, r.LateResult)
+		}
+	}
+
+	// The winner concludes failed: Complete returns exactly the two registered
+	// siblings, each keyed on its own RunnerRequestID.
+	siblings := winner.Complete(broker.TaskResultFailed)
+	got := map[string]bool{}
+	for _, s := range siblings {
+		got[s.RunnerRequestID] = true
+	}
+	if len(siblings) != 2 || !got["d2"] || !got["d3"] {
+		t.Fatalf("winner should get its two registered siblings d2/d3, got %+v", siblings)
+	}
+
+	// A late redelivery within the linger window gets the winner's recorded result
+	// (failed) to resolve its own delivery — it does not win, and is not registered.
+	late := m.claimJob(planID, SiblingDelivery{RunnerRequestID: "d4"})
+	if late.Won {
+		t.Fatal("a late redelivery must not win the concluded claim")
+	}
+	if late.LateResult != broker.TaskResultFailed {
+		t.Fatalf("late redelivery should carry the winner's recorded result, got %q", late.LateResult)
+	}
 }
 
 // TestMultiplexer_ClaimLinger_ZeroFreesImmediately verifies that when ClaimLinger
@@ -66,13 +117,13 @@ func TestMultiplexer_ClaimLinger_ZeroFreesImmediately(t *testing.T) {
 	m.now = func() time.Time { return now }
 	m.ClaimLinger = 0
 
-	release, ok := m.claimJob(planID)
-	if !ok {
+	winner := m.claimJob(planID, SiblingDelivery{})
+	if !winner.Won {
 		t.Fatal("winner should acquire the claim")
 	}
-	release()
+	winner.Complete(broker.TaskResultSucceeded)
 
-	if _, ok := m.claimJob(planID); !ok {
+	if r := m.claimJob(planID, SiblingDelivery{}); !r.Won {
 		t.Fatal("with ClaimLinger==0 the planID must be free immediately after release")
 	}
 }
@@ -88,14 +139,14 @@ func TestMultiplexer_ClaimLinger_SweepBoundsMap(t *testing.T) {
 
 	// Complete several jobs; each leaves a lingering entry.
 	for _, id := range []string{"a", "b", "c"} {
-		release, ok := m.claimJob(id)
-		if !ok {
+		res := m.claimJob(id, SiblingDelivery{})
+		if !res.Won {
 			t.Fatalf("claim %q should succeed", id)
 		}
-		release()
+		res.Complete(broker.TaskResultSucceeded)
 	}
 	// One more job is still in-flight (never released).
-	if _, ok := m.claimJob("live"); !ok {
+	if r := m.claimJob("live", SiblingDelivery{}); !r.Won {
 		t.Fatal("in-flight claim should succeed")
 	}
 
@@ -108,11 +159,11 @@ func TestMultiplexer_ClaimLinger_SweepBoundsMap(t *testing.T) {
 
 	// Advance past the linger window and trigger a sweep via a fresh claim.
 	now = now.Add(2 * time.Minute)
-	release, ok := m.claimJob("d")
-	if !ok {
+	res := m.claimJob("d", SiblingDelivery{})
+	if !res.Won {
 		t.Fatal("claim d should succeed")
 	}
-	release()
+	res.Complete(broker.TaskResultSucceeded)
 
 	m.jobClaimsMu.Lock()
 	defer m.jobClaimsMu.Unlock()

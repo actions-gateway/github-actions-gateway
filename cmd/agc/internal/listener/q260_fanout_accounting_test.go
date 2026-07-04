@@ -3,6 +3,7 @@ package listener_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ import (
 // completejob with result succeeded — exactly what the real worker reports to the
 // run service. Losing siblings are deduped by the planID claim and never run the
 // JobHandler, so their acquired deliveries are left unresolved.
-func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *listener.Metrics, release <-chan struct{}) *listener.Multiplexer {
+func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *listener.Metrics, release <-chan struct{}, fanoutCompletion bool) *listener.Multiplexer {
 	t.Helper()
 	factory := func(idx int) listener.Config {
 		agent := &agentpool.Agent{
@@ -42,15 +43,16 @@ func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *list
 			HTTPClient: srv.HTTPClient(),
 		}
 		return listener.Config{
-			Group:         "test-rg",
-			Namespace:     "default",
-			Agent:         agent,
-			Broker:        bc,
-			HTTPClient:    srv.HTTPClient(),
-			Metrics:       m,
-			IdleThreshold: 1_000_000, // never idle-exit during the assertions
-			RenewInterval: time.Hour, // no renewal traffic during the test
-			JobHandler: func(ctx context.Context, runServiceURL, planID string, payload []byte, _ string) error {
+			Group:            "test-rg",
+			Namespace:        "default",
+			Agent:            agent,
+			Broker:           bc,
+			HTTPClient:       srv.HTTPClient(),
+			Metrics:          m,
+			IdleThreshold:    1_000_000, // never idle-exit during the assertions
+			RenewInterval:    time.Hour, // no renewal traffic during the test
+			FanoutCompletion: fanoutCompletion,
+			JobHandler: func(ctx context.Context, runServiceURL, planID string, payload []byte, _ string) (broker.TaskResult, error) {
 				// Recover this delivery's own RunnerRequestID (the fan-out acquire
 				// response embeds it) so the "worker" completes the delivery it ran.
 				var acq struct {
@@ -60,14 +62,16 @@ func fanoutMux(t *testing.T, srv *brokertest.Server, maxListeners int32, m *list
 				select {
 				case <-release:
 				case <-ctx.Done():
-					return nil
+					return "", nil
 				}
 				_ = bc.CompleteJob(ctx, runServiceURL, broker.CompleteJobRequest{
 					PlanID: planID,
 					JobID:  acq.RunnerRequestID,
 					Result: broker.TaskResultSucceeded,
 				})
-				return nil
+				// The winner's pod-phase proxy (a clean run → succeeded); the AGC
+				// reports this when it fans completion out to the deduped siblings.
+				return broker.TaskResultSucceeded, nil
 			},
 		}
 	}
@@ -133,7 +137,9 @@ func TestAGC_Q260_FanoutCompletionAccountingGap(t *testing.T) {
 
 	m := newTestMetrics()
 	release := make(chan struct{})
-	mgr := fanoutMux(t, srv, n, m, release)
+	// Fan-out completion OFF (the production default): the winner completes only its
+	// own delivery, so the N-1 sibling deliveries dangle and the job cancels.
+	mgr := fanoutMux(t, srv, n, m, release, false)
 	t.Cleanup(mgr.Stop)
 
 	driveFanout(t, srv, mgr, m, planID, n, release)
@@ -156,14 +162,14 @@ func TestAGC_Q260_FanoutCompletionAccountingGap(t *testing.T) {
 // completed must conclude as completed across ALL its sibling deliveries — no
 // unstarted-timeout cancel.
 //
-// SKIPPED until that reconciliation lands: it FAILS against today's code (the winner
-// completes only its own delivery; the siblings dangle and the job cancels — see
-// TestAGC_Q260_FanoutCompletionAccountingGap). Remove the Skip when implementing the
-// Q260 fan-out completion reconciliation design; it validates the fix with no GKE
-// turn-up.
+// It is the acceptance gate for the Q260 Option A fan-out completion fix: with
+// FanoutCompletion enabled (the winner fans completjob out to every deduped sibling
+// delivery on completion), the deduped-away sibling deliveries are resolved, so none
+// dangle and the job the single deduped runner completed concludes as completed even
+// after the unstarted-job timeout fires. It FAILS against pre-fix code (completed vs
+// cancelled — see TestAGC_Q260_FanoutCompletionAccountingGap) and validates the fix
+// with no GKE turn-up.
 func TestAGC_Q260_FanoutCompletionReconciles(t *testing.T) {
-	t.Skip("Q260: gated on the fan-out completion reconciliation fix (see the Q260 plan)")
-
 	const (
 		planID = "plan-fanout-fixed"
 		n      = 4
@@ -173,15 +179,62 @@ func TestAGC_Q260_FanoutCompletionReconciles(t *testing.T) {
 
 	m := newTestMetrics()
 	release := make(chan struct{})
-	mgr := fanoutMux(t, srv, n, m, release)
+	// Fan-out completion ON (Q260 Option A): the winner reconciles every deduped
+	// sibling delivery on GitHub's books when its job finishes.
+	mgr := fanoutMux(t, srv, n, m, release, true)
 	t.Cleanup(mgr.Stop)
 
 	driveFanout(t, srv, mgr, m, planID, n, release)
 
-	// After the fix, the deduped-away sibling deliveries are resolved too, so none
-	// dangle — and the job the winner completed concludes as completed even after the
+	// The winner fans completion out to the N-1 deduped siblings, so all N deliveries
+	// (winner's own + siblings) are resolved — one completejob each.
+	require.Eventually(t, func() bool {
+		return srv.CompleteJobCalls() >= n
+	}, 5*time.Second, 10*time.Millisecond, "the winner must complete each deduped sibling delivery")
+
+	// With no delivery dangling, the completed job concludes green even after the
 	// unstarted-job timeout fires.
 	srv.ExpireUnstartedDeliveries(planID)
 	assert.Equal(t, "completed", srv.JobState(planID),
 		"post-fix: reconciling all sibling deliveries lets the completed job conclude green")
+}
+
+// TestAGC_Q260_WinnerCompletesEachSibling asserts the mechanics of the Q260 Option A
+// fix: the winner issues exactly one completejob per deduped sibling delivery, each
+// keyed on that sibling's OWN RunnerRequestID (distinct per delivery under fan-out),
+// with the winner's pod-phase-proxy result. Together with the winner's own delivery,
+// every one of the N fanned-out deliveries is resolved exactly once.
+func TestAGC_Q260_WinnerCompletesEachSibling(t *testing.T) {
+	const (
+		planID = "plan-fanout-siblings"
+		n      = 4
+	)
+	srv := brokertest.New()
+	t.Cleanup(srv.Close)
+
+	m := newTestMetrics()
+	release := make(chan struct{})
+	mgr := fanoutMux(t, srv, n, m, release, true)
+	t.Cleanup(mgr.Stop)
+
+	driveFanout(t, srv, mgr, m, planID, n, release)
+
+	// Every one of the N deliveries is resolved with a completejob keyed on its own
+	// RunnerRequestID — the winner's own (by the worker stub) plus the N-1 siblings
+	// (fanned out by the winner).
+	require.Eventually(t, func() bool {
+		return len(srv.DeliveryResults(planID)) >= n
+	}, 5*time.Second, 10*time.Millisecond, "each deduped sibling delivery must be completed on its own RunnerRequestID")
+
+	results := srv.DeliveryResults(planID)
+	require.Len(t, results, n, "exactly the N fanned-out deliveries are resolved (no extra, no missing)")
+	// Each fanned-out delivery is keyed on its own distinct RunnerRequestID
+	// ("<planID>-d<i>") and completed with the winner's pod-phase proxy (succeeded).
+	for i := 1; i <= n; i++ {
+		reqID := fmt.Sprintf("%s-d%d", planID, i)
+		assert.Equal(t, broker.TaskResultSucceeded, results[reqID],
+			"delivery %s must be completed as succeeded (the winner's pod-phase proxy)", reqID)
+	}
+	// One completejob per delivery — no duplicate sibling completions.
+	assert.Equal(t, n, srv.CompleteJobCalls(), "exactly one completejob per fanned-out delivery")
 }

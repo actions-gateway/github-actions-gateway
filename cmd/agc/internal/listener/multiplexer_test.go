@@ -583,13 +583,13 @@ func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
 			Broker:        bc,
 			HTTPClient:    oauthSrv.Client(),
 			IdleThreshold: idleThreshold,
-			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 				jobStartedOnce.Do(func() { close(jobStarted) })
 				select {
 				case <-jobBlock:
 				case <-ctx.Done():
 				}
-				return nil
+				return "", nil
 			},
 		}
 	}
@@ -687,7 +687,7 @@ func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 			Metrics:       m,
 			IdleThreshold: 1_000_000, // never idle-exit during the assertions
 			RenewInterval: time.Hour, // no renewal traffic during the test
-			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 				n := handlerActive.Add(1)
 				for {
 					old := handlerMax.Load()
@@ -700,7 +700,7 @@ func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
 				case <-ctx.Done():
 				}
 				handlerActive.Add(-1)
-				return nil
+				return "", nil
 			},
 		}
 	}
