@@ -90,7 +90,10 @@ Triggered via workflow_dispatch less than a minute ago
 JOBS
 {GRN}✓{RST} test in 8s (ID 85081558995)""", post=2.0)
 
-say("#  One job → one short-lived pod → gone. No idle runners, no idle GPUs.", pause=3.2)
+# The closing frame is the whole story (idle → pod lifecycle → green → payoff),
+# so hold it a good while before the loop repeats — a short hold buries the lead
+# and is frustrating if you were mid-read when it restarts.
+say("#  One job → one short-lived pod → gone. No idle runners, no idle GPUs.", pause=7.0)
 
 # svg-term ends the animation at the last event's timestamp, so without a
 # trailing event the final caption would flash at the loop boundary with no dwell.

@@ -23,4 +23,4 @@
 [23.75, "o", "JOBS\r\n"]
 [23.85, "o", "\u001b[32m✓\u001b[0m test in 8s (ID 85081558995)\r\n"]
 [25.95, "o", "\u001b[1;38;5;45m#  One job → one short-lived pod → gone. No idle runners, no idle GPUs.\u001b[0m\r\n"]
-[29.15, "o", ""]
+[32.95, "o", ""]
