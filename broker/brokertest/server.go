@@ -38,6 +38,37 @@ type Server struct {
 	lastCompleteJob     atomic.Value // broker.CompleteJobRequest of the most recent completejob
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
+
+	// Fan-out job-accounting model (Q260). Off by default so existing tests are
+	// unaffected; EnableFanoutAccounting turns it on. It models the one property
+	// the default stub omits and the one that wedged production: GitHub fans a
+	// single logical job (one planID) out to N sibling sessions as N deliveries
+	// with DISTINCT RunnerRequestIDs, and the job only concludes when its
+	// per-delivery accounting is reconciled — completing a single sibling's own
+	// delivery does NOT conclude the job, and any acquired-but-unresolved sibling
+	// delivery cancels the whole job at the ~15-minute unstarted-job timeout. See
+	// the accounting methods below.
+	acctMu    sync.Mutex
+	fanout    bool
+	jobs      map[string]*fanoutJob // planID → logical job
+	reqToPlan map[string]string     // delivery RunnerRequestID → planID
+}
+
+// fanoutDelivery is one per-delivery assignment of a logical fan-out job — one
+// RunnerRequestID GitHub minted for the job's planID (Q260).
+type fanoutDelivery struct {
+	reqID    string
+	handed   bool              // returned to a poller via GET /message
+	acquired bool              // POST /acquirejob seen for this delivery
+	result   broker.TaskResult // "" until POST /completejob resolves it
+}
+
+// fanoutJob is the accounting state of one logical job (planID) across all the
+// sibling deliveries GitHub fanned it out to (Q260).
+type fanoutJob struct {
+	planID     string
+	deliveries []*fanoutDelivery
+	state      string // "queued" | "in_progress" | "completed" | "failed" | "cancelled"
 }
 
 // New creates and starts a new broker Stub. Call Close when done.
@@ -49,6 +80,8 @@ func New() *Server {
 		firstPollNotify: make(map[string]chan struct{}),
 		jobQueues:       make(map[string]chan broker.TaskAgentMessage),
 		bearerSessions:  make(map[string]string),
+		jobs:            make(map[string]*fanoutJob),
+		reqToPlan:       make(map[string]string),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/token", s.handleToken)
@@ -217,6 +250,164 @@ func (s *Server) LastCompleteJob() (broker.CompleteJobRequest, bool) {
 	return v.(broker.CompleteJobRequest), true
 }
 
+// EnableFanoutAccounting turns on the per-delivery fan-out job-accounting model
+// (Q260). Off by default. Call once before enqueuing a fan-out job. When on, the
+// server tracks a logical job per planID with one assignment per delivery and only
+// concludes the job when the accounting is reconciled — modeling GitHub's real
+// fan-out completion semantics that the default stub omits (the gap that let the
+// Q260 dedup pass envtest yet wedge production).
+func (s *Server) EnableFanoutAccounting() {
+	s.acctMu.Lock()
+	s.fanout = true
+	s.acctMu.Unlock()
+}
+
+// EnqueueFanoutJob registers one logical job (planID) that GitHub fans out to n
+// sibling sessions as n deliveries with DISTINCT RunnerRequestIDs. The deliveries
+// are handed to pollers on GET /message (one per poll, to whichever sessions poll),
+// so a burst of n concurrent pollers each receives one delivery of the same job —
+// exactly the shape the planID dedup must collapse. Returns the n RunnerRequestIDs.
+// Requires EnableFanoutAccounting. Safe to call once per planID.
+func (s *Server) EnqueueFanoutJob(planID string, n int) []string {
+	s.acctMu.Lock()
+	defer s.acctMu.Unlock()
+	job := &fanoutJob{planID: planID, state: "queued"}
+	reqIDs := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		reqID := fmt.Sprintf("%s-d%d", planID, i)
+		job.deliveries = append(job.deliveries, &fanoutDelivery{reqID: reqID})
+		s.reqToPlan[reqID] = planID
+		reqIDs = append(reqIDs, reqID)
+	}
+	s.jobs[planID] = job
+	return reqIDs
+}
+
+// JobState returns the accounting state of the logical fan-out job: "queued",
+// "in_progress", "completed", "failed", or "cancelled" (or "" if unknown). See
+// EnableFanoutAccounting.
+func (s *Server) JobState(planID string) string {
+	s.acctMu.Lock()
+	defer s.acctMu.Unlock()
+	if job, ok := s.jobs[planID]; ok {
+		return job.state
+	}
+	return ""
+}
+
+// ExpireUnstartedDeliveries fires GitHub's ~15-minute unstarted-job timeout
+// deterministically (no real timer): if any delivery of the job was acquired but
+// never resolved with a terminal result, the whole job is CANCELLED — GitHub is
+// still waiting on that phantom assignment even though a sibling already ran the
+// job. A no-op once the job has concluded. This is the mechanism that turns the
+// Q260 dedup's silently-abandoned sibling deliveries into a cancelled job.
+func (s *Server) ExpireUnstartedDeliveries(planID string) {
+	s.acctMu.Lock()
+	defer s.acctMu.Unlock()
+	if job, ok := s.jobs[planID]; ok {
+		s.reconcileLocked(job, true /* expire */)
+	}
+}
+
+// reconcileLocked recomputes a job's state from its deliveries. Caller holds acctMu.
+//
+// The model encodes the invariant observed live in re-route #4: a fan-out job
+// concludes only when EVERY acquired delivery is resolved with a consistent, real
+// (non-skipped) terminal result. Completing a single sibling's own delivery is not
+// enough — the other acquired-but-unresolved siblings keep the job open, and at the
+// unstarted timeout (expire=true) they cancel it. A delivery resolved as "skipped"
+// (the #513 dead-end) acks the assignment but contributes no real conclusion, so a
+// skipped-contaminated job never goes green — matching the live flag-ON result
+// (indefinite in_progress rather than completed).
+func (s *Server) reconcileLocked(job *fanoutJob, expire bool) {
+	switch job.state {
+	case "completed", "failed", "cancelled":
+		return // terminal
+	}
+	danglingAcquired := false
+	var results []broker.TaskResult
+	for _, d := range job.deliveries {
+		if !d.acquired {
+			continue
+		}
+		if d.result == "" {
+			danglingAcquired = true
+		} else {
+			results = append(results, d.result)
+		}
+	}
+	if danglingAcquired {
+		if expire {
+			job.state = "cancelled"
+		} else {
+			job.state = "in_progress"
+		}
+		return
+	}
+	if len(results) == 0 {
+		return // nothing acquired yet (or nothing resolved) — leave queued/in_progress
+	}
+	// Every acquired delivery is resolved. Decide the conclusion from the results.
+	allSkipped, hasFailed, hasSucceeded := true, false, false
+	for _, r := range results {
+		if r != broker.TaskResultSkipped {
+			allSkipped = false
+		}
+		switch r {
+		case broker.TaskResultFailed:
+			hasFailed = true
+		case broker.TaskResultSucceeded:
+			hasSucceeded = true
+		}
+	}
+	switch {
+	case allSkipped:
+		job.state = "in_progress" // skipped-only never concludes (models #513)
+	case hasFailed:
+		job.state = "failed"
+	case hasSucceeded:
+		job.state = "completed"
+	default:
+		job.state = "in_progress"
+	}
+}
+
+// fanoutMessage pops the next un-handed delivery of any pending fan-out job and
+// returns it as a broker message, or (nil,false) if none is pending. Caller must
+// NOT hold acctMu. The RunServiceURL points back at this stub so /acquirejob and
+// /completejob for the delivery return here.
+func (s *Server) fanoutMessage() (broker.TaskAgentMessage, bool) {
+	s.acctMu.Lock()
+	var picked *fanoutDelivery
+	for _, job := range s.jobs {
+		for _, d := range job.deliveries {
+			if !d.handed {
+				picked = d
+				break
+			}
+		}
+		if picked != nil {
+			break
+		}
+	}
+	if picked != nil {
+		picked.handed = true
+	}
+	s.acctMu.Unlock()
+	if picked == nil {
+		return broker.TaskAgentMessage{}, false
+	}
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: picked.reqID,
+		RunServiceURL:   strings.TrimRight(s.URL, "/"),
+	})
+	return broker.TaskAgentMessage{
+		MessageID:   s.msgCounter.Add(1),
+		MessageType: "RunnerJobRequest",
+		Body:        string(body),
+	}, true
+}
+
 // ActiveSessionCount returns the number of goroutines that have registered a session
 // but not yet called DELETE /session. It is computed as (#POST /session − #DELETE /session)
 // so each listener goroutine contributes +1 on start and −1 on exit, regardless of v2 mode.
@@ -355,6 +546,36 @@ func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := r.URL.Query().Get("sessionId")
 
+	// Fan-out accounting (Q260): hand the next pending fan-out delivery to whichever
+	// session polls, one per poll. Takes precedence over the per-session queue so a
+	// burst of concurrent pollers each receives one delivery of the same logical job.
+	s.acctMu.Lock()
+	fanoutOn := s.fanout
+	s.acctMu.Unlock()
+	if fanoutOn {
+		s.mu.Lock()
+		if pollCh, known := s.firstPollNotify[sessionID]; known {
+			select {
+			case <-pollCh:
+			default:
+				close(pollCh)
+			}
+		} else {
+			closedCh := make(chan struct{})
+			close(closedCh)
+			s.firstPollNotify[sessionID] = closedCh
+		}
+		s.mu.Unlock()
+		if msg, ok := s.fanoutMessage(); ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(msg)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
 	s.mu.Lock()
 	ch, ok := s.jobQueues[sessionID]
 	// Notify WaitForFirstPoll on the first GET /message for this session.
@@ -422,6 +643,26 @@ func (s *Server) handleCompleteJob(w http.ResponseWriter, r *http.Request) {
 	var req broker.CompleteJobRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	s.lastCompleteJob.Store(req)
+
+	// Fan-out accounting (Q260): resolve this delivery with its reported result and
+	// recompute the logical job's state. A single sibling's completion does not
+	// conclude the job while other acquired deliveries remain unresolved.
+	s.acctMu.Lock()
+	if s.fanout {
+		if planID, ok := s.reqToPlan[req.JobID]; ok {
+			if job, ok := s.jobs[planID]; ok {
+				for _, d := range job.deliveries {
+					if d.reqID == req.JobID {
+						d.result = req.Result
+						break
+					}
+				}
+				s.reconcileLocked(job, false)
+			}
+		}
+	}
+	s.acctMu.Unlock()
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -433,6 +674,42 @@ func (s *Server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 	}
 	n := s.acquireCount.Add(1)
 	w.Header().Set("Content-Type", "application/json")
+
+	// Fan-out accounting (Q260): map this delivery (jobMessageId == RunnerRequestID)
+	// to its logical job, mark the delivery acquired, and return the SHARED planID —
+	// so every sibling that acquires its own distinct delivery resolves to one planID
+	// (the collision the dedup must collapse). The response embeds runnerRequestId so
+	// a worker-simulating JobHandler can complete this exact delivery.
+	s.acctMu.Lock()
+	fanoutOn := s.fanout
+	s.acctMu.Unlock()
+	if fanoutOn {
+		var req broker.JobAcquisitionRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		s.acctMu.Lock()
+		planID := s.reqToPlan[req.JobMessageID]
+		if job, ok := s.jobs[planID]; ok {
+			for _, d := range job.deliveries {
+				if d.reqID == req.JobMessageID {
+					d.acquired = true
+					break
+				}
+			}
+			s.reconcileLocked(job, false)
+		}
+		s.acctMu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan":            map[string]string{"planId": planID},
+			"runnerRequestId": req.JobMessageID,
+			"resources": map[string]any{
+				"endpoints": []map[string]any{{
+					"name":          "SystemVssConnection",
+					"authorization": map[string]any{"parameters": map[string]string{"AccessToken": "job-token-" + req.JobMessageID}},
+				}},
+			},
+		})
+		return
+	}
 
 	s.mu.Lock()
 	custom := s.acquireJobResponse
