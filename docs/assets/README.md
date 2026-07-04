@@ -151,7 +151,7 @@ python3 generate-demo-cast.py            # writes demo-local-kind.cast
 # Render the cast → self-contained animated SVG via svg-term-cli in a container
 docker run --rm -v "$PWD:/data" -w /data node:20-alpine \
   sh -c "npx --yes svg-term-cli@2.1.1 --in demo-local-kind.cast \
-           --out demo-local-kind.svg --window --width 92 --height 30"
+           --out demo-local-kind.svg --window --width 100 --height 32"
 ```
 
 Commands are revealed whole (not typed char-by-char) on purpose: a typing
