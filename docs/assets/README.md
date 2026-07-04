@@ -130,8 +130,8 @@ truth is the asciinema **cast v2** file, and the SVG is rendered from it.
 | Artefact | Committed? | What it is |
 | --- | --- | --- |
 | `generate-demo-cast.py` | yes | Emits the cast. The screenplay (commands + outputs + pacing) lives here. |
-| `demo-local-kind.cast` | yes (~9 KB) | asciinema v2 cast — one JSON header line + `[t,"o","…"]` event lines. |
-| `demo-local-kind.svg` | yes (~125 KB) | Self-contained animated SVG rendered from the cast; embedded on the demo page. |
+| `demo-local-kind.cast` | yes (~4 KB) | asciinema v2 cast — one JSON header line + `[t,"o","…"]` event lines. |
+| `demo-local-kind.svg` | yes (~40 KB) | Self-contained animated SVG rendered from the cast; embedded on the demo page. |
 
 **Truthfulness:** every command and every line of output in the screenplay is
 transcribed from a **real run** on a kind cluster against **real GitHub** — no
@@ -151,7 +151,7 @@ python3 generate-demo-cast.py            # writes demo-local-kind.cast
 # Render the cast → self-contained animated SVG via svg-term-cli in a container
 docker run --rm -v "$PWD:/data" -w /data node:20-alpine \
   sh -c "npx --yes svg-term-cli@2.1.1 --in demo-local-kind.cast \
-           --out demo-local-kind.svg --window --width 100 --height 32"
+           --out demo-local-kind.svg --window --width 100 --height 26"
 ```
 
 Commands are revealed whole (not typed char-by-char) on purpose: a typing

@@ -1,29 +1,31 @@
 # Demo: a real job on a local cluster
 
-Watch one GitHub Actions job go from `workflow_dispatch` to green — routed
-through GitHub Actions Gateway (GAG), run in an **ephemeral worker pod** on a
-local [kind](https://kind.sigs.k8s.io/) cluster, and reaped the instant it
-finishes. Nothing here is staged: every line was captured from a real run
-against **real GitHub** (a self-hosted `runs-on: e2e` workflow), then replayed at
-readable speed.
+GitHub Actions Gateway (GAG) in 30 seconds: a real GitHub Actions job runs in a
+**worker pod that exists only while the job runs**, then disappears — no runner
+sits idle. Nothing here is staged; every line was captured from a real run on a
+local [kind](https://kind.sigs.k8s.io/) cluster against **real GitHub** (a
+self-hosted `runs-on: e2e` workflow).
 
-![Terminal recording: a GitHub Actions job running on GAG on a local kind cluster — the worker pod appears, runs, and is reaped on completion.](assets/demo-local-kind.svg)
+![Terminal recording: a GitHub Actions job running on GAG — no idle pods, then one job spins up a worker pod that runs and is deleted on completion, green on GitHub.](assets/demo-local-kind.svg)
 
-## What you just watched
+The recording assumes GAG is already installed and shows only the payoff. The
+full install and onboarding steps are in [Reproduce it yourself](#reproduce-it-yourself)
+below.
+
+## What the demo shows
 
 | Beat | What happens | Why it matters |
 | --- | --- | --- |
-| **Install** | A kind cluster comes up; the Gateway Manager Controller (GMC) is installed with one `helm install`. | One controller to run the whole platform. |
-| **Onboard** | One `ActionsGateway` custom resource (CR) provisions the tenant's Actions Gateway Controller (AGC) + egress proxy and registers self-hosted runners with GitHub. | A tenant is a single CR, not a pile of Deployments. |
-| **Idle** | Before any job, the tenant namespace holds only the controller and proxy — **zero worker pods**. | No idle compute (and no idle GPUs) between jobs. |
-| **Run** | `gh workflow run` dispatches one job. A worker pod goes `Pending → Running → Completed`, then is **deleted on completion**. | One job → one short-lived pod; the node is freed immediately. |
-| **Green** | `gh run view` shows the job succeeded on GitHub; the tenant namespace is back to controller + proxy only. | The job really ran on GitHub, and compute returned to zero. |
+| **Idle** | Before any job, the team's namespace holds only a lightweight controller and proxy — **zero worker pods**. | No idle compute (and no idle GPUs) between jobs. |
+| **Run** | One `gh workflow run` triggers a job. A worker pod goes `Pending → Running → Completed`, then is **deleted on completion**. | One job → one short-lived pod; the node is freed instantly. |
+| **Green** | `gh run view` shows the job succeeded on GitHub (in ~8s). | The job really ran on real GitHub — you paid for compute only while it ran. |
 
 ## Reproduce it yourself
 
 This is the **free** path: a local kind cluster and a real GitHub repo — no paid
-infrastructure. The commands below are the ones in the recording; run them from a
-checkout of the [repository](https://github.com/actions-gateway/github-actions-gateway).
+infrastructure. The recording above shows the payoff once GAG is running; the
+steps below are the full path to get there from scratch. Run them from a checkout
+of the [repository](https://github.com/actions-gateway/github-actions-gateway).
 
 ### Prerequisites
 
