@@ -13,7 +13,7 @@ The full install/onboard steps live as text on the demo page.
 """
 import json
 
-WIDTH, HEIGHT = 100, 24
+WIDTH, HEIGHT = 100, 27
 E = "\x1b"
 PROMPT = f"{E}[1;32m➜{E}[0m {E}[1;36mgag-demo{E}[0m {E}[1;34m${E}[0m "
 DIM = f"{E}[38;5;245m"      # inline annotations
@@ -36,6 +36,11 @@ def wait(dt):
 
 def say(line, pause=2.0):
     emit(f"{SAY}{line}{RST}\r\n")
+    wait(pause)
+
+def blank(pause=0.4):
+    """A visual separator between command blocks — one empty line."""
+    emit("\r\n")
     wait(pause)
 
 def command(cmd, pre=0.5, post=0.7):
@@ -66,6 +71,7 @@ def watch_row(name, ready, status, age, annot="", color=""):
 say("#  GitHub Actions Gateway — trigger one CI job, watch the pod:", pause=2.2)
 command("gh workflow run test-job.yml --repo $ORG/$REPO --ref main")
 output(f"{DIM}https://github.com/$ORG/$REPO/actions/runs/28687049624{RST}", post=0.7)
+blank()
 
 # ── The payoff: one `-w` shows idle → pod appears, runs, and is deleted ───────
 command("kubectl get pods -n team-a -w", post=0.6)
@@ -79,6 +85,7 @@ emit(watch_row(RUNNER, "1/1", "Running", "3s", "← the job runs here", GRN) + "
 emit(watch_row(RUNNER, "0/1", "Completed", "9s", "← job done", CYN) + "\r\n"); wait(1.8)
 emit(watch_row(RUNNER, "0/1", "Terminating", "9s", "← deleted, back to idle") + "\r\n"); wait(2.8)
 emit(f"{DIM}^C{RST}\r\n"); wait(1.2)
+blank()
 
 # ── Proof + one-line payoff ──────────────────────────────────────────────────
 say("#  Green on GitHub — it really ran (8s):", pause=1.6)
@@ -89,6 +96,7 @@ Triggered via workflow_dispatch less than a minute ago
 
 JOBS
 {GRN}✓{RST} test in 8s (ID 85081558995)""", post=2.0)
+blank()
 
 # The closing frame is the whole story (idle → pod lifecycle → green → payoff),
 # so hold it a good while before the loop repeats — a short hold buries the lead
