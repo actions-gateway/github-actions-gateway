@@ -442,16 +442,17 @@ Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision**
 | U3 | Does an ephemeral runner started with `run.sh --jitconfig` receive its job and complete it? | **✅ core probed** — yes: two real `actions-runner` containers registered via probe-minted JIT configs, picked up jobs ~2 s after start; the fast job completed `success` in 5 s and its runner exited 0 (§2b-4). **Residual for P4:** the same flow behind the egress proxy (proxy-CA trust) and under pod (not local-docker) conditions. |
 | U4 | Rate limits on the Actions Service tenant. | **partially probed** — no rate-limit headers on the queue at all (§2a-5); sustained-load behaviour unknown until P4. |
 | U5 | Eviction fast-cancel: how quickly does GitHub conclude a job whose runner died? | **✅ core probed** — ≈9.5 min to `failure` ("runner lost communication"), same order as the classic lock-TTL lapse (§2b-5). The listener receives the terminal `JobCompleted{result, runnerName}` on its queue (§2b-6), so the ported eviction-retry keys off that signal; the rerun-API call itself is unchanged AGC code. Residual for P4: behaviour under pod eviction (vs SIGKILL) on a cluster. |
-| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? | **🔸 recommended (§5a)** — GAG-owned client in a new leaf `scaleset/` module, tracking upstream as the reference spec; revisit at upstream GA. |
-| U7 | Migration surface for the protocol selector. | **🔸 recommended (§5a)** — v2alpha1 `RunnerSet.spec.acquisitionProtocol: Classic\|ScaleSet`, default `Classic`, immutable, CEL `ScaleSet ⇒ one runnerLabel`; v1alpha1 stays classic-only. |
-| U8 | Enterprise scope, GHES floor, org-scope group policy, classic retirement. | **🔸 recommended (§5a)** — enterprise: out of scope (non-regression); GHES floor moot but keep the acquire-on-`JobAvailable` path (GHES requires it); prefer repo scope + document org-scope group policy; classic: coexist P3–P4 → default flip P5 → one-minor-release deprecation → remove. |
+| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? | **✅ decided (§5a)** — GAG-owned client in a new leaf `scaleset/` module, tracking upstream as the reference spec; revisit at upstream GA. |
+| U7 | Migration surface for the protocol selector. | **✅ decided (§5a)** — v2alpha1 `RunnerSet.spec.acquisitionProtocol: Classic\|ScaleSet`, default `Classic`, immutable, CEL `ScaleSet ⇒ one runnerLabel`; v1alpha1 stays classic-only. |
+| U8 | Enterprise scope, GHES floor, org-scope group policy, classic retirement. | **✅ decided (§5a)** — enterprise: out of scope (non-regression); GHES floor moot but keep the acquire-on-`JobAvailable` path (GHES requires it); prefer repo scope + document org-scope group policy; classic: coexist P3–P4 → default flip P5 → one-minor-release deprecation → remove. |
 
 ## 5a. The three decisions — analysis and recommendations (2026-07-04)
 
 Researched exhaustively (upstream `actions/scaleset` inspected at HEAD
 `1b6da87`; ARC master `go.mod`; GHES release lifecycle; GAG's v2 API, scope
 support, and dependency conventions). Each subsection: options, the facts that
-discriminate, a recommendation. **Recommendations pending user sign-off.**
+discriminate, a recommendation. **All three recommendations were signed off
+2026-07-04 — these are now the decisions of record.**
 
 ### U6 — wire client: vendor `actions/scaleset` vs GAG-owned implementation
 
@@ -497,8 +498,8 @@ discriminate, a recommendation. **Recommendations pending user sign-off.**
 | C | **GAG-owned client in a new leaf module (`scaleset/`, `broker/`-style), mirroring upstream types for wire parity** | The probe already implements and live-validates the full surface (~700 lines incl. the E2 flows); GAG idioms exactly (httpx bounded clients, typed errors, metrics recorder, `scalesettest` fake); zero Preview coupling; matches GAG's protocol-transparency positioning ([appendix D](../design/appendix-d-alternatives-considered.md) critiques ARC's protocol opacity). Cost: GAG re-owns JWT/session refresh (subtleties now probed and documented, §2b-7) and tracks upstream wire changes manually. |
 | D | Fork / vendor-and-patch | Worst of both; fallback only. |
 
-**Recommendation: C — GAG-owned client, tracking `actions/scaleset` as the
-reference spec.** The deciding argument: **whichever option is chosen, GAG
+**Decision (signed off 2026-07-04): C — GAG-owned client, tracking
+`actions/scaleset` as the reference spec.** The deciding argument: **whichever option is chosen, GAG
 must own the auto-assign semantics** — the fake, the tests, and the invariants
 must encode what §2a/§2b probed, because upstream neither documents nor
 answers for them (#107). Once GAG owns the semantics, the fake, and a wrapper
@@ -527,7 +528,7 @@ is for gateway-level config like `GATEWAY_NAME`).
 | c | `ActionsGateway`-level selector | Whole tenant flips at once — kills incremental migration. Reject. |
 | d | AGC env flag only | Not tenant-declarative; invisible in the API. Reject (fine as an additional operator kill-switch during P3/P4, not as the surface). |
 
-**Recommendation: b**, with these specifics:
+**Decision (signed off 2026-07-04): b**, with these specifics:
 
 - **Field:** `acquisitionProtocol`, enum `Classic|ScaleSet`, default `Classic`
   (stability-by-default; neither value relaxes a security property). Naming
