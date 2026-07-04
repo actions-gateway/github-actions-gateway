@@ -1,5 +1,9 @@
 # Getting Started
 
+> **Want to see it first?** The [Demo](demo.md) walks one real GitHub job through
+> a local kind cluster — job → ephemeral worker pod → green on GitHub — with the
+> exact commands to reproduce it.
+
 ## Prerequisites
 
 - Kubernetes 1.30+ (GA `ValidatingAdmissionPolicy`)
