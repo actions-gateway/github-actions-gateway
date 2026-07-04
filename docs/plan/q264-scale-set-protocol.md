@@ -548,6 +548,17 @@ is for gateway-level config like `GATEWAY_NAME`).
   v1 groups to `Classic` RunnerSets unchanged; a tenant opts into `ScaleSet`
   by editing the migrated RunnerSet (a new object, so the immutability rule
   never blocks the migration itself).
+- **The field is transitional — v2beta1 is ScaleSet-only** (signed off
+  2026-07-04): `acquisitionProtocol` exists only on v2alpha1, as the per-set
+  canary/rollback lever P3–P4 need (the Q260 lesson: live validation wants
+  per-set opt-in, and rollback must be a field edit, not an AGC image
+  downgrade across every v2 tenant). **v2beta1 never serves `Classic`**: the
+  Q74 graduation conversion strips the field, and `maxListeners` — meaningless
+  under ScaleSet (one session per set; concurrency is governed by
+  `maxWorkers`/`priorityTiers` via the capacity header) — is removed from
+  RunnerSet at the same graduation (documented as ignored for `ScaleSet` sets
+  in the interim). End state: the protocol is an API-version property — v1 =
+  classic (deprecated), v2 = scale-set — with no enum surviving.
 
 ### U8 — support-matrix policy
 
@@ -589,8 +600,10 @@ vendor-supported GHES). Recommended sequence: flagged coexistence through
 P3–P4 → default flips to `ScaleSet` at P5 (with the positioning-doc rewrite,
 §4.7) → classic deprecated for **one minor release** → classic machinery
 (agent pool + Q114 recycle, multiplexer, Q260 dedup, classic broker client)
-removed in an isolated PR. The `Classic` enum value is dropped at the next API
-graduation with Q74 conversion handling.
+removed in an isolated PR, **aligned with the Q74 v2beta1 graduation** — the
+same hop that strips the transitional `acquisitionProtocol` field and
+`maxListeners` (U7): v2beta1 never serves `Classic`, so graduation is the
+natural removal milestone for the classic machinery too.
 
 **Consequence of ScaleSet being v2-exclusive:** classic is v1alpha1's *only*
 acquisition path, so removing the classic machinery necessarily ends
@@ -598,7 +611,10 @@ v1alpha1's ability to acquire jobs — the classic deprecation window **is** the
 v1alpha1 migration window. The removal PR must therefore be sequenced after
 v1alpha1 is itself deprecated (tenants moved via `gag-migrate`); announcing
 the two deprecations together is honest and turns the fan-out-free model into
-the concrete incentive to complete the v1→v2 migration.
+the concrete incentive to complete the v1→v2 migration. With the v2beta1
+alignment above, the full ladder is: P5 default flip → one-minor classic
+deprecation (= v1alpha1 deprecation) → v2beta1 graduation ships ScaleSet-only
+kinds + the classic-machinery removal.
 
 ## 6. Phased execution path (no big-bang rewrite)
 
