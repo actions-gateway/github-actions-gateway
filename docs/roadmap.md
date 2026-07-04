@@ -41,7 +41,7 @@ operations docs.
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
-- **Reusable runner templates (v2 API, alpha).** A decomposed `v2alpha1`
+- **Reusable runner templates.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed `v2alpha1`
   (`actions-gateway.com`) API ships *beside* the standard `v1alpha1` for early
   adopters: reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`,
   multiple scoped gateways per namespace, and a `v1 → v2` migration tool.
