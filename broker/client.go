@@ -525,6 +525,53 @@ func (c *Client) RenewJob(ctx context.Context, runServiceURL string, reqData Ren
 	return &result, nil
 }
 
+// CompleteJob reports a job's terminal result to POST {run_service_url}/completejob.
+// runServiceURL must come from RunnerJobRequestBody.RunServiceURL, not from
+// Client.BrokerURL. Set reqData.AuthToken to the acquirejob response's job-scoped
+// token (AcquireJobResponse.JobAuthToken); without it the run service rejects the
+// call with 401 "Not authorized for this job", exactly as it does for renewjob
+// (Q247).
+//
+// In GAG the worker pod's runner binary makes this call for a job it ran; the AGC
+// calls it directly only to release a deduplicated duplicate delivery it acquired
+// but will not run (Q260 follow-up), so GitHub does not leave that per-delivery
+// assignment dangling until its ~15-minute unstarted-job timeout.
+//
+// A 404/410 means the job (and its assignment) no longer exists server-side. For
+// the duplicate-delivery use that is a benign no-op — the dangling assignment is
+// already resolved — so it is returned as *JobNotFoundError (as RenewJob does) and
+// the caller may treat it as success rather than a fault.
+func (c *Client) CompleteJob(ctx context.Context, runServiceURL string, reqData CompleteJobRequest) error {
+	req, err := c.newJSONRequest(ctx, http.MethodPost, runServiceURL+"/completejob", reqData)
+	if err != nil {
+		return err
+	}
+	// Per-job completion is authorized with the job-scoped token from the acquirejob
+	// response, not the broker session token — the run service rejects the session
+	// token for per-job operations (401 "Not authorized for this job", Q247). Fall
+	// back to Client.Token when the caller has no job token (test/stub use).
+	if reqData.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+reqData.AuthToken)
+	}
+
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return fmt.Errorf("broker: CompleteJob: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// 404/410: the job's assignment no longer exists server-side — a benign no-op
+	// for the duplicate-delivery case (nothing left to release).
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return &JobNotFoundError{StatusCode: resp.StatusCode}
+	}
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("broker: CompleteJob: unexpected status %d: %s", resp.StatusCode, capBody(body, 200))
+	}
+	return nil
+}
+
 // RenewJobLoop starts a background goroutine that calls RenewJob on every tick
 // until ctx is cancelled or RenewJob returns a non-nil error.
 //

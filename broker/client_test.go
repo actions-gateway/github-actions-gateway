@@ -432,6 +432,107 @@ func TestRenewJob_JobNotFound(t *testing.T) {
 	}
 }
 
+func TestCompleteJob_UsesRunServiceURLAndBody(t *testing.T) {
+	t.Parallel()
+	var (
+		hit  bool
+		body map[string]any
+	)
+	runServiceSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		assert.Equal(t, "/completejob", r.URL.Path)
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer runServiceSrv.Close()
+
+	brokerSrv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("CompleteJob must not call BrokerURL; it called %s", r.URL.Path)
+	}))
+	defer brokerSrv.Close()
+
+	c := newTestClient(brokerSrv)
+	err := c.CompleteJob(context.Background(), runServiceSrv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped,
+	})
+	require.NoError(t, err)
+	assert.True(t, hit)
+	assert.Equal(t, "p", body["planId"])
+	assert.Equal(t, "j", body["jobId"])
+	assert.Equal(t, "skipped", body["result"])
+}
+
+func TestCompleteJob_UsesJobAuthToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped, AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// Per-job completion is authorized with the job-scoped token, not the session
+	// token, exactly as renewjob is (Q247).
+	assert.Equal(t, "Bearer "+jobAuthToken, gotAuth)
+}
+
+func TestCompleteJob_AuthTokenNotInBody(t *testing.T) {
+	t.Parallel()
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped, AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, body, "AuthToken")
+	assert.NotContains(t, body, "authToken")
+}
+
+func TestCompleteJob_JobNotFound(t *testing.T) {
+	t.Parallel()
+	// 404/410 mean the job's assignment is already gone server-side — a benign
+	// no-op for the duplicate-delivery use, surfaced as a typed JobNotFoundError so
+	// the caller can treat it as success rather than a fault.
+	for _, status := range []int{http.StatusNotFound, http.StatusGone} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+
+		c := newTestClient(srv)
+		err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{})
+		srv.Close()
+
+		require.Error(t, err)
+		var notFound *broker.JobNotFoundError
+		require.ErrorAs(t, err, &notFound, "status %d must map to JobNotFoundError", status)
+		assert.Equal(t, status, notFound.StatusCode)
+	}
+}
+
+func TestCompleteJob_NonOKResponse(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
 func TestRenewJob_StopsOnCancel(t *testing.T) {
 	t.Parallel()
 	// Start a renew loop in a goroutine and cancel the context; verify the

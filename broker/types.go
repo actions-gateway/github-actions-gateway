@@ -142,3 +142,61 @@ type RenewJobResponse struct {
 	// LockedUntil is typically ~10 minutes from the time of renewal.
 	LockedUntil time.Time `json:"lockedUntil"`
 }
+
+// TaskResult is a job's terminal result as reported to
+// POST {run_service_url}/completejob. The values mirror the runner SDK's
+// TaskResult enum (Microsoft.TeamFoundation.DistributedTask.WebApi.TaskResult).
+// The AGC itself sends only TaskResultSkipped, for a deduplicated duplicate
+// delivery it acquired but will not run (Q260 follow-up); the remaining values are
+// defined for wire fidelity and future use.
+//
+// WIRE FORMAT NOT LIVE-CONFIRMED: the exact serialization the run service expects
+// for the result field (lowercase camelCase strings here, vs PascalCase or the
+// integer enum) has not been validated against a live run service. The AGC's
+// completejob call is gated off by default until a dogfood turn-up confirms it
+// (Q260 follow-up item 1).
+type TaskResult string
+
+const (
+	// TaskResultSucceeded is a job that ran to a successful conclusion.
+	TaskResultSucceeded TaskResult = "succeeded"
+	// TaskResultSucceededWithIssues is a job that succeeded but logged warnings.
+	TaskResultSucceededWithIssues TaskResult = "succeededWithIssues"
+	// TaskResultFailed is a job that ran to a failed conclusion.
+	TaskResultFailed TaskResult = "failed"
+	// TaskResultCanceled is a job that was cancelled before or during execution.
+	TaskResultCanceled TaskResult = "canceled"
+	// TaskResultSkipped is a job assignment the runner acquired but did not
+	// execute. The AGC reports this for a deduplicated duplicate delivery (the
+	// Q260 loser): honest (acquired, ran nothing) and the smallest blast radius if
+	// the run service maps a delivery's completion onto the whole job.
+	TaskResultSkipped TaskResult = "skipped"
+	// TaskResultAbandoned is a job the runner gave up without a conclusion.
+	TaskResultAbandoned TaskResult = "abandoned"
+)
+
+// CompleteJobRequest is the request body for POST {run_service_url}/completejob.
+// A runner sends it to report a job's terminal result. In GAG the worker pod's
+// runner binary makes this call for a job it actually ran; the AGC itself sends it
+// only for a deduplicated duplicate delivery it acquired but will not run — so
+// GitHub does not leave that per-delivery job assignment dangling until its
+// ~15-minute unstarted-job timeout and cancel the job even after the winning
+// sibling completed it (Q260 follow-up).
+//
+// JobID is the delivery's own RunnerRequestID — distinct per sibling under GitHub's
+// broker fan-out — so, under the per-delivery lock model the renew path relies on
+// (Q247), completing it resolves only this phantom assignment and not the winner's.
+type CompleteJobRequest struct {
+	// PlanID comes from the acquirejob response (AcquireJobResponse.Plan.PlanID).
+	PlanID string `json:"planId"`
+	// JobID is RunnerJobRequestBody.RunnerRequestID — this delivery's own id.
+	JobID string `json:"jobId"`
+	// Result is the terminal result reported for the job assignment.
+	Result TaskResult `json:"result"`
+	// AuthToken is the job-scoped bearer token (AcquireJobResponse.JobAuthToken)
+	// that authorizes this call. Like renewjob, the run service rejects the broker
+	// session token for per-job operations (401 "Not authorized for this job",
+	// Q247), so completejob must present the job token. Empty falls back to
+	// Client.Token. Never serialized into the request body.
+	AuthToken string `json:"-"`
+}

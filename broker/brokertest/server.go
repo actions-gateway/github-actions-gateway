@@ -34,6 +34,8 @@ type Server struct {
 	acquireCount        atomic.Int64
 	ackCount            atomic.Int64
 	renewJobCount       atomic.Int64
+	completeJobCount    atomic.Int64
+	lastCompleteJob     atomic.Value // broker.CompleteJobRequest of the most recent completejob
 	msgCounter          atomic.Int64
 	activeSessionsCount atomic.Int32 // +1 per POST /session, -1 per DELETE /session call
 }
@@ -54,6 +56,7 @@ func New() *Server {
 	mux.HandleFunc("/message", s.handleMessage)
 	mux.HandleFunc("/acquirejob", s.handleAcquireJob)
 	mux.HandleFunc("/renewjob", s.handleRenewJob)
+	mux.HandleFunc("/completejob", s.handleCompleteJob)
 	// The VSTS Task Agent delete-message ("acknowledge") endpoint lives under the
 	// pool path: DELETE {poolBase}/messages/{id}. The probe calls it immediately
 	// after AcquireJob returns client-side, so it is an observable "acquire
@@ -194,6 +197,24 @@ func (s *Server) AcknowledgeCalls() int {
 // RenewJobCalls returns the number of times /renewjob was called.
 func (s *Server) RenewJobCalls() int {
 	return int(s.renewJobCount.Load())
+}
+
+// CompleteJobCalls returns the number of times /completejob was called. The AGC
+// issues this only for a deduplicated duplicate delivery it abandons (Q260
+// follow-up), so a test can assert the loser released its dangling assignment.
+func (s *Server) CompleteJobCalls() int {
+	return int(s.completeJobCount.Load())
+}
+
+// LastCompleteJob returns the request body of the most recent /completejob call,
+// and false if none has been received. AuthToken is never populated (the client
+// sends it as a header, not in the body).
+func (s *Server) LastCompleteJob() (broker.CompleteJobRequest, bool) {
+	v := s.lastCompleteJob.Load()
+	if v == nil {
+		return broker.CompleteJobRequest{}, false
+	}
+	return v.(broker.CompleteJobRequest), true
 }
 
 // ActiveSessionCount returns the number of goroutines that have registered a session
@@ -387,6 +408,21 @@ func (s *Server) handleRenewJob(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"lockedUntil": time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 	})
+}
+
+// handleCompleteJob serves POST /completejob — records the call and its request
+// body, and replies 200. The AGC issues this only to release a deduplicated
+// duplicate delivery's assignment (Q260 follow-up).
+func (s *Server) handleCompleteJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.completeJobCount.Add(1)
+	var req broker.CompleteJobRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	s.lastCompleteJob.Store(req)
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleAcquireJob serves POST /acquirejob — returns a synthetic AcquireJob response.

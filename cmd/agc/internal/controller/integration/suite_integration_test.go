@@ -134,6 +134,10 @@ type provisionerOptions struct {
 	// goroutines record into it (e.g. the Q260 duplicate-delivery counter). Nil
 	// leaves metrics unwired, as most suites do not assert on them.
 	metrics *listener.Metrics
+	// completeAbandonedDeliveries enables the guarded Q260 follow-up so a
+	// deduplicated duplicate delivery releases its acquired-but-unrun assignment via
+	// completejob. Off in every suite but the one that asserts on it.
+	completeAbandonedDeliveries bool
 }
 
 // startAGCReconciler starts a RunnerGroupReconciler for the duration of a test.
@@ -212,6 +216,8 @@ func startAGCReconcilerOpts(t *testing.T, opts provisionerOptions) (*controller.
 			IdleThreshold: 500,
 			// Short renew interval so integration tests can verify RenewJob is called.
 			RenewJobInterval: 50 * time.Millisecond,
+			// Guarded Q260 follow-up; off unless a test opts in.
+			CompleteAbandonedDeliveries: opts.completeAbandonedDeliveries,
 		},
 		// Q137 baseline re-check cadence; zero leaves the production default.
 		BaselineRecheckInterval: opts.baselineRecheckInterval,
