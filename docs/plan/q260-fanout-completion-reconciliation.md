@@ -74,6 +74,30 @@ provisioner returns `nil` even on `PodFailed`
 ([`provisioner.go`](../../cmd/agc/internal/provisioner/provisioner.go), step 5–7); only
 the worker's runner binary reports the real result, and only for the winner delivery.
 
+### Why this is GAG-specific — ARC has one acquirer
+
+The gap is a consequence of GAG's **topology**, not a defect in GitHub's protocol.
+The offer-to-many / redeliver-on-stale dispatch is an inherent, by-design race:
+GitHub offers a queued job to any eligible idle session and treats `acquirejob` as
+the claim, assuming each acquired delivery is either run-to-completion or reclaimed.
+
+Modern ARC (`gha-runner-scale-set`) never surfaces it because it runs **one**
+`Runner.Listener` per scale set
+([`01-executive-summary.md`](../design/01-executive-summary.md),
+[`appendix-f-cost-model.md`](../design/appendix-f-cost-model.md)): that single listener
+acquires each job **once**, then spins a dedicated ephemeral pod to run it — a strict
+1:1 acquire-to-run with **no sibling deliveries to reconcile**. ARC separates
+*acquire* (one listener) from *run* (a fresh pod).
+
+GAG instead runs a permanent baseline plus up to `maxListeners` concurrent
+long-polling sessions per RunnerGroup, **each independently able to `acquirejob`**
+([`02-architecture.md`](../design/02-architecture.md)). That is the ~60 KiB/session
+virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one
+job to several sessions, all acquire it (shared planID), and leave N assignments for
+one logical job. **The fan-out is intrinsic to the many-acquirers topology**; the
+dedup and this completion reconciliation are the tax that topology pays. Option E
+treats the cause instead of the symptom.
+
 ---
 
 ## 2. The accounting gap (exact)
@@ -211,6 +235,21 @@ closes, the window.
 collisions). The problem is completion accounting, not acquisition dedup. No new key
 helps.
 
+### Option E — single-acquirer-per-RunnerGroup (treat the cause, not the symptom)
+
+**Deferred — a larger pivot; the fallback if Option A proves infeasible (§5).** Funnel
+acquisition for a RunnerGroup through a **single** acquiring session (ARC's shape) that
+then dispatches the acquired job to a worker, keeping the goroutine model only for
+polling/scale. One acquirer ⇒ one delivery per job ⇒ the fan-out and its accounting
+**cannot arise** — the bug class is eliminated by construction rather than reconciled.
+It preserves the bulk of GAG's density win (still no ~256 MiB per-runner listener
+pods), but gives up per-session *parallel acquisition* and adds an acquire→dispatch
+hop. Not attempted now because (a) Option A is far smaller **if it works**, and (b)
+there is no pre-acquire single-flight key — planID is post-acquire and the pre-acquire
+message's `RunnerRequestID` differs per sibling (the entire Q260 history), so "single
+acquirer" must mean literally one polling session per group, a real throughput and
+failure-domain change. Revisit only if §5 rules Option A out.
+
 **Recommendation: Option A**, behind the existing flag (renamed/rescoped from the
 per-loser `AGC_COMPLETE_ABANDONED_DELIVERIES` to a winner-driven fan-out completion),
 **off by default** until re-route #5 confirms §5.
@@ -254,8 +293,10 @@ default: **one re-route #5 settles feasibility.**
    pod-phase proxy is the fix; wire the result and flip the flag on by default.
 5. **If even resolving all siblings does not conclude the job** (most-recent-delivery
    authority) → **STOP**: the gap is GitHub-server-side, and Q224's "concurrent
-   matrix green" is infeasible via GAG's multiplex model without GitHub changing its
-   fan-out reconciliation. Reframe Q224 feasibility and record it.
+   matrix green" is infeasible via GAG's *many-acquirers* model without GitHub changing
+   its fan-out reconciliation. Reframe Q224 feasibility and record it — **Option E
+   (single-acquirer topology) becomes the path**, at the cost of the parallel-acquire
+   density model.
 
 Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate`
 reverted to the toolchain-less upstream image — `make: command not found`), so a
