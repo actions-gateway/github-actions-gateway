@@ -1,0 +1,17 @@
+# Q264 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Queues one job on runs-on: gag-probe-scaleset so the cmd/probe Investigation E
+# scenario (PROBE_SCALESET_TEST=true PROBE_SCALESET_JOB_TEST=true) can observe a
+# real JobAvailable message and exercise the batch acquire against the
+# throwaway scale set the probe registers. The job never executes — no runner
+# backs the label; cancel the run once the probe has its evidence.
+name: scaleset-probe
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe-target:
+    runs-on: gag-probe-scaleset
+    timeout-minutes: 10
+    steps:
+      - run: echo "This job exists only to be observed by cmd/probe Investigation E (Q264)."

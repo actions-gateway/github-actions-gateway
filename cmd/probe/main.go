@@ -21,6 +21,10 @@
 // The decrypted AcquireJob response body is printed to stdout as JSON.
 // Pipe it to testdata/job_payload.json after a successful run (redact
 // ACTIONS_RUNTIME_TOKEN before committing).
+//
+// Set PROBE_SCALESET_TEST=true to run Investigation E (Q264) instead — the
+// runner-scale-set message-queue protocol scenario, which has its own smaller
+// environment contract. See scaleset.go.
 package main
 
 import (
@@ -54,6 +58,27 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	// ── Investigation E (Q264): runner-scale-set protocol ────────────────────
+	// A self-contained scenario with its own, smaller env contract (no broker
+	// URL or pre-registered agent). See scaleset.go.
+	if os.Getenv("PROBE_SCALESET_TEST") == "true" {
+		ssCfg, err := parseScalesetConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          ssCfg.AppID,
+			PrivateKeyPEM:  ssCfg.PrivateKeyPEM,
+			InstallationID: ssCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runScalesetProbe(ctx, logger, ssCfg, provider, "https://api.github.com")
+	}
+
 	// ── 1. Read credentials from environment ────────────────────────────────
 	cfg, err := parseProbeConfig(os.Getenv)
 	if err != nil {
