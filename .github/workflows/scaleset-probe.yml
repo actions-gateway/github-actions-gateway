@@ -17,13 +17,19 @@ on:
     branches: ["claude/**"]
     paths: [".github/workflows/scaleset-probe.yml"]
 
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[scaleset-probe]". A plain push touching this file
+# (e.g. editing the fixture itself) skips both jobs, so the run concludes
+# green instead of leaving queued jobs / an expected-failure check on the PR.
 jobs:
   probe-fast:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[scaleset-probe]')
     runs-on: gag-probe-scaleset
     timeout-minutes: 10
     steps:
       - run: echo "probe-fast ran under the Investigation E scale set (Q264)."
   probe-slow:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[scaleset-probe]')
     runs-on: gag-probe-scaleset
     timeout-minutes: 10
     steps:
