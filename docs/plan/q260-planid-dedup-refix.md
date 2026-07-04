@@ -1,6 +1,29 @@
 # Q260 re-fix — re-key job-acquisition dedup on `planID`
 
-**Status:** code-complete, awaiting dogfood re-route (do not close Q224/Q260 off code alone).
+**Status:** live-validated **effective** (2026-07-04, dogfood re-route #3) — the dedup fires on
+the shared `planID` and the burst-start Secret-collision collapse does **not** recur. But the
+concurrent matrix is still **not fully green**, blocked by two residuals distinct from this
+fix: (1) Q248 spot-worker preemption starved the burst to ~1 node → serialized jobs hit the
+600s/15-min GitHub timeouts; (2) a **late-redelivery Pod-collision** — a slow job's `planID`
+claim is released when the winner completes, so a post-completion GitHub redelivery collides on
+the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs the prior 5×
+`create Secret` at burst start). Full evidence in
+[`gke-dogfood.md`](gke-dogfood.md) turn-up #3. **Q224/Q260/Q242 stay open.**
+
+## Follow-up (post-#3): close the residual before re-validating green
+
+1. **Release the `planID` claim only after the worker Pod is garbage-collected**, not at job
+   completion — so a post-completion redelivery of a slow job is deduped rather than colliding
+   on the lingering Completed pod. (Alternatively make Pod creation idempotent / adopt an
+   existing Completed pod for the same planID.)
+2. **Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery
+   model:** a fanned-out job whose winner completes via one delivery can still be cancelled at
+   the 15-min unstarted-timeout on a *deduped* sibling delivery (observed: `tidy-check`'s pod
+   reported "Job completed" yet GitHub cancelled the job). Investigate whether the loser
+   should acknowledge/complete its delivery rather than silently skip.
+3. **Stable worker capacity for the re-validation** (Q248): the spot pool preempted to 1 node,
+   confounding throughput. Re-run on non-spot or ≥3 held nodes so a non-green result can be
+   attributed cleanly.
 
 ## Problem
 
