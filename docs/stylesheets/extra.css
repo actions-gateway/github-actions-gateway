@@ -808,6 +808,31 @@ body[data-md-color-scheme="slate"] {
   color: #d0bcff;
 }
 
+/* Maturity badge — small pill marking a roadmap item's stability (alpha/beta/
+   GA) as a capability graduates. Distinct axis from the v2 API badge above:
+   this signals how stable a capability is, not which API surface it needs.
+   Shares the pill shape; amber warns "not yet GA". */
+.gag-maturity-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.75rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(179, 118, 0, 0.14);
+  color: #8a5a00;
+  vertical-align: middle;
+  margin-left: 0.15rem;
+  white-space: nowrap;
+}
+
+[data-md-color-scheme="slate"] .gag-maturity-badge {
+  background: rgba(255, 202, 128, 0.16);
+  color: #ffca80;
+}
+
 /* Comparison / data tables: bigger text, rounded frame, emphasized header + GAG
    column. NB: do not re-add a :not([class]) guard here — the scroll-reveal JS
    stamps .gag-reveal onto marketing-page tables, which a :not([class]) selector

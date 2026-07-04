@@ -169,6 +169,18 @@ build-proxy: ## Build the proxy binary
 compat-report: ## Regenerate docs/development/broker-compatibility.md from the broker-compat suite
 	COMPAT_WRITE_REPORT=1 go test -C cmd/probe -run TestReportInSync ./compat/...
 
+# Local preview of the docs/marketing site. The script provisions an isolated
+# venv from the pinned requirements-docs.txt (never touching host Python) into
+# the gitignored .venv-docs/, reused across runs. python3 is the only host
+# prerequisite. Full context: docs/development/website.md.
+.PHONY: docs-serve
+docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (isolated venv)
+	scripts/docs-preview.sh serve
+
+.PHONY: docs-build
+docs-build: ## Build the static docs/marketing site into site/ (isolated venv)
+	scripts/docs-preview.sh build
+
 # The heavy per-module loops (test, lint) live in scripts/go-test.sh and
 # scripts/go-lint.sh, which apply the local auto-throttle themselves
 # (scripts/local-throttle.sh: parallelism cap + low-priority QoS prefix on an
