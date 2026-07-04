@@ -198,13 +198,16 @@ type Config struct {
 	// terminal result. Losers do NOT complete early (that was the rejected #513
 	// per-loser-immediate path, live-tested worse than the default).
 	//
-	// OFF BY DEFAULT (secure-by-default). The run service's per-delivery completion
-	// semantics are not yet live-confirmed: if completion is scoped by planID (not
-	// jobID) the pod-phase proxy could green a red workflow whose worker exited 0.
-	// This outward behavior is therefore gated behind an explicit opt-in
-	// (AGC env AGC_FANOUT_COMPLETION) pending the re-route #5 dogfood experiment that
-	// confirms the semantics AND validates the fix. The operator runbook is the Q260
-	// redelivery-accounting limitation in docs/operations/troubleshooting.md.
+	// ON BY DEFAULT. The re-route #5 dogfood experiment (2026-07-04) confirmed the
+	// run service's completion is per-delivery, not planID-scoped: completejob on a
+	// sibling's OWN jobID resolves only that assignment (returns OK, not "already
+	// resolved"), while the winner's own delivery still carries the real workflow
+	// result reported by its runner binary — so the sibling pod-phase proxy cannot
+	// green a red workflow. Previously-wedged concurrent jobs concluded green with
+	// the flag on, the Q259 recycle 422 cleared per job on winner completion, and no
+	// job cancelled at the ~15-minute unstarted timeout. Opt out with AGC env
+	// AGC_FANOUT_COMPLETION=false. The operator runbook is the Q260
+	// redelivery-accounting section in docs/operations/troubleshooting.md.
 	FanoutCompletion bool
 	Clock            Clock
 	Log              *slog.Logger

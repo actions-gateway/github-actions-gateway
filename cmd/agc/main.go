@@ -515,14 +515,17 @@ func run() error {
 			// connection is torn down a few seconds past the 50s hold rather than
 			// blocking a listener for the multi-minute OS TCP timeout (Q108).
 			HTTPClient: broker.NewHTTPClient(),
-			// Guarded Q260 Option A: when a job is fanned out to sibling sessions, the
-			// winner fans completejob out to every deduped sibling delivery on
-			// completion so GitHub does not cancel the whole job at its ~15-minute
-			// unstarted-job timeout. OFF by default — the run service's per-delivery
-			// completion semantics are not yet live-confirmed (the pod-phase proxy
-			// could green a red job if completion is planID-scoped). Flip on only
-			// during the re-route #5 dogfood experiment that confirms the semantics.
-			FanoutCompletion: os.Getenv("AGC_FANOUT_COMPLETION") == "true",
+			// Q260 Option A: when a job is fanned out to sibling sessions, the winner
+			// fans completejob out to every deduped sibling delivery on completion so
+			// GitHub does not cancel the whole job at its ~15-minute unstarted-job
+			// timeout. ON by default — the re-route #5 dogfood experiment (2026-07-04)
+			// confirmed the run service's completion is per-delivery, not planID-scoped:
+			// completejob on a sibling's OWN jobID resolves only that assignment and
+			// returns OK, the winner's own delivery still carries the real workflow
+			// result, and previously-wedged concurrent jobs concluded green. Opt out
+			// with AGC_FANOUT_COMPLETION=false. Operator runbook: the Q260
+			// redelivery-accounting section in docs/operations/troubleshooting.md.
+			FanoutCompletion: os.Getenv("AGC_FANOUT_COMPLETION") != "false",
 		},
 	}
 	if err := r.SetupWithManager(mgr); err != nil {
