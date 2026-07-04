@@ -122,8 +122,7 @@ func driveFanout(t *testing.T, srv *brokertest.Server, mgr *listener.Multiplexer
 // the fan-out nor the per-delivery completion — which is why the Q260 dedup passed
 // envtest yet wedged production (re-route #4, 2026-07-04). The companion test
 // TestAGC_Q260_FanoutCompletionReconciles asserts the post-fix invariant and is the
-// gate for the reconciliation fix designed in
-// docs/plan/q260-fanout-completion-reconciliation.md.
+// gate for the Q260 fan-out completion reconciliation fix.
 func TestAGC_Q260_FanoutCompletionAccountingGap(t *testing.T) {
 	const (
 		planID = "plan-fanout"
@@ -160,10 +159,10 @@ func TestAGC_Q260_FanoutCompletionAccountingGap(t *testing.T) {
 // SKIPPED until that reconciliation lands: it FAILS against today's code (the winner
 // completes only its own delivery; the siblings dangle and the job cancels — see
 // TestAGC_Q260_FanoutCompletionAccountingGap). Remove the Skip when implementing the
-// design in docs/plan/q260-fanout-completion-reconciliation.md; it validates the fix
-// with no GKE turn-up.
+// Q260 fan-out completion reconciliation design; it validates the fix with no GKE
+// turn-up.
 func TestAGC_Q260_FanoutCompletionReconciles(t *testing.T) {
-	t.Skip("Q260: gated on the fan-out completion reconciliation fix — see docs/plan/q260-fanout-completion-reconciliation.md")
+	t.Skip("Q260: gated on the fan-out completion reconciliation fix (see the Q260 plan)")
 
 	const (
 		planID = "plan-fanout-fixed"
