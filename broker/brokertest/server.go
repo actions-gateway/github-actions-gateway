@@ -283,6 +283,25 @@ func (s *Server) EnqueueFanoutJob(planID string, n int) []string {
 	return reqIDs
 }
 
+// DeliveryResults returns, for the fan-out job identified by planID, each delivery's
+// resolved completejob result keyed by its RunnerRequestID — only deliveries a
+// completejob has resolved appear. Empty when the job is unknown or none resolved.
+// It lets a test assert the winner completed each deduped sibling delivery keyed on
+// its OWN RunnerRequestID with the expected result (Q260 Option A). Read-only.
+func (s *Server) DeliveryResults(planID string) map[string]broker.TaskResult {
+	s.acctMu.Lock()
+	defer s.acctMu.Unlock()
+	out := make(map[string]broker.TaskResult)
+	if job, ok := s.jobs[planID]; ok {
+		for _, d := range job.deliveries {
+			if d.result != "" {
+				out[d.reqID] = d.result
+			}
+		}
+	}
+	return out
+}
+
 // JobState returns the accounting state of the logical fan-out job: "queued",
 // "in_progress", "completed", "failed", or "cancelled" (or "" if unknown). See
 // EnableFanoutAccounting.

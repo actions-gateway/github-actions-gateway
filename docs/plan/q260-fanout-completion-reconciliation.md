@@ -1,11 +1,17 @@
 # Q260 — reconcile GitHub's per-delivery fan-out with AGC's one-runner-per-session model
 
-**Status:** design + a cheap, deterministic offline repro (this PR). The repro
-(`TestAGC_Q260_FanoutCompletionReconciles`, skipped) **fails today** and gates the
-eventual fix; it needs no GKE turn-up. The production reconciliation fix is **not**
-implemented here — it is designed below and left as a fast follow, because its one
-load-bearing assumption (does GitHub honour a non-running delivery's completion?) is
-only answerable by a live re-route #5. **Q224/Q260/Q242 stay open.**
+**Status:** **Option A implemented, behind the default-off `AGC_FANOUT_COMPLETION`
+flag; the offline acceptance gate is green.** The winner of a fanned-out job now
+tracks every deduped sibling delivery and, on completion, fans a `completejob` out to
+each (keyed on the sibling's own `RunnerRequestID`, with the winner's pod-phase-proxy
+result); a late redelivery within the linger window is resolved with the recorded
+terminal result. `TestAGC_Q260_FanoutCompletionReconciles` (the gate) now passes; the
+companion `…AccountingGap` (flag off) still asserts the wedge. The one load-bearing
+assumption — does GitHub honour a non-running delivery's completion, and does
+resolving *all* siblings conclude the job? — is still only answerable by a live
+**re-route #5**, which is the remaining go/no-go and the reason the flag ships off by
+default (secure-by-default: the pod-phase proxy could green a red job if completion is
+planID-scoped). **Q224/Q260/Q242 stay open.**
 
 This is the last blocker for Q224 "route production CI green," after the earlier
 Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID
@@ -165,9 +171,10 @@ wedged live.
     dedup path against the model — winner completes its own delivery, siblings dedup
     — and asserts the job ends up **`cancelled`** at the timeout. This locks the
     wedge in as a deterministic, offline regression.
-  - `TestAGC_Q260_FanoutCompletionReconciles` (**skipped**, the fix gate) asserts the
-    job concludes **`completed`**. It **fails today** (`completed` vs `cancelled`) and
-    passes once the reconciliation lands — validating the fix with no turn-up.
+  - `TestAGC_Q260_FanoutCompletionReconciles` (the fix gate, **now un-skipped and
+    green** with the flag on) asserts the job concludes **`completed`**. It failed
+    against pre-fix code (`completed` vs `cancelled`) and passes now that Option A
+    lands — validating the fix with no turn-up.
 
 Model assumptions and their grounding are documented inline in `server.go`; the one
 assumption the model *cannot* prove is §5's live-only unknown.
@@ -217,10 +224,11 @@ that arrives during the linger window) so **no** assignment dangles. Losers do
 immediately returns OK but does **not** conclude the job; worse, by acking the
 delivery it **suppresses** the unstarted-timeout that would otherwise resolve it, so
 a late redelivery re-assigns the already-run job and GitHub holds it **indefinitely
-`in_progress`** — strictly worse than a terminal cancel. Keep
-`AGC_COMPLETE_ABANDONED_DELIVERIES` **OFF**. (The mechanism stays in the tree, off,
-because Option A reuses the same `broker.CompleteJob` plumbing — just deferred and
-fanned to all siblings rather than fired immediately per loser.)
+`in_progress`** — strictly worse than a terminal cancel. The per-loser-immediate
+path is therefore **removed/unreachable**: Option A reuses the same
+`broker.CompleteJob` plumbing but fires it from the **winner**, deferred to job
+completion and fanned to all siblings, under the rescoped `AGC_FANOUT_COMPLETION`
+flag — never per-loser at dedup time.
 
 ### Option C — Reduce fan-out width
 
@@ -266,9 +274,9 @@ actually *improves* (one listener/group, not N), but the story becomes "a
 lighter-weight ARC listener" rather than "cheap virtual runners." Revisit only if §5
 rules Option A out.
 
-**Recommendation: Option A**, behind the existing flag (renamed/rescoped from the
-per-loser `AGC_COMPLETE_ABANDONED_DELIVERIES` to a winner-driven fan-out completion),
-**off by default** until re-route #5 confirms §5.
+**Recommendation: Option A** — **implemented**, behind the flag renamed/rescoped from
+the per-loser `AGC_COMPLETE_ABANDONED_DELIVERIES` to the winner-driven
+`AGC_FANOUT_COMPLETION`, **off by default** until re-route #5 confirms §5.
 
 ---
 
@@ -297,9 +305,10 @@ default: **one re-route #5 settles feasibility.**
 
 ### Re-route #5 must confirm
 
-1. Enable Option A (winner fans `completejob` to all siblings on completion) via the
-   `AGC_EXTRA_*` passthrough (no GMC code change — see re-route #4 note in
-   [`gke-dogfood.md`](gke-dogfood.md)).
+1. Enable Option A (winner fans `completejob` to all siblings on completion) by
+   setting `AGC_EXTRA_AGC_FANOUT_COMPLETION=true` on the GMC pod, which forwards
+   `AGC_FANOUT_COMPLETION=true` to the AGC Deployments (no GMC code change — see the
+   re-route #4 note in [`gke-dogfood.md`](gke-dogfood.md)).
 2. Fire the concurrent matrix on stable capacity (already fixed).
 3. Capture, per fanned-out job: every `completejob` request/response (result value +
    status), whether the previously-cancelled jobs (`tidy-check`, etc.) now **conclude
@@ -323,16 +332,25 @@ non-green result is attributable to accounting, not the runner image
 
 ## 6. Test strategy
 
-- **Offline gate (this PR):** the fan-out accounting model + the two listener tests
-  in §3. The skipped `…Reconciles` test is the fix's acceptance gate — remove the
-  `t.Skip` when Option A lands; it must go green with no turn-up.
-- **When implementing Option A:** add a listener/multiplexer unit test asserting the
-  winner issues one `completejob` per deduped sibling on completion (and one for a
-  late redelivery during the linger window), keyed on each sibling's own
-  `RunnerRequestID`; extend the envtest to assert the deduped losers' deliveries are
-  resolved (not merely skipped-and-forgotten).
-- **Live (re-route #5):** §5. This is the only step that cannot be done offline, and
-  it is the go/no-go for Q224.
+- **Offline gate — ✅ green.** The fan-out accounting model + the two listener tests
+  in §3. `TestAGC_Q260_FanoutCompletionReconciles` (the acceptance gate, `t.Skip`
+  removed) now passes with the flag on; `…AccountingGap` (flag off) still asserts the
+  cancelled wedge. No turn-up needed.
+- **Option A unit/envtest coverage — ✅ landed.**
+  - `TestAGC_Q260_WinnerCompletesEachSibling` (listener): the winner issues exactly
+    one `completejob` per deduped sibling, keyed on the sibling's own
+    `RunnerRequestID`, with the pod-phase-proxy result.
+  - `TestMultiplexer_FanoutClaim_TracksSiblingsAndLateRedelivery` (claim registry):
+    siblings are registered and returned to the winner on `Complete`; a late
+    redelivery within the linger window is handed the recorded terminal result.
+  - `TestAGC_Q260_WinnerCompletesDedupedSiblingDelivery` (envtest): the deduped
+    sibling's delivery is *resolved* by the winner on completion (keyed on its own
+    `jobId`, result `succeeded` from the winner's Succeeded pod), not
+    skipped-and-forgotten; it is **not** completed while the winner is still running.
+  - `TestProvisioner_ResultPodPhaseProxy` (provisioner): `PodFailed`→`failed`, else
+    `succeeded`.
+- **Live (re-route #5) — ⬜ pending.** §5. The only step that cannot be done offline,
+  and the go/no-go for Q224. Enable via `AGC_EXTRA_AGC_FANOUT_COMPLETION=true`.
 
 ---
 

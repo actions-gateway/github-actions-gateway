@@ -31,6 +31,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+// errOnly adapts a JobHandlerFunc to return only its error, dropping the Q260
+// pod-phase-proxy result these provisioning tests don't assert on (that result is
+// covered directly in provisioner_result_test.go and the listener fan-out tests).
+func errOnly(h listener.JobHandlerFunc) func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
+	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
+		_, err := h(ctx, runServiceURL, planID, payload, jitConfig)
+		return err
+	}
+}
+
 // newTestMetrics builds a Metrics with unregistered counters/histograms safe
 // for per-test use (not added to the global Prometheus registry).
 func newTestMetrics() *listener.Metrics {
@@ -226,7 +236,7 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 	// Run provisioner in background; complete pod immediately.
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "http://run-svc", "plan-abc-123", payload, "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "http://run-svc", "plan-abc-123", payload, "")
 	}()
 
 	// Wait for the pod to appear, then complete it.
@@ -266,7 +276,7 @@ func TestProvisioner_ForwardsJITConfigIntoSecret(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-jit", stubPayload(7), jitBlob)
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-jit", stubPayload(7), jitBlob)
 	}()
 
 	// Wait for the Pod (created strictly after the Secret) so the findSecret
@@ -296,7 +306,7 @@ func TestProvisioner_OmitsJITKeyWhenEmpty(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-nojit", stubPayload(8), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-nojit", stubPayload(8), "")
 	}()
 
 	// Wait for the Pod (created strictly after the Secret) so the findSecret
@@ -322,7 +332,7 @@ func TestProvisioner_DeletesSecretOnCompletion(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-del", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-del", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -374,7 +384,7 @@ func TestProvisioner_MaxWorkersHolds(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := p.HandlerFor(rg)(ctx, "", "plan-hold", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-hold", stubPayload(1), "")
 	assert.ErrorContains(t, err, "ceiling")
 
 	// No new pod created, but the existing 3 are still there.
@@ -426,7 +436,7 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-tier", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-tier", stubPayload(1), "")
 	}()
 
 	// Wait specifically for a pod that is NOT one of the pre-existing ones.
@@ -488,7 +498,7 @@ func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := p.HandlerFor(rg)(ctx, "", "plan-ceil", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-ceil", stubPayload(1), "")
 	assert.ErrorContains(t, err, "ceiling")
 
 	var list corev1.PodList
@@ -508,7 +518,7 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-img", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-img", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -548,7 +558,7 @@ func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-gapfill", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-gapfill", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -579,7 +589,7 @@ func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-nooverride", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-nooverride", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -611,7 +621,7 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-reserved", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-reserved", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -655,7 +665,7 @@ func TestProvisioner_SecretCleanupOnPodCreateFailure(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := p.HandlerFor(rg)(ctx, "", "plan-conflict", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-conflict", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// Secret must be cleaned up even though pod creation failed.
@@ -676,7 +686,7 @@ func TestProvisioner_ContextCancellation(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-cancel", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-cancel", stubPayload(1), "")
 	}()
 
 	// Wait for pod to be created, then cancel.
@@ -704,7 +714,7 @@ func TestProvisioner_PodNameDNSSafe(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -735,7 +745,7 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-mount", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-mount", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -812,7 +822,7 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-evict", payload, "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-evict", payload, "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -880,7 +890,7 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	runCycle := func(planID string) {
 		t.Helper()
 		done := make(chan error, 1)
-		go func() { done <- p.HandlerFor(rg)(ctx, "", planID, payload, "") }()
+		go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, payload, "") }()
 
 		var podToEvict *corev1.Pod
 		require.Eventually(t, func() bool {
@@ -952,7 +962,7 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 	payload := stubPayloadFull("org5xx", "repo5xx", 55)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-5xx", payload, "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-5xx", payload, "") }()
 
 	require.Eventually(t, func() bool {
 		return findPod(ctx, t, fc, "team-a") != nil
@@ -1016,7 +1026,7 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 	p := newProvisioner(fc)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-tier2", stubPayload(1), "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-tier2", stubPayload(1), "") }()
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1085,7 +1095,7 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 	p := newProvisioner(fc)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-boundary", stubPayload(1), "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-boundary", stubPayload(1), "") }()
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1161,7 +1171,7 @@ func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := p.HandlerFor(rg)(ctx, "", "plan-pending-ceil", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-pending-ceil", stubPayload(1), "")
 	// M3: ceiling is enforced because Pending pods count as active.
 	assert.ErrorContains(t, err, "ceiling")
 
@@ -1196,7 +1206,7 @@ func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	payload := stubPayloadFull("org-del", "repo-del", 77)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-extdel", payload, "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-extdel", payload, "") }()
 
 	require.Eventually(t, func() bool {
 		return findPod(ctx, t, fc, "team-a") != nil
@@ -1236,7 +1246,7 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-proxy", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1287,7 +1297,7 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-proxy-ca", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy-ca", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1359,7 +1369,7 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1430,7 +1440,7 @@ func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {
 			payload := stubPayloadFull(tc.owner, tc.repo, 42)
 
 			done := make(chan error, 1)
-			go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-adv-repo", payload, "") }()
+			go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-adv-repo", payload, "") }()
 
 			require.Eventually(t, func() bool {
 				return findPod(ctx, t, fc, "team-a") != nil
@@ -1466,7 +1476,7 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-overwrite", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-overwrite", stubPayload(1), "")
 	}()
 
 	require.Eventually(t, func() bool {
@@ -1513,7 +1523,7 @@ func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
 	payload := stubPayloadFull("org", "repo", 42)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-zero-retry", payload, "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-zero-retry", payload, "") }()
 
 	require.Eventually(t, func() bool {
 		return findPod(ctx, t, fc, "team-a") != nil
@@ -1568,7 +1578,7 @@ func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
 	runCycle := func(planID string) {
 		t.Helper()
 		done := make(chan error, 1)
-		go func() { done <- p.HandlerFor(rg)(ctx, "", planID, payload, "") }()
+		go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, payload, "") }()
 		var podToEvict *corev1.Pod
 		require.Eventually(t, func() bool {
 			var list corev1.PodList
@@ -1627,7 +1637,7 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	payload := stubPayloadFull("org", "repo", 11)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-delay", payload, "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-delay", payload, "") }()
 
 	require.Eventually(t, func() bool {
 		return findPod(ctx, t, fc, "team-a") != nil
@@ -1666,7 +1676,7 @@ func TestProvisioner_QuotaRetrySucceeds(t *testing.T) {
 	payload := stubPayload(1)
 
 	done := make(chan error, 1)
-	go func() { done <- p.HandlerFor(rg)(ctx, "", "plan-quota-ok", payload, "") }()
+	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-ok", payload, "") }()
 
 	// Pod appears after the first (failed) attempt retries.
 	require.Eventually(t, func() bool {
@@ -1702,7 +1712,7 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := p.HandlerFor(rg)(ctx, "", "plan-quota-exhaust", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-exhaust", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No pod created; Secret cleaned up.
@@ -1742,7 +1752,7 @@ func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
 	rg := newRG("mygroup", "team-a")
 	rg.Spec.MaxQuotaRetries = &zero
 
-	err := p.HandlerFor(rg)(ctx, "", "plan-quota-disabled", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-disabled", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No pod; no retry counters incremented.
@@ -1768,7 +1778,7 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := p.HandlerFor(rg)(ctx, "", "plan-nonquota", stubPayload(1), "")
+	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-nonquota", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No quota retries attempted.
@@ -1783,7 +1793,7 @@ func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner,
 	t.Helper()
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", planID, stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, stubPayload(1), "")
 	}()
 	require.Eventually(t, func() bool {
 		return findPod(ctx, t, fc, ns) != nil
@@ -2033,7 +2043,7 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-ownerref", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-ownerref", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -2074,7 +2084,7 @@ func TestProvisioner_DeletesPodOnCompletionWhenTTLZero(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-ttl0", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-ttl0", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -2101,7 +2111,7 @@ func TestProvisioner_RetainsPodOnCompletionByDefault(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- p.HandlerFor(rg)(ctx, "", "plan-retain", stubPayload(1), "")
+		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-retain", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")

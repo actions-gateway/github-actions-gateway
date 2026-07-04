@@ -22,11 +22,11 @@ type Metrics struct {
 	// completed but its terminal worker pod has not yet been reaped, so the claim
 	// still lingers and the redelivery would otherwise collide on `create Pod`).
 	JobsDuplicateDeliveryTotal *prometheus.CounterVec
-	// Q260 follow-up: a deduplicated duplicate delivery (the loser) issuing a
-	// completejob on its own delivery so GitHub does not leave the acquired-but-unrun
-	// assignment dangling until its ~15-minute unstarted-job timeout. Labelled by
-	// outcome (completed, error). Only incremented when the guarded behavior is
-	// enabled (Config.CompleteAbandonedDeliveries).
+	// Q260 Option A: the winner of a fanned-out job issuing a completejob on a
+	// deduped sibling delivery (or on a late redelivery within the linger window) so
+	// GitHub does not leave the acquired-but-unrun assignment dangling until its
+	// ~15-minute unstarted-job timeout. Labelled by outcome (completed, error). Only
+	// incremented when the guarded behavior is enabled (Config.FanoutCompletion).
 	AbandonedDeliveryCompletionsTotal *prometheus.CounterVec
 	TokenRefreshesTotal               *prometheus.CounterVec
 	TokenRefreshErrorsTotal           *prometheus.CounterVec
@@ -87,7 +87,7 @@ func NewMetrics() *Metrics {
 
 		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_delivery_completions_total",
-			Help: "Deduplicated duplicate deliveries (Q260 losers) whose acquired-but-unrun assignment was released via completejob so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when the guarded behavior is enabled.",
+			Help: "Deduped sibling deliveries of a fanned-out job whose acquired-but-unrun assignment the winner released via completejob (on completion, or on a late redelivery within the linger window) so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when fan-out completion (Q260 Option A) is enabled.",
 		}, []string{"namespace", "runner_group", "outcome"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{

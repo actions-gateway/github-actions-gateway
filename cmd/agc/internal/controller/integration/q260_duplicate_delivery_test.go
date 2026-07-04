@@ -107,28 +107,31 @@ func TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID(t *testing.T) {
 	assert.Equal(t, 1, countJobSecrets(t, nsName, rgName),
 		"exactly one job-<planID> worker Secret must exist (no duplicate provision)")
 
-	// Off by default: with CompleteAbandonedDeliveries unset (the production
-	// default), the deduped loser silently skips — it must NOT issue a completejob.
+	// Off by default: with FanoutCompletion unset (the production default), no
+	// completejob is issued for the deduped sibling — the winner blocks (its pod stays
+	// Pending), so it never reaches its fan-out, and the loser never completes itself.
 	assert.Equal(t, completeBefore, brokerStub.CompleteJobCalls(),
-		"the loser must not release its assignment via completejob when the guard is off (default)")
+		"no sibling completejob must be issued when the guard is off (default)")
 }
 
-// TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery is the envtest regression for
-// the Q260 follow-up (item 2): when CompleteAbandonedDeliveries is enabled, a
-// deduplicated duplicate delivery (the loser) does not merely skip — it releases
-// its acquired-but-unrun assignment via completejob so GitHub does not cancel the
-// job at its ~15-minute unstarted-job timeout even after the winner completed it.
+// TestAGC_Q260_WinnerCompletesDedupedSiblingDelivery is the envtest regression for
+// the Q260 Option A fix: when FanoutCompletion is enabled, a deduped sibling
+// delivery is not skipped-and-forgotten — the WINNER, when its job finishes, fans a
+// completejob out to the sibling's acquired-but-unrun assignment so GitHub does not
+// cancel the whole job at its ~15-minute unstarted-job timeout even after the winner
+// completed it. The result reported is the winner's pod-phase proxy (its pod
+// Succeeded here → "succeeded"), NOT the rejected #513 immediate-"skipped" path.
 //
-// It mirrors TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID (winner claims the shared
-// planID and holds it), then delivers the SAME planID job with a DISTINCT
-// RunnerRequestID ("loser") to the sibling and asserts the loser is deduped AND
-// issues exactly one completejob keyed on its OWN jobID ("loser") with result
-// "skipped" — proving it releases only its phantom assignment, not the winner's.
-func TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery(t *testing.T) {
+// It mirrors TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID up to the dedup (winner
+// claims the shared planID and provisions; a DISTINCT-RunnerRequestID sibling
+// "loser" is deduped and registered), then drives the winner's pod to Succeeded so
+// the winner concludes and fans completion out. It asserts exactly one completejob
+// keyed on the SIBLING's own jobID ("loser") with result "succeeded".
+func TestAGC_Q260_WinnerCompletesDedupedSiblingDelivery(t *testing.T) {
 	const (
-		nsName = "agc-q260-abandon"
-		rgName = "abandon-rg"
-		planID = "shared-plan-abandon"
+		nsName = "agc-q260-fanout"
+		rgName = "fanout-rg"
+		planID = "shared-plan-fanout"
 	)
 	createNSForAGC(t, nsName)
 
@@ -143,16 +146,18 @@ func TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery(t *testing.T) {
 
 	m := sharedListenerMetrics()
 	// Opt into the guarded behavior for this test only.
-	startAGCReconcilerWithProvisioner(t, provisionerOptions{metrics: m, completeAbandonedDeliveries: true})
+	startAGCReconcilerWithProvisioner(t, provisionerOptions{metrics: m, fanoutCompletion: true})
 
-	// The winner acquires the shared planID, claims it, provisions its worker
-	// Secret, then blocks in waitForCompletion — holding the claim.
+	// The winner acquires the shared planID, claims it, and provisions its worker
+	// Secret + pod, then blocks in waitForCompletion until we advance the pod below.
 	winnerID := enqueueJobOnOwnerSession(15*time.Second, rgName, nil, broker.RunnerJobRequestBody{RunnerRequestID: "winner"})
 	require.NotEmpty(t, winnerID, "expected a baseline session to deliver the winning job to")
 
+	var podName string
 	require.Eventually(t, func() bool {
-		return countJobSecrets(t, nsName, rgName) >= 1
-	}, 15*time.Second, 25*time.Millisecond, "winner should provision its job-<planID> Secret")
+		podName = firstWorkerPod(t, nsName, rgName)
+		return podName != ""
+	}, 15*time.Second, 25*time.Millisecond, "winner should provision its worker pod")
 
 	// The winner's SpawnReplacement brings a sibling online for the duplicate.
 	var siblingID string
@@ -166,31 +171,49 @@ func TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery(t *testing.T) {
 		return false
 	}, 15*time.Second, 25*time.Millisecond, "winner's SpawnReplacement should bring a sibling session online")
 
+	dupBefore := testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues(nsName, rgName))
 	completeBefore := brokerStub.CompleteJobCalls()
 
-	// The loser: SAME planID, DISTINCT RunnerRequestID, delivered to the sibling.
+	// The loser: SAME planID, DISTINCT RunnerRequestID, delivered to the sibling. It
+	// is deduped and registered on the winner's claim — but NOT completed yet (the
+	// winner is still running).
 	brokerStub.EnqueueJob(siblingID, broker.RunnerJobRequestBody{RunnerRequestID: "loser"})
+	require.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues(nsName, rgName)) >= dupBefore+1
+	}, 15*time.Second, 25*time.Millisecond, "the distinct-RunnerRequestID sibling must be deduped on planID")
+	assert.Equal(t, completeBefore, brokerStub.CompleteJobCalls(),
+		"the sibling must NOT be completed while the winner is still running (not the rejected #513 immediate path)")
 
-	// The loser is deduped AND releases its assignment via completejob.
+	// Complete the winner: advance its pod to Succeeded (envtest has no kubelet).
+	// waitForCompletion returns, the winner concludes, and fans completion out to the
+	// registered sibling delivery.
+	var pod corev1.Pod
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKey{Namespace: nsName, Name: podName}, &pod))
+	pod.Status.Phase = corev1.PodSucceeded
+	require.NoError(t, k8sClient.Status().Update(ctx, &pod))
+
+	// The winner fans a completejob out to the sibling's assignment on completion.
 	require.Eventually(t, func() bool {
 		return brokerStub.CompleteJobCalls() >= completeBefore+1
-	}, 15*time.Second, 25*time.Millisecond, "the deduped loser must release its assignment via completejob when the guard is on")
+	}, 15*time.Second, 25*time.Millisecond, "the winner must complete the deduped sibling delivery on finish")
 
-	// The completejob is keyed on the LOSER's own jobID (not the winner's), with
-	// result "skipped" — so it resolves only the phantom assignment.
+	// The completejob is keyed on the SIBLING's own jobID (not the winner's), with the
+	// winner's pod-phase proxy result "succeeded" — resolving only that assignment.
 	last, ok := brokerStub.LastCompleteJob()
 	require.True(t, ok, "a completejob request should have been recorded")
-	assert.Equal(t, "loser", last.JobID, "completejob must key on the loser's own delivery jobID")
+	assert.Equal(t, "loser", last.JobID, "completejob must key on the sibling's own delivery jobID")
 	assert.Equal(t, planID, last.PlanID, "completejob must carry the shared planID")
-	assert.Equal(t, broker.TaskResultSkipped, last.Result, "the abandoned delivery is reported as Skipped")
+	assert.Equal(t, broker.TaskResultSucceeded, last.Result, "the sibling is completed with the winner's pod-phase proxy (succeeded)")
 
 	// The completion counter records the outcome as completed.
 	assert.GreaterOrEqual(t, testutil.ToFloat64(m.AbandonedDeliveryCompletionsTotal.WithLabelValues(nsName, rgName, "completed")), float64(1),
-		"the abandoned-delivery completion counter should record a completed outcome")
+		"the fan-out completion counter should record a completed outcome")
 
-	// Still no duplicate provision: exactly one job-<planID> Secret.
-	assert.Equal(t, 1, countJobSecrets(t, nsName, rgName),
-		"exactly one job-<planID> worker Secret must exist (no duplicate provision)")
+	// Still no duplicate provision: the winner's Secret is deleted on completion, and
+	// the sibling never provisioned a second pod — exactly the winner's Succeeded pod
+	// lingers (completedPodTTL default 5m, not yet reaped).
+	assert.Equal(t, 1, countWorkerPods(t, nsName, rgName),
+		"exactly one worker pod must exist (the winner's; the deduped sibling never provisioned)")
 }
 
 // countJobSecrets returns the number of worker (job-payload) Secrets in the

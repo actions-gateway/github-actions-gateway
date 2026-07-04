@@ -89,9 +89,9 @@ func TestListener_HotPathLogsAreDebugWithCorrelation(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.Agent = agent
 	cfg.Log = slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		cancel()
-		return nil
+		return "", nil
 	}
 
 	done := make(chan error, 1)

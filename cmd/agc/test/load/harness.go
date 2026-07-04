@@ -352,15 +352,15 @@ func loadHTTPClient(sessions int) *http.Client {
 // (and thus the virtual session) for the duration. It returns promptly on
 // context cancellation so teardown is not blocked by an in-flight job.
 func jobHandler(d time.Duration) listener.JobHandlerFunc {
-	return func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+	return func(ctx context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		if d <= 0 {
-			return nil
+			return broker.TaskResultSucceeded, nil
 		}
 		select {
 		case <-ctx.Done():
-			return nil
+			return "", nil
 		case <-time.After(d):
-			return nil
+			return broker.TaskResultSucceeded, nil
 		}
 	}
 }

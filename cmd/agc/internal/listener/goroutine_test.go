@@ -713,7 +713,9 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -769,7 +771,9 @@ func TestListener_AcquireJobStallDoesNotWedge(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
 	cfg.ControlPlaneTimeout = 200 * time.Millisecond
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -806,7 +810,9 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
 	cfg.SpawnReplacement = func(_ context.Context) { spawnCalls.Add(1) }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -1314,9 +1320,9 @@ func TestListener_RenewJobUsesRunnerRequestID(t *testing.T) {
 		RunnerOS:      "Linux",
 		RenewInterval: 60 * time.Second,
 		IsLastPoller:  func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			<-release
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1448,9 +1454,9 @@ func TestListener_RenewJobUsesJobToken(t *testing.T) {
 		RunnerOS:      "Linux",
 		RenewInterval: 60 * time.Second,
 		IsLastPoller:  func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			<-release
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1535,6 +1541,9 @@ func newTestMetrics() *listener.Metrics {
 		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_jobs_duplicate_delivery_total",
 		}, []string{"namespace", "runner_group"}),
+		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_abandoned_delivery_completions_total",
+		}, []string{"namespace", "runner_group", "outcome"}),
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_token_refreshes_total",
 		}, []string{"namespace"}),
@@ -1688,15 +1697,15 @@ func TestListener_DuplicateJobDeliverySkipsProvisioning(t *testing.T) {
 	// keyed by the planID from the acquire response (defaultAcquireJob → "plan-stub"),
 	// so it is exercised AFTER AcquireJob — not the pre-acquire RunnerRequestID.
 	var claimKey atomic.Value
-	cfg.ClaimJob = func(planID string) (func(), bool) {
+	cfg.ClaimJob = func(planID string, _ listener.SiblingDelivery) listener.ClaimResult {
 		claimKey.Store(planID)
-		return nil, false
+		return listener.ClaimResult{} // Won=false: a sibling already owns this planID
 	}
 	// The loser must not provision (no worker Secret/pod), so the JobHandler that
 	// stands in for the provisioner must never fire.
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		t.Error("JobHandler must not run for a deduplicated duplicate delivery")
-		return nil
+		return "", nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1749,9 +1758,9 @@ func TestListener_AdmissionReleasedOnCompletion(t *testing.T) {
 		return func() { releaseCalls.Add(1) }, true
 	}
 	handlerDone := make(chan struct{}, 1)
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		handlerDone <- struct{}{}
-		return nil
+		return "", nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1979,10 +1988,10 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 		Clock:        clk,
 		RunnerOS:     "Linux",
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -2132,10 +2141,10 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 		Clock:        clk,
 		RunnerOS:     "Linux",
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -2249,10 +2258,10 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -2358,9 +2367,9 @@ func TestListener_PlaintextSessionKey(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -2456,9 +2465,9 @@ func TestListener_NoSessionKey(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
