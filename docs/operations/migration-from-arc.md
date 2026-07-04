@@ -290,9 +290,10 @@ spec:
     minReplicas: 2
     maxReplicas: 10
   runnerGroups:
-    - name: gpu-large
-      # Old scale-set name kept as a label so `runs-on: gpu-large` still routes:
-      runnerLabels: ["self-hosted", "gpu-large"]
+    # A runner group has no `name` field — the RunnerGroup CR name is derived from
+    # the gateway name + first runnerLabel. Keeping the old ARC scale-set name as
+    # the first label so `runs-on: gpu-large` still routes AND names the group:
+    - runnerLabels: ["gpu-large", "self-hosted"]
       maxListeners: 10
       maxWorkers: 20              # was ARC's maxRunners (real cap is the namespace quota)
       # No minRunners: GAG scales to zero with no cold-start penalty.

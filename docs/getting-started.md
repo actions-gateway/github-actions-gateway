@@ -57,7 +57,31 @@ spec:
     requests.cpu: "20"
     requests.memory: "40Gi"
     pods: "50"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-a-defaults
+  namespace: team-a
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: "1"
+        memory: 512Mi
 ```
+
+The `LimitRange` is not optional here. A `ResourceQuota` that constrains
+`requests.cpu`/`requests.memory` makes those requests **mandatory** for every pod
+in the namespace — Kubernetes rejects any pod that omits a constrained resource.
+The AGC control-plane pod stamps no requests of its own, so without a `LimitRange`
+to supply defaults it is refused with `must specify requests.cpu` and never
+schedules. The `LimitRange` above fills that gap (and covers any worker pod whose
+runner group leaves requests unset). See
+[Tenant Onboarding — LimitRange caveat](operations/tenant-onboarding.md#copy-pasteable-template).
 
 The gateway reads remaining quota and reacts to exhaustion (it fast-cancels and
 reruns quota-blocked jobs — see [why-gag](why-gag.md)), but the quota itself is
@@ -110,9 +134,13 @@ spec:
     maxReplicas: 10
   # The namespace ResourceQuota is platform-owned and set on the namespace in
   # step 2 — it is not a field on this CR.
+  #
+  # A runner group has no `name` field. Its RunnerGroup CR name is derived by the
+  # GMC from the gateway name + the group's FIRST runnerLabel, so make that first
+  # label distinctive per group ("gpu", "linux" below) — two groups whose first
+  # label matches would derive the same name and collide.
   runnerGroups:
-    - name: gpu-runners
-      runnerLabels: ["self-hosted", "gpu"]
+    - runnerLabels: ["gpu", "self-hosted"]
       maxListeners: 10
       # priorityClassName values must be on the GMC --allowed-priority-classes
       # allowlist (platform-owned); preemption is set on the PriorityClass object.
@@ -128,8 +156,7 @@ spec:
               resources:
                 limits:
                   nvidia.com/gpu: "1"
-    - name: cpu-runners
-      runnerLabels: ["self-hosted", "linux"]
+    - runnerLabels: ["linux", "self-hosted"]
       maxWorkers: 30
       podTemplate:
         spec:

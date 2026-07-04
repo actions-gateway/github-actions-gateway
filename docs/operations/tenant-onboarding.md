@@ -319,9 +319,10 @@ spec:
     # noProxyCIDRs: ["10.0.0.0/8"]
   # The namespace ResourceQuota is platform-owned and set on the namespace in
   # Step 1b — it is not a field on this CR.
+  # A runner group has no `name` field — the RunnerGroup CR name is derived from
+  # the gateway name + the group's first runnerLabel (here "linux").
   runnerGroups:
-    - name: default
-      runnerLabels: ["self-hosted", "linux"]
+    - runnerLabels: ["linux", "self-hosted"]
       maxListeners: 10
       maxWorkers: 20
       podTemplate:
