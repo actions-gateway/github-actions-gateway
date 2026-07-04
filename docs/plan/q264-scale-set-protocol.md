@@ -442,9 +442,149 @@ Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision**
 | U3 | Does an ephemeral runner started with `run.sh --jitconfig` receive its job and complete it? | **✅ core probed** — yes: two real `actions-runner` containers registered via probe-minted JIT configs, picked up jobs ~2 s after start; the fast job completed `success` in 5 s and its runner exited 0 (§2b-4). **Residual for P4:** the same flow behind the egress proxy (proxy-CA trust) and under pod (not local-docker) conditions. |
 | U4 | Rate limits on the Actions Service tenant. | **partially probed** — no rate-limit headers on the queue at all (§2a-5); sustained-load behaviour unknown until P4. |
 | U5 | Eviction fast-cancel: how quickly does GitHub conclude a job whose runner died? | **✅ core probed** — ≈9.5 min to `failure` ("runner lost communication"), same order as the classic lock-TTL lapse (§2b-5). The listener receives the terminal `JobCompleted{result, runnerName}` on its queue (§2b-6), so the ported eviction-retry keys off that signal; the rerun-API call itself is unchanged AGC code. Residual for P4: behaviour under pod eviction (vs SIGKILL) on a cluster. |
-| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? (Vendoring: MIT license, faster, tracks GitHub; reimplementing: fits GAG's client conventions, no Preview-API churn exposure.) **Probe data point:** the official client's static `acquirejobs` construction 404s on the broker-host tenant — vendoring does not exempt GAG from backend skew. | **decision** |
-| U7 | Migration surface: new v2-only acquisition (RunnerSet gains a protocol/label field) vs per-group selector on v1alpha1? Interacts with the `runnerLabels` collapse (§4.2). | **decision** |
-| U8 | Enterprise-scope (PAT-only) and GHES <3.9: drop, document, or keep classic machinery alive as a legacy mode? Also now: org-scope requires runner-group public-repo policy handling (§2a-6) — document or default to repo-scope registration. | **decision** |
+| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? | **🔸 recommended (§5a)** — GAG-owned client in a new leaf `scaleset/` module, tracking upstream as the reference spec; revisit at upstream GA. |
+| U7 | Migration surface for the protocol selector. | **🔸 recommended (§5a)** — v2alpha1 `RunnerSet.spec.acquisitionProtocol: Classic\|ScaleSet`, default `Classic`, immutable, CEL `ScaleSet ⇒ one runnerLabel`; v1alpha1 stays classic-only. |
+| U8 | Enterprise scope, GHES floor, org-scope group policy, classic retirement. | **🔸 recommended (§5a)** — enterprise: out of scope (non-regression); GHES floor moot but keep the acquire-on-`JobAvailable` path (GHES requires it); prefer repo scope + document org-scope group policy; classic: coexist P3–P4 → default flip P5 → one-minor-release deprecation → remove. |
+
+## 5a. The three decisions — analysis and recommendations (2026-07-04)
+
+Researched exhaustively (upstream `actions/scaleset` inspected at HEAD
+`1b6da87`; ARC master `go.mod`; GHES release lifecycle; GAG's v2 API, scope
+support, and dependency conventions). Each subsection: options, the facts that
+discriminate, a recommendation. **Recommendations pending user sign-off.**
+
+### U6 — wire client: vendor `actions/scaleset` vs GAG-owned implementation
+
+**Upstream facts** (`github.com/actions/scaleset`, MIT, Public Preview):
+
+- Lean: the library packages import only stdlib + `golang-jwt/jwt/v4` +
+  `go-retryablehttp` + `google/uuid` (~2.3 k non-test lines; the scary
+  dependency block is tool-directive/example-only and never vendors). Go floor
+  1.26.3 — GAG is on 1.26.4, compatible.
+- ARC dogfoods it (ARC master requires `scaleset v0.4.0`); maintained by the
+  ARC maintainers; 4 releases (v0.1.0–v0.4.0, Feb–May 2026), all v0.x with the
+  README caveat "interfaces … may change."
+- Exposes exactly the raw primitives GAG needs (session, `GetMessage`,
+  `DeleteMessage`, `AcquireJobs`, `GenerateJitRunnerConfig`, `RemoveRunner`);
+  the `listener/` package is a clean optional library (a `Scaler` interface —
+  `HandleJobStarted/JobCompleted/HandleDesiredRunnerCount`), not ARC-wired.
+- Handles the auth chain internally, **including the admin-JWT `exp`-refresh
+  our probe proved mandatory (§2b-7)** and the session
+  refresh-once-on-401.
+- **Auto-assign compatible**: its listener calls `AcquireJobs` only when
+  `JobAvailable` messages arrive — zero on the auto-assign backend — and
+  handles `JobStarted`/`JobCompleted` with no prior-acquire bookkeeping. But
+  the auto-assign contract is *undocumented*: upstream issue #107 reports
+  exactly our §2a-3 observation and has had **no maintainer response in a
+  month**.
+- Frictions: a single mutex serializes every `Client` call (#104 — mitigable
+  with one `Client` per RunnerSet); transport injection type-asserts
+  `*http.Transport` (GAG's proxy-patched `http.DefaultTransport` *is* one, so
+  compatible, but it forbids non-standard RoundTrippers); `go-retryablehttp`
+  adds a retry layer GAG normally owns explicitly; a shipped API typo
+  (`WithRetryableHTTPClint`) signals pre-1.0 roughness.
+- **Breakage precedent**: upstream removed the job-acquire flow, which
+  **silently broke GHES** (issue #75), restored in v0.3.0 (PR #90). One real
+  breaking misstep in four releases — and on precisely the GHES path GAG
+  supports.
+
+**Options:**
+
+| | Option | Assessment |
+|---|---|---|
+| A | Vendor; use client **and** `listener/` directly | Maximum reuse, but the listener's at-most-once delete-before-handle and abort-on-any-error semantics don't match GAG's multiplexer/backoff conventions; GAG would fight the loop it adopted. |
+| B | Vendor the client; GAG-owned loop behind a wrapper interface | Real value: maintained JWT/session refresh, GHES URL derivation, typed errors. Cost: every v0.x bump may break the wrapper (precedent exists); auth duplicates `githubapp`; the backend GAG actually talks to is where upstream is silent. |
+| C | **GAG-owned client in a new leaf module (`scaleset/`, `broker/`-style), mirroring upstream types for wire parity** | The probe already implements and live-validates the full surface (~700 lines incl. the E2 flows); GAG idioms exactly (httpx bounded clients, typed errors, metrics recorder, `scalesettest` fake); zero Preview coupling; matches GAG's protocol-transparency positioning ([appendix D](../design/appendix-d-alternatives-considered.md) critiques ARC's protocol opacity). Cost: GAG re-owns JWT/session refresh (subtleties now probed and documented, §2b-7) and tracks upstream wire changes manually. |
+| D | Fork / vendor-and-patch | Worst of both; fallback only. |
+
+**Recommendation: C — GAG-owned client, tracking `actions/scaleset` as the
+reference spec.** The deciding argument: **whichever option is chosen, GAG
+must own the auto-assign semantics** — the fake, the tests, and the invariants
+must encode what §2a/§2b probed, because upstream neither documents nor
+answers for them (#107). Once GAG owns the semantics, the fake, and a wrapper
+interface, the marginal cost of owning the ~700-line wire client is small —
+and it removes a v0.x dependency whose one demonstrated failure mode (dropping
+the acquire flow) would have broken GAG's GHES path silently. Revisit trigger:
+upstream reaching GA/v1.0, or GHES-specific divergence proving expensive to
+replicate.
+
+### U7 — where the protocol selector lives
+
+**GAG facts:** the v1alpha1 surface is frozen (migration is the `gag-migrate`
+fan-out tool, not conversion); `v2alpha1` is **alpha — adding a spec field now
+is a free reshape**, whereas after the v2beta1 freeze it needs the Q74
+conversion webhook (graduation is not imminent: blocked on
+Q191/Q196/Q197/Q224/Q242/Q243). A per-set field reaches the AGC directly
+through its RunnerSet informer — no GMC env threading needed (that mechanism
+is for gateway-level config like `GATEWAY_NAME`).
+
+**Options:**
+
+| | Option | Assessment |
+|---|---|---|
+| a | v1alpha1 `RunnerGroup` field | Violates the v1 freeze; doubles the surface; complicates `gag-migrate`. Reject. |
+| b | **v2alpha1 `RunnerSet.spec.acquisitionProtocol: Classic \| ScaleSet` (default `Classic`)** | Per-set granularity → tenants migrate set-by-set; free while alpha; CEL-expressible constraint. |
+| c | `ActionsGateway`-level selector | Whole tenant flips at once — kills incremental migration. Reject. |
+| d | AGC env flag only | Not tenant-declarative; invisible in the API. Reject (fine as an additional operator kill-switch during P3/P4, not as the surface). |
+
+**Recommendation: b**, with these specifics:
+
+- **Field:** `acquisitionProtocol`, enum `Classic|ScaleSet`, default `Classic`
+  (stability-by-default; neither value relaxes a security property). Naming
+  follows [appendix H §H.6](../design/appendix-h-v2-api-decomposition.md).
+- **Immutable** via CEL `oldSelf` (H.15 pattern): switching a live set is a
+  re-registration storm; start immutable — *relaxing* immutability later is
+  compatible, adding it later is breaking.
+- **Admission (CEL):** `ScaleSet` ⇒ `size(runnerLabels) == 1` — the scale
+  set's name **is** the single label (the tenant's `runs-on` contract), not
+  the RunnerSet object name. Webhook-level check: no two `ScaleSet`-protocol
+  RunnerSets under one gateway may share that label (two scale sets with one
+  name would collide at GitHub).
+- v1alpha1 stays classic-only; `gag-migrate` maps v1 groups to
+  `Classic` RunnerSets unchanged.
+
+### U8 — support-matrix policy
+
+**Enterprise scope — non-regression; declare out of scope.** GAG supports
+org- and repo-scope registration only (URL-shape selection in
+[`github_registrar.go`](../../cmd/agc/internal/agentpool/github_registrar.go);
+the three documented URL forms) — it has never supported
+enterprise-scope runners. The scale-set PAT-only limitation at enterprise
+scope is a GitHub platform constraint that binds ARC identically
+([ARC auth docs](https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/authenticate-to-the-api)).
+No PAT credential mode; document enterprise scope as out of scope (it already
+is).
+
+**GHES — the ≥3.9 floor excludes nothing; but GHES keeps the acquire flow.**
+As of 2026-07 the supported GHES window is ~3.17–3.20
+([release lifecycle](https://docs.github.com/en/enterprise-server@3.17/admin/all-releases));
+GHES 3.9 has been EOL for years, so the floor costs zero vendor-supported
+deployments. The real GHES fact is upstream's #75/#90: **GHES's scale-set
+backend requires the explicit `JobAvailable` → `acquirejobs` flow** (removing
+it broke GHES), while dotcom's broker-host auto-assigns (§2a-3). The GAG
+client therefore implements **both** paths with one rule — acquire exactly the
+ids that arrive as `JobAvailable`, and treat `JobAssigned` as authoritative
+regardless of origin (ARC's listener logic). This also settles the U2′
+residual: dotcom-vs-GHES skew is a handled case, not a fork.
+
+**Org-scope public repos — document + prefer repo scope.** GAG's existing
+URL-shape scope selection carries over: repo-shaped `githubURL` → repo-scoped
+scale set (bypasses runner groups; the dogfood model). Operator docs (P3/P5)
+gain: org-scoped scale sets serving **public** repos require a runner group
+with `allows_public_repositories: true` (§2a-6), plus a troubleshooting entry
+(symptom: jobs queue forever, `totalAvailableJobs: 0`). Optional later
+enhancement, not now: an advisory condition when an org-scoped set assigns
+nothing while jobs queue.
+
+**Classic retirement — deprecation window, then remove.** Keeping classic
+forever re-imports the dual-protocol maintenance burden Option E exists to
+end; retiring it at cutover strands nobody (scale sets cover dotcom + all
+vendor-supported GHES). Recommended sequence: flagged coexistence through
+P3–P4 → default flips to `ScaleSet` at P5 (with the positioning-doc rewrite,
+§4.7) → classic deprecated for **one minor release** → classic machinery
+(agent pool + Q114 recycle, multiplexer, Q260 dedup, classic broker client)
+removed in an isolated PR. The `Classic` enum value is dropped at the next API
+graduation with Q74 conversion handling.
 
 ## 6. Phased execution path (no big-bang rewrite)
 
@@ -460,21 +600,28 @@ parallel implementation behind a flag, then cutover.
   the cores of U3/U5. Every protocol-level unknown is now probed; what
   remains for P4 is integration-level only (egress proxy, pod conditions,
   sustained load).
-- **P2 — scale-set client package (M).** Decide U6; land the client (vendored
-  or new module) + a `scalesettest` fake modelled on
-  [`brokertest`](../../broker/brokertest/server.go), encoding the queue/ack/
-  batch-acquire semantics P1 confirmed. Unit + envtest coverage; no AGC wiring.
-- **P3 — parallel acquisition tier behind a flag (L).** A scale-set listener
-  (one goroutine per group: session + poll + batch-acquire + dispatch) and the
-  `run.sh --jitconfig` worker path, selected per group (U7), **classic remains
-  the default** (secure/stable-by-default). The Q260
+- **P2 — scale-set client package (M).** Per the U6 recommendation (§5a): a
+  new leaf module `scaleset/` (`broker/`-style — httpx bounded clients, typed
+  errors, metrics recorder), promoting the probe's live-validated flows, with
+  types mirroring `actions/scaleset` for wire parity. Plus a `scalesettest`
+  fake modelled on [`brokertest`](../../broker/brokertest/server.go) encoding
+  the §2a/§2b semantics: auto-assign under capacity **and** the GHES-style
+  `JobAvailable`→acquire flow, cursor replay, token expiry. Unit + envtest
+  coverage; no AGC wiring.
+- **P3 — parallel acquisition tier behind the API field (L).** Per U7 (§5a):
+  `RunnerSet.spec.acquisitionProtocol` (v2alpha1, default `Classic`,
+  immutable, CEL-validated single label) selects a scale-set listener per set
+  (one goroutine: session + capacity-gated poll + dispatch) and the
+  `run.sh --jitconfig` worker path. The Q260
   `TestAGC_Q260_FanoutCompletionReconciles` acceptance shape gets a scale-set
   twin: N concurrent jobs, every one concludes `completed`, zero dedup
   involved.
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
-- **P5 — cutover + retirement (M).** Flip the default, migrate dogfood, retire
-  the classic tier per U8, rewrite the positioning docs (§4.7), update
+- **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate
+  dogfood, then run the U8 retirement sequence (§5a: one-minor-release
+  deprecation → remove classic machinery in an isolated PR), rewrite the
+  positioning docs (§4.7), update
   [03-api-contracts §3.3](../design/03-api-contracts.md) and
   [02-architecture §2.2](../design/02-architecture.md) — the design docs, plus
   the operator docs per the
@@ -521,6 +668,13 @@ Fetched 2026-07-04; all public:
 - **docs.github.com**: ARC "Runner scale sets" concepts, "Authenticate to the
   API" (App permission matrix; enterprise = PAT-only), "Deploying runner scale
   sets with ARC" (GHES ≥ 3.9).
+- **§5a decision research (2026-07-04)**: `actions/scaleset` @ HEAD `1b6da87`
+  — `go.mod`/LICENSE, `client.go`/`session_client.go`/`common_client.go`/
+  `errors.go`/`config.go`, `listener/listener.go`, releases v0.1.0–v0.4.0,
+  issues #75/#90 (GHES acquire-flow removal + restore), #104 (client mutex),
+  #107 (auto-assign, unanswered); ARC master `go.mod` (requires
+  `scaleset v0.4.0`); GHES release lifecycle (supported window ~3.17–3.20 as
+  of 2026-07); ARC authentication docs (enterprise scope PAT-only).
 
 Per the repo rule that source-inspection findings are unverified until
 exercised end-to-end, §2's wire-level specifics were treated as unconfirmed
