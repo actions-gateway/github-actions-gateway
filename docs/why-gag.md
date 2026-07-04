@@ -192,8 +192,7 @@ spec:
     maxReplicas: 10
   # No namespaceQuota field: the ResourceQuota is platform-owned (4)!
   runnerGroups:
-    - name: gpu-runners
-      runnerLabels: ["self-hosted", "gpu"]
+    - runnerLabels: ["gpu", "self-hosted"]   # first label → derived RunnerGroup name
       maxListeners: 10
       priorityTiers:             # (5)!
         - priorityClassName: runner-critical
@@ -207,8 +206,7 @@ spec:
               resources:
                 limits:
                   nvidia.com/gpu: "1"
-    - name: cpu-runners
-      runnerLabels: ["self-hosted", "linux"]
+    - runnerLabels: ["linux", "self-hosted"]   # distinct first label ⇒ distinct name
       maxWorkers: 30
       podTemplate:
         spec:

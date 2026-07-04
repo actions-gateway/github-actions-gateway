@@ -62,8 +62,7 @@ Per-RunnerGroup, set the `RuntimeClassName` field on the `WorkerPodTemplate`:
 ```yaml
 spec:
   runnerGroups:
-  - name: untrusted-prs
-    runnerLabels: [self-hosted, sandboxed]
+  - runnerLabels: [sandboxed, self-hosted]   # first label → derived RunnerGroup name
     podTemplate:
       spec:
         runtimeClassName: gvisor   # or kata-containers

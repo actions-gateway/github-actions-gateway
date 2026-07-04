@@ -172,8 +172,7 @@ metadata:
 spec:
   securityProfile: baseline            # the default — Kata needs no escalation
   runnerGroups:
-    - name: kata-builders
-      runnerLabels: ["self-hosted", "kata"]
+    - runnerLabels: ["kata", "self-hosted"]   # first label → derived RunnerGroup name
       podTemplate:                     # worker pod config lives per runner group
         spec:
           runtimeClassName: kata-qemu
