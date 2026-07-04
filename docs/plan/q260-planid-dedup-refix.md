@@ -62,7 +62,16 @@ block below). **Q224/Q260/Q242 stay open.**
      the pre-fix delete-on-completion behavior** with the exact residual signature
      (`create Pod runner-…-<planid>: pods "…" already exists`).
 2. **Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery
-   model:** a fanned-out job whose winner completes via one delivery can still be cancelled at
+   model.** ➜ **Designed + repro landed in
+   [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md).**
+   The #513 immediate-loser-`skipped` path below is a **confirmed dead-end** (re-route #4);
+   the recommended fix is instead a **winner-driven completion fan-out** to all sibling
+   deliveries on completion, gated pending a live re-route #5 (one unknown: does GitHub honour
+   a non-running delivery's completion?). An offline, deterministic repro of the accounting
+   gap now fails-today and gates that fix — no turn-up needed. The remainder of this item is
+   the superseded #513 record.
+
+   A fanned-out job whose winner completes via one delivery can still be cancelled at
    the 15-min unstarted-timeout on a *deduped* sibling delivery (observed: `tidy-check`'s pod
    reported "Job completed" yet GitHub cancelled the job). Investigate whether the loser
    should acknowledge/complete its delivery rather than silently skip.
