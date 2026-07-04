@@ -235,20 +235,36 @@ closes, the window.
 collisions). The problem is completion accounting, not acquisition dedup. No new key
 helps.
 
-### Option E — single-acquirer-per-RunnerGroup (treat the cause, not the symptom)
+### Option E — single-acquirer topology / adopt the runner-scale-set protocol (treat the cause)
 
-**Deferred — a larger pivot; the fallback if Option A proves infeasible (§5).** Funnel
-acquisition for a RunnerGroup through a **single** acquiring session (ARC's shape) that
-then dispatches the acquired job to a worker, keeping the goroutine model only for
-polling/scale. One acquirer ⇒ one delivery per job ⇒ the fan-out and its accounting
-**cannot arise** — the bug class is eliminated by construction rather than reconciled.
-It preserves the bulk of GAG's density win (still no ~256 MiB per-runner listener
-pods), but gives up per-session *parallel acquisition* and adds an acquire→dispatch
-hop. Not attempted now because (a) Option A is far smaller **if it works**, and (b)
-there is no pre-acquire single-flight key — planID is post-acquire and the pre-acquire
-message's `RunnerRequestID` differs per sibling (the entire Q260 history), so "single
-acquirer" must mean literally one polling session per group, a real throughput and
-failure-domain change. Revisit only if §5 rules Option A out.
+**Deferred — a v-next architectural pivot; the fallback if Option A proves infeasible
+(§5).** The fan-out exists only because GAG runs *many* acquiring sessions per group on
+the classic per-runner broker protocol, where **concurrency = number of registered
+runners = number of acquirers**. So "one acquirer" and "N concurrent jobs" are mutually
+exclusive on this protocol: a single classic session is a single runner and would
+**serialize the whole group to one job at a time** (and there is no pre-acquire
+single-flight key — planID is post-acquire and the message's `RunnerRequestID` differs
+per sibling; the entire Q260 history). Getting one acquirer *with* concurrency requires
+GitHub's **runner-scale-set message-queue protocol** (what ARC uses): one listener
+long-polls a single job stream, `acquireJobs` claims a **batch**, and GAG creates one
+worker pod per acquired job. One authoritative stream ⇒ no sibling deliveries ⇒ the
+Q260 / Q247-completion / Q259-recycle class is eliminated **by construction**, not
+reconciled. GAG would still beat ARC on footprint (a Go listener goroutine vs a
+~256 MiB .NET process) and keep egress isolation + on-demand workers — "ARC's protocol,
+GAG's efficiency."
+
+**Cost:** a large rewrite of the acquisition tier and a partial redefinition of GAG. It
+discards most of the classic-protocol machinery (per-agent JIT session model, agent
+pool + single-use recycle Q114, the Multiplexer, the Q260 dedup, the Q247
+renew-by-`RunnerRequestID` path); it means reverse-engineering and depending on a
+**second** GitHub-internal protocol; it reworks registration/auth (register a scale
+set, not N agents) and re-expresses the admission gate (Q59) + `priorityTiers` against a
+dispatch model; and it collapses each group's acquisition to a **single point of
+failure** (vs today's N independent sessions, each with its own Q137 revival). It also
+retires the "thousands of goroutine-backed virtual runners" identity — density at rest
+actually *improves* (one listener/group, not N), but the story becomes "a
+lighter-weight ARC listener" rather than "cheap virtual runners." Revisit only if §5
+rules Option A out.
 
 **Recommendation: Option A**, behind the existing flag (renamed/rescoped from the
 per-loser `AGC_COMPLETE_ABANDONED_DELIVERIES` to a winner-driven fan-out completion),
