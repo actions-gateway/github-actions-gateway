@@ -8,6 +8,12 @@
 name: scaleset-probe
 on:
   workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch;
+  # the push trigger (scoped to this file on claude/ branches) lets the
+  # probe session queue the job from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/scaleset-probe.yml"]
 
 jobs:
   probe-target:
