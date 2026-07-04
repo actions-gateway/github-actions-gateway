@@ -27,6 +27,21 @@ The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgres
 
 ## Inner-loop gotchas
 
+### Target the cluster explicitly — don't trust the active context
+
+`~/.kube/config` is a single shared file. When multiple sessions run on one machine, any session's `kind create`, `gcloud … get-credentials`, or `kubectl config use-context` rewrites `current-context` for *everyone* — so a bare `kubectl get pods` you fire mid-task can silently hit the wrong cluster, and a write can land somewhere it shouldn't.
+
+Pin the target on every ad-hoc command instead of relying on the active context:
+
+```bash
+kubectl --context kind-<cluster> get pods -A            # kind e2e (see KIND_CLUSTER)
+kubectl --context gke_<project>_<zone>_<cluster> get ns # GKE dogfood
+```
+
+The repo scripts already do this — `scripts/kind-with-registry.sh` threads `kubectl --context "kind-${KIND_CLUSTER}"` through every call, and `scripts/lib/common.sh` (`gke_get_credentials_and_verify`) fails closed if `current-context` isn't the expected GKE context before any write. Match that pattern in ad-hoc commands.
+
+The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too. Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
+
 ### Image tag caching
 
 Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
