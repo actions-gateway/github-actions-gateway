@@ -63,7 +63,13 @@ main() {
   esac
 
   ensure_venv
-  exec "${venv_dir}/bin/mkdocs" "${cmd}"
+
+  # `serve` honors $PORT (default 8000) so parallel previews don't collide and
+  # tooling can inject an auto-assigned port; `build` takes no address.
+  if [[ "${cmd}" == "serve" ]]; then
+    exec "${venv_dir}/bin/mkdocs" serve --dev-addr "127.0.0.1:${PORT:-8000}"
+  fi
+  exec "${venv_dir}/bin/mkdocs" build
 }
 
 main "$@"
