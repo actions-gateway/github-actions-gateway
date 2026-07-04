@@ -41,8 +41,11 @@ operations docs.
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
-- **v2 API.** Reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`,
+- **Reusable runner templates (v2 API, alpha).** A decomposed `v2alpha1`
+  (`actions-gateway.com`) API ships *beside* the standard `v1alpha1` for early
+  adopters: reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`,
   multiple scoped gateways per namespace, and a `v1 → v2` migration tool.
+  Graduation toward `v2beta1` is near-term work (below).
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.
 - **Workload-identity credentials.** Mint short-lived GitHub credentials through
