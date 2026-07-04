@@ -676,6 +676,24 @@ gh api /repos/"$REPO"/actions/runners \
 > AGC debug logs (`agc:e2e-1f4111b`), reruns unit-test.yml `28687585802` + integration-test.yml
 > `28687585839` (both on `sha 1f4111b`), burst `23:45:33Z`–`00:03Z`.
 >
+> **Q260 redelivery residual — code-complete (2026-07-03; awaits combined re-route #4).**
+> The late-redelivery **Pod-collision** from residual (2) is now **fixed in code**: the AGC
+> Multiplexer's shared `planID` claim registry **retains** a released claim for a linger window
+> sized to the owner's `completedPodTTL` (the exact window the winner's terminal pod lingers
+> before the reaper GCs it), instead of freeing it on completion. A post-completion redelivery
+> arriving during that window is deduped at the post-acquire `planID` gate — counted on
+> `actions_gateway_jobs_duplicate_delivery_total`, no re-provision, **no `create Pod … already
+> exists`**, no error surfaced as a cancel. Regression:
+> `TestAGC_Q260_LateRedeliveryAfterCompletionDedups` (envtest) reproduces the exact
+> `create Pod runner-…-<planid>: pods "…" already exists` against the pre-fix behavior and
+> passes with the fix. The deeper **completion-vs-15-min-cancel accounting gap** (the winner's
+> pod completes yet GitHub cancels the job on a deduped sibling delivery) is **flagged, not
+> forced**: the deduped loser has already run `AcquireJob` (planID is post-acquire) and the
+> `broker.Client` has no complete/abandon call, so closing it needs a new run-service protocol
+> call — see [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) Follow-up item 2. This
+> code lands ahead of the dispatcher's combined **capacity (Q248) + re-route #4** turn-up, which
+> re-validates green on stable worker capacity. **Q224/Q260/Q242 stay open until then.**
+>
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`
 > because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills

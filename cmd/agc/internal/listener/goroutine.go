@@ -129,8 +129,11 @@ type Config struct {
 	// the listener skips provisioning and returns acquired=true, letting the caller
 	// recycle its consumed single-use runner back online (slot reclaimed cleanly)
 	// rather than colliding on the Secret. On ok=true the returned release is
-	// called exactly once when the job finishes or is abandoned, so a later GitHub
-	// redelivery can be provisioned again. Keying on planID (not the pre-acquire
+	// called exactly once when the job finishes or is abandoned; the claim then
+	// lingers for the owner's completedPodTTL so a LATE redelivery arriving while
+	// the winner's Completed-but-not-yet-reaped worker pod still exists is also
+	// deduped (rather than colliding on `create Pod`) — a genuine redelivery after
+	// the pod is reaped provisions again. Keying on planID (not the pre-acquire
 	// RunnerRequestID, which differs per sibling and so never deduped the fan-out —
 	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
 	// disables dedup (stub-only tests, or a response with no planID).

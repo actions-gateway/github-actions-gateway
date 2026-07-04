@@ -15,9 +15,12 @@ type Metrics struct {
 	// rejects a delivered job (acquire skipped, job left queued for redelivery).
 	JobsAdmissionRejectedTotal *prometheus.CounterVec
 	// Q260: duplicate broker delivery. Incremented when an acquired job's planID is
-	// already being provisioned by a sibling session in this AGC, so this session
-	// skips provisioning (and recycles its runner) rather than colliding on the
-	// shared "job-<planID>" worker Secret.
+	// already claimed by a sibling session in this AGC, so this session skips
+	// provisioning (and recycles its runner) rather than colliding on the shared
+	// "job-<planID>" worker Secret. Covers both a concurrent burst (a sibling is
+	// provisioning the planID right now) and a LATE redelivery (the winner already
+	// completed but its terminal worker pod has not yet been reaped, so the claim
+	// still lingers and the redelivery would otherwise collide on `create Pod`).
 	JobsDuplicateDeliveryTotal *prometheus.CounterVec
 	TokenRefreshesTotal        *prometheus.CounterVec
 	TokenRefreshErrorsTotal    *prometheus.CounterVec
@@ -73,7 +76,7 @@ func NewMetrics() *Metrics {
 
 		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_jobs_duplicate_delivery_total",
-			Help: "Duplicate job deliveries deduplicated: the job's planID was already being provisioned by a sibling session in this AGC, so provisioning was skipped (and the runner recycled) to avoid colliding on the shared per-job worker Secret (Q260).",
+			Help: "Duplicate job deliveries deduplicated: the job's planID was already claimed by a sibling session in this AGC, so provisioning was skipped (and the runner recycled) to avoid colliding on the shared per-job worker Secret or the winner's not-yet-reaped worker pod. Covers both a concurrent burst and a late redelivery after completion (Q260).",
 		}, []string{"namespace", "runner_group"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
