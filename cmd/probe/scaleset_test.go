@@ -96,6 +96,11 @@ func (f *scalesetFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = w.Write([]byte(`{"count":1,"value":[{"id":7,"name":"Default"}]}`))
 
+	case path == "/_apis/runtime/runnerscalesets" && r.Method == http.MethodGet:
+		f.record("get-scaleset name=" + r.URL.Query().Get("name"))
+		f.requireAdmin(r)
+		_, _ = w.Write([]byte(`{"count":1,"value":[{"id":42,"name":"gag-probe-scaleset","runnerGroupId":7}]}`))
+
 	case path == "/_apis/runtime/runnerscalesets" && r.Method == http.MethodPost:
 		f.record("create-scaleset")
 		f.requireAdmin(r)
@@ -596,6 +601,23 @@ func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
 		if info.Mode().Perm() != 0o600 {
 			t.Errorf("%s perms = %v, want 0600", f, info.Mode().Perm())
 		}
+	}
+}
+
+func TestScalesetProbe_CleanupMode(t *testing.T) {
+	fake := &scalesetFake{t: t}
+	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{Cleanup: true})
+
+	if err := p.run(context.Background()); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	got := strings.Join(fake.recorded(), "\n")
+	if !strings.Contains(got, "get-scaleset name=gag-probe-scaleset") ||
+		!strings.Contains(got, "delete-scaleset") {
+		t.Errorf("cleanup mode must look up by name and delete; got:\n%s", got)
+	}
+	if strings.Contains(got, "create-scaleset") || strings.Contains(got, "create-session") {
+		t.Errorf("cleanup mode must not create anything; got:\n%s", got)
 	}
 }
 

@@ -1,20 +1,25 @@
 # Q264 — Migrate AGC acquisition to the runner-scale-set protocol (Option E feasibility spike)
 
-**Status:** design/feasibility spike **plus a live wire probe** (Investigation E,
-§2a — `cmd/probe` scenario, run 2026-07-04) — **no production acquisition code
-changed**. This is
+**Status:** design/feasibility spike **plus live wire probes** (Investigations
+E and E2, §2a/§2b — `cmd/probe` scenarios, run 2026-07-04) — **no production
+acquisition code changed**. Every protocol-level unknown is probed; the
+residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
 the deferred fallback pursued **only if live re-route #5 rules Option A
 (winner fan-out completion) infeasible**. The go/no-go stays with re-route #5;
 this doc exists so that fork is not started cold.
 
 **Verdict up front: Option E is viable — and materially cheaper than the Q260 doc
-priced it.** The live probe (§2a) then **strengthened** the verdict: GAG's own
-GitHub App drove the full protocol end-to-end at both org and repo scope, and
-on the current broker-host backend GitHub **auto-assigns** each job to the
-scale set (no client acquire call at all, capacity-gated by a header) —
-assignment is 1:1 by construction with even less client machinery than the
-ARC-era sources document. GitHub has published
+priced it.** The live probes (§2a/§2b) then **strengthened** the verdict:
+GAG's own GitHub App drove the full protocol end-to-end at both org and repo
+scope; on the current broker-host backend GitHub **auto-assigns** each job to
+the scale set (no client acquire call at all — strictly and dynamically gated
+by the `X-ScaleSetMaxCapacity` poll header), assignment is 1:1 by
+construction; the message stream replays to a recreated session (restart-safe
+recovery with no local state); and a real `actions-runner` container started
+from a probe-minted JIT config picked its job up in ~2 s and completed it,
+with the terminal `JobCompleted{result}` delivered back to the listener — a
+signal the classic protocol never gives the AGC. GitHub has published
 [`actions/scaleset`](https://github.com/actions/scaleset) (Public Preview), an
 **official standalone Go client + listener package for this exact protocol**,
 "so that platform teams, integrators, and infrastructure providers can build their
@@ -246,6 +251,69 @@ at most that many jobs, exactly once each; there is no batch-claim bookkeeping
 at all. The `JobAssigned` statistics count is the authoritative
 provision-target, matching the ARC `clamp()` model (§2.2).
 
+## 2b. Investigation E2 — capacity gating, recovery, and a real runner (2026-07-04)
+
+Second live round (`PROBE_SCALESET_CAPACITY_TEST=true` + two pre-queued jobs
+from the fixture, then two locally docker-run
+`ghcr.io/actions/actions-runner` containers registered with probe-minted JIT
+configs; `PROBE_SCALESET_JITCONFIG_FILES` + `PROBE_SCALESET_HOLD_SECONDS` keep
+the scale set alive while they work). Logs prefix `INVESTIGATION-E2:`.
+
+1. **U2′ resolved — assignment is strictly, dynamically capacity-gated, and
+   there is no overflow `JobAvailable`/acquire flow on this backend.** With
+   two jobs queued: a capacity-**0** poll long-held then returned **202** —
+   jobs simply wait server-side, nothing is offered. The next poll at
+   capacity-**1** delivered exactly **one** `JobAssigned`
+   (`totalAssignedJobs: 1`); the follow-up at capacity-**2** delivered the
+   second (`totalAssignedJobs: 2`). Capacity is re-evaluated **per poll**, so
+   a GAG listener can widen/narrow its advertised capacity every poll cycle —
+   the Q59 gate maps 1:1 with per-cycle granularity.
+2. **Session token refresh works as documented**: `PATCH …/sessions/{id}` →
+   200, same `sessionId`, **new** `messageQueueAccessToken`.
+3. **Recovery-by-recreate confirmed (the §3 claim)**: after `DELETE` +
+   re-`POST` of the session, a `lastMessageId=0` poll on the **fresh** session
+   **replayed** the earlier `JobAssigned` message (same `messageId`) — the
+   message stream is scale-set-scoped, not session-scoped. An AGC restart
+   re-reads assigned-but-unprovisioned jobs from the queue; no in-memory
+   registry to lose.
+4. **U3 core resolved — a real ephemeral runner works against a probe-minted
+   JIT config.** Two `actions-runner` containers started with
+   `run.sh --jitconfig <blob>`: both connected and picked up a job **~2 s**
+   after start; the fast job ran to completion and its runner **exited 0 and
+   deregistered itself** (single-use lifecycle end-to-end). The scale-set
+   queue meanwhile streamed the lifecycle telemetry: `JobStarted` messages
+   with `runnerName`, and statistics transitions
+   (`totalRegisteredRunners: 2`, `totalRunningJobs: 1`,
+   `totalAssignedJobs` 2→1 as the fast job concluded) — completion accounting
+   is fully observable from the listener session. *Residual for P4:* the same
+   flow behind the per-tenant egress proxy with the proxy-CA trust bundle,
+   and job-start latency under pod (not local-docker) conditions.
+5. **U5 core measured — killed-runner cancel latency ≈ 9.5 minutes.**
+   `docker kill` (SIGKILL) on the runner mid-job at 16:19:06Z; GitHub
+   concluded the job `failure` at 16:28:40Z (annotation: *"The self-hosted
+   runner lost communication with the server"* — coinciding with the job's
+   10-minute `timeout-minutes` boundary). Same order as the classic
+   protocol's ~10-minute lock-TTL lapse: Option E neither gains nor loses on
+   dead-runner detection, and GAG's AGC-side pod-death → rerun-API fast path
+   remains the differentiator to port.
+6. **Terminal results are delivered to the listener.** The hold loop received
+   `JobCompleted` with `result: "failed"`, the `runnerId`/`runnerName` that
+   held the job, and `finishTime`, statistics zeroing in the same message —
+   the authoritative signal the ported eviction-retry (and job-duration
+   metrics) can key off, something the classic AGC never gets (§1 of the Q260
+   doc: the JobHandler never learns the real result).
+7. **Admin JWT TTL is short — observed expiry within ~17 minutes.** The
+   connection minted at run start 401-ed (`InvalidTokenException`) the
+   cleanup deletes after the 15-minute hold. ARC's parse-`exp`-and-refresh
+   (60 s pre-expiry) is **mandatory** client behaviour, not defensive polish.
+   The probe now re-mints the connection after holds, and a
+   `PROBE_SCALESET_CLEANUP=true` mode deletes a leaked scale set by name.
+
+**Net effect on §4 costs:** none added — E2 only removed unknowns. The
+capacity-header admission model (1) plus queue replay (3) simplify the target
+listener design further: no acquire plumbing, no persistent local state — and
+(6) actually *removes* a classic-protocol limitation.
+
 ## 3. Delta from today's classic machinery
 
 What Option E discards, reworks, carries over, and improves — against the
@@ -370,10 +438,10 @@ Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision**
 |---|---|---|
 | U1 | Full auth chain with **GAG's GitHub App**, org and repo scope. | **✅ probed** — works at both scopes with the existing App permissions (§2a-1). New constraint found instead: org-scope routing is gated by runner-group policy (`allows_public_repositories`) — repo scope bypasses it (§2a-6). |
 | U2 | Wire details: 202 semantics + poll cadence, `X-ScaleSetMaxCapacity` effect, `acquirejobs` responses, message replay. | **✅ probed** — 202 after ~51 s hold; cursor-based at-least-once redelivery; and the headline: the broker-host backend **auto-assigns** (JobAssigned direct, no acquire call — every acquire route 404s), gated by `X-ScaleSetMaxCapacity` (§2a-3/4). |
-| U2′ | Does `JobAvailable` + an explicit acquire step reappear when queued jobs exceed the advertised capacity? Do `pipelines.*` tenants still serve the ARC-documented explicit-acquire flow (version skew a GAG client must tolerate)? | **probe** (capacity-0 / multi-job variant of the §2a scenario) |
-| U3 | Does an ephemeral runner started with `run.sh --jitconfig` behind the egress proxy (proxy CA via wrapper) receive its job and complete it — and what is the added job-start latency vs the pipes handoff? | **probe** (needs a pod; Tier-A/kind, not a bare probe binary) |
+| U2′ | Does `JobAvailable` + an explicit acquire step reappear when queued jobs exceed the advertised capacity? | **✅ probed** — no: jobs above capacity are simply **held server-side** (capacity-0 poll → 202 with two jobs queued); each capacity increment releases exactly one `JobAssigned`, re-evaluated per poll (§2b-1). Session refresh (PATCH) and delete/recreate replay also confirmed (§2b-2/3). Residual: whether `pipelines.*` tenants still serve the ARC-era explicit-acquire flow — version skew a GAG client should tolerate by preferring message-delivered URLs. |
+| U3 | Does an ephemeral runner started with `run.sh --jitconfig` receive its job and complete it? | **✅ core probed** — yes: two real `actions-runner` containers registered via probe-minted JIT configs, picked up jobs ~2 s after start; the fast job completed `success` in 5 s and its runner exited 0 (§2b-4). **Residual for P4:** the same flow behind the egress proxy (proxy-CA trust) and under pod (not local-docker) conditions. |
 | U4 | Rate limits on the Actions Service tenant. | **partially probed** — no rate-limit headers on the queue at all (§2a-5); sustained-load behaviour unknown until P4. |
-| U5 | Eviction fast-cancel: how quickly does GitHub cancel a job whose runner pod died (lock-lapse latency), and does the rerun-API retry path behave as today? | **probe** (live cluster) |
+| U5 | Eviction fast-cancel: how quickly does GitHub conclude a job whose runner died? | **✅ core probed** — ≈9.5 min to `failure` ("runner lost communication"), same order as the classic lock-TTL lapse (§2b-5). The listener receives the terminal `JobCompleted{result, runnerName}` on its queue (§2b-6), so the ported eviction-retry keys off that signal; the rerun-API call itself is unchanged AGC code. Residual for P4: behaviour under pod eviction (vs SIGKILL) on a cluster. |
 | U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? (Vendoring: MIT license, faster, tracks GitHub; reimplementing: fits GAG's client conventions, no Preview-API churn exposure.) **Probe data point:** the official client's static `acquirejobs` construction 404s on the broker-host tenant — vendoring does not exempt GAG from backend skew. | **decision** |
 | U7 | Migration surface: new v2-only acquisition (RunnerSet gains a protocol/label field) vs per-group selector on v1alpha1? Interacts with the `runnerLabels` collapse (§4.2). | **decision** |
 | U8 | Enterprise-scope (PAT-only) and GHES <3.9: drop, document, or keep classic machinery alive as a legacy mode? Also now: org-scope requires runner-group public-repo policy handling (§2a-6) — document or default to repo-scope registration. | **decision** |
@@ -384,11 +452,14 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a
 parallel implementation behind a flag, then cutover.
 
 - **P0 — this spike.** This doc. No code.
-- **P1 — wire probe (S). ✅ DONE 2026-07-04** — the `PROBE_SCALESET_TEST=true`
-  scenario in [`cmd/probe`](../../cmd/probe/scaleset.go) plus the
-  `scaleset-probe.yml` dispatch fixture. Settled U1/U2 and half of U4 (§2a);
-  surfaced the auto-assign model and the runner-group gate. Residual: the U2′
-  capacity-overflow variant.
+- **P1 — wire probe (S). ✅ DONE 2026-07-04, both rounds** — the
+  `PROBE_SCALESET_TEST=true` scenario in
+  [`cmd/probe`](../../cmd/probe/scaleset.go) plus the `scaleset-probe.yml`
+  fixture. Round 1 (§2a) settled U1/U2 and half of U4; round 2 (§2b,
+  `PROBE_SCALESET_CAPACITY_TEST` + real docker-run runners) settled U2′ and
+  the cores of U3/U5. Every protocol-level unknown is now probed; what
+  remains for P4 is integration-level only (egress proxy, pod conditions,
+  sustained load).
 - **P2 — scale-set client package (M).** Decide U6; land the client (vendored
   or new module) + a `scalesettest` fake modelled on
   [`brokertest`](../../broker/brokertest/server.go), encoding the queue/ack/

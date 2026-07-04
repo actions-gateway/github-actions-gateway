@@ -79,6 +79,11 @@ type scalesetConfig struct {
 	// HoldSeconds delays cleanup so externally started runners can register,
 	// receive a job, and run under the probe's scale set.
 	HoldSeconds int
+	// Cleanup makes the probe only look up the scale set by name and delete
+	// it — the recovery path for a scale set leaked by an interrupted run
+	// (observed live: the admin JWT expired during a long hold, 401-ing the
+	// deferred deletes).
+	Cleanup bool
 }
 
 // parseScalesetConfig reads and validates the scale-set scenario environment
@@ -145,6 +150,7 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 			return scalesetConfig{}, fmt.Errorf("parse PROBE_SCALESET_HOLD_SECONDS: %w", err)
 		}
 	}
+	cfg.Cleanup = getenv("PROBE_SCALESET_CLEANUP") == "true"
 	return cfg, nil
 }
 
@@ -222,28 +228,69 @@ func runScalesetProbe(ctx context.Context, logger *slog.Logger, cfg scalesetConf
 	return p.run(ctx)
 }
 
-func (p *scalesetProbe) run(ctx context.Context) error {
-	// ── 1. Installation token ────────────────────────────────────────────────
+// mintAdminConnection runs the two bootstrap hops (installation token →
+// registration token → RemoteAuth runner-registration) and returns a fresh
+// admin connection. Called at start and again before cleanup after a long
+// hold — the admin JWT was observed live to expire within ~17 minutes, so a
+// connection minted at start 401s the deferred deletes.
+func (p *scalesetProbe) mintAdminConnection(ctx context.Context) (*adminConnection, error) {
 	installToken, err := p.provider.Token(ctx)
 	if err != nil {
-		return fmt.Errorf("get installation token: %w", err)
+		return nil, fmt.Errorf("get installation token: %w", err)
 	}
-	p.log.Info("INVESTIGATION-E: obtained installation access token")
-
-	// ── 2. Registration token (REST) ─────────────────────────────────────────
 	regToken, err := p.registrationToken(ctx, installToken)
 	if err != nil {
-		return fmt.Errorf("registration token: %w", err)
+		return nil, fmt.Errorf("registration token: %w", err)
 	}
-	p.log.Info("INVESTIGATION-E: obtained registration token", "len", len(regToken))
-
-	// ── 3. RemoteAuth hop → Actions Service tenant + admin JWT ───────────────
 	conn, err := p.adminConnection(ctx, regToken)
 	if err != nil {
-		return fmt.Errorf("runner-registration hop: %w", err)
+		return nil, fmt.Errorf("runner-registration hop: %w", err)
+	}
+	return conn, nil
+}
+
+// cleanupOnly looks the scale set up by name and deletes it — recovery for a
+// leaked scale set from an interrupted or 401-ed run.
+func (p *scalesetProbe) cleanupOnly(ctx context.Context, conn *adminConnection) error {
+	var out struct {
+		Count int `json:"count"`
+		Value []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"value"`
+	}
+	status, err := p.svcCall(ctx, conn, http.MethodGet,
+		"/_apis/runtime/runnerscalesets?name="+url.QueryEscape(p.cfg.ScaleSetName), nil, &out)
+	if err != nil {
+		return fmt.Errorf("lookup scale set %q: %w", p.cfg.ScaleSetName, err)
+	}
+	if out.Count == 0 {
+		p.log.Info("INVESTIGATION-E: cleanup — no scale set with that name", "name", p.cfg.ScaleSetName, "status", status)
+		return nil
+	}
+	for _, ss := range out.Value {
+		dStatus, dErr := p.svcCall(ctx, conn, http.MethodDelete,
+			fmt.Sprintf("/_apis/runtime/runnerscalesets/%d", ss.ID), nil, nil)
+		if dErr != nil {
+			return fmt.Errorf("delete scale set %d: %w", ss.ID, dErr)
+		}
+		p.log.Info("INVESTIGATION-E: cleanup — scale set deleted", "id", ss.ID, "name", ss.Name, "status", dStatus)
+	}
+	return nil
+}
+
+func (p *scalesetProbe) run(ctx context.Context) error {
+	// ── 1–3. Bootstrap: installation token → registration token → admin JWT ──
+	conn, err := p.mintAdminConnection(ctx)
+	if err != nil {
+		return err
 	}
 	p.log.Info("INVESTIGATION-E: admin connection established",
 		"actionsServiceURL", conn.URL, "adminTokenLen", len(conn.Token))
+
+	if p.cfg.Cleanup {
+		return p.cleanupOnly(ctx, conn)
+	}
 
 	// ── 4. Resolve runner group (fall back to the default group id 1) ────────
 	groupID := p.resolveRunnerGroup(ctx, conn)
@@ -317,6 +364,13 @@ func (p *scalesetProbe) run(ctx context.Context) error {
 	//        observing the lifecycle messages they generate.
 	if p.cfg.HoldSeconds > 0 {
 		p.holdAndObserve(ctx, sess)
+		// The admin JWT expires within ~17 minutes (observed live); re-mint
+		// the connection so the deferred deletes below don't 401.
+		if fresh, mErr := p.mintAdminConnection(ctx); mErr != nil {
+			p.log.Warn("INVESTIGATION-E: re-mint admin connection for cleanup failed", "error", mErr)
+		} else {
+			*conn = *fresh
+		}
 	}
 
 	p.log.Info("INVESTIGATION-E: scenario complete; cleaning up")
@@ -397,13 +451,13 @@ func (p *scalesetProbe) capacityTest(ctx context.Context, conn *adminConnection,
 	}
 
 	// Phase 3 — capacity 2: the held job should follow if gating is dynamic.
+	// (cursor is not advanced further — the replay test below polls from 0.)
 	status, msg, err = p.pollOnce(ctx, sess, 2, cursor)
 	if err != nil {
 		p.log.Warn("INVESTIGATION-E2: capacity-2 poll error", "error", err)
 	} else if msg == nil {
 		p.log.Info("INVESTIGATION-E2: capacity-2 poll returned no message", "status", status)
 	} else {
-		cursor = msg.MessageID
 		p.logQueueMessage("capacity-2 poll delivered", 2, msg)
 	}
 
