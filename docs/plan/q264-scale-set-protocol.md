@@ -541,8 +541,13 @@ is for gateway-level config like `GATEWAY_NAME`).
   the RunnerSet object name. Webhook-level check: no two `ScaleSet`-protocol
   RunnerSets under one gateway may share that label (two scale sets with one
   name would collide at GitHub).
-- v1alpha1 stays classic-only; `gag-migrate` maps v1 groups to
-  `Classic` RunnerSets unchanged.
+- **v2-exclusive by design** (signed off with explicit rationale 2026-07-04):
+  the field never appears on v1alpha1 — zero changes to the frozen v1 surface,
+  and the fan-out-free acquisition model becomes a concrete, user-visible
+  reason to migrate to v2, alongside the decomposed kinds. `gag-migrate` maps
+  v1 groups to `Classic` RunnerSets unchanged; a tenant opts into `ScaleSet`
+  by editing the migrated RunnerSet (a new object, so the immutability rule
+  never blocks the migration itself).
 
 ### U8 — support-matrix policy
 
@@ -586,6 +591,14 @@ P3–P4 → default flips to `ScaleSet` at P5 (with the positioning-doc rewrite,
 (agent pool + Q114 recycle, multiplexer, Q260 dedup, classic broker client)
 removed in an isolated PR. The `Classic` enum value is dropped at the next API
 graduation with Q74 conversion handling.
+
+**Consequence of ScaleSet being v2-exclusive:** classic is v1alpha1's *only*
+acquisition path, so removing the classic machinery necessarily ends
+v1alpha1's ability to acquire jobs — the classic deprecation window **is** the
+v1alpha1 migration window. The removal PR must therefore be sequenced after
+v1alpha1 is itself deprecated (tenants moved via `gag-migrate`); announcing
+the two deprecations together is honest and turns the fan-out-free model into
+the concrete incentive to complete the v1→v2 migration.
 
 ## 6. Phased execution path (no big-bang rewrite)
 
