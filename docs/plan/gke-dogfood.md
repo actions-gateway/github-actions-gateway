@@ -709,6 +709,85 @@ gh api /repos/"$REPO"/actions/runners \
 > pursue the claim-release-post-GC path instead. See
 > [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) follow-up item 2.
 >
+> **Combined capacity fix + flag-on/flag-off comparison — capacity & collisions
+> FIXED, but still NOT green; the blocker is now GitHub's broker fan-out
+> completion/assignment accounting (2026-07-04, re-route #4).** Ran the same ~7-job
+> concurrent matrix twice on **stable, non-preemptible** worker capacity with a
+> fresh AGC built off `main`@`4602429` (= HEAD, includes #512 late-redelivery claim
+> linger and #513 guarded completejob-abandon) — `ghcr.io/actions-gateway/agc:e2e-4602429`
+> (amd64 digest `sha256:55a88007…`), GMC/proxy/wrapper `v1.1.0-rc.6`, `spec.logLevel:
+> debug`, `RunnerTemplate` pinned to `dogfood-runner:2.335.1` (Q239), worker CPU
+> request `1`. The AGC pod's `imageID` matched the pushed digest; gateway `Ready=True`.
+>
+> **Capacity (Q248 residual) — FIXED.** Replaced the spot `workers` pool (which
+> preempted `3 → 1` mid-burst in #3) with a **non-preemptible `workers-od` pool**
+> (`e2-standard-4 ×3`, on-demand, taint `dedicated=workers:NoSchedule`; spot `workers`
+> scaled to `0`, `default-pool → 2`). SSD math: `3×100 + 2×50 + 20 = 420 GB < 500`
+> (`SSD_TOTAL_GB` quota; disks are `pd-balanced`, which counts against it). Result:
+> **3 `workers-od` nodes stayed Ready across all 58 monitor samples — zero preemption,
+> zero spot nodes**; peak node utilization **34 % CPU / 27 % mem**; peak per-pod
+> memory **~3.8 GiB** (under the 8 GiB limit, no OOM); peak `activeSessions` **5**.
+> So the #3 failure mode (preemption → serialized jobs → 600 s lock-TTL / 15-min
+> unstarted cancels *from capacity starvation*) **did not recur**. `workers-od` fixed
+> at `min=max=3` to stay under quota; 4 concurrent worker pods fit comfortably at CPU
+> request `1`.
+>
+> **#512 dedup — FIXED (again), 0 collisions in both bursts.** Each burst fanned out
+> 3 planIDs with **5 sibling redeliveries each** (distinct `RunnerRequestID`s); the
+> post-acquire planID gate deduped all of them (**10 dedup events per burst**) with
+> **zero `create Secret … already exists` and zero `create Pod … already exists`**.
+> The planID key and the claim-linger are working as designed.
+>
+> **Burst #4a — flag ON** (`AGC_COMPLETE_ABANDONED_DELIVERIES=true`, forwarded via the
+> GMC `AGC_EXTRA_*` passthrough with `--allow-agc-extra-env`): reruns
+> `28694212343` (6 gag-ci jobs) + `28694212356` (integration) at `04:11:48Z`. The
+> #513 path was **exercised**: **15 `completejob` calls — 14 returned OK, 1 returned
+> `401 "Not authorized for this job"`** (planID `eba8f94d`; its winner pod kept
+> running, so the 401 did **not** finalize the winner — a per-delivery auth edge, not
+> the feared planID-scoped regression). **Outcome: 2/7 green** (`coverage` on ci-1,
+> `integration-test`); **5/7 wedged INDEFINITELY `in_progress`** (`tidy-check`,
+> `shellcheck`, `unit-test`, `vendor-check`, `lint`) under the replacement session
+> `ci-2`. Their winner pods **ran** (6 Succeeded, 1 Failed) — yet GitHub never
+> concluded the jobs (confirmed via the Checks API, not just the runs API, whose
+> aggregate froze at a stale `completed/success` when `coverage` finished). **The
+> `completejob(result=skipped)` call returns OK but does not transition the job to
+> completed** — it merely acks that one delivery, so a late redelivery re-assigns the
+> already-run job to `ci-2` and GitHub holds it `in_progress`. Worse, by acking the
+> delivery it **suppresses the 15-min unstarted-timeout that would otherwise resolve
+> the job**, yielding an *indefinite* limbo.
+>
+> **Burst #4b — flag OFF** (control; the *only* difference from #4a is the completejob
+> path): reruns `28693708850` + `28693708839` at `05:00:10Z`. AGC logs confirmed the
+> clean control: **10 dedup events, 0 `completejob` calls, 0 collisions**. **Outcome:
+> 1/7 green** (`integration-test`); `coverage`=**failure**, `unit-test`=**failure**,
+> `vendor-check`=**cancelled**, `shellcheck`=**cancelled**, `lint`/`tidy-check`
+> in_progress → cancel. Crucially these are **terminal** states, not the indefinite
+> wedge. The Q259 recycle churn was present **and blocking**: GitHub's fan-out marks
+> `ci-1/2/3` as *"runner … is still running a job and cannot be deleted"* (422), so the
+> AGC cannot recycle those listener slots → the trivial jobs never get a slot and are
+> cancelled at the 15-min unstarted-timeout; the jobs that *did* run concluded
+> `failure` (the completion-accounting mismatch, same class as Q247 but at the
+> assignment level — not a real test failure: identical commits pass on GitHub-hosted
+> and `coverage` passed green in #4a).
+>
+> **Verdict.** Neither flag state reaches green — the same jobs go `in_progress`-forever
+> (flag on) or `failure`/`cancelled` (flag off). **Capacity (Q248) and collisions
+> (#512) are both fixed and off the critical path.** The remaining blocker is
+> **GitHub's broker fan-out completion/assignment accounting**: one job is delivered to
+> N sibling listener sessions as independent assignments, and neither the winner's
+> completion nor the losers' `completejob(skipped)` reconciles GitHub's per-delivery
+> view — so runners can't recycle (Q259 422) and jobs don't conclude as success. This
+> is **distinct from and beyond** the Q260 dedup. **The #513 flag does not help and
+> makes the end-state worse (indefinite `in_progress` vs terminal cancel/fail) — keep
+> `AGC_COMPLETE_ABANDONED_DELIVERIES` OFF by default (secure-by-default confirmed by
+> live evidence).** `completejob` semantics answered: the run service **accepts** the
+> `skipped` result serialization (14/15 HTTP-OK, so wire format is fine) but does
+> **not** conclude the job on that call; and 1/15 returned `401`, so job-scoped auth
+> for the completion path is not reliable. **Q224/Q260/Q242 stay open**, now blocked on
+> the fan-out accounting rather than capacity/collisions. Evidence: AGC debug logs
+> (`agc:e2e-4602429`), flag-on reruns `28694212343`/`28694212356` (burst `04:11:48Z`),
+> flag-off reruns `28693708850`/`28693708839` (burst `05:00:10Z`).
+>
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`
 > because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills

@@ -1,14 +1,14 @@
 # Q260 re-fix — re-key job-acquisition dedup on `planID`
 
-**Status:** live-validated **effective** (2026-07-04, dogfood re-route #3) — the dedup fires on
-the shared `planID` and the burst-start Secret-collision collapse does **not** recur. But the
-concurrent matrix is still **not fully green**, blocked by two residuals distinct from this
-fix: (1) Q248 spot-worker preemption starved the burst to ~1 node → serialized jobs hit the
-600s/15-min GitHub timeouts; (2) a **late-redelivery Pod-collision** — a slow job's `planID`
-claim is released when the winner completes, so a post-completion GitHub redelivery collides on
-the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs the prior 5×
-`create Secret` at burst start). Full evidence in
-[`gke-dogfood.md`](gke-dogfood.md) turn-up #3. **Q224/Q260/Q242 stay open.**
+**Status:** the planID dedup is live-validated **effective** — the dedup fires on the shared
+`planID` and the burst-start Secret-collision collapse does **not** recur — and as of re-route
+#4 (2026-07-04) the **capacity (Q248) and collision residuals are both fixed** (3 non-preempted
+nodes; **0 Secret/Pod `already exists` in two bursts**). But the concurrent matrix is still
+**not fully green**: the remaining blocker has shifted to GitHub's broker **fan-out
+completion/assignment accounting**, which is distinct from and beyond this dedup, and which the
+#513 completejob-abandon flag does **not** resolve (it makes the end-state worse — keep it OFF).
+Full evidence in [`gke-dogfood.md`](gke-dogfood.md) re-route #4 (and the re-route #4 update
+block below). **Q224/Q260/Q242 stay open.**
 
 > **Update (redelivery residual code-complete).** Residual (2) — the late-redelivery
 > Pod-collision — is **fixed in code** (this PR): the released `planID` claim now **lingers**
@@ -19,6 +19,26 @@ the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs
 > **off by default** pending live confirmation of GitHub's per-delivery completion semantics.
 > Residual (1) (Q248 capacity) is a cluster task for the combined re-route #4. Q224/Q260/Q242
 > stay open until that turn-up reconfirms green (and, for item 2, confirms the semantics).
+>
+> **Update (re-route #4, 2026-07-04 — live-tested; #513 flag does NOT resolve, keep OFF).**
+> The combined capacity + flag-on/flag-off turn-up ran on stable non-preemptible capacity
+> (full evidence in [`gke-dogfood.md`](gke-dogfood.md) re-route #4). Findings: **capacity
+> (Q248) and collisions (#512) are both FIXED** — 3 non-preempted nodes, and **0 Secret/Pod
+> `already exists` collisions in both bursts** (10 dedup events each). But **neither flag state
+> reaches green**: the blocker is now GitHub's broker **fan-out completion/assignment
+> accounting**, distinct from and beyond this dedup. With the flag **ON**, `completejob(result=
+> skipped)` returns HTTP-OK (14/15; 1× `401 "Not authorized for this job"`) **but does not
+> conclude the job** — a late redelivery re-assigns the already-run job to a replacement
+> session and GitHub holds it **indefinitely `in_progress`**; by acking the delivery it even
+> *suppresses* the 15-min unstarted-cancel that would otherwise resolve it. With the flag
+> **OFF** (control, only the completejob path differs) the same jobs reach **terminal
+> `failure`/`cancelled`** (the Q259 recycle 422 blocks listener reuse → trivial jobs cancelled
+> at the unstarted-timeout). **The flag makes the end-state worse, so it stays OFF by default.**
+> Semantics answered: the run service **accepts** the `skipped` serialization but does not
+> finalize the job on that call, and job-scoped completion auth is unreliable (the 401).
+> **Item 2's completejob-abandon approach is therefore not the fix** — the real work is
+> reconciling GitHub's per-delivery fan-out with the AGC's one-runner-per-session model
+> (runner recycle + job completion), tracked under Q260/Q224. Q224/Q260/Q242 stay open.
 
 ## Follow-up (post-#3): close the residual before re-validating green
 
