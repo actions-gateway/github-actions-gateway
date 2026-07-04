@@ -198,6 +198,7 @@ The per-tenant proxy and AGC serve metrics over **mutual TLS** on `:8443`: a scr
 | `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried due to namespace ResourceQuota exhaustion |
 | `actions_gateway_quota_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Jobs abandoned after exhausting the quota retry budget |
 | `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the reaper (`completed_ttl` or `pending_deadline`) |
+| `actions_gateway_reap_blocking_sidecar_templates` | Gauge | `namespace`, `runner_set` | Regular (non-native) sidecar containers in a `RunnerSet`'s resolved worker template that may block pod reaping (Q249); pairs with the advisory `PossibleReapBlockingSidecar` condition |
 | `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered (`post_job`, `stale_session`, `startup`, `reconcile_repair`) |
 | `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed attempts to re-register a single-use JIT agent |
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace` | GetMessage errors (non-empty-poll, non-session-expired) |

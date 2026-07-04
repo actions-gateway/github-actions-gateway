@@ -255,9 +255,12 @@ same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
   unnecessary once injection is enabled, since the runner image is the upstream one
   with the wrapper injected. Retiring it is tracked separately.
 
-Both are digest-pinned in the chart (`wrapper.image.digest` like `agc`/`proxy`),
-so a release must publish the `wrapper` image and pin its digest for the default
-install to run jobs.
+Only `wrapper` is digest-pinned in the chart (`wrapper.image.digest`, like
+`agc`/`proxy`), so a release must publish the `wrapper` image and pin its digest
+for the default install to run jobs. The `worker` image has no chart `image`
+block — it is the optional batteries-included image a tenant opts into via its
+per-RunnerGroup `workerImage`, not a chart-provisioned one — so nothing in the
+chart pins it.
 
 ## PR CI vs publish — what runs where
 

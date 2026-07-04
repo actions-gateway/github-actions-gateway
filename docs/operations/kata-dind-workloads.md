@@ -92,7 +92,7 @@ restricted by machine family:
 | Requirement | Detail |
 |---|---|
 | Cluster mode | **GKE Standard.** Autopilot does **not** allow nested virtualization. |
-| Machine family | **N1, N2, N2D, C2, C2D** support nested virtualization. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
+| Machine family | **N2, N2D, C2, C2D** support nested virtualization and are the families the shipped [`scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) accepts. **N1** also supports nested virtualization on GKE, but the provisioning script rejects it — provision an N1 pool manually if you need it. **E2 does not.** The GPU families (**A2, A3, G2**) do not either — GPU + Kata on cloud needs bare metal or dedicated instances. |
 | Node-pool flag | Create the pool with `--enable-nested-virtualization`. |
 | Node label | Label eligible nodes (e.g. `katacontainers.io/kata-runtime=true`) so the Kata install and the worker pods schedule only there. |
 
@@ -161,29 +161,30 @@ kubectl get runtimeclass kata-qemu
 ## Configure the worker podTemplate
 
 Point the worker pods at the runtime by setting `runtimeClassName` on the
-`ActionsGateway` worker `podTemplate`. No privileged context, no host
-namespaces, and no profile escalation are involved:
+runner group's worker `podTemplate` (`spec.runnerGroups[].podTemplate`). No
+privileged context, no host namespaces, and no profile escalation are involved:
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1
+apiVersion: actions-gateway.github.com/v1alpha1
 kind: ActionsGateway
 metadata:
   name: build-gateway
 spec:
-  securityProfile: baseline        # the default — Kata needs no escalation
-  worker:
-    podTemplate:
-      spec:
-        runtimeClassName: kata-qemu
-        # The runtime label is enforced by the RuntimeClass scheduling
-        # rule above; add a matching nodeSelector only if you also want it
-        # explicit on the pod.
-        containers:
-          - name: runner
-            # A normal runner image with dockerd inside — no privileged
-            # flag, no /var/run/docker.sock host mount.
-            securityContext:
-              privileged: false
+  securityProfile: baseline            # the default — Kata needs no escalation
+  runnerGroups:
+    - runnerLabels: ["kata", "self-hosted"]   # first label → derived RunnerGroup name
+      podTemplate:                     # worker pod config lives per runner group
+        spec:
+          runtimeClassName: kata-qemu
+          # The runtime label is enforced by the RuntimeClass scheduling
+          # rule above; add a matching nodeSelector only if you also want it
+          # explicit on the pod.
+          containers:
+            - name: runner
+              # A normal runner image with dockerd inside — no privileged
+              # flag, no /var/run/docker.sock host mount.
+              securityContext:
+                privileged: false
 ```
 
 The AGC honours a tenant-set `runtimeClassName` and applies no override
@@ -219,6 +220,14 @@ is the same mechanism described here applied on top of `privileged`; see
   modules, specific `/dev` devices, or GPU passthrough need extra Kata
   configuration (and, for GPU, bare-metal or dedicated instances — the
   cloud GPU families lack nested virtualization).
+- **Run `dockerd` inside the runner container, not as a regular sidecar.**
+  The pattern above keeps the daemon a nested process of the single `runner`
+  container, so the pod reaps cleanly when the job ends. If you instead split
+  the daemon into a separate sidecar container, declare it as a **native
+  sidecar** (`restartPolicy: Always` init container) — a regular sidecar runs
+  forever and keeps the worker pod from reaping, stranding the runner slot.
+  See [In-runner image builds § Sidecar containers must be native
+  sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
 - **Validate before relying on it for production CI.** The end-to-end Kata
   path on GKE is staged through the
   [spike runbook](kata-ci-spike-runbook.md) and has not yet been run live

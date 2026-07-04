@@ -27,6 +27,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
+- [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
@@ -36,6 +37,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Token Refresh Errors Spiking](#token-refresh-errors-spiking)
 - [RenewJob Failures Rising](#renewjob-failures-rising)
 - [Sessions Stuck in 401/EOF GetMessage Loops (Tenant Throughput Decays to Zero)](#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero)
+- [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner)
 - [Network Connectivity Failures](#network-connectivity-failures)
 - [AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)](#agc-cannot-reach-the-kubernetes-api-server-networkpolicy--post-dnat-port-mismatch)
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
@@ -636,11 +638,17 @@ kubectl get actionsgateway <gateway-name> -n <namespace> -o jsonpath='{range .sp
 
 **Likely cause.** The IP Range Reconciler's initial `api.github.com/meta` fetch failed or stalled at GMC startup. The cached ranges seed each proxy `NetworkPolicy`'s `ipBlock` allowlist; until the first fetch lands, the allowlist is empty. The reconciler retries the initial fetch on a capped exponential backoff (1s→30s), so a transient outage normally self-heals within seconds — but a sustained inability to reach `api.github.com` from the GMC pod (egress firewall, DNS, or a long GitHub outage) leaves the allowlist empty until connectivity returns.
 
+For **direct-egress** gateways (no `defaultProxyRef`) the same GitHub allowlist lives on the `<gateway>-workload` and `<gateway>-agc` policies instead of a proxy policy, so the empty-allowlist symptom applies to worker and AGC egress there. A gateway that has already been programmed **keeps** its allowlist across a GMC restart: the per-gateway reconcile preserves an existing direct-egress policy's rules while the cache is still warming, rather than rebuilding it from the empty cache (which would have blanked the allowlist for the seconds until the first fetch lands — a window that widened under node CPU pressure and caused release-asset downloads to time out right after a restart). Only a **first-ever** provision with a not-yet-populated cache shows the empty allowlist, and it self-heals on the first fetch.
+
 **Diagnostics.**
 
 ```sh
-# Inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
+# Proxied gateway: inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
 kubectl get networkpolicy -n <namespace> actions-gateway-proxy \
+  -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
+
+# Direct-egress gateway: check the workload (and AGC) policy instead.
+kubectl get networkpolicy -n <namespace> <gateway>-workload \
   -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
 
 # Look for retry warnings in the GMC log.
@@ -649,7 +657,7 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager \
 ```
 
 **Resolution.**
-- Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing proxy `NetworkPolicy`.
+- Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster). The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing `NetworkPolicy`.
 - If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set `spec.proxy.managedNetworkPolicy: false` so the reconciler leaves the policy alone.
 
 ---
@@ -732,6 +740,29 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 **What happened.** A service-mesh sidecar was injected into the worker pod. GAG worker pods run to completion: the slot is freed and the pod reaped only when the pod reaches a *terminal* phase (`Succeeded`/`Failed`), which requires every container to exit. A classic mesh sidecar never exits on its own, so the pod stays `Running` forever and falls through both reaper paths (`completedPodTTL` covers terminal pods; `pendingPodDeadline` covers `Pending` pods — neither covers a stuck `Running` pod).
 
 **Resolution.** Opt the GAG tenant namespace out of the mesh, or — if mesh membership is mandatory — switch to native sidecars (Kubernetes 1.28+) or a sidecar-less/ambient data plane. The full per-mesh configuration (Istio sidecar + ambient, Linkerd, Cilium, generic) is in [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md). Note that mesh opt-out/exclusion annotations set on the RunnerGroup `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
+
+A mesh sidecar is *injected* at admission, so it is not in the `RunnerTemplate` and GAG cannot warn about it ahead of time — the runtime symptom above is the only signal. A **build/DinD sidecar you declare in the template** is different: GAG detects it and warns proactively — see the next section.
+
+---
+
+## RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)
+
+**Symptoms.** A `RunnerSet` reports the advisory condition `PossibleReapBlockingSidecar=True` (`kubectl get runnerset <name> -n <ns> -o jsonpath='{.status.conditions}'`), the `actions_gateway_reap_blocking_sidecar_templates` gauge is `> 0`, and/or `kubectl apply` of the `RunnerTemplate`/`ClusterRunnerTemplate` printed a `Warning:` naming a sidecar container. Left unfixed, the symptom is the same `READY 1/2` stranding as the mesh-sidecar case above: worker pods linger after the job and the set wedges at `maxWorkers`.
+
+**What happened.** The resolved worker template carries a **regular** (non-native) sidecar container besides the `runner` container — e.g. a `docker:dind` daemon or a BuildKit sidecar declared under `spec.containers[]`. A pod terminates only when every regular container exits, so a sidecar that runs for the life of the job keeps the pod from reaping (Q249). The condition, gauge, and admission warning are **advisory only** — they never block template creation or gate the set's `Ready` — because the "runs forever" property can't be proven from a pod spec.
+
+**Resolution.**
+
+- **Preferred — convert to a native sidecar.** Move the sidecar to `spec.initContainers[]` with `restartPolicy: Always` (Kubernetes ≥ 1.29). The kubelet tears it down when the `runner` container exits, so the pod completes on its own. The template shape is in [In-runner image builds § Sidecar containers must be native sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
+- **If the sidecar genuinely exits on its own** when the job ends, acknowledge it in the template's `actions-gateway.com/self-exiting-sidecars` annotation (a comma-separated name-list). This silences the warning, the condition, and the gauge for the named containers only — a newly added, unacknowledged sidecar still warns.
+
+```bash
+# See which containers a set's condition is flagging
+kubectl get runnerset <name> -n <namespace> \
+  -o jsonpath='{.status.conditions[?(@.type=="PossibleReapBlockingSidecar")].message}'
+# Which templates are flagged, fleet-wide
+# PromQL: actions_gateway_reap_blocking_sidecar_templates > 0
+```
 
 ---
 
@@ -1018,12 +1049,22 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 
 ## RenewJob Failures Rising
 
-**Symptoms.** `actions_gateway_renew_job_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion.
+**Symptoms.** `actions_gateway_renew_job_errors_total` is increasing. Jobs may start being cancelled by GitHub before completion. On current versions, a **definitively lost** lock also increments `actions_gateway_renew_job_teardowns_total` and the AGC self-cancels the worker (see the self-cancel note below).
 
 **Likely causes.**
 - Network connectivity issues between the AGC and GitHub (via proxy).
 - GitHub API is temporarily unavailable.
 - The runner job lock window expired before the renewer could refresh (AGC was slow or restarting).
+- **AGC versions before the Q247 fix** renewed with the wrong job identifier (the broker envelope's `MessageID` instead of the job's `RunnerRequestID`), so *every* renewal returned an error and **no** lock was ever refreshed. The tell is a *sustained, non-transient* error rate that tracks the acquired-job rate — every job that outlives GitHub's lock window (roughly one renewal interval) is then recycled and redelivered to a sibling session, so you also see duplicate worker pods for one job and completed jobs that fail with `conclusion: failure`, no failed step, no logs, and a `TaskOrchestrationJobNotFoundException` at `CompleteJobAsync`. Long jobs expose it; sub-window jobs finish before the lock lapses.
+- **AGC versions before the Q247 *residual* fix** ran each `RenewJob` call inline with no per-call timeout. Under heavy worker-node load (CPU/egress saturation) a single `/renewjob` call can black-hole — the connection is accepted but never answered — and, because the next renewal cannot start until the call returns, that one hung call starves *every* subsequent renewal. The tell is a long job failing at *exactly* GitHub's ~10-minute lock window (the initial lock TTL, never refreshed) with a **single** worker pod that keeps running past the cutoff — distinct from the wrong-jobId signature above, which produces *duplicate* pods. Fixed versions bound each renewal with the control-plane timeout, so a hung call aborts (one `renew_job_errors_total` increment) and the loop renews on schedule.
+- **AGC versions before the Q247 *auth* fix** renewed with the broker session (OAuth) token instead of the job-scoped token GitHub issues in the `acquirejob` response (the `SystemVssConnection` endpoint's `AccessToken`). GitHub accepts the session token to *claim* a job but rejects it for *renewing* that job's lock, so *every* renewal returns **`401 {"source":"actions-run-service","errorMessage":"Not authorized for this job"}`** from the very first call. The tell is identical to the residual signature — a long job failing at *exactly* the ~10-minute lock window with a **single** worker pod — but the AGC log shows every `RenewJob` returning that specific 401 (not a timeout, not a wrong jobId). Fixed versions present the job-scoped token, so renewals return 200 and the lock is refreshed.
+
+**Self-cancel on a definitively lost lock (current behavior, Q254).** On a lock the renewer can prove is *unrecoverably* lost, the AGC no longer lets the worker run on to completion as an orphan pod. Two triggers:
+
+- **Definitive job-gone.** The run service answers `/renewjob` with `404`/`410` (the job's lock no longer exists — GitHub recycled or reassigned it). A single such response is enough.
+- **Sustained failure run.** Renewal fails for **5 consecutive** intervals (~5 min at the default 60s cadence) — a network partition or a persistently unreachable run service. This is well past any single transient blip, and it tears down before the ~10-minute lock TTL lapses.
+
+On either trigger the AGC cancels the job's context so the worker pod tears down promptly, logs a distinct error line (`job lock definitively lost; cancelling worker …`), and increments `actions_gateway_renew_job_teardowns_total{reason="job_not_found"|"consecutive_failures"}`. Tearing the orphan down *before* the lock lapses closes the residual window in which GitHub could recycle the job and redeliver it to a sibling session (a duplicate worker pod for one job). A *single/transient* renewal failure still stays non-fatal and is retried.
 
 **Diagnostics.**
 
@@ -1034,16 +1075,24 @@ kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
 # Check AGC logs for renewal errors and job IDs
 kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "renewjob"
 
+# Definitive-loss teardowns (worker self-cancelled), split by reason
+# Metric: sum by (reason) (rate(actions_gateway_renew_job_teardowns_total[15m]))
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "job lock definitively lost"
+
 # Confirm the proxy pool is healthy
 kubectl get pods -n <namespace> -l app=actions-gateway-proxy
 ```
 
 **Resolution.**
+- **Sustained errors on every job (the Q247 signature above): upgrade** to a gateway version with the Q247 fix, which renews by `RunnerRequestID`. On affected versions no renewal succeeds, so there is no interim mitigation short of the upgrade — jobs longer than the lock window keep failing.
+- **A long job failing at exactly the ~10-minute lock window with a single (not duplicate) worker pod (the Q247 residual signature above): upgrade** to a gateway version that bounds each renewal call with the control-plane timeout. Reducing worker-node CPU/egress pressure (which is what makes a renewal call black-hole) lowers the odds on affected versions but is not a reliable mitigation — the upgrade is the fix.
+- **Every renewal returning `401 "Not authorized for this job"` from the first call (the Q247 auth signature above): upgrade** to a gateway version that renews with the job-scoped token from the `acquirejob` response. On affected versions no renewal is authorized, so there is no interim mitigation short of the upgrade — jobs longer than the lock window keep failing.
 - Transient GitHub API errors: the renewer retries; monitor until the rate returns to zero.
 - Proxy pool unhealthy: fix the proxy pool (see [Proxy Pool Not Scaling](#proxy-pool-not-scaling)).
 - If the AGC restarted mid-job: jobs whose lock expired will have been cancelled by GitHub. These require manual re-run. Check `actions_gateway_eviction_retries_exhausted_total` for any jobs that were also evicted.
+- **`actions_gateway_renew_job_teardowns_total` rising (a self-cancel, Q254 behavior above):** the worker was torn down because its lock was definitively lost — this is the AGC *avoiding* an orphan pod, not a new fault. Investigate the *underlying* cause via the split reason: `reason="job_not_found"` means GitHub reassigned/recycled the job (often downstream of a lock that already lapsed for one of the Q247 reasons, or genuine cancellation); `reason="consecutive_failures"` means renewal was unreachable for ~5 min — treat it like a sustained error rate above (proxy/egress or GitHub reachability). The affected job is re-run by GitHub on the sibling session that picks it up.
 
-Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single transient error on a long-running job is rarely fatal.
+Each `renewjob` error is a warning, not an immediate job failure — GitHub grants ~10 minutes per renewal window. A single *transient* error on a long-running job is rarely fatal; a *sustained* error on every job is the Q247 signature above, not a transient blip. When a lock is *definitively* lost, current versions self-cancel the worker (Q254 behavior above) rather than orphaning it.
 
 ---
 
@@ -1082,6 +1131,60 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].status.activeSess
   Expect `409 Already exists` registration errors for any agent that never ran a job — its record survives server-side under an ID the AGC no longer knows. Delete the survivor from GitHub first: find its ID with `gh api '.../actions/runners?name=<group>-<index>'`, then `gh api -X DELETE .../actions/runners/<id>`. Fixed versions resolve this 409 automatically.
 
 **On fixed versions,** a sustained rise of `actions_gateway_agent_recycle_errors_total` means the AGC cannot re-register agents (registration API unreachable, installation token failures, or revoked GitHub App runner-administration permission) — listener capacity shrinks until recycles succeed. Check AGC logs for `recycle` errors and verify the App's runner permissions.
+
+---
+
+## Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)
+
+**Symptoms.** Each job runs green *individually*, but bursting a whole CI matrix onto the gateway at once serializes to roughly one running worker even with ample node room (nodes well under capacity, zero `Pending` pods). Queued jobs sit unstarted until GitHub cancels them at its ~15-minute unstarted-job timeout; an already-running job whose token is invalidated dies with `RenewJob 401 "Not authorized for this job"`.
+
+**Cause.** After a single-use JIT runner completes a job, GitHub auto-removes the ephemeral runner record — but for a few to tens of seconds it still reports the runner as running and answers a delete with `422 "Runner … is currently running a job and cannot be deleted"`. Because the AGC re-registers each agent under a **stable name**, the lingering record also makes the re-registration conflict (`409`). Under a burst, many agents recycle at once and hit this window together. On gateway versions before the Q259 fix the AGC treated the `422` as fatal: the post-job recycle failed, the listener goroutine exited, and a non-permanent replacement listener is not restarted — so every completed job permanently dropped a polling slot until only the permanent baseline remained. GitHub then had one online runner to dispatch to, so it dispatched ~1 job at a time.
+
+**Diagnostics.**
+
+```sh
+# Recycle errors climbing in lockstep with a burst (pre-fix: fatal 422s)
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "currently running|recycle"
+
+# Metric: actions_gateway_agent_recycle_errors_total — spikes during the burst on pre-fix versions
+# Metric: actions_gateway_active_sessions             — collapses toward 1 as replacements exit
+```
+
+**Resolution.**
+- **Upgrade** to a gateway version with the Q259 fix. Fixed versions treat the `422 "currently running"` as transient: `Pool.Recycle` retries the re-registration with a bounded, jittered backoff (waiting for GitHub to release the just-consumed runner) instead of failing, so the listener keeps its polling slot and concurrency is sustained. A recycle that finally succeeds after the wait increments `actions_gateway_agent_recycles_total{trigger="post_job"}` as usual.
+- **On fixed versions,** `actions_gateway_agent_recycle_errors_total` still rises only if a runner *never* releases within the retry bound — a genuine fault (registration API unreachable, or the runner is truly wedged running server-side), not the normal post-job race. Investigate as in the section above.
+
+> **If the burst still serializes to ~1 worker after the Q259 fix, see the next
+> section (Q260) — a distinct duplicate-acquisition cause.**
+
+---
+
+## Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)
+
+**Symptoms.** As above, a whole CI matrix bursted onto the gateway serializes to roughly one running worker — but this variant persists *even on a gateway with the Q259 recycle fix*. The distinguishing tell is in the AGC logs: several sessions of the same RunnerGroup (distinct `agentIndex` / `sessionId`) all fail provisioning the **same** job with `provisioner: create Secret job-<planid>: secrets "…" already exists`. In GitHub's runner list the losing runners show `busy` but `offline` with **no** worker pod; their sessions then die. Remaining jobs sit `in_progress` (assigned to the now-dead duplicate runners) until GitHub's ~15-minute unstarted-job timeout.
+
+**Cause.** Under a burst, GitHub's broker fans one job out to several sibling long-poll sessions of one RunnerGroup — as separate `RunnerJobRequest` messages with **distinct** `RunnerRequestID`s but one shared **plan ID**. On gateway versions before the Q260 fix, every recipient independently ran `acquirejob` — succeeding and marking its runner **busy** — and then entered the provisioner, where the per-job worker Secret name is derived from the job's plan ID. The first session created the Secret; the rest collided (`already exists`), failed provisioning, and died *with their runner slot already consumed*. Net effect: one worker runs the job while the other slots are burned, collapsing the pool to the baseline listener. This is distinct from the Q259 post-job recycle churn (which may still be visible as a secondary `422 "currently running"` signal).
+
+A second, **late-redelivery** variant collides on the worker **Pod** rather than the Secret: `provisioner: create Pod runner-<group>-<planid>: pods "…" already exists`. Here the winning session already ran the job to completion, but its terminal worker pod lingers for `completedPodTTL` before the reaper GCs it. A gateway version that freed the plan-ID claim on *completion* (rather than on pod GC) would let a late GitHub redelivery of that same plan ID pass the claim gate, re-provision, and collide on the winner's still-present Completed pod.
+
+**Diagnostics.**
+
+```sh
+# Multiple sessions provisioning the SAME job (the duplicate-acquisition signature)
+# — the Secret variant (burst) and the Pod variant (late redelivery)
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "create (Secret|Pod).*already exists|duplicate job delivery"
+
+# Metric: actions_gateway_jobs_duplicate_delivery_total — on fixed versions, this
+#   rises (deliveries safely deduplicated) INSTEAD of runner slots being burned.
+# Metric: actions_gateway_active_sessions — collapses toward 1 on pre-fix versions.
+```
+
+**Resolution.**
+- **Upgrade** to a gateway version with the Q260 fix. Fixed versions dedup a job across the RunnerGroup's sibling sessions on its **plan ID** — the identity that collapses across the fan-out and names the worker Secret. Because the plan ID is only returned by `acquirejob`, a sibling still acquires, but then finds the plan ID already claimed by another session in the same AGC and **skips provisioning**, recycling its consumed runner back online (slot reclaimed) instead of colliding on the shared `job-<planid>` Secret. Each such skip increments `actions_gateway_jobs_duplicate_delivery_total`; a steady low rate of that counter during bursts is the fix working as intended. (The first Q260 fix keyed on `RunnerRequestID` before `acquirejob`, but siblings get distinct request ids, so it did not collapse the fan-out — upgrade past it.)
+- **For the late-redelivery Pod variant,** the same fixed versions hold the plan-ID claim for `completedPodTTL` *past* job completion — until the winner's terminal worker pod has been reaped — so a late redelivery is deduped (counted on `actions_gateway_jobs_duplicate_delivery_total`) rather than colliding on the lingering pod. No operator action; a lower `completedPodTTL` shortens both the retained pod and the claim linger together.
+- **No operator action** is needed on fixed versions — the dedup is automatic and per-RunnerGroup. If the burst still serializes with `jobs_duplicate_delivery_total` flat and `jobs_acquired_total` not climbing, the bottleneck is elsewhere (worker-node capacity, namespace `ResourceQuota`, or the Q259 recycle path) — work through those sections.
+
+**Known limitation — redelivery accounting.** The dedup gate is *post-*`acquirejob` (the plan ID is only known then), so a deduplicated sibling has *already* claimed its own per-delivery job assignment at GitHub before it skips provisioning. Left untouched, GitHub still expects a runner to start *that* assignment and cancels the whole job at its ~15-minute unstarted-job timeout — even after the winning sibling ran the job to completion. The tell: a job whose pod logged `Job completed` with no renewal errors is nonetheless reported `cancelled` on GitHub. A **guarded** mitigation exists (`AGC_FANOUT_COMPLETION=true`, Q260 Option A): when the winner's job finishes, it fans a `completejob` out to *every* deduped sibling delivery — keyed on each sibling's own delivery job ID, with the winner's pod-phase-proxy result (a Failed pod → `failed`, else `succeeded`) — and a late redelivery arriving during the linger window is resolved with the same result; all tracked by `actions_gateway_abandoned_delivery_completions_total`. It is **off by default** and **pending live validation** (dogfood re-route #5): do not enable it in production without that confirmation, because if the run service scopes completion by plan ID (not job ID) the pod-phase proxy could green a red workflow whose worker exited 0. See [`docs/plan/q260-fanout-completion-reconciliation.md`](../plan/q260-fanout-completion-reconciliation.md).
 
 ---
 
@@ -1872,42 +1975,47 @@ kubectl run dbg-connect --rm -i --restart=Never --quiet \
 
 ## Prometheus Not Scraping Proxy or AGC Metrics
 
-**Symptom.** The proxy and AGC `/metrics` endpoints (both on `:8081`) return no
-data in Prometheus, or scrape targets show as `down` with a connection
-timeout/refused — despite the pods being healthy.
+**Symptom.** The proxy and AGC `/metrics` endpoints (served over mutual TLS on
+`:8443`) return no data in Prometheus, or scrape targets show as `down` with a
+connection timeout/refused — despite the pods being healthy.
 
 **Cause.** Each tenant namespace runs under a default-deny ingress posture. The
-GMC's per-tenant NetworkPolicies admit `:8081` ingress *only* from namespaces
+GMC's per-tenant NetworkPolicies admit `:8443` ingress *only* from namespaces
 labelled `metrics: enabled` (the same convention the GMC's own
 `allow-metrics-traffic` NetworkPolicy uses). If the namespace your Prometheus
-runs in is not labelled, its scrapes are dropped. Kubelet liveness/readiness
-probes are unaffected — they originate from the node, which every supported CNI
-exempts from NetworkPolicy enforcement.
+runs in is not labelled, its scrapes are dropped before the TLS handshake.
+Kubelet liveness/readiness probes are unaffected — they hit `:8081`
+(`/healthz` + `/readyz`) from the node, which every supported CNI exempts from
+NetworkPolicy enforcement.
 
 ```bash
 # 1. Confirm the monitoring namespace carries the scrape label.
 kubectl get ns <prometheus-namespace> -o jsonpath='{.metadata.labels.metrics}{"\n"}'
 # Expected: enabled
 
-# 2. Inspect the per-tenant NP ingress rules — each should list an 8081 rule
+# 2. Inspect the per-tenant NP ingress rules — each should list an 8443 rule
 #    whose `from` is a namespaceSelector on metrics=enabled.
 kubectl get networkpolicy -n <tenant-namespace> \
   actions-gateway-proxy actions-gateway-controller \
   -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.ingress}{"\n"}{end}'
 
-# 3. Reproduce a scrape from a pod in the monitoring namespace (allowed) and an
-#    unlabelled namespace (denied) to confirm the policy, not the listener.
+# 3. Distinguish an NP drop from a missing client cert: scrape from the
+#    monitoring namespace without a cert (-k skips server-cert verification).
+#    A `tls: certificate required` error means the NP admits you — fix the cert
+#    per the TLS runbook below. A timeout means the label/NP still drops you.
 kubectl run dbg-scrape --rm -i --restart=Never --quiet \
   -n <prometheus-namespace> --image=curlimages/curl --command -- \
-  curl -sS --max-time 5 http://actions-gateway-proxy.<tenant-namespace>.svc:8081/metrics | head
+  curl -sS --max-time 5 -k https://actions-gateway-proxy.<tenant-namespace>.svc:8443/metrics
 ```
 
 **Resolution.**
 - Label the namespace your Prometheus runs in: `kubectl label ns <prometheus-namespace> metrics=enabled`.
-- The proxy and AGC `/metrics` endpoints are unauthenticated plain HTTP; the
-  NetworkPolicy namespace selector is the only access control. Keep the
-  `metrics: enabled` label off namespaces that should not see per-tenant
-  traffic-volume metrics.
+- The proxy and AGC `/metrics` endpoints are served over **mutual TLS on `:8443`**
+  (Q69), so the scraper also needs the per-tenant client certificate — see
+  [Metrics scrape returns a TLS / connection error](#metrics-scrape-returns-a-tls--connection-error)
+  for fetching the bundle. The `metrics: enabled` label gates *ingress*; the
+  client cert *authenticates* the scraper. Keep the label off namespaces that
+  should not see per-tenant traffic-volume metrics.
 
 **Same label gates the GMC manager metrics.** Since the §E manifest-defaults
 work, the GMC install ships the manager NetworkPolicy enabled by default, which

@@ -7,9 +7,11 @@ import (
 	stderrors "errors"
 	"fmt"
 	"log/slog"
+	"math/rand"
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -24,6 +26,20 @@ const (
 	labelRunnerGroup = "actions-gateway/runner-group"
 	labelAgentIndex  = "actions-gateway/agent-index"
 	managedByValue   = names.ControllerName
+)
+
+// Recycle retry policy for the transient GitHub 422 "runner is currently
+// running a job and cannot be deleted" race after a single-use JIT job
+// completes (Q259). The record (and its stable name) linger for a few to tens
+// of seconds until GitHub finishes auto-removing the ephemeral runner, so
+// Recycle waits it out with a bounded, jittered backoff rather than failing the
+// recycle and dropping the listener slot. Bounded so a runner that never
+// releases cannot spin a hot loop or wedge the goroutine indefinitely; on
+// give-up the caller records actions_gateway_agent_recycle_errors_total.
+const (
+	defaultRecycleMaxAttempts = 6
+	defaultRecycleBaseBackoff = 2 * time.Second
+	defaultRecycleMaxBackoff  = 15 * time.Second
 )
 
 // RegisterParams is the input to Registrar.Register.
@@ -65,6 +81,23 @@ type NameConflictError struct {
 
 func (e *NameConflictError) Error() string {
 	return fmt.Sprintf("agentpool: runner name %q already registered", e.Name)
+}
+
+// RunnerBusyError is returned by Registrar.Deregister when GitHub refuses to
+// delete a runner record because it still considers the runner to be executing
+// a job (HTTP 422 "Runner … is currently running a job and cannot be deleted").
+// For a single-use JIT runner this is a transient race after the job completes:
+// GitHub's auto-removal of the ephemeral record has not finished, so the record
+// (and its name) linger for a few to tens of seconds. Recycle treats it as
+// retriable — waiting for GitHub to release the runner — rather than fatal, so a
+// concurrent job burst does not collapse the pool to a single online listener
+// (Q259). AgentID is the record GitHub refused to delete.
+type RunnerBusyError struct {
+	AgentID int64
+}
+
+func (e *RunnerBusyError) Error() string {
+	return fmt.Sprintf("agentpool: runner id %d is still running a job and cannot be deleted", e.AgentID)
 }
 
 // Registrar abstracts the runner agent registration API.
@@ -134,6 +167,15 @@ type Pool struct {
 	// a successful Recycle. In-memory only — after an AGC restart a stale agent
 	// is instead detected by the listener's unauthorized-at-startup heal path.
 	consumed map[int]bool
+
+	// Recycle retry policy for the transient GitHub 422 "runner still running"
+	// race (Q259). Zero values select the default* constants above. sleep is a
+	// test hook for a fast, deterministic backoff; nil uses a real ctx-aware
+	// timer. Set once before first use (not guarded by mu).
+	recycleMaxAttempts int
+	recycleBaseBackoff time.Duration
+	recycleMaxBackoff  time.Duration
+	sleep              func(ctx context.Context, d time.Duration) error
 }
 
 // NewPool creates a Pool for the given RunnerGroup.
@@ -324,6 +366,83 @@ func (p *Pool) registerAgent(ctx context.Context, token string, index int) (*Age
 	return creds, privKeyPEM, nil
 }
 
+// registerAgentWithBusyRetry re-registers the agent at index, retrying while
+// registration is blocked by the just-consumed single-use JIT runner still
+// lingering server-side (Q259). GitHub auto-removes the ephemeral record after a
+// job completes, but for a few to tens of seconds the record survives: the
+// deregister of the conflicting record returns 422 ("runner is currently running
+// a job and cannot be deleted", surfaced as *RunnerBusyError) and the
+// re-registration under the stable name 409s. Both clear once GitHub finishes
+// releasing the runner, so a bounded, jittered backoff waits it out rather than
+// failing the recycle — which would drop the listener's polling slot and, under
+// a concurrent burst, collapse the pool to a single online listener. The loop is
+// bounded (attempts + ctx cancellation) so a runner that never releases cannot
+// spin a hot loop; on give-up the RunnerBusyError is returned to the caller,
+// which records actions_gateway_agent_recycle_errors_total.
+func (p *Pool) registerAgentWithBusyRetry(ctx context.Context, token string, index int) (*AgentCredentials, []byte, error) {
+	maxAttempts := p.recycleMaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = defaultRecycleMaxAttempts
+	}
+	for attempt := 1; ; attempt++ {
+		creds, privKeyPEM, err := p.registerAgent(ctx, token, index)
+		if err == nil {
+			return creds, privKeyPEM, nil
+		}
+		var busy *RunnerBusyError
+		if !stderrors.As(err, &busy) || attempt >= maxAttempts {
+			return nil, nil, err
+		}
+		slog.Debug("agentpool: recycle blocked by still-running consumed runner; backing off and retrying",
+			"index", index, "attempt", attempt, "maxAttempts", maxAttempts, "error", err)
+		if serr := p.recycleSleep(ctx, p.recycleBackoff(attempt)); serr != nil {
+			return nil, nil, serr
+		}
+	}
+}
+
+// recycleBackoff returns the jittered backoff before recycle retry attempt+1,
+// growing exponentially from the base delay to the per-attempt cap.
+func (p *Pool) recycleBackoff(attempt int) time.Duration {
+	base := p.recycleBaseBackoff
+	if base <= 0 {
+		base = defaultRecycleBaseBackoff
+	}
+	maxD := p.recycleMaxBackoff
+	if maxD <= 0 {
+		maxD = defaultRecycleMaxBackoff
+	}
+	// Exponential: base * 2^(attempt-1), capped. attempt is >= 1.
+	d := base
+	for i := 1; i < attempt && d < maxD; i++ {
+		d *= 2
+	}
+	if d > maxD {
+		d = maxD
+	}
+	// Full jitter over [d/2, d] so concurrent recyclers do not resynchronize
+	// their retries into a thundering herd against GitHub.
+	half := d / 2
+	return half + time.Duration(rand.Int63n(int64(half)+1)) //nolint:gosec // jitter, not crypto
+}
+
+// recycleSleep waits for d or until ctx is cancelled, returning ctx.Err() if the
+// context is cancelled first. The test hook (p.sleep) overrides it for fast,
+// deterministic backoff.
+func (p *Pool) recycleSleep(ctx context.Context, d time.Duration) error {
+	if p.sleep != nil {
+		return p.sleep(ctx, d)
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
 // secretDataFor builds the Secret data map for an agent's credentials.
 func (p *Pool) secretDataFor(index int, creds *AgentCredentials, privKeyPEM []byte) map[string][]byte {
 	return map[string][]byte{
@@ -507,6 +626,15 @@ func (p *Pool) MarkConsumed(a *Agent) {
 // any, is preserved; the consumed mark is cleared. The authoritative old agent
 // ID is read from the pool's current entry, not from a — the caller's pointer
 // may predate an earlier recycle.
+//
+// Registration is retried with a bounded, jittered backoff while it is blocked
+// by the just-consumed runner still lingering server-side — GitHub's 422 "runner
+// is currently running a job and cannot be deleted" race after job completion
+// (Q259). Without the retry a concurrent job burst collapses the pool to a
+// single online listener, because each replacement listener that finishes a job
+// fails its recycle and drops its polling slot. On give-up (the runner never
+// releases within the bound) the error is returned and the caller records
+// actions_gateway_agent_recycle_errors_total.
 func (p *Pool) Recycle(ctx context.Context, a *Agent, token string) (*Agent, error) {
 	idx := a.Index
 	p.mu.Lock()
@@ -523,7 +651,7 @@ func (p *Pool) Recycle(ctx context.Context, a *Agent, token string) (*Agent, err
 		}
 	}
 
-	creds, privKeyPEM, err := p.registerAgent(ctx, token, idx)
+	creds, privKeyPEM, err := p.registerAgentWithBusyRetry(ctx, token, idx)
 	if err != nil {
 		return nil, fmt.Errorf("agentpool: recycle agent %d: %w", idx, err)
 	}

@@ -122,6 +122,12 @@ type BrokerConfig struct {
 	// RenewJobInterval is the cadence of the per-job RenewJob renewal loop.
 	// 0 means the default (60s).
 	RenewJobInterval time.Duration
+	// FanoutCompletion enables the guarded Q260 Option A: the winner of a fanned-out
+	// job fans completejob out to every deduped sibling delivery on completion so
+	// GitHub does not cancel the whole job at its ~15-minute unstarted-job timeout.
+	// OFF by default pending live confirmation of the run service's per-delivery
+	// completion semantics — see listener.Config.FanoutCompletion.
+	FanoutCompletion bool
 }
 
 // SetupWithManager registers the reconciler with the controller-runtime manager.
@@ -541,6 +547,12 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 	// correlation; per-goroutine lines add agentIndex/sessionId beneath (Q87, Theme F).
 	muxLog := r.Log.With("namespace", rg.Namespace, "group", rg.Name)
 	mux := listener.NewMultiplexer(factory, rg.Spec.MaxListeners, muxLog)
+	// Retain a completed job's planID claim until its terminal worker pod is
+	// reaped (completedPodTTL), so a late GitHub redelivery of the same planID is
+	// deduped rather than colliding on the lingering Completed pod (Q260 redelivery
+	// residual). Zero completedPodTTL (pods reaped synchronously) leaves the
+	// original delete-on-completion behavior.
+	mux.ClaimLinger = provisioner.EffectiveCompletedPodTTL(rg)
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

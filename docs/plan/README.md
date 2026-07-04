@@ -43,6 +43,7 @@ run commands live in
 | Plan | Scope | Status |
 |---|---|---|
 | [milestone-1-tests.md](milestone-1-tests.md) | M1 unit-test coverage gaps | ✅ Done — all five gaps closed |
+| [coverage-to-75-per-module.md](coverage-to-75-per-module.md) | Every Go module's hand-written unit-test coverage to ≥75% (Q255) | ✅ Done — all 8 code modules ≥75% (probe/gmc reached via a `runProbe`/fake-client refactor + tests) |
 
 ## Speed improvements
 
@@ -59,7 +60,8 @@ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — pending workflow changes |
+| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — turn-up done 2026-07-01 (every CI job green per-job on `gag-ci`, Q246/Q247 hold); concurrent-matrix recycle-under-burst wedge (Q259) code-fixed, pending live re-validation next turn-up |
+| [dogfood-runner-rightsizing.md](dogfood-runner-rightsizing.md) | Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e) | ❌ Open — measurement pending |
 
 ## Cross-cutting
 
@@ -79,6 +81,9 @@ Plans whose work has fully landed and which `docs/STATUS.md` no longer reference
 
 | Plan | Scope | Closed |
 |---|---|---|
+| [archive/worker-sidecar-reap-warning.md](archive/worker-sidecar-reap-warning.md) | Non-blocking warning + `PossibleReapBlockingSidecar` condition + `actions_gateway_reap_blocking_sidecar_templates` metric when a worker template has a regular (non-native) sidecar that can block pod reaping; name-list opt-out; steer to native sidecars (no reaper) | 2026-07-03 — Q249; detection helper in `api/v2alpha1`, GMC admission warning, AGC RunnerSet condition+gauge; unit + webhook + envtest coverage; operator docs |
+| [archive/q237-docs-quality-audit.md](archive/q237-docs-quality-audit.md) | Six-goal quality audit of the published docset: 57 ranked findings (36 goal-1 docs-vs-code drift, 17 high) with remediation batches | 2026-07-01 — Q237 audit; remediation batches Q250 (A, goal-1 high), Q251 (B, goal-1 medium), Q252 (C, goal-5/6 usability & tone) all shipped; appendix-e v1/v2 straddle split to Q253 (resolved) |
+| [archive/q246-release-asset-timeout-live-diagnosis.md](archive/q246-release-asset-timeout-live-diagnosis.md) | Live cold-run diagnosis of the dogfood release-asset download timeout: (a) Q61 cache race vs (b) Q247 CPU starve | 2026-07-01 — Q246: confirmed (a) the Q61 cold-start cache race (per-CR reconcile blanks the direct-egress allowlist from an empty cache; live-measured ~25s window on `gag-dogfood`). Fix: preserve an existing NP's egress while the cache warms. (b) CPU is only an amplifier. Findings folded into [gke-dogfood.md](gke-dogfood.md) |
 | [archive/q235-worker-wrapper-injection.md](archive/q235-worker-wrapper-injection.md) | Inject the `cmd/worker` wrapper into worker pods at runtime so the default install and any `actions/runner`-derived (ARC) image run jobs without a baked-in wrapper image | 2026-06-28 — Q235: OCI image volume (K8s ≥1.33) / initContainer fallback, GMC forwards `WRAPPER_IMAGE`; default-on; e2e-validated on kindnet + Calico (#437). Live GKE re-validate folds into Q224 |
 | [archive/q187-air-gapped-install.md](archive/q187-air-gapped-install.md) | Air-gapped / private-registry install: chart image-pull-secret support + per-image registry overrides (digests preserved) + air-gapped install guide | 2026-06-26 — Q187: `imagePullSecrets` on the GMC pod; runtime AGC/proxy/worker covered by the SA-attach pattern; `docs/operations/air-gapped-install.md` |
 | [archive/q205-label-metric-naming-audit.md](archive/q205-label-metric-naming-audit.md) | `app.kubernetes.io/*` recommended labels on all created objects + metric/span semconv alignment before the v2beta1 freeze | 2026-06-26 — Q205: shared `api/apilabels` helper, `renewjob_errors_total`→`renew_job_errors_total`, span attrs → `k8s.*`/`gateway.*`; envtest-asserted |

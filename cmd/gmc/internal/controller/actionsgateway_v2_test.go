@@ -29,6 +29,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -631,6 +632,53 @@ func TestGenerateMetricsCertsV2_ParsesAndCoversAGCService(t *testing.T) {
 	assert.NotEmpty(t, b.clientCertPEM)
 }
 
+// TestAGCResources_NilOverrideReturnsDefaults asserts that a v2 ActionsGateway
+// with no spec.agcResources override reproduces the platform default AGC
+// container resources unchanged.
+func TestAGCResources_NilOverrideReturnsDefaults(t *testing.T) {
+	res := agcResources(nil)
+	assert.Equal(t, resource.MustParse("500m"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("2Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("2"), res.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("4Gi"), res.Limits[corev1.ResourceMemory])
+}
+
+// TestAGCResources_PartialOverrideMergesPerKey asserts the override is merged
+// key-by-key over the defaults (mirroring proxyResources' semantics): a tenant
+// that only overrides one knob keeps the platform default for every other key.
+func TestAGCResources_PartialOverrideMergesPerKey(t *testing.T) {
+	override := &corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
+	}
+	res := agcResources(override)
+	// Overridden key applied.
+	assert.Equal(t, resource.MustParse("8Gi"), res.Limits[corev1.ResourceMemory])
+	// Every other key keeps the default.
+	assert.Equal(t, resource.MustParse("500m"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("2Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("2"), res.Limits[corev1.ResourceCPU])
+}
+
+// TestAGCResources_FullOverrideWins asserts an override that sets every key
+// fully replaces the defaults.
+func TestAGCResources_FullOverrideWins(t *testing.T) {
+	override := &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("4"),
+			corev1.ResourceMemory: resource.MustParse("8Gi"),
+		},
+	}
+	res := agcResources(override)
+	assert.Equal(t, resource.MustParse("1"), res.Requests[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("1Gi"), res.Requests[corev1.ResourceMemory])
+	assert.Equal(t, resource.MustParse("4"), res.Limits[corev1.ResourceCPU])
+	assert.Equal(t, resource.MustParse("8Gi"), res.Limits[corev1.ResourceMemory])
+}
+
 // --- helpers ---
 
 func isControllerOwnedByGateway(refs []metav1.OwnerReference, name string) bool {
@@ -666,4 +714,81 @@ func findApiserverEgressRule(np *networkingv1.NetworkPolicy) *networkingv1.Netwo
 		}
 	}
 	return nil
+}
+
+// TestActionsGatewayV2Reconcile_PreservesEgressWhenCacheEmpty is the Q246/Q61
+// regression: a reconcile that runs before the IP-range cache has completed its first
+// api.github.com/meta fetch (an empty snapshot — the state at GMC startup) must not
+// blank an already-programmed direct-egress GitHub allowlist. Before the fix the
+// per-CR reconcile rebuilt the workload/AGC NetworkPolicies from the empty cache and
+// stripped every GitHub CIDR, default-denying worker and AGC egress to GitHub until
+// IPRangeReconciler repatched — the live-observed "release-asset download times out"
+// symptom.
+func TestActionsGatewayV2Reconcile_PreservesEgressWhenCacheEmpty(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+	ag := v2Gateway("gw", "team-a", "github-app", "") // no defaultProxyRef ⇒ direct
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ns, secret, ag).WithStatusSubresource(ag).Build()
+
+	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
+	require.NoError(t, err)
+	cache := &IPRangeCache{}
+	cache.Set([]net.IPNet{*cidr})
+
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", IPCache: cache}
+	ctx := context.Background()
+
+	// Steady state: cache populated ⇒ NPs carry the GitHub allowlist.
+	reconcileV2Gateway(t, r, "team-a", "gw")
+	var anp, wnp networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
+	require.True(t, hasGitHubCIDREgress(&anp, "140.82.112.0/20"), "precondition: AGC NP programmed")
+	require.True(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"), "precondition: workload NP programmed")
+
+	// Simulate a GMC restart: the in-memory cache starts empty until the first fetch.
+	cache.Set(nil)
+	reconcileV2Gateway(t, r, "team-a", "gw")
+
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp))
+	assert.True(t, hasGitHubCIDREgress(&anp, "140.82.112.0/20"),
+		"empty cache must not blank the already-programmed AGC GitHub allowlist (Q246/Q61)")
+	assert.True(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"),
+		"empty cache must not blank the already-programmed workload GitHub allowlist (Q246/Q61)")
+	// The apiserver egress rule is unrelated to the cache and stays either way.
+	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
+}
+
+// TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache asserts the other
+// half of the Q246/Q61 contract: a first-ever reconcile with an empty cache still
+// creates the direct-egress NetworkPolicies, fail-closed (no GitHub rule). That is
+// safe — no worker pod exists that early — and secure-by-default (egress is never
+// opened); IPRangeReconciler patches the GitHub rule in once its first fetch lands.
+func TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
+	ag := v2Gateway("gw", "team-a", "github-app", "") // direct
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ns, secret, ag).WithStatusSubresource(ag).Build()
+
+	cache := &IPRangeCache{} // never fetched ⇒ empty snapshot
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", IPCache: cache}
+	ctx := context.Background()
+
+	reconcileV2Gateway(t, r, "team-a", "gw")
+
+	var anp, wnp networkingv1.NetworkPolicy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &anp),
+		"AGC NP is created even before the cache is ready")
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: workloadNPNameV2(ag)}, &wnp),
+		"workload NP is created even before the cache is ready")
+	assert.False(t, hasGitHubCIDREgress(&wnp, "140.82.112.0/20"), "fresh install: no GitHub rule yet (fail-closed)")
+	// Egress is restricted, not open: workers still reach DNS and the apiserver rule
+	// remains on the AGC NP; the GitHub allowlist simply arrives on the IPRange patch.
+	assert.True(t, hasDNSEgress(&wnp), "workload NP still permits DNS")
+	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
 }

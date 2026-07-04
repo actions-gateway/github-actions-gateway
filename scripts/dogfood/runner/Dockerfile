@@ -7,7 +7,7 @@
 # artifact — it is a dev convenience that lets the GKE dogfood run THIS repo's
 # own make-based CI green. publish.yml builds and signs only the five product
 # images (gmc/agc/proxy/worker/wrapper); this one is built ad hoc by
-# scripts/dogfood-runner-build.sh and pushed to GHCR for the dogfood tenant to
+# scripts/dogfood/runner-build.sh and pushed to GHCR for the dogfood tenant to
 # pin as its RunnerTemplate workerImage. The Q235 wrapper is still injected on
 # top of it at provision time, exactly as it is on the bare upstream default.
 #

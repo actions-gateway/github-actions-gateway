@@ -129,6 +129,13 @@ hooks: ## Install the tracked git hooks (sets core.hooksPath to .githooks)
 	git config core.hooksPath .githooks
 	@echo "git hooks installed: core.hooksPath -> .githooks (fast gofmt + STATUS.md gate on commit)"
 
+# Diagnose the local toolchain: report which required/e2e/extended CLI tools are
+# missing or installed-but-not-on-PATH, with per-OS install and PATH-fix hints.
+# Runnable without the vendored tool binaries, so it works on a fresh clone.
+.PHONY: doctor
+doctor: ## Check required CLI tools are installed and on PATH (install/PATH-fix hints for any missing)
+	scripts/check-tools.sh
+
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods
 	$(MAKE) -C api generate
@@ -161,6 +168,18 @@ build-proxy: ## Build the proxy binary
 .PHONY: compat-report
 compat-report: ## Regenerate docs/development/broker-compatibility.md from the broker-compat suite
 	COMPAT_WRITE_REPORT=1 go test -C cmd/probe -run TestReportInSync ./compat/...
+
+# Local preview of the docs/marketing site. The script provisions an isolated
+# venv from the pinned requirements-docs.txt (never touching host Python) into
+# the gitignored .venv-docs/, reused across runs. python3 is the only host
+# prerequisite. Full context: docs/development/website.md.
+.PHONY: docs-serve
+docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (isolated venv)
+	scripts/docs-preview.sh serve
+
+.PHONY: docs-build
+docs-build: ## Build the static docs/marketing site into site/ (isolated venv)
+	scripts/docs-preview.sh build
 
 # The heavy per-module loops (test, lint) live in scripts/go-test.sh and
 # scripts/go-lint.sh, which apply the local auto-throttle themselves

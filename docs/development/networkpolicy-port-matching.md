@@ -1,4 +1,4 @@
-# NetworkPolicy port matching under kube-proxy DNAT
+# NetworkPolicy port matching under kube-proxy Destination NAT (DNAT)
 
 This doc is the canonical writeup of the kube-proxy DNAT vs. NetworkPolicy-port-match trap that the AGC `buildAGCNetworkPolicy` apiserver egress rule has to work around. Cited from [`docs/design/network-architecture.md`](../design/network-architecture.md), [`docs/operations/troubleshooting.md`](../operations/troubleshooting.md), [`kind-iteration.md`](kind-iteration.md), and the code at [`cmd/gmc/internal/controller/builder.go`](../../cmd/gmc/internal/controller/builder.go) (where the rule lists both `443` and `6443`).
 
@@ -103,8 +103,11 @@ and the fix is symmetric.
 In kind, the `kubernetes` Service points to the apiserver running on the
 control-plane node at port `6443`:
 
+```bash
+kubectl get endpointslice -n default
 ```
-$ kubectl get endpointslice -n default
+
+```
 NAME         ADDRESSTYPE   PORTS   ENDPOINTS    AGE
 kubernetes   IPv4          6443    172.18.0.3   59m
 ```

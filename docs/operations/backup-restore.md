@@ -146,7 +146,7 @@ For a control-plane loss, restore etcd from a snapshot per your Kubernetes distr
 
 ### CR Stuck Terminating
 
-If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down). The finalizer exists precisely to avoid orphaning the cluster-scoped `ClusterRoleBinding`.
+If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.github.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down). The finalizer exists precisely to avoid orphaning the cluster-scoped `ClusterRoleBinding`.
 
 1. Check the GMC is running and reconciling — restart it if needed (`kubectl rollout restart deploy/gmc-controller-manager -n gmc-system`); it will complete teardown and clear the finalizer.
 2. Only **force-remove the finalizer as a last resort** when the GMC is permanently gone, and understand the trade-off: it leaves the cluster-scoped `ClusterRoleBinding` (`agc-clusterrunnertemplate-reader.<namespace>.<name>`) orphaned, which you must then delete by hand.

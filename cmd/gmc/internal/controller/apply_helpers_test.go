@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -256,6 +257,44 @@ func TestApplyOrPruneServiceMonitors_EnabledMissingCRDSkips(t *testing.T) {
 	ag := applyTestAG()
 
 	require.NoError(t, r.applyOrPruneServiceMonitors(context.Background(), ag))
+}
+
+// TestApplyOrPruneServiceMonitors_EnabledPropagatesRealError verifies that an
+// apply failure other than a missing-CRD NoMatch (e.g. a genuine API error) is
+// not swallowed like the NoMatch case — it must fail the reconcile.
+func TestApplyOrPruneServiceMonitors_EnabledPropagatesRealError(t *testing.T) {
+	scheme := serviceMonitorTestScheme(t)
+	boom := errors.New("apiserver unavailable")
+	c := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(context.Context, client.WithWatch, client.Object, ...client.CreateOption) error {
+			return boom
+		},
+	}).Build()
+	r := applyTestReconciler(t, c, scheme)
+	r.EnableTenantServiceMonitors = true
+	ag := applyTestAG()
+
+	err := r.applyOrPruneServiceMonitors(context.Background(), ag)
+	require.ErrorIs(t, err, boom, "a non-NoMatch apply error must fail the reconcile, not be swallowed")
+}
+
+// TestApplyOrPruneServiceMonitors_DisabledPropagatesDeleteError verifies that a
+// genuine delete failure while pruning (not a missing-CRD NoMatch, not a
+// NotFound) is not swallowed.
+func TestApplyOrPruneServiceMonitors_DisabledPropagatesDeleteError(t *testing.T) {
+	scheme := serviceMonitorTestScheme(t)
+	boom := errors.New("apiserver unavailable")
+	c := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+			return boom
+		},
+	}).Build()
+	r := applyTestReconciler(t, c, scheme)
+	r.EnableTenantServiceMonitors = false
+	ag := applyTestAG()
+
+	err := r.applyOrPruneServiceMonitors(context.Background(), ag)
+	require.ErrorIs(t, err, boom, "a genuine delete error while pruning must fail the reconcile")
 }
 
 // TestApplyOrPruneServiceMonitors_DisabledPrunesExisting verifies that flipping

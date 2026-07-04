@@ -61,6 +61,7 @@ const WorkerImageDigest = "sha256:08c30b0a7105f64bddfc485d2487a22aa03932a7914023
 
 // DefaultWorkerImage is the fully digest-pinned default worker image
 // ("<repo>:<version>@<digest>") the AGC pulls when neither the per-RunnerGroup
-// workerImage field nor the AGC --worker-image flag is set. Digest-pinning is
+// workerImage field nor the WORKER_IMAGE environment variable (set by the GMC on
+// the AGC Deployment) is set. Digest-pinning is
 // secure-by-default: a tag alone is mutable.
 const DefaultWorkerImage = WorkerImageRepo + ":" + RunnerVersion + "@" + WorkerImageDigest

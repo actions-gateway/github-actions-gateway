@@ -8,7 +8,7 @@ Reference for iterating against a real kind cluster — when unit tests and envt
 make e2e-cluster          # 3-node kind cluster + local OCI registry (idempotent)
 make apply-cert-manager   # cert-manager (the GMC webhook depends on it)
 make wait-cert-manager
-make e2e-images           # builds and pushes gmc/agc/proxy/worker/fakegithub
+make e2e-images           # builds and pushes gmc/agc/proxy/worker/wrapper/fakegithub
 ```
 
 The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from there on demand. The `scripts/kind-with-registry.sh` script wires the kind nodes' containerd to resolve `127.0.0.1:5000/*` against the host registry. (The literal IPv4 loopback is used, not `localhost`: the registry is published IPv4-only, so a pusher that resolves `localhost` to IPv6 `[::1]` first fails intermittently with "connection refused".)
@@ -26,6 +26,21 @@ The script creates the cluster with `disableDefaultCNI: true` and `podSubnet: 19
 The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) detect the CNI at runtime and skip themselves on kindnet, so the standard CI flow is unaffected; they only assert enforcement on a Calico/Cilium cluster.
 
 ## Inner-loop gotchas
+
+### Target the cluster explicitly — don't trust the active context
+
+`~/.kube/config` is a single shared file. When multiple sessions run on one machine, any session's `kind create`, `gcloud … get-credentials`, or `kubectl config use-context` rewrites `current-context` for *everyone* — so a bare `kubectl get pods` you fire mid-task can silently hit the wrong cluster, and a write can land somewhere it shouldn't.
+
+Pin the target on every ad-hoc command instead of relying on the active context:
+
+```bash
+kubectl --context kind-<cluster> get pods -A            # kind e2e (see KIND_CLUSTER)
+kubectl --context gke_<project>_<zone>_<cluster> get ns # GKE dogfood
+```
+
+The repo scripts already do this — `scripts/kind-with-registry.sh` threads `kubectl --context "kind-${KIND_CLUSTER}"` through every call, and `scripts/lib/common.sh` (`gke_get_credentials_and_verify`) fails closed if `current-context` isn't the expected GKE context before any write. Match that pattern in ad-hoc commands.
+
+The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too. Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
 
 ### Image tag caching
 
@@ -146,7 +161,7 @@ A full `make e2e-up` run is ~10 minutes per cycle. To iterate on a single compon
 
 1. Stand up the cluster + cert-manager + GMC once with `E2E_SKIP_TEARDOWN=true ginkgo run --focus '<spec>' ...`. The suite leaves the GMC, fakegithub, and cert-manager in place after it exits.
 2. Rebuild the changed component only: `docker buildx bake --file docker-bake.hcl --set "<target>.tags=127.0.0.1:5000/<name>:<unique-tag>" <target>`.
-3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WORKER_IMAGE` on the GMC).
+3. Update the deployment image: `kubectl set image` (or `kubectl set env` for `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` on the GMC).
 4. Force a fresh pod: `kubectl delete pod -l <selector>`.
 5. Test the path with a label-matched `kubectl run` debug pod (above).
 
@@ -183,4 +198,4 @@ For the runner side, `gh run list --repo <org>/<repo>` and `gh run view <id> --j
 
 ## Cleanup
 
-`make e2e-clean` deletes the cluster and the local registry. The `.build/` directory persists across sessions; remove it if you suspect stale tool binaries.
+`make e2e-clean` deletes the cluster and the local registry, and also removes `.build/`. Other targets leave `.build/` in place, so it otherwise persists across sessions — remove it manually (`rm -rf .build`) if you suspect stale tool binaries and aren't running the full `make e2e-clean`.

@@ -168,6 +168,11 @@ type server struct {
 	sessionVersions      map[string]string       // sessionID → agent.version (runnerVersion)
 	deadPolls            map[string]int          // dead sessionID → GET /message count since death
 	requestSessions      map[string]string       // runnerRequestId → delivering sessionID
+	// jobTokens maps a job's runner_request_id to the job-scoped token issued in
+	// its acquirejob response (the SystemVssConnection AccessToken). RenewJob must
+	// present it: the real run service rejects the broker session token for per-job
+	// renewal with 401 "Not authorized for this job" (Q247). Guarded by mu.
+	jobTokens map[string]string
 
 	// Lease / acquire-vs-redeliver fidelity (Q154). Opt-in, owner-scoped. When
 	// enabled, a delivered job is leased rather than dropped: AcquireJob consumes
@@ -241,6 +246,7 @@ func newServer() *server {
 		sessionVersions: make(map[string]string),
 		deadPolls:       make(map[string]int),
 		requestSessions: make(map[string]string),
+		jobTokens:       make(map[string]string),
 		leased:          make(map[string]*leasedJob),
 		acquiredReqs:    make(map[string]bool),
 		deliveryCount:   make(map[string]int),
@@ -259,6 +265,7 @@ func (s *server) mainMux() http.Handler {
 	mux.HandleFunc("/session", s.handleSession)
 	mux.HandleFunc("/message", s.handleMessage)
 	mux.HandleFunc("/acquirejob", s.handleAcquireJob)
+	mux.HandleFunc("/renewjob", s.handleRenewJob)
 	return mux
 }
 
@@ -733,10 +740,69 @@ func (s *server) handleAcquireJob(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(custom)
 		return
 	}
+	// Issue a job-scoped token in the SystemVssConnection endpoint — the shape the
+	// real run service returns and the runner uses to renew the job lock. RenewJob
+	// must present it, not the broker session token (Q247). Record it keyed by the
+	// job's runner_request_id (== jobMessageId) so handleRenewJob can enforce it.
+	jobToken := fmt.Sprintf("jobtoken-%d", n)
+	if reqBody.JobMessageID != "" {
+		jobToken = "jobtoken-" + reqBody.JobMessageID
+		s.mu.Lock()
+		s.jobTokens[reqBody.JobMessageID] = jobToken
+		s.mu.Unlock()
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"plan": map[string]string{
 			"planId": fmt.Sprintf("plan-%d", n),
 		},
+		"resources": map[string]any{
+			"endpoints": []map[string]any{{
+				"name": "SystemVssConnection",
+				"url":  externalBase(r),
+				"authorization": map[string]any{
+					"scheme":     "OAuth",
+					"parameters": map[string]string{"AccessToken": jobToken},
+				},
+			}},
+		},
+	})
+}
+
+// handleRenewJob serves POST /renewjob. It enforces the Q247 contract: a job's
+// lock is renewed with the job-scoped token issued in its acquirejob response (the
+// SystemVssConnection AccessToken), not the broker session token. When a token was
+// recorded for the job, a mismatching Authorization header is rejected 401 "Not
+// authorized for this job" — the exact signature the real run service returns.
+// Jobs with no recorded token (a custom acquire response without an endpoint) are
+// renewed leniently so specs that override the response are unaffected.
+func (s *server) handleRenewJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var reqBody struct {
+		JobID string `json:"jobId"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&reqBody)
+
+	s.mu.Lock()
+	want, recorded := s.jobTokens[reqBody.JobID]
+	s.mu.Unlock()
+
+	if recorded && r.Header.Get("Authorization") != "Bearer "+want {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"source":       "actions-run-service",
+			"statusCode":   401,
+			"errorMessage": "Not authorized for this job",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"lockedUntil": time.Now().Add(10 * time.Minute).Format(time.RFC3339),
 	})
 }
 

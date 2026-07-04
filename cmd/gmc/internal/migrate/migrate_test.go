@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -380,4 +381,44 @@ func TestGoldenRepresentativeTenant(t *testing.T) {
 	want, err := os.ReadFile(goldenPath)
 	require.NoError(t, err, "golden file missing; run with -update")
 	assert.Equal(t, string(want), got)
+}
+
+// TestLabelSafe exercises every sanitization branch: it must lowercase, replace
+// any non-[a-z0-9-] byte with '-', trim leading/trailing '-', cap the segment at
+// 40 bytes, fall back to "label" when nothing survives, and always append a
+// 7-hex hash so distinct inputs stay distinct.
+func TestLabelSafe(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		wantSeg string // segment before the "-<hash>" suffix
+	}{
+		{"already safe", "linux", "linux"},
+		{"uppercased", "Linux", "linux"},
+		{"non-alnum to dash", "a/b c", "a-b-c"},
+		{"trims edge dashes", "-abc-", "abc"},
+		{"caps at 40 bytes", strings.Repeat("a", 50), strings.Repeat("a", 40)},
+		{"empty after sanitize falls back", "///", "label"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := labelSafe(tt.in)
+			assert.Regexp(t, "^"+tt.wantSeg+"-[0-9a-f]{7}$", got)
+		})
+	}
+
+	// The hash suffix keeps otherwise-colliding sanitized segments distinct.
+	assert.NotEqual(t, labelSafe("a/b"), labelSafe("a-b"),
+		"different raw labels that sanitize identically must differ by hash")
+}
+
+// TestRunnerGroupName covers both derivation paths: a content-derived name from
+// the first runner label (via labelSafe) and the index-based fallback when no
+// labels are set.
+func TestRunnerGroupName(t *testing.T) {
+	withLabel := runnerGroupName("gw", agcv1alpha1.RunnerGroupSpec{RunnerLabels: []string{"Linux"}}, 0)
+	assert.Regexp(t, "^gw-linux-[0-9a-f]{7}$", withLabel)
+
+	noLabel := runnerGroupName("gw", agcv1alpha1.RunnerGroupSpec{}, 3)
+	assert.Equal(t, "gw-3", noLabel)
 }

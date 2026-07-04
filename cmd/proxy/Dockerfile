@@ -7,7 +7,7 @@
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.26@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26@sha256:f96cc555eb8db430159a3aa6797cd5bae561945b7b0fe7d0e284c63a3b291609 AS builder
 WORKDIR /src
 # Build context is the repo root so the workspace vendor/ is available.
 # `go build` auto-selects -mod=vendor when go.work and vendor/ are present.

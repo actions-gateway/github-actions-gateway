@@ -214,6 +214,7 @@ func assembleListenerConfig(
 		Admit:             admit,
 		IdleThreshold:     brokerCfg.IdleThreshold,
 		RenewInterval:     brokerCfg.RenewJobInterval,
+		FanoutCompletion:  brokerCfg.FanoutCompletion,
 		ReleaseAgent:      func() { pool.ReleaseAgent(agent) },
 		MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
 		RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {

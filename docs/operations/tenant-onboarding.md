@@ -19,7 +19,7 @@ Before beginning, confirm all of the following:
 - [ ] **Cluster CNI enforces egress NetworkPolicy.** The tenant isolation model (workers restricted to DNS + the per-tenant proxy; no direct GitHub or Kubernetes API egress) is implemented as NetworkPolicy egress rules, which are inert unless the cluster's Container Network Interface (CNI) plugin enforces them. Production clusters must run an egress-enforcing CNI such as Calico or Cilium — kind's default kindnet, for example, accepts NetworkPolicy objects without enforcing egress. Verify with your CNI's documentation, or run the negative probes in [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) after onboarding: the "blocked" probes must actually time out.
 - [ ] **Service mesh is accounted for (if the cluster runs one).** A mesh (Istio, Linkerd, Cilium Service Mesh, Kuma) that injects a sidecar into the tenant namespace will strand completed worker pods and fight the per-tenant egress proxy. The supported posture is to opt the GAG tenant namespace out of the mesh; if mesh membership is mandatory, use native sidecars or an ambient/sidecar-less data plane plus egress exclusions. Decide this before provisioning — see [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md).
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`. Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
-- [ ] **CRDs are installed.** `kubectl get crd actionsgateway.actions.gateway && kubectl get crd runnergroups.actions.gateway`.
+- [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.github.com && kubectl get crd runnergroups.actions-gateway.github.com`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with at least `Actions: Read` and `Administration: Read` permissions. The platform team has the `appId`, `installationId`, and private key `.pem` file. First time? [Step 0](#step-0-create-and-install-the-github-app) walks through creating the App and capturing all three.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
 - [ ] **GitHub URL is known.** The org/enterprise/repo URL the runners register against — `https://github.com/<org>`, `https://github.com/<org>/<repo>`, or a GitHub Enterprise Server URL `https://ghes.example.com/<org>`. It goes in `spec.gitHubURL` (Step 2) and must match where the App is installed. It is a required field — there is no default.
@@ -319,9 +319,10 @@ spec:
     # noProxyCIDRs: ["10.0.0.0/8"]
   # The namespace ResourceQuota is platform-owned and set on the namespace in
   # Step 1b — it is not a field on this CR.
+  # A runner group has no `name` field — the RunnerGroup CR name is derived from
+  # the gateway name + the group's first runnerLabel (here "linux").
   runnerGroups:
-    - name: default
-      runnerLabels: ["self-hosted", "linux"]
+    - runnerLabels: ["linux", "self-hosted"]
       maxListeners: 10
       maxWorkers: 20
       podTemplate:
@@ -364,7 +365,7 @@ RUN apt-get update \
 USER runner   # keep the non-root UID 1001 the AGC expects
 ```
 
-A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood-runner-build.sh`](../../scripts/dogfood-runner-build.sh)); it adds just enough to run a `make`-based Go CI. **It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan. Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the `RunnerGroup` `VersionTooOld` condition.
+A working reference you can copy and extend lives at [`scripts/dogfood/runner/Dockerfile`](../../scripts/dogfood/runner/Dockerfile) (built by [`scripts/dogfood/runner-build.sh`](../../scripts/dogfood/runner-build.sh)); it adds just enough to run a `make`-based Go CI. **It is a reference example, not an officially supported image** — GAG signs and CVE-scans only its five first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan. Keep the runner version in step with the default the AGC would otherwise inject (it is the version GitHub validates at session creation); a stale runner surfaces as the `RunnerGroup` `VersionTooOld` condition.
 
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block. Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default). `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 

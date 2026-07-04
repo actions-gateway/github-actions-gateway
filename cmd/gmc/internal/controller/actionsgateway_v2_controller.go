@@ -111,6 +111,23 @@ func (r *ActionsGatewayV2Reconciler) githubCIDRs() []net.IPNet {
 	return r.IPCache.Snapshot()
 }
 
+// preserveExistingEgress copies an already-programmed NetworkPolicy's egress rules
+// into desired, so a reconcile that runs before the IP-range cache is ready does not
+// blank the direct-egress GitHub allowlist (Q246/Q61). If the policy does not exist
+// yet it is left as built (fail-closed, no GitHub rule): no worker can egress that
+// early, and IPRangeReconciler patches the rule in within seconds. Best-effort — a
+// Get error other than NotFound is ignored, leaving the pre-fix behavior as the worst
+// case rather than failing the whole reconcile.
+func (r *ActionsGatewayV2Reconciler) preserveExistingEgress(ctx context.Context, namespace string, desired *networkingv1.NetworkPolicy) {
+	var existing networkingv1.NetworkPolicy
+	if err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: desired.Name}, &existing); err != nil {
+		return
+	}
+	if len(existing.Spec.Egress) > 0 {
+		desired.Spec.Egress = existing.Spec.Egress
+	}
+}
+
 // Reconcile drives a v2 ActionsGateway toward its desired AGC control plane.
 func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var ag gmcv2alpha1.ActionsGateway
@@ -235,10 +252,29 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	step("NetworkPolicies")
 	direct := proxy == nil
 	githubCIDRs := r.githubCIDRs()
-	if err := r.applyNetworkPolicy(ctx, ag, buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct)); err != nil {
+	workloadNP := buildWorkloadNetworkPolicyV2(ag, githubCIDRs, direct)
+	agcNP := buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct)
+	// Q246/Q61: in direct egress the GitHub-CIDR allowlist on these two policies is
+	// sourced from the IP-range cache. At GMC startup that cache is empty until
+	// IPRangeReconciler's first api.github.com/meta fetch lands, so rebuilding an
+	// already-programmed policy from it would strip the entire allowlist and
+	// default-deny GitHub egress for the AGC and every worker until the fetch
+	// completes — a window (live-measured at ~25s on a cold node) that widens under
+	// node CPU pressure (Q247) and produced the "release-asset download times out"
+	// symptom. When the cache is not yet ready, preserve the existing policy's egress
+	// instead of blanking it; a not-yet-created policy is still created fail-closed
+	// (no GitHub rule), which is safe — no worker exists that early and
+	// IPRangeReconciler patches the rule in within seconds. The cache is empty only
+	// before its first successful fetch: a /meta fetch always yields ranges, so an
+	// empty snapshot unambiguously means "not fetched yet", never "GitHub has none".
+	if direct && len(githubCIDRs) == 0 {
+		r.preserveExistingEgress(ctx, ag.Namespace, workloadNP)
+		r.preserveExistingEgress(ctx, ag.Namespace, agcNP)
+	}
+	if err := r.applyNetworkPolicy(ctx, ag, workloadNP); err != nil {
 		return fmt.Errorf("workload NetworkPolicy: %w", err)
 	}
-	if err := r.applyNetworkPolicy(ctx, ag, buildAGCNetworkPolicyV2(ag, r.APIServerCIDRs, githubCIDRs, direct)); err != nil {
+	if err := r.applyNetworkPolicy(ctx, ag, agcNP); err != nil {
 		return fmt.Errorf("AGC NetworkPolicy: %w", err)
 	}
 

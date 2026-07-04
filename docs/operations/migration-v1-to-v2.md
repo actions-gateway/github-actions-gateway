@@ -14,6 +14,53 @@ create**, not an automatic conversion — see the
 This guide covers running the `gag-migrate` tool: dry-run → review → `--apply`, the
 coexistence/rollback story, and the post-migration teardown.
 
+## Why upgrade to v2
+
+v2 is **opt-in and `v2alpha1` (alpha)** — the schema may still change incompatibly
+before it graduates toward `v2beta1`, and it is **not a drop-in replacement** (new
+API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted
+fan-out). `v1alpha1` stays fully supported. Migrate a tenant when one of these is worth
+that trade-off.
+
+**New capabilities — no v1 equivalent:**
+
+- **Multiple gateways per namespace.** Run several GitHub orgs, or rebalance
+  `maxWorkers`/`priorityTiers` across runner sets against a single namespace
+  `ResourceQuota`, without spreading across namespaces (v1 is one gateway per namespace).
+- **Reusable runner templates.** A `RunnerTemplate` — or cluster-scoped
+  `ClusterRunnerTemplate` for platform-owned golden DinD/sysbox templates — is
+  referenced by many `RunnerSet`s instead of copied inline into each group. This also
+  relieves the etcd per-object size pressure a fat inline template creates
+  ([Appendix H §H.1](../design/appendix-h-v2-api-decomposition.md#h1-why-decompose)).
+- **Shared or optional egress proxy.** The proxy is a standalone `EgressProxy` several
+  runner sets can point at, or omit entirely for direct (still `NetworkPolicy`-restricted)
+  egress. v1 couples exactly one proxy to one gateway
+  ([§H.10](../design/appendix-h-v2-api-decomposition.md#h10-the-egress-proxy-becomes-optional)).
+- **Workload-identity credentials.** `credentials.type: WorkloadIdentity` delegates
+  App-JWT signing to an external signer (Vault transit MVP), so the GitHub App private
+  key never enters the cluster — the secure-by-default credential model. v1's flat
+  credential shape cannot express it
+  ([05-security.md §5.7](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model)).
+- **Per-gateway control-plane sizing.** `ActionsGateway.spec.agcResources` tunes the AGC
+  container CPU/memory per gateway (an additive overlay of the platform default). v1 has
+  no equivalent field ([§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
+- **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds `CiliumFQDN` /
+  `CalicoFQDN` modes (default `CIDR`) to allowlist GitHub by hostname on a DNS-aware CNI.
+
+**Quality-of-life and hardening — batched into the one schema break:**
+
+- **Higher default concurrency.** `maxListeners` defaults to `10` (v1: `1`), so job
+  pickup is not serialized per group. The migration tool pins each set to its v1
+  *effective* value, so an existing tenant's ceiling does not jump silently.
+- **Better `kubectl` ergonomics.** Additional printer columns (Ready, profile, active
+  sessions) and short names.
+- **Safer by construction.** `githubURL` is immutable (CEL) — no accidental rebinding of
+  a running gateway's org — and secret references are name-only, dropping v1's
+  cross-namespace `SecretReference.namespace` footgun.
+- **Fewer fail-closed webhooks.** Checks that needed a validating webhook on Kubernetes
+  ≤ 1.30 move to structural/CEL, so admission has fewer single points of failure
+  ([§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)).
+
 ## What the tool does
 
 `gag-migrate` reads a tenant's v1 `ActionsGateway` (and the `RunnerGroup` CRs the

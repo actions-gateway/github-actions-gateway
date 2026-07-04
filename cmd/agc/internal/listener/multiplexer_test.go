@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -581,13 +583,13 @@ func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
 			Broker:        bc,
 			HTTPClient:    oauthSrv.Client(),
 			IdleThreshold: idleThreshold,
-			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) error {
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 				jobStartedOnce.Do(func() { close(jobStarted) })
 				select {
 				case <-jobBlock:
 				case <-ctx.Done():
 				}
-				return nil
+				return "", nil
 			},
 		}
 	}
@@ -627,6 +629,107 @@ func TestMultiplexer_BusyListenerNotCountedAsPoller(t *testing.T) {
 	close(jobBlock)
 	cancel()
 	m.Stop()
+	drainHTTP(oauthSrv, brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestMultiplexer_DuplicateJobDeliveryProvisionsOnce is the Q260 regression: when
+// GitHub's broker fans one job out to every sibling session of one RunnerGroup
+// under a concurrent burst, the Multiplexer's shared job-claim registry must
+// ensure exactly one session provisions it. The fan-out delivers a DISTINCT
+// RunnerRequestID to each sibling but the AcquireJob response carries one SHARED
+// planID, so without a planID-keyed claim every recipient acquires and then enters
+// the provisioner, colliding on the shared "job-<planID>" worker Secret — all but
+// one runner slot is burned (busy but pod-less) and the pool collapses to a single
+// worker. This is precisely the shape the first fix (c850764) missed: it keyed the
+// claim on RunnerRequestID, so distinct-id siblings all passed the gate. Here every
+// poll delivers a distinct RunnerRequestID (so the c850764 key would NOT dedup) but
+// the acquire returns a constant planID; the JobHandler stands in for the
+// provisioner and records the peak number of sessions running the job at once. The
+// invariant is that it never exceeds one, and the losing siblings are deduplicated.
+func TestMultiplexer_DuplicateJobDeliveryProvisionsOnce(t *testing.T) {
+	const maxListeners = 5
+
+	oauthSrv := oauthStub()
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	// Each poll delivers the same job with a DISTINCT RunnerRequestID (req-1,
+	// req-2, …), reproducing the broker fan-out: siblings differ by request id but
+	// share the planID the acquire returns. If the dedup keyed on RunnerRequestID
+	// (the ineffective c850764 fix) every sibling would pass the gate.
+	var reqSeq atomic.Int64
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		reqID := fmt.Sprintf("req-%d", reqSeq.Add(1))
+		_ = json.NewEncoder(w).Encode(jobMsgWithReqID(brokerSrv.URL, reqID))
+	})
+	// AcquireJob always succeeds and returns the SAME planID ("plan-stub") for every
+	// sibling (defaultAcquireJob) — the shared identity the claim must key on so that
+	// only the winner reaches the provisioner.
+
+	m := newTestMetrics()
+	release := make(chan struct{})
+	var handlerActive, handlerMax atomic.Int32
+	factory := func(_ int) listener.Config {
+		agent := makeAgent(t, oauthSrv.URL)
+		bc := &broker.Client{
+			BrokerURL:  brokerSrv.URL,
+			UseV2Flow:  true,
+			HTTPClient: brokerSrv.Client(),
+		}
+		return listener.Config{
+			Group:         "test-rg",
+			Namespace:     "default",
+			Agent:         agent,
+			Broker:        bc,
+			HTTPClient:    oauthSrv.Client(),
+			Metrics:       m,
+			IdleThreshold: 1_000_000, // never idle-exit during the assertions
+			RenewInterval: time.Hour, // no renewal traffic during the test
+			JobHandler: func(ctx context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+				n := handlerActive.Add(1)
+				for {
+					old := handlerMax.Load()
+					if n <= old || handlerMax.CompareAndSwap(old, n) {
+						break
+					}
+				}
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+				handlerActive.Add(-1)
+				return "", nil
+			},
+		}
+	}
+
+	mgr := listener.NewMultiplexer(factory, maxListeners, nil)
+	mgr.RestartDelay = time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	require.NoError(t, mgr.Start(ctx))
+	// Force maxListeners concurrent pollers up front (the burst pre-scales the
+	// pool), rather than waiting for the winner's post-acquire SpawnReplacement.
+	for i := 0; i < maxListeners-1; i++ {
+		mgr.SpawnReplacement(ctx)
+	}
+
+	// The losing siblings are deduplicated: at least maxListeners-1 duplicate
+	// deliveries must be skipped.
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= float64(maxListeners-1)
+	}, 3*time.Second, 10*time.Millisecond, "losing sibling sessions should be deduplicated")
+
+	// The core invariant: never more than one session provisions the job at once.
+	// Without the claim, all maxListeners sessions would run the handler together.
+	assert.Equal(t, int32(1), handlerMax.Load(),
+		"exactly one session may provision a given job under a duplicate-delivery burst")
+
+	close(release)
+	cancel()
+	mgr.Stop()
 	drainHTTP(oauthSrv, brokerSrv)
 	goleak.VerifyNone(t)
 }

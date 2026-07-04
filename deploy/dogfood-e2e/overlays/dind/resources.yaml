@@ -1,0 +1,63 @@
+# Privileged-DinD isolation delta: the worker pod shape + the egress policy.
+#
+# ClusterRunnerTemplate is cluster-scoped (platform-owned) — v2 refuses a
+# privileged container in a namespaced (tenant) RunnerTemplate, so the privileged
+# DinD shape MUST live here.
+apiVersion: actions-gateway.com/v2alpha1
+kind: ClusterRunnerTemplate
+metadata:
+  name: dogfood-e2e-privileged
+spec:
+  podTemplate:
+    spec:
+      nodeSelector:
+        cloud.google.com/gke-nodepool: e2e
+      tolerations:
+        - key: dedicated
+          value: e2e
+          effect: NoSchedule
+      # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s >=1.29).
+      # This is load-bearing: a regular sidecar's dockerd never exits, so the pod
+      # never completes, the AGC keeps the session active, and maxWorkers strands
+      # (Q249). As a native sidecar, K8s tears dind down when the runner exits.
+      initContainers:
+        - name: dind
+          image: docker:27-dind
+          restartPolicy: Always
+          args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          securityContext:
+            privileged: true
+          resources:
+            requests: { cpu: "1", memory: "2Gi" }
+            limits: { cpu: "4", memory: "8Gi" }
+      containers:
+        - name: runner
+          # docker CLI + buildx + helm + kubectl + jq on the build-capable base
+          # (scripts/dogfood/e2e-runner/Dockerfile). The AGC still injects the
+          # Q235 wrapper and preserves the native-sidecar init container.
+          image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.335.1-2
+          env:
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
+          resources:
+            requests: { cpu: "2", memory: "4Gi" }
+            limits: { cpu: "6", memory: "12Gi" }
+---
+# Open egress (additive; unions with GAG's managed default-deny). TRUSTED-ONLY:
+# e2e pulls from Docker Hub / quay / registry.k8s.io / get.helm.sh, all CDN-fronted
+# (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable on GKE DPv2 —
+# Q245). Durable hardening = an in-cluster pull-through mirror. This variant is
+# for trusted CI; untrusted jobs use the Kata variant with tighter egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: e2e-open-egress
+  namespace: gag-dogfood-e2e
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - {}

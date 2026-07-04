@@ -7,7 +7,30 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/broker"
 )
+
+// jobClaim is the accounting state of one claimed planID (Q260). It collapses
+// GitHub's per-delivery fan-out onto one provisioning winner and, under Option A,
+// carries what the winner needs to reconcile the deduped-away sibling deliveries on
+// GitHub's books when its job finishes.
+type jobClaim struct {
+	// expireAt is the zero Time while the job is in-flight (held until the winner
+	// concludes); it becomes a future instant once the winner concludes and the
+	// claim lingers for ClaimLinger. A still-present entry therefore always denies a
+	// fresh claim — either in-flight or completed within the trailing linger window.
+	expireAt time.Time
+	// concluded is set once the winner reports its terminal result. A sibling
+	// delivered after this point (a late redelivery within the linger window) is
+	// resolved with result rather than registered.
+	concluded bool
+	// result is the winner's terminal result, valid once concluded.
+	result broker.TaskResult
+	// siblings are the deduped sibling deliveries registered against this planID
+	// while the winner ran, awaiting the winner's fan-out completion (Q260 Option A).
+	siblings []SiblingDelivery
+}
 
 // listenerState tracks one running listener goroutine.
 type listenerState struct {
@@ -54,6 +77,44 @@ type Multiplexer struct {
 	stopped bool
 	factory ConfigFactory
 	log     *slog.Logger
+
+	// jobClaimsMu guards jobClaims. It is separate from mu so the hot per-job
+	// claim/release path never contends with spawn/Stop bookkeeping.
+	jobClaimsMu sync.Mutex
+	// jobClaims maps a claimed planID to its accounting state (see jobClaim). It
+	// deduplicates a job that GitHub's broker fans out to multiple sibling sessions
+	// under a concurrent burst: the fan-out delivers distinct RunnerRequestIDs but
+	// one shared planID, so the first goroutine to claim the planID provisions it,
+	// and siblings that see it already claimed skip provisioning (and recycle their
+	// runner) rather than colliding on the shared "job-<planID>" worker Secret
+	// (Q260).
+	//
+	// A claim's expireAt is the zero Time while the job is in-flight (held until the
+	// winning goroutine concludes). On conclusion the entry is not deleted
+	// immediately but retained with a future expiry — ClaimLinger past completion —
+	// so a LATE GitHub redelivery of an already-completed planID is still deduped
+	// while the winner's terminal-but-not-yet-reaped worker pod lingers. Without the
+	// linger the redelivery would pass the (freshly released) claim gate,
+	// re-provision, and collide on `create Pod runner-…-<planID>` with the winner's
+	// Completed pod (the Q260 redelivery residual). Expired lingering entries are
+	// swept lazily on the next claim, so the map holds only in-flight jobs plus
+	// those completed within the trailing ClaimLinger window.
+	//
+	// Each claim also records the deduped sibling deliveries (so the winner can fan
+	// completion out to them, Q260 Option A) and, once concluded, the winner's
+	// terminal result (so a late redelivery within the linger window resolves with
+	// the same result rather than dangling).
+	jobClaims map[string]*jobClaim
+	// ClaimLinger is how long a planID claim is retained after the owning goroutine
+	// releases it (see jobClaims). It is sized to the owner's completedPodTTL — the
+	// window during which a Completed worker pod lingers before the reaper GCs it —
+	// so the claim outlives the pod it names. Zero (the owner deletes terminal pods
+	// synchronously on completion, so none linger) keeps the original
+	// delete-on-release behavior. Set once after NewMultiplexer, before Start.
+	ClaimLinger time.Duration
+	// now returns the current time; nil means time.Now. A test seam for driving the
+	// ClaimLinger expiry deterministically.
+	now func() time.Time
 	// RestartDelay is the backoff before restarting a crashed permanent listener
 	// goroutine. Zero defaults to one second. Override to a smaller value in tests.
 	RestartDelay time.Duration
@@ -67,6 +128,7 @@ func NewMultiplexer(factory ConfigFactory, maxListeners int32, log *slog.Logger)
 	m := &Multiplexer{
 		active:     make(map[int]*listenerState),
 		restarting: make(map[int]*listenerState),
+		jobClaims:  make(map[string]*jobClaim),
 		factory:    factory,
 		log:        log,
 	}
@@ -139,6 +201,96 @@ func (m *Multiplexer) setPolling(state *listenerState, polling bool) {
 	}
 }
 
+// claimJob reserves exclusive provisioning of planID within this RunnerGroup and,
+// for a deduped sibling, reconciles its delivery against the winner (Q260 Option A).
+// delivery describes THIS caller's own per-delivery assignment so the winner can
+// complete it on GitHub's books if this caller loses the claim.
+//
+// The returned ClaimResult.Won is false when the claim is still held — either a
+// sibling goroutine is provisioning this planID right now (a duplicate broker
+// delivery of the same job under a concurrent burst), or the job already completed
+// but its claim is still lingering because the winner's terminal worker pod has not
+// yet been reaped (a LATE GitHub redelivery). A loser must skip provisioning and
+// recycle its runner instead of colliding on the shared "job-<planID>" Secret or
+// the lingering "runner-…-<planID>" pod. For a loser whose winner is still running,
+// this delivery is registered so the winner completes it on finish; for a loser
+// whose planID has already concluded, ClaimResult.LateResult carries the winner's
+// terminal result so the caller resolves its own delivery immediately.
+//
+// On Won=true the returned Complete must be called exactly once when the job
+// finishes or is abandoned; it is idempotent. Complete records the winner's
+// terminal result on the claim (so a late redelivery within the linger window
+// resolves with the same result), transitions the claim into its ClaimLinger window
+// (or frees it immediately when ClaimLinger is zero — the owner reaps terminal pods
+// synchronously), and returns the deduped sibling deliveries registered so far so
+// the winner can fan completion out to each.
+func (m *Multiplexer) claimJob(planID string, delivery SiblingDelivery) ClaimResult {
+	m.jobClaimsMu.Lock()
+	defer m.jobClaimsMu.Unlock()
+	// Drop lingering claims whose pod-linger window has elapsed, so a still-present
+	// entry always denies (in-flight, or completed within the trailing window).
+	m.sweepExpiredClaimsLocked(m.nowFn())
+	if c, held := m.jobClaims[planID]; held {
+		if c.concluded {
+			// Late redelivery after the winner concluded: resolve this delivery with
+			// the winner's recorded result during the linger window (the winner is
+			// gone, so it cannot complete this one).
+			return ClaimResult{LateResult: c.result}
+		}
+		// The winner is still running: register this deduped sibling so the winner
+		// fans completion out to its delivery when the job finishes.
+		c.siblings = append(c.siblings, delivery)
+		return ClaimResult{}
+	}
+	c := &jobClaim{} // in-flight (zero expiry: held until Complete)
+	m.jobClaims[planID] = c
+	var once sync.Once
+	complete := func(result broker.TaskResult) []SiblingDelivery {
+		var siblings []SiblingDelivery
+		once.Do(func() {
+			m.jobClaimsMu.Lock()
+			defer m.jobClaimsMu.Unlock()
+			c.concluded = true
+			c.result = result
+			siblings = c.siblings
+			c.siblings = nil
+			if m.ClaimLinger <= 0 {
+				// No pod lingers after completion (owner reaps synchronously), so
+				// free the planID immediately for any redelivery.
+				delete(m.jobClaims, planID)
+				return
+			}
+			// Retain the concluded claim for the pod-linger window so a late
+			// redelivery is deduped (and resolved with result) rather than colliding
+			// on the winner's not-yet-reaped pod.
+			c.expireAt = m.nowFn().Add(m.ClaimLinger)
+		})
+		return siblings
+	}
+	return ClaimResult{Won: true, Complete: complete}
+}
+
+// sweepExpiredClaimsLocked deletes jobClaims entries whose lingering expiry has
+// passed (a completed job whose worker pod has since been reaped). In-flight
+// entries (zero expiry) are never swept. Caller must hold jobClaimsMu. Deleting
+// during a map range is safe in Go, and per-group job rates keep the map small
+// (in-flight jobs plus those completed within the trailing ClaimLinger window).
+func (m *Multiplexer) sweepExpiredClaimsLocked(now time.Time) {
+	for id, c := range m.jobClaims {
+		if !c.expireAt.IsZero() && !now.Before(c.expireAt) {
+			delete(m.jobClaims, id)
+		}
+	}
+}
+
+// nowFn returns the current time, honouring the test-injected m.now override.
+func (m *Multiplexer) nowFn() time.Time {
+	if m.now != nil {
+		return m.now()
+	}
+	return time.Now()
+}
+
 // Stop cancels all listener goroutines — including any permanent baseline
 // waiting out its restart backoff — and waits for them to exit cleanly. The
 // Multiplexer is retired afterwards: Start and SpawnReplacement become no-ops.
@@ -186,6 +338,10 @@ func (m *Multiplexer) spawn(ctx context.Context, isPerm bool) {
 	cfg.IsLastPoller = func() bool { return m.PollerCount() <= 1 }
 	cfg.SpawnReplacement = func(ctx context.Context) { m.SpawnReplacement(ctx) }
 	cfg.SetPolling = func(polling bool) { m.setPolling(state, polling) }
+	// Dedup duplicate broker deliveries of one job (same planID) across this
+	// group's sibling sessions (Q260). Shared across all goroutines the Multiplexer
+	// spawns.
+	cfg.ClaimJob = m.claimJob
 
 	go func() {
 		defer close(state.done)

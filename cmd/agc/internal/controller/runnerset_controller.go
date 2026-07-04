@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,6 +222,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// stopping avoids the churn and reflects reality).
 		r.stopMultiplexer(req.NamespacedName)
 		r.setReadyCondition(&rs, false, res.reason, res.message)
+		// No template resolved, so there is no known reap-blocking sidecar: clear the
+		// Q249 condition and gauge rather than leave a stale True/non-zero behind (e.g.
+		// after the resolved template was deleted).
+		r.setReapBlockingSidecarStatus(&rs, nil, nil)
 		rs.Status.ActiveSessions = 0
 		rs.Status.ActiveJobs = 0
 		rs.Status.PendingJobs = 0
@@ -244,6 +249,12 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// cluster-default ClusterRunnerTemplate. Auditable in status.templateSource so an
 	// operator sees whether a set runs on an explicit template or a default.
 	rs.Status.TemplateSource = refs.templateSource
+
+	// Warn (non-blocking) if the resolved template carries a regular sidecar that may
+	// block worker-pod reaping (Q249): surface it as the PossibleReapBlockingSidecar
+	// condition and the reap-blocking-sidecar gauge, gated by the self-exiting-sidecars
+	// opt-out. Advisory only — it never gates Ready.
+	r.setReapBlockingSidecarStatus(&rs, refs.template, refs.templateAnnotations)
 
 	// 2. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
@@ -368,6 +379,11 @@ func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.poolsMu.Lock()
 	delete(r.pools, key)
 	r.poolsMu.Unlock()
+	// Drop the Q249 reap-blocking-sidecar gauge series so a deleted (or foreign-gateway)
+	// RunnerSet does not leave a stale value behind.
+	if r.Metrics != nil {
+		r.Metrics.ReapBlockingSidecarTemplates.DeleteLabelValues(key.Namespace, key.Name)
+	}
 }
 
 func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, reason, action, note string, args ...any) {
@@ -429,6 +445,11 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 
 	muxLog := r.Log.With("namespace", rs.Namespace, "group", rs.Name)
 	mux := listener.NewMultiplexer(factory, rs.Spec.MaxListeners, muxLog)
+	// Retain a completed job's planID claim until its terminal worker pod is reaped
+	// (completedPodTTL), so a late GitHub redelivery of the same planID is deduped
+	// rather than colliding on the lingering Completed pod (Q260 redelivery
+	// residual). Mirrors the RunnerGroup controller.
+	mux.ClaimLinger = provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}
@@ -550,6 +571,46 @@ func (r *RunnerSetReconciler) setEgressMode(rs *v2alpha1.RunnerSet, proxied bool
 		Message:            msg,
 		ObservedGeneration: rs.Generation,
 	})
+}
+
+// setReapBlockingSidecarStatus surfaces whether the RunnerSet's resolved worker
+// template carries a regular (non-native) sidecar that may keep the worker pod alive
+// after the runner container exits — the Q247 stranding class reproduced by a
+// docker:dind sidecar declared as a regular container (Q249). It sets the advisory
+// PossibleReapBlockingSidecar condition (abnormal-is-True, never gates Ready) and the
+// reap-blocking-sidecar gauge, both gated by the self-exiting-sidecars opt-out so an
+// acknowledged sidecar fires none of them. A nil template (references unresolved)
+// clears both. It is a warning, not enforcement: the fix is native sidecars, which the
+// message and the admission warning steer operators toward.
+func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec, annotations map[string]string) {
+	names := v2alpha1.ReapBlockingSidecars(template, annotations)
+
+	if r.Metrics != nil {
+		r.Metrics.ReapBlockingSidecarTemplates.WithLabelValues(rs.Namespace, rs.Name).Set(float64(len(names)))
+	}
+
+	status := metav1.ConditionFalse
+	reason := v2alpha1.ReasonNoReapBlockingSidecar
+	msg := "no regular reap-blocking sidecar in the resolved worker template"
+	if len(names) > 0 {
+		status = metav1.ConditionTrue
+		reason = v2alpha1.ReasonReapBlockingSidecar
+		msg = fmt.Sprintf("worker pod sidecar container(s) %s are regular containers that may keep the pod from reaping after the runner exits, stranding the runner slot; declare them as native sidecars (restartPolicy: Always init containers, Kubernetes >= 1.29) or acknowledge them in the %s annotation",
+			strings.Join(names, ", "), v2alpha1.SelfExitingSidecarsAnnotation)
+	}
+	prev := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
+		Type:               v2alpha1.ConditionPossibleReapBlockingSidecar,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: rs.Generation,
+	})
+	// Warn once on a genuine False→True transition so the misconfiguration lands in the
+	// event stream, not only in status.
+	if status == metav1.ConditionTrue && (prev == nil || prev.Status != metav1.ConditionTrue) {
+		r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", msg)
+	}
 }
 
 // nowFunc returns the reaper clock: Now when set, time.Now otherwise.

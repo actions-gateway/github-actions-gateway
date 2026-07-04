@@ -159,6 +159,14 @@ func (r *GithubRegistrar) Deregister(ctx context.Context, token string, agentID 
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// 422 "currently running a job and cannot be deleted" is the transient
+		// race where GitHub has not yet finished auto-removing the just-consumed
+		// single-use JIT runner (Q259). Surface it as a typed, retriable error so
+		// Recycle waits for the release instead of failing and dropping a listener
+		// slot. Other 422s (a genuinely invalid delete) fall through as fatal.
+		if resp.StatusCode == http.StatusUnprocessableEntity && bytes.Contains(bytes.ToLower(body), []byte("currently running")) {
+			return &RunnerBusyError{AgentID: agentID}
+		}
 		return fmt.Errorf("deregister runner: unexpected status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 512))
 	}
 	return nil

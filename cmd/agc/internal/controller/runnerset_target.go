@@ -176,6 +176,10 @@ type resolvedRefs struct {
 	// template (Q172): one of v2alpha1.TemplateSource{Ref,GatewayDefault,ClusterDefault}.
 	// Set only on full resolution; surfaced in RunnerSet status.templateSource.
 	templateSource string
+	// templateAnnotations are the resolved template object's metadata annotations,
+	// carried so the reconciler can read the self-exiting-sidecars opt-out (Q249)
+	// without re-reading the template. Set only on full resolution.
+	templateAnnotations map[string]string
 }
 
 // refResolution is the outcome of resolving a RunnerSet's references: either a
@@ -221,11 +225,12 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	// chain (Q172, §H.4): rs.templateRef → gateway.defaultTemplateRef → the single
 	// cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound. Fail-closed
 	// throughout — never a phantom pod shape.
-	tmplSpec, tmplSource, res := resolveTemplateChain(ctx, c, ns, rs, gw)
+	tmplSpec, tmplAnnotations, tmplSource, res := resolveTemplateChain(ctx, c, ns, rs, gw)
 	if !res.resolved() {
 		return nil, res
 	}
 	refs.template = tmplSpec
+	refs.templateAnnotations = tmplAnnotations
 	refs.templateSource = tmplSource
 
 	// proxyRef → EgressProxy, else gateway.defaultProxyRef. Both unset ⇒ direct
@@ -265,20 +270,20 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 // AmbiguousDefault, and an exhausted chain yields TemplateNotFound — the AGC never
 // synthesizes a pod shape. A set with an explicit templateRef behaves exactly as
 // before the relaxation (rung 1 only).
-func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*v2alpha1.RunnerTemplateSpec, string, refResolution) {
+func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*v2alpha1.RunnerTemplateSpec, map[string]string, string, refResolution) {
 	// Rung 1: the set's own explicit templateRef.
 	if rs.Spec.TemplateRef != nil {
-		spec, res := resolveTemplate(ctx, c, ns, *rs.Spec.TemplateRef)
-		return spec, v2alpha1.TemplateSourceRef, res
+		spec, annotations, res := resolveTemplate(ctx, c, ns, *rs.Spec.TemplateRef)
+		return spec, annotations, v2alpha1.TemplateSourceRef, res
 	}
 	// Rung 2: the gateway's defaultTemplateRef, inherited because templateRef is unset.
 	if gw.Spec.DefaultTemplateRef != nil {
-		spec, res := resolveTemplate(ctx, c, ns, *gw.Spec.DefaultTemplateRef)
-		return spec, v2alpha1.TemplateSourceGatewayDefault, res
+		spec, annotations, res := resolveTemplate(ctx, c, ns, *gw.Spec.DefaultTemplateRef)
+		return spec, annotations, v2alpha1.TemplateSourceGatewayDefault, res
 	}
 	// Rung 3: the single cluster-default ClusterRunnerTemplate.
-	spec, res := resolveClusterDefaultTemplate(ctx, c)
-	return spec, v2alpha1.TemplateSourceClusterDefault, res
+	spec, annotations, res := resolveClusterDefaultTemplate(ctx, c)
+	return spec, annotations, v2alpha1.TemplateSourceClusterDefault, res
 }
 
 // resolveClusterDefaultTemplate resolves the single cluster-default ClusterRunnerTemplate
@@ -291,10 +296,10 @@ func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v
 // CEL cannot express it) and admission-time rejection would break GitOps apply-ordering
 // (§H.7). The cluster-scoped List is authorized by the per-gateway
 // agc-clusterrunnertemplate-reader ClusterRoleBinding the GMC creates (M3b).
-func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alpha1.RunnerTemplateSpec, refResolution) {
+func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alpha1.RunnerTemplateSpec, map[string]string, refResolution) {
 	var list v2alpha1.ClusterRunnerTemplateList
 	if err := c.List(ctx, &list); err != nil {
-		return nil, refResolution{err: fmt.Errorf("list ClusterRunnerTemplates: %w", err)}
+		return nil, nil, refResolution{err: fmt.Errorf("list ClusterRunnerTemplates: %w", err)}
 	}
 	var defaults []*v2alpha1.ClusterRunnerTemplate
 	for i := range list.Items {
@@ -304,18 +309,18 @@ func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alp
 	}
 	switch len(defaults) {
 	case 0:
-		return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+		return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
 			message: fmt.Sprintf("no templateRef, no gateway defaultTemplateRef, and no ClusterRunnerTemplate marked %s=%s",
 				v2alpha1.IsDefaultTemplateAnnotation, v2alpha1.IsDefaultTemplateValue)}
 	case 1:
-		return &defaults[0].Spec, refResolution{}
+		return &defaults[0].Spec, defaults[0].Annotations, refResolution{}
 	default:
 		names := make([]string, len(defaults))
 		for i, d := range defaults {
 			names[i] = d.Name
 		}
 		sort.Strings(names)
-		return nil, refResolution{reason: v2alpha1.ReasonAmbiguousDefault,
+		return nil, nil, refResolution{reason: v2alpha1.ReasonAmbiguousDefault,
 			message: fmt.Sprintf("%d ClusterRunnerTemplates are marked the cluster default (%s); exactly one must be: %s",
 				len(defaults), v2alpha1.IsDefaultTemplateAnnotation, strings.Join(names, ", "))}
 	}
@@ -325,7 +330,7 @@ func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alp
 // cluster-scoped ClusterRunnerTemplate; the default (empty/RunnerTemplate) is the
 // namespaced RunnerTemplate. Both fail closed with TemplateNotFound when the
 // referent is absent, so the set waits for the referent→referrer watch (§H.7).
-func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alpha1.ObjectRef) (*v2alpha1.RunnerTemplateSpec, refResolution) {
+func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alpha1.ObjectRef) (*v2alpha1.RunnerTemplateSpec, map[string]string, refResolution) {
 	if ref.Kind == "ClusterRunnerTemplate" {
 		// Cluster-scoped read, authorized by the per-gateway ClusterRoleBinding to
 		// agc-clusterrunnertemplate-reader the GMC creates (M3b). The kind is
@@ -333,22 +338,22 @@ func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alph
 		crt := &v2alpha1.ClusterRunnerTemplate{}
 		if err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, crt); err != nil {
 			if apierrors.IsNotFound(err) {
-				return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+				return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
 					message: fmt.Sprintf("ClusterRunnerTemplate %q not found", ref.Name)}
 			}
-			return nil, refResolution{err: fmt.Errorf("read ClusterRunnerTemplate: %w", err)}
+			return nil, nil, refResolution{err: fmt.Errorf("read ClusterRunnerTemplate: %w", err)}
 		}
-		return &crt.Spec, refResolution{}
+		return &crt.Spec, crt.Annotations, refResolution{}
 	}
 	rt := &v2alpha1.RunnerTemplate{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, rt); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+			return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
 				message: fmt.Sprintf("RunnerTemplate %q not found in namespace %q", ref.Name, ns)}
 		}
-		return nil, refResolution{err: fmt.Errorf("read RunnerTemplate: %w", err)}
+		return nil, nil, refResolution{err: fmt.Errorf("read RunnerTemplate: %w", err)}
 	}
-	return &rt.Spec, refResolution{}
+	return &rt.Spec, rt.Annotations, refResolution{}
 }
 
 // runnerSetTierThresholds converts v2 priority tiers to the neutral TierThreshold

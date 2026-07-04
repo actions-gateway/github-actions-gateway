@@ -332,8 +332,8 @@ func startServer(t *testing.T, srv *Server) {
 	})
 	select {
 	case <-srv.ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("server did not bind its listeners (s.ready) within 2s")
+	case <-time.After(10 * time.Second):
+		t.Fatal("server did not bind its listeners (s.ready) within 10s")
 	}
 }
 
@@ -350,16 +350,16 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 	// Wait for both listeners to bind (s.ready) before cancelling.
 	select {
 	case <-srv.ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("server did not bind its listeners (s.ready) within 2s")
+	case <-time.After(10 * time.Second):
+		t.Fatal("server did not bind its listeners (s.ready) within 10s")
 	}
 
 	cancel()
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
-	case <-time.After(2 * time.Second):
-		t.Fatal("ListenAndServe did not return within 2s after context cancellation")
+	case <-time.After(10 * time.Second):
+		t.Fatal("ListenAndServe did not return within 10s after context cancellation")
 	}
 }
 

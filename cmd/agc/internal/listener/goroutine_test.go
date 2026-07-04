@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -325,8 +326,17 @@ func closeHTTP(srv *httptest.Server) {
 // jobMsgWithURL returns a TaskAgentMessage whose Body contains a RunnerJobRequestBody
 // with RunServiceURL set to brokerSrvURL (so AcquireJob hits the stub server).
 func jobMsgWithURL(brokerSrvURL string) broker.TaskAgentMessage {
+	return jobMsgWithReqID(brokerSrvURL, "req-1")
+}
+
+// jobMsgWithReqID is jobMsgWithURL with an explicit RunnerRequestID. Under GitHub's
+// broker fan-out each sibling session of one job receives a DISTINCT RunnerRequestID
+// (while the AcquireJob response carries one shared planID), so the Q260 dedup tests
+// use this to give each delivery its own id — the exact shape the RunnerRequestID-keyed
+// first fix (c850764) failed to deduplicate.
+func jobMsgWithReqID(brokerSrvURL, reqID string) broker.TaskAgentMessage {
 	body, _ := json.Marshal(broker.RunnerJobRequestBody{
-		RunnerRequestID: "req-1",
+		RunnerRequestID: reqID,
 		RunServiceURL:   brokerSrvURL,
 	})
 	return broker.TaskAgentMessage{
@@ -703,7 +713,9 @@ func TestListener_AcquireJobThenReuse(t *testing.T) {
 
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -759,7 +771,9 @@ func TestListener_AcquireJobStallDoesNotWedge(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
 	cfg.ControlPlaneTimeout = 200 * time.Millisecond
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -796,7 +810,9 @@ func TestListener_SpawnReplacementOnAcquire(t *testing.T) {
 	cfg := makeCfg(t, oauthSrv, brokerSrv)
 	cfg.IsLastPoller = func() bool { return true }
 	cfg.SpawnReplacement = func(_ context.Context) { spawnCalls.Add(1) }
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error { return nil }
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		return "", nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -869,7 +885,7 @@ func TestRenewLoop_TicksAt60s(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -900,7 +916,7 @@ func TestRenewLoop_StopsOnStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, "", "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, "", "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 	stop() // should not hang
 
 	// done must close once the loop goroutine exits after stop().
@@ -935,7 +951,7 @@ func TestRenewLoop_NonOKContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Advance 5 s per check — 12 steps to clear the 60 s threshold, vs the
 	// original 1 s × 60 steps. The advance must stay inside Eventually to avoid
@@ -976,7 +992,7 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	stop, done := listener.StartRenewLoop(ctx, bc, srv.URL, "plan-1", "job-1", nil, "default", clk, nil, 60*time.Second)
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 0)
 
 	// Stop before any tick fires.
 	stop()
@@ -992,6 +1008,486 @@ func TestRenewLoop_NoCallAfterStop(t *testing.T) {
 		tr.CloseIdleConnections()
 	}
 	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals is the Q247 residual gate.
+// The first /renewjob call black-holes (never responds), simulating a renewal
+// whose egress path is saturated under heavy worker load (the CPU exhaustion that
+// co-occurred with the dogfood e2e). Without a per-call timeout the renewal loop
+// runs that call inline and wedges — no later tick can fire, so the job's lock
+// lapses at its initial ~10-minute TTL and GitHub recycles the job even though the
+// jobId is correct (#481). With the per-call timeout the hung call is aborted and
+// counted as a non-fatal error, and the loop is free to issue the next renewal.
+// The test asserts a SECOND renewal attempt is made while the first is still hung,
+// which is impossible if the loop is wedged on the first call.
+func TestRenewLoop_SlowCallDoesNotWedgeSubsequentRenewals(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			if calls.Add(1) == 1 {
+				// Hang the first renewal until the client's per-call deadline
+				// cancels it (r.Context().Done) or the test releases it in cleanup.
+				select {
+				case <-release:
+				case <-r.Context().Done():
+				}
+			}
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 60s renewal interval (fake-clock driven); 100ms per-call timeout (real time),
+	// well under the interval as production requires. The first call blocks longer
+	// than 100ms, so the timeout — not the response — must free the loop.
+	stop, done := listener.StartRenewLoop(ctx, nil, bc, srv.URL, "plan-1", "job-1", "", nil, "default", clk, nil, 60*time.Second, 100*time.Millisecond)
+
+	// Two renewal attempts prove the loop was not wedged by the first (hung) call:
+	// the second can only fire once the per-call timeout aborts the first.
+	for i := 0; i < 2; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(60 * time.Second)
+			return calls.Load() >= int32(i+1)
+		}, 3*time.Second, 5*time.Millisecond,
+			"expected renewal attempt %d — the loop must not wedge on a hung renewal", i+1)
+	}
+
+	unblock()
+	stop()
+	<-done
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_DefinitiveJobNotFoundTearsDown is the Q254 definitive-loss gate.
+// The run service answers /renewjob with 404 (the job's lock no longer exists —
+// GitHub recycled or reassigned it), which is unrecoverable. A single such
+// response must immediately cancel the worker's job context (so the pod tears down
+// instead of orphaning) rather than being retried like a transient blip — and must
+// do so without waiting for the consecutive-failure threshold.
+func TestRenewLoop_DefinitiveJobNotFoundTearsDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			calls.Add(1)
+			w.WriteHeader(http.StatusNotFound) // run service: the job is gone
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// jobCtx models the worker's job context; the loop must cancel it on a
+	// definitive job-gone response so the JobHandler unwinds and the pod tears down.
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, log, 60*time.Second, 0)
+
+	// A single 404 must trigger teardown — advance one interval to fire the tick.
+	require.Eventually(t, func() bool {
+		clk.Advance(60 * time.Second)
+		select {
+		case <-jobCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, time.Millisecond, "a definitive job-not-found must cancel the worker's job context")
+	<-done
+
+	assert.Equal(t, int32(1), calls.Load(), "one 404 must trigger teardown; the loop must not renew again")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "job_not_found")),
+		"definitive-loss teardown counter must fire once with reason=job_not_found")
+	assert.Contains(t, logBuf.String(), "job lock definitively lost", "expected the distinct teardown log line")
+
+	stop()
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_ConsecutiveFailuresTearDown is the Q254 sustained-failure gate.
+// Every /renewjob call fails (server error / lost lock). After a sustained run of
+// consecutive failures reaching the threshold the loop must cancel the worker so
+// the orphan pod is gone before GitHub recycles the job and redelivers it to a
+// sibling session — rather than logging every failure as non-fatal forever.
+func TestRenewLoop_ConsecutiveFailuresTearDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			calls.Add(1)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
+
+	// Drive renewals until the sustained-failure threshold cancels the worker.
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		select {
+		case <-jobCtx.Done():
+			return true
+		default:
+			return false
+		}
+	}, 3*time.Second, time.Millisecond, "a sustained run of renewal failures must cancel the worker")
+	<-done
+
+	// Teardown fires exactly once the threshold is reached, then the loop stops —
+	// so the failure count equals the threshold and does not run on.
+	assert.Equal(t, int32(5), calls.Load(), "teardown must trip at the consecutive-failure threshold (5)")
+	assert.Equal(t, float64(1),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "consecutive_failures")),
+		"definitive-loss teardown counter must fire once with reason=consecutive_failures")
+
+	stop()
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestRenewLoop_TransientFailuresDoNotTearDown asserts the Q254 change stays
+// conservative: a burst of failures below the threshold, followed by a success
+// that resets the counter, must never cancel the worker. GitHub grants ~10 min per
+// renewal window, so a single blip is expected and non-fatal.
+func TestRenewLoop_TransientFailuresDoNotTearDown(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/renewjob") {
+			// Fail 4 in a row (one below the 5-failure threshold), then recover.
+			// The success must reset the consecutive-failure counter.
+			if calls.Add(1) <= 4 {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			defaultRenewJob(w)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{BrokerURL: srv.URL, HTTPClient: srv.Client()}
+	m := newTestMetrics()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	jobCtx, cancelJob := context.WithCancel(context.Background())
+	defer cancelJob()
+
+	stop, done := listener.StartRenewLoop(ctx, cancelJob, bc, srv.URL, "plan-1", "job-1", "", m, "default", clk, nil, 60*time.Second, 0)
+
+	// Drive at least 8 renewals — 4 failures then successes — well past what a
+	// single blip needs to prove it never trips the threshold.
+	for i := 0; i < 8; i++ {
+		assert.Eventually(t, func() bool {
+			clk.Advance(5 * time.Second)
+			return calls.Load() >= int32(i+1)
+		}, 2*time.Second, time.Millisecond, "expected RenewJob call %d", i+1)
+	}
+
+	// No teardown: the job context stays live and the counter is untouched.
+	assert.NoError(t, jobCtx.Err(), "transient failures below the threshold must not cancel the worker")
+	assert.Equal(t, float64(0),
+		testutil.ToFloat64(m.RenewJobTeardownsTotal.WithLabelValues("default", "consecutive_failures")),
+		"no teardown expected for transient failures")
+
+	stop()
+	<-done
+	clk.Stop()
+	srv.Close()
+	if tr, ok := srv.Client().Transport.(*http.Transport); ok {
+		tr.CloseIdleConnections()
+	}
+	time.Sleep(50 * time.Millisecond)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_RenewJobUsesRunnerRequestID drives a real job through the full
+// Run path and asserts that the per-job renewal targets the job's
+// RunnerRequestID — the same value AcquireJob sends as jobMessageId — and NOT
+// the broker envelope's numeric MessageID. Sending the MessageID renews a job
+// the run service does not recognize, so the lock never renews: on a job that
+// outlives GitHub's lock TTL the job is recycled and redelivered to a sibling
+// (a duplicate worker pod) while this worker orphans at CompleteJobAsync with
+// TaskOrchestrationJobNotFoundException (Q247). MessageID and RunnerRequestID
+// are deliberately distinct here so a regression cannot pass by coincidence.
+func TestListener_RenewJobUsesRunnerRequestID(t *testing.T) {
+	const (
+		wantJobID = "req-renew-abc123"
+		msgID     = int64(987654321)
+	)
+
+	oauthSrv := oauthStub()
+
+	renewJobID := make(chan string, 1)
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobID,
+		RunServiceURL:   brokerSrv.URL, // must resolve so AcquireJob + RenewJob hit the stub
+	})
+
+	jobDelivered := atomic.Bool{}
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   msgID,
+				MessageType: "RunnerJobRequest",
+				Body:        string(body),
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetRenew(func(w http.ResponseWriter, r *http.Request) {
+		var req broker.RenewJobRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		select {
+		case renewJobID <- req.JobID:
+		default:
+		}
+		defaultRenewJob(w)
+	})
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	// JobHandler blocks until the renew tick has been observed, so the renew loop
+	// is live while we advance the clock.
+	release := make(chan struct{})
+	cfg := listener.Config{
+		Group:         "grp",
+		Namespace:     "ns",
+		Agent:         makeAgent(t, oauthSrv.URL),
+		Broker:        bc,
+		HTTPClient:    oauthSrv.Client(),
+		Clock:         clk,
+		RunnerOS:      "Linux",
+		RenewInterval: 60 * time.Second,
+		IsLastPoller:  func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+			<-release
+			return "", nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// Advance past the 60s renew interval to fire the renewal, then assert the
+	// jobId it carried.
+	var got string
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		select {
+		case got = <-renewJobID:
+			return true
+		default:
+			return false
+		}
+	}, 3*time.Second, time.Millisecond, "expected a RenewJob call")
+	assert.Equal(t, wantJobID, got, "RenewJob must target the job's RunnerRequestID, not the broker MessageID")
+
+	close(release)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_RenewJobUsesJobToken drives a real job through the full Run path
+// and asserts that every per-job renewal is authorized with the job-scoped token
+// from the acquirejob response (the SystemVssConnection AccessToken) — NOT the
+// broker session token. The run service accepts the session token to *claim* a job
+// (acquirejob) but rejects it for *renewing* the job's lock with 401 "Not
+// authorized for this job"; the lock then lapses at its ~10-minute TTL and GitHub
+// recycles the job (the third and final Q247 facet). The job token here is
+// deliberately distinct from the broker OAuth token so the pre-fix behaviour
+// (sending the session token) cannot pass: every renewal would 401 and renewOK
+// would stay zero.
+func TestListener_RenewJobUsesJobToken(t *testing.T) {
+	const (
+		wantJobID = "req-jobtoken-1"
+		// must differ from the broker OAuth token
+		wantJobToken = "job-scoped-actoken-xyz" //nolint:gosec // G101: fixed test value, not a real credential
+	)
+
+	oauthSrv := oauthStub() // issues "stub-runner-token" as the broker session token
+
+	var (
+		renewOK     atomic.Int32
+		renewUnauth atomic.Int32
+	)
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	body, _ := json.Marshal(broker.RunnerJobRequestBody{
+		RunnerRequestID: wantJobID,
+		RunServiceURL:   brokerSrv.URL, // must resolve so AcquireJob + RenewJob hit the stub
+	})
+
+	var jobDelivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if jobDelivered.CompareAndSwap(false, true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(broker.TaskAgentMessage{
+				MessageID:   1,
+				MessageType: "RunnerJobRequest",
+				Body:        string(body),
+			})
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	// AcquireJob returns the job-scoped token in the SystemVssConnection endpoint —
+	// the shape the real run service returns and the worker/runner consumes.
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("x-plan-id", "plan-1")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-1"},
+			"resources": map[string]any{
+				"endpoints": []map[string]any{{
+					"name": "SystemVssConnection",
+					"url":  brokerSrv.URL,
+					"authorization": map[string]any{
+						"scheme":     "OAuth",
+						"parameters": map[string]string{"AccessToken": wantJobToken},
+					},
+				}},
+			},
+		})
+	})
+	mux.SetRenew(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+wantJobToken {
+			renewUnauth.Add(1)
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"source":"actions-run-service","statusCode":401,"errorMessage":"Not authorized for this job"}`))
+			return
+		}
+		renewOK.Add(1)
+		defaultRenewJob(w)
+	})
+
+	clk := newFakeClock(time.Now())
+	bc := &broker.Client{
+		BrokerURL:     brokerSrv.URL,
+		RunnerVersion: "2.327.1",
+		UseV2Flow:     true,
+		HTTPClient:    brokerSrv.Client(),
+	}
+
+	// JobHandler blocks until the renewals have fired, so the renew loop stays live
+	// while we advance the clock across the simulated job.
+	release := make(chan struct{})
+	cfg := listener.Config{
+		Group:         "grp",
+		Namespace:     "ns",
+		Agent:         makeAgent(t, oauthSrv.URL),
+		Broker:        bc,
+		HTTPClient:    oauthSrv.Client(),
+		Clock:         clk,
+		RunnerOS:      "Linux",
+		RenewInterval: 60 * time.Second,
+		IsLastPoller:  func() bool { return true },
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+			<-release
+			return "", nil
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- listener.Run(ctx, cfg) }()
+
+	// Simulate a job that outlives the ~10-minute lock TTL: drive 11 renewal ticks
+	// (11 minutes at the 60s cadence). Every one must be authorized with the job
+	// token — pre-fix, RenewJob sends the broker session token and every renewal
+	// 401s, so the lock lapses at 10 minutes and GitHub recycles the job (Q247).
+	const wantRenewals = 11
+	require.Eventually(t, func() bool {
+		clk.Advance(10 * time.Second)
+		return renewOK.Load() >= wantRenewals
+	}, 5*time.Second, time.Millisecond, "expected >=%d authorized renewals across a >10-min job", wantRenewals)
+	assert.Zero(t, renewUnauth.Load(),
+		"no renewal may be rejected as unauthorized; RenewJob must present the job-scoped token, not the broker session token (Q247)")
+
+	close(release)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Error("goroutine did not exit after context cancellation")
+	}
+
+	clk.Stop()
+	time.Sleep(20 * time.Millisecond)
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
 	goleak.VerifyNone(t)
 }
 
@@ -1042,6 +1538,12 @@ func newTestMetrics() *listener.Metrics {
 		JobsAdmissionRejectedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_jobs_admission_rejected_total",
 		}, []string{"namespace", "runner_group"}),
+		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_jobs_duplicate_delivery_total",
+		}, []string{"namespace", "runner_group"}),
+		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_abandoned_delivery_completions_total",
+		}, []string{"namespace", "runner_group", "outcome"}),
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_token_refreshes_total",
 		}, []string{"namespace"}),
@@ -1051,6 +1553,9 @@ func newTestMetrics() *listener.Metrics {
 		RenewJobErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_renewjob_errors_total",
 		}, []string{"namespace"}),
+		RenewJobTeardownsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_renewjob_teardowns_total",
+		}, []string{"namespace", "reason"}),
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_message_poll_errors_total",
 		}, []string{"namespace", "reason"}),
@@ -1154,6 +1659,74 @@ func TestListener_AdmissionRejected(t *testing.T) {
 	goleak.VerifyNone(t)
 }
 
+// ── Q260: duplicate-delivery dedup gate ──────────────────────────────────────
+
+// TestListener_DuplicateJobDeliverySkipsProvisioning verifies the post-acquire
+// dedup gate (Q260): when the claim is refused — a sibling session in this AGC is
+// already provisioning this job's planID — the listener skips provisioning (the
+// JobHandler must not run) and increments the duplicate-delivery counter, yet it
+// still ran AcquireJob first because the planID is only known post-acquire. The
+// gate keys on the planID from the AcquireJob response ("plan-stub"), NOT the
+// pre-acquire RunnerRequestID — that is the fix over c850764, whose RunnerRequestID
+// key never collapsed the broker fan-out (siblings get distinct request ids).
+func TestListener_DuplicateJobDeliverySkipsProvisioning(t *testing.T) {
+	oauthSrv := oauthStub()
+	var acquireCalled atomic.Bool
+	mux := &brokerMux{}
+	brokerSrv := httptest.NewServer(mux)
+
+	var delivered atomic.Bool
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if !delivered.Swap(true) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jobMsgWithURL(brokerSrv.URL))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	mux.SetAcquire(func(w http.ResponseWriter, _ *http.Request) {
+		acquireCalled.Store(true)
+		defaultAcquireJob(w)
+	})
+
+	m := newTestMetrics()
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Metrics = m
+	cfg.IsLastPoller = func() bool { return true }
+	// A sibling already owns this planID: the claim is always refused. The gate is
+	// keyed by the planID from the acquire response (defaultAcquireJob → "plan-stub"),
+	// so it is exercised AFTER AcquireJob — not the pre-acquire RunnerRequestID.
+	var claimKey atomic.Value
+	cfg.ClaimJob = func(planID string, _ listener.SiblingDelivery) listener.ClaimResult {
+		claimKey.Store(planID)
+		return listener.ClaimResult{} // Won=false: a sibling already owns this planID
+	}
+	// The loser must not provision (no worker Secret/pod), so the JobHandler that
+	// stands in for the provisioner must never fire.
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
+		t.Error("JobHandler must not run for a deduplicated duplicate delivery")
+		return "", nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	done := runAndWait(ctx, cfg)
+
+	assert.Eventually(t, func() bool {
+		return testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues("default", "test-rg")) >= 1
+	}, 2*time.Second, 10*time.Millisecond, "duplicate-delivery counter should be incremented")
+	// The dedup is post-acquire: AcquireJob ran, and the claim keyed on the
+	// response's planID rather than the pre-acquire RunnerRequestID ("req-1").
+	assert.True(t, acquireCalled.Load(), "AcquireJob runs before the planID-keyed dedup gate")
+	assert.Equal(t, "plan-stub", claimKey.Load(), "dedup must key on the acquired planID, not the RunnerRequestID")
+
+	cancel()
+	<-done
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
 // TestListener_AdmissionReleasedOnCompletion verifies that an admitted job's
 // reservation is released after the job handler completes, so the slot is
 // returned to the gate.
@@ -1185,9 +1758,9 @@ func TestListener_AdmissionReleasedOnCompletion(t *testing.T) {
 		return func() { releaseCalls.Add(1) }, true
 	}
 	handlerDone := make(chan struct{}, 1)
-	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) error {
+	cfg.JobHandler = func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 		handlerDone <- struct{}{}
-		return nil
+		return "", nil
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -1415,10 +1988,10 @@ func TestListener_DecryptsMessageBody(t *testing.T) {
 		Clock:        clk,
 		RunnerOS:     "Linux",
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1568,10 +2141,10 @@ func TestListener_SessionKeyPassedToHandleJob(t *testing.T) {
 		Clock:        clk,
 		RunnerOS:     "Linux",
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1685,10 +2258,10 @@ func TestListener_DecryptFailureFallsBackToPlaintext(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			handlerCalled.Store(true)
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1794,9 +2367,9 @@ func TestListener_PlaintextSessionKey(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 
@@ -1892,9 +2465,9 @@ func TestListener_NoSessionKey(t *testing.T) {
 		Broker:       bc,
 		Clock:        clk,
 		IsLastPoller: func() bool { return true },
-		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) error {
+		JobHandler: func(_ context.Context, _, _ string, _ []byte, _ string) (broker.TaskResult, error) {
 			cancel()
-			return nil
+			return "", nil
 		},
 	}
 

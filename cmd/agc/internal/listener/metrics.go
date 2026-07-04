@@ -14,10 +14,27 @@ type Metrics struct {
 	// Q59: pre-acquisition admission control. Incremented when the capacity gate
 	// rejects a delivered job (acquire skipped, job left queued for redelivery).
 	JobsAdmissionRejectedTotal *prometheus.CounterVec
-	TokenRefreshesTotal        *prometheus.CounterVec
-	TokenRefreshErrorsTotal    *prometheus.CounterVec
-	RenewJobErrorsTotal        *prometheus.CounterVec
-	MessagePollErrorsTotal     *prometheus.CounterVec
+	// Q260: duplicate broker delivery. Incremented when an acquired job's planID is
+	// already claimed by a sibling session in this AGC, so this session skips
+	// provisioning (and recycles its runner) rather than colliding on the shared
+	// "job-<planID>" worker Secret. Covers both a concurrent burst (a sibling is
+	// provisioning the planID right now) and a LATE redelivery (the winner already
+	// completed but its terminal worker pod has not yet been reaped, so the claim
+	// still lingers and the redelivery would otherwise collide on `create Pod`).
+	JobsDuplicateDeliveryTotal *prometheus.CounterVec
+	// Q260 Option A: the winner of a fanned-out job issuing a completejob on a
+	// deduped sibling delivery (or on a late redelivery within the linger window) so
+	// GitHub does not leave the acquired-but-unrun assignment dangling until its
+	// ~15-minute unstarted-job timeout. Labelled by outcome (completed, error). Only
+	// incremented when the guarded behavior is enabled (Config.FanoutCompletion).
+	AbandonedDeliveryCompletionsTotal *prometheus.CounterVec
+	TokenRefreshesTotal               *prometheus.CounterVec
+	TokenRefreshErrorsTotal           *prometheus.CounterVec
+	RenewJobErrorsTotal               *prometheus.CounterVec
+	// Q254: incremented when the per-job renew loop cancels the worker because the
+	// job's lock is definitively lost, by reason (job_not_found, consecutive_failures).
+	RenewJobTeardownsTotal *prometheus.CounterVec
+	MessagePollErrorsTotal *prometheus.CounterVec
 	// M3: pod lifecycle metrics (emitted by provisioner package)
 	PodCreationLatency       *prometheus.HistogramVec
 	JobDuration              *prometheus.HistogramVec
@@ -31,6 +48,11 @@ type Metrics struct {
 	// the agent pool's reconcile repair pass)
 	AgentRecyclesTotal      *prometheus.CounterVec
 	AgentRecycleErrorsTotal *prometheus.CounterVec
+	// Q249: number of regular (non-native) sidecar containers in a RunnerSet's
+	// resolved worker template that may block pod reaping (emitted by the RunnerSet
+	// reconciler). A non-zero value warns of the Q247 stranding class; native
+	// sidecars or the self-exiting-sidecars acknowledgment annotation clear it.
+	ReapBlockingSidecarTemplates *prometheus.GaugeVec
 }
 
 // NewMetrics creates and registers all listener metrics with the controller-runtime
@@ -58,6 +80,16 @@ func NewMetrics() *Metrics {
 			Help: "Jobs left queued at GitHub because the pre-acquisition capacity gate was full (acquire skipped for redelivery).",
 		}, []string{"namespace", "runner_group"}),
 
+		JobsDuplicateDeliveryTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_jobs_duplicate_delivery_total",
+			Help: "Duplicate job deliveries deduplicated: the job's planID was already claimed by a sibling session in this AGC, so provisioning was skipped (and the runner recycled) to avoid colliding on the shared per-job worker Secret or the winner's not-yet-reaped worker pod. Covers both a concurrent burst and a late redelivery after completion (Q260).",
+		}, []string{"namespace", "runner_group"}),
+
+		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_abandoned_delivery_completions_total",
+			Help: "Deduped sibling deliveries of a fanned-out job whose acquired-but-unrun assignment the winner released via completejob (on completion, or on a late redelivery within the linger window) so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when fan-out completion (Q260 Option A) is enabled.",
+		}, []string{"namespace", "runner_group", "outcome"}),
+
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_token_refreshes_total",
 			Help: "Total number of successful installation token refreshes.",
@@ -72,6 +104,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_renew_job_errors_total",
 			Help: "Total number of RenewJob non-OK responses.",
 		}, []string{"namespace"}),
+
+		RenewJobTeardownsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_renew_job_teardowns_total",
+			Help: "Workers cancelled by the renew loop because the job lock was definitively lost, by reason (job_not_found, consecutive_failures).",
+		}, []string{"namespace", "reason"}),
 
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_message_poll_errors_total",
@@ -126,6 +163,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_agent_recycle_errors_total",
 			Help: "Failed attempts to re-register a single-use JIT agent.",
 		}, []string{"namespace", "runner_group"}),
+
+		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_reap_blocking_sidecar_templates",
+			Help: "Number of regular (non-native) sidecar containers in a RunnerSet's resolved worker template that may block pod reaping (Q249); native sidecars or the self-exiting-sidecars acknowledgment annotation clear it.",
+		}, []string{"namespace", "runner_set"}),
 	}
 
 	metrics.Registry.MustRegister(
@@ -133,9 +175,12 @@ func NewMetrics() *Metrics {
 		m.JobsAcquiredTotal,
 		m.JobAcquisitionErrors,
 		m.JobsAdmissionRejectedTotal,
+		m.JobsDuplicateDeliveryTotal,
+		m.AbandonedDeliveryCompletionsTotal,
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,
+		m.RenewJobTeardownsTotal,
 		m.MessagePollErrorsTotal,
 		m.PodCreationLatency,
 		m.JobDuration,
@@ -146,6 +191,7 @@ func NewMetrics() *Metrics {
 		m.WorkerPodsReaped,
 		m.AgentRecyclesTotal,
 		m.AgentRecycleErrorsTotal,
+		m.ReapBlockingSidecarTemplates,
 	)
 	return m
 }

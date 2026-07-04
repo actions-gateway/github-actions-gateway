@@ -16,7 +16,10 @@
 // 404 errors in custom broker clients.
 package broker
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // TaskAgentMessage is the response body from GET {broker_url}/message.
 // MessageType is "RunnerJobRequest" when a job is available.
@@ -49,15 +52,73 @@ type JobAcquisitionRequest struct {
 	BillingOwnerID string `json:"billingOwnerId"`
 }
 
+// ServiceEndpoint is one entry in AcquireJobResponse.Resources.Endpoints. The run
+// service returns the job's service endpoints in the acquirejob response; the
+// SystemVssConnection endpoint carries the job-scoped OAuth token the runner must
+// present for that job's subsequent calls (RenewJob) — see
+// AcquireJobResponse.JobAuthToken.
+type ServiceEndpoint struct {
+	Name          string `json:"name"`
+	URL           string `json:"url"`
+	Authorization struct {
+		Scheme     string            `json:"scheme"`
+		Parameters map[string]string `json:"parameters"`
+	} `json:"authorization"`
+}
+
+// systemVssConnectionName is the well-known name of the acquirejob-response
+// endpoint whose AccessToken authorization parameter is the job-scoped bearer
+// token. Matches WellKnownServiceEndpointNames.SystemVssConnection in the runner
+// SDK.
+const systemVssConnectionName = "SystemVssConnection"
+
+// accessTokenParam is the authorization-parameters key holding the job token,
+// matching EndpointAuthorizationParameters.AccessToken in the runner SDK.
+const accessTokenParam = "AccessToken"
+
 // AcquireJobResponse is the parsed response from POST {run_service_url}/acquirejob.
-// The AGC only extracts PlanID for renewal; the full raw response bytes are
-// stored alongside it and forwarded opaquely to the worker pod.
+// The AGC extracts PlanID for renewal and the job-scoped auth token
+// (JobAuthToken); the full raw response bytes are stored alongside it and
+// forwarded opaquely to the worker pod.
 // PlanID is populated by AcquireJob from the x-plan-id response header
 // (preferred) or .plan.planId in the body (fallback).
 type AcquireJobResponse struct {
 	Plan struct {
 		PlanID string `json:"planId"`
 	} `json:"plan"`
+	// Resources carries the job's service endpoints. The SystemVssConnection
+	// endpoint's AccessToken is the job-scoped bearer token RenewJob must present:
+	// the run service accepts the broker/registration OAuth token to *claim* a job
+	// (acquirejob) but rejects that same token when *renewing* the job's lock,
+	// returning 401 "Not authorized for this job" — so on a job that outlives the
+	// initial ~10-minute lock TTL the lock is never renewed and GitHub recycles it
+	// at exactly the TTL boundary (Q247). See JobAuthToken.
+	Resources struct {
+		Endpoints []ServiceEndpoint `json:"endpoints"`
+	} `json:"resources"`
+}
+
+// JobAuthToken returns the job-scoped bearer token from the acquirejob response —
+// the AccessToken authorization parameter of the SystemVssConnection endpoint — or
+// "" when the response carries no such endpoint. This is the same token the real
+// runner uses to renew a job lock (VssUtil.GetVssCredential over the message's
+// SystemVssConnection endpoint); the listener passes it to RenewJob as
+// RenewJobRequest.AuthToken so per-job renewal is authorized (Q247).
+func (r *AcquireJobResponse) JobAuthToken() string {
+	for i := range r.Resources.Endpoints {
+		if !strings.EqualFold(r.Resources.Endpoints[i].Name, systemVssConnectionName) {
+			continue
+		}
+		// Match the parameter key case-insensitively: it is a well-known constant
+		// ("AccessToken") but a case quirk in the wire form must not silently drop
+		// the token and re-trigger the Q247 401 loop.
+		for k, v := range r.Resources.Endpoints[i].Authorization.Parameters {
+			if strings.EqualFold(k, accessTokenParam) {
+				return v
+			}
+		}
+	}
+	return ""
 }
 
 // RenewJobRequest is the request body for POST {run_service_url}/renewjob.
@@ -67,10 +128,75 @@ type RenewJobRequest struct {
 	PlanID string `json:"planId"`
 	// JobID is RunnerJobRequestBody.RunnerRequestID.
 	JobID string `json:"jobId"`
+	// AuthToken is the job-scoped bearer token (AcquireJobResponse.JobAuthToken)
+	// that authorizes this renewal. When non-empty, RenewJob presents it as the
+	// Authorization header instead of Client.Token, because the run service rejects
+	// the broker session token for per-job lock renewal with 401 "Not authorized
+	// for this job" (Q247). Empty falls back to Client.Token. Never serialized into
+	// the request body.
+	AuthToken string `json:"-"`
 }
 
 // RenewJobResponse is returned by POST {run_service_url}/renewjob.
 type RenewJobResponse struct {
 	// LockedUntil is typically ~10 minutes from the time of renewal.
 	LockedUntil time.Time `json:"lockedUntil"`
+}
+
+// TaskResult is a job's terminal result as reported to
+// POST {run_service_url}/completejob. The values mirror the runner SDK's
+// TaskResult enum (Microsoft.TeamFoundation.DistributedTask.WebApi.TaskResult).
+// The AGC itself sends only TaskResultSkipped, for a deduplicated duplicate
+// delivery it acquired but will not run (Q260 follow-up); the remaining values are
+// defined for wire fidelity and future use.
+//
+// WIRE FORMAT NOT LIVE-CONFIRMED: the exact serialization the run service expects
+// for the result field (lowercase camelCase strings here, vs PascalCase or the
+// integer enum) has not been validated against a live run service. The AGC's
+// completejob call is gated off by default until a dogfood turn-up confirms it
+// (Q260 follow-up item 1).
+type TaskResult string
+
+const (
+	// TaskResultSucceeded is a job that ran to a successful conclusion.
+	TaskResultSucceeded TaskResult = "succeeded"
+	// TaskResultSucceededWithIssues is a job that succeeded but logged warnings.
+	TaskResultSucceededWithIssues TaskResult = "succeededWithIssues"
+	// TaskResultFailed is a job that ran to a failed conclusion.
+	TaskResultFailed TaskResult = "failed"
+	// TaskResultCanceled is a job that was cancelled before or during execution.
+	TaskResultCanceled TaskResult = "canceled"
+	// TaskResultSkipped is a job assignment the runner acquired but did not
+	// execute. The AGC reports this for a deduplicated duplicate delivery (the
+	// Q260 loser): honest (acquired, ran nothing) and the smallest blast radius if
+	// the run service maps a delivery's completion onto the whole job.
+	TaskResultSkipped TaskResult = "skipped"
+	// TaskResultAbandoned is a job the runner gave up without a conclusion.
+	TaskResultAbandoned TaskResult = "abandoned"
+)
+
+// CompleteJobRequest is the request body for POST {run_service_url}/completejob.
+// A runner sends it to report a job's terminal result. In GAG the worker pod's
+// runner binary makes this call for a job it actually ran; the AGC itself sends it
+// only for a deduplicated duplicate delivery it acquired but will not run — so
+// GitHub does not leave that per-delivery job assignment dangling until its
+// ~15-minute unstarted-job timeout and cancel the job even after the winning
+// sibling completed it (Q260 follow-up).
+//
+// JobID is the delivery's own RunnerRequestID — distinct per sibling under GitHub's
+// broker fan-out — so, under the per-delivery lock model the renew path relies on
+// (Q247), completing it resolves only this phantom assignment and not the winner's.
+type CompleteJobRequest struct {
+	// PlanID comes from the acquirejob response (AcquireJobResponse.Plan.PlanID).
+	PlanID string `json:"planId"`
+	// JobID is RunnerJobRequestBody.RunnerRequestID — this delivery's own id.
+	JobID string `json:"jobId"`
+	// Result is the terminal result reported for the job assignment.
+	Result TaskResult `json:"result"`
+	// AuthToken is the job-scoped bearer token (AcquireJobResponse.JobAuthToken)
+	// that authorizes this call. Like renewjob, the run service rejects the broker
+	// session token for per-job operations (401 "Not authorized for this job",
+	// Q247), so completejob must present the job token. Empty falls back to
+	// Client.Token. Never serialized into the request body.
+	AuthToken string `json:"-"`
 }

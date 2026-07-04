@@ -25,7 +25,10 @@ on:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    # Route to GAG self-hosted runners when GAG_E2E_RUNNER is set (Q231 / runbook
+    # Part F2); defaults to GitHub-hosted when unset or "ubuntu-latest". Mirrors
+    # the GAG_RUNNER wiring on unit-test.yml / integration-test.yml.
+    runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     permissions:
       contents: read

@@ -10,7 +10,7 @@
 # Required env vars (export before running):
 #   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER          GKE cluster name (e.g. gag-dogfood)
-#   ZONE             GCP zone (e.g. us-central1-b)
+#   ZONE             GCP zone (e.g. us-east1-b)
 #   REPO             GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 #   APP_ID           GitHub App numeric ID (3752347)
 #   INSTALLATION_ID  GitHub App installation ID for this repo
@@ -246,7 +246,7 @@ main() {
 	echo "  2. Set the default (off) variable:"
 	echo "       gh variable set GAG_E2E_RUNNER --body '\"ubuntu-latest\"' --repo ${REPO}"
 	echo "  3. Commit and push the workflow change."
-	echo "  4. When ready to enable e2e on GAG: scripts/dogfood-e2e-start.sh"
+	echo "  4. When ready to enable e2e on GAG: scripts/dogfood/e2e-start.sh"
 }
 
 main "$@"

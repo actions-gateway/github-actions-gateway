@@ -198,6 +198,83 @@ func TestAcquireJob_FallsBackToPlanIDFromBody(t *testing.T) {
 	assert.Equal(t, "plan-from-body", result.Plan.PlanID)
 }
 
+// Fixed, non-secret token values for the Q247 RenewJob/AcquireJob auth tests.
+// Referenced as identifiers at every use site so gosec's hardcoded-credential
+// heuristic (G101) fires only on these declarations, suppressed here — rather than
+// at each map/struct literal that carries the value.
+const (
+	jobAuthToken   = "job-scoped-token" //nolint:gosec // G101: fixed test value, not a real credential
+	otherAuthToken = "other-endpoint"   //nolint:gosec // G101: fixed test value, not a real credential
+)
+
+func TestAcquireJob_ExtractsJobAuthToken(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// The run service returns the job-scoped token in the SystemVssConnection
+		// endpoint's AccessToken authorization parameter (Q247).
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"plan": map[string]string{"planId": "plan-1"},
+			"resources": map[string]any{
+				"endpoints": []map[string]any{
+					{
+						"name": "SomeOtherEndpoint",
+						"authorization": map[string]any{
+							"parameters": map[string]string{"AccessToken": otherAuthToken},
+						},
+					},
+					{
+						"name": "SystemVssConnection",
+						"url":  "https://run.example/job",
+						"authorization": map[string]any{
+							"scheme":     "OAuth",
+							"parameters": map[string]string{"AccessToken": jobAuthToken},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	result, _, err := c.AcquireJob(context.Background(), srv.URL, broker.JobAcquisitionRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, jobAuthToken, result.JobAuthToken(),
+		"must extract the AccessToken from the SystemVssConnection endpoint")
+}
+
+func TestAcquireJobResponse_JobAuthToken(t *testing.T) {
+	t.Parallel()
+	t.Run("case-insensitive endpoint name and param key", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"resources": {"endpoints": [
+				{"name": "systemvssconnection", "authorization": {"parameters": {"accesstoken": "tok"}}}
+			]}
+		}`), &r))
+		assert.Equal(t, "tok", r.JobAuthToken())
+	})
+	t.Run("no SystemVssConnection endpoint returns empty", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"plan": {"planId": "p"},
+			"resources": {"endpoints": [
+				{"name": "Other", "authorization": {"parameters": {"AccessToken": "tok"}}}
+			]}
+		}`), &r))
+		assert.Empty(t, r.JobAuthToken())
+	})
+	t.Run("no resources returns empty", func(t *testing.T) {
+		t.Parallel()
+		var r broker.AcquireJobResponse
+		require.NoError(t, json.Unmarshal([]byte(`{"plan": {"planId": "p"}}`), &r))
+		assert.Empty(t, r.JobAuthToken())
+	})
+}
+
 func TestAcquireJob_UsesRunServiceURL(t *testing.T) {
 	t.Parallel()
 	// runServiceSrv is a separate server from the broker — AcquireJob must
@@ -260,6 +337,67 @@ func TestRenewJob_UsesRunServiceURL(t *testing.T) {
 	assert.True(t, renewHit)
 }
 
+func TestRenewJob_UsesJobAuthToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{
+		PlanID:    "p",
+		JobID:     "j",
+		AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// The job-scoped token authorizes per-job renewal; the broker session token is
+	// rejected 401 "Not authorized for this job" (Q247).
+	assert.Equal(t, "Bearer "+jobAuthToken, gotAuth)
+}
+
+func TestRenewJob_FallsBackToClientTokenWithoutJobToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{PlanID: "p", JobID: "j"})
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer test-token", gotAuth)
+}
+
+func TestRenewJob_AuthTokenNotInBody(t *testing.T) {
+	t.Parallel()
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(broker.RenewJobResponse{LockedUntil: time.Now().Add(10 * time.Minute)})
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{
+		PlanID:    "p",
+		JobID:     "j",
+		AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// AuthToken is an auth header, never a body field — it must not leak into the
+	// serialized request body.
+	assert.NotContains(t, body, "AuthToken")
+	assert.NotContains(t, body, "authToken")
+}
+
 func TestRenewJob_NonOKResponse(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +407,128 @@ func TestRenewJob_NonOKResponse(t *testing.T) {
 
 	c := newTestClient(srv)
 	_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "500")
+}
+
+func TestRenewJob_JobNotFound(t *testing.T) {
+	t.Parallel()
+	// 404 and 410 both mean the job's lock is gone server-side; RenewJob must
+	// surface a typed JobNotFoundError so the renew loop can tear the worker down
+	// instead of retrying an unrecoverable lock (Q254).
+	for _, status := range []int{http.StatusNotFound, http.StatusGone} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+
+		c := newTestClient(srv)
+		_, err := c.RenewJob(context.Background(), srv.URL, broker.RenewJobRequest{})
+		srv.Close()
+
+		require.Error(t, err)
+		var notFound *broker.JobNotFoundError
+		require.ErrorAs(t, err, &notFound, "status %d must map to JobNotFoundError", status)
+		assert.Equal(t, status, notFound.StatusCode)
+	}
+}
+
+func TestCompleteJob_UsesRunServiceURLAndBody(t *testing.T) {
+	t.Parallel()
+	var (
+		hit  bool
+		body map[string]any
+	)
+	runServiceSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		assert.Equal(t, "/completejob", r.URL.Path)
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer runServiceSrv.Close()
+
+	brokerSrv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("CompleteJob must not call BrokerURL; it called %s", r.URL.Path)
+	}))
+	defer brokerSrv.Close()
+
+	c := newTestClient(brokerSrv)
+	err := c.CompleteJob(context.Background(), runServiceSrv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped,
+	})
+	require.NoError(t, err)
+	assert.True(t, hit)
+	assert.Equal(t, "p", body["planId"])
+	assert.Equal(t, "j", body["jobId"])
+	assert.Equal(t, "skipped", body["result"])
+}
+
+func TestCompleteJob_UsesJobAuthToken(t *testing.T) {
+	t.Parallel()
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv) // Client.Token == "test-token"
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped, AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	// Per-job completion is authorized with the job-scoped token, not the session
+	// token, exactly as renewjob is (Q247).
+	assert.Equal(t, "Bearer "+jobAuthToken, gotAuth)
+}
+
+func TestCompleteJob_AuthTokenNotInBody(t *testing.T) {
+	t.Parallel()
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{
+		PlanID: "p", JobID: "j", Result: broker.TaskResultSkipped, AuthToken: jobAuthToken,
+	})
+	require.NoError(t, err)
+	assert.NotContains(t, body, "AuthToken")
+	assert.NotContains(t, body, "authToken")
+}
+
+func TestCompleteJob_JobNotFound(t *testing.T) {
+	t.Parallel()
+	// 404/410 mean the job's assignment is already gone server-side — a benign
+	// no-op for the duplicate-delivery use, surfaced as a typed JobNotFoundError so
+	// the caller can treat it as success rather than a fault.
+	for _, status := range []int{http.StatusNotFound, http.StatusGone} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+		}))
+
+		c := newTestClient(srv)
+		err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{})
+		srv.Close()
+
+		require.Error(t, err)
+		var notFound *broker.JobNotFoundError
+		require.ErrorAs(t, err, &notFound, "status %d must map to JobNotFoundError", status)
+		assert.Equal(t, status, notFound.StatusCode)
+	}
+}
+
+func TestCompleteJob_NonOKResponse(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(srv)
+	err := c.CompleteJob(context.Background(), srv.URL, broker.CompleteJobRequest{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
 }

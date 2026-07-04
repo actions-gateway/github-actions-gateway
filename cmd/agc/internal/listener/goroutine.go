@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
@@ -63,7 +63,51 @@ type EventRecorder interface {
 // materialize .runner / .credentials / .credentials_rsaparams in /home/runner/
 // before invoking Runner.Worker. May be empty when the agent was created by a
 // registrar that does not produce a JIT blob (e.g. stub-only tests).
-type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error
+//
+// The returned broker.TaskResult is the handler's POD-PHASE PROXY of the job's
+// outcome (PodFailed→failed, else succeeded) — NOT the workflow's real
+// succeeded/failed, which only the worker's runner binary knows and reports for the
+// winner's own delivery. The AGC uses it solely as the result to report when it fans
+// completion out to the deduped sibling deliveries of a fanned-out job (Q260 Option
+// A); an empty result (an error before the pod reached a terminal phase) is treated
+// as succeeded by that fan-out. The error return is the provisioning error as
+// before (recoverable; the poll loop logs and continues).
+type JobHandlerFunc func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) (broker.TaskResult, error)
+
+// SiblingDelivery identifies one deduped sibling delivery of a fanned-out job so the
+// winner can complete it on GitHub's books when its job finishes (Q260 Option A).
+// Each field is the sibling's OWN per-delivery value: RunnerRequestID is the
+// delivery's job id (distinct per sibling under fan-out), and RunServiceURL /
+// JobToken are what completejob needs to resolve that specific assignment.
+type SiblingDelivery struct {
+	RunnerRequestID string
+	RunServiceURL   string
+	JobToken        string
+}
+
+// ClaimResult is returned by Config.ClaimJob for one delivery of a job (Q260). It
+// reports whether this caller won the planID claim — and, for the winner, how to
+// reconcile the deduped-away sibling deliveries on GitHub's books when the job
+// finishes (Option A).
+type ClaimResult struct {
+	// Won is true for the first caller to claim planID — the goroutine that
+	// provisions and runs the job. False for a deduped sibling (loser).
+	Won bool
+	// Complete is called exactly once by the winner when its job finishes or is
+	// abandoned. It records the winner's terminal result on the claim (so a late
+	// redelivery within the linger window resolves with the same result),
+	// transitions the claim into its post-completion linger, and returns the deduped
+	// sibling deliveries registered so far so the winner can fan completjob out to
+	// each. It is idempotent. Nil for a loser.
+	Complete func(result broker.TaskResult) []SiblingDelivery
+	// LateResult is set for a LOSER whose planID has ALREADY concluded — a late
+	// redelivery arriving during the linger window, after the winner is gone. The
+	// caller resolves its own delivery immediately with this result rather than
+	// waiting for a winner that has already finished. Empty for a winner, or for a
+	// loser whose winner is still running (that loser was registered on the claim
+	// for the winner to complete).
+	LateResult broker.TaskResult
+}
 
 // AdmitFunc gates job acquisition on available worker capacity (Q59). It is
 // called after a job is delivered but before AcquireJob claims it from GitHub.
@@ -116,8 +160,54 @@ type Config struct {
 	// (acquire failure or job completion). Nil disables the gate, leaving the
 	// provisioner's post-acquire ceilingCheck as the only (backstop) limit.
 	Admit AdmitFunc
-	Clock Clock
-	Log   *slog.Logger
+	// ClaimJob deduplicates provisioning of one job across the sibling listener
+	// goroutines of this RunnerGroup (Q260). Under a concurrent burst GitHub's
+	// broker fans one job out to several sibling sessions as messages with
+	// DISTINCT RunnerRequestIDs; each sibling acquires its own delivery and the
+	// AcquireJob response carries the SAME planID, so without a claim every
+	// recipient then races to create the shared per-job worker Secret
+	// "job-<planID>" — one wins and the rest collide ("already exists"), fail
+	// provisioning, and die with their runner slot already burned (busy but
+	// offline, no worker pod). ClaimJob is therefore called with the job's planID
+	// AFTER AcquireJob (planID is only known post-acquire) but BEFORE provisioning:
+	// ok=false means a sibling in this AGC is already provisioning this planID, so
+	// the listener skips provisioning and returns acquired=true, letting the caller
+	// recycle its consumed single-use runner back online (slot reclaimed cleanly)
+	// rather than colliding on the Secret. On ok=true the returned release is
+	// called exactly once when the job finishes or is abandoned; the claim then
+	// lingers for the owner's completedPodTTL so a LATE redelivery arriving while
+	// the winner's Completed-but-not-yet-reaped worker pod still exists is also
+	// deduped (rather than colliding on `create Pod`) — a genuine redelivery after
+	// the pod is reaped provisions again. Keying on planID (not the pre-acquire
+	// RunnerRequestID, which differs per sibling and so never deduped the fan-out —
+	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
+	// disables dedup (stub-only tests, or a response with no planID). Passing this
+	// caller's own delivery lets the winner reconcile it on GitHub's books under
+	// Option A (see ClaimResult, SiblingDelivery, and FanoutCompletion).
+	ClaimJob func(planID string, delivery SiblingDelivery) ClaimResult
+	// FanoutCompletion, when true, makes the WINNER of a fanned-out job fan
+	// completejob out to every deduped sibling delivery when its job finishes (Q260
+	// Option A). Under a concurrent burst GitHub fans one logical job (one planID)
+	// out to N sibling sessions as N deliveries with distinct RunnerRequestIDs; the
+	// planID dedup (ClaimJob) collapses them to ONE runner, but the other N−1
+	// acquired deliveries dangle and GitHub cancels the whole job at its ~15-minute
+	// unstarted-job timeout even after the winner completed it. When enabled, the
+	// winner issues completejob for each tracked sibling — keyed on the sibling's OWN
+	// RunnerRequestID and job token — with the winner's pod-phase-proxy result, and a
+	// late redelivery arriving during the linger window is resolved with the recorded
+	// terminal result. Losers do NOT complete early (that was the rejected #513
+	// per-loser-immediate path, live-tested worse than the default).
+	//
+	// OFF BY DEFAULT (secure-by-default). The run service's per-delivery completion
+	// semantics are not yet live-confirmed: if completion is scoped by planID (not
+	// jobID) the pod-phase proxy could green a red workflow whose worker exited 0.
+	// This outward behavior is therefore gated behind an explicit opt-in
+	// (AGC env AGC_FANOUT_COMPLETION) pending the re-route #5 dogfood experiment that
+	// confirms the semantics AND validates the fix. The operator runbook is the Q260
+	// redelivery-accounting limitation in docs/operations/troubleshooting.md.
+	FanoutCompletion bool
+	Clock            Clock
+	Log              *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -571,6 +661,11 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		payload       []byte
 		planID        = "stub"
 		runServiceURL = jobBody.RunServiceURL
+		// jobToken is the job-scoped bearer token the run service returns in the
+		// acquirejob response (the SystemVssConnection AccessToken). RenewJob must
+		// present it: the run service rejects the broker session token for per-job
+		// lock renewal with 401 "Not authorized for this job" (Q247).
+		jobToken string
 	)
 
 	// Call AcquireJob if we have a runServiceURL. Bounded by the control-plane
@@ -605,8 +700,85 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		}
 		planID = resp.Plan.PlanID
 		payload = rawBytes
+		jobToken = resp.JobAuthToken()
+		if jobToken == "" {
+			// The run service authorizes per-job renewal with this token; without it
+			// RenewJob falls back to the broker session token, which the run service
+			// rejects with 401 "Not authorized for this job", so the lock lapses at
+			// its ~10-minute TTL (Q247). Warn so a protocol drift that drops the token
+			// is visible rather than silently re-orphaning long jobs.
+			log.Warn("AcquireJob response carried no SystemVssConnection token; " +
+				"RenewJob will fall back to the broker token and the run service may reject the renewal (Q247)")
+		}
 	} else {
 		payload = []byte(msg.Body)
+	}
+
+	// Dedup gate (Q260): claim this job by its planID — the job identity that
+	// collapses across GitHub's broker fan-out and names the shared worker Secret
+	// — AFTER AcquireJob (planID is only known post-acquire) but BEFORE
+	// provisioning. Under a concurrent burst the broker fans one job out to several
+	// sibling sessions as messages with DISTINCT RunnerRequestIDs; each sibling
+	// acquires its own delivery and the response carries the SAME planID, so
+	// without this every sibling would race to create the per-job worker Secret
+	// "job-<planID>" — one wins, the rest collide ("already exists"), fail
+	// provisioning, and die with their runner slot burned (busy but pod-less),
+	// collapsing the pool to a single worker (the Q260 wedge). A losing sibling
+	// skips provisioning and returns acquired=true so its consumed single-use
+	// runner is recycled back online (slot reclaimed cleanly) rather than left
+	// busy/offline. The claim is held for the whole job and released on return, so
+	// a later GitHub redelivery is provisionable again. Keying on planID — not the
+	// pre-acquire RunnerRequestID, which differs per sibling and so never deduped
+	// the fan-out (the ineffective first fix, c850764) — is what converges the
+	// siblings onto one provision.
+	//
+	// jobResult is the winner's pod-phase-proxy result, reported when it fans
+	// completion out to the deduped sibling deliveries on completion (Q260 Option A).
+	// It defaults to succeeded and is overwritten by the JobHandler's terminal
+	// result below; it is unused on the loser path.
+	jobResult := broker.TaskResultSucceeded
+	if cfg.ClaimJob != nil && acquired && planID != "" {
+		delivery := SiblingDelivery{
+			RunnerRequestID: jobBody.RunnerRequestID,
+			RunServiceURL:   runServiceURL,
+			JobToken:        jobToken,
+		}
+		claim := cfg.ClaimJob(planID, delivery)
+		if !claim.Won {
+			if cfg.Metrics != nil {
+				cfg.Metrics.JobsDuplicateDeliveryTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+			}
+			// High-volume under a burst of duplicate deliveries; Debug, with the
+			// metric as the operator-facing signal (Q87, Theme D). acquired stays
+			// true so the caller recycles the consumed runner (slot reclaimed);
+			// SpawnReplacement/renew/provision are all skipped for the loser.
+			log.Debug("duplicate job delivery: planID already claimed by a sibling session; skipping provisioning and recycling the runner slot",
+				"planID", planID, "runnerRequestID", jobBody.RunnerRequestID)
+			// Q260 Option A (guarded): the loser already ran AcquireJob, so GitHub
+			// holds a per-delivery assignment for it. If the winner is still running,
+			// this delivery was registered on the claim and the winner completes it on
+			// finish. If the job ALREADY concluded (a late redelivery within the
+			// linger window, when the winner is gone), resolve this delivery here with
+			// the winner's recorded result — keyed on this delivery's OWN jobID
+			// (distinct from the winner's), so under the per-delivery lock model
+			// (Q247) it resolves only this assignment. Off by default until the run
+			// service's per-delivery completion semantics are live-confirmed (see
+			// Config.FanoutCompletion).
+			if cfg.FanoutCompletion && claim.LateResult != "" && runServiceURL != "" {
+				completeSiblingDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
+			}
+			return acquired, nil
+		}
+		// Winner: when the job finishes, conclude the claim (always — this replaces
+		// the pre-Option-A release, so the claim still lingers past completion for
+		// the #512 redelivery dedup) and, when enabled, fan completjob out to every
+		// deduped sibling delivery so none dangles at GitHub's unstarted-job timeout.
+		defer func() {
+			siblings := claim.Complete(jobResult)
+			if cfg.FanoutCompletion && runServiceURL != "" && len(siblings) > 0 {
+				<-completeSiblingDeliveries(ctx, cfg, log, planID, siblings, jobResult)
+			}
+		}()
 	}
 
 	// Notify multiplexer to spawn a replacement listener before blocking on job handler.
@@ -619,9 +791,33 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	if renewInterval == 0 {
 		renewInterval = 60 * time.Second
 	}
-	jobID := strconv.FormatInt(msg.MessageID, 10)
-	stop, renewDone := StartRenewLoop(ctx, cfg.Broker, runServiceURL, planID, jobID,
-		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval)
+	// RenewJob's jobId is the job's RunnerRequestID — the same value AcquireJob
+	// sends as jobMessageId — NOT the broker envelope's numeric MessageID. Sending
+	// the MessageID renews a job the run service does not recognize, so the lock is
+	// never actually renewed: on any job that outlives GitHub's lock TTL the job is
+	// recycled and redelivered to a sibling session (a duplicate worker pod), while
+	// this worker runs to completion and then orphans at CompleteJobAsync with
+	// TaskOrchestrationJobNotFoundException (Q247). Short jobs finish before the TTL
+	// lapses, which is why only long jobs (e.g. e2e) exposed it.
+	jobID := jobBody.RunnerRequestID
+	// Bound each RenewJob call with the same per-call deadline as AcquireJob, so a
+	// black-holed renewal (egress path saturated under load) aborts instead of
+	// wedging the loop and starving every later renewal until the lock lapses (the
+	// Q247 residual — an exactly-~10-minute orphan even with the correct jobId).
+	// jobToken authorizes the renewal: the run service rejects the broker session
+	// token for per-job renewal (401 "Not authorized for this job") even though it
+	// accepted the same token to claim the job — the third and final Q247 facet.
+	// Derive a per-job context the renew loop can cancel. When the loop detects the
+	// job's lock is definitively lost (a definitive job-gone response or a sustained
+	// run of renewal failures), it calls cancelJob so the JobHandler's context is
+	// cancelled and the worker tears down — rather than running on to completion as
+	// an orphan pod while GitHub recycles the job and redelivers it to a sibling
+	// session (a duplicate acquire). On the normal path cancelJob fires via defer
+	// once the job completes (a no-op teardown of an already-finished worker) (Q254).
+	jobCtx, cancelJob := context.WithCancel(ctx)
+	defer cancelJob()
+	stop, renewDone := StartRenewLoop(jobCtx, cancelJob, cfg.Broker, runServiceURL, planID, jobID, jobToken,
+		cfg.Metrics, cfg.Namespace, cfg.Clock, log, renewInterval, cfg.controlPlaneTimeout())
 	// Cancel the renew loop and wait for it to exit before returning, so the
 	// goroutine never outlives the job it renews.
 	defer func() { stop(); <-renewDone }()
@@ -631,9 +827,80 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	}
 
 	if cfg.JobHandler != nil {
-		return acquired, cfg.JobHandler(ctx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		result, jobErr := cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
+		// Record the pod-phase proxy for the winner's deferred sibling fan-out; keep
+		// the succeeded default on an empty result (the pod never reached a terminal
+		// phase — e.g. a provisioning error), matching "PodFailed→failed, else
+		// succeeded" (Q260 Option A).
+		if result != "" {
+			jobResult = result
+		}
+		return acquired, jobErr
 	}
 	return acquired, nil
+}
+
+// completeSiblingDeliveries fans completjob out to every deduped sibling delivery
+// of a fanned-out job concurrently, on a background goroutine, and returns a done
+// channel closed once all completions have been attempted (Q260 Option A). It is
+// async per CLAUDE.md's channel convention: the winner may block on the channel (as
+// handleJob does, so its recycle happens after the assignments are resolved) or
+// ignore it. Each call is bounded and best-effort — see completeSiblingDelivery.
+func completeSiblingDeliveries(ctx context.Context, cfg Config, log *slog.Logger, planID string, siblings []SiblingDelivery, result broker.TaskResult) <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var wg sync.WaitGroup
+		for _, sib := range siblings {
+			wg.Add(1)
+			go func(sib SiblingDelivery) {
+				defer wg.Done()
+				completeSiblingDelivery(ctx, cfg, log, planID, sib, result)
+			}(sib)
+		}
+		wg.Wait()
+	}()
+	return done
+}
+
+// completeSiblingDelivery resolves one deduped sibling delivery's job assignment via
+// completejob so GitHub does not leave it dangling until the ~15-minute
+// unstarted-job timeout and cancel the whole job even after the winner completed it
+// (Q260 Option A). sib.RunnerRequestID is the sibling delivery's OWN jobID, distinct
+// from the winner's; under the per-delivery lock model (Q247) completing it resolves
+// only that assignment. result is the winner's pod-phase proxy. Best-effort: the
+// call is bounded by the control-plane timeout and failures are logged and counted,
+// never fatal — the runner still recycles its slot. Reached only when
+// Config.FanoutCompletion is enabled; see that field for why this outward call is
+// off by default.
+func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, planID string, sib SiblingDelivery, result broker.TaskResult) {
+	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+	defer cancel()
+	err := cfg.Broker.CompleteJob(cctx, sib.RunServiceURL, broker.CompleteJobRequest{
+		PlanID:    planID,
+		JobID:     sib.RunnerRequestID,
+		Result:    result,
+		AuthToken: sib.JobToken,
+	})
+
+	outcome := "completed"
+	var notFound *broker.JobNotFoundError
+	switch {
+	case err == nil:
+		log.Debug("completed a deduped sibling delivery via completejob so GitHub does not cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", sib.RunnerRequestID, "result", result)
+	case errors.As(err, &notFound):
+		// The assignment is already gone server-side — nothing left to resolve.
+		log.Debug("deduped sibling delivery already resolved server-side",
+			"planID", planID, "jobID", sib.RunnerRequestID)
+	default:
+		outcome = "error"
+		log.Warn("failed to complete a deduped sibling delivery; GitHub may cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", sib.RunnerRequestID, "error", err)
+	}
+	if cfg.Metrics != nil {
+		cfg.Metrics.AbandonedDeliveryCompletionsTotal.WithLabelValues(cfg.Namespace, cfg.Group, outcome).Inc()
+	}
 }
 
 // healSession replaces the goroutine's broker session: best-effort delete of
@@ -709,20 +976,49 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 // once the loop goroutine has fully exited. Callers must call stop when the job
 // completes to avoid goroutine leaks; they may then wait on done if they need to
 // guarantee the goroutine has stopped before releasing shared resources.
+//
+// jobToken is the job-scoped bearer token from the acquirejob response
+// (AcquireJobResponse.JobAuthToken). Each RenewJob call presents it instead of the
+// broker session token: the run service rejects the session token for per-job lock
+// renewal with 401 "Not authorized for this job" even though it accepted the same
+// token to claim the job, so without jobToken every renewal fails and the lock
+// lapses at its ~10-minute TTL (Q247). An empty jobToken falls back to the client's
+// session token (test/stub use, or a run service that authorizes renewal with it).
+//
+// renewCallTimeout bounds each individual RenewJob call. It MUST be smaller than
+// renewInterval and smaller than GitHub's lock TTL. The renewal call runs inline
+// in the loop, so an unbounded call that black-holes (egress-proxy path saturated
+// under heavy worker load — the Q247 residual) would wedge the goroutine and
+// starve every subsequent tick until it returned, letting the job's lock lapse at
+// the initial ~10-minute TTL even when the jobId is correct. A bounded call aborts
+// (counted as a non-fatal RenewJob error), and the loop proceeds to the next tick,
+// so a single slow renewal costs one renewal, not all of them. A zero value leaves
+// the call unbounded (test/stub use only).
+//
+// cancelJob tears the worker down when the job's lock is definitively lost: a
+// definitive job-gone response (broker.JobNotFoundError, 404/410) or a sustained
+// run of renewFailureThreshold consecutive renewal failures. Without it the loop
+// would keep logging every failure as non-fatal and the worker would run on to
+// completion as an orphan pod while GitHub recycles the job and redelivers it to a
+// sibling session (a duplicate acquire) — the Q247 residual. A single/transient
+// failure stays non-fatal and is retried (GitHub grants ~10 min per renewal
+// window). cancelJob may be nil (test/stub use); teardown is then a no-op.
 func StartRenewLoop(
 	ctx context.Context,
+	cancelJob context.CancelFunc,
 	client *broker.Client,
-	runServiceURL, planID, jobID string,
+	runServiceURL, planID, jobID, jobToken string,
 	metrics *Metrics,
 	namespace string,
 	clk Clock,
 	log *slog.Logger,
-	renewInterval time.Duration,
+	renewInterval, renewCallTimeout time.Duration,
 ) (stop func(), done <-chan struct{}) {
 	stopCtx, cancel := context.WithCancel(ctx)
 	doneCh := make(chan struct{})
 	go func() {
 		defer close(doneCh)
+		var consecutiveFailures int
 		for {
 			select {
 			case <-stopCtx.Done():
@@ -731,22 +1027,74 @@ func StartRenewLoop(
 				if runServiceURL == "" {
 					continue // M2 stub: no real run service URL
 				}
-				_, err := client.RenewJob(stopCtx, runServiceURL, broker.RenewJobRequest{
-					PlanID: planID,
-					JobID:  jobID,
+				callCtx, cancelCall := stopCtx, context.CancelFunc(func() {})
+				if renewCallTimeout > 0 {
+					callCtx, cancelCall = context.WithTimeout(stopCtx, renewCallTimeout)
+				}
+				_, err := client.RenewJob(callCtx, runServiceURL, broker.RenewJobRequest{
+					PlanID:    planID,
+					JobID:     jobID,
+					AuthToken: jobToken,
 				})
-				if err != nil {
+				cancelCall()
+				if err == nil {
+					consecutiveFailures = 0
+					continue
+				}
+				// A renewal aborted only because the loop itself is shutting down
+				// (stop() cancelled stopCtx mid-call) is not a lock failure — don't
+				// count it toward teardown; just exit.
+				if stopCtx.Err() != nil {
+					return
+				}
+				consecutiveFailures++
+				if metrics != nil {
+					metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
+				}
+				if reason := renewTeardownReason(err, consecutiveFailures); reason != "" {
 					if metrics != nil {
-						metrics.RenewJobErrorsTotal.WithLabelValues(namespace).Inc()
+						metrics.RenewJobTeardownsTotal.WithLabelValues(namespace, reason).Inc()
 					}
 					if log != nil {
-						log.Warn("RenewJob error (non-fatal)", "error", err)
+						log.Error("RenewJob: job lock definitively lost; cancelling worker to avoid an orphan pod and a sibling duplicate-acquire (Q254)",
+							"reason", reason, "consecutiveFailures", consecutiveFailures, "error", err)
 					}
+					if cancelJob != nil {
+						cancelJob()
+					}
+					return
+				}
+				if log != nil {
+					log.Warn("RenewJob error (non-fatal)", "error", err, "consecutiveFailures", consecutiveFailures)
 				}
 			}
 		}
 	}()
 	return cancel, doneCh
+}
+
+// renewFailureThreshold is the number of consecutive RenewJob failures that trips
+// a worker teardown. With the default 60s renew interval and GitHub's ~10-minute
+// lock TTL, 5 consecutive failures (~5 min of a sustained outage) is well past any
+// single transient blip, yet still tears the worker down before the lock lapses at
+// ~10 min — so the orphan pod is gone before GitHub can recycle the job and
+// redeliver it to a sibling session (the duplicate-acquire window) (Q254).
+const renewFailureThreshold = 5
+
+// renewTeardownReason returns a non-empty metric reason when a RenewJob error
+// means the job's lock is unrecoverably lost and the worker must be cancelled: a
+// definitive job-gone response (broker.JobNotFoundError, 404/410), or a sustained
+// run of consecutive failures reaching renewFailureThreshold. It returns "" for a
+// transient failure that should stay non-fatal and be retried.
+func renewTeardownReason(err error, consecutiveFailures int) string {
+	var notFound *broker.JobNotFoundError
+	if errors.As(err, &notFound) {
+		return "job_not_found"
+	}
+	if consecutiveFailures >= renewFailureThreshold {
+		return "consecutive_failures"
+	}
+	return ""
 }
 
 func setCondition(cfg Config, condType string, status metav1.ConditionStatus, reason, msg string) {

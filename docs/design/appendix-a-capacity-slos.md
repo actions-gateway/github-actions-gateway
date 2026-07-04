@@ -43,7 +43,7 @@ The following targets are conservative defaults derived from the architectural c
 | Resource | Target | Note |
 | --- | --- | --- |
 | Concurrent CONNECT tunnels | ≤ 500 | File-descriptor-bound; tune the proxy pod `ulimit nofile` if increasing. |
-| CPU request / limit | 10m / 100m | Defaults per `ProxyConfig`. Adjust upward if HPA lag is observed under bursty load. |
+| CPU request / limit | 10m / 500m | Defaults per `ProxyConfig`. The 500m limit (not 100m) keeps the pod from throttling before the HPA's 60%-utilization signal trips under CONNECT load. Adjust upward if HPA lag is observed under bursty load. |
 | Memory request / limit | 32 MiB / 64 MiB | Stateless CONNECT proxies have a small footprint; these defaults survive 500 concurrent tunnels with headroom. |
 
 ---

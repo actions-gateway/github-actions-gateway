@@ -37,6 +37,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -116,8 +117,8 @@ const (
 	// Aligned with the Actions Runner Controller (ARC) gha-runner-scale-set chart,
 	// which defaults to ghcr.io/actions/actions-runner. Tenants copy-pasting from
 	// ARC examples see the same image name. Operators override at AGC startup via
-	// --worker-image (env: WORKER_IMAGE); the per-RunnerGroup workerImage field
-	// overrides further.
+	// the WORKER_IMAGE environment variable (set by the GMC on the AGC Deployment);
+	// the per-RunnerGroup workerImage field overrides further.
 	//
 	// Sourced from names.DefaultWorkerImage (built from names.RunnerVersion) so the
 	// runner version stays locked to the agent.version the AGC registers and to the
@@ -382,7 +383,7 @@ func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFu
 // creating a pod. v1 wires it via HandlerFor; the v2 RunnerSet controller wires
 // it directly with a RunnerSet-backed Target.
 func (p *Provisioner) Handle(target Target) listener.JobHandlerFunc {
-	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
+	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) (broker.TaskResult, error) {
 		return p.provision(ctx, target, planID, payload, jitConfig)
 	}
 }
@@ -522,7 +523,13 @@ func applyDisruptionSafetyDefaults(dst, templateAnnotations map[string]string) m
 	return dst
 }
 
-func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (err error) {
+// provision stages the job wiring, creates the worker pod, and waits for it to
+// reach a terminal phase. The returned broker.TaskResult is the POD-PHASE PROXY of
+// the outcome (PodFailed→failed, else succeeded) that the listener reports when it
+// fans completion out to the deduped sibling deliveries of a fanned-out job (Q260
+// Option A); it is empty on any error path that returns before the pod reached a
+// terminal phase (the fan-out treats an empty result as succeeded).
+func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (result broker.TaskResult, err error) {
 	key := target.Key()
 	log := p.logForKey(key)
 
@@ -533,7 +540,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	spec, err := target.Resolve(ctx)
 	if err != nil {
 		log.Warn("provisioning spec unresolved; failing job without creating a pod", "error", err)
-		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
+		return "", fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
 	}
 	start := time.Now()
 
@@ -585,7 +592,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		secret := p.buildSecret(target, secretName, planID, workerVersion, payload, jitConfig)
 		return p.Client.Create(ctx, secret)
 	}); err != nil {
-		return fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
+		return "", fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
 	}
 	// One of three lines per provisioned pod; Debug to keep per-job volume down
 	// at scale (Q87, Theme D).
@@ -599,7 +606,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		return cErr
 	}); err != nil {
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return fmt.Errorf("provisioner: count active pods: %w", err)
+		return "", fmt.Errorf("provisioner: count active pods: %w", err)
 	}
 	span.SetAttributes(attribute.Int("gateway.active_pods", int(count)))
 
@@ -610,7 +617,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		log.Info("pod held by concurrency ceiling", "activePods", count)
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
 		err = fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
-		return err
+		return "", err
 	}
 
 	// 4. Build and create the pod (with quota retry).
@@ -619,7 +626,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
 	}); err != nil {
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
+		return "", fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
 	}
 	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod created", "priorityClass", priorityClass)
@@ -634,7 +641,17 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	}); err != nil {
 		// Context cancelled or unrecoverable watch error.
 		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return err
+		return "", err
+	}
+	// Pod-phase proxy of the job outcome for the listener's fan-out completion of a
+	// fanned-out job's deduped sibling deliveries (Q260 Option A). The AGC does not
+	// learn the workflow's real result (only the worker's runner binary reports it,
+	// for the winner's own delivery), so PodFailed→failed and anything else
+	// (Succeeded, or a terminal phase we cannot map) →succeeded is the honest proxy.
+	if phase == corev1.PodFailed {
+		result = broker.TaskResultFailed
+	} else {
+		result = broker.TaskResultSucceeded
 	}
 
 	duration := time.Since(start)
@@ -662,7 +679,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		_ = p.deletePod(ctx, key.Namespace, podName)
 	}
 	_ = p.deleteSecret(ctx, key.Namespace, secretName)
-	return nil
+	return result, nil
 }
 
 // traceStep runs fn inside a child span named name (parented to the span carried
@@ -991,7 +1008,7 @@ func ceilingCheck(spec *ResolvedSpec, activePods int32) (priorityClass string, h
 }
 
 // resolveWorkerImage returns the worker image used for a provision: the
-// per-RunnerGroup override, else the AGC --worker-image flag, else the
+// per-RunnerGroup override, else the WORKER_IMAGE environment variable, else the
 // digest-pinned built-in default. Shared by buildPod and the version-label
 // computation so both agree on which image (hence which runner version) a pod runs.
 func (p *Provisioner) resolveWorkerImage(spec *ResolvedSpec) string {
