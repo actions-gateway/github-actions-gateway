@@ -1165,11 +1165,14 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "curren
 
 **Cause.** Under a burst, GitHub's broker fans one job out to several sibling long-poll sessions of one RunnerGroup — as separate `RunnerJobRequest` messages with **distinct** `RunnerRequestID`s but one shared **plan ID**. On gateway versions before the Q260 fix, every recipient independently ran `acquirejob` — succeeding and marking its runner **busy** — and then entered the provisioner, where the per-job worker Secret name is derived from the job's plan ID. The first session created the Secret; the rest collided (`already exists`), failed provisioning, and died *with their runner slot already consumed*. Net effect: one worker runs the job while the other slots are burned, collapsing the pool to the baseline listener. This is distinct from the Q259 post-job recycle churn (which may still be visible as a secondary `422 "currently running"` signal).
 
+A second, **late-redelivery** variant collides on the worker **Pod** rather than the Secret: `provisioner: create Pod runner-<group>-<planid>: pods "…" already exists`. Here the winning session already ran the job to completion, but its terminal worker pod lingers for `completedPodTTL` before the reaper GCs it. A gateway version that freed the plan-ID claim on *completion* (rather than on pod GC) would let a late GitHub redelivery of that same plan ID pass the claim gate, re-provision, and collide on the winner's still-present Completed pod.
+
 **Diagnostics.**
 
 ```sh
 # Multiple sessions provisioning the SAME job (the duplicate-acquisition signature)
-kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "already exists|duplicate job delivery"
+# — the Secret variant (burst) and the Pod variant (late redelivery)
+kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "create (Secret|Pod).*already exists|duplicate job delivery"
 
 # Metric: actions_gateway_jobs_duplicate_delivery_total — on fixed versions, this
 #   rises (deliveries safely deduplicated) INSTEAD of runner slots being burned.
@@ -1178,7 +1181,10 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -iE "alread
 
 **Resolution.**
 - **Upgrade** to a gateway version with the Q260 fix. Fixed versions dedup a job across the RunnerGroup's sibling sessions on its **plan ID** — the identity that collapses across the fan-out and names the worker Secret. Because the plan ID is only returned by `acquirejob`, a sibling still acquires, but then finds the plan ID already claimed by another session in the same AGC and **skips provisioning**, recycling its consumed runner back online (slot reclaimed) instead of colliding on the shared `job-<planid>` Secret. Each such skip increments `actions_gateway_jobs_duplicate_delivery_total`; a steady low rate of that counter during bursts is the fix working as intended. (The first Q260 fix keyed on `RunnerRequestID` before `acquirejob`, but siblings get distinct request ids, so it did not collapse the fan-out — upgrade past it.)
+- **For the late-redelivery Pod variant,** the same fixed versions hold the plan-ID claim for `completedPodTTL` *past* job completion — until the winner's terminal worker pod has been reaped — so a late redelivery is deduped (counted on `actions_gateway_jobs_duplicate_delivery_total`) rather than colliding on the lingering pod. No operator action; a lower `completedPodTTL` shortens both the retained pod and the claim linger together.
 - **No operator action** is needed on fixed versions — the dedup is automatic and per-RunnerGroup. If the burst still serializes with `jobs_duplicate_delivery_total` flat and `jobs_acquired_total` not climbing, the bottleneck is elsewhere (worker-node capacity, namespace `ResourceQuota`, or the Q259 recycle path) — work through those sections.
+
+> **Known limitation (redelivery accounting).** The dedup keys on plan ID, which is only known *post-`acquirejob`*, so a deduped late redelivery still ran `acquirejob` — leaving GitHub with a job-assignment it expects a runner to start. A completed job can therefore still be cancelled at GitHub's ~15-minute unstarted-job timeout on the *deduped* sibling delivery, even though the winner's pod reported "Job completed". Closing that gap needs a run-service "complete/abandon this delivery" protocol call that the gateway does not yet make; it is tracked as a Q260 follow-up (see the plan doc). The Pod-collision itself is resolved.
 
 ---
 

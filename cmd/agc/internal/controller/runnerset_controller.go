@@ -445,6 +445,11 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 
 	muxLog := r.Log.With("namespace", rs.Namespace, "group", rs.Name)
 	mux := listener.NewMultiplexer(factory, rs.Spec.MaxListeners, muxLog)
+	// Retain a completed job's planID claim until its terminal worker pod is reaped
+	// (completedPodTTL), so a late GitHub redelivery of the same planID is deduped
+	// rather than colliding on the lingering Completed pod (Q260 redelivery
+	// residual). Mirrors the RunnerGroup controller.
+	mux.ClaimLinger = provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

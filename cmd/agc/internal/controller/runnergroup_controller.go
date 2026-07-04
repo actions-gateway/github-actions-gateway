@@ -541,6 +541,12 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 	// correlation; per-goroutine lines add agentIndex/sessionId beneath (Q87, Theme F).
 	muxLog := r.Log.With("namespace", rg.Namespace, "group", rg.Name)
 	mux := listener.NewMultiplexer(factory, rg.Spec.MaxListeners, muxLog)
+	// Retain a completed job's planID claim until its terminal worker pod is
+	// reaped (completedPodTTL), so a late GitHub redelivery of the same planID is
+	// deduped rather than colliding on the lingering Completed pod (Q260 redelivery
+	// residual). Zero completedPodTTL (pods reaped synchronously) leaves the
+	// original delete-on-completion behavior.
+	mux.ClaimLinger = provisioner.EffectiveCompletedPodTTL(rg)
 	if err := mux.Start(ctx); err != nil {
 		r.Log.Error("failed to start multiplexer", "error", err)
 	}

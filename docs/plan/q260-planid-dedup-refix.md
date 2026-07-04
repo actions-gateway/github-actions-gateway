@@ -10,20 +10,54 @@ the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs
 `create Secret` at burst start). Full evidence in
 [`gke-dogfood.md`](gke-dogfood.md) turn-up #3. **Q224/Q260/Q242 stay open.**
 
+> **Update (redelivery residual code-complete).** Residual (2) — the late-redelivery
+> Pod-collision — is **fixed in code** (this PR): the released `planID` claim now **lingers**
+> for the pod's `completedPodTTL` window, so a late redelivery is deduped instead of colliding
+> on the winner's lingering Completed pod. See Follow-up item 1 below. The deeper
+> completion-vs-15-min-cancel *accounting* gap (item 2) is **flagged** as needing a run-service
+> protocol call, not forced. Residual (1) (Q248 capacity) is a cluster task for the combined
+> re-route #4. Q224/Q260/Q242 stay open until that turn-up reconfirms green.
+
 ## Follow-up (post-#3): close the residual before re-validating green
 
 1. **Release the `planID` claim only after the worker Pod is garbage-collected**, not at job
    completion — so a post-completion redelivery of a slow job is deduped rather than colliding
-   on the lingering Completed pod. (Alternatively make Pod creation idempotent / adopt an
-   existing Completed pod for the same planID.)
+   on the lingering Completed pod. ✅ **DONE (code-complete, awaits re-route #4).** The
+   Multiplexer's shared claim registry now **retains** a released `planID` claim for a linger
+   window sized to the owner's `completedPodTTL` (the exact window the winner's terminal pod
+   lingers before the reaper GCs it), instead of deleting it on completion. A late redelivery
+   arriving during that window is deduped at the post-acquire `planID` gate (counted on
+   `actions_gateway_jobs_duplicate_delivery_total`) and never re-enters the provisioner — so
+   there is **no `create Pod … already exists`** and no error surfaced as a job cancel. Once
+   the linger elapses (pod reaped), the `planID` is reclaimable, so a genuine redelivery after
+   GC still provisions. Expired lingering entries are swept lazily, keeping the map bounded.
+   - Wiring: `Multiplexer.ClaimLinger` set from `provisioner.EffectiveCompletedPodTTL(rg)` (v1)
+     / `CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)` (v2). `ClaimLinger == 0` (owner reaps
+     terminal pods synchronously, so none linger) keeps the original delete-on-completion path.
+   - Regression: `TestAGC_Q260_LateRedeliveryAfterCompletionDedups` (envtest — winner completes,
+     its pod lingers, a late redelivery of the same planID must be deduped, not a 2nd `create
+     Pod`) + Multiplexer unit tests for the linger/sweep semantics. The envtest **fails against
+     the pre-fix delete-on-completion behavior** with the exact residual signature
+     (`create Pod runner-…-<planid>: pods "…" already exists`).
 2. **Reconcile GitHub's per-delivery job-assignment timeout with the dedup-to-one-delivery
    model:** a fanned-out job whose winner completes via one delivery can still be cancelled at
    the 15-min unstarted-timeout on a *deduped* sibling delivery (observed: `tidy-check`'s pod
    reported "Job completed" yet GitHub cancelled the job). Investigate whether the loser
    should acknowledge/complete its delivery rather than silently skip.
+   - 🚩 **FLAGGED — needs a run-service protocol call, out of scope for the claim lifecycle.**
+     The dedup keys on `planID`, only known **post-`acquirejob`**, so a deduped late redelivery
+     has *already* run `AcquireJob` — leaving GitHub a job-assignment it expects a runner to
+     start. The `broker.Client` surface is `CreateSession` / `GetMessage` / `AcquireJob` /
+     `RenewJob` / `DeleteSession` — there is **no** CompleteJob/FinishJob/abandon call, so the
+     loser cannot tell the run service "this delivery is already done." Closing the ~15-min
+     unstarted-cancel gap therefore requires a **new run-service protocol call** (complete or
+     abandon the deduped delivery), plus confirmation of GitHub's per-delivery assignment
+     semantics from a live turn-up — beyond this claim-lifecycle fix. Fix #1 removes the Pod
+     collision and the error-surfaced-as-cancel; this accounting gap is a separate follow-up.
 3. **Stable worker capacity for the re-validation** (Q248): the spot pool preempted to 1 node,
    confounding throughput. Re-run on non-spot or ≥3 held nodes so a non-green result can be
-   attributed cleanly.
+   attributed cleanly. *(Cluster task; owned by the dispatcher's combined capacity + re-route #4
+   turn-up, not this code change.)*
 
 ## Problem
 
