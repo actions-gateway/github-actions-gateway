@@ -74,12 +74,19 @@ in `site_url`) and registers that domain in their Plausible dashboard. Point
 ## Local preview
 
 ```sh
-pip install -r requirements-docs.txt   # pinned: mkdocs 1.6.1, mkdocs-material 9.7.6
-mkdocs serve                           # http://localhost:8000/
+make docs-serve   # live-reload preview at http://localhost:8000/
+make docs-build   # one-shot static build into site/
 ```
 
+Both targets provision an **isolated venv** (`.venv-docs/`, gitignored) from the
+pinned `requirements-docs.txt` and reuse it across runs, so the docs toolchain
+never touches the host Python — `python3` is the only host prerequisite
+(`scripts/check-tools.sh`, extended tier). On Debian/Ubuntu the stdlib venv
+module ships separately: `apt-get install python3-venv` if `python3 -m venv`
+fails.
+
 The toolchain is pinned **exactly** — MkDocs 2.0 is incompatible with Material 9.x,
-so don't float the versions.
+so don't float the versions in `requirements-docs.txt`.
 
 ## Publication scope
 

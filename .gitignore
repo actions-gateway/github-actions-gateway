@@ -37,6 +37,10 @@ CLAUDE.local.md
 .venv/
 __pycache__/
 *.pyc
+# MkDocs local preview: the isolated venv `make docs-serve` provisions from
+# requirements-docs.txt, and the static build output `make docs-build` writes.
+/.venv-docs/
+/site/
 # Go coverage profiles from a manual `go test -coverprofile`. scripts/coverage.sh
 # writes its profiles to TMPDIR, never in-tree; this only catches stray manual
 # runs. The committed coverage-baseline.txt (the ratchet floor) is NOT a profile
