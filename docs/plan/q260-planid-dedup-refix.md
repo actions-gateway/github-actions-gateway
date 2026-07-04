@@ -14,9 +14,11 @@ the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs
 > Pod-collision — is **fixed in code** (this PR): the released `planID` claim now **lingers**
 > for the pod's `completedPodTTL` window, so a late redelivery is deduped instead of colliding
 > on the winner's lingering Completed pod. See Follow-up item 1 below. The deeper
-> completion-vs-15-min-cancel *accounting* gap (item 2) is **flagged** as needing a run-service
-> protocol call, not forced. Residual (1) (Q248 capacity) is a cluster task for the combined
-> re-route #4. Q224/Q260/Q242 stay open until that turn-up reconfirms green.
+> completion-vs-15-min-cancel *accounting* gap (item 2) now has its run-service protocol call —
+> `broker.CompleteJob` + a guarded loser-abandon path (a follow-up PR to #512) — but it stays
+> **off by default** pending live confirmation of GitHub's per-delivery completion semantics.
+> Residual (1) (Q248 capacity) is a cluster task for the combined re-route #4. Q224/Q260/Q242
+> stay open until that turn-up reconfirms green (and, for item 2, confirms the semantics).
 
 ## Follow-up (post-#3): close the residual before re-validating green
 
@@ -44,16 +46,25 @@ the winner's not-yet-GC'd Completed pod (2× `create Pod … already exists`, vs
    the 15-min unstarted-timeout on a *deduped* sibling delivery (observed: `tidy-check`'s pod
    reported "Job completed" yet GitHub cancelled the job). Investigate whether the loser
    should acknowledge/complete its delivery rather than silently skip.
-   - 🚩 **FLAGGED — needs a run-service protocol call, out of scope for the claim lifecycle.**
-     The dedup keys on `planID`, only known **post-`acquirejob`**, so a deduped late redelivery
-     has *already* run `AcquireJob` — leaving GitHub a job-assignment it expects a runner to
-     start. The `broker.Client` surface is `CreateSession` / `GetMessage` / `AcquireJob` /
-     `RenewJob` / `DeleteSession` — there is **no** CompleteJob/FinishJob/abandon call, so the
-     loser cannot tell the run service "this delivery is already done." Closing the ~15-min
-     unstarted-cancel gap therefore requires a **new run-service protocol call** (complete or
-     abandon the deduped delivery), plus confirmation of GitHub's per-delivery assignment
-     semantics from a live turn-up — beyond this claim-lifecycle fix. Fix #1 removes the Pod
-     collision and the error-surfaced-as-cancel; this accounting gap is a separate follow-up.
+   - **Mechanism landed, guarded (PR follow-up to #512).** `broker.Client.CompleteJob`
+     (`POST {run_service_url}/completejob`, job-scoped auth like `renewjob`) was added, and the
+     `handleJob` loser path now — *when enabled* — releases its acquired-but-unrun assignment
+     via `completejob` on the loser's **own** `jobID` (`RunnerRequestID`, distinct per sibling)
+     with result `skipped`, tracked by `actions_gateway_abandoned_delivery_completions_total`.
+     Keying on the loser's own `jobID` (not the shared planID) is safe **iff** the run service
+     scopes completion per-delivery, which the `renewjob` per-`(planID, jobID)` model (Q247,
+     live-confirmed) strongly implies but does **not** prove for the *completion* path.
+   - **OFF BY DEFAULT** (`AGC_COMPLETE_ABANDONED_DELIVERIES=true`;
+     `listener.Config.CompleteAbandonedDeliveries`). Rationale: if completion is scoped by
+     `planID` (not `jobID`), the loser's call would finalize the winner's still-running job —
+     a strict regression on live workflows. Secure-by-default keeps it opt-in until confirmed.
+   - **STILL NEEDS item 1 (a live dogfood turn-up)** to confirm: (a) that a deduped
+     `acquirejob` really creates an independently-tracked assignment GitHub cancels at 15 min
+     even after the winner completes; (b) that `completejob` on the loser's own `jobID` resolves
+     *only* that assignment (not the winner's); and (c) the exact `result` wire serialization
+     (`skipped` lowercase vs PascalCase vs integer enum — currently modeled, unverified). The
+     turn-up that gathers this evidence should also flip the flag on and validate the fix — do
+     both in one turn-up. Capture the run-service request/response in `gke-dogfood.md`.
 3. **Stable worker capacity for the re-validation** (Q248): the spot pool preempted to 1 node,
    confounding throughput. Re-run on non-spot or ≥3 held nodes so a non-green result can be
    attributed cleanly. *(Cluster task; owned by the dispatcher's combined capacity + re-route #4

@@ -687,12 +687,27 @@ gh api /repos/"$REPO"/actions/runners \
 > `TestAGC_Q260_LateRedeliveryAfterCompletionDedups` (envtest) reproduces the exact
 > `create Pod runner-…-<planid>: pods "…" already exists` against the pre-fix behavior and
 > passes with the fix. The deeper **completion-vs-15-min-cancel accounting gap** (the winner's
-> pod completes yet GitHub cancels the job on a deduped sibling delivery) is **flagged, not
-> forced**: the deduped loser has already run `AcquireJob` (planID is post-acquire) and the
-> `broker.Client` has no complete/abandon call, so closing it needs a new run-service protocol
-> call — see [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) Follow-up item 2. This
-> code lands ahead of the dispatcher's combined **capacity (Q248) + re-route #4** turn-up, which
+> pod completes yet GitHub cancels the job on a deduped sibling delivery) now has its run-service
+> protocol call — `broker.CompleteJob` + a guarded loser-abandon path, described next — but it
+> stays **off by default** pending live confirmation of the completion semantics. See
+> [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) Follow-up item 2. This code lands
+> ahead of the dispatcher's combined **capacity (Q248) + re-route #4** turn-up, which
 > re-validates green on stable worker capacity. **Q224/Q260/Q242 stay open until then.**
+>
+> **Follow-up mechanism landed (guarded), pending this turn-up's confirmation.** The
+> completion-accounting residual now has a code path: the deduped loser can release its
+> acquired-but-unrun assignment via `completejob` on its own `jobID` (result `skipped`), so
+> GitHub does not cancel the job at the 15-min unstarted-timeout. It is **off by default**
+> (`AGC_COMPLETE_ABANDONED_DELIVERIES=true`) because the run service's per-delivery *completion*
+> semantics are not yet live-confirmed. **Next turn-up: enable the flag via the existing
+> `AGC_EXTRA_*` passthrough — set `AGC_EXTRA_AGC_COMPLETE_ABANDONED_DELIVERIES=true` on the GMC
+> pod (GMC run with `--allow-agc-extra-env`), which the GMC forwards verbatim (prefix-stripped)
+> to the AGC Deployment env; no GMC code change needed.** Then re-fire the burst on stable
+> (non-spot) capacity and capture the `completejob` request/response + whether the
+> previously-cancelled job (`tidy-check`) now concludes instead of cancelling.
+> If completion turns out to be planID-scoped (would cancel the winner), revert the flag and
+> pursue the claim-release-post-GC path instead. See
+> [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) follow-up item 2.
 >
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`

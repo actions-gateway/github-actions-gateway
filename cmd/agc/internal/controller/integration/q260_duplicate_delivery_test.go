@@ -85,6 +85,7 @@ func TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID(t *testing.T) {
 
 	dupBefore := testutil.ToFloat64(m.JobsDuplicateDeliveryTotal.WithLabelValues(nsName, rgName))
 	acquiresBefore := brokerStub.AcquireJobCalls()
+	completeBefore := brokerStub.CompleteJobCalls()
 
 	// The loser: deliver the SAME job with a DISTINCT RunnerRequestID to the sibling.
 	// It acquires (same planID), finds the planID already claimed by the winner, and
@@ -103,6 +104,91 @@ func TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID(t *testing.T) {
 
 	// Exactly one worker Secret for this planID ever exists — the real API server
 	// never saw a second create for the shared job-<planID> Secret.
+	assert.Equal(t, 1, countJobSecrets(t, nsName, rgName),
+		"exactly one job-<planID> worker Secret must exist (no duplicate provision)")
+
+	// Off by default: with CompleteAbandonedDeliveries unset (the production
+	// default), the deduped loser silently skips — it must NOT issue a completejob.
+	assert.Equal(t, completeBefore, brokerStub.CompleteJobCalls(),
+		"the loser must not release its assignment via completejob when the guard is off (default)")
+}
+
+// TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery is the envtest regression for
+// the Q260 follow-up (item 2): when CompleteAbandonedDeliveries is enabled, a
+// deduplicated duplicate delivery (the loser) does not merely skip — it releases
+// its acquired-but-unrun assignment via completejob so GitHub does not cancel the
+// job at its ~15-minute unstarted-job timeout even after the winner completed it.
+//
+// It mirrors TestAGC_Q260_DuplicateDeliveryDedupsOnPlanID (winner claims the shared
+// planID and holds it), then delivers the SAME planID job with a DISTINCT
+// RunnerRequestID ("loser") to the sibling and asserts the loser is deduped AND
+// issues exactly one completejob keyed on its OWN jobID ("loser") with result
+// "skipped" — proving it releases only its phantom assignment, not the winner's.
+func TestAGC_Q260_DedupedLoserReleasesAbandonedDelivery(t *testing.T) {
+	const (
+		nsName = "agc-q260-abandon"
+		rgName = "abandon-rg"
+		planID = "shared-plan-abandon"
+	)
+	createNSForAGC(t, nsName)
+
+	rg := newRunnerGroup(nsName, rgName, 2)
+	require.NoError(t, k8sClient.Create(ctx, rg))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
+
+	brokerStub.SetAcquireJobResponse(map[string]any{
+		"plan": map[string]string{"planId": planID},
+	})
+	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
+
+	m := sharedListenerMetrics()
+	// Opt into the guarded behavior for this test only.
+	startAGCReconcilerWithProvisioner(t, provisionerOptions{metrics: m, completeAbandonedDeliveries: true})
+
+	// The winner acquires the shared planID, claims it, provisions its worker
+	// Secret, then blocks in waitForCompletion — holding the claim.
+	winnerID := enqueueJobOnOwnerSession(15*time.Second, rgName, nil, broker.RunnerJobRequestBody{RunnerRequestID: "winner"})
+	require.NotEmpty(t, winnerID, "expected a baseline session to deliver the winning job to")
+
+	require.Eventually(t, func() bool {
+		return countJobSecrets(t, nsName, rgName) >= 1
+	}, 15*time.Second, 25*time.Millisecond, "winner should provision its job-<planID> Secret")
+
+	// The winner's SpawnReplacement brings a sibling online for the duplicate.
+	var siblingID string
+	require.Eventually(t, func() bool {
+		for _, id := range brokerStub.ActiveSessionsForOwner(rgName) {
+			if id != winnerID {
+				siblingID = id
+				return true
+			}
+		}
+		return false
+	}, 15*time.Second, 25*time.Millisecond, "winner's SpawnReplacement should bring a sibling session online")
+
+	completeBefore := brokerStub.CompleteJobCalls()
+
+	// The loser: SAME planID, DISTINCT RunnerRequestID, delivered to the sibling.
+	brokerStub.EnqueueJob(siblingID, broker.RunnerJobRequestBody{RunnerRequestID: "loser"})
+
+	// The loser is deduped AND releases its assignment via completejob.
+	require.Eventually(t, func() bool {
+		return brokerStub.CompleteJobCalls() >= completeBefore+1
+	}, 15*time.Second, 25*time.Millisecond, "the deduped loser must release its assignment via completejob when the guard is on")
+
+	// The completejob is keyed on the LOSER's own jobID (not the winner's), with
+	// result "skipped" — so it resolves only the phantom assignment.
+	last, ok := brokerStub.LastCompleteJob()
+	require.True(t, ok, "a completejob request should have been recorded")
+	assert.Equal(t, "loser", last.JobID, "completejob must key on the loser's own delivery jobID")
+	assert.Equal(t, planID, last.PlanID, "completejob must carry the shared planID")
+	assert.Equal(t, broker.TaskResultSkipped, last.Result, "the abandoned delivery is reported as Skipped")
+
+	// The completion counter records the outcome as completed.
+	assert.GreaterOrEqual(t, testutil.ToFloat64(m.AbandonedDeliveryCompletionsTotal.WithLabelValues(nsName, rgName, "completed")), float64(1),
+		"the abandoned-delivery completion counter should record a completed outcome")
+
+	// Still no duplicate provision: exactly one job-<planID> Secret.
 	assert.Equal(t, 1, countJobSecrets(t, nsName, rgName),
 		"exactly one job-<planID> worker Secret must exist (no duplicate provision)")
 }

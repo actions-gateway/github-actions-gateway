@@ -122,6 +122,13 @@ type BrokerConfig struct {
 	// RenewJobInterval is the cadence of the per-job RenewJob renewal loop.
 	// 0 means the default (60s).
 	RenewJobInterval time.Duration
+	// CompleteAbandonedDeliveries enables the guarded Q260 follow-up: a
+	// deduplicated duplicate delivery (the loser) releases its acquired-but-unrun
+	// assignment via completejob so GitHub does not cancel the job at its ~15-minute
+	// unstarted-job timeout. OFF by default pending live confirmation of the run
+	// service's per-delivery completion semantics — see
+	// listener.Config.CompleteAbandonedDeliveries.
+	CompleteAbandonedDeliveries bool
 }
 
 // SetupWithManager registers the reconciler with the controller-runtime manager.

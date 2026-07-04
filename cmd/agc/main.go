@@ -515,6 +515,13 @@ func run() error {
 			// connection is torn down a few seconds past the 50s hold rather than
 			// blocking a listener for the multi-minute OS TCP timeout (Q108).
 			HTTPClient: broker.NewHTTPClient(),
+			// Guarded Q260 follow-up: when a deduplicated duplicate delivery (the
+			// loser) is refused the planID claim, release its acquired-but-unrun
+			// assignment via completejob so GitHub does not cancel the job at its
+			// ~15-minute unstarted-job timeout. OFF by default — the run service's
+			// per-delivery completion semantics are not yet live-confirmed. Flip on
+			// only during a dogfood turn-up that confirms the semantics.
+			CompleteAbandonedDeliveries: os.Getenv("AGC_COMPLETE_ABANDONED_DELIVERIES") == "true",
 		},
 	}
 	if err := r.SetupWithManager(mgr); err != nil {

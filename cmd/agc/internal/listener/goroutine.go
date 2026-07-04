@@ -138,8 +138,24 @@ type Config struct {
 	// the ineffective first Q260 fix, c850764) is what collapses the siblings. Nil
 	// disables dedup (stub-only tests, or a response with no planID).
 	ClaimJob func(planID string) (release func(), ok bool)
-	Clock    Clock
-	Log      *slog.Logger
+	// CompleteAbandonedDeliveries, when true, makes a deduplicated duplicate
+	// delivery (the Q260 loser, which the ClaimJob gate refuses) call completejob on
+	// its OWN delivery's jobID before recycling — so GitHub does not leave the
+	// acquired-but-unrun per-delivery assignment dangling until its ~15-minute
+	// unstarted-job timeout and cancel the whole job even after the winning sibling
+	// completed it (Q260 follow-up item 2).
+	//
+	// OFF BY DEFAULT. The run service's per-delivery completion semantics are not
+	// yet live-confirmed: if completion is scoped by planID (not jobID) the loser's
+	// call could finalize the winner's still-running job, a strict regression. This
+	// outward call is therefore gated behind an explicit opt-in
+	// (AGC env AGC_COMPLETE_ABANDONED_DELIVERIES) pending a dogfood turn-up that
+	// confirms the semantics AND validates the fix (Q260 follow-up item 1). The
+	// operator runbook is the Q260 redelivery-accounting limitation in
+	// docs/operations/troubleshooting.md.
+	CompleteAbandonedDeliveries bool
+	Clock                       Clock
+	Log                         *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -675,6 +691,18 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			// SpawnReplacement/renew/provision are all skipped for the loser.
 			log.Debug("duplicate job delivery: planID already claimed by a sibling session; skipping provisioning and recycling the runner slot",
 				"planID", planID, "runnerRequestID", jobBody.RunnerRequestID)
+			// Q260 follow-up (guarded): the loser already ran AcquireJob, so GitHub
+			// holds a per-delivery job assignment for it. Left dangling, GitHub
+			// cancels the whole job at its ~15-minute unstarted-job timeout even
+			// after the winner completes. When enabled, release this delivery via
+			// completejob on the loser's OWN jobID (jobBody.RunnerRequestID) — which
+			// is distinct from the winner's, so under the per-delivery lock model
+			// (Q247) it resolves only this phantom assignment. Off by default until
+			// the run service's per-delivery completion semantics are live-confirmed
+			// (see Config.CompleteAbandonedDeliveries).
+			if cfg.CompleteAbandonedDeliveries && runServiceURL != "" {
+				completeAbandonedDelivery(ctx, cfg, log, runServiceURL, planID, jobBody.RunnerRequestID, jobToken)
+			}
 			return acquired, nil
 		}
 		defer release()
@@ -729,6 +757,44 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 		return acquired, cfg.JobHandler(jobCtx, runServiceURL, planID, payload, cfg.Agent.EncodedJITConfig)
 	}
 	return acquired, nil
+}
+
+// completeAbandonedDelivery releases a deduplicated duplicate delivery's job
+// assignment via completejob so GitHub does not leave it dangling until the
+// ~15-minute unstarted-job timeout (Q260 follow-up). jobID is the loser delivery's
+// OWN RunnerRequestID, distinct from the winner's; the result is Skipped (honest:
+// acquired, ran nothing). Best-effort: the call is bounded by the control-plane
+// timeout and failures are logged and counted, never fatal — the runner still
+// recycles its slot. Gated by Config.CompleteAbandonedDeliveries; see that field
+// for why this outward call is off by default.
+func completeAbandonedDelivery(ctx context.Context, cfg Config, log *slog.Logger, runServiceURL, planID, jobID, jobToken string) {
+	cctx, cancel := context.WithTimeout(ctx, cfg.controlPlaneTimeout())
+	defer cancel()
+	err := cfg.Broker.CompleteJob(cctx, runServiceURL, broker.CompleteJobRequest{
+		PlanID:    planID,
+		JobID:     jobID,
+		Result:    broker.TaskResultSkipped,
+		AuthToken: jobToken,
+	})
+
+	outcome := "completed"
+	var notFound *broker.JobNotFoundError
+	switch {
+	case err == nil:
+		log.Debug("released abandoned duplicate delivery via completejob so GitHub does not cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", jobID)
+	case errors.As(err, &notFound):
+		// The assignment is already gone server-side — nothing left to release.
+		log.Debug("abandoned duplicate delivery already resolved server-side",
+			"planID", planID, "jobID", jobID)
+	default:
+		outcome = "error"
+		log.Warn("failed to release abandoned duplicate delivery; GitHub may cancel the job at its unstarted-job timeout",
+			"planID", planID, "jobID", jobID, "error", err)
+	}
+	if cfg.Metrics != nil {
+		cfg.Metrics.AbandonedDeliveryCompletionsTotal.WithLabelValues(cfg.Namespace, cfg.Group, outcome).Inc()
+	}
 }
 
 // healSession replaces the goroutine's broker session: best-effort delete of

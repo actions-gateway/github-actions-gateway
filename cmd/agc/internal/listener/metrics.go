@@ -22,9 +22,15 @@ type Metrics struct {
 	// completed but its terminal worker pod has not yet been reaped, so the claim
 	// still lingers and the redelivery would otherwise collide on `create Pod`).
 	JobsDuplicateDeliveryTotal *prometheus.CounterVec
-	TokenRefreshesTotal        *prometheus.CounterVec
-	TokenRefreshErrorsTotal    *prometheus.CounterVec
-	RenewJobErrorsTotal        *prometheus.CounterVec
+	// Q260 follow-up: a deduplicated duplicate delivery (the loser) issuing a
+	// completejob on its own delivery so GitHub does not leave the acquired-but-unrun
+	// assignment dangling until its ~15-minute unstarted-job timeout. Labelled by
+	// outcome (completed, error). Only incremented when the guarded behavior is
+	// enabled (Config.CompleteAbandonedDeliveries).
+	AbandonedDeliveryCompletionsTotal *prometheus.CounterVec
+	TokenRefreshesTotal               *prometheus.CounterVec
+	TokenRefreshErrorsTotal           *prometheus.CounterVec
+	RenewJobErrorsTotal               *prometheus.CounterVec
 	// Q254: incremented when the per-job renew loop cancels the worker because the
 	// job's lock is definitively lost, by reason (job_not_found, consecutive_failures).
 	RenewJobTeardownsTotal *prometheus.CounterVec
@@ -78,6 +84,11 @@ func NewMetrics() *Metrics {
 			Name: "actions_gateway_jobs_duplicate_delivery_total",
 			Help: "Duplicate job deliveries deduplicated: the job's planID was already claimed by a sibling session in this AGC, so provisioning was skipped (and the runner recycled) to avoid colliding on the shared per-job worker Secret or the winner's not-yet-reaped worker pod. Covers both a concurrent burst and a late redelivery after completion (Q260).",
 		}, []string{"namespace", "runner_group"}),
+
+		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_abandoned_delivery_completions_total",
+			Help: "Deduplicated duplicate deliveries (Q260 losers) whose acquired-but-unrun assignment was released via completejob so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when the guarded behavior is enabled.",
+		}, []string{"namespace", "runner_group", "outcome"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_token_refreshes_total",
@@ -165,6 +176,7 @@ func NewMetrics() *Metrics {
 		m.JobAcquisitionErrors,
 		m.JobsAdmissionRejectedTotal,
 		m.JobsDuplicateDeliveryTotal,
+		m.AbandonedDeliveryCompletionsTotal,
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,
