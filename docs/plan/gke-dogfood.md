@@ -610,6 +610,72 @@ gh api /repos/"$REPO"/actions/runners \
 > dogfood turn-up — Q224/Q242 stay open/blocked and Q260 stays open until then.**
 > Plan: [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md).
 >
+> **Q260 planID dedup live-validated EFFECTIVE — the burst-start collapse does NOT recur;
+> but the matrix still isn't fully green, now blocked by capacity + a late-redelivery edge
+> (2026-07-04, re-route #3).** A fresh AGC image built off `main`@`1f4111b` (=#508, the
+> planID re-fix) — `ghcr.io/actions-gateway/agc:e2e-1f4111b`
+> (manifest-list digest `sha256:b0848e970e0fca62d0b649fa5620467580914d79e21e04c24ddcd16171be40dd`,
+> amd64 manifest `sha256:03bc3ee2…`), GMC/proxy/wrapper unchanged at `v1.1.0-rc.6` — was
+> deployed by patching the GMC's `AGC_IMAGE` env; the CI AGC rolled to it (verified: the
+> running pod's `imageID` matches the pushed digest), gateway `Ready=True`, baseline listener
+> online. The dogfood `RunnerTemplate` was re-pinned to the build-capable
+> `ghcr.io/actions-gateway/dogfood-runner:2.335.1` (Q239, avoids `make: command not found`),
+> worker CPU request already `1`, `default-pool→2`, `workers` pre-scaled `→3`, and
+> `spec.logLevel: debug` set on the CR so the dedup skip (a Debug line) is observable. The
+> SAME comparable 7-job burst as #505 was fired at `23:45:33Z` — reruns of the two completed
+> `main` runs **on the exact deployed commit `1f4111b`**: unit-test.yml `28687585802` (6
+> gag-ci jobs) + integration-test.yml `28687585839` (1 job) — after flipping
+> `GAG_RUNNER → ["self-hosted","linux","gag-ci"]`.
+>
+> **The Q260-specific wedge is gone.** The prior turn-ups' signature — 5 sibling sessions
+> **simultaneously** colliding on the shared `job-<planID>` **Secret** at burst start →
+> instant collapse to `activeSessions 1-2` → nothing completes — did **not** occur:
+> - **Dedup fired on the shared planID:** `duplicate_delivery` gate skipped **2** deliveries,
+>   both for planID `b8321da3` (agentIndex 1 @`23:47:45` and agentIndex 3 @`23:51:28`, with
+>   **distinct** `RunnerRequestID`s) — exactly the fan-out the old pre-acquire RunnerRequestID
+>   key missed. The planID key collapses it, as designed.
+> - **Zero Secret collisions at burst start** (was 5): 5 `job-<planID>` Secrets created cleanly;
+>   `activeSessions` scaled up to **4 concurrent busy runners** (ci-0..3, = `maxWorkers`),
+>   holding rather than collapsing.
+> - **Two full CI jobs completed GREEN under the burst** — `coverage` and `integration-test`
+>   both `success` on `gag-ci` (a first for these turn-ups; prior wedges completed ~nothing).
+>
+> **But the concurrent matrix still does NOT go fully green.** Final tally: **2 success**
+> (coverage, integration-test), **2 cancelled** (tidy-check, vendor-check), **1 failure**
+> (unit-test), 2 (shellcheck, lint) still in-progress at teardown. The residual blockers are
+> **distinct from the Q260 dedup wedge**:
+> 1. **Capacity starvation (Q248) — dominant.** The pre-scaled 3 spot `workers` nodes were
+>    **preempted** mid-burst down to **1** node (spot; node set `cd55/hsms/l5w6 → gwzz`,
+>    autoscaler reported "1 in backoff after failed scale-up"; `SSD_TOTAL_GB=500` caps the pool
+>    at ~3-4 regardless). With ~1 concurrent worker slot the 7 jobs serialized: `unit-test`
+>    died at **exactly 600s** (the initial AcquireJob lock TTL) having run **zero steps**
+>    because its assigned runner never got a pod; `tidy-check`/`vendor-check` were cancelled at
+>    **exactly 15:00** (GitHub's unstarted-job timeout). This is capacity, not Q260.
+> 2. **Late-redelivery Pod-collision (new Q260 follow-up).** The **2** collisions that *did*
+>    occur were on **`create Pod`** (not Secret) and **late** (`23:59:18`/`:19`), both for the
+>    single **slow** planID `b8321da3`: GitHub redelivered that one job repeatedly over ~12 min
+>    (`23:47`→`23:59`); the planID claim is released when the winner completes, so a
+>    post-completion redelivery passes the gate and collides on the winner's **not-yet-GC'd
+>    Completed pod**. That winner pod **ran the job to completion** ("Raising job completed
+>    against run service" / "Job completed" @`23:59:14`, **no** renewal/lock errors) — yet
+>    GitHub still **cancelled** `tidy-check` at the 15-min unstarted-timeout, a
+>    completion-vs-timeout **accounting gap** under fan-out. Milder than the Secret-collapse
+>    (the job already ran) but it still burns runner slots and yields a cancelled job.
+> The Q259 `422 "…still running a job and cannot be deleted"` recycle churn (4 listener
+> exit-on-recycle events) is present as before — unchanged secondary symptom.
+>
+> **Verdict.** The planID stable-key model is **correct** — the dedup fired on the shared
+> planID and prevented the burst-start Secret-collision collapse — so do **not** hunt for a
+> different dedup key. But **Q224's "route production CI green" is still NOT met:** full green
+> is blocked by (1) Q248 spot-node capacity → serialized execution → 600s/15-min timeouts, and
+> (2) the late-redelivery Pod-collision + completion-accounting residual. **Q224/Q260/Q242
+> stay open/blocked.** A clean green re-validation needs **stable worker capacity** (non-spot,
+> or ≥3 held nodes) so throughput isn't the confound, plus addressing the redelivery-accounting
+> edge (release the planID claim only after the worker Pod is GC'd, and/or reconcile GitHub's
+> per-delivery job-assignment timeout with the AGC's dedup-to-one-delivery model). Evidence:
+> AGC debug logs (`agc:e2e-1f4111b`), reruns unit-test.yml `28687585802` + integration-test.yml
+> `28687585839` (both on `sha 1f4111b`), burst `23:45:33Z`–`00:03Z`.
+>
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`
 > because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills
