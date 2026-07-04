@@ -146,6 +146,8 @@ The same applies to bulk completions: if a session verifies that a stale Queue e
 
 If you completed work that closes the last ⚠️ open item under a Progress row, update both in the same commit.
 
+When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — a "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. `v2alpha1`/alpha) so the roadmap doesn't overclaim. This is the same trigger as the website-positioning row in the [doc-update matrix](doc-update-matrix.md); the roadmap is hand-maintained, so nothing else catches the drift.
+
 ### `⚠️` means an open *Queue* row remains — deferred residuals don't count
 
 A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in the [Deferred](#deferred-items-live-below-the-queue-not-in-it) section (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)), and they **do not keep a plan `⚠️`**. A plan whose only remainders are Deferred rows or accepted-by-design residuals is `✅`, not `⚠️`.
