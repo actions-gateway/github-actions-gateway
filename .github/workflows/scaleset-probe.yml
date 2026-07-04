@@ -1,23 +1,32 @@
 # Q264 probe fixture — dispatch-only, never runs in normal CI.
 #
-# Queues one job on runs-on: gag-probe-scaleset so the cmd/probe Investigation E
-# scenario (PROBE_SCALESET_TEST=true PROBE_SCALESET_JOB_TEST=true) can observe a
-# real JobAvailable message and exercise the batch acquire against the
-# throwaway scale set the probe registers. The job never executes — no runner
-# backs the label; cancel the run once the probe has its evidence.
+# Queues jobs on runs-on: gag-probe-scaleset so the cmd/probe Investigation E
+# scenario (PROBE_SCALESET_TEST=true, and the E2 capacity test) can observe
+# real JobAvailable/JobAssigned messages against the throwaway scale set the
+# probe registers. Two jobs so a capacity-1 poll has an overflow candidate:
+# probe-fast completes quickly under a real runner (U3); probe-slow sleeps so
+# the runner can be killed mid-job to measure GitHub's cancel latency (U5).
+# Cancel the run once the probe has its evidence.
 name: scaleset-probe
 on:
   workflow_dispatch: {}
   # workflow_dispatch only works once the file reaches the default branch;
   # the push trigger (scoped to this file on claude/ branches) lets the
-  # probe session queue the job from its own feature branch.
+  # probe session queue the jobs from its own feature branch.
   push:
     branches: ["claude/**"]
     paths: [".github/workflows/scaleset-probe.yml"]
 
 jobs:
-  probe-target:
+  probe-fast:
     runs-on: gag-probe-scaleset
     timeout-minutes: 10
     steps:
-      - run: echo "This job exists only to be observed by cmd/probe Investigation E (Q264)."
+      - run: echo "probe-fast ran under the Investigation E scale set (Q264)."
+  probe-slow:
+    runs-on: gag-probe-scaleset
+    timeout-minutes: 10
+    steps:
+      - run: |
+          echo "probe-slow started; sleeping so the runner can be killed mid-job (U5)."
+          sleep 300

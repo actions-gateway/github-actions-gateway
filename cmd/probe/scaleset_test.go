@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -135,13 +136,20 @@ func (f *scalesetFake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.requireAdmin(r)
 		w.WriteHeader(http.StatusNoContent)
 
+	case strings.HasPrefix(path, "/_apis/runtime/runnerscalesets/42/sessions/") && r.Method == http.MethodPatch:
+		f.record("refresh-session")
+		f.requireAdmin(r)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"sessionId":               "11111111-2222-3333-4444-555555555555",
+			"messageQueueUrl":         f.URL + "/queue/42/messages?dummy=1",
+			"messageQueueAccessToken": "queue-token",
+		})
+
 	case path == "/queue/42/messages":
-		f.record("queue-poll lastMessageId=" + r.URL.Query().Get("lastMessageId"))
+		f.record("queue-poll cap=" + r.Header.Get("X-ScaleSetMaxCapacity") +
+			" last=" + r.URL.Query().Get("lastMessageId"))
 		if got := r.Header.Get("Authorization"); got != "Bearer queue-token" {
 			f.t.Errorf("queue poll auth = %q, want queue token", got)
-		}
-		if got := r.Header.Get("X-ScaleSetMaxCapacity"); got != "1" {
-			f.t.Errorf("queue poll X-ScaleSetMaxCapacity = %q, want 1", got)
 		}
 		var msg *runnerScaleSetMessage
 		f.mu.Lock()
@@ -268,7 +276,7 @@ func TestScalesetProbe_FullFlowAndCleanup(t *testing.T) {
 		"runnergroups",
 		"create-scaleset",
 		"create-session",
-		"queue-poll lastMessageId=0",
+		"queue-poll cap=1 last=0",
 		"acquirejobs(queue) []",
 		"acquirejobs(queue) [9999999999]",
 		"acquirejobs(admin) [9999999999]",
@@ -326,7 +334,7 @@ func TestScalesetProbe_JobTestAcquiresAndSeesAssigned(t *testing.T) {
 	if !strings.Contains(got, "acquirejobs(queue) [1234]") {
 		t.Errorf("job test did not acquire the offered id; got:\n%s", got)
 	}
-	if !strings.Contains(got, "queue-poll lastMessageId=1") {
+	if !strings.Contains(got, "queue-poll cap=1 last=1") {
 		t.Errorf("job test did not advance lastMessageId after the first message; got:\n%s", got)
 	}
 }
@@ -516,9 +524,105 @@ func TestScalesetProbe_JobTestSkipsNonAvailableEntries(t *testing.T) {
 	if strings.Contains(got, "acquirejobs(queue) [55]") {
 		t.Errorf("JobStarted entry must not be acquired; got:\n%s", got)
 	}
-	if !strings.Contains(got, "queue-poll lastMessageId=1") ||
-		!strings.Contains(got, "queue-poll lastMessageId=2") {
+	if !strings.Contains(got, "queue-poll cap=1 last=1") ||
+		!strings.Contains(got, "queue-poll cap=1 last=2") {
 		t.Errorf("lastMessageId must advance across skipped messages; got:\n%s", got)
+	}
+}
+
+func TestScalesetProbe_CapacityTestSequence(t *testing.T) {
+	assigned1, _ := json.Marshal([]map[string]any{
+		{"messageType": "JobAssigned", "runnerRequestId": 0, "jobId": "aaa"},
+	})
+	assigned2, _ := json.Marshal([]map[string]any{
+		{"messageType": "JobAssigned", "runnerRequestId": 0, "jobId": "bbb"},
+	})
+	fake := &scalesetFake{
+		t: t,
+		queueScript: []*runnerScaleSetMessage{
+			nil, // capacity-0 poll: jobs held
+			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned1)},
+			{MessageID: 2, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned2)},
+			{MessageID: 1, MessageType: "RunnerScaleSetJobMessages", Body: string(assigned1)}, // replay
+		},
+	}
+	dir := t.TempDir()
+	jit1 := dir + "/jit-1.b64"
+	jit2 := dir + "/jit-2.b64"
+	p, _ := newScalesetProbeForTest(t, fake, scalesetConfig{
+		CapacityTest:   true,
+		JITConfigFiles: []string{jit1, jit2},
+		HoldSeconds:    1,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := p.run(ctx); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	got := strings.Join(fake.recorded(), "\n")
+	for _, want := range []string{
+		"queue-poll cap=0 last=0", // phase 1: capacity 0
+		"queue-poll cap=1 last=0", // phase 2: capacity 1 (cursor unchanged by 202)
+		"queue-poll cap=2 last=1", // phase 3: capacity 2, cursor advanced
+		"refresh-session",         // phase 4: PATCH
+		"queue-poll cap=2 last=0", // phase 5: replay poll on fresh session
+		"generatejitconfig",       // JIT mints
+		"delete-scaleset",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("call sequence missing %q; got:\n%s", want, got)
+		}
+	}
+	// Two session creates (initial + replay recreate) and two deletes (replay
+	// test + deferred cleanup of the recreated session).
+	if n := strings.Count(got, "create-session"); n != 2 {
+		t.Errorf("create-session count = %d, want 2; got:\n%s", n, got)
+	}
+	if n := strings.Count(got, "delete-session"); n != 2 {
+		t.Errorf("delete-session count = %d, want 2; got:\n%s", n, got)
+	}
+	// The JIT blobs must land in the files, 0600.
+	for _, f := range []string{jit1, jit2} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		if len(b) == 0 {
+			t.Errorf("%s is empty", f)
+		}
+		info, _ := os.Stat(f)
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("%s perms = %v, want 0600", f, info.Mode().Perm())
+		}
+	}
+}
+
+func TestParseScalesetConfig_CapacityAndHold(t *testing.T) {
+	env := map[string]string{
+		"GITHUB_APP_ID":                  "123",
+		"GITHUB_APP_INSTALLATION_ID":     "456",
+		"GITHUB_APP_PRIVATE_KEY":         testRSAPEM(t),
+		"GITHUB_ORG_URL":                 "https://github.com/test-org",
+		"PROBE_SCALESET_CAPACITY_TEST":   "true",
+		"PROBE_SCALESET_JITCONFIG_FILES": "a.b64, b.b64",
+		"PROBE_SCALESET_HOLD_SECONDS":    "42",
+	}
+	cfg, err := parseScalesetConfig(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("parseScalesetConfig: %v", err)
+	}
+	if !cfg.CapacityTest || cfg.HoldSeconds != 42 {
+		t.Errorf("capacity/hold not parsed: %+v", cfg)
+	}
+	if len(cfg.JITConfigFiles) != 2 || cfg.JITConfigFiles[1] != "b.b64" {
+		t.Errorf("JITConfigFiles = %v, want [a.b64 b.b64]", cfg.JITConfigFiles)
+	}
+
+	env["PROBE_SCALESET_HOLD_SECONDS"] = "notanumber"
+	if _, err := parseScalesetConfig(func(k string) string { return env[k] }); err == nil {
+		t.Error("want error for bad PROBE_SCALESET_HOLD_SECONDS")
 	}
 }
 

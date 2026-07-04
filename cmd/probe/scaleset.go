@@ -46,6 +46,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -64,6 +65,20 @@ type scalesetConfig struct {
 	ScaleSetName   string
 	GroupName      string
 	JobTest        bool
+	// CapacityTest (Investigation E2) polls the queue with
+	// X-ScaleSetMaxCapacity 0 → 1 → 2 against pre-queued jobs to observe
+	// whether assignment is capacity-gated and whether JobAvailable/an
+	// explicit acquire step appears above capacity; then probes session
+	// token refresh (PATCH) and delete/recreate message replay.
+	CapacityTest bool
+	// JITConfigFiles, when non-empty, are paths the probe writes freshly
+	// minted encodedJITConfig blobs to (0600, one runner each) so a real
+	// runner (docker run …/actions-runner run.sh --jitconfig) can register
+	// against the probe's scale set while HoldSeconds keeps it alive.
+	JITConfigFiles []string
+	// HoldSeconds delays cleanup so externally started runners can register,
+	// receive a job, and run under the probe's scale set.
+	HoldSeconds int
 }
 
 // parseScalesetConfig reads and validates the scale-set scenario environment
@@ -117,6 +132,19 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 		cfg.GroupName = "Default"
 	}
 	cfg.JobTest = getenv("PROBE_SCALESET_JOB_TEST") == "true"
+	cfg.CapacityTest = getenv("PROBE_SCALESET_CAPACITY_TEST") == "true"
+	if v := getenv("PROBE_SCALESET_JITCONFIG_FILES"); v != "" {
+		for _, f := range strings.Split(v, ",") {
+			if f = strings.TrimSpace(f); f != "" {
+				cfg.JITConfigFiles = append(cfg.JITConfigFiles, f)
+			}
+		}
+	}
+	if v := getenv("PROBE_SCALESET_HOLD_SECONDS"); v != "" {
+		if _, err := fmt.Sscan(v, &cfg.HoldSeconds); err != nil {
+			return scalesetConfig{}, fmt.Errorf("parse PROBE_SCALESET_HOLD_SECONDS: %w", err)
+		}
+	}
 	return cfg, nil
 }
 
@@ -254,27 +282,226 @@ func (p *scalesetProbe) run(ctx context.Context) error {
 		}
 	}()
 
-	// ── 7. One queue long-poll (U2: 202 semantics; U4: rate-limit headers) ───
-	if err := p.pollQueueOnce(ctx, sess); err != nil {
-		// Non-fatal: the poll's status/headers are the finding either way.
-		p.log.Warn("INVESTIGATION-E: queue poll returned error", "error", err)
+	if p.cfg.CapacityTest {
+		// ── Investigation E2: capacity gating / refresh / replay ────────────
+		p.capacityTest(ctx, conn, ss.ID, sess)
+	} else {
+		// ── 7. One queue long-poll (U2: 202 semantics; U4: headers) ─────────
+		if err := p.pollQueueOnce(ctx, sess); err != nil {
+			// Non-fatal: the poll's status/headers are the finding either way.
+			p.log.Warn("INVESTIGATION-E: queue poll returned error", "error", err)
+		}
+
+		// ── 8. acquirejobs shape probes (U2: empty batch + unknown id) ──────
+		p.probeAcquireJobs(ctx, conn, ss.ID, sess)
+
+		// ── 9. generatejitconfig ────────────────────────────────────────────
+		if err := p.probeJITConfig(ctx, conn, ss.ID); err != nil {
+			p.log.Warn("INVESTIGATION-E: generatejitconfig failed", "error", err)
+		}
 	}
 
-	// ── 8. acquirejobs shape probes (U2: empty batch + unknown id) ───────────
-	p.probeAcquireJobs(ctx, conn, ss.ID, sess)
-
-	// ── 9. generatejitconfig ─────────────────────────────────────────────────
-	if err := p.probeJITConfig(ctx, conn, ss.ID); err != nil {
-		p.log.Warn("INVESTIGATION-E: generatejitconfig failed", "error", err)
+	// ── 10. Mint JIT configs for externally run runners ──────────────────────
+	for i, path := range p.cfg.JITConfigFiles {
+		if err := p.mintJITConfigToFile(ctx, conn, ss.ID, i+1, path); err != nil {
+			p.log.Warn("INVESTIGATION-E: mint JIT config failed", "index", i+1, "error", err)
+		}
 	}
 
-	// ── 10. Optional live-job test ───────────────────────────────────────────
+	// ── 11. Optional live-job test ───────────────────────────────────────────
 	if p.cfg.JobTest {
 		p.jobTest(ctx, conn, ss.ID, sess)
 	}
 
+	// ── 12. Optional hold: keep the scale set alive for external runners, ────
+	//        observing the lifecycle messages they generate.
+	if p.cfg.HoldSeconds > 0 {
+		p.holdAndObserve(ctx, sess)
+	}
+
 	p.log.Info("INVESTIGATION-E: scenario complete; cleaning up")
 	return nil
+}
+
+// pollOnce issues one message-queue long-poll with the given advertised
+// capacity and cursor, returning the HTTP status and any decoded message.
+func (p *scalesetProbe) pollOnce(ctx context.Context, sess *runnerScaleSetSession, capacity int, lastMessageID int64) (int, *runnerScaleSetMessage, error) {
+	u := sess.MessageQueueURL
+	sep := "?"
+	if strings.Contains(u, "?") {
+		sep = "&"
+	}
+	u += sep + fmt.Sprintf("lastMessageId=%d", lastMessageID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+sess.MessageQueueAccessToken)
+	req.Header.Set("X-ScaleSetMaxCapacity", fmt.Sprintf("%d", capacity))
+	resp, err := p.pollClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK || len(body) == 0 {
+		return resp.StatusCode, nil, nil
+	}
+	var msg runnerScaleSetMessage
+	if err := json.Unmarshal(body, &msg); err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("decode message: %w", err)
+	}
+	return resp.StatusCode, &msg, nil
+}
+
+// logQueueMessage emits one summarising log line for a queue message.
+func (p *scalesetProbe) logQueueMessage(tag string, capacity int, msg *runnerScaleSetMessage) {
+	p.log.Info("INVESTIGATION-E2: "+tag,
+		"capacity", capacity,
+		"messageId", msg.MessageID,
+		"messageType", msg.MessageType,
+		"statistics", string(msg.Statistics),
+		"body", githubapp.SanitizeBody([]byte(msg.Body), 1024))
+}
+
+// capacityTest is Investigation E2: with jobs pre-queued on the scale set's
+// label, poll at capacity 0, 1, then 2 to observe whether assignment is
+// strictly capacity-gated and whether a JobAvailable/acquire flow appears for
+// jobs above the advertised capacity; then exercise the session token refresh
+// (PATCH) and the delete/recreate replay behaviour. sess is updated in place
+// when the session is refreshed or recreated so the caller's deferred cleanup
+// deletes the live session.
+func (p *scalesetProbe) capacityTest(ctx context.Context, conn *adminConnection, scaleSetID int, sess *runnerScaleSetSession) {
+	var cursor int64
+
+	// Phase 1 — capacity 0, jobs queued: does anything arrive?
+	status, msg, err := p.pollOnce(ctx, sess, 0, cursor)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E2: capacity-0 poll error", "error", err)
+	} else if msg == nil {
+		p.log.Info("INVESTIGATION-E2: capacity-0 poll returned no message (jobs held)", "status", status)
+	} else {
+		cursor = msg.MessageID
+		p.logQueueMessage("capacity-0 poll delivered", 0, msg)
+	}
+
+	// Phase 2 — capacity 1: exactly one assignment expected if gated.
+	status, msg, err = p.pollOnce(ctx, sess, 1, cursor)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E2: capacity-1 poll error", "error", err)
+	} else if msg == nil {
+		p.log.Info("INVESTIGATION-E2: capacity-1 poll returned no message", "status", status)
+	} else {
+		cursor = msg.MessageID
+		p.logQueueMessage("capacity-1 poll delivered", 1, msg)
+	}
+
+	// Phase 3 — capacity 2: the held job should follow if gating is dynamic.
+	status, msg, err = p.pollOnce(ctx, sess, 2, cursor)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E2: capacity-2 poll error", "error", err)
+	} else if msg == nil {
+		p.log.Info("INVESTIGATION-E2: capacity-2 poll returned no message", "status", status)
+	} else {
+		cursor = msg.MessageID
+		p.logQueueMessage("capacity-2 poll delivered", 2, msg)
+	}
+
+	// Phase 4 — session token refresh (PATCH).
+	var refreshed runnerScaleSetSession
+	rStatus, rErr := p.svcCall(ctx, conn, http.MethodPatch,
+		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions/%s", scaleSetID, sess.SessionID), nil, &refreshed)
+	if rErr != nil {
+		p.log.Warn("INVESTIGATION-E2: session refresh (PATCH) failed", "status", rStatus, "error", rErr)
+	} else {
+		p.log.Info("INVESTIGATION-E2: session refresh (PATCH)",
+			"status", rStatus,
+			"sameSessionId", refreshed.SessionID == sess.SessionID,
+			"tokenChanged", refreshed.MessageQueueAccessToken != sess.MessageQueueAccessToken,
+			"newTokenLen", len(refreshed.MessageQueueAccessToken))
+		if refreshed.MessageQueueAccessToken != "" {
+			sess.MessageQueueAccessToken = refreshed.MessageQueueAccessToken
+		}
+		if refreshed.MessageQueueURL != "" {
+			sess.MessageQueueURL = refreshed.MessageQueueURL
+		}
+	}
+
+	// Phase 5 — delete + recreate the session; does the message state replay?
+	dStatus, dErr := p.svcCall(ctx, conn, http.MethodDelete,
+		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions/%s", scaleSetID, sess.SessionID), nil, nil)
+	if dErr != nil {
+		p.log.Warn("INVESTIGATION-E2: session delete for replay test failed", "status", dStatus, "error", dErr)
+		return
+	}
+	newSess, cErr := p.createSession(ctx, conn, scaleSetID)
+	if cErr != nil {
+		p.log.Warn("INVESTIGATION-E2: session recreate for replay test failed", "error", cErr)
+		return
+	}
+	*sess = *newSess // the caller's deferred cleanup must delete the live session
+	status, msg, err = p.pollOnce(ctx, sess, 2, 0)
+	if err != nil {
+		p.log.Warn("INVESTIGATION-E2: replay poll error", "error", err)
+	} else if msg == nil {
+		p.log.Info("INVESTIGATION-E2: replay poll returned no message (no replay)", "status", status)
+	} else {
+		p.logQueueMessage("replay poll delivered (state replayed to fresh session)", 2, msg)
+	}
+}
+
+// mintJITConfigToFile mints one JIT runner config and writes the encoded blob
+// to path (0600) so an external runner can register with it. The blob is
+// runner credentials — it is written to the file and never logged.
+func (p *scalesetProbe) mintJITConfigToFile(ctx context.Context, conn *adminConnection, scaleSetID, index int, path string) error {
+	var out jitRunnerConfig
+	status, err := p.svcCall(ctx, conn, http.MethodPost,
+		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/generatejitconfig", scaleSetID),
+		map[string]string{
+			"name":       fmt.Sprintf("%s-runner-%d", p.cfg.ScaleSetName, index),
+			"workFolder": "_work",
+		}, &out)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, []byte(out.EncodedJITConfig), 0o600); err != nil {
+		return fmt.Errorf("write JIT config: %w", err)
+	}
+	p.log.Info("INVESTIGATION-E2: JIT config minted to file",
+		"status", status, "runnerId", out.Runner.ID, "runnerName", out.Runner.Name, "path", path)
+	return nil
+}
+
+// holdAndObserve keeps the scale set alive for HoldSeconds, polling the queue
+// (capacity 2) and logging every message — the JobStarted/JobCompleted
+// lifecycle generated by externally run runners.
+func (p *scalesetProbe) holdAndObserve(ctx context.Context, sess *runnerScaleSetSession) {
+	p.log.Info("INVESTIGATION-E2: holding scale set alive for external runners",
+		"holdSeconds", p.cfg.HoldSeconds)
+	deadline, cancel := context.WithTimeout(ctx, time.Duration(p.cfg.HoldSeconds)*time.Second)
+	defer cancel()
+	var cursor int64
+	for {
+		if deadline.Err() != nil {
+			p.log.Info("INVESTIGATION-E2: hold window over")
+			return
+		}
+		status, msg, err := p.pollOnce(deadline, sess, 2, cursor)
+		if err != nil {
+			if deadline.Err() != nil {
+				p.log.Info("INVESTIGATION-E2: hold window over")
+				return
+			}
+			p.log.Warn("INVESTIGATION-E2: hold poll error", "error", err)
+			return
+		}
+		if msg == nil {
+			p.log.Debug("INVESTIGATION-E2: hold poll empty", "status", status)
+			continue
+		}
+		cursor = msg.MessageID
+		p.logQueueMessage("hold observed message", 2, msg)
+	}
 }
 
 // registrationToken exchanges the installation token for a short-lived runner
