@@ -48,8 +48,10 @@ operations docs.
   Graduation toward `v2beta1` is near-term work (below).
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.
-- **Workload-identity credentials.** Mint short-lived GitHub credentials through
-  an external signer, avoiding a long-lived private key in the cluster.
+- **Workload-identity credentials.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> Mint short-lived GitHub credentials through
+  an external signer (`credentials.type: WorkloadIdentity`), so the GitHub App
+  private key never enters the cluster. Available in the `v2alpha1` API only —
+  v1's flat credential shape has no equivalent.
 
 See [Why GAG?](why-gag.md) for the capability-by-capability comparison against
 Actions Runner Controller (ARC), and the [operations docs](operations/README.md)
