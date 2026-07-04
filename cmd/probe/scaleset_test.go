@@ -230,6 +230,9 @@ func newScalesetProbeForTest(t *testing.T, fake *scalesetFake, cfg scalesetConfi
 	if cfg.ScaleSetName == "" {
 		cfg.ScaleSetName = "gag-probe-scaleset"
 	}
+	if cfg.GroupName == "" {
+		cfg.GroupName = "Default"
+	}
 	return &scalesetProbe{
 		log:        slog.New(slog.NewTextHandler(io.Discard, nil)),
 		cfg:        cfg,
@@ -523,7 +526,7 @@ func TestParseScalesetConfig_Valid(t *testing.T) {
 	env := map[string]string{
 		"GITHUB_APP_ID":              "123",
 		"GITHUB_APP_INSTALLATION_ID": "456",
-		"GITHUB_APP_PRIVATE_KEY":     "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----",
+		"GITHUB_APP_PRIVATE_KEY":     testRSAPEM(t),
 		"GITHUB_ORG_URL":             "https://github.com/test-org",
 	}
 	cfg, err := parseScalesetConfig(func(k string) string { return env[k] })
@@ -545,7 +548,7 @@ func TestParseScalesetConfig_Overrides(t *testing.T) {
 	env := map[string]string{
 		"GITHUB_APP_ID":              "123",
 		"GITHUB_APP_INSTALLATION_ID": "456",
-		"GITHUB_APP_PRIVATE_KEY":     "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----",
+		"GITHUB_APP_PRIVATE_KEY":     testRSAPEM(t),
 		"GITHUB_ORG_URL":             "https://github.com/test-org",
 		"PROBE_SCALESET_NAME":        "custom-name",
 		"PROBE_SCALESET_JOB_TEST":    "true",
@@ -563,7 +566,7 @@ func TestParseScalesetConfig_Errors(t *testing.T) {
 	base := map[string]string{
 		"GITHUB_APP_ID":              "123",
 		"GITHUB_APP_INSTALLATION_ID": "456",
-		"GITHUB_APP_PRIVATE_KEY":     "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----",
+		"GITHUB_APP_PRIVATE_KEY":     testRSAPEM(t),
 		"GITHUB_ORG_URL":             "https://github.com/test-org",
 	}
 	for _, tc := range []struct {

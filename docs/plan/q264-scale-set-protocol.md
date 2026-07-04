@@ -1,13 +1,20 @@
 # Q264 — Migrate AGC acquisition to the runner-scale-set protocol (Option E feasibility spike)
 
-**Status:** design/feasibility spike only — **no production code changed**. This is
+**Status:** design/feasibility spike **plus a live wire probe** (Investigation E,
+§2a — `cmd/probe` scenario, run 2026-07-04) — **no production acquisition code
+changed**. This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
 the deferred fallback pursued **only if live re-route #5 rules Option A
 (winner fan-out completion) infeasible**. The go/no-go stays with re-route #5;
 this doc exists so that fork is not started cold.
 
 **Verdict up front: Option E is viable — and materially cheaper than the Q260 doc
-priced it.** GitHub has published
+priced it.** The live probe (§2a) then **strengthened** the verdict: GAG's own
+GitHub App drove the full protocol end-to-end at both org and repo scope, and
+on the current broker-host backend GitHub **auto-assigns** each job to the
+scale set (no client acquire call at all, capacity-gated by a header) —
+assignment is 1:1 by construction with even less client machinery than the
+ARC-era sources document. GitHub has published
 [`actions/scaleset`](https://github.com/actions/scaleset) (Public Preview), an
 **official standalone Go client + listener package for this exact protocol**,
 "so that platform teams, integrators, and infrastructure providers can build their
@@ -119,6 +126,13 @@ label** — there is no free-form label list per scale set.
 
 ### 2.3 Batch acquisition — the call that kills the fan-out
 
+> **Live caveat (§2a-3):** on the current broker-host backend the explicit
+> `acquirejobs` call below **does not exist** (404) — GitHub auto-assigns jobs
+> to the scale set up to the polled `X-ScaleSetMaxCapacity`, delivering
+> `JobAssigned` directly. The subsection stands as the documented ARC-era flow
+> (and possibly the `pipelines.*` behaviour — U2′); either way acquisition is
+> single-stream and 1:1.
+
 ```
 POST /_apis/runtime/runnerscalesets/{id}/acquirejobs?api-version=6.0-preview
 Authorization: Bearer <messageQueueAccessToken>     ← queue token, not admin JWT
@@ -167,6 +181,70 @@ setup; the pipes handoff and the AGC-side renew loop do not.
 | **Queue access token** | session create/refresh | queue long-poll **and `acquirejobs`** | refresh via session PATCH on 401 (new) |
 | JIT config | `generatejitconfig` | the runner pod's own session | one-shot, per job (replaces per-agent creds) |
 | Per-job SystemVssConnection token | inside the job message **to the runner** | renew/complete, logs, artifacts | moves out of the AGC entirely |
+
+## 2a. Investigation E — live wire probe (2026-07-04)
+
+`PROBE_SCALESET_TEST=true` in [`cmd/probe`](../../cmd/probe/scaleset.go) runs the
+full chain against real GitHub with only App credentials — registration-token →
+RemoteAuth hop → runner-group lookup → throwaway scale set → session → queue
+long-poll → acquire-shape probes → `generatejitconfig` → full cleanup.
+`PROBE_SCALESET_JOB_TEST=true` additionally waits for a real job (queued by the
+dispatch-only [`scaleset-probe.yml`](../../.github/workflows/scaleset-probe.yml)
+fixture, `runs-on: gag-probe-scaleset`). Runbook: export `GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_ORG_URL`; logs
+prefix `INVESTIGATION-E:`; tokens and the JIT blob are never logged.
+
+Findings (all live, `actions-gateway` org / `github-actions-gateway` repo):
+
+1. **U1 resolved — the auth chain works with GAG's App, at org AND repo
+   scope.** Registration token (132 chars) → `POST /actions/runner-registration`
+   with `Authorization: RemoteAuth …` → 200 with tenant URL + admin JWT
+   (~1 KiB). Scale-set create / session / `generatejitconfig` / deletes all
+   succeed (200/204). No extra App permissions were needed beyond what the
+   dogfood App already has.
+2. **The tenant is the broker host, not `pipelines.*`.** The admin connection
+   returned `actionsServiceURL = https://broker.actions.githubusercontent.com/rest`
+   — a newer backend than the ARC-era sources describe. The session's queue URL
+   is `{broker}/scalesets/message` (no query params; the queue token is the
+   identity).
+3. **The backend AUTO-ASSIGNS jobs — no acquire call exists.** The headline
+   deviation from §2.3: `POST …/acquirejobs` returns a router-level
+   `404 page not found` at every plausible location (Actions Service path with
+   queue token — the official client's exact construction — admin token, and
+   the `/scalesets/…` queue-base route), while sibling route
+   `GET …/acquirablejobs` exists (204 when empty). With a job queued on the
+   scale set's label, the queue delivered **`JobAssigned` directly ~1 s after
+   session creation** — no `JobAvailable`, no client claim, `runnerRequestId: 0`,
+   a `jobId` UUID, `scaleSetAssignTime` stamped, `statistics.totalAssignedJobs: 1`.
+   Admission control is the **`X-ScaleSetMaxCapacity` header** the poll
+   advertises (the probe sent `1`). Open sub-question (§5 U2′): whether
+   `JobAvailable` + an acquire step reappears when queued jobs exceed the
+   advertised capacity, and whether `pipelines.*` tenants still serve the
+   ARC-documented explicit-acquire flow.
+4. **Delivery is cursor-based, at-least-once.** An unacked message is
+   redelivered with the same `messageId` (100000001) on the next
+   `lastMessageId=0` poll. Empty long-poll: held ~51 s → `202`, no body.
+5. **U4 partial — no rate-limit headers on the queue.** Only
+   `X-GitHub-Request-Id`/`X-Github-Backend` observed; no `X-RateLimit-*`,
+   no `Retry-After`. Steady-state cost is one ~50 s long-poll per scale set.
+6. **Runner-group policy gates org-scoped scale sets — a real operational
+   constraint.** With the scale set in the org's `Default` group
+   (`allows_public_repositories: false`, the GitHub default), a job from this
+   **public** repo was never routed — three-minute windows expired twice with
+   `totalAvailableJobs: 0`. Registering the scale set **repo-scoped** (config
+   URL = the repo) bypasses runner groups entirely and the pre-queued job
+   delivered instantly. GAG must document this per-scope behaviour for tenants
+   on public repos (mirrors the classic dogfood setup, which is repo-scoped).
+7. **JIT config shape confirmed**: base64 blob (~4 KiB) decoding to top-level
+   keys `.runner`, `.credentials`, `.credentials_rsaparams` — the same
+   credential family the classic registrar parses today.
+
+**Design consequence for GAG:** the listener tier gets *simpler* than §3
+sketched. On this backend the admission gate (Q59) is literally the
+`X-ScaleSetMaxCapacity` header — advertise free worker slots and GitHub assigns
+at most that many jobs, exactly once each; there is no batch-claim bookkeeping
+at all. The `JobAssigned` statistics count is the authoritative
+provision-target, matching the ARC `clamp()` model (§2.2).
 
 ## 3. Delta from today's classic machinery
 
@@ -285,19 +363,20 @@ gate strengthens (§3 Reworked).
 
 ## 5. Load-bearing unknowns
 
-Source inspection cannot settle these; each is marked **probe** (a
-`cmd/probe` scenario answers it live) or **decision** (the user/design owns it).
+Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision**
+(the user/design owns it), or **✅ probed** (settled by Investigation E, §2a).
 
 | # | Unknown | Kind |
 |---|---|---|
-| U1 | Does the full auth chain work with **GAG's GitHub App** at org scope (and repo scope, given the Administration:RW question)? The two-hop bootstrap, scale-set create, session, queue poll, `generatejitconfig`, teardown. | **probe** (P1, §6) |
-| U2 | Wire details ARC's code implies but doesn't prove: 202 semantics + poll cadence, `X-ScaleSetMaxCapacity` effect, partial-batch `acquirejobs` responses, queue-token expiry/refresh behaviour, message replay after session re-create. | **probe** |
+| U1 | Full auth chain with **GAG's GitHub App**, org and repo scope. | **✅ probed** — works at both scopes with the existing App permissions (§2a-1). New constraint found instead: org-scope routing is gated by runner-group policy (`allows_public_repositories`) — repo scope bypasses it (§2a-6). |
+| U2 | Wire details: 202 semantics + poll cadence, `X-ScaleSetMaxCapacity` effect, `acquirejobs` responses, message replay. | **✅ probed** — 202 after ~51 s hold; cursor-based at-least-once redelivery; and the headline: the broker-host backend **auto-assigns** (JobAssigned direct, no acquire call — every acquire route 404s), gated by `X-ScaleSetMaxCapacity` (§2a-3/4). |
+| U2′ | Does `JobAvailable` + an explicit acquire step reappear when queued jobs exceed the advertised capacity? Do `pipelines.*` tenants still serve the ARC-documented explicit-acquire flow (version skew a GAG client must tolerate)? | **probe** (capacity-0 / multi-job variant of the §2a scenario) |
 | U3 | Does an ephemeral runner started with `run.sh --jitconfig` behind the egress proxy (proxy CA via wrapper) receive its job and complete it — and what is the added job-start latency vs the pipes handoff? | **probe** (needs a pod; Tier-A/kind, not a bare probe binary) |
-| U4 | Rate limits on the Actions Service tenant (the classic §3.5 budget is per-installation REST; the pipelines tenant may differ). | **probe** (observe headers) |
+| U4 | Rate limits on the Actions Service tenant. | **partially probed** — no rate-limit headers on the queue at all (§2a-5); sustained-load behaviour unknown until P4. |
 | U5 | Eviction fast-cancel: how quickly does GitHub cancel a job whose runner pod died (lock-lapse latency), and does the rerun-API retry path behave as today? | **probe** (live cluster) |
-| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? (Vendoring: MIT license, faster, tracks GitHub; reimplementing: fits GAG's client conventions, no Preview-API churn exposure.) | **decision** |
+| U6 | Vendor `actions/scaleset` vs reimplement in `broker/`-style? (Vendoring: MIT license, faster, tracks GitHub; reimplementing: fits GAG's client conventions, no Preview-API churn exposure.) **Probe data point:** the official client's static `acquirejobs` construction 404s on the broker-host tenant — vendoring does not exempt GAG from backend skew. | **decision** |
 | U7 | Migration surface: new v2-only acquisition (RunnerSet gains a protocol/label field) vs per-group selector on v1alpha1? Interacts with the `runnerLabels` collapse (§4.2). | **decision** |
-| U8 | Enterprise-scope (PAT-only) and GHES <3.9: drop, document, or keep classic machinery alive as a legacy mode? | **decision** |
+| U8 | Enterprise-scope (PAT-only) and GHES <3.9: drop, document, or keep classic machinery alive as a legacy mode? Also now: org-scope requires runner-group public-repo policy handling (§2a-6) — document or default to repo-scope registration. | **decision** |
 
 ## 6. Phased execution path (no big-bang rewrite)
 
@@ -305,13 +384,11 @@ Mirrors the M1 → M2 pattern that built the classic tier: probe first, then a
 parallel implementation behind a flag, then cutover.
 
 - **P0 — this spike.** This doc. No code.
-- **P1 — wire probe (S).** A `PROBE_SCALESET_TEST=true` scenario in
-  [`cmd/probe`](../../cmd/probe/main.go) (the M1 pattern:
-  env-gated investigation funcs): bootstrap hops → create a throwaway scale set
-  → session → poll → dispatch one job → `acquirejobs` → `generatejitconfig` →
-  delete everything. Settles U1/U2/U4 offline from production code. Read-only
-  with respect to production paths; creates/deletes only its own test scale
-  set.
+- **P1 — wire probe (S). ✅ DONE 2026-07-04** — the `PROBE_SCALESET_TEST=true`
+  scenario in [`cmd/probe`](../../cmd/probe/scaleset.go) plus the
+  `scaleset-probe.yml` dispatch fixture. Settled U1/U2 and half of U4 (§2a);
+  surfaced the auto-assign model and the runner-group gate. Residual: the U2′
+  capacity-overflow variant.
 - **P2 — scale-set client package (M).** Decide U6; land the client (vendored
   or new module) + a `scalesettest` fake modelled on
   [`brokertest`](../../broker/brokertest/server.go), encoding the queue/ack/
@@ -375,5 +452,8 @@ Fetched 2026-07-04; all public:
   sets with ARC" (GHES ≥ 3.9).
 
 Per the repo rule that source-inspection findings are unverified until
-exercised end-to-end, §2's wire-level specifics are **high-confidence but
-unconfirmed** until the P1 probe runs.
+exercised end-to-end, §2's wire-level specifics were treated as unconfirmed
+until the P1 probe ran. **Investigation E (§2a) has now live-confirmed the
+registration/session/queue/JIT chain — and corrected the acquisition model on
+the current backend** (auto-assign, no client acquire). Full probe logs:
+`INVESTIGATION-E:` lines from the 2026-07-04 runs.

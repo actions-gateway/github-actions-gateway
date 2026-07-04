@@ -3,8 +3,8 @@
 // Set PROBE_SCALESET_TEST=true to run this scenario instead of the classic
 // broker probe. It exercises the scale-set wire protocol end-to-end against
 // real GitHub with only GitHub App credentials — no pre-registered agent, no
-// broker URL — and settles the U1/U2/U4 unknowns in
-// docs/plan/q264-scale-set-protocol.md §5:
+// broker URL — settling the Q264 protocol unknowns (auth chain, queue/message
+// semantics, rate-limit headers):
 //
 //	installation token
 //	  → POST {api}/orgs/{org}/actions/runners/registration-token
@@ -62,6 +62,7 @@ type scalesetConfig struct {
 	PrivateKeyPEM  []byte
 	ConfigURL      string // org or repo URL the scale set registers against
 	ScaleSetName   string
+	GroupName      string
 	JobTest        bool
 }
 
@@ -107,6 +108,13 @@ func parseScalesetConfig(getenv func(string) string) (scalesetConfig, error) {
 	cfg.ScaleSetName = getenv("PROBE_SCALESET_NAME")
 	if cfg.ScaleSetName == "" {
 		cfg.ScaleSetName = "gag-probe-scaleset"
+	}
+	// The runner group must admit the target repo — for a PUBLIC repo the
+	// group needs allows_public_repositories=true, which Default denies by
+	// default. Point this at a group that admits the repo for the job test.
+	cfg.GroupName = getenv("PROBE_SCALESET_GROUP_NAME")
+	if cfg.GroupName == "" {
+		cfg.GroupName = "Default"
 	}
 	cfg.JobTest = getenv("PROBE_SCALESET_JOB_TEST") == "true"
 	return cfg, nil
@@ -397,9 +405,10 @@ func (p *scalesetProbe) svcCall(ctx context.Context, conn *adminConnection, meth
 	return resp.StatusCode, nil
 }
 
-// resolveRunnerGroup looks up the Default runner group id, falling back to 1
-// (GitHub's default-group id) if the endpoint rejects the call — the fallback
-// keeps the probe productive while still logging the endpoint's real behaviour.
+// resolveRunnerGroup looks up the configured runner group id, falling back to
+// 1 (GitHub's default-group id) if the endpoint rejects the call — the
+// fallback keeps the probe productive while still logging the endpoint's real
+// behaviour.
 func (p *scalesetProbe) resolveRunnerGroup(ctx context.Context, conn *adminConnection) int {
 	var out struct {
 		Count int `json:"count"`
@@ -409,7 +418,7 @@ func (p *scalesetProbe) resolveRunnerGroup(ctx context.Context, conn *adminConne
 		} `json:"value"`
 	}
 	status, err := p.svcCall(ctx, conn, http.MethodGet,
-		"/_apis/runtime/runnergroups/?groupName=Default", nil, &out)
+		"/_apis/runtime/runnergroups/?groupName="+url.QueryEscape(p.cfg.GroupName), nil, &out)
 	if err != nil {
 		p.log.Warn("INVESTIGATION-E: runnergroups lookup failed; falling back to group id 1",
 			"status", status, "error", err)
