@@ -3548,7 +3548,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ================================================================================
-Module: github.com/onsi/gomega (v1.42.0)
+Module: github.com/onsi/gomega (v1.42.1)
 License file: github.com/onsi/gomega/LICENSE
 ================================================================================
 
@@ -7337,7 +7337,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/mod (v0.35.0)
+Module: golang.org/x/mod (v0.36.0)
 License file: golang.org/x/mod/LICENSE
 ================================================================================
 
@@ -7370,7 +7370,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/net (v0.55.0)
+Module: golang.org/x/net (v0.56.0)
 License file: golang.org/x/net/LICENSE
 ================================================================================
 
@@ -7436,7 +7436,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/sync (v0.20.0)
+Module: golang.org/x/sync (v0.21.0)
 License file: golang.org/x/sync/LICENSE
 ================================================================================
 
@@ -7469,7 +7469,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/sys (v0.45.0)
+Module: golang.org/x/sys (v0.46.0)
 License file: golang.org/x/sys/LICENSE
 ================================================================================
 
@@ -7502,7 +7502,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/term (v0.43.0)
+Module: golang.org/x/term (v0.44.0)
 License file: golang.org/x/term/LICENSE
 ================================================================================
 
@@ -7535,7 +7535,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/text (v0.37.0)
+Module: golang.org/x/text (v0.38.0)
 License file: golang.org/x/text/LICENSE
 ================================================================================
 
@@ -7601,7 +7601,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: golang.org/x/tools (v0.44.0)
+Module: golang.org/x/tools (v0.45.0)
 License file: golang.org/x/tools/LICENSE
 ================================================================================
 
