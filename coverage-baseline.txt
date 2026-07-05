@@ -10,4 +10,5 @@
 ./cmd/proxy	76.7
 ./cmd/worker	81.2
 ./githubapp	84.2
+./scaleset	81.6
 ./test/fakegithub	n/a

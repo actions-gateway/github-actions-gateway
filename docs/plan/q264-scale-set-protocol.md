@@ -1,9 +1,12 @@
 # Q264 — Migrate AGC acquisition to the runner-scale-set protocol (Option E feasibility spike)
 
-**Status:** design/feasibility spike **plus live wire probes** (Investigations
-E and E2, §2a/§2b — `cmd/probe` scenarios, run 2026-07-04) — **no production
-acquisition code changed**. Every protocol-level unknown is probed; the
-residuals are integration-level (P4). This is
+**Status:** ACTIVE — the Option E rewrite is committed. Phases **P0 (spike)**,
+**P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
+scenarios, run 2026-07-04**)**, and **P2 (the `scaleset/` client package + its
+`scalesettest` fake, §6)** are DONE; **P3 (AGC wiring behind the
+`acquisitionProtocol` field) is next**. The classic AGC acquisition path is
+**still unchanged** — P2 is a standalone leaf module with no AGC wiring. Every
+protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
 the deferred fallback pursued **only if live re-route #5 rules Option A
 (winner fan-out completion) infeasible**. The go/no-go stays with re-route #5;
@@ -647,14 +650,32 @@ parallel implementation behind a flag, then cutover.
   the cores of U3/U5. Every protocol-level unknown is now probed; what
   remains for P4 is integration-level only (egress proxy, pod conditions,
   sustained load).
-- **P2 — scale-set client package (M).** Per the U6 recommendation (§5a): a
-  new leaf module `scaleset/` (`broker/`-style — httpx bounded clients, typed
-  errors, metrics recorder), promoting the probe's live-validated flows, with
-  types mirroring `actions/scaleset` for wire parity. Plus a `scalesettest`
-  fake modelled on [`brokertest`](../../broker/brokertest/server.go) encoding
-  the §2a/§2b semantics: auto-assign under capacity **and** the GHES-style
-  `JobAvailable`→acquire flow, cursor replay, token expiry. Unit + envtest
-  coverage; no AGC wiring.
+- **P2 — scale-set client package (M). ✅ DONE** — the new leaf module
+  [`scaleset/`](../../scaleset/) (`broker/`-style — httpx bounded clients that
+  clone the proxy-patched `http.DefaultTransport`, typed errors, a nil-safe
+  `MetricsRecorder`), promoting the probe's live-validated flows with types
+  mirroring `actions/scaleset` for wire parity (not vendored — U6-C). Covers:
+  the two-hop auth bootstrap; lazy admin-JWT refresh ~60s pre-expiry (§2b-7);
+  scale-set CRUD + runner-group resolve + per-job `generatejitconfig`; session
+  create/refresh(PATCH)/delete; the capacity-gated queue long-poll; both
+  acquisition paths as one rule (`AvailableJobIDs`→`AcquireJobs` on GHES,
+  `AssignedJobs` authoritative regardless of origin — §5a-U8); and the token
+  matrix (queue token, not admin JWT, on `acquirejobs` + poll — §2.5). Plus the
+  [`scalesettest`](../../scaleset/scalesettest/server.go) fake (modelled on
+  [`brokertest`](../../broker/brokertest/server.go)) encoding the §2a/§2b
+  semantics: auto-assign under advertised capacity **and** the GHES-style
+  `JobAvailable`→acquire flow, cursor-based at-least-once replay to a re-created
+  session, admin- and queue-token expiry, and claim-once acquisition. Unit +
+  client-vs-fake coverage (81.6%, race-clean); no envtest (a pure
+  network-client package — coverage is entirely client-vs-fake); **no AGC
+  wiring** (P3). **P2-surfaced unknown for P4:** the message-DELETE ack endpoint
+  shape (`DELETE {messageQueueUrl}/{messageId}`, §2.2) is source-derived from
+  the official listener but was **not** exercised by the live probe (which acked
+  by cursor only); `Client.DeleteMessage` implements it and the fake tests the
+  construction, but P4 must confirm the URL shape and status semantics on a live
+  tenant before the P3 listener relies on delete-acking over pure cursor
+  advance. **P3 now builds on:** `scaleset.Client` (one per RunnerSet) + the
+  `scalesettest` fake for the listener's acceptance twin.
 - **P3 — parallel acquisition tier behind the API field (L).** Per U7 (§5a):
   `RunnerSet.spec.acquisitionProtocol` (v2alpha1, default `Classic`,
   immutable, CEL-validated single label) selects a scale-set listener per set
