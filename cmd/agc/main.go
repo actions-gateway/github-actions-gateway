@@ -39,6 +39,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
@@ -267,6 +268,10 @@ func run() error {
 
 	// ── 3. Build Prometheus metrics ──────────────────────────────────────────
 	m := listener.NewMetrics()
+	// The ScaleSet acquisition tier (Q264 Option E) emits its own counter series,
+	// separate from the classic listener metrics; a Classic-only AGC simply never
+	// increments them.
+	sm := scalesetlistener.NewMetrics()
 
 	// ── 4. Build scheme ──────────────────────────────────────────────────────
 	scheme := runtime.NewScheme()
@@ -538,16 +543,17 @@ func run() error {
 	// objects. It shares the process-wide TokenManager, Registrar, Metrics, and
 	// Provisioner (the provisioner Target seam own-refs the real RunnerSet).
 	rsr := &controller.RunnerSetReconciler{
-		Client:       mgr.GetClient(),
-		Log:          slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
-		TokenManager: tokenMgr,
-		Registrar:    registrar,
-		Metrics:      m,
-		Provisioner:  prov,
-		AgentKeyType: agentKeyType,
-		GatewayName:  gatewayName,
-		Recorder:     mgr.GetEventRecorder("runnerset-controller"),
-		BrokerConfig: r.BrokerConfig,
+		Client:          mgr.GetClient(),
+		Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
+		TokenManager:    tokenMgr,
+		Registrar:       registrar,
+		Metrics:         m,
+		ScaleSetMetrics: sm,
+		Provisioner:     prov,
+		AgentKeyType:    agentKeyType,
+		GatewayName:     gatewayName,
+		Recorder:        mgr.GetEventRecorder("runnerset-controller"),
+		BrokerConfig:    r.BrokerConfig,
 	}
 	if err := rsr.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("setup runnerset reconciler: %w", err)

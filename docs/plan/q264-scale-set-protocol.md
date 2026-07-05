@@ -753,6 +753,13 @@ parallel implementation behind a flag, then cutover.
     that makes `ScaleSet` live behind the field — **P3 is complete**.
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
+  *Observability prep (done):* the tier now emits per-`RunnerSet` Prometheus
+  counters (`actions_gateway_scaleset_jobs_assigned_total` /
+  `…_jobs_provisioned_total` / `…_provision_errors_total` /
+  `…_jobs_completed_total{result}`) via a `scalesetlistener.Metrics` recorder
+  wired into the listener `Config` — so the dogfood run is measurable (assigned
+  vs provisioned 1:1, no fan-out). Documented in
+  [observability.md](../operations/observability.md#scale-set-acquisition-tier-q264).
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate
   dogfood, then run the U8 retirement sequence (§5a: one-minor-release
   deprecation → remove classic machinery in an isolated PR), rewrite the

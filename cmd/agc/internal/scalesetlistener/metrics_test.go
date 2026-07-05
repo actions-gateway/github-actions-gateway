@@ -1,0 +1,58 @@
+package scalesetlistener
+
+import (
+	"testing"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
+)
+
+// TestMetricsRecorderIncrements verifies that a per-RunnerSet recorder increments the
+// right counter under the right (namespace, runner_set[, result]) labels, and that
+// distinct RunnerSets keep separate series.
+func TestMetricsRecorderIncrements(t *testing.T) {
+	m := NewMetrics()
+	rec := m.RecorderFor("tenant-a", "set-1")
+
+	rec.IncJobAssigned()
+	rec.IncJobAssigned()
+	rec.IncJobProvisioned()
+	rec.IncProvisionError()
+	rec.IncJobCompleted("succeeded")
+	rec.IncJobCompleted("succeeded")
+	rec.IncJobCompleted("failed")
+
+	if got := testutil.ToFloat64(m.JobsAssignedTotal.WithLabelValues("tenant-a", "set-1")); got != 2 {
+		t.Errorf("JobsAssignedTotal = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.JobsProvisionedTotal.WithLabelValues("tenant-a", "set-1")); got != 1 {
+		t.Errorf("JobsProvisionedTotal = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.ProvisionErrorsTotal.WithLabelValues("tenant-a", "set-1")); got != 1 {
+		t.Errorf("ProvisionErrorsTotal = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.JobsCompletedTotal.WithLabelValues("tenant-a", "set-1", "succeeded")); got != 2 {
+		t.Errorf("JobsCompletedTotal{result=succeeded} = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.JobsCompletedTotal.WithLabelValues("tenant-a", "set-1", "failed")); got != 1 {
+		t.Errorf("JobsCompletedTotal{result=failed} = %v, want 1", got)
+	}
+
+	// A second RunnerSet's recorder writes an independent series.
+	m.RecorderFor("tenant-a", "set-2").IncJobAssigned()
+	if got := testutil.ToFloat64(m.JobsAssignedTotal.WithLabelValues("tenant-a", "set-2")); got != 1 {
+		t.Errorf("set-2 JobsAssignedTotal = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(m.JobsAssignedTotal.WithLabelValues("tenant-a", "set-1")); got != 2 {
+		t.Errorf("set-1 JobsAssignedTotal changed to %v, want still 2", got)
+	}
+}
+
+// TestNilMetricsRecorderForIsNil confirms a nil *Metrics yields a nil recorder, so an
+// AGC that never wires NewMetrics passes a nil MetricsRecorder into Config (metrics
+// disabled) rather than panicking — the default-Classic no-observability path.
+func TestNilMetricsRecorderForIsNil(t *testing.T) {
+	var m *Metrics
+	if rec := m.RecorderFor("ns", "set"); rec != nil {
+		t.Errorf("RecorderFor on nil *Metrics = %v, want nil", rec)
+	}
+}

@@ -12,11 +12,13 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -36,10 +38,18 @@ import (
 // apiserver and the scalesettest fake, while a Classic set (the default) keeps using
 // the classic multiplexer path untouched — it never registers a scale set.
 
+// scaleSetTestMetrics is the shared scale-set metrics registry for the integration
+// tests. It is created once at package init: scalesetlistener.NewMetrics registers with
+// the global controller-runtime registry, and MustRegister panics on a duplicate, so it
+// must not be re-created per test. Counters are labelled per (namespace, runner_set), so
+// the tests' distinct namespaces keep independent series.
+var scaleSetTestMetrics = scalesetlistener.NewMetrics()
+
 // startRunnerSetReconcilerWithScaleSet wires and starts a RunnerSetReconciler like
 // startRunnerSetReconciler, but injects a ScaleSetClientFactory that points every
 // ScaleSet-protocol set's client at the given scalesettest fake, so the scale-set
-// acquisition tier is exercised offline.
+// acquisition tier is exercised offline. It wires the scale-set metrics so a test can
+// assert the reconciler → listener recorder path increments end-to-end.
 func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
@@ -69,11 +79,12 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 	p.TokenFunc = stubProvider{}.Token
 
 	r := &controller.RunnerSetReconciler{
-		Client:       mgr.GetClient(),
-		TokenManager: tm,
-		Registrar:    &brokerRegistrar{stub: brokerStub},
-		AgentKeyType: agentpool.KeyTypeEd25519,
-		Provisioner:  p,
+		Client:          mgr.GetClient(),
+		TokenManager:    tm,
+		Registrar:       &brokerRegistrar{stub: brokerStub},
+		AgentKeyType:    agentpool.KeyTypeEd25519,
+		Provisioner:     p,
+		ScaleSetMetrics: scaleSetTestMetrics,
 		BrokerConfig: controller.BrokerConfig{
 			BrokerURL:        brokerStub.URL,
 			RunnerVersion:    "2.335.1",
@@ -182,6 +193,15 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 		}
 	}
 	assert.True(t, foundOwner, "worker pod must be owner-referenced to the RunnerSet")
+
+	// The reconciler wired a per-RunnerSet Prometheus recorder into the listener: the
+	// assigned job counts as assigned and its successful provision counts as
+	// provisioned, under this set's (namespace, runner_set) labels (Q264 P4).
+	require.Eventually(t, func() bool {
+		return testutil.ToFloat64(scaleSetTestMetrics.JobsProvisionedTotal.WithLabelValues(ns, "ss-set")) >= 1
+	}, 10*time.Second, 50*time.Millisecond, "the scale-set tier must count the provisioned worker")
+	assert.GreaterOrEqual(t, testutil.ToFloat64(scaleSetTestMetrics.JobsAssignedTotal.WithLabelValues(ns, "ss-set")), float64(1),
+		"the assigned job must be counted")
 
 	// The worker runs in scale-set mode (run.sh --jitconfig): WORKER_MODE=scaleset.
 	var runner *corev1.Container

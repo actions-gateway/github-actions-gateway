@@ -12,6 +12,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
@@ -55,9 +56,13 @@ type RunnerSetReconciler struct {
 	Registrar    agentpool.Registrar
 	BrokerConfig BrokerConfig
 	Metrics      *listener.Metrics
-	Log          *slog.Logger
-	Provisioner  *provisioner.Provisioner
-	AgentKeyType agentpool.KeyType
+	// ScaleSetMetrics holds the Prometheus counters for the ScaleSet acquisition tier
+	// (Q264 Option E). Nil disables scale-set observability (a Classic-only AGC needs
+	// none); the classic Metrics field is unaffected either way.
+	ScaleSetMetrics *scalesetlistener.Metrics
+	Log             *slog.Logger
+	Provisioner     *provisioner.Provisioner
+	AgentKeyType    agentpool.KeyType
 
 	// GatewayName scopes this AGC to a single ActionsGateway under multi-gateway
 	// (§H.16 #1): it reconciles only the RunnerSets whose spec.gatewayRef.name
