@@ -37,23 +37,29 @@ that hypothesis rather than assuming it.
   `Classic`, per-set opt-in `ScaleSet`;
   [Q264 §5a-U7/U8](q264-scale-set-protocol.md#5a-the-three-decisions--analysis-and-recommendations-2026-07-04)).
   So retiring the **v1alpha1 API** (Axis 1) and retiring the **classic protocol**
-  (Axis 2) are *not the same lever* even though they share an end: classic outlives
-  the v1 API on `v2alpha1: Classic`, so the API can retire first (gated on adoption)
-  and the classic machinery later (gated on scale-set maturity, at the v2beta1
-  graduation). The fan-out wall is an Axis-2 (protocol) property — a `v2alpha1`
-  RunnerSet on `Classic` hits the identical wall, so moving to the v2 API does not,
-  by itself, fix it.
-- **Recommendation, split by axis:**
-  - **Protocol (Axis 2): accelerate *positioning*, not *removal*.** Endorse the
-    existing plan's fastest safe point — flip the default to `ScaleSet` at P5,
-    gated on P4 green — and additionally name ScaleSet the *recommended* protocol
-    for concurrency-sensitive workloads the moment P4 is green. **Do not** pull
-    classic-machinery *removal* forward: scale-set is GitHub Public Preview, and
-    classic still serves the low/moderate segment and GHES at zero user cost.
-  - **API (Axis 1): do not accelerate v1alpha1 *removal*.** Keep it gated on
-    scale-set proving out *and* an adoption signal, precisely because the plan
-    couples classic-machinery removal to v1alpha1 removal — pulling it forward
-    would force a Preview-stage protocol onto v1 users at the API cutover.
+  (Axis 2) are *not the same lever* even though they share an end. The fan-out wall
+  is an Axis-2 (protocol) property — a `v2alpha1` RunnerSet on `Classic` hits the
+  identical wall, so moving to the v2 API does not, by itself, fix it; selecting the
+  scale-set protocol does.
+- **Recommendation (updated 2026-07-05 — full form in §6.2): v2/scale-set *is* the
+  product. Make it the only front door and let migration discipline carry the trust
+  signal.** P4 proved scale-set clears the ceiling classic structurally cannot
+  (**7/7 vs 2/7**), and there are **no real v1 adopters to protect** (§6.3) — so the
+  goal is not to keep classic alive as a safety valve, it is to make v2 the obvious
+  on-ramp and retire v1 *cleanly*. Concretely:
+  - **Route every new user to v2 now** and deprecate v1 loudly in the docs path —
+    the failure mode is a *new* user landing on v1, not a v1 user complaining.
+  - **Classic is terminal** (no further investment — the eight re-routes were the
+    last of it) and **v2beta1 stays ScaleSet-only**; the earlier "retain the
+    protocol field as a fallback to v2 GA" hedge protected users who don't exist.
+    The graduation guardrail is *technical* (clean-green + a short stability soak),
+    not user-migration.
+  - **Commit v1 removal to a stated schedule gated on v2 *stability* (the v2beta1
+    graduation), not on adopters.** The discipline — announced, scheduled, with a
+    working `gag-migrate` — *is* the "safe bet, won't strand you" signal a
+    prospective **v2** adopter is actually reading.
+  - **The real lever is v2 *maturation* (Q74 / v2beta1), not v1 removal** — "v2 is
+    the front door" only pays off once v2 is beta-stable.
 - **Building classic first was a defensible bet, not a mistake.** The scale-set
   protocol was undocumented-internal-to-ARC at design time; the official standalone
   client only reached Public Preview in 2026. The world changed — that is what
@@ -293,59 +299,80 @@ useful even if Option A wins").
   to acquire jobs — the plan therefore sequences the classic-removal PR after
   v1alpha1 is itself deprecated, announcing both together (Q264 §5a-U8 "Consequence").
 
-> **Open design question this review surfaces (not decided here).** The plan makes
-> **v2beta1 ScaleSet-only** (Q264 §5a-U7/U8): the graduation conversion strips
-> `acquisitionProtocol` and drops the classic machinery. That binds a *third* thing to
-> the beta cut — it removes the classic **fallback** at the exact version GAG signals
-> as "stable," while scale-set is still GitHub **Public Preview** (contract undocumented,
-> `actions/scaleset#107` unanswered, already drifted once). Under this decision,
-> scale-set upstream maturity ([Q272](../STATUS.md#Q272)) and *"all tenants migrated off
-> classic"* become **de-facto v2beta1 blockers**, not passive watches. The alternative —
-> **retain `acquisitionProtocol` through v2beta1 and drop `Classic` only at v2 GA** —
-> decouples graduation from scale-set maturity and preserves the rollback lever the rest
-> of this memo argues for. P4-green materially de-risks the ScaleSet-only choice (the
-> protocol works live), and GAG owns its own client (not hostage to upstream's cadence),
-> so ScaleSet-only-beta is defensible — but it is a genuine call that revisits a signed-off
-> decision, and belongs to the maintainer + the Q264 owner. Flagged, not resolved.
+> **Design question this review raised, now resolved (2026-07-05):
+> keep v2beta1 ScaleSet-only.** The question was whether to *retain*
+> `acquisitionProtocol` (and a `Classic` fallback) through v2beta1 and drop it only
+> at v2 GA, rather than stripping it at graduation (Q264 §5a-U7/U8). The retain-hedge
+> existed to preserve a rollback fallback — but that fallback protects **v1/classic
+> users who do not exist** (§6.3), so it buys almost nothing while muddying the "one
+> protocol, strictly better than ARC" story that drives adoption. Against that:
+> **P4 proved the protocol works live** (7/7), **GAG owns its own client** (not
+> hostage to upstream's Preview cadence — "Preview" is a label on GitHub's *library*,
+> while the *wire protocol* is what ARC runs in production at scale), and a cleaner
+> beta surface is easier to commit to and support. **Decision: v2beta1 stays
+> ScaleSet-only.** The residual risk — GitHub drifts the protocol post-graduation
+> with no classic escape — is real but bounded (own-client + ARC-in-prod + a code
+> fix is always shippable), and is managed with a **technical** guardrail rather than
+> the retain-hedge: **do not graduate v2beta1 until the clean-green dogfood re-run
+> plus a short stability soak of the scale-set path** — bet the beta on evidence, not
+> one run. Consequence for the backlog: [Q272](../STATUS.md#Q272) (scale-set upstream
+> maturity) is *not* a graduation blocker — it lifts the Preview caveat and triggers
+> the U6 vendor-vs-own revisit, but the beta cut gates on GAG's own soak, not on
+> GitHub's GA timeline.
 
-### 6.2 Should either be accelerated? — recommendation
+### 6.2 The recommendation — v2 is the product; retire v1 on a stability schedule
 
-**Protocol (Axis 2): accelerate the *positioning*, hold the *removal*.**
+An earlier draft of this memo recommended "hold both removals, keep classic as a
+safety valve, gate on an adoption signal." That rested on an assumption since
+corrected: **there is no v1 adopter base to protect, and there won't be one**
+(§6.3). Once that falls away, the safety-valve rationale collapses and the goal
+changes — from *protecting v1* to making **v2 the only sensible on-ramp** and using
+the v1→v2 handling as a forward-looking trust signal. What that signal is *for*
+matters: its audience is not v1 users (there are none) but a **prospective v2
+adopter** judging whether GAG is a safe multi-year bet — they read how the project
+treats its own deprecated version as a proxy for how it will treat *them* at the next
+version bump. Handled poorly the cost is not complaints (no one to complain) — it is
+the adoption failure the maintainer named: **no adoption, or a new user landing on v1
+instead of v2.**
 
-- **Accelerate now (gated on P4 green):** name `ScaleSet` the **recommended**
-  protocol for concurrency-sensitive workloads in the operator docs the moment the
-  Q224 matrix is green on the flagged path, and keep the P5 default flip on its
-  existing schedule (it is already the fastest *safe* point — flipping before P4
-  green would ship an unvalidated default). *Pro:* classic is structurally capped
-  (§4); the eight re-routes are sunk cost if classic is retiring; the protocol is
-  now officially supported; adoption is pre-launch so the compat cost is near-zero
-  (§6.3).
-- **Do NOT pull classic-machinery *removal* forward.** Keep it at v2beta1
-  graduation. *Against acceleration:* scale-set is **Public Preview** — GitHub says
-  interfaces "may change," the auto-assign contract this backend actually uses is
-  *undocumented* and upstream issue [actions/scaleset#107](https://github.com/actions/scaleset/issues/107)
-  has had **no maintainer response in a month**, and there is a demonstrated
-  breaking precedent ([actions/scaleset#75](https://github.com/actions/scaleset/issues/75)/[#90](https://github.com/actions/scaleset/pull/90) silently
-  broke the GHES acquire path)
-  ([Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)).
-  Classic also *works* for the low/moderate segment (§2) and covers GHES back to the
-  documented floor — keeping the machinery one deprecation window longer strands
-  nobody and preserves a fallback if a Preview wire change bites. Ripping it out
-  early trades a real safety valve for a maintenance saving that the v2beta1
-  alignment already captures.
+1. **Make v2 the only front door now.** Route README / getting-started / onboarding /
+   new-tenant templates entirely to v2, with a prominent "v1 is deprecated — start on
+   v2" banner on the v1 pages. This directly kills the "new user adopts v1" failure
+   mode and is cheap — it is *documentation and positioning*, not v1 runtime work.
+2. **Commit v1 removal to a stated schedule gated on v2 *stability* — not adopters.**
+   Replace the open-ended "removed once v2 adoption is sufficient" (which reads as
+   indecision) with a **named removal release tied to the v2beta1 graduation**. Gating
+   on v2 reaching beta is honest — you should not force anyone onto an alpha — and is
+   *not* catering to imaginary users. The **discipline** (announced, scheduled,
+   documented, backed by a working `gag-migrate`) *is* the "safe bet, won't strand
+   you" signal, far more than the length of the window.
+3. **Reinvest the freed effort into the migration mechanics as a showcase, not the v1
+   runtime.** `gag-migrate`, the migration guide, the deprecation notice, the
+   "what's preserved / what changes" doc — make these *exemplary*, because that is the
+   artifact a prospective adopter actually inspects. (This reframes the
+   adoption-signal item [Q271](../STATUS.md#Q271) from "instrument who's using it" to
+   "polish the migration story" — a better use of effort when there is no one to
+   measure.)
+4. **Classic is terminal — no further investment.** The eight re-routes were the last
+   classic spend; the residual ceiling is structural (§4). This is the "structural
+   ceiling → stop paying it down" disposition from
+   [technical-debt.md](../development/technical-debt.md).
+5. **v2beta1 stays ScaleSet-only** (§6.1), with a *technical* graduation guardrail
+   (clean-green + a stability soak), not a user-migration one.
+6. **The real lever is v2 *maturation*, not v1 removal.** "v2 is the front door" only
+   converts to adoption once v2 is beta-stable, so the priority is the **v2beta1
+   graduation path** — Q74 and its blockers (Q191/Q196/Q197/Q242/Q243; Q224 is now
+   addressed by the scale-set path) — not the v1 sunset. Retiring v1 is the
+   *consequence* of v2 being ready, not a goal to chase on its own.
 
-**API (Axis 1): do NOT accelerate v1alpha1 removal.**
-
-- Keep removal gated on **both** an adoption signal **and** scale-set proving out —
-  *not* pulled forward. The reason is the §6.1 coupling: because removing classic
-  machinery ends v1alpha1 acquisition, an accelerated v1alpha1 removal would **force
-  v1 users onto a Public-Preview protocol at the API cutover**. The design already
-  provides the safety valve — v1 users migrate to v2 *first* (API change via
-  `gag-migrate`) while staying on `Classic` protocol, *then* opt into `ScaleSet` as a
-  separate, reversible field edit (Q264 §5a-U7). Preserve that two-step; do not
-  collapse it by accelerating the API removal ahead of protocol maturity.
-- Deprecating the *notice* faster is fine and cheap (it is already published); it is
-  the *removal* that must stay gated.
+**The one risk to hold in view.** Do not let "deprecate v1 loudly" run ahead of v2
+actually being ready to be the sole path — v2 is still alpha with open blockers. Route
+new users to v2 in the docs *now* (safe: it is the better shape), but keep the loud
+removal *commitment* pinned to v2beta1 readiness. And stay honest that GAG's weaker
+flank versus ARC is *maturity* (pre-1.0, a Public-Preview protocol dependency), not
+capability — which is precisely *why* the migration-discipline signal is worth the
+effort: it is how a young project earns "safe bet" trust before it has the track
+record to claim it.
 
 ### 6.3 Adoption reality — the fact that most changes the risk math
 
@@ -356,22 +383,28 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
   and there are **no external deployers yet** — the goal is still "first handful"
   ([go-to-market.md](go-to-market.md) §8 Phase 0–1). GAG is Apache-2.0,
   **non-commercial**, deliberately donation-ready, revenue explicitly out of scope.
-- **Implication:** the compat/adoption cost of *both* sunsets is currently near-zero
-  — there is no external user base holding classic or v1alpha1 in production. This is
-  the strongest single argument *for* moving fast. But it cuts both ways: the same
-  pre-adoption state means there is **no urgent user pain forcing removal either**, so
-  the conservative "hold removal, accelerate positioning" split costs nothing to
-  keep. The moment a real adopter lands, the calculus tightens — which is exactly why
-  an **adoption signal should gate the removal decisions** (§6.4).
+- **Implication (this is the load-bearing turn):** the compat cost of retiring v1 is
+  ~zero — no external user base holds classic or v1alpha1 in production, and none is
+  expected to; new users should hop straight onto v2. That removes the "protect the v1
+  fallback" rationale **entirely** and *inverts* the risk. The danger is no longer "we
+  strand a v1 user" — it is "a **new** user onboards onto v1, or doesn't adopt at all
+  because the versioning story looks unsafe." So the disposition is not *hold*: it is
+  **retire v1 cleanly on a stability-gated schedule, and make v2 the only marketed
+  on-ramp now** (§6.2). Removal gates on **v2 reaching beta**, not an adoption count —
+  there is no adopter base to measure, and waiting on one would itself read as
+  indecision. The adoption signal (Q271) is therefore reframed from *"gate removal on
+  measuring adopters"* to *"confirm dogfood-only so we can commit the schedule, and
+  make the migration itself exemplary."*
 
 ### 6.4 Gating evidence (what must be true before each acceleration step)
 
 | Step | Gate |
 |---|---|
-| Name ScaleSet "recommended" for concurrency-sensitive workloads | **✅ MET (2026-07-05):** P4 ran the full concurrent matrix on the scale-set path — **7/7** distinct jobs concluded, vs classic **2/7** — so the fan-out fix is confirmed by construction. (The residual `WORKER_MODE` test leak gates the *P5 clean-green cutover*, not this recommend-in-docs step.) |
-| Flip default to `ScaleSet` (P5) | Clean-green dogfood re-run (the P4 residual — `WORKER_MODE` test leak — fixed on main) **+** positioning-doc rewrite landed in the same PR (Q264 §4.7) — else the vs-ARC story self-contradicts |
-| Remove classic machinery | Scale-set upstream **GA / v1.0** *or* the auto-assign contract ([actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) documented **+** v2beta1 graduation reached **+** v1alpha1 deprecated |
-| Remove v1alpha1 API | Adoption signal shows all known tenants migrated (or confirmed dogfood-only) **+** the classic-removal gate above |
+| Route new users to v2 + deprecate v1 loudly in the docs path | **Do now** — positioning/docs only, no technical gate; kills the "new user lands on v1" failure mode (§6.2 item 1). |
+| Name ScaleSet the recommended (and, in v2beta1, the only) protocol | **✅ MET (2026-07-05):** P4 ran the full concurrent matrix on scale-set — **7/7** distinct jobs concluded vs classic **2/7** — the fan-out fix is confirmed by construction. |
+| Graduate v2beta1 (ScaleSet-only) + flip the default | Clean-green dogfood re-run (P4 `WORKER_MODE` residual fixed on main) **+** a short **stability soak** of the scale-set path **+** the positioning-doc rewrite in the same change (Q264 §4.7). A *technical* gate, not adopter-gated. |
+| Remove v1 (v1alpha1 API **and** classic machinery, together) | The v2beta1 graduation above **is** the classic removal (ScaleSet-only beta can't store a Classic set) **+** a **named removal release announced with ≥1 release of notice**. Not gated on an adoption count. |
+| *(no longer a gate)* Scale-set upstream GA / [actions/scaleset#107](https://github.com/actions/scaleset/issues/107) documented | Q272 — lifts the Public-Preview caveat and triggers the U6 vendor-vs-own revisit; **not** a graduation or removal blocker (§6.1). |
 
 ---
 
@@ -384,53 +417,64 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
   ([Q264 §4 "Security check"](q264-scale-set-protocol.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate)).
   The default stays `Classic` (the more-conservative value) until validated — no
   security property is relaxed to enable the flip.
-- **Positioning identity shifts and must move in lockstep.** The "thousands of
-  goroutine-backed virtual runners" story retires; density-at-rest *improves* but the
-  narrative becomes "a lighter-weight ARC listener with GAG's isolation + scheduling."
-  The `why-gag` / vs-ARC marketing pages must be rewritten **in the same PR that flips
-  the default** (Q264 §4.7) — flipping first would leave the public positioning
-  contradicting the shipped behaviour.
+- **Positioning identity shifts — and this is the adoption lever, not just hygiene.**
+  The "thousands of goroutine-backed virtual runners" story retires; density-at-rest
+  *improves*. The rewrite should make the **strictly-better-than-ARC** claim for the
+  ICP, not hedge with situational trade-offs (the maintainer's point: "better in
+  certain circumstances" doesn't move anyone off ARC). Going ScaleSet-only *sharpens*
+  it — one protocol, no "why two?" — so the claim becomes: **everything ARC's
+  scale-set model does, at ~4,000× lower control-plane footprint, plus per-tenant
+  egress isolation, self-service multi-tenancy, and zero-idle that ARC lacks
+  natively.** Be honest about the weaker flank — GAG's *maturity* (pre-1.0, a
+  Public-Preview protocol dependency), not its capability. The `why-gag` / vs-ARC
+  pages must be rewritten **in the same PR that flips the default** (Q264 §4.7) —
+  flipping first would leave the public positioning contradicting the shipped
+  behaviour.
 - **User-visible API regression to document, not hide:** ScaleSet collapses
   `runnerLabels` to a single `runs-on` label (the scale-set name) and raises the GHES
   floor to 3.9 — real trade-offs the migration comms must state (Q264 §4.2/§4.5).
 
 ---
 
-## 8. Follow-up items (filed on the Queue)
+## 8. Follow-up items
 
-The two gating-signal items are **filed** as deferred, trigger-based Queue entries;
-the third is folded into the Q264 P5 scope (below). These are what operationalize the
-§6.4 gates:
+The direction in §6.2 turns two of these into near-term work and demotes the third:
 
-1. **[Q271, Decision-triggered] Adoption signal to make the "v2 adoption sufficient"
-   gate measurable.** Instrument or record a concrete "known tenants / are we still
-   dogfood-only?" signal so the §6.4 removal gates are *measured*, not guessed. Cheap;
-   unblocks a confident v1alpha1-removal decision later. Ties to
+1. **[Q271 — active] Make v2 the front door + an exemplary v1→v2 migration story
+   (the adoption trust signal).** Route README / getting-started / onboarding /
+   new-tenant templates to v2; add "v1 deprecated — start on v2" banners; and polish
+   `gag-migrate` + the migration guide + the "what's preserved / what changes" doc to
+   showcase quality (the artifact a prospective **v2** adopter inspects). Reframed
+   from the earlier "instrument an adoption signal" — with no adopter base to measure,
+   the value is *confirm dogfood-only so the removal schedule can be committed* and
+   *make the migration itself the signal*. Partly gated on v2 being ready to be the
+   sole path (§6.2 risk); the docs-routing slice is doable now. Ties to
    [go-to-market.md](go-to-market.md) Phase 1.
-2. **[Q272, Event-triggered / watch] Scale-set upstream maturity watch.** Track
-   `actions/scaleset` reaching GA/v1.0 and the auto-assign contract (upstream
-   [actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting
-   documented — the §6.4 gate for classic-machinery *removal*, and the revisit trigger
-   for the [Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)
-   vendor-vs-own decision. Until then, classic stays the fallback.
-3. **[folded into Q264 P5, not a separate item] Fold this memo's per-workload
-   viability table (§2) into the operator migration docs**, so operators self-select
-   Classic vs ScaleSet by their concurrency profile rather than being told "just
-   switch." This is a natural part of the P5 positioning-doc rewrite (Q264 §4.7),
-   tracked there rather than as its own row.
+2. **[Q272 — Deferred / watch] Scale-set upstream maturity watch.** Track
+   `actions/scaleset` reaching GA/v1.0 and the auto-assign contract
+   ([actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting
+   documented. Per §6.1 this is **not** a graduation or removal blocker — it lifts the
+   Public-Preview caveat and triggers the
+   [Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)
+   vendor-vs-own revisit.
+3. **[folded into the P5 positioning rewrite] Migration guide states *why v2/ScaleSet*,
+   not a Classic-vs-ScaleSet chooser.** Classic is terminal (§6.2 item 4), so the
+   guide should route everyone to ScaleSet and explain the "no fan-out ceiling" reason
+   — *not* present the two protocols as a menu. Tracked in Q264 §4.7.
 
-**Two things deliberately *not* done here** (flagged, not actioned): (a) the §6.4
-gating table should be folded into [Q264 §5a-U8](q264-scale-set-protocol.md#u8--support-matrix-policy)
-as the explicit retirement gates — left for the Q264 owner, since that plan is under
-active P3–P4 work in a parallel session; (b) no `CLAUDE.md` change and no new
-milestone — the protocol/API retirement is already the Q264/Q74 milestone structure,
-and the live-verify-don't-trust-source meta-lesson is already a CLAUDE.md rule.
+**Flagged, not actioned:** (a) the §6.4 gate table + the §6.1 v2beta1-ScaleSet-only
+resolution should be folded into
+[Q264 §5a-U8](q264-scale-set-protocol.md#u8--support-matrix-policy) by the Q264 owner
+(that plan is under active P3–P4 work in a parallel session); (b) no `CLAUDE.md` change
+and no new milestone — the retirement is already the Q264/Q74 structure, and the
+live-verify meta-lesson is already a CLAUDE.md rule.
 
-No new *structural* work is proposed: the Q264 plan is sound and this review endorses
-it. The only substantive recommendation that *differs* from a naive reading of the
-maintainer's hypothesis is **"accelerate positioning, hold removal, and keep the two
-axes' timelines separate"** — i.e. do not fast-sunset classic or v1alpha1 ahead of
-P4-green + scale-set maturity + an adoption signal.
+**Net thesis (revised).** Not "hold and sequence" — **v2/scale-set is the product.**
+Make v2 the only front door now, treat classic as terminal, keep v2beta1 ScaleSet-only
+with a technical soak guardrail, retire v1 on a schedule gated on **v2 reaching beta**
+(not on adopters), and let migration discipline carry the "safe bet" signal. The one
+lever that actually converts the strategy to adoption is **v2 maturation (v2beta1),
+not the v1 sunset.**
 
 ---
 
@@ -453,9 +497,13 @@ P4-green + scale-set maturity + an adoption signal.
 > *today*. Building classic first was a defensible bet — the protocol wasn't a
 > supported surface then, and classic's merits were real.
 >
-> **Can we sunset v1 faster?** Partly, and only on one axis: **accelerate the
-> scale-set *positioning*** (recommend it for concurrent workloads once P4 is green),
-> but **hold both removals** (classic machinery and the v1alpha1 API) to the existing
-> plan, gated on P4-green + scale-set maturity + an adoption signal. "v1 is
-> fundamentally broken" is not the right frame; "classic is capped at scale and the
-> sunset should be *sequenced*, not *rushed*" is.
+> **Can we sunset v1 faster?** Yes — and we should, but the sharp move isn't "delete
+> v1 fast," it's **"make v2 the only front door now."** With no v1 adopters to protect
+> and P4 proving scale-set clears the ceiling classic can't, keeping classic alive as
+> a fallback protects no one and muddies the ARC comparison. So: route every new user
+> to v2 and deprecate v1 loudly today; treat classic as terminal; keep v2beta1
+> ScaleSet-only behind a technical soak guardrail; and commit v1 removal to a schedule
+> gated on **v2 reaching beta**, not on an adoption count. Handle the v1→v2 migration
+> *impeccably* — that discipline is the "safe bet, won't strand you" signal a
+> prospective v2 adopter is actually reading. The real work is **maturing v2**
+> (v2beta1); retiring v1 is its consequence, not a separate race.
