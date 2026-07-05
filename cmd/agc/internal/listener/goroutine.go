@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -227,8 +228,16 @@ type Config struct {
 	// loser's recycle 422 has cleared by the time the fallback fires. Overridable in
 	// tests to drive the fallback deterministically.
 	LoserRecycleDeferTimeout time.Duration
-	Clock                    Clock
-	Log                      *slog.Logger
+	// TokenPropagationRetryBackoff is the base delay between broker OAuth
+	// token-exchange retries after an agent recycle, while GitHub's token endpoint
+	// still returns a transient "Registration … was not found" 400 for the
+	// just-created runner record (the generate-jitconfig → OAuth-service
+	// propagation window, Q267). Zero selects defaultTokenPropagationRetryBackoff.
+	// Overridable in tests to drive the retry deterministically. See
+	// refreshBrokerTokenAfterRecycle.
+	TokenPropagationRetryBackoff time.Duration
+	Clock                        Clock
+	Log                          *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -294,6 +303,29 @@ func (cfg Config) controlPlaneTimeout() time.Duration {
 		return cfg.ControlPlaneTimeout
 	}
 	return defaultControlPlaneTimeout
+}
+
+// tokenPropagationMaxAttempts bounds the broker OAuth token-exchange retries a
+// freshly recycled agent makes while GitHub's token endpoint still reports its
+// just-created registration as "not found" (Q267). Bounded so a registration that
+// genuinely never appears cannot spin; the total wait is roughly
+// (attempts-1) × TokenPropagationRetryBackoff, well inside the propagation window
+// observed in practice (sub-second to a few seconds).
+const tokenPropagationMaxAttempts = 6
+
+// defaultTokenPropagationRetryBackoff is the base inter-attempt delay for the
+// recycle token-exchange propagation retry when Config.TokenPropagationRetryBackoff
+// is unset. Jittered per attempt (see jitterBackoff) so concurrent recyclers under
+// a burst do not resynchronize their retries into a thundering herd.
+const defaultTokenPropagationRetryBackoff = 2 * time.Second
+
+// tokenPropagationRetryBackoff returns the base inter-attempt delay for the
+// recycle token-exchange propagation retry, defaulting when unset.
+func (cfg Config) tokenPropagationRetryBackoff() time.Duration {
+	if cfg.TokenPropagationRetryBackoff > 0 {
+		return cfg.TokenPropagationRetryBackoff
+	}
+	return defaultTokenPropagationRetryBackoff
 }
 
 // Run executes the listener goroutine. It blocks until the context is cancelled
@@ -561,6 +593,60 @@ func refreshBrokerToken(ctx context.Context, cfg Config) error {
 	}
 	cfg.Broker.Token = token
 	return nil
+}
+
+// refreshBrokerTokenAfterRecycle fetches a broker OAuth token for a freshly
+// recycled agent, riding out the transient "Registration … was not found" 400
+// that GitHub's token endpoint returns in the brief window between
+// generate-jitconfig creating the runner record and the OAuth service
+// recognizing it (registration propagation, Q267). A single such 400 was
+// previously fatal on the recycle path: recycleAndRestart returned it, the
+// listener goroutine exited, and its polling slot churned a new runner record —
+// and under a sustained fan-out burst at a wide maxListeners enough listeners
+// exited that the online pool stayed near zero (the Q259/Q114 wide-pool recycle
+// seam). The retry is bounded (attempts + ctx cancellation) and jittered, and
+// re-uses the SAME fresh credentials — it never re-registers — so a registration
+// that genuinely never appears cannot spin or multiply records; on give-up the
+// error is returned and the caller exits exactly as before (the Multiplexer
+// re-registers), no worse than the pre-Q267 behaviour.
+//
+// It is applied only to the fresh, just-registered credentials on the recycle
+// path — not to the stored-credential exchange in healSession, where a token
+// rejection is the deliberate signal that a single-use JIT record was consumed
+// and must be recycled (Q114). Distinguishing the two is why isRegistrationNotFound
+// is narrower than isTokenRejected.
+func refreshBrokerTokenAfterRecycle(ctx context.Context, cfg Config, log *slog.Logger) error {
+	for attempt := 1; ; attempt++ {
+		err := refreshBrokerToken(ctx, cfg)
+		if err == nil {
+			return nil
+		}
+		if !isRegistrationNotFound(err) || attempt >= tokenPropagationMaxAttempts {
+			return err
+		}
+		if cfg.Metrics != nil {
+			cfg.Metrics.BrokerTokenPropagationRetriesTotal.WithLabelValues(cfg.Namespace, cfg.Group).Inc()
+		}
+		wait := jitterBackoff(cfg.tokenPropagationRetryBackoff())
+		log.Debug("broker token exchange: freshly recycled registration not yet propagated; backing off and retrying",
+			"attempt", attempt, "maxAttempts", tokenPropagationMaxAttempts, "backoff", wait, "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-cfg.Clock.After(wait):
+		}
+	}
+}
+
+// jitterBackoff returns d with full jitter applied over [d/2, d], so concurrent
+// recyclers under a burst do not resynchronize their retries into a thundering
+// herd. A non-positive d returns 0.
+func jitterBackoff(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 0
+	}
+	half := d / 2
+	return half + time.Duration(rand.Int63n(int64(half)+1)) //nolint:gosec // jitter, not crypto
 }
 
 // NonRetriableError wraps an error from Run that indicates a permanent failure
@@ -1046,7 +1132,12 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 		cfg.Metrics.AgentRecyclesTotal.WithLabelValues(cfg.Namespace, cfg.Group, trigger).Inc()
 	}
 	cfg.Agent = fresh
-	if err := refreshBrokerToken(ctx, *cfg); err != nil {
+	// The freshly registered runner record may not yet be recognized by GitHub's
+	// OAuth token endpoint (generate-jitconfig → OAuth propagation lag), which
+	// surfaces as a transient "Registration … was not found" 400. Ride it out with
+	// a bounded retry rather than exiting and churning a new record — the wide-pool
+	// recycle seam (Q267, the Q259/Q114 family).
+	if err := refreshBrokerTokenAfterRecycle(ctx, *cfg, log); err != nil {
 		return sessionState{}, err
 	}
 	sess, err := createSession(ctx, *cfg, log)
@@ -1237,6 +1328,26 @@ func isPollTimeout(err error) bool {
 // has been deleted (Q114, M4 §12: "decode response: EOF").
 func isDecodeEOF(err error) bool {
 	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
+// isRegistrationNotFound reports whether a broker OAuth token fetch failed with
+// the transient "Registration … was not found" response GitHub's token endpoint
+// returns for a runner record that exists but whose registration the OAuth
+// service has not yet caught up to — the propagation window just after
+// generate-jitconfig (Q267). It is deliberately narrower than isTokenRejected:
+// only this specific body warrants riding out the lag by retrying the SAME fresh
+// credentials, whereas a broad credential rejection means the record is genuinely
+// gone and the agent must be recycled (Q114).
+func isRegistrationNotFound(err error) bool {
+	var typed *githubapp.TokenExchangeError
+	if !errors.As(err, &typed) {
+		return false
+	}
+	if typed.StatusCode != http.StatusBadRequest && typed.StatusCode != http.StatusNotFound {
+		return false
+	}
+	body := strings.ToLower(typed.Body)
+	return strings.Contains(body, "registration") && strings.Contains(body, "not found")
 }
 
 // isTokenRejected reports whether a broker OAuth token fetch failed because
