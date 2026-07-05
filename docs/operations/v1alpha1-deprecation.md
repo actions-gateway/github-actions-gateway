@@ -19,6 +19,12 @@ working during the transition, and what changes at removal.
   [migration-v1-to-v2.md](migration-v1-to-v2.md). The migration is a one-shot
   fan-out, not an automatic conversion, because one v1 object becomes several v2
   objects.
+- **Migrating preserves how your jobs are acquired.** `gag-migrate` maps v1 runner
+  groups to v2 `RunnerSet`s that use the same job-acquisition path — the migration
+  changes the API objects, not the runtime behaviour, so it is safe to do ahead of
+  any other change. (A newer per-`RunnerSet` acquisition protocol is being introduced
+  separately and is opt-in; adopting it is a distinct, later step, never a side
+  effect of migrating off `v1alpha1`.)
 
 ## Why v2 (what the decomposition buys)
 
