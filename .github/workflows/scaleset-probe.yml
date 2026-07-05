@@ -1,0 +1,38 @@
+# Q264 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Queues jobs on runs-on: gag-probe-scaleset so the cmd/probe Investigation E
+# scenario (PROBE_SCALESET_TEST=true, and the E2 capacity test) can observe
+# real JobAvailable/JobAssigned messages against the throwaway scale set the
+# probe registers. Two jobs so a capacity-1 poll has an overflow candidate:
+# probe-fast completes quickly under a real runner (U3); probe-slow sleeps so
+# the runner can be killed mid-job to measure GitHub's cancel latency (U5).
+# Cancel the run once the probe has its evidence.
+name: scaleset-probe
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch;
+  # the push trigger (scoped to this file on claude/ branches) lets the
+  # probe session queue the jobs from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/scaleset-probe.yml"]
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[scaleset-probe]". A plain push touching this file
+# (e.g. editing the fixture itself) skips both jobs, so the run concludes
+# green instead of leaving queued jobs / an expected-failure check on the PR.
+jobs:
+  probe-fast:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[scaleset-probe]')
+    runs-on: gag-probe-scaleset
+    timeout-minutes: 10
+    steps:
+      - run: echo "probe-fast ran under the Investigation E scale set (Q264)."
+  probe-slow:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[scaleset-probe]')
+    runs-on: gag-probe-scaleset
+    timeout-minutes: 10
+    steps:
+      - run: |
+          echo "probe-slow started; sleeping so the runner can be killed mid-job (U5)."
+          sleep 300
