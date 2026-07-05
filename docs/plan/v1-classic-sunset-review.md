@@ -350,7 +350,7 @@ instead of v2.**
    runtime.** `gag-migrate`, the migration guide, the deprecation notice, the
    "what's preserved / what changes" doc — make these *exemplary*, because that is the
    artifact a prospective adopter actually inspects. (This reframes the
-   adoption-signal item [Q271](../STATUS.md#Q271) from "instrument who's using it" to
+   adoption-signal item [Q273](../STATUS.md#Q273) from "instrument who's using it" to
    "polish the migration story" — a better use of effort when there is no one to
    measure.)
 4. **Classic is terminal — no further investment.** The eight re-routes were the last
@@ -392,7 +392,7 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
   **retire v1 cleanly on a stability-gated schedule, and make v2 the only marketed
   on-ramp now** (§6.2). Removal gates on **v2 reaching beta**, not an adoption count —
   there is no adopter base to measure, and waiting on one would itself read as
-  indecision. The adoption signal (Q271) is therefore reframed from *"gate removal on
+  indecision. The adoption signal (Q273) is therefore reframed from *"gate removal on
   measuring adopters"* to *"confirm dogfood-only so we can commit the schedule, and
   make the migration itself exemplary."*
 
@@ -440,7 +440,7 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
 
 The direction in §6.2 turns two of these into near-term work and demotes the third:
 
-1. **[Q271 — active] Make v2 the front door + an exemplary v1→v2 migration story
+1. **[Q273 — active] Make v2 the front door + an exemplary v1→v2 migration story
    (the adoption trust signal).** Route README / getting-started / onboarding /
    new-tenant templates to v2; add "v1 deprecated — start on v2" banners; and polish
    `gag-migrate` + the migration guide + the "what's preserved / what changes" doc to
