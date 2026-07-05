@@ -983,6 +983,25 @@ gh api /repos/"$REPO"/actions/runners \
 > (`agc:e2e-f681d9d`, digest `86aa1b1e`), reruns `28731081406`/`28731081446` (bursts
 > `06:29Z`/`06:45Z`); quota `DISKS_TOTAL_GB=400`, `SSD_TOTAL_GB=220/500`.
 >
+> **Follow-up — the online-session/broker-credential recycle seam is now fixed
+> code-side ([Q267](../STATUS.md#Q267), 2026-07-05).** Root cause of the
+> `broker token exchange rejected … "Registration … was not found"` (400) churn:
+> after a recycle re-registers a fresh runner record, the immediate OAuth
+> token-exchange for that record's client credential can 400 for a brief
+> `generate-jitconfig` → OAuth-service propagation window. `recycleAndRestart`
+> treated that transient 400 as **fatal** — the listener exited and churned a new
+> record, and at a wide `maxListeners` the exits multiplied stale records and held
+> the online pool near zero. `healSession` rides out a token 400 on *stored* creds
+> (via one recycle), but the *fresh*-cred exchange had no retry. The fix
+> (`refreshBrokerTokenAfterRecycle`) rides out the transient with a bounded,
+> jittered retry of the **same** fresh credential — no re-registration, so no
+> record leak — counted by `actions_gateway_broker_token_propagation_retries_total`.
+> Proven by an **offline** regression test (`goroutine_q267_test.go`, no cluster
+> needed). What remains for a clean "holds at `maxWorkers`" measurement is
+> operational, not code: a **live wide-pool re-benchmark** on a **clean namespace**
+> (the guard-blocked mass runner-record delete). Both are dispatcher-tracked
+> follow-ups, not blockers on Q267's merge.
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`

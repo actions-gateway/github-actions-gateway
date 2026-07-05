@@ -58,6 +58,11 @@ type Metrics struct {
 	// the agent pool's reconcile repair pass)
 	AgentRecyclesTotal      *prometheus.CounterVec
 	AgentRecycleErrorsTotal *prometheus.CounterVec
+	// Q267: broker OAuth token-exchange retries a freshly recycled agent made
+	// while GitHub's token endpoint still reported its just-created registration as
+	// "not found" (the generate-jitconfig → OAuth-service propagation window). A
+	// sustained non-zero rate signals wide-pool recycle churn feeding this seam.
+	BrokerTokenPropagationRetriesTotal *prometheus.CounterVec
 	// Q249: number of regular (non-native) sidecar containers in a RunnerSet's
 	// resolved worker template that may block pod reaping (emitted by the RunnerSet
 	// reconciler). A non-zero value warns of the Q247 stranding class; native
@@ -179,6 +184,11 @@ func NewMetrics() *Metrics {
 			Help: "Failed attempts to re-register a single-use JIT agent.",
 		}, []string{"namespace", "runner_group"}),
 
+		BrokerTokenPropagationRetriesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_broker_token_propagation_retries_total",
+			Help: "Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient \"Registration … was not found\" 400 for its just-created runner record (the generate-jitconfig → OAuth-service propagation window). The listener rides these out instead of exiting and churning a new record; a sustained non-zero rate signals wide-pool recycle churn feeding this seam (Q267, the Q259/Q114 family).",
+		}, []string{"namespace", "runner_group"}),
+
 		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_reap_blocking_sidecar_templates",
 			Help: "Number of regular (non-native) sidecar containers in a RunnerSet's resolved worker template that may block pod reaping (Q249); native sidecars or the self-exiting-sidecars acknowledgment annotation clear it.",
@@ -207,6 +217,7 @@ func NewMetrics() *Metrics {
 		m.WorkerPodsReaped,
 		m.AgentRecyclesTotal,
 		m.AgentRecycleErrorsTotal,
+		m.BrokerTokenPropagationRetriesTotal,
 		m.ReapBlockingSidecarTemplates,
 	)
 	return m
