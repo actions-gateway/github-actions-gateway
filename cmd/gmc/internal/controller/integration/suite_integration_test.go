@@ -195,6 +195,13 @@ func startValidatingWebhook() error {
 	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
+	// The same ValidatingWebhookConfiguration also carries the RunnerSet webhook
+	// (Q264 P3, failurePolicy=Fail), which enforces ScaleSet runnerLabel uniqueness;
+	// this server must serve its path or every RunnerSet create in the suite would
+	// fail closed.
+	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
+		return fmt.Errorf("register RunnerSet webhook: %w", err)
+	}
 
 	var mgrCtx context.Context
 	mgrCtx, webhookCancel = context.WithCancel(ctx)
