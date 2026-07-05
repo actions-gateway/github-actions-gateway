@@ -53,6 +53,12 @@ The GMC also makes one additional outbound call: `GET https://api.github.com/met
 
 GitHub publishes its current IP ranges at `https://api.github.com/meta` under the `actions` key. The GMC uses this list to populate proxy pod `NetworkPolicy` egress rules and refreshes them every 24 hours. If `spec.proxy.managedNetworkPolicy` is `false`, operators are responsible for keeping egress rules current.
 
+### Per-tenant egress IP: the source-IP mechanism
+
+The per-tenant proxy pool establishes a per-tenant **choke point** — all of a tenant's GitHub-bound traffic (AGC control plane + worker data plane) funnels through one identifiable set of proxy pods. That is a prerequisite for the per-tenant egress-IP claim, but **it is not by itself sufficient**: what source IP GitHub observes is decided one layer lower, by how the cluster masquerades (SNATs) pod egress. On a stock cloud cluster, proxy-pod egress SNATs to the **node's** shared cloud egress IP (GKE Cloud NAT, an EKS NAT gateway, an AKS outbound rule), which is shared across tenants on that node and not stable across proxy-pod reschedules.
+
+Delivering a **distinct, stable, per-tenant** source IP at GitHub — the property that makes GitHub-side IP allowlisting, per-tenant audit attribution, incident containment, and the per-tenant kill-switch coherent — requires an explicit **egress-IP mechanism** underneath the proxy pool: **Cilium Egress Gateway** (per-tenant egress IP via a gateway node) or **per-tenant cloud NAT** (dedicated subnet/node-pool + reserved static IP). The mechanism binds a source IP to the proxy's choke point; it does not change the proxy pool or the `NetworkPolicy` rules below, which stay orthogonal and complementary. The comparison of the two mechanisms, the single-tenant-direct (dogfood) vs production multi-tenant topology, the cost model, and the live-validation plan are specified in [the per-tenant egress-IP reference architecture](../plan/q243-egress-ip-reference-arch.md) ([Q243](../STATUS.md#Q243), a v2beta1 blocker). Until that live validation lands, treat the distinct-per-tenant-egress-IP property as **designed but not yet live-substantiated**; the dogfood cluster runs single-tenant-direct and does not exercise it.
+
 ---
 
 ## NetworkPolicy Rules
