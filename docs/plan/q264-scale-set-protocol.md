@@ -4,9 +4,10 @@
 **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
 scenarios, run 2026-07-04**)**, and **P2 (the `scaleset/` client package + its
 `scalesettest` fake, §6)** are DONE; **P3 (AGC wiring behind the
-`acquisitionProtocol` field) is IN PROGRESS** — sub-PR (a) (the API field +
-codegen + CEL + GMC webhook, default `Classic`) is landed; (b) the scale-set
-listener and (c) the worker JIT path + acceptance twin follow (§6-P3). The classic AGC acquisition path is
+`acquisitionProtocol` field) is IN PROGRESS** — sub-PRs (a) (the API field +
+codegen + CEL + GMC webhook) and (b) (the standalone `scalesetlistener` engine +
+the fan-out-free acceptance twin) are landed, both default `Classic`; (c) the
+reconciler wiring + worker `run.sh --jitconfig` path follows (§6-P3). The classic AGC acquisition path is
 **still unchanged** — P2 is a standalone leaf module with no AGC wiring. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
@@ -698,8 +699,25 @@ parallel implementation behind a flag, then cutover.
     (defaulting/immutability/single-label CEL), and a cmd/gmc
     admission-through-apiserver envtest for the sibling-uniqueness webhook.
     v1alpha1 untouched.
-  - **(b) scale-set listener + provision-on-`JobAssigned`** — next.
-  - **(c) worker `run.sh --jitconfig` path + the fan-out-free acceptance twin** — after (b).
+  - **(b) scale-set listener — ✅ DONE.** New standalone package
+    [`scalesetlistener`](../../cmd/agc/internal/scalesetlistener/): one `Listener`
+    per (future) ScaleSet set holds a single session, long-polls advertising free
+    worker slots as `X-ScaleSetMaxCapacity`, mints a per-job JIT config and
+    provisions one worker per `JobAssigned` (GHES `JobAvailable`→`AcquireJobs`
+    handled as the one rule), and reconciles against the server-authoritative
+    `statistics.totalAssignedJobs`. Acking is **cursor-only** (the live-proven
+    semantics, §2b-4) — it deliberately does not rely on the unproven
+    `DeleteMessage` (P4); recovery is queue replay to a re-created session, made
+    idempotent by process-scoped provisioned/completed sets. The engine is **not
+    yet wired into the RunnerSet reconciler** (default Classic trivially
+    preserved); that + the real provisioner/worker path is (c). Tests (race-clean)
+    against the `scalesettest` fake: one-worker-per-job/zero-dedup, capacity
+    gating, assigned-count reconciliation, session-recreate replay without
+    double-provision, the GHES acquire path, and **the fan-out-free acceptance
+    twin** — the scale-set analog of `TestAGC_Q260_FanoutCompletionReconciles`:
+    N concurrent jobs, every one concludes `completed`, zero dedup.
+  - **(c) reconciler wiring + worker `run.sh --jitconfig` path + provisioner JIT
+    staging + envtest** — after (b).
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate

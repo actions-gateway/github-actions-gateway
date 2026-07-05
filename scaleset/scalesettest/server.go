@@ -217,6 +217,32 @@ func (s *Server) ExpireQueueToken(scaleSetID int) {
 	}
 }
 
+// DropSession clears the scale set's active session server-side, so the client's next
+// poll 404s (NotFoundError) and it must re-create the session — which replays the
+// scale-set-scoped queue log from the cursor head (§2b-3). The queue log itself
+// persists (it is not session-scoped), which is what makes replay possible.
+func (s *Server) DropSession(scaleSetID int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ss := s.scaleSets[scaleSetID]; ss != nil {
+		ss.session = nil
+	}
+}
+
+// AssignedJobCount returns how many of the scale set's jobs are currently
+// assigned-but-not-completed (assigned or running) — the server-authoritative
+// totalAssignedJobs. A test asserts it drains to zero to prove no delivery dangles
+// after every job completes (the scale-set analog of brokertest's JobState check).
+func (s *Server) AssignedJobCount(scaleSetID int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return 0
+	}
+	return ss.stats().TotalAssignedJobs
+}
+
 // Calls returns the recorded call log in order.
 func (s *Server) Calls() []string {
 	s.mu.Lock()

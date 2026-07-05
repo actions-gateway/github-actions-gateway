@@ -71,6 +71,59 @@ func TestServer_RecordsCallOrder(t *testing.T) {
 	}
 }
 
+// TestServer_DropSessionReplaysUnackedMessage confirms DropSession clears the session
+// server-side (so the next poll 404s) while the queue log persists, so a re-created
+// session replays the unacked message — the recovery path the scale-set listener uses
+// on a session drop. AssignedJobCount reports the server-authoritative assigned count.
+func TestServer_DropSessionReplaysUnackedMessage(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := newClient(t, srv)
+
+	if err := c.Connect(ctx); err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	ss, err := c.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{Name: "s", RunnerGroupID: 7})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	sess, err := c.CreateSession(ctx, ss.ID, "owner")
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	srv.EnqueueJob(ss.ID)
+
+	// Assign the job (capacity 1) but do NOT ack it.
+	msg, err := c.GetMessage(ctx, sess, 1, 0)
+	if err != nil || msg == nil {
+		t.Fatalf("GetMessage = %v, %v", msg, err)
+	}
+	if got := srv.AssignedJobCount(ss.ID); got != 1 {
+		t.Fatalf("AssignedJobCount = %d, want 1", got)
+	}
+
+	// Drop the session server-side; the next poll on the stale session must 404.
+	srv.DropSession(ss.ID)
+	if _, err := c.GetMessage(ctx, sess, 1, msg.MessageID); err == nil {
+		t.Fatalf("poll on a dropped session must error")
+	}
+
+	// A re-created session replays the unacked message from the queue head.
+	fresh, err := c.CreateSession(ctx, ss.ID, "owner")
+	if err != nil {
+		t.Fatalf("re-CreateSession: %v", err)
+	}
+	replay, err := c.GetMessage(ctx, fresh, 1, 0)
+	if err != nil || replay == nil {
+		t.Fatalf("unacked message must replay to a fresh session, got %v, %v", replay, err)
+	}
+	if replay.MessageID != msg.MessageID {
+		t.Errorf("replayed messageId = %d, want %d", replay.MessageID, msg.MessageID)
+	}
+}
+
 // TestServer_AckStopsReplay confirms deleting (acking) a message prevents its
 // replay to a re-created session, complementing the client-side replay test.
 func TestServer_AckStopsReplay(t *testing.T) {

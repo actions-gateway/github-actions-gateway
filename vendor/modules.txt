@@ -13,6 +13,8 @@ github.com/Masterminds/semver/v3
 ## explicit; go 1.26.4
 # github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000 => ./githubapp
 ## explicit; go 1.26.4
+# github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000 => ./scaleset
+## explicit; go 1.26.4
 # github.com/antlr4-go/antlr/v4 v4.13.0
 ## explicit; go 1.20
 github.com/antlr4-go/antlr/v4
