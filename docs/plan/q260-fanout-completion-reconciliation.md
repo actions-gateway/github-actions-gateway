@@ -495,8 +495,13 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
   constraint. Do not start the Option E rewrite on this evidence.
 - **Fix the recycle slot-stranding seam** (new Queue item, Q259/Q114 family), then
   **re-benchmark on a fresh, clean dogfood namespace** at moderate `maxListeners` (≈ 8–16),
-  with `maxWorkers` raised as far as an SSD-quota increase allows, to obtain the clean
-  "holds at maxWorkers" measurement Q265 set out to get.
+  with `maxWorkers` widened, to obtain the clean "holds at maxWorkers" measurement Q265 set
+  out to get. **Update (re-route #7, 2026-07-05):** the `maxWorkers` widening needs **no
+  SSD-quota bump** — right-sizing the worker boot disk `pd-balanced → pd-standard` takes it
+  off the SSD quota (Q248, done). The re-benchmark then confirmed Q266's seam is gone but
+  surfaced the *real* residual: the online-session / broker-credential recycle churn keeps
+  the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still
+  gated on that seam + a clean namespace.
 - **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above
   and (b) worker capacity ([Q248](../STATUS.md)) — both tuning/fix, not architectural.
 
@@ -547,9 +552,23 @@ no loser strands+exits while the winner runs, and each loser recycles in place o
 winner's conclusion. It FAILS against pre-Q266 behaviour (the eager losers exit) and needs
 no GKE turn-up.
 
-**Still open.** Q266 is code-complete offline; the clean live re-benchmark §7 called for
-(fresh namespace, moderate `maxListeners`, `maxWorkers` raised via an SSD-quota bump) is a
-separate task before [Q224](../STATUS.md) full-matrix green can be claimed.
+**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood.md) re-route #7).** Q266's
+targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal
+`deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38)
+were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A
+`completejob` (5) and dedup (7) fired. **But full-matrix green / "holds at `maxWorkers`" was
+STILL not obtained.** The residual is neither Q266's seam nor the `completejob` tax (0
+`worker capacity full`) — it is a **two-way bind**: throughput needs `maxListeners ≈ maxWorkers ×
+fan-out`, yet a wide `maxListeners` (48) multiplies GitHub runner records and inflates the
+**broker-credential / registration recycle churn** (Q259/Q114 — `"Registration … was not found"`)
+that keeps the **online idle pool near 0**, collapsing to `online = 0`; a moderate `maxListeners`
+(12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs. Un-cleanable
+stale records (guard-blocked mass-delete) compound it. A clean measurement needs the
+**online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still
+blocked in-session, so [Q224](../STATUS.md) full-matrix green **cannot yet be claimed**. Separately,
+the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an
+SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota
+entirely), see [`dogfood-runner-rightsizing.md`](dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
 
 ## Ruled-out, for the record
 
