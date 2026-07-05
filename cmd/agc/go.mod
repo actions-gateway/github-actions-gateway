@@ -6,6 +6,7 @@ require (
 	github.com/actions-gateway/github-actions-gateway/api v0.0.0-00010101000000-000000000000
 	github.com/actions-gateway/github-actions-gateway/broker v0.0.0-00010101000000-000000000000
 	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
+	github.com/actions-gateway/github-actions-gateway/scaleset v0.0.0-00010101000000-000000000000
 	github.com/go-logr/logr v1.4.3
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
@@ -91,3 +92,5 @@ replace github.com/actions-gateway/github-actions-gateway/api => ../../api
 replace github.com/actions-gateway/github-actions-gateway/broker => ../../broker
 
 replace github.com/actions-gateway/github-actions-gateway/githubapp => ../../githubapp
+
+replace github.com/actions-gateway/github-actions-gateway/scaleset => ../../scaleset
