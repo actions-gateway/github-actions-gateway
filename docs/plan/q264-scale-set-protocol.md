@@ -835,6 +835,11 @@ parallel implementation behind a flag, then cutover.
   `…_jobs_completed_total{result}`) via a `scalesetlistener.Metrics` recorder
   wired into the listener `Config`. Documented in
   [observability.md](../operations/observability.md#scale-set-acquisition-tier-q264).
+  *Prerequisite fixed (Q269):* `cmd/worker`'s tests now clear the ambient
+  `WORKER_MODE` in `TestMain`, so the classic-path unit tests stay deterministic
+  when GAG's own CI runs on a `WORKER_MODE=scaleset` runner pod — otherwise the
+  P4 dogfood CI (which runs `main`'s code) fails unit-test+coverage before the
+  Q224 matrix can even run.
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate
   dogfood, then run the U8 retirement sequence (§5a: one-minor-release
   deprecation → remove classic machinery in an isolated PR), rewrite the
