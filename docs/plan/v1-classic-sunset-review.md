@@ -7,12 +7,18 @@ v1 may be fundamentally limited by its protocol constraints — and that if so, 
 should sunset it faster and focus on v2/scale-set. The review deliberately tests
 that hypothesis rather than assuming it.
 
-> **In-flight input, not yet folded in:** [Q264](q264-scale-set-protocol.md) **P4**
-> (live dogfood validation of the scale-set path — the [Q224](gke-dogfood.md)
-> concurrent-matrix acceptance gate) is running in a parallel session as this memo
-> is written. A green P4 is the single most important piece of evidence for the
-> "accelerate" case and is called out as a gate below; this memo does **not** block
-> on it.
+> **Update (2026-07-05) — P4 is in, and green on the acceptance gate.**
+> [Q264](q264-scale-set-protocol.md) **P4** (live dogfood,
+> [PR #541](https://github.com/actions-gateway/github-actions-gateway/pull/541))
+> confirmed the scale-set path **eliminates the [Q224](gke-dogfood.md) fan-out
+> distinct-delivery starvation by construction**: the single-acquirer listener
+> assigned, ran, and terminally concluded **all 7** distinct jobs (**7/7**, 0 dedup /
+> collision) where classic managed **2/7** across eight re-routes. This is the single
+> most important piece of evidence for the "accelerate" case (§6.4). **Caveat — not a
+> clean all-green sweep yet:** the residual non-green is *orthogonal to acquisition*
+> (a self-referential `WORKER_MODE=scaleset` test leak — GAG dogfooding its own CI on
+> its own scale-set worker — plus CPU-starved envtest), and gates the **P5 cutover**,
+> not the acceptance verdict. Q224/Q264 stay open until the clean-green re-run.
 
 ---
 
@@ -227,6 +233,13 @@ from the AGC**.
 > fix is single-acquirer topology (Option E / scale-set). Below that concurrency
 > line, the protocol is not kneecapped at all.
 
+**Now confirmed from the other side (P4, 2026-07-05).** The structural claim is no
+longer only theory: on the identical concurrent matrix that pinned classic at 2/7,
+the scale-set path concluded **all 7** distinct jobs (7/7, single acquirer, zero
+dedup) — the fan-out is gone *by construction*, exactly as §5a-U8 predicted. That is
+the strongest possible evidence both that classic's ceiling is real (the same test,
+same load, opposite outcome) and that Option E is the fix, not merely *a* fix.
+
 ---
 
 ## 5. Was scale-set "what we should have built from the start"? (hindsight, fairly)
@@ -279,6 +292,21 @@ useful even if Option A wins").
   acquisition path, so classic-machinery removal **is** the end of v1alpha1's ability
   to acquire jobs — the plan therefore sequences the classic-removal PR after
   v1alpha1 is itself deprecated, announcing both together (Q264 §5a-U8 "Consequence").
+
+> **Open design question this review surfaces (not decided here).** The plan makes
+> **v2beta1 ScaleSet-only** (Q264 §5a-U7/U8): the graduation conversion strips
+> `acquisitionProtocol` and drops the classic machinery. That binds a *third* thing to
+> the beta cut — it removes the classic **fallback** at the exact version GAG signals
+> as "stable," while scale-set is still GitHub **Public Preview** (contract undocumented,
+> `actions/scaleset#107` unanswered, already drifted once). Under this decision,
+> scale-set upstream maturity ([Q272](../STATUS.md#Q272)) and *"all tenants migrated off
+> classic"* become **de-facto v2beta1 blockers**, not passive watches. The alternative —
+> **retain `acquisitionProtocol` through v2beta1 and drop `Classic` only at v2 GA** —
+> decouples graduation from scale-set maturity and preserves the rollback lever the rest
+> of this memo argues for. P4-green materially de-risks the ScaleSet-only choice (the
+> protocol works live), and GAG owns its own client (not hostage to upstream's cadence),
+> so ScaleSet-only-beta is defensible — but it is a genuine call that revisits a signed-off
+> decision, and belongs to the maintainer + the Q264 owner. Flagged, not resolved.
 
 ### 6.2 Should either be accelerated? — recommendation
 
@@ -340,8 +368,8 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
 
 | Step | Gate |
 |---|---|
-| Name ScaleSet "recommended" for concurrency-sensitive workloads | **Q264 P4 green** (Q224 matrix on the flagged path) — running now |
-| Flip default to `ScaleSet` (P5) | P4 green **+** positioning-doc rewrite landed in the same PR (Q264 §4.7) — else the vs-ARC story self-contradicts |
+| Name ScaleSet "recommended" for concurrency-sensitive workloads | **✅ MET (2026-07-05):** P4 ran the full concurrent matrix on the scale-set path — **7/7** distinct jobs concluded, vs classic **2/7** — so the fan-out fix is confirmed by construction. (The residual `WORKER_MODE` test leak gates the *P5 clean-green cutover*, not this recommend-in-docs step.) |
+| Flip default to `ScaleSet` (P5) | Clean-green dogfood re-run (the P4 residual — `WORKER_MODE` test leak — fixed on main) **+** positioning-doc rewrite landed in the same PR (Q264 §4.7) — else the vs-ARC story self-contradicts |
 | Remove classic machinery | Scale-set upstream **GA / v1.0** *or* the auto-assign contract ([actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) documented **+** v2beta1 graduation reached **+** v1alpha1 deprecated |
 | Remove v1alpha1 API | Adoption signal shows all known tenants migrated (or confirmed dogfood-only) **+** the classic-removal gate above |
 
@@ -374,12 +402,12 @@ The two gating-signal items are **filed** as deferred, trigger-based Queue entri
 the third is folded into the Q264 P5 scope (below). These are what operationalize the
 §6.4 gates:
 
-1. **[Q269, Decision-triggered] Adoption signal to make the "v2 adoption sufficient"
+1. **[Q271, Decision-triggered] Adoption signal to make the "v2 adoption sufficient"
    gate measurable.** Instrument or record a concrete "known tenants / are we still
    dogfood-only?" signal so the §6.4 removal gates are *measured*, not guessed. Cheap;
    unblocks a confident v1alpha1-removal decision later. Ties to
    [go-to-market.md](go-to-market.md) Phase 1.
-2. **[Q270, Event-triggered / watch] Scale-set upstream maturity watch.** Track
+2. **[Q272, Event-triggered / watch] Scale-set upstream maturity watch.** Track
    `actions/scaleset` reaching GA/v1.0 and the auto-assign contract (upstream
    [actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting
    documented — the §6.4 gate for classic-machinery *removal*, and the revisit trigger
