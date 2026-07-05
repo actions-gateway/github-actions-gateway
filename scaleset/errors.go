@@ -17,6 +17,22 @@ func (e *UnauthorizedError) Error() string {
 	return fmt.Sprintf("scaleset: unauthorized (HTTP %d)", e.StatusCode)
 }
 
+// ConflictError is the generic 409 Conflict the Actions Service returns. Its meaning
+// is endpoint-specific, so the shared status-to-error mapping (statusError) yields
+// this neutral type and each call translates it into a precise one: CreateSession
+// into a SessionConflictError (one active session per scale set), GenerateJITConfig
+// into a RunnerNameConflictError (the runner name is already registered). An
+// untranslated ConflictError surfaces a 409 from a call that assigns it no specific
+// meaning. Distinguishing the two 409 causes is what stops a generatejitconfig
+// runner-name conflict from being mislabeled a session conflict (Q270).
+type ConflictError struct {
+	StatusCode int
+}
+
+func (e *ConflictError) Error() string {
+	return fmt.Sprintf("scaleset: conflict (HTTP %d)", e.StatusCode)
+}
+
 // SessionConflictError is returned by CreateSession when a session already exists
 // for the scale set (409 Conflict) — one active session per scale set is a
 // protocol invariant. The caller must delete or wait out the existing session
@@ -27,6 +43,20 @@ type SessionConflictError struct {
 
 func (e *SessionConflictError) Error() string {
 	return fmt.Sprintf("scaleset: session already exists (HTTP %d)", e.StatusCode)
+}
+
+// RunnerNameConflictError is returned by GenerateJITConfig when the runner name it
+// tried to pre-register is already taken (409 Conflict) — distinct from a
+// SessionConflictError, which a session-create 409 yields. The name collided (a stale
+// runner record, or a replay racing an earlier attempt), so the caller must retry
+// under a *fresh* runner name rather than replay the same request, which would
+// conflict indefinitely and wedge the queue cursor behind it (Q270).
+type RunnerNameConflictError struct {
+	StatusCode int
+}
+
+func (e *RunnerNameConflictError) Error() string {
+	return fmt.Sprintf("scaleset: runner name already registered (HTTP %d)", e.StatusCode)
 }
 
 // NotFoundError is returned when a scale set, session, or message no longer exists

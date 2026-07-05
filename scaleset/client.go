@@ -346,7 +346,10 @@ func statusError(status int, header http.Header, body []byte) error {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return &UnauthorizedError{StatusCode: status}
 	case status == http.StatusConflict:
-		return &SessionConflictError{StatusCode: status}
+		// A generic 409 — the caller (CreateSession, GenerateJITConfig, …) translates
+		// it into the endpoint-specific conflict type. A 409 means different things per
+		// call, so this shared helper must not presume one (Q270).
+		return &ConflictError{StatusCode: status}
 	case status == http.StatusNotFound || status == http.StatusGone:
 		return &NotFoundError{StatusCode: status}
 	case status == http.StatusTooManyRequests:
@@ -430,7 +433,9 @@ func (c *Client) DeleteRunnerScaleSet(ctx context.Context, id int) error {
 // GenerateJITConfig mints a just-in-time runner config for one job: the server
 // pre-registers the runner and returns a base64 blob a runner pod consumes with
 // run.sh --jitconfig. name is the runner's name; workFolder its work directory
-// (conventionally "_work").
+// (conventionally "_work"). A 409 surfaces as *RunnerNameConflictError (the runner
+// name is already registered) — distinct from CreateSession's SessionConflictError;
+// the caller should retry under a fresh name rather than replay the same one (Q270).
 func (c *Client) GenerateJITConfig(ctx context.Context, scaleSetID int, name, workFolder string) (*JITRunnerConfig, error) {
 	if workFolder == "" {
 		workFolder = "_work"
@@ -439,6 +444,10 @@ func (c *Client) GenerateJITConfig(ctx context.Context, scaleSetID int, name, wo
 	if err := c.svcCall(ctx, http.MethodPost,
 		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/generatejitconfig", scaleSetID),
 		map[string]string{"name": name, "workFolder": workFolder}, &out); err != nil {
+		var ce *ConflictError
+		if errors.As(err, &ce) {
+			return nil, &RunnerNameConflictError{StatusCode: ce.StatusCode}
+		}
 		return nil, err
 	}
 	return &out, nil
@@ -451,6 +460,10 @@ func (c *Client) CreateSession(ctx context.Context, scaleSetID int, ownerName st
 	if err := c.svcCall(ctx, http.MethodPost,
 		fmt.Sprintf("/_apis/runtime/runnerscalesets/%d/sessions", scaleSetID),
 		map[string]string{"ownerName": ownerName}, &out); err != nil {
+		var ce *ConflictError
+		if errors.As(err, &ce) {
+			return nil, &SessionConflictError{StatusCode: ce.StatusCode}
+		}
 		return nil, err
 	}
 	return &out, nil
