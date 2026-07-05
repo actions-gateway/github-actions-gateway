@@ -1331,26 +1331,45 @@ B5 if you had a placeholder. As of this writing the install is `135739122`.
 
 ### C2. Workflow changes
 
-Change `runs-on: ubuntu-latest` to the variable-driven expression in these
-jobs (leave all `changes` jobs untouched):
+The migrated jobs route to GAG only under an **explicit opt-in**, so a dogfood
+turn-up never drags every concurrent push, PR, or Dependabot run onto the
+cluster. Two paths coexist:
+
+- **Opt-in dispatch (default day-to-day turn-up)** — a `workflow_dispatch`
+  trigger with a boolean `target_gag` input (default `false`). GAG runs only
+  when a run is *manually* dispatched with `target_gag=true`. This is the
+  scoped path for validation bursts (Q224/Q264 P4; see PR #541 for the
+  contention this replaced).
+- **Global variable (milestone end-state only)** — flipping `vars.GAG_RUNNER`
+  still routes *all* production CI to GAG. This remains the Q224 end goal
+  ("route all production CI to GAG") and is intentionally left in place.
+
+Both are folded into one `runs-on` expression, applied to these jobs (leave all
+`changes` jobs on `ubuntu-latest`):
 
 **`.github/workflows/unit-test.yml`** — jobs `lint`, `shellcheck`,
-`vendor-check`, `tidy-check`, `unit-test`, `coverage`:
-
-```yaml
-runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
-```
-
+`vendor-check`, `tidy-check`, `unit-test`, `coverage`.
 **`.github/workflows/integration-test.yml`** — job `integration-test`:
 
 ```yaml
-runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
 ```
 
-When `GAG_RUNNER` is unset or `"ubuntu-latest"`, `fromJSON` returns the
-string `ubuntu-latest` and jobs run on GitHub-hosted runners as before.
-When `GAG_RUNNER` is `["self-hosted","linux","gag-ci"]`, `fromJSON` returns
-the array and jobs route to GAG.
+- On **push / pull_request** (or a dispatch with `target_gag` unset/false):
+  `github.event_name == 'workflow_dispatch' && inputs.target_gag` is `false`,
+  so the whole `&& … ||` expression short-circuits to the trailing
+  `'ubuntu-latest'` — GitHub-hosted, exactly as before. `vars.GAG_RUNNER` is
+  never consulted, so flipping it no longer affects these events.
+- On a **dispatch with `target_gag=true`**: the expression evaluates
+  `fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"')` — the array
+  `["self-hosted","linux","gag-ci"]` (routes to GAG) when the variable is set,
+  or the string `ubuntu-latest` when it is not.
+
+The gate jobs' `if` conditions also add `|| github.event_name ==
+'workflow_dispatch'` so a manual dispatch still creates the migrated jobs even
+when the paths-filter finds no matching diff, and each dispatch run gets its own
+`concurrency` group (run id appended) so it never queues behind an in-flight
+push run on the same ref.
 
 ### C3. Set default variable (cluster off)
 
@@ -1360,8 +1379,11 @@ gh variable set GAG_RUNNER \
   --repo "$REPO"
 ```
 
-Commit and push the workflow changes. Because the variable defaults to
-`ubuntu-latest`, CI is unaffected until you flip it in Part D.
+Commit and push the workflow changes. Ordinary push/PR CI stays on
+GitHub-hosted runners regardless of this variable — under the opt-in model the
+variable is consulted only by a `workflow_dispatch` run with `target_gag=true`
+(Part D). Keeping it at `"ubuntu-latest"` also makes such a dispatch a safe
+no-op when the cluster is off.
 
 ---
 
@@ -1380,17 +1402,31 @@ kubectl wait --for=condition=Ready pod \
   -l app.kubernetes.io/name=actions-gateway-controller,app.kubernetes.io/instance=dogfood \
   -n gag-dogfood --timeout=3m
 
-# 3. Route CI jobs to GAG
+# 3. Set the GAG runner label (consulted only by opt-in dispatches below;
+#    does NOT route any push/PR CI on its own)
 gh variable set GAG_RUNNER \
   --body '["self-hosted","linux","gag-ci"]' \
   --repo "$REPO"
+
+# 4. Dispatch an isolated validation burst onto GAG (scoped — does not touch
+#    other PRs, Dependabot, or push CI). Repeat per burst; --ref picks the
+#    branch whose code to validate.
+gh workflow run unit-test.yml -f target_gag=true --ref main --repo "$REPO"
+gh workflow run integration-test.yml -f target_gag=true --ref main --repo "$REPO"
 ```
+
+To route **all** production CI to GAG (the Q224 milestone end-state, not a
+day-to-day turn-up), see "Route all CI to GAG" below.
 
 ### Stop dogfooding
 
+Opt-in dispatches are one-shot, so there is no standing CI route to revert —
+just wait for any in-flight dispatched run to finish (or cancel it), then scale
+down. Only the end-state global routing below needs the `GAG_RUNNER` reset.
+
 ```bash
-# 1. Route CI jobs back to GitHub-hosted (do this first — in-flight jobs
-#    running on GAG will be cancelled when nodes are removed)
+# 1. Reset the runner label so a later dispatch is a no-op, and undo any
+#    end-state global routing if it was enabled (see below)
 gh variable set GAG_RUNNER \
   --body '"ubuntu-latest"' \
   --repo "$REPO"
@@ -1401,6 +1437,23 @@ gcloud container clusters resize "$CLUSTER" \
 
 # Worker nodes drain and autoscale to 0 automatically within ~10 min.
 ```
+
+### Route all CI to GAG (milestone end-state)
+
+The opt-in dispatch above is the day-to-day validation path. The Q224 end goal
+— routing *every* push/PR run to GAG — is a deliberate, separate step because it
+reintroduces the whole-CI contention the opt-in model exists to avoid. It is
+**not** a `GAG_RUNNER` flip: under the opt-in expression the variable is ignored
+on push/PR events. Reaching the end-state means editing the migrated jobs'
+`runs-on` back to the unconditional form:
+
+```yaml
+runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+```
+
+with `GAG_RUNNER` set to `["self-hosted","linux","gag-ci"]`. Defer this until
+the milestone criteria in Q224/Q264 are met (P4-green, scale-set maturity,
+adoption signal).
 
 ---
 
@@ -1510,8 +1563,8 @@ or both at the same time.
 | Action | Script |
 |---|---|
 | One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood/setup.sh` |
-| Start cluster + route CI to GAG | `scripts/dogfood/start.sh` |
-| Stop cluster + route CI to GitHub-hosted | `scripts/dogfood/stop.sh` |
+| Start cluster + dispatch opt-in validation runs onto GAG | `scripts/dogfood/start.sh` |
+| Stop cluster + reset GAG runner label | `scripts/dogfood/stop.sh` |
 | Enable e2e on GAG | `scripts/dogfood/e2e-start.sh` |
 | Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood/e2e-setup.sh` |

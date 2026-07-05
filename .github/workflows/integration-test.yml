@@ -8,12 +8,26 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+  # Manual opt-in dispatch for GAG dogfood validation turn-ups (Q224/Q264). When
+  # target_gag=true the integration-test job routes to the self-hosted GAG runner
+  # (vars.GAG_RUNNER); on every other trigger — and on a dispatch with the input
+  # unset/false — it stays on ubuntu-latest. This scopes cluster contention to
+  # explicitly-requested validation bursts instead of every concurrent push, PR,
+  # or Dependabot run, which is what a global GAG_RUNNER flip would route.
+  workflow_dispatch:
+    inputs:
+      target_gag:
+        description: 'Route the integration-test job to the GAG dogfood cluster (vars.GAG_RUNNER)'
+        type: boolean
+        default: false
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
-# for a PR that is the unique refs/pull/<n>/merge.
+# for a PR that is the unique refs/pull/<n>/merge. A workflow_dispatch run gets
+# its own group (run id appended) so a validation turn-up never queues behind an
+# in-flight push run on the same ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -47,8 +61,8 @@ jobs:
 
   integration-test:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 15
     # ENVTEST_K8S_VERSION pins the Kubernetes API-server version the integration
     # tier tests against. Single-sourced here (the cache key + the `use` below both

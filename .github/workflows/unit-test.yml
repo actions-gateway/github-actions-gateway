@@ -10,12 +10,26 @@ on:
       - '**.md'
       - 'docs/**'
       - '!docs/STATUS.md'
+  # Manual opt-in dispatch for GAG dogfood validation turn-ups (Q224/Q264). When
+  # target_gag=true the migrated jobs route to the self-hosted GAG runner
+  # (vars.GAG_RUNNER); on every other trigger — and on a dispatch with the input
+  # unset/false — they stay on ubuntu-latest. This scopes cluster contention to
+  # explicitly-requested validation bursts instead of every concurrent push, PR,
+  # or Dependabot run, which is what a global GAG_RUNNER flip would route.
+  workflow_dispatch:
+    inputs:
+      target_gag:
+        description: 'Route the migrated jobs to the GAG dogfood cluster (vars.GAG_RUNNER)'
+        type: boolean
+        default: false
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
 # never cancelled (each is a distinct post-merge gate). Keyed on github.ref —
-# for a PR that is the unique refs/pull/<n>/merge.
+# for a PR that is the unique refs/pull/<n>/merge. A workflow_dispatch run gets
+# its own group (run id appended) so a validation turn-up never queues behind an
+# in-flight push run on the same ref.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -98,8 +112,8 @@ jobs:
   lint:
     needs: [changes]
     # gofmt/golangci need code; lint-status needs the STATUS.md filter.
-    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -136,8 +150,8 @@ jobs:
   # scripts/*.sh, recursive).
   shellcheck:
     needs: [changes]
-    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.scripts == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 5
     # Pin the shellcheck version rather than using ubuntu-latest's preinstalled
     # one: that version drifts with the runner image and its SC2015-style
@@ -185,8 +199,8 @@ jobs:
   # vendor sync lands — that's the intended signal (see scripts/vendor-check.sh).
   vendor-check:
     needs: [changes]
-    if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.vendor == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -212,8 +226,8 @@ jobs:
   # re-run, and vice versa.
   tidy-check:
     needs: [changes]
-    if: needs.changes.outputs.modules == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.modules == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -230,8 +244,8 @@ jobs:
 
   unit-test:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     # -race roughly doubles unit runtime vs. plain `go test`, so allow more
     # headroom than the lint job. The race detector needs cgo, which the
     # ubuntu-latest image's gcc satisfies out of the box.
@@ -258,8 +272,8 @@ jobs:
   # (uninstrumented) test run.
   coverage:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') }}
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
