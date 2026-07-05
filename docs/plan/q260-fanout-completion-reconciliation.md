@@ -570,6 +570,45 @@ the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** �
 SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota
 entirely), see [`dogfood-runner-rightsizing.md`](dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
 
+## 9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out *dispatch* (2026-07-05)
+
+The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood.md) re-route #8,
+`agc:e2e-63cddfc`, fresh `dogfood8`/`ci8`/`gag-ci8`, `maxListeners = 48`,
+`maxWorkers = 8`, non-preemptible `pd-standard` capacity, no mid-run restart) closes out
+the seam accounting from re-route #7:
+
+- **The broker-credential recycle collapse seam is GONE.** At the exact `maxListeners = 48`
+  that collapsed #7's pool to `online = 0`, the pool **held** for a 20-minute window with
+  **0** token-400 (`"Registration … was not found"`), **0** Q267 ride-out retries, **0**
+  fatal `deregister conflicting` exits, **0** `worker capacity full`. (Nuance: the token-400
+  *condition never arose* — 0 occurrences — because [Q266](../STATUS.md#Q266) parks losers
+  instead of recycling and the clean namespace removed the stale-record amplifier; so the
+  wide-pool hold is a property of the **Q266 + Q267 + clean-ns** stack, and Q267's retry
+  path stays covered by its offline repro, not exercised live.) **Q267: DONE.**
+
+- **Option A's accounting is correct — but fan-out *dispatch* starves distinct jobs.** The
+  AGC received **only 2 distinct planIDs**; both ran and concluded **green**. GitHub fanned
+  **one** planID out as ~6 sibling deliveries (all deduped + `completejob`-released,
+  correctly), but the **other 5 jobs' planIDs were never delivered** while GitHub marked
+  those jobs `in_progress` on the recycled stable-named runners — leaving them wedged
+  `in_progress` **indefinitely** (run-level status froze `completed/success` while the jobs
+  API stayed `in_progress` >1h). The online-idle pool **stalled at 3 sessions ≪ 48** because
+  a duplicate delivery does not grow the demand-driven 1:1 replacement pool. This **refines
+  §5's "reconcilable AGC-side"**: the *completion* accounting is reconcilable (a job that
+  *receives its planID* concludes green), but the fan-out *dispatch* stochastically starves
+  distinct jobs (#5 got 3/7 green, #8 got 2/7 with 5 wedged), so a **reliable** full-matrix
+  green is **not** achievable on the classic many-acquirers protocol.
+
+- **Consequence for Q264.** This is a real throughput/assignment **wall** — distinct from
+  the `completejob`-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's
+  server-side fan-out assignment against GAG's many-acquirers + stable-name single-use
+  ([Q114](../STATUS.md)) topology. It **strengthens the [Option E / Q264](q264-scale-set-protocol.md)
+  case** (one acquirer, one authoritative stream, no sibling deliveries, no per-name
+  recycle) — which eliminates the class by construction — though Q264 stays a deferred
+  v-next decision, not force-triggered. **Q224/Q242 stay open**, now blocked on the fan-out
+  dispatch topology, not on any recycle/capacity/tax seam (all resolved). Evidence: AGC
+  debug logs (`agc:e2e-63cddfc`), reruns `28734640377`/`28734640415` (burst `08:50:22Z`).
+
 ## Ruled-out, for the record
 
 - **#513 completejob-abandon (immediate loser `skipped`)** — live-tested worse than

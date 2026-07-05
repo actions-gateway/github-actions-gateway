@@ -1002,6 +1002,97 @@ gh api /repos/"$REPO"/actions/runners \
 > (the guard-blocked mass runner-record delete). Both are dispatcher-tracked
 > follow-ups, not blockers on Q267's merge.
 >
+> **Re-route #8 — Q267 live-reconfirmed: the wide pool HOLDS (collapse seam gone);
+> Q224 still NOT green, now cleanly isolated to GitHub's fan-out distinct-delivery
+> starvation (2026-07-05).** The definitive clean-namespace close-out. Built
+> `agc:e2e-63cddfc` (amd64 `sha256:ab7811e7…`, index `sha256:be26d80c…`, HEAD/#528 =
+> Option A default-on + Q266 loser-defer + Q267 token-400 ride-out), deployed via the
+> GMC `AGC_IMAGE` patch with **no** explicit `AGC_FANOUT_COMPLETION` env (shipped
+> default-on confirmed: `os.Getenv("AGC_FANOUT_COMPLETION") != "false"`; the AGC pod's
+> `imageID` matched the pushed digest). Ran from a **fresh tenant** — a new
+> `ActionsGateway/dogfood8` + `RunnerSet/ci8` with a **new label `gag-ci8`** so the
+> AGC's runner records are `ci8-N`, sidestepping the guard-un-cleanable stale `ci-N`
+> clutter that confounded #6/#7 (the old `dogfood`/`ci` CI gateway was deleted so its
+> AGC couldn't churn the stale records). Capacity: non-preemptible `workers-od`
+> **`e2-standard-4 ×4`, `pd-standard`** ([Q248](../STATUS.md#Q248), 6 nodes Ready
+> throughout, zero preemption), `default-pool` 2, worker CPU request 1. The Q265 lever
+> at its widest: **`maxListeners = 48`** (the exact config that collapsed to `online = 0`
+> in #7), `maxWorkers = 8`, `spec.logLevel: debug`. **No mid-run AGC restart** (the #7
+> confound). Fired the same ~7-job matrix as #5/#6/#7 — push-event reruns of
+> `28734640377` (unit-test, 6 gag jobs) + `28734640415` (integration) **on the exact
+> deployed commit `63cddfc`**, concurrency-immune — at `08:50:22Z`.
+>
+> **Q267 — the wide-pool collapse seam is GONE (live-confirmed).** Over a **20-minute
+> stable window** (`08:59`–`09:19`) the pool held steady and every collapse marker
+> stayed at **zero**: **0** `broker token exchange … "Registration … was not found"`
+> (400), **0** Q267 ride-out retries needed, **0** fatal `deregister conflicting …`
+> listener exits (re-route #6 had 41/38), **0** `worker capacity full`. re-route #7's
+> `maxListeners = 48` collapsed to `online = 0` **from exactly this seam**; #8 at the
+> same width does **not** collapse. **Honest nuance:** the token-400 condition did not
+> *arise* at all (0 occurrences), so Q267's ride-out *retry path* was not exercised
+> live — the churn that triggers it did not materialize, because [Q266](../STATUS.md#Q266)
+> parks deduped losers instead of recycling them (far fewer re-registrations) and the
+> clean namespace removed the stale-record amplifier. So the wide-pool hold is a
+> property of the combined **Q266 + Q267 + clean-namespace** stack; the retry logic
+> itself remains covered by the offline repro (`goroutine_q267_test.go`, #528). Either
+> way the load-bearing question — *does the wide pool still collapse?* — is answered
+> **no**.
+>
+> **Q260 / Q266 — all firing correctly.** `duplicate_delivery` dedup **5**, Option A
+> `completed a deduped sibling delivery via completejob` **5** (per-delivery), **0**
+> `create Secret … already exists`, **0** `create Pod … already exists`, **0**
+> `fanout_loser_recycle_deferred fallback_timeout`. The **2** logical jobs whose planIDs
+> the AGC actually received (`62d2c792`, `17c6c7dd`) ran to completion and concluded
+> **success** (`coverage`, `integration-test`).
+>
+> **Q224 — NOT green; the residual is now cleanly isolated.** Final tally: **2/7
+> success** (`coverage`, `integration-test`), **5/7 wedged `in_progress`
+> indefinitely** (`shellcheck`, `vendor-check`, `tidy-check`, `unit-test`, `lint`) — at
+> `10:02Z` (>1h) the run-level status had frozen at `completed/success` (aggregated from
+> `coverage`) while the **jobs API** still showed the 5 as `in_progress`, the exact
+> re-route #4 "runs-API aggregate froze, jobs never conclude" signature. **Mechanism
+> (from the AGC debug logs, decisive):** the AGC **only ever saw 2 distinct planIDs**.
+> GitHub's broker fanned **one** planID (`coverage`'s `62d2c792`) out as ~6 sibling
+> deliveries to the recycling listener slots; the AGC deduped every sibling on planID
+> and released each via Option A `completejob` — **correct**. But the **5 other jobs'
+> own planIDs were never delivered** to the AGC, while GitHub had marked those 5 jobs
+> `in_progress`/`started` on the recycled stable-named runners (`ci8-1` and `ci8-2` each
+> carried 3 job assignments). The **online-idle pool stalled at 3 active sessions — far
+> below `maxListeners = 48`** — because a fan-out *duplicate* delivery does not grow the
+> demand-driven 1:1 replacement pool the way a distinct acquisition does, so the pool
+> could never present enough distinct idle slots for GitHub to place the 5 distinct
+> jobs. Net: **distinct-job-delivery starvation + pool-growth stall** → indefinite
+> `in_progress` wedge.
+>
+> **Attribution (what it is and isn't).** It is **not** a recycle-churn seam —
+> Q259/Q266/Q267 markers were all **0** (no token-400, no fatal deregister, no
+> collapse). It is **not** the `completejob` tax — **0** `worker capacity full` (re-route
+> #6's finding holds). It is **not** an AGC code bug — deduping identical planIDs is
+> correct, and the 5 distinct planIDs simply never arrived. It **is** GitHub's
+> server-side fan-out job-assignment interacting with GAG's **many-acquirers +
+> stable-name single-use recycle** ([Q114](../STATUS.md)) topology — the class
+> [Option E / Q264](q264-scale-set-protocol.md) (one acquirer, one authoritative job
+> stream, **no** sibling deliveries and **no** per-name recycling) eliminates *by
+> construction*. Because the pool self-limited to **3 ≪ 48**, `maxListeners` width is
+> **not** the binding constraint (a moderate `maxListeners` reproduces the same
+> 3-session stall), so no re-run at a narrower width was warranted.
+>
+> **Verdict.** **Q267: DONE** (wide pool holds at `maxListeners = 48`; the #7 collapse
+> seam is gone). **Q224: NOT green — do not close.** The blocker is no longer any of the
+> now-fixed recycle seams (Q259/Q266/Q267) or capacity (Q248) or the `completejob` tax
+> (Q265) — it is the **fan-out distinct-delivery starvation** intrinsic to the
+> many-acquirers topology. This **refines** re-route #5's "reconcilable AGC-side": Option
+> A's *accounting* is correct (a job that *receives its planID* concludes green — 2/2
+> here), but the fan-out *dispatch* stochastically starves distinct jobs (#5 got 3/7,
+> #8 got 2/7 with 5 indefinitely wedged), so a *reliable* full-matrix green is **not**
+> achievable on the classic many-acquirers protocol. This is a real throughput/assignment
+> **wall** — distinct from the `completejob`-tax wall re-route #6 ruled out — and it
+> **strengthens the [Q264](q264-scale-set-protocol.md) (Option E, single-acquirer
+> scale-set) case**, which stays a deferred v-next decision. **Q224/Q242 stay open.**
+> Evidence: AGC debug logs (`agc:e2e-63cddfc`), reruns `28734640377`/`28734640415`
+> (burst `08:50:22Z`), 20-min stable time series `08:59`–`09:19Z` (online=3/idle=3,
+> all collapse markers 0), terminal job state `10:02Z`.
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
