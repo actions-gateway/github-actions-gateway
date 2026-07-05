@@ -609,6 +609,15 @@ the seam accounting from re-route #7:
   dispatch topology, not on any recycle/capacity/tax seam (all resolved). Evidence: AGC
   debug logs (`agc:e2e-63cddfc`), reruns `28734640377`/`28734640415` (burst `08:50:22Z`).
 
+- **AGC-side escape-hatch spike — none found (2026-07-05).** #8's "Option E is the
+  structural fix" conclusion was stress-tested for an AGC-side lever before the Q264
+  go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md):
+  unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is
+  runner-id churn), and a warm idle **listener** baseline (≠ [Q261](../STATUS.md#Q261) warm
+  *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated
+  reimplementation of the scale-set model. **Verdict: Option E ([Q264](q264-scale-set-protocol.md))
+  is the only reliable fix — #530 stands.**
+
 ## Ruled-out, for the record
 
 - **#513 completejob-abandon (immediate loser `skipped`)** — live-tested worse than

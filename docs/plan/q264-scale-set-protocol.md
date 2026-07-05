@@ -431,6 +431,23 @@ gate strengthens (§3 Reworked).
 
 ## 5. Load-bearing unknowns
 
+> **AGC-side escape-hatch checked — none found (2026-07-05).** Before committing
+> to this rewrite, the two proposed classic-protocol levers for re-route #8's
+> fan-out distinct-delivery starvation were tested against the mechanism and the
+> live evidence in a dedicated spike
+> ([`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md)).
+> Verdict: **no reliable AGC-side lever.** Unique/ephemeral runner names are a
+> non-lever (they add no distinct idle sessions and the #8 orphaning is runner-id
+> churn, not name reuse); a warm idle **listener** baseline (distinct from Q261's
+> warm *worker* pods) is at best a probabilistic green-*rate* stopgap whose very
+> efficacy is unconfirmed and whose favourable case converges on reimplementing
+> this scale-set capacity model on the fan-out-prone protocol. **Option E remains
+> the only structural fix** — the spike *strengthens* the case here without
+> force-triggering it. A live classic-dispatch probe that would settle the one
+> residual GitHub-side unknown (warm-wide classic: spread vs fan-out) is designed
+> and ready in that doc's §5 but was not run, as its outcome does not move this
+> go/no-go.
+
 Each is marked **probe** (a `cmd/probe` scenario answers it live), **decision**
 (the user/design owns it), or **✅ probed** (settled by Investigation E, §2a).
 
