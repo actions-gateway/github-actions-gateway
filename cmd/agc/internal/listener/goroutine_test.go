@@ -1544,6 +1544,9 @@ func newTestMetrics() *listener.Metrics {
 		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_abandoned_delivery_completions_total",
 		}, []string{"namespace", "runner_group", "outcome"}),
+		FanoutLoserRecycleDeferredTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_fanout_loser_recycle_deferred_total",
+		}, []string{"namespace", "runner_group", "outcome"}),
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_token_refreshes_total",
 		}, []string{"namespace"}),
@@ -1559,6 +1562,12 @@ func newTestMetrics() *listener.Metrics {
 		MessagePollErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_message_poll_errors_total",
 		}, []string{"namespace", "reason"}),
+		AgentRecyclesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_agent_recycles_total",
+		}, []string{"namespace", "runner_group", "trigger"}),
+		AgentRecycleErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "t_agent_recycle_errors_total",
+		}, []string{"namespace", "runner_group"}),
 	}
 }
 

@@ -502,6 +502,55 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
 
 Full live evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #6.
 
+## 8. Q266 — the slot-stranding recycle fix (2026-07-04)
+
+The seam attributed in §7 is now fixed AGC-side (Q266), offline-tested, awaiting a live
+re-benchmark.
+
+**The fix — defer the loser's recycle until its winner completes.** The loser's `422`
+cannot clear until the winner fans `completejob` out to that delivery (§5, Option A) — so
+recycling *before* the winner concludes is guaranteed to fail. Instead of recycling
+eagerly into that `422`, blowing the bounded backoff, and exiting the listener, a deduped
+loser now **holds its slot** and waits for the winner's conclusion signal, then recycles
+in place and resumes polling. The wait reuses the #512 claim registry: when a loser loses
+the `planID` claim to a still-running winner, `claimJob` hands back the claim's
+`WinnerConcluded` channel (closed exactly once when the winner's `Complete` runs), and the
+loser blocks on it before returning to the recycle path
+([`multiplexer.go`](../../cmd/agc/internal/listener/multiplexer.go),
+[`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)).
+
+Key properties:
+
+- **No net capacity regression.** The deduped-loser goroutines were *already* occupying
+  their listener slots as pollers; holding them blocked (rather than exiting) keeps the
+  slots they had. It counts as a poller = **false** while parked (`SetPolling(false)` is set
+  before the job), so a parked loser is never mistaken for available polling capacity.
+- **Worker capacity is freed.** A loser provisions no pod, so it **releases its `Admit`
+  worker-capacity reservation before parking** — otherwise F−1 losers would pin the tight
+  `maxWorkers` ceiling ([Q248](../STATUS.md)) with runners that do nothing.
+- **Bounded fallback for a stuck winner.** If the winner never concludes (crash/hang), the
+  wait is capped at `defaultLoserRecycleDeferTimeout` (16 min, just past GitHub's ~15-minute
+  unstarted-job timeout that force-releases the assignment), so a loser slot can never leak.
+- **Only under Option A.** The defer applies only when `AGC_FANOUT_COMPLETION` is enabled
+  (the default) — that is what clears the loser's `422`. With it off, losers fall back to the
+  eager-recycle path (documented as the worse opt-out).
+- **Observability.** Each defer increments
+  `actions_gateway_fanout_loser_recycle_deferred_total{outcome}` — `winner_concluded`
+  (normal), `fallback_timeout` (alert-worthy: stuck winners), `context_cancelled` (shutdown).
+
+**Regression test.**
+`TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes`
+([`goroutine_q266_test.go`](../../cmd/agc/internal/listener/goroutine_q266_test.go)) drives a
+sustained fan-out burst through the `brokertest` fan-out model with a `RecycleAgent` that
+`422`s until the winner concludes (the live mechanism), and asserts the pool **holds** —
+no loser strands+exits while the winner runs, and each loser recycles in place on the
+winner's conclusion. It FAILS against pre-Q266 behaviour (the eager losers exit) and needs
+no GKE turn-up.
+
+**Still open.** Q266 is code-complete offline; the clean live re-benchmark §7 called for
+(fresh namespace, moderate `maxListeners`, `maxWorkers` raised via an SSD-quota bump) is a
+separate task before [Q224](../STATUS.md) full-matrix green can be claimed.
+
 ## Ruled-out, for the record
 
 - **#513 completejob-abandon (immediate loser `skipped`)** — live-tested worse than
