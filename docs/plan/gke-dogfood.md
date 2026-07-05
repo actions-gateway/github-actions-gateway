@@ -788,6 +788,71 @@ gh api /repos/"$REPO"/actions/runners \
 > (`agc:e2e-4602429`), flag-on reruns `28694212343`/`28694212356` (burst `04:11:48Z`),
 > flag-off reruns `28693708850`/`28693708839` (burst `05:00:10Z`).
 >
+> **Re-route #5 — Q260 Option A CONFIRMED (GO); the fan-out accounting gap is closed
+> AGC-side (2026-07-04).** Deployed a fresh `ghcr.io/actions-gateway/agc:e2e-238b8df`
+> (amd64 digest `sha256:611632e7…`, includes #521 winner-driven Option A) via the GMC
+> `AGC_IMAGE` env patch, on the same re-route #4 stable capacity (non-preemptible
+> `workers-od` ×3 + default-pool 2, worker cpu req 1, 5 nodes Ready throughout). Enabled
+> Option A with **`AGC_EXTRA_AGC_FANOUT_COMPLETION=true`** on the GMC pod (GMC v1.1.0-rc.6
+> already run with `--allow-agc-extra-env`), which forwards `AGC_FANOUT_COMPLETION=true`
+> to the AGC Deployment — no GMC code change. `spec.logLevel: debug`. RunnerTemplate was
+> already pinned to `dogfood-runner:2.335.1` in the persisted CR (Q239 not regressed this
+> time — the toolchain image was present). Fired the same ~7-job matrix (unit-test
+> `28712011706` + integration `28712011697` reruns on sha `238b8df`, both green on
+> GitHub-hosted; **push** events, so concurrency-immune).
+>
+> **The one live-only unknown is answered YES.** At `16:37:07Z` a fanned-out job (planID
+> `357b6d9e`, winner on ci-0) whose winner completed **naturally** fanned `completejob`
+> out to **both** deduped siblings (jobIDs `34ad8db4` on ci-2, `f968c752` on ci-4) →
+> **both returned OK** (`completed a deduped sibling delivery via completejob`), **not**
+> "already resolved". GitHub **accepts** the completion of a sibling delivery that never
+> ran the job. Cumulative over the burst: **9 `completejob` OK, 0 failures, 2
+> already-resolved** (siblings whose winners were concurrency-cancelled — see confound),
+> across **13** deduped fan-out deliveries. Completion is **per-delivery, not
+> planID-scoped**: `completejob` on a sibling's own job ID resolved only that assignment,
+> and the winner's own delivery still carried the real workflow result reported by its
+> runner binary — so the pod-phase proxy on siblings **cannot** green a red workflow. The
+> secure-by-default concern is cleared; the flag is flipped **on by default**
+> (`AGC_FANOUT_COMPLETION`, opt out `=false`).
+>
+> **Jobs conclude green and stay green.** `coverage` (16:37:04Z), `unit-test` (`-race`,
+> 16:52:29Z) and `integration-test` all concluded **success** — the previously-wedged
+> class. Crucially `coverage` stayed `success` **past `16:47Z`**, beyond the ~15-minute
+> unstarted-timeout of its siblings (acquired ~16:31Z) — the exact point re-route #4's
+> winner-completed jobs were cancelled. **Option A prevented the cancel.**
+>
+> **Q259 recycle 422 clears per job.** The "runner … is still running a job and cannot be
+> deleted" churn (121 hits in the 6 min before the first winner completed) dropped ~12×
+> once winners began fanning `completejob`; the AGC pool recovered from a collapsed
+> **2 active sessions back to 5** and drained its backlog. The 422 is a **rolling
+> transient** — each fanned-out job's in-flight siblings 422 until that job's winner
+> completes and resolves them — not the permanent wedge of re-route #4.
+>
+> **Confound (handled).** A Dependabot rebase merge-train briefly shared the runner pool:
+> its `pull_request` CI runs (SHAs `81b0d30`/`d160ae3`/…) were concurrency-cancelled on
+> each rebase force-push, cancelling in ~4 min — **distinct** from the 15-min accounting
+> timeout, and (because the delivery is torn down first) the reason 2 sibling
+> `completejob`s hit "already resolved". Attempting to cancel the interfering runs was
+> denied (shared workload). The clean signal came from the **push**-event `238b8df`
+> reruns, which cannot be concurrency-cancelled. Their slower jobs (`vendor-check`,
+> `lint`, `tidy-check`, `shellcheck`) ran long on a cold Athens cache and, 38 min in,
+> were still **in_progress** — **not** the Q260 accounting cancel (which did not recur)
+> but a **separate worker-capacity limit**: with `maxWorkers=4` saturated the AGC logged
+> repeated `job admission rejected: worker capacity full` and those jobs cycled through
+> redeliveries without ever landing a worker slot. So the ~7-job matrix did **not**
+> cleanly sweep all-green in this window; a pristine full-matrix green is gated on
+> worker-capacity tuning (`maxWorkers`, Q248), which is **distinct from and beyond** the
+> Q260 accounting fix confirmed here.
+>
+> **Verdict: GO (design §5 point 4).** Resolving all sibling deliveries lets a fanned-out
+> job conclude green (3/3 that landed workers concluded — `coverage`, `unit-test`
+> `-race`, `integration-test`), `completejob` on live siblings returns OK (9/9, 0
+> failures), the job survives past the 15-minute timeout, and the Q259 422 clears per
+> job. The many-acquirers topology is reconcilable AGC-side; **Option E (Q264) is not
+> needed** and is demoted. **Q260 DONE; Q224's fan-out blocker cleared** (residual: the
+> `maxWorkers` capacity sweep, Q248). Evidence: AGC debug logs (`agc:e2e-238b8df`),
+> reruns `28712011706`/`28712011697` (burst `16:24:00Z`), fan-out completion `16:37:07Z`.
+>
 > **Secondary observation — dogfood RunnerTemplate reverted to the bare upstream
 > image (Q239 regression).** The `shellcheck` job failed `make: command not found`
 > because the CI `RunnerTemplate` runner container is image-less, so the AGC gap-fills
