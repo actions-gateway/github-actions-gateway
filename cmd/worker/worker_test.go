@@ -35,6 +35,95 @@ func withSystemCABundleCandidates(t *testing.T, paths []string) {
 	t.Cleanup(func() { systemCABundleCandidates = orig })
 }
 
+func TestReadJITBlob_Valid(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, jitConfigFile), []byte("  base64blob==\n"), 0o600))
+	blob, err := readJITBlob(dir)
+	require.NoError(t, err)
+	assert.Equal(t, "base64blob==", blob, "the blob is trimmed of surrounding whitespace")
+}
+
+func TestReadJITBlob_MissingIsError(t *testing.T) {
+	_, err := readJITBlob(t.TempDir())
+	require.Error(t, err, "a scale-set worker cannot register without a JIT config")
+}
+
+func TestReadJITBlob_EmptyIsError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, jitConfigFile), []byte("   \n"), 0o600))
+	_, err := readJITBlob(dir)
+	require.Error(t, err)
+}
+
+// TestRunScaleSet_ExecsRunShWithJITConfig verifies the scale-set worker mode execs
+// the runner image's run.sh with --jitconfig and the staged blob, from the runner
+// home directory — the probed interface (§2b-4). A fake run.sh records its argv.
+func TestRunScaleSet_ExecsRunShWithJITConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("run.sh exec test is POSIX-only")
+	}
+	runnerHome := t.TempDir()
+	payloadDir := t.TempDir()
+
+	// A fake run.sh that records its arguments (one per line) into args.txt in cwd.
+	script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > args.txt\nexit 0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(runnerHome, runnerRunScript), []byte(script), 0o700)) //nolint:gosec // test fixture must be executable
+
+	const blob = "eyJydW5uZXIiOnt9fQ==" // arbitrary base64 blob
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte(blob), 0o600))
+
+	// No PROXY_CA_CERT_PATH set → proxy-CA trust install is a tolerated no-op.
+	t.Setenv("PROXY_CA_CERT_PATH", "")
+
+	require.NoError(t, runScaleSet(payloadDir, runnerHome))
+
+	got, err := os.ReadFile(filepath.Join(runnerHome, "args.txt"))
+	require.NoError(t, err, "run.sh must have executed in the runner home directory")
+	lines := strings.Split(strings.TrimSpace(string(got)), "\n")
+	require.Equal(t, []string{jitConfigFlag, blob}, lines,
+		"run.sh must receive exactly --jitconfig <blob>")
+}
+
+// TestRunScaleSet_MissingBlobFailsFast verifies runScaleSet errors before exec when no
+// JIT blob is staged (rather than launching a runner that cannot register).
+func TestRunScaleSet_MissingBlobFailsFast(t *testing.T) {
+	runnerHome := t.TempDir()
+	require.Error(t, runScaleSet(t.TempDir(), runnerHome))
+}
+
+// TestRunScaleSet_InstallsProxyCATrust verifies the wrapper's one retained duty in
+// scale-set mode: it installs the per-tenant egress-proxy CA trust and passes
+// SSL_CERT_FILE into the run.sh environment so the runner's own TLS to GitHub through
+// the proxy is trusted.
+func TestRunScaleSet_InstallsProxyCATrust(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("run.sh exec test is POSIX-only")
+	}
+	staging := t.TempDir()
+	systemBundle := filepath.Join(staging, "ca-certificates.crt")
+	require.NoError(t, os.WriteFile(systemBundle, []byte("-----BEGIN CERTIFICATE-----\nSYS\n-----END CERTIFICATE-----\n"), 0o644)) //nolint:gosec // G306: test fixture public CA bundle
+	withSystemCABundleCandidates(t, []string{systemBundle})
+
+	caPath := filepath.Join(staging, "tls.crt")
+	require.NoError(t, os.WriteFile(caPath, []byte("-----BEGIN CERTIFICATE-----\nPROXY\n-----END CERTIFICATE-----\n"), 0o600))
+	t.Setenv("PROXY_CA_CERT_PATH", caPath)
+
+	runnerHome := t.TempDir()
+	payloadDir := t.TempDir()
+	// A fake run.sh that records its SSL_CERT_FILE env into env.txt in cwd.
+	script := "#!/bin/sh\nprintf 'SSL_CERT_FILE=%s\\n' \"$SSL_CERT_FILE\" > env.txt\nexit 0\n"
+	require.NoError(t, os.WriteFile(filepath.Join(runnerHome, runnerRunScript), []byte(script), 0o700)) //nolint:gosec // test fixture must be executable
+	require.NoError(t, os.WriteFile(filepath.Join(payloadDir, jitConfigFile), []byte("blob=="), 0o600))
+
+	require.NoError(t, runScaleSet(payloadDir, runnerHome))
+
+	got, err := os.ReadFile(filepath.Join(runnerHome, "env.txt"))
+	require.NoError(t, err)
+	want := "SSL_CERT_FILE=" + filepath.Join(runnerHome, proxyCABundleFile)
+	assert.Equal(t, want, strings.TrimSpace(string(got)),
+		"run.sh must inherit the combined proxy-CA bundle via SSL_CERT_FILE")
+}
+
 func TestWrapper_ReadPayloadFromMount(t *testing.T) {
 	dir := t.TempDir()
 	want := []byte(`{"run_id":42,"variables":{}}`)

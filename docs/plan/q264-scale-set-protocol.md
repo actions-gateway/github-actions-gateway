@@ -4,10 +4,12 @@
 **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
 scenarios, run 2026-07-04**)**, and **P2 (the `scaleset/` client package + its
 `scalesettest` fake, §6)** are DONE; **P3 (AGC wiring behind the
-`acquisitionProtocol` field) is IN PROGRESS** — sub-PRs (a) (the API field +
-codegen + CEL + GMC webhook) and (b) (the standalone `scalesetlistener` engine +
-the fan-out-free acceptance twin) are landed, both default `Classic`; (c) the
-reconciler wiring + worker `run.sh --jitconfig` path follows (§6-P3). The classic AGC acquisition path is
+`acquisitionProtocol` field) is IN PROGRESS** — sub-PRs (a) (API field + CEL + GMC
+webhook), (b) (the standalone `scalesetlistener` engine + the fan-out-free
+acceptance twin), and (c) (the worker `run.sh --jitconfig` mode + provisioner JIT
+staging) are landed, all default `Classic`; (d) the RunnerSet-controller wiring
+that makes `ScaleSet` live behind the field + its envtest is the remaining step
+(§6-P3). The classic AGC acquisition path is
 **still unchanged** — P2 is a standalone leaf module with no AGC wiring. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
@@ -716,8 +718,24 @@ parallel implementation behind a flag, then cutover.
     double-provision, the GHES acquire path, and **the fan-out-free acceptance
     twin** — the scale-set analog of `TestAGC_Q260_FanoutCompletionReconciles`:
     N concurrent jobs, every one concludes `completed`, zero dedup.
-  - **(c) reconciler wiring + worker `run.sh --jitconfig` path + provisioner JIT
-    staging + envtest** — after (b).
+  - **(c) worker path + provisioner staging — ✅ DONE.** The entrypoint wrapper
+    ([`cmd/worker`](../../cmd/worker/main.go)) gains a `WORKER_MODE=scaleset` mode:
+    no payload handoff — the pod runs the full runner via `run.sh --jitconfig`,
+    which pulls and completes its own job (§2.4); the wrapper keeps only its
+    proxy-CA trust duty (the pipes handoff + Runner.Worker spawn do not run).
+    `Provisioner.ProvisionScaleSetWorker` stages a JIT-config Secret (the blob, no
+    acquired payload) and creates a scale-set-mode worker pod, fire-and-forget and
+    idempotent per jobID. Not yet called by any reconciler (default Classic
+    unchanged). Unit tests: the wrapper's run.sh exec + proxy-CA trust, and the
+    provisioner's JIT Secret staging + scale-set pod mode.
+  - **(d) RunnerSet-controller wiring + envtest** — the remaining step: branch the
+    AGC RunnerSet reconciler on `spec.acquisitionProtocol == ScaleSet` to build a
+    per-set `scaleset.Client` + `scalesetlistener` (Provision →
+    `ProvisionScaleSetWorker`, Capacity → the maxWorkers/priorityTiers ceiling)
+    instead of the classic pool/multiplexer, with the session lifecycle tied to the
+    RunnerSet; plus the envtest for provision-on-`JobAssigned` end to end. This is
+    the step that makes `ScaleSet` live behind the field; everything before it is
+    dead code preserving default Classic.
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate
