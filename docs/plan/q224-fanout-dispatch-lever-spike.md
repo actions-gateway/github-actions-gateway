@@ -159,7 +159,7 @@ where the two are hard to separate. But the existing evidence **leans toward (b)
   proof: the 5 could in principle have been withheld by an unrelated per-group
   serialization — which is exactly what the §5 probe would settle.)*
 - **The scale-set 1:1 result does *not* transfer.** Investigation E2
-  ([q264 §2b](q264-scale-set-protocol.md#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner))
+  ([q264 §2b](q264-scale-set-protocol.md#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04))
   showed GitHub delivering distinct jobs 1:1 — but on the **auto-assign scale-set
   backend** (server pushes assignments up to a capacity header), a *different
   dispatch algorithm* from classic offer-to-many long-poll. It proves GitHub *can*
