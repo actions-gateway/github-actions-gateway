@@ -393,6 +393,115 @@ non-green result is attributable to accounting, not the runner image
 
 ---
 
+## 7. Q265 — fan-out throughput benchmark (2026-07-05): tax wall or tuning?
+
+Q260 proved Option A's *accounting* is correct (§5, re-route #5). Q265 asks the
+*throughput* question that gates [Q224](gke-dogfood.md) and the Option A-vs-Option E
+([Q264](q264-scale-set-protocol.md)) fork: on a warm, right-sized pool with
+`maxListeners ≫ maxWorkers × fan-out-width` (so listener supply is not the bottleneck),
+does the busy-worker pool **hold near `maxWorkers`** under sustained fan-out burst
+(→ Option A sufficient; re-route #5's "2/8" was tuning), or does the completion tax
+**serialize throughput and collapse the pool** (→ hard wall; revive Q264)?
+
+**Verdict up front: the completion tax is NOT the wall — but a *clean* "holds at
+maxWorkers" measurement could not be obtained on the dogfood cluster, so this is a
+bounded result, not a full clearance.** Across two sustained bursts
+(`maxListeners` = 48 and 16, `maxWorkers` = 4, non-preemptible `workers-od` ×3) the
+active-session pool collapsed to ~1 busy worker **both** times — but the collapse was
+driven by the **agent-recycle registration-conflict seam** (Q259/Q114), **not** the
+`completejob` tax: the worker-capacity ceiling (`job admission rejected: worker capacity
+full`) was **never reached** (0 admission rejections in either run), so the completion
+tax was **never the binding constraint**. There is therefore **no evidence of an Option A
+completion-tax throughput wall**, and **Q264 revival is not triggered by the tax**. The
+residual throughput blocker is a **fixable AGC recycle-robustness gap**, not an
+architectural wall.
+
+### Method
+
+- HEAD `cacd4c6` (#523, Option A default-on). Built `agc:e2e-cacd4c6` (amd64,
+  `sha256:ec25509…`), deployed via the GMC `AGC_IMAGE` patch with the explicit
+  `AGC_FANOUT_COMPLETION` env **removed** — verifying the *shipped* default-on (confirmed
+  live: warm-up 5×, run 2 2× `completed a deduped sibling delivery via completejob`).
+- Capacity = the re-route #4/#5 stable pool: non-preemptible `workers-od`
+  (`e2-standard-4` ×3, on-demand), default-pool 2, spot `workers` pinned to 0/0 (no
+  preemption confound). SSD `3×100 + 2×50 + 20 = 420 < 500`.
+- The Q265 lever: `maxListeners` set **far above** `maxWorkers × fan-out-width` (48, then
+  16; fan-out width ≈ 6 per re-route #4) so listener supply could not bottleneck.
+  `maxWorkers = 4` (SSD-bounded — see caveat).
+- Load: the same ~7-job concurrent matrix as re-route #5 (`unit-test.yml` 6 jobs +
+  `integration-test.yml`), push-event reruns (concurrency-immune).
+- Sampled every 15 s: online runners (≈ active listener sessions), busy runners,
+  worker-pod occupancy (`actions-gateway/plan-id`), + AGC debug-log marker counts.
+
+### Results
+
+| Run | `maxListeners` | peak online (sessions) | peak busy workers | worker-capacity rejections | deregister-conflict fatal seam | `completejob` (Option A) |
+|---|---|---|---|---|---|---|
+| 1 | 48 | 2 | **1** | **0** | 41 | 0 (no winner completed) |
+| 2 | 16 | 3 | **1** | **0** | 38 | 2 |
+
+Both bursts collapsed the active-session pool to 0 within ~1–2 min and never provisioned
+more than 1 concurrent worker; **neither** reached the `maxWorkers = 4` ceiling. The
+dominant signal was recycle churn: `recycle blocked by still-running consumed runner;
+backing off and retrying` (the Q259 bounded-backoff path) followed by
+`deregister conflicting runner record "ci-N": runner is still running a job and cannot be
+deleted` → **fatal listener exit**.
+
+### Mechanism (attributed) — fan-out *slot-stranding*, not `completejob` cost
+
+1. GitHub fans one job to F ≈ 6 sibling deliveries; 1 wins and provisions a worker (job
+   runs for **minutes**), F−1 are deduped losers.
+2. A deduped loser immediately tries to **recycle** its single-use slot, but GitHub still
+   considers that runner **assigned to the job** (the Q259 422) until the winner completes
+   **and** Option A fans `completejob` to release the sibling.
+3. So each loser slot is 422-blocked for the **winner's entire job runtime**, which
+   **exceeds** the bounded recycle backoff (`registerAgentWithBusyRetry`, tens of seconds,
+   [`pool.go:382`](../../cmd/agc/internal/agentpool/pool.go)). The backoff **exhausts**,
+   the recycle fails, and the listener goroutine **exits**
+   ([`pool.go:344`](../../cmd/agc/internal/agentpool/pool.go)).
+4. Each fanned-out job thus strands and eventually loses F−1 listener slots; under
+   sustained burst this collapses the pool faster than winners complete.
+
+This is a **classic-protocol topology cost** (single-use recycle Q114 + many-acquirers
+fan-out) that Option A's *accounting* fix does not touch. It is **fixable AGC-side** (do
+not eagerly recycle a deduped loser until its winner completes; or hold the slot across
+the winner's runtime instead of exiting on backoff exhaustion) — a bounded fix, tracked as
+a new Queue item. It is **not** a `completejob`-tax wall and does **not** force Option E —
+though Option E (scale-set, one acquirer, **no** agent recycle) would eliminate this seam
+*and* the completion tax by construction (a modest long-term point in E's favour, not a
+forcing one).
+
+### Honest bounds — the measurement is confounded + capacity-bounded
+
+A clean "pool holds at maxWorkers" measurement was **not** achieved:
+
+- **SSD quota caps `maxWorkers` ≈ 4** (500 GB `SSD_TOTAL_GB`; `pd-balanced` disks count
+  against it). A 4-worker pool cannot prove no-wall at a *wide* pool; the tax, even shown
+  non-binding here, is untested at `maxWorkers ≫ 4`.
+- **Stale runner-record clutter** (47 offline `ci-*` records — prior re-routes + this
+  session's `maxListeners` changes) inflates the 409/422 recycle-conflict rate. Cleaning
+  it (mass runner-record delete) was **denied by the write-safety guard** on the shared
+  repo, so a clean-namespace run was impossible in-session. re-route #5 (which *recovered*
+  to 5 sessions) ran on a cleaner namespace, `maxListeners = 8`, longer jobs — consistent
+  with the collapse being *provoked* (not purely inherent) by clutter + over-cranked
+  `maxListeners` + short/failing jobs.
+- So the two live possibilities — (a) clutter-only artifact, Option A sufficient with
+  namespace hygiene; (b) a fundamental slot-stranding gap needing the recycle fix —
+  **cannot be distinguished without a clean run**. **Both** agree the tax is not the wall.
+
+### Recommendation
+
+- **Q264 stays DEFERRED.** No completion-tax wall observed; the tax is never the binding
+  constraint. Do not start the Option E rewrite on this evidence.
+- **Fix the recycle slot-stranding seam** (new Queue item, Q259/Q114 family), then
+  **re-benchmark on a fresh, clean dogfood namespace** at moderate `maxListeners` (≈ 8–16),
+  with `maxWorkers` raised as far as an SSD-quota increase allows, to obtain the clean
+  "holds at maxWorkers" measurement Q265 set out to get.
+- **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above
+  and (b) worker capacity ([Q248](../STATUS.md)) — both tuning/fix, not architectural.
+
+Full live evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #6.
+
 ## Ruled-out, for the record
 
 - **#513 completejob-abandon (immediate loser `skipped`)** — live-tested worse than

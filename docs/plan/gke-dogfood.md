@@ -863,6 +863,49 @@ gh api /repos/"$REPO"/actions/runners \
 > `RunnerTemplate` `workerImage`) so `make`-based jobs can pass. Not a new bug — the
 > cluster lost the Q239 config across a re-setup.
 >
+> **Re-route #6 — Q265 fan-out throughput benchmark: the completion tax is NOT the wall
+> (2026-07-05).** Built `agc:e2e-cacd4c6` (amd64 `sha256:ec25509…`, HEAD/#523, Option A
+> default-on), deployed via the GMC `AGC_IMAGE` patch with the explicit
+> `AGC_FANOUT_COMPLETION` env **removed** (verifying the *shipped* default — confirmed
+> live). Same re-route #4/#5 stable capacity (non-preemptible `workers-od` ×3 +
+> default-pool 2; spot `workers` pinned 0/0 to remove the preemption confound). The Q265
+> lever: `maxListeners` set **far above** `maxWorkers × fan-out-width` (48, then 16;
+> fan-out ≈ 6) so listener supply could not bottleneck; `maxWorkers = 4` (SSD-bounded).
+> Fired the same ~7-job matrix, sampling online runners (≈ active sessions), busy workers,
+> worker-pod occupancy, and AGC debug markers every 15 s.
+>
+> **Both bursts collapsed to ~1 busy worker — but NOT via the tax.** Run 1 (`maxListeners`
+> 48): peak 2 online / **1** worker. Run 2 (`maxListeners` 16): peak 3 online / **1**
+> worker. In **neither** run did the pool reach the `maxWorkers = 4` ceiling —
+> `job admission rejected: worker capacity full` fired **0** times, so the `completejob`
+> tax was **never the binding constraint**. The dominant signal was the **agent-recycle
+> registration-conflict seam** (Q259/Q114): `recycle blocked by still-running consumed
+> runner; backing off and retrying` then
+> `deregister conflicting runner record "ci-N": runner is still running a job and cannot be
+> deleted` → **fatal listener exit** (41 / 38 occurrences). Option A itself worked (warm-up
+> 5×, run 2 2× `completed a deduped sibling delivery via completejob`, per-delivery).
+>
+> **Mechanism (fan-out slot-stranding, not `completejob` cost):** a deduped loser's
+> single-use slot is 422-blocked ("assigned to the job") for the **winner's entire job
+> runtime** (minutes), which exceeds the bounded recycle backoff (tens of seconds) — the
+> backoff exhausts, the recycle fails, the listener exits, and each fanned-out job loses
+> F−1 slots faster than winners complete. A classic-protocol topology cost (single-use
+> recycle + many-acquirers fan-out), fixable AGC-side; **not** a tax wall.
+>
+> **Honest bounds:** SSD quota caps `maxWorkers` ≈ 4 (can't prove no-wall at a *wide*
+> pool), and 47 stale offline `ci-*` runner records (prior re-routes + this session's
+> `maxListeners` changes) inflated the 409/422 conflict rate — cleaning them (mass
+> runner-record delete) was **denied by the write-safety guard**, so a clean-namespace run
+> was impossible in-session. re-route #5 (cleaner namespace, `maxListeners` 8, longer jobs)
+> *recovered* to 5 sessions — consistent with the collapse being *provoked* by clutter +
+> over-cranked `maxListeners` + short jobs, not purely inherent. **Verdict:** no completion-
+> tax wall → **Q264 stays deferred**; fix the recycle slot-stranding seam (new Queue item)
+> and re-benchmark on a fresh clean namespace before any Option E reconsideration. Full
+> analysis + method + results table:
+> [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md) §7.
+> Evidence: AGC debug logs (`agc:e2e-cacd4c6`), reruns `28726094554`/`28726094563`
+> (run 1, `02:52Z`) and `28725801848`/`28725801860` (run 2, `03:00Z`).
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
