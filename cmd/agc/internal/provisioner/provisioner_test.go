@@ -292,6 +292,77 @@ func TestProvisioner_ForwardsJITConfigIntoSecret(t *testing.T) {
 	require.NoError(t, <-done)
 }
 
+// fakeTarget is a minimal provisioner.Target for exercising ProvisionScaleSetWorker
+// directly, without the controller-owned RunnerGroup/RunnerSet target adapters.
+type fakeTarget struct {
+	key    client.ObjectKey
+	labels map[string]string
+	spec   *provisioner.ResolvedSpec
+}
+
+func (f *fakeTarget) Key() client.ObjectKey { return f.key }
+func (f *fakeTarget) OwnerRef() metav1.OwnerReference {
+	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet", Name: f.key.Name, UID: types.UID("uid-" + f.key.Name)}
+}
+func (f *fakeTarget) PodOwnerLabels() map[string]string     { return f.labels }
+func (f *fakeTarget) Ceiling(context.Context) (int32, bool) { return 0, false }
+func (f *fakeTarget) RecordEvent(_, _, _, _ string)         {}
+func (f *fakeTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, error) {
+	return f.spec, nil
+}
+
+// TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode covers the Q264 scale-set
+// provision path: a JIT-config Secret (the blob, no acquired payload) and a worker pod
+// switched into scale-set mode (WORKER_MODE=scaleset → run.sh --jitconfig). It is
+// fire-and-forget (no wait for completion) and idempotent per jobID.
+func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	target := &fakeTarget{
+		key:    client.ObjectKey{Namespace: "team-a", Name: "gpu"},
+		labels: map[string]string{"actions-gateway.com/runner-set": "gpu"},
+		spec:   &provisioner.ResolvedSpec{WorkerImage: "runner:test"},
+	}
+	const jit = "eyJydW5uZXIiOnt9fQ=="
+
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-1", jit))
+
+	// The Secret carries the JIT blob and NO acquired payload.
+	secret := findSecret(ctx, t, fc, "team-a", "job-ss-")
+	require.NotNil(t, secret, "a scale-set job Secret must be staged")
+	assert.Equal(t, []byte(jit), secret.Data["jitconfig"], "the JIT blob is staged under 'jitconfig'")
+	_, hasPayload := secret.Data["payload"]
+	assert.False(t, hasPayload, "a scale-set worker Secret carries no acquired payload")
+
+	// The pod runs in scale-set mode and mounts its Secret.
+	pod := findPod(ctx, t, fc, "team-a")
+	require.NotNil(t, pod)
+	var runner *corev1.Container
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == "runner" {
+			runner = &pod.Spec.Containers[i]
+			break
+		}
+	}
+	require.NotNil(t, runner, "runner container must exist")
+	var mode string
+	for _, e := range runner.Env {
+		if e.Name == "WORKER_MODE" {
+			mode = e.Value
+		}
+	}
+	assert.Equal(t, "scaleset", mode, "the worker must run in scale-set mode (run.sh --jitconfig)")
+
+	// Idempotent: replaying the same job is a no-op (deterministic names → AlreadyExists).
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-1", jit))
+
+	// A missing JIT config is rejected before any object is created.
+	require.Error(t, p.ProvisionScaleSetWorker(ctx, target, "job-uuid-2", ""))
+}
+
 // TestProvisioner_OmitsJITKeyWhenEmpty pins the contract that an empty
 // jitConfig string does not create a Secret entry. Stub-registrar agents
 // (used by integration tests against fakegithub) produce no JIT blob, and

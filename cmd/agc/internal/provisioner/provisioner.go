@@ -151,6 +151,13 @@ const (
 	jitConfigKey    = "jitconfig"
 	runnerContainer = "runner"
 
+	// workerModeEnvVar / workerModeScaleSetValue switch the worker wrapper into the
+	// Q264 scale-set path: instead of the classic pipes handoff to Runner.Worker, the
+	// pod runs the full runner (run.sh --jitconfig) and pulls its own job (§2.4). Set
+	// only by ProvisionScaleSetWorker; unset for classic sets (default behaviour).
+	workerModeEnvVar        = "WORKER_MODE"
+	workerModeScaleSetValue = "scaleset"
+
 	// wrapperVolumeName / wrapperMountDir / wrapperInitName describe how the GAG
 	// worker wrapper is injected into a worker pod (Q235) so the runner container
 	// can be the unmodified upstream actions-runner image. The wrapper binary lands
@@ -682,6 +689,91 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	return result, nil
 }
 
+// ProvisionScaleSetWorker stages a JIT-config Secret and creates a
+// run.sh --jitconfig worker pod for one scale-set-assigned job, then returns without
+// waiting for the job (fire-and-forget). Unlike the classic provision(), the runner
+// pulls and completes its OWN job through its own broker session (§2.4), so the AGC
+// neither hands off an acquired payload nor blocks on completion — the scale-set
+// listener observes the terminal JobCompleted on its queue instead.
+//
+// It is idempotent per jobID: the Secret and pod are named deterministically from the
+// jobID, so a job replayed to a re-created session is a no-op (an AlreadyExists is
+// treated as success). Capacity is already gated upstream by the listener's advertised
+// X-ScaleSetMaxCapacity, so a concurrency-ceiling hit here is a narrow race the
+// listener retries on its next poll.
+//
+// Cleanup: the Secret and pod are owned by the RunnerSet (Target.OwnerRef), so they
+// cascade-GC when the set is deleted; the reconciler's reaper deletes the terminal pod
+// per spec.completedPodTTL. Per-job Secret cleanup in steady state is the caller's
+// responsibility (the reconciler wiring that drives this method) — this method only
+// creates.
+func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, jobID, jitConfig string) error {
+	if jitConfig == "" {
+		return fmt.Errorf("provisioner: scale-set worker for job %q has no JIT config", jobID)
+	}
+	key := target.Key()
+	log := p.logForKey(key)
+
+	spec, err := target.Resolve(ctx)
+	if err != nil {
+		log.Warn("provisioning spec unresolved; not creating a scale-set worker", "error", err)
+		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
+	}
+
+	safeJob := safeName(jobID)
+	secretName := "job-ss-" + safeJob
+	podName := fmt.Sprintf("runner-%s-%s", safeName(key.Name), safeJob)
+	if len(podName) > 63 { // Kubernetes DNS label limit
+		podName = podName[:63]
+	}
+	log = log.With("podName", podName, "jobID", jobID)
+
+	workerVersion := imageVersion(p.resolveWorkerImage(spec))
+
+	// 1. Stage the JIT-config Secret. There is no acquired payload — the runner pulls
+	//    its own job — so payload is nil and only the jitconfig blob is staged.
+	secret := p.buildSecret(target, secretName, jobID, workerVersion, nil, jitConfig)
+	if err := p.Client.Create(ctx, secret); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, err)
+	}
+
+	// 2. Priority-tier selection (capacity is gated upstream; a held result is a race).
+	count, err := p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
+	if err != nil {
+		return fmt.Errorf("provisioner: count active pods: %w", err)
+	}
+	priorityClass, held := ceilingCheck(spec, count)
+	if held {
+		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods); listener will retry", count)
+	}
+
+	// 3. Build the pod and switch the wrapper into scale-set mode (run.sh --jitconfig).
+	pod := p.buildPod(target, spec, podName, secretName, priorityClass, jobMeta{})
+	setScaleSetWorkerMode(pod)
+
+	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil // idempotent: a replayed job already has its worker pod
+		}
+		return fmt.Errorf("provisioner: create scale-set Pod %s: %w", podName, err)
+	}
+	log.Debug("scale-set worker pod created", "priorityClass", priorityClass)
+	return nil
+}
+
+// setScaleSetWorkerMode sets WORKER_MODE=scaleset on the runner container so the
+// injected wrapper runs the full runner (run.sh --jitconfig) rather than the classic
+// Runner.Worker pipes handoff (§2.4). A no-op if no runner container is present.
+func setScaleSetWorkerMode(pod *corev1.Pod) {
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == runnerContainer {
+			pod.Spec.Containers[i].Env = mergeEnvOverride(pod.Spec.Containers[i].Env,
+				[]corev1.EnvVar{{Name: workerModeEnvVar, Value: workerModeScaleSetValue}})
+			return
+		}
+	}
+}
+
 // traceStep runs fn inside a child span named name (parented to the span carried
 // by ctx), recording and stamping any error fn returns and always ending the
 // span. It centralises the start/record/end boilerplate for the provision
@@ -1046,8 +1138,13 @@ func imageVersion(image string) string {
 
 func (p *Provisioner) buildSecret(target Target, name, planID, version string, payload []byte, jitConfig string) *corev1.Secret {
 	data := map[string][]byte{
-		payloadKey: payload,
-		planIDKey:  []byte(planID),
+		planIDKey: []byte(planID),
+	}
+	// The classic path always carries the acquired AcquireJob payload; the scale-set
+	// path (ProvisionScaleSetWorker) carries none — the runner pulls its own job — so
+	// the key is omitted rather than stored empty.
+	if len(payload) > 0 {
+		data[payloadKey] = payload
 	}
 	if jitConfig != "" {
 		data[jitConfigKey] = []byte(jitConfig)
