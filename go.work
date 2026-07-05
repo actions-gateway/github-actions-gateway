@@ -9,5 +9,6 @@ use (
 	./cmd/proxy // Milestone 4
 	./cmd/worker
 	./githubapp
+	./scaleset // Q264: GAG-owned runner-scale-set protocol client (Option E)
 	./test/fakegithub // Stub GitHub broker used by Tier B e2e tests
 )
