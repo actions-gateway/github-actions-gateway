@@ -21,7 +21,17 @@ import (
 // TestMain runs the package tests under goleak so a goroutine leaked by run()
 // — the payload-writer and output-drain goroutines it spawns must both be
 // joined before run() returns — fails the suite instead of leaking silently.
+//
+// It also clears WORKER_MODE for the whole package so the ambient environment
+// can never change a test's outcome (Q269). The AGC provisioner sets
+// WORKER_MODE=scaleset on ScaleSet-protocol runner pods; when GAG's own CI runs
+// on such a pod the job's `go test` process inherits it, which would flip every
+// run()-based classic-path test into the scale-set branch and fail its
+// assertions. The scale-set tests exercise runScaleSet directly rather than via
+// run(), so none of them relies on an ambient WORKER_MODE; a test that intends a
+// specific mode sets it with t.Setenv itself.
 func TestMain(m *testing.M) {
+	_ = os.Unsetenv(workerModeEnv)
 	goleak.VerifyTestMain(m)
 }
 
