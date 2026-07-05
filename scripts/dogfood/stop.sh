@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Take the dogfood GKE cluster offline and route CI jobs back to GitHub-hosted.
-# See docs/plan/gke-dogfood.md Part D.
+# Take the dogfood GKE cluster offline and reset the GAG runner label. Opt-in
+# dispatches are one-shot, so there is no standing push/PR CI route to revert;
+# resetting the label just makes a later dispatch a safe no-op (and undoes any
+# end-state global routing). See docs/plan/gke-dogfood.md Part D.
 #
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
@@ -22,7 +24,7 @@ main() {
 	require_cmd gcloud "https://cloud.google.com/sdk/docs/install"
 	require_cmd gh "https://cli.github.com/"
 
-	echo "Routing CI jobs back to GitHub-hosted runners..."
+	echo "Resetting GAG runner label to ubuntu-latest..."
 	gh variable set GAG_RUNNER \
 		--body '"ubuntu-latest"' \
 		--repo "${REPO}"

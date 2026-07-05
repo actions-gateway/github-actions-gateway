@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Bring the dogfood GKE cluster online and route CI jobs to GAG.
+# Bring the dogfood GKE cluster online and dispatch an isolated CI validation
+# burst onto GAG. Ordinary push/PR CI is NOT re-routed — only the explicit
+# workflow_dispatch runs below target GAG (opt-in model; see Q224/Q264 P4).
 # See docs/plan/gke-dogfood.md Part D.
 #
 # Required env vars (export before running):
@@ -43,12 +45,22 @@ main() {
 		-l app.kubernetes.io/name=actions-gateway-controller,app.kubernetes.io/instance=dogfood \
 		-n gag-dogfood --timeout=3m
 
-	echo "Routing CI jobs to GAG..."
+	# Set the runner label the opt-in dispatches consume. This alone does NOT
+	# route any push/PR CI — the migrated jobs read GAG_RUNNER only on a
+	# workflow_dispatch run with target_gag=true.
+	echo "Setting GAG runner label..."
 	gh variable set GAG_RUNNER \
 		--body '["self-hosted","linux","gag-ci"]' \
 		--repo "${REPO}"
 
-	echo "Done. CI jobs now route to GAG self-hosted runners."
+	# Dispatch isolated validation bursts onto GAG. Scoped to these runs only —
+	# other PRs, Dependabot, and push CI stay on GitHub-hosted runners.
+	echo "Dispatching validation runs onto GAG (ref: main)..."
+	gh workflow run unit-test.yml -f target_gag=true --ref main --repo "${REPO}"
+	gh workflow run integration-test.yml -f target_gag=true --ref main --repo "${REPO}"
+
+	echo "Done. Dispatched unit-test and integration-test onto GAG."
+	echo "Watch: gh run list --workflow=unit-test.yml --repo ${REPO}"
 }
 
 main "$@"
