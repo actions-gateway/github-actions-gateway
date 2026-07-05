@@ -280,6 +280,31 @@ func (s *Server) GenerateJITCalls() int {
 	return s.generateJITCalls
 }
 
+// ScaleSetIDByName returns the id of the scale set registered under name and whether
+// one exists. It lets a caller that did not create the scale set itself — e.g. a
+// controller test where the reconciler created it internally — resolve the id it needs
+// for EnqueueJob/AssignedJobCount.
+func (s *Server) ScaleSetIDByName(name string) (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ss := range s.scaleSets {
+		if ss.name == name {
+			return ss.id, true
+		}
+	}
+	return 0, false
+}
+
+// HasActiveSession reports whether the scale set currently has a live message-queue
+// session. A test asserts it drops to false after the listener stops, proving the
+// session was deleted on shutdown (no leaked session).
+func (s *Server) HasActiveSession(scaleSetID int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	return ss != nil && ss.session != nil
+}
+
 // ── internals ───────────────────────────────────────────────────────────────
 
 func (s *Server) record(format string, args ...any) {
