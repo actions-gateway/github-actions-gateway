@@ -1093,6 +1093,78 @@ gh api /repos/"$REPO"/actions/runners \
 > (burst `08:50:22Z`), 20-min stable time series `08:59`–`09:19Z` (online=3/idle=3,
 > all collapse markers 0), terminal job state `10:02Z`.
 >
+> **Q264 P4 — the ScaleSet path turn-up: fan-out starvation ELIMINATED by
+> construction (2026-07-05).** The first live dogfood of the runner-scale-set
+> acquisition protocol ([Q264](../STATUS.md#Q264) Option E), and the definitive
+> answer to the [Q224](../STATUS.md#Q224) fan-out class that classic stalled on at
+> 2/7 across eight re-routes. Built `agc:e2e-8a29b75` (index `sha256:4c88631d…`,
+> amd64 `sha256:91dd52ad…`, HEAD/#537 = all P3 landed) **and the matching P3c
+> wrapper** `wrapper:e2e-8a29b75` (index `sha256:0040ae1e…`), both deployed via the
+> GMC `AGC_IMAGE`/`WRAPPER_IMAGE` env patch. **The wrapper bump is mandatory:** the
+> scale-set worker runs `run.sh --jitconfig` only when the wrapper honors
+> `WORKER_MODE=scaleset`; the stale rc.6 wrapper ran the classic payload path and
+> **every** worker errored `read payload: open …/job-payload/payload: no such file`
+> — the AGC set the env correctly, the old wrapper ignored it. A fresh **ScaleSet
+> tenant** replaced the classic one: `ActionsGateway/dogfoodss` (repo-scoped,
+> **direct-egress** to match the classic baseline, `logLevel: debug`),
+> `RunnerTemplate/default-ss` (build-capable `dogfood-runner:2.335.1` + Athens),
+> `RunnerSet/ciss` (`acquisitionProtocol: ScaleSet`, single `runnerLabels:
+> [gag-scaleset2]`, `maxWorkers: 8`). **The pinned rc.6 v2 CRD chart had to be
+> `helm upgrade`d to HEAD first** — it predated the `acquisitionProtocol` field, so
+> the RunnerSet apply 400'd `unknown field "spec.acquisitionProtocol"`. Capacity:
+> non-preemptible `workers-od` `e2-standard-4 ×4` `pd-standard`
+> ([Q248](../STATUS.md#Q248)), `default-pool` 2, worker CPU req 1. Fired the same
+> ~7-job matrix as re-routes #5–#8 — push-event reruns of unit-test.yml
+> `28752455482` (6 jobs) + integration-test.yml `28752455509` (1 job) on sha
+> `4ea41f6`, routed via `GAG_RUNNER → "gag-scaleset2"`.
+>
+> **Q224 GATE — MET. The starvation is gone.** The single-acquirer listener
+> received **7 distinct `JobAssigned` messages** and provisioned **7 distinct worker
+> pods in 3 seconds** (19:55:54–19:55:57Z), one per job — **0 dedup, 0
+> `create Secret … already exists`, 0 `create Pod … already exists`**. All 7 jobs
+> **ran** and all 7 reached a **terminal conclusion**; **none wedged `in_progress`
+> indefinitely** — the exact opposite of classic (#5/#8: **2/7**, 5 jobs starved
+> forever because their distinct planIDs never arrived). One acquirer, one
+> authoritative queue, no sibling deliveries → the fan-out distinct-delivery
+> starvation **cannot occur**, confirmed live. Capacity gating held: `maxWorkers=8`
+> advertised as `X-ScaleSetMaxCapacity`; GitHub assigned exactly the 7 queued jobs
+> (≤ capacity), one worker each. **U3 core settled:** the `run.sh --jitconfig`
+> worker ran in a real pod, connected, pulled its job, executed, and **its runner
+> reported its own true terminal result** — the data plane the classic AGC never saw.
+>
+> **But a pristine all-7-green sweep was NOT obtained — 3 green, 4 non-green, every
+> non-green ORTHOGONAL to acquisition.** `shellcheck`/`tidy-check`/`vendor-check` ✅
+> (the last confirms Athens under the scale-set worker). `unit-test` ❌ + `coverage`
+> ❌: a **self-referential dogfooding artifact** — the provisioner sets
+> `WORKER_MODE=scaleset` on the runner *container*, the job's `go test` inherits it,
+> and the `cmd/worker` tests take the jitconfig branch and fail their classic-payload
+> assertions (`TestRun_ReadPayloadErrorIsWrapped`, …); `cover-check` runs the same
+> suite. This bites **only** because GAG dogfoods its own CI on its own scale-set
+> worker — a normal tenant is unaffected. **Fix = the `cmd/worker` tests must pin
+> `WORKER_MODE` (Queue item); it must land on `main` before a clean-green dogfood
+> re-run is possible.** `integration-test` ❌: envtest `context canceled` under node
+> CPU saturation (98–101% during the 7-wide burst) — a capacity confound
+> ([Q248](../STATUS.md#Q248)). `lint` (cancelled): hit its own `timeout-minutes: 10`
+> (golangci-lint pathologically slow on the saturated node) — a mundane timeout,
+> **not** a lock lapse. **U5 was not tested** (no mid-job eviction; the two ~10-min
+> durations were natural runtime / a job timeout).
+>
+> **Minor findings (Queue):** the `scaleset` client maps **every** 409 to
+> `SessionConflictError` ("session already exists"), mislabeling a `generatejitconfig`
+> runner-name conflict; and the listener retries `generatejitconfig` with no backoff
+> and never advances the cursor on a persistent 409 → a tight ~1/s replay loop that
+> can wedge a batch on a stale registered runner-name (surfaced when a mid-flight pod
+> delete left a JIT runner registered — sidestepped by switching to a fresh scale-set
+> name `gag-scaleset2`/scaleSetID 4).
+>
+> **Verdict.** The ScaleSet path **eliminates the Q224 fan-out starvation by
+> construction — proven live (7/7 assigned+ran+concluded vs classic 2/7)**; the
+> [Q264](../STATUS.md#Q264)/Option E structural claim is CONFIRMED. **Q224 stays
+> OPEN** (do not close): a pristine all-7-green needs the `WORKER_MODE` test fix on
+> `main`, then a clean re-run on adequate CPU. **P5 (default flip / classic
+> retirement) stays gated** on that green. Evidence: AGC debug logs (`agc:e2e-8a29b75`,
+> scaleSetID 4), reruns `28752455482`/`28752455509` (burst `19:55:54Z`, sha `4ea41f6`).
+>
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
 > which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
