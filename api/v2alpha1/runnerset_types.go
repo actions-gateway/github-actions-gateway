@@ -4,6 +4,25 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Acquisition protocols selectable via RunnerSetSpec.AcquisitionProtocol. The
+// protocol governs how the AGC acquires jobs for a runner set; it is a v2alpha1-only,
+// transitional selector (Q264 §5a-U7): v2beta1 graduation is ScaleSet-only and drops
+// the field, and v1alpha1 has no equivalent (classic-only). Both values are matched
+// exactly by the AGC RunnerSet controller and the GMC validating webhook.
+const (
+	// AcquisitionProtocolClassic is the default: the classic per-runner broker
+	// protocol — N pre-registered single-use agents multiplexed as listener
+	// goroutines (the M1/M2 tier). Unchanged for every existing user.
+	AcquisitionProtocolClassic = "Classic"
+	// AcquisitionProtocolScaleSet selects the runner-scale-set message-queue
+	// protocol (Q264 Option E): one listener session per set, capacity-gated
+	// job assignment, and a full-runner (run.sh --jitconfig) worker. It removes
+	// the classic protocol's many-acquirers fan-out race by construction. The
+	// scale set's single runnerLabel is its runs-on match target, so a ScaleSet
+	// set must declare exactly one label (enforced by CEL).
+	AcquisitionProtocolScaleSet = "ScaleSet"
+)
+
 // RunnerSetSpec is the desired state of a RunnerSet — the small scheduling/quota
 // binder that replaces v1alpha1's RunnerGroup. The large PodTemplateSpec no longer
 // lives here: it moves to a referenced RunnerTemplate / ClusterRunnerTemplate so a
@@ -16,6 +35,7 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay) >= duration('1s')",message="quotaRetryDelay must be at least 1s"
 // +kubebuilder:validation:XValidation:rule="!has(self.completedPodTTL) || duration(self.completedPodTTL) >= duration('0s')",message="completedPodTTL must not be negative"
 // +kubebuilder:validation:XValidation:rule="!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline) >= duration('1s')",message="pendingPodDeadline must be at least 1s"
+// +kubebuilder:validation:XValidation:rule="self.acquisitionProtocol != 'ScaleSet' || size(self.runnerLabels) == 1",message="a ScaleSet-protocol runner set must declare exactly one runnerLabel: the scale set's name is its single runs-on match target (Q264)"
 type RunnerSetSpec struct {
 	// GatewayRef names the ActionsGateway that supplies this runner set's GitHub
 	// binding and control plane. Under multi-gateway-per-namespace each AGC
@@ -80,6 +100,28 @@ type RunnerSetSpec struct {
 	// +kubebuilder:validation:items:MaxLength=256
 	// +kubebuilder:validation:items:Pattern=`^[^,\s]+$`
 	RunnerLabels []string `json:"runnerLabels"`
+
+	// AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
+	// "Classic" (default) is the per-runner broker protocol every existing set uses;
+	// "ScaleSet" is the runner-scale-set message-queue protocol (Q264 Option E), which
+	// removes the classic protocol's many-acquirers fan-out race by construction — one
+	// listener session per set, capacity-gated assignment, and a full-runner
+	// (run.sh --jitconfig) worker.
+	//
+	// It is immutable: switching a live set's protocol is a re-registration storm, so
+	// the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.
+	// Starting immutable is compatible (relaxing it later is a non-breaking change;
+	// adding immutability later would be breaking). A ScaleSet set must declare exactly
+	// one runnerLabel (the scale set's name is its single runs-on target) — enforced by
+	// the spec-level CEL rule above and, for cross-set uniqueness, the GMC webhook.
+	// This field exists only on v2alpha1 as the per-set canary/rollback lever for the
+	// Q264 P3–P4 rollout; v2beta1 is ScaleSet-only and drops it (Q264 §5a-U7).
+	//
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition protocol"
+	// +kubebuilder:validation:Enum=Classic;ScaleSet
+	// +kubebuilder:default=Classic
+	AcquisitionProtocol string `json:"acquisitionProtocol,omitempty"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count
 	// thresholds. Tiers must be in strictly ascending threshold order.

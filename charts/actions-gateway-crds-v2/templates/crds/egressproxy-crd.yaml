@@ -94,8 +94,8 @@ spec:
                   Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
                   since the pod-egress layer expresses them as toFQDNs rules. Opening egress
                   beyond GitHub is an admin decision: the GMC rejects any entry not on its
-                  --allowed-egress-fqdns platform allowlist (empty allowlist denies all). See
-                  docs/plan/q242-g1-proxy-destination-allowlist.md.
+                  --allowed-egress-fqdns platform allowlist (empty allowlist denies all).
+                  G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).
                 items:
                   type: string
                 maxItems: 64

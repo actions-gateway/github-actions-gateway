@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -272,6 +274,47 @@ func TestWebhookAdmission_NoProxyCIDRs(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, good),
 		"CIDRs and non-GitHub domain suffixes in noProxyCIDRs must be admitted")
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), good)) })
+}
+
+// TestWebhookAdmission_ScaleSetRunnerLabelUniqueness verifies the apiserver admits
+// the first ScaleSet-protocol RunnerSet claiming a runnerLabel under a gateway,
+// rejects a second ScaleSet set claiming the SAME label under the same gateway (a
+// scale-set name collision at GitHub the CRD CEL cannot see), and still admits one
+// claiming a DISTINCT label (Q264 P3).
+func TestWebhookAdmission_ScaleSetRunnerLabelUniqueness(t *testing.T) {
+	const nsName = "team-webhook-scaleset-label"
+	createNamespace(t, nsName)
+
+	first := newScaleSetRunnerSet("first-set", nsName, "gw", "linux")
+	require.NoError(t, k8sClient.Create(ctx, first),
+		"the first ScaleSet set claiming a label must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), first)) })
+
+	dup := newScaleSetRunnerSet("dup-set", nsName, "gw", "linux")
+	err := k8sClient.Create(ctx, dup)
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), dup)) })
+	require.Error(t, err, "a second ScaleSet set claiming the same label under the same gateway must be rejected")
+	assert.Contains(t, err.Error(), "already used by RunnerSet",
+		"rejection must come from the GMC RunnerSet webhook")
+
+	distinct := newScaleSetRunnerSet("distinct-set", nsName, "gw", "windows")
+	require.NoError(t, k8sClient.Create(ctx, distinct),
+		"a ScaleSet set claiming a distinct label must be admitted")
+	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), distinct)) })
+}
+
+// newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet with a single runnerLabel
+// bound to the named gateway (references are resolved at runtime, so no template need
+// exist for admission).
+func newScaleSetRunnerSet(name, ns, gateway, label string) *v2alpha1.RunnerSet {
+	return &v2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: v2alpha1.RunnerSetSpec{
+			GatewayRef:          v2alpha1.ObjectRef{Name: gateway},
+			AcquisitionProtocol: v2alpha1.AcquisitionProtocolScaleSet,
+			RunnerLabels:        []string{label},
+		},
+	}
 }
 
 // updateActionsGateway fetches the latest version of the named ActionsGateway,

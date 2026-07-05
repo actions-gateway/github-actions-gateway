@@ -1,0 +1,142 @@
+/*
+Copyright 2026.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v2alpha1
+
+import (
+	"context"
+	"fmt"
+
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+)
+
+// +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnerset,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnersets,verbs=create;update,versions=v2alpha1,name=vrunnerset-v2alpha1.kb.io,admissionReviewVersions=v1
+
+// RunnerSetCustomValidator enforces the cross-object invariant that a spec-scoped
+// CRD CEL rule cannot express: no two ScaleSet-protocol RunnerSets under one gateway
+// may claim the same single runnerLabel (Q264 §5a-U7). The scale set's name IS that
+// label, so two such sets would register the same scale-set name at GitHub and
+// collide. Everything else about acquisitionProtocol — the enum, the default, the
+// immutability, and the ScaleSet⇒exactly-one-label rule — is enforced by CRD CEL on
+// the RunnerSet type itself; this webhook adds only the sibling-uniqueness check.
+//
+// +kubebuilder:object:generate=false
+type RunnerSetCustomValidator struct {
+	// reader lists sibling RunnerSets for the label-uniqueness guard. It is the
+	// manager's uncached API reader in production (wired by
+	// SetupRunnerSetWebhookWithManager): a just-created sibling may not be in the
+	// informer cache yet, and admitting a colliding scale-set label through a stale
+	// cache is exactly the race the guard exists to prevent — mirroring the v1
+	// ActionsGateway singleton guard. A nil reader disables the check (direct-
+	// construction unit tests that are not exercising it); the integration/e2e and
+	// production paths always wire a reader.
+	reader client.Reader
+}
+
+// ValidateCreate rejects a ScaleSet RunnerSet whose single runnerLabel collides with
+// an existing ScaleSet sibling under the same gateway.
+func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
+	}
+	return nil, nil
+}
+
+// ValidateUpdate re-checks label uniqueness on update. acquisitionProtocol itself is
+// immutable (CRD CEL), but runnerLabels and gatewayRef can change, so an update can
+// still move a ScaleSet set onto a colliding label.
+func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
+	}
+	return nil, nil
+}
+
+// ValidateDelete is a no-op.
+func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	return nil, nil
+}
+
+// validateScaleSetLabelUniqueness rejects a ScaleSet-protocol RunnerSet whose single
+// runnerLabel is already claimed by another ScaleSet-protocol RunnerSet targeting the
+// same gateway in the same namespace. It is a no-op for Classic sets (which have no
+// scale-set object) and for any set that does not carry exactly one label (the
+// ScaleSet⇒exactly-one-label CRD CEL rule rejects those before this runs).
+//
+// The check is fail-closed: if the sibling List errors, the request is rejected
+// rather than admitted on faith — admitting a possible collision is the failure mode
+// this guards against.
+func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
+	if rs.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
+		return nil
+	}
+	if len(rs.Spec.RunnerLabels) != 1 {
+		// The CRD CEL rule (ScaleSet ⇒ size(runnerLabels) == 1) already rejects
+		// this; nothing to compare against a single label here.
+		return nil
+	}
+	if v.reader == nil {
+		// No reader wired (direct-construction unit-test path); the integration/e2e
+		// and production paths always wire the uncached API reader.
+		return nil
+	}
+	label := rs.Spec.RunnerLabels[0]
+	var existing agcv2alpha1.RunnerSetList
+	if err := v.reader.List(ctx, &existing, client.InNamespace(rs.Namespace)); err != nil {
+		return fmt.Errorf(
+			"cannot verify ScaleSet runnerLabel uniqueness for %q in namespace %q: %w",
+			rs.Name, rs.Namespace, err)
+	}
+	for i := range existing.Items {
+		other := &existing.Items[i]
+		// On CREATE the new object is not yet persisted; on UPDATE it appears in the
+		// list. Either way, skip the object being admitted by name.
+		if other.Name == rs.Name {
+			continue
+		}
+		if other.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet {
+			continue
+		}
+		if other.Spec.GatewayRef.Name != rs.Spec.GatewayRef.Name {
+			continue
+		}
+		if len(other.Spec.RunnerLabels) == 1 && other.Spec.RunnerLabels[0] == label {
+			return fmt.Errorf(
+				"ScaleSet runnerLabel %q is already used by RunnerSet %q under gateway %q in namespace %q; "+
+					"a ScaleSet set's runnerLabel is its scale-set name at GitHub, so two sets sharing it would collide — "+
+					"pick a distinct label",
+				label, other.Name, rs.Spec.GatewayRef.Name, rs.Namespace)
+		}
+	}
+	return nil
+}
+
+// SetupRunnerSetWebhookWithManager registers the validating webhook for the
+// namespaced RunnerSet. The manager's scheme must already include agcv2alpha1 (the
+// GMC registers it at startup). The uncached API reader backs the sibling-uniqueness
+// guard, matching the v1 ActionsGateway singleton webhook.
+func SetupRunnerSetWebhookWithManager(mgr ctrl.Manager) error {
+	v := &RunnerSetCustomValidator{reader: mgr.GetAPIReader()}
+	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.RunnerSet{}).
+		WithValidator(v).
+		Complete(); err != nil {
+		return fmt.Errorf("register RunnerSet webhook: %w", err)
+	}
+	return nil
+}

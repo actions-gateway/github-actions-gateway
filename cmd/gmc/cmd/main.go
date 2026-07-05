@@ -613,6 +613,12 @@ func main() {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "EgressProxy")
 			os.Exit(1)
 		}
+		// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under
+		// one gateway (the scale-set name collision a spec-scoped CEL rule cannot see).
+		if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerSet")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

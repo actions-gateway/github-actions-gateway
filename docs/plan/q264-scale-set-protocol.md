@@ -4,7 +4,9 @@
 **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
 scenarios, run 2026-07-04**)**, and **P2 (the `scaleset/` client package + its
 `scalesettest` fake, §6)** are DONE; **P3 (AGC wiring behind the
-`acquisitionProtocol` field) is next**. The classic AGC acquisition path is
+`acquisitionProtocol` field) is IN PROGRESS** — sub-PR (a) (the API field +
+codegen + CEL + GMC webhook, default `Classic`) is landed; (b) the scale-set
+listener and (c) the worker JIT path + acceptance twin follow (§6-P3). The classic AGC acquisition path is
 **still unchanged** — P2 is a standalone leaf module with no AGC wiring. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
@@ -683,7 +685,21 @@ parallel implementation behind a flag, then cutover.
   `run.sh --jitconfig` worker path. The Q260
   `TestAGC_Q260_FanoutCompletionReconciles` acceptance shape gets a scale-set
   twin: N concurrent jobs, every one concludes `completed`, zero dedup
-  involved.
+  involved. Landing as a sequence of PRs, all under Q264 P3 and **all behind
+  default `Classic`** (nothing changes for existing users until P5):
+  - **(a) API field + codegen + CEL/webhook — ✅ DONE.** `acquisitionProtocol`
+    added to `api/v2alpha1` RunnerSet: enum `Classic|ScaleSet`, default
+    `Classic`, immutable (CEL `self == oldSelf`), spec-level CEL
+    `ScaleSet ⇒ size(runnerLabels) == 1`, and a GMC validating webhook
+    (`vrunnerset-v2alpha1.kb.io`) rejecting two `ScaleSet` sets that share their
+    single label under one gateway (the scale-set-name collision a spec-scoped
+    CEL rule cannot see). CRD + chart + webhook manifests regenerated. Coverage:
+    webhook unit tests (fake client), a cmd/agc CRD envtest
+    (defaulting/immutability/single-label CEL), and a cmd/gmc
+    admission-through-apiserver envtest for the sibling-uniqueness webhook.
+    v1alpha1 untouched.
+  - **(b) scale-set listener + provision-on-`JobAssigned`** — next.
+  - **(c) worker `run.sh --jitconfig` path + the fan-out-free acceptance twin** — after (b).
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate

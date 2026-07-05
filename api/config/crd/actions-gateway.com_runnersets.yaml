@@ -90,6 +90,32 @@ spec:
               (docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
               lifecycle fields are carried over from RunnerGroup unchanged in meaning.
             properties:
+              acquisitionProtocol:
+                default: Classic
+                description: |-
+                  AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
+                  "Classic" (default) is the per-runner broker protocol every existing set uses;
+                  "ScaleSet" is the runner-scale-set message-queue protocol (Q264 Option E), which
+                  removes the classic protocol's many-acquirers fan-out race by construction — one
+                  listener session per set, capacity-gated assignment, and a full-runner
+                  (run.sh --jitconfig) worker.
+
+                  It is immutable: switching a live set's protocol is a re-registration storm, so
+                  the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.
+                  Starting immutable is compatible (relaxing it later is a non-breaking change;
+                  adding immutability later would be breaking). A ScaleSet set must declare exactly
+                  one runnerLabel (the scale set's name is its single runs-on target) — enforced by
+                  the spec-level CEL rule above and, for cross-set uniqueness, the GMC webhook.
+                  This field exists only on v2alpha1 as the per-set canary/rollback lever for the
+                  Q264 P3–P4 rollout; v2beta1 is ScaleSet-only and drops it (Q264 §5a-U7).
+                enum:
+                - Classic
+                - ScaleSet
+                type: string
+                x-kubernetes-validations:
+                - message: acquisitionProtocol is immutable; create a new RunnerSet
+                    to change the acquisition protocol
+                  rule: self == oldSelf
               completedPodTTL:
                 description: |-
                   CompletedPodTTL is how long a worker pod that has reached a terminal phase is
@@ -314,6 +340,10 @@ spec:
             - message: pendingPodDeadline must be at least 1s
               rule: '!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline)
                 >= duration(''1s'')'
+            - message: 'a ScaleSet-protocol runner set must declare exactly one runnerLabel:
+                the scale set''s name is its single runs-on match target (Q264)'
+              rule: self.acquisitionProtocol != 'ScaleSet' || size(self.runnerLabels)
+                == 1
           status:
             description: |-
               RunnerSetStatus is the observed state of a RunnerSet. It follows the uniform v2

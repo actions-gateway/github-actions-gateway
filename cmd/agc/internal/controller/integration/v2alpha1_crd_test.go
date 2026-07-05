@@ -133,6 +133,60 @@ func TestV2_RunnerSet_MaxWorkersMustMatchLastTier(t *testing.T) {
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxWorkers != last tier, got %v", err)
 }
 
+func TestV2_RunnerSet_AcquisitionProtocolDefaultsClassic(t *testing.T) {
+	const ns = "v2-runnerset-acqproto-default"
+	createNSForAGC(t, ns)
+
+	// Omit acquisitionProtocol entirely — the apiserver must default it to Classic,
+	// so nothing changes for existing users (Q264 P3, default-Classic invariant).
+	rs := newV2RunnerSet(ns, "linux", "acme", "default")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	var got agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
+	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, got.Spec.AcquisitionProtocol,
+		"acquisitionProtocol must default to Classic")
+}
+
+func TestV2_RunnerSet_ScaleSetRequiresSingleLabel(t *testing.T) {
+	const ns = "v2-runnerset-acqproto-label"
+	createNSForAGC(t, ns)
+
+	// A ScaleSet set with more than one runnerLabel is rejected by the spec-level CEL
+	// rule: the scale set's name is its single runs-on label (Q264 §5a-U7).
+	multi := newV2RunnerSet(ns, "multi", "acme", "default") // labels: self-hosted, linux
+	multi.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
+	err := k8sClient.Create(ctx, multi)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "ScaleSet with >1 label should be Invalid, got %v", err)
+
+	// Exactly one label is accepted.
+	single := newV2RunnerSet(ns, "single", "acme", "default")
+	single.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
+	single.Spec.RunnerLabels = []string{"scale-set-linux"}
+	require.NoError(t, k8sClient.Create(ctx, single))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, single) })
+}
+
+func TestV2_RunnerSet_AcquisitionProtocolImmutable(t *testing.T) {
+	const ns = "v2-runnerset-acqproto-immutable"
+	createNSForAGC(t, ns)
+
+	rs := newV2RunnerSet(ns, "linux", "acme", "default")
+	rs.Spec.RunnerLabels = []string{"scale-set-linux"}
+	rs.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	var got agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
+	got.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolClassic
+	err := k8sClient.Update(ctx, &got)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "switching acquisitionProtocol should be Invalid, got %v", err)
+}
+
 func TestV2_RunnerTemplate_RoundTrip(t *testing.T) {
 	const ns = "v2-runnertemplate-rt"
 	createNSForAGC(t, ns)

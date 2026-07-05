@@ -51,6 +51,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
+- [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
 - [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
@@ -1641,6 +1642,53 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 **Resolution.**
 - Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
 - For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`. Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the effective `securityProfile`), which remains the runtime backstop.
+
+---
+
+## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
+
+> Applies to the `v2alpha1` (`actions-gateway.com`) API. `acquisitionProtocol` selects
+> how the AGC acquires jobs for a runner set: `Classic` (default — the per-runner
+> broker protocol every set uses today) or `ScaleSet` (the runner-scale-set
+> message-queue protocol, Q264 Option E). `ScaleSet` is early-adopter and opt-in per
+> set; leaving the field unset keeps the set on `Classic`, so nothing changes unless
+> you deliberately opt in.
+
+**Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
+
+```
+The RunnerSet "linux" is invalid: spec: Invalid value: "object": a ScaleSet-protocol
+runner set must declare exactly one runnerLabel: the scale set's name is its single
+runs-on match target (Q264)
+```
+
+```
+The RunnerSet "linux" is invalid: spec.acquisitionProtocol: Invalid value: "string":
+acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition
+protocol
+```
+
+```
+admission webhook "vrunnerset-v2alpha1.kb.io" denied the request: ScaleSet runnerLabel
+"linux" is already used by RunnerSet "other-set" under gateway "gw" in namespace
+"tenant"; a ScaleSet set's runnerLabel is its scale-set name at GitHub, so two sets
+sharing it would collide — pick a distinct label
+```
+
+**Likely cause & resolution.**
+
+- **Exactly one label (CRD CEL).** A `ScaleSet` set registers one scale-set object at
+  GitHub whose *name is its single `runs-on` label* — there is no multi-label match
+  like `Classic`. Set exactly one entry in `spec.runnerLabels` (e.g. `["gpu-linux"]`).
+  A workflow targets it with that one label in `runs-on`.
+- **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a
+  full re-registration storm, so the field is frozen after creation. To change it,
+  create a **new** `RunnerSet` (with a distinct name and label) and delete the old one.
+- **Duplicate label under one gateway (GMC webhook).** Two `ScaleSet` sets targeting
+  the same gateway may not share their single label, or they would register the same
+  scale-set name at GitHub and collide. Give each `ScaleSet` set a distinct label.
+  (Two `Classic` sets, or the same label under a *different* gateway or namespace, are
+  unaffected — they register no colliding scale set.)
 
 ---
 
