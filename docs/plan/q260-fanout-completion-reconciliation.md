@@ -1,22 +1,28 @@
 # Q260 — reconcile GitHub's per-delivery fan-out with AGC's one-runner-per-session model
 
-**Status:** **Option A implemented, behind the default-off `AGC_FANOUT_COMPLETION`
-flag; the offline acceptance gate is green.** The winner of a fanned-out job now
-tracks every deduped sibling delivery and, on completion, fans a `completejob` out to
-each (keyed on the sibling's own `RunnerRequestID`, with the winner's pod-phase-proxy
-result); a late redelivery within the linger window is resolved with the recorded
-terminal result. `TestAGC_Q260_FanoutCompletionReconciles` (the gate) now passes; the
-companion `…AccountingGap` (flag off) still asserts the wedge. The one load-bearing
-assumption — does GitHub honour a non-running delivery's completion, and does
-resolving *all* siblings conclude the job? — is still only answerable by a live
-**re-route #5**, which is the remaining go/no-go and the reason the flag ships off by
-default (secure-by-default: the pod-phase proxy could green a red job if completion is
-planID-scoped). **Q224/Q260/Q242 stay open.**
+**Status:** **Option A live-confirmed by re-route #5 (2026-07-04) and flipped ON by
+default (`AGC_FANOUT_COMPLETION`, opt out with `=false`). Q260 DONE; Q224's fan-out
+blocker cleared (a pristine full-matrix green is now gated only on `maxWorkers`
+worker-capacity tuning, Q248 — not the accounting gap).** The winner
+of a fanned-out job tracks every deduped sibling delivery and, on completion, fans a
+`completejob` out to each (keyed on the sibling's own `RunnerRequestID`, with the
+winner's pod-phase-proxy result); a late redelivery within the linger window is
+resolved with the recorded terminal result. The one load-bearing assumption — does
+GitHub honour a non-running delivery's completion, and does resolving *all* siblings
+conclude the job? — is **confirmed YES**: re-route #5 observed `completejob` on a live
+sibling's own job ID return **OK** (not "already resolved"), the winner's own delivery
+carry the real workflow result, previously-wedged concurrent jobs conclude **green**,
+the Q259 recycle 422 clear per job on winner completion, and **no** job cancel at the
+~15-minute timeout. Completion is **per-delivery, not planID-scoped**, so the
+secure-by-default concern (a green sibling proxy masking a red workflow) does not
+arise — the flag is on by default. `TestAGC_Q260_FanoutCompletionReconciles` (the
+gate) passes; the companion `…AccountingGap` (flag off) still asserts the pre-fix wedge.
 
-This is the last blocker for Q224 "route production CI green," after the earlier
+This closed the last blocker for Q224 "route production CI green," after the earlier
 Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID
 dedup key ([`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md)). Full live
-evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #4 (2026-07-04).
+evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #4 (fails-today control) +
+re-route #5 (Option A confirmed).
 
 ---
 
@@ -303,25 +309,55 @@ does not prove it, because #4 only ever completed siblings with `skipped`. This 
 why the design ships behind a flag with a decisive live experiment rather than as a
 default: **one re-route #5 settles feasibility.**
 
-### Re-route #5 must confirm
+### Re-route #5 confirmed (2026-07-04) — GO
 
-1. Enable Option A (winner fans `completejob` to all siblings on completion) by
-   setting `AGC_EXTRA_AGC_FANOUT_COMPLETION=true` on the GMC pod, which forwards
-   `AGC_FANOUT_COMPLETION=true` to the AGC Deployments (no GMC code change — see the
-   re-route #4 note in [`gke-dogfood.md`](gke-dogfood.md)).
-2. Fire the concurrent matrix on stable capacity (already fixed).
-3. Capture, per fanned-out job: every `completejob` request/response (result value +
-   status), whether the previously-cancelled jobs (`tidy-check`, etc.) now **conclude
-   completed**, and whether the Q259 recycle 422 clears (GitHub no longer considers
-   the deduped runners assigned).
-4. **If a real result concludes the job but `skipped` does not** → Option A with the
-   pod-phase proxy is the fix; wire the result and flip the flag on by default.
-5. **If even resolving all siblings does not conclude the job** (most-recent-delivery
-   authority) → **STOP**: the gap is GitHub-server-side, and Q224's "concurrent
-   matrix green" is infeasible via GAG's *many-acquirers* model without GitHub changing
-   its fan-out reconciliation. Reframe Q224 feasibility and record it — **Option E
-   (single-acquirer topology) becomes the path**, at the cost of the parallel-acquire
-   density model.
+Enabled Option A by setting `AGC_EXTRA_AGC_FANOUT_COMPLETION=true` on the GMC pod (which
+forwards `AGC_FANOUT_COMPLETION=true` to the AGC Deployments — no GMC code change), on a
+fresh `agc:e2e-238b8df` (includes #521), on the re-route #4 stable capacity (non-preemptible
+`workers-od` ×3 + default-pool 2), `spec.logLevel: debug`. Fired the same ~7-job concurrent
+matrix (unit-test + integration reruns on sha 238b8df, green on GitHub-hosted). Observations:
+
+1. **`completejob` on a live sibling returns OK** — at 16:37:07 a fanned-out job (planID
+   `357b6d9e`, winner on ci-0) whose winner completed *naturally* fanned `completejob` out
+   to **both** deduped siblings (jobIDs `34ad8db4` on ci-2, `f968c752` on ci-4) → **both
+   `completed a deduped sibling delivery via completejob`** (HTTP OK), **not** "already
+   resolved". So GitHub **accepts** the completion of a sibling delivery that never ran the
+   job. (A sibling whose winner had been *concurrency-cancelled* by an unrelated Dependabot
+   rebase returned "already resolved server-side" — GitHub had already torn that delivery
+   down — which is why the winner must complete naturally for the clean signal.)
+2. **Previously-wedged concurrent jobs conclude green** — `coverage` and `integration-test`
+   (fanned-out) concluded **success**; all 6 unit jobs eventually ran (none stranded at the
+   unstarted timeout once the pool recovered).
+3. **Durability** — `coverage` stayed `success` past 16:47, i.e. beyond the ~15-minute
+   unstarted-timeout of its siblings (acquired ~16:31) — the exact point re-route #4's
+   winner-completed jobs were cancelled. Option A prevented the cancel.
+4. **Q259 recycle 422 clears per job** — the "runner … is still running a job and cannot be
+   deleted" churn dropped ~12× once winners began completing and fanning `completejob`; the
+   pool recovered from a collapsed 2 sessions back toward `maxListeners`, draining the
+   backlog. (The 422 is a *rolling* transient per job's in-flight siblings, cleared on that
+   job's winner completion — not a permanent wedge.)
+
+**Verdict: GO (design point 4).** Completion is **per-delivery, not planID-scoped**:
+`completejob` on a sibling's own job ID resolves only that assignment, and the winner's own
+delivery still carries the real workflow result reported by its runner binary — so the
+pod-phase proxy on siblings cannot green a red workflow. The secure-by-default gate is
+therefore cleared and the flag is flipped **on by default** (opt out `AGC_FANOUT_COMPLETION=false`).
+Option E (Q264) is **not needed** — the many-acquirers topology is reconcilable AGC-side.
+
+Confound handled: a Dependabot rebase merge-train briefly polluted the shared runner pool
+with pull_request runs that concurrency-cancelled on each force-push (cancels in ~4 min,
+distinct from the 15-min accounting timeout). The clean signal came from the **push**-event
+238b8df reruns, which are concurrency-immune. Full evidence: [`gke-dogfood.md`](gke-dogfood.md)
+re-route #5.
+
+The alternative outcomes the experiment was designed to distinguish, for the record:
+- **`skipped` acks but a real result concludes** → wire the pod-phase proxy (already the
+  default in #521). Confirmed: the winner's real result concludes the job; siblings only
+  need releasing.
+- **Even resolving all siblings does not conclude the job** (most-recent-delivery authority)
+  → would have been a **NO-GO**: gap GitHub-server-side, Q224 infeasible via many-acquirers,
+  **Option E (single-acquirer topology)** the path. **This did not occur** — resolving all
+  siblings concludes the job.
 
 Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate`
 reverted to the toolchain-less upstream image — `make: command not found`), so a
@@ -349,8 +385,11 @@ non-green result is attributable to accounting, not the runner image
     skipped-and-forgotten; it is **not** completed while the winner is still running.
   - `TestProvisioner_ResultPodPhaseProxy` (provisioner): `PodFailed`→`failed`, else
     `succeeded`.
-- **Live (re-route #5) — ⬜ pending.** §5. The only step that cannot be done offline,
-  and the go/no-go for Q224. Enable via `AGC_EXTRA_AGC_FANOUT_COMPLETION=true`.
+- **Live (re-route #5) — ✅ GO (2026-07-04).** §5. The only step that could not be done
+  offline, and the go/no-go for Q224. Confirmed: `completejob` on a live sibling returns
+  OK (9/9, 0 failures across 13 fan-outs), fanned-out jobs conclude green, the job
+  survives past the 15-minute sibling timeout, and the Q259 recycle 422 clears per job.
+  Completion is per-delivery, not planID-scoped. Flag flipped on by default.
 
 ---
 

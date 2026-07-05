@@ -122,11 +122,11 @@ type BrokerConfig struct {
 	// RenewJobInterval is the cadence of the per-job RenewJob renewal loop.
 	// 0 means the default (60s).
 	RenewJobInterval time.Duration
-	// FanoutCompletion enables the guarded Q260 Option A: the winner of a fanned-out
-	// job fans completejob out to every deduped sibling delivery on completion so
-	// GitHub does not cancel the whole job at its ~15-minute unstarted-job timeout.
-	// OFF by default pending live confirmation of the run service's per-delivery
-	// completion semantics — see listener.Config.FanoutCompletion.
+	// FanoutCompletion enables the Q260 Option A: the winner of a fanned-out job fans
+	// completejob out to every deduped sibling delivery on completion so GitHub does
+	// not cancel the whole job at its ~15-minute unstarted-job timeout. ON by default;
+	// the run service's per-delivery completion semantics were live-confirmed by the
+	// re-route #5 dogfood experiment — see listener.Config.FanoutCompletion.
 	FanoutCompletion bool
 }
 
