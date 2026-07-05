@@ -28,9 +28,19 @@ type Metrics struct {
 	// ~15-minute unstarted-job timeout. Labelled by outcome (completed, error). Only
 	// incremented when the guarded behavior is enabled (Config.FanoutCompletion).
 	AbandonedDeliveryCompletionsTotal *prometheus.CounterVec
-	TokenRefreshesTotal               *prometheus.CounterVec
-	TokenRefreshErrorsTotal           *prometheus.CounterVec
-	RenewJobErrorsTotal               *prometheus.CounterVec
+	// Q266: a deduped fan-out loser deferred its slot recycle until its winner
+	// concluded, rather than recycling eagerly into a 422 that cannot clear for the
+	// winner's whole runtime (which would exhaust the bounded Q259 backoff and exit
+	// the listener, collapsing the pool under sustained burst). Labelled by outcome:
+	// winner_concluded (the normal path — the winner finished and released this
+	// runner's assignment), fallback_timeout (the winner never concluded within the
+	// bound; GitHub's unstarted-job timeout released the assignment instead — worth
+	// alerting on), or context_cancelled (AGC shutdown). Only emitted when fan-out
+	// completion (Q260 Option A) is enabled.
+	FanoutLoserRecycleDeferredTotal *prometheus.CounterVec
+	TokenRefreshesTotal             *prometheus.CounterVec
+	TokenRefreshErrorsTotal         *prometheus.CounterVec
+	RenewJobErrorsTotal             *prometheus.CounterVec
 	// Q254: incremented when the per-job renew loop cancels the worker because the
 	// job's lock is definitively lost, by reason (job_not_found, consecutive_failures).
 	RenewJobTeardownsTotal *prometheus.CounterVec
@@ -88,6 +98,11 @@ func NewMetrics() *Metrics {
 		AbandonedDeliveryCompletionsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_delivery_completions_total",
 			Help: "Deduped sibling deliveries of a fanned-out job whose acquired-but-unrun assignment the winner released via completejob (on completion, or on a late redelivery within the linger window) so GitHub does not cancel the job at its ~15-minute unstarted-job timeout, by outcome (completed, error). Only emitted when fan-out completion (Q260 Option A) is enabled.",
+		}, []string{"namespace", "runner_group", "outcome"}),
+
+		FanoutLoserRecycleDeferredTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_fanout_loser_recycle_deferred_total",
+			Help: "Deduped fan-out losers that deferred their slot recycle until their winner concluded, rather than recycling into a 422 that persists for the winner's whole runtime and exits the listener (which collapses the pool under sustained burst). By outcome: winner_concluded (normal), fallback_timeout (winner never concluded within the bound — GitHub's unstarted-job timeout released the assignment instead; alert-worthy), context_cancelled (AGC shutdown). Only emitted when fan-out completion (Q260 Option A) is enabled (Q266).",
 		}, []string{"namespace", "runner_group", "outcome"}),
 
 		TokenRefreshesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -177,6 +192,7 @@ func NewMetrics() *Metrics {
 		m.JobsAdmissionRejectedTotal,
 		m.JobsDuplicateDeliveryTotal,
 		m.AbandonedDeliveryCompletionsTotal,
+		m.FanoutLoserRecycleDeferredTotal,
 		m.TokenRefreshesTotal,
 		m.TokenRefreshErrorsTotal,
 		m.RenewJobErrorsTotal,

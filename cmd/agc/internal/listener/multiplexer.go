@@ -30,6 +30,13 @@ type jobClaim struct {
 	// siblings are the deduped sibling deliveries registered against this planID
 	// while the winner ran, awaiting the winner's fan-out completion (Q260 Option A).
 	siblings []SiblingDelivery
+	// concludedCh is closed exactly once when the winner concludes (in Complete).
+	// A deduped loser whose winner is still running waits on it before recycling
+	// its slot: the winner's conclusion is when it fans completjob out to the
+	// loser's delivery (Option A), releasing GitHub's assignment on the loser's
+	// deduped runner so its recycle 422 finally clears (Q266). Created with the
+	// claim; never nil for a live claim.
+	concludedCh chan struct{}
 }
 
 // listenerState tracks one running listener goroutine.
@@ -238,11 +245,13 @@ func (m *Multiplexer) claimJob(planID string, delivery SiblingDelivery) ClaimRes
 			return ClaimResult{LateResult: c.result}
 		}
 		// The winner is still running: register this deduped sibling so the winner
-		// fans completion out to its delivery when the job finishes.
+		// fans completion out to its delivery when the job finishes, and hand back
+		// the winner's conclusion signal so this loser can defer its slot recycle
+		// until the winner releases its assignment (Q266).
 		c.siblings = append(c.siblings, delivery)
-		return ClaimResult{}
+		return ClaimResult{WinnerConcluded: c.concludedCh}
 	}
-	c := &jobClaim{} // in-flight (zero expiry: held until Complete)
+	c := &jobClaim{concludedCh: make(chan struct{})} // in-flight (zero expiry: held until Complete)
 	m.jobClaims[planID] = c
 	var once sync.Once
 	complete := func(result broker.TaskResult) []SiblingDelivery {
@@ -254,6 +263,10 @@ func (m *Multiplexer) claimJob(planID string, delivery SiblingDelivery) ClaimRes
 			c.result = result
 			siblings = c.siblings
 			c.siblings = nil
+			// Wake any deduped losers deferring their recycle: the winner has
+			// concluded, so it is fanning completjob out to their deliveries now,
+			// clearing their recycle 422 (Q266). Closed once under the once guard.
+			close(c.concludedCh)
 			if m.ClaimLinger <= 0 {
 				// No pod lingers after completion (owner reaps synchronously), so
 				// free the planID immediately for any redelivery.

@@ -107,6 +107,15 @@ type ClaimResult struct {
 	// loser whose winner is still running (that loser was registered on the claim
 	// for the winner to complete).
 	LateResult broker.TaskResult
+	// WinnerConcluded is set for a LOSER whose winner is STILL RUNNING. It is closed
+	// when the winner concludes — the point at which the winner fans completjob out
+	// to this loser's delivery (Option A), releasing GitHub's assignment on this
+	// deduped runner so its recycle 422 clears. The loser waits on it before
+	// recycling its slot rather than recycling eagerly into a 422 that cannot clear
+	// for the winner's whole runtime — which would exhaust the bounded Q259 backoff
+	// and exit the listener, collapsing the pool under sustained fan-out burst
+	// (Q266). Nil for a winner, or for a loser resolved via LateResult.
+	WinnerConcluded <-chan struct{}
 }
 
 // AdmitFunc gates job acquisition on available worker capacity (Q59). It is
@@ -209,8 +218,17 @@ type Config struct {
 	// AGC_FANOUT_COMPLETION=false. The operator runbook is the Q260
 	// redelivery-accounting section in docs/operations/troubleshooting.md.
 	FanoutCompletion bool
-	Clock            Clock
-	Log              *slog.Logger
+	// LoserRecycleDeferTimeout bounds how long a deduped fan-out loser waits for its
+	// winner to conclude before recycling its slot anyway (Q266). Zero selects
+	// defaultLoserRecycleDeferTimeout. It is a backstop for a winner that never
+	// concludes (a crash or a wedged worker the renew loop somehow does not tear
+	// down): GitHub cancels the whole job at its ~15-minute unstarted-job timeout,
+	// which releases the loser's assignment, so the bound sits just past that — the
+	// loser's recycle 422 has cleared by the time the fallback fires. Overridable in
+	// tests to drive the fallback deterministically.
+	LoserRecycleDeferTimeout time.Duration
+	Clock                    Clock
+	Log                      *slog.Logger
 
 	// RunnerOS is passed to AcquireJob (e.g. "Linux").
 	RunnerOS string
@@ -642,6 +660,10 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 	// queued at GitHub and is redelivered to a sibling session with capacity —
 	// rather than claiming a job whose worker pod we cannot place, which would be
 	// cancelled when its unrenewed lock lapses (failure shape 1 in the Q59 plan).
+	// admitRelease frees the reserved worker slot; nil when the gate is disabled.
+	// The AdmitFunc's closure is idempotent, so the deferred release and any earlier
+	// explicit release (the deduped-loser path below) together free it exactly once.
+	var admitRelease func()
 	if cfg.Admit != nil {
 		release, ok := cfg.Admit(ctx)
 		if !ok {
@@ -653,6 +675,7 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			log.Debug("job admission rejected: worker capacity full; leaving job queued for redelivery", "messageId", msg.MessageID)
 			return false, nil
 		}
+		admitRelease = release
 		// Hold the reservation until handleJob returns. On the acquire path that is
 		// pod terminal (JobHandler has returned by then); on any earlier return it
 		// fires immediately. Either way the gate's in-flight count tracks only live
@@ -769,6 +792,33 @@ func handleJob(ctx context.Context, cfg Config, log *slog.Logger, aesKey []byte,
 			// Config.FanoutCompletion).
 			if cfg.FanoutCompletion && claim.LateResult != "" && runServiceURL != "" {
 				completeSiblingDelivery(ctx, cfg, log, planID, delivery, claim.LateResult)
+				return acquired, nil
+			}
+			// Q266: the winner is still running. GitHub considers THIS deduped runner
+			// assigned to the job (the loser's own AcquireJob claimed a per-delivery
+			// assignment), so its recycle 422s — "runner is currently running a job and
+			// cannot be deleted" — for the winner's ENTIRE runtime. That far outlasts
+			// the bounded Q259 recycle backoff, so recycling now would give up and exit
+			// the listener; under sustained fan-out burst enough losers strand+exit to
+			// collapse the pool. Instead HOLD this slot until the winner concludes —
+			// when it fans completjob out to this delivery (Option A), releasing the
+			// assignment so the 422 finally clears — then let the caller recycle
+			// normally. Only fan-out completion clears the loser's 422, so the defer
+			// applies only when it is enabled; with it off, fall through to the eager
+			// recycle of the documented (worse) opt-out path.
+			if cfg.FanoutCompletion && claim.WinnerConcluded != nil {
+				// The worker slot reserved above is for a pod this loser will never
+				// provision. Free it before parking so a deduped loser never pins
+				// worker capacity while it waits — that would starve the winner's own
+				// pod under a tight maxWorkers ceiling (Q248). Idempotent with the
+				// deferred release.
+				if admitRelease != nil {
+					admitRelease()
+				}
+				outcome := waitForWinnerConclusion(ctx, cfg, log, planID, claim.WinnerConcluded)
+				if cfg.Metrics != nil {
+					cfg.Metrics.FanoutLoserRecycleDeferredTotal.WithLabelValues(cfg.Namespace, cfg.Group, outcome).Inc()
+				}
 			}
 			return acquired, nil
 		}
@@ -903,6 +953,42 @@ func completeSiblingDelivery(ctx context.Context, cfg Config, log *slog.Logger, 
 	}
 	if cfg.Metrics != nil {
 		cfg.Metrics.AbandonedDeliveryCompletionsTotal.WithLabelValues(cfg.Namespace, cfg.Group, outcome).Inc()
+	}
+}
+
+// defaultLoserRecycleDeferTimeout bounds a deduped fan-out loser's wait for its
+// winner to conclude before it recycles anyway (Q266). It sits just past GitHub's
+// ~15-minute unstarted-job timeout: if the winner never concludes (crash/hang),
+// GitHub cancels the whole job at that timeout and releases the loser's assignment,
+// so the loser's recycle 422 has cleared by the time this fallback fires — the wait
+// is a safety valve, not the normal path (a winner concludes in seconds to minutes
+// and always signals via its deferred Complete).
+const defaultLoserRecycleDeferTimeout = 16 * time.Minute
+
+// waitForWinnerConclusion blocks a deduped fan-out loser until its winner concludes
+// — the point at which the winner fans completjob out to this loser's delivery
+// (Option A), releasing GitHub's assignment on the loser's deduped runner so its
+// recycle 422 clears (Q266). It returns the outcome for the metric: "winner_concluded"
+// on the signal, "fallback_timeout" if the winner did not conclude within the bound
+// (a winner crash/hang; GitHub's unstarted-job timeout has released the assignment by
+// then), or "context_cancelled" on shutdown. The loser holds its listener slot and
+// pool agent throughout — it is not counted as a poller (SetPolling(false) was set
+// before the job) so it is never mistaken for available capacity.
+func waitForWinnerConclusion(ctx context.Context, cfg Config, log *slog.Logger, planID string, winnerConcluded <-chan struct{}) string {
+	timeout := cfg.LoserRecycleDeferTimeout
+	if timeout <= 0 {
+		timeout = defaultLoserRecycleDeferTimeout
+	}
+	select {
+	case <-winnerConcluded:
+		return "winner_concluded"
+	case <-cfg.Clock.After(timeout):
+		log.Warn("deferred loser recycle: winner did not conclude within the fallback bound; recycling anyway "+
+			"(GitHub's unstarted-job timeout should have released this deduped runner's assignment by now)",
+			"planID", planID, "timeout", timeout)
+		return "fallback_timeout"
+	case <-ctx.Done():
+		return "context_cancelled"
 	}
 }
 
