@@ -368,24 +368,35 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
 
 ---
 
-## 8. Proposed follow-up Queue items (for the maintainer to file — not added here)
+## 8. Follow-up items (filed on the Queue)
 
-This is a review; these are *proposals* with suggested priority, not filed items.
-(No `docs/STATUS.md` change accompanies this memo.)
+The two gating-signal items are **filed** as deferred, trigger-based Queue entries;
+the third is folded into the Q264 P5 scope (below). These are what operationalize the
+§6.4 gates:
 
-1. **[medium] Adoption signal to gate the removal decisions.** Instrument or record a
-   concrete "known tenants / are we still dogfood-only?" signal so the §6.4 removal
-   gates ("v2 adoption sufficient") are *measurable* rather than a judgment call.
-   Cheap; unblocks a confident v1alpha1-removal decision later. Ties to
+1. **[Q269, Decision-triggered] Adoption signal to make the "v2 adoption sufficient"
+   gate measurable.** Instrument or record a concrete "known tenants / are we still
+   dogfood-only?" signal so the §6.4 removal gates are *measured*, not guessed. Cheap;
+   unblocks a confident v1alpha1-removal decision later. Ties to
    [go-to-market.md](go-to-market.md) Phase 1.
-2. **[low, watch-only] Scale-set upstream maturity watch.** Track `actions/scaleset`
-   reaching GA/v1.0 and the auto-assign contract (upstream [actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting documented —
-   the §6.4 gate for classic-machinery *removal*. Until then, classic stays the
-   fallback. Revisit trigger already noted in
-   [Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation).
-3. **[low] Fold this memo's per-workload viability table (§2) into the operator
-   migration docs** at P5, so operators can self-select Classic vs ScaleSet by their
-   concurrency profile rather than being told "just switch."
+2. **[Q270, Event-triggered / watch] Scale-set upstream maturity watch.** Track
+   `actions/scaleset` reaching GA/v1.0 and the auto-assign contract (upstream
+   [actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting
+   documented — the §6.4 gate for classic-machinery *removal*, and the revisit trigger
+   for the [Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)
+   vendor-vs-own decision. Until then, classic stays the fallback.
+3. **[folded into Q264 P5, not a separate item] Fold this memo's per-workload
+   viability table (§2) into the operator migration docs**, so operators self-select
+   Classic vs ScaleSet by their concurrency profile rather than being told "just
+   switch." This is a natural part of the P5 positioning-doc rewrite (Q264 §4.7),
+   tracked there rather than as its own row.
+
+**Two things deliberately *not* done here** (flagged, not actioned): (a) the §6.4
+gating table should be folded into [Q264 §5a-U8](q264-scale-set-protocol.md#u8--support-matrix-policy)
+as the explicit retirement gates — left for the Q264 owner, since that plan is under
+active P3–P4 work in a parallel session; (b) no `CLAUDE.md` change and no new
+milestone — the protocol/API retirement is already the Q264/Q74 milestone structure,
+and the live-verify-don't-trust-source meta-lesson is already a CLAUDE.md rule.
 
 No new *structural* work is proposed: the Q264 plan is sound and this review endorses
 it. The only substantive recommendation that *differs* from a naive reading of the
