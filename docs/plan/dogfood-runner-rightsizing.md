@@ -1,9 +1,12 @@
 # GAG Dogfood CI Runner Right-Sizing
 
-> **Status: ❌ Open — measurement pending.** Tracked as [Q248](../STATUS.md#Q248).
+> **Status: ◐ Partial — node-pool disk class RESOLVED; pod `requests`/`limits`
+> refinement still open.** Tracked as [Q248](../STATUS.md#Q248).
 > The worker pod's current `requests`/`limits` (CPU 2/4, memory 4Gi/8Gi) were
 > never measured — they are a guess. This plan replaces them with values derived
 > from observed peak usage, and sizes the worker node pool to bin-pack them.
+> **The dominant capacity ceiling turned out to be the node-pool *disk class*,
+> not the pod requests** — see [§ Node-pool disk class](#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05) below (resolved 2026-07-05: `pd-balanced`→`pd-standard`, no quota bump).
 
 ## Goal
 
@@ -203,6 +206,45 @@ Findings:
 Caveats (first pass): only 2 pods captured; `lint` (the longest job) and the full
 `-race` memory peak may not be among them, and `-race` can spike memory higher —
 confirm with a targeted run before finalizing. Attribution is by lifetime only.
+
+## Node-pool disk class: the real `maxWorkers` ceiling (Q248, 2026-07-05)
+
+Phase 1 assumed the worker **pod** requests were the binding constraint. Live
+capacity work (re-routes #4–#6) surfaced a bigger, unrelated ceiling: the worker
+**node** boot **disk class**.
+
+**Root cause.** Each worker node (`workers`/`workers-od`, `e2-standard-4`) had a
+100 GB **`pd-balanced`** boot disk. `pd-balanced` is SSD-class and counts against
+the regional **`SSD_TOTAL_GB` = 500 GB** quota. With the system pool (2×50 GB) and
+base usage also on SSD, ~4 worker nodes exhausted the 500 GB → `maxWorkers ≈ 4`.
+This read as a quota shortage but is **self-inflicted**: the CI workload is tiny
+(peak ~3.8 GiB mem, 34 % node CPU), so SSD-class disks for worker nodes buy
+nothing.
+
+**Fix (no quota bump).** Recreate the worker pool with **`--disk-type=pd-standard`**
+(HDD). `pd-standard` counts against **`DISKS_TOTAL_GB` = 4096 GB**, *not* the SSD
+quota, so worker capacity becomes **CPU/mem-bound** (`CPUS` = 200 quota), not
+SSD-bound. Disk size stays 100 GB for container-image pull scratch (pd-standard is
+a *quota class* change, not a size cut, so no scratch-space risk). The CI job
+classes (Go build/test/lint/envtest) are CPU/mem-bound, not scratch-IOPS-bound, so
+HDD is appropriate; a job class that genuinely needed SSD scratch IOPS would keep
+`pd-balanced` and pay the SSD quota.
+
+**Live proof (2026-07-05).** Recreated `workers-od` as `pd-standard` ×4
+(`e2-standard-4`). With 4 worker nodes + 2 system nodes up: `DISKS_TOTAL_GB` usage
+= **400** (= the 4×100 GB worker disks, now HDD), `SSD_TOTAL_GB` = 220/500 (system
+only — workers no longer counted), `CPUS` = 24/200. Under the old `pd-balanced`
+config those same 4 workers would have pushed SSD to ~620 > 500 → blocked. The
+SSD ceiling is gone; `maxWorkers` is now limited by CPU/mem (≈ 48 `e2-standard-4`
+nodes' worth of headroom), not disk quota.
+
+**Persisted.** [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh)
+`create_worker_pool` and the mirrored recipe in [`gke-dogfood.md`](gke-dogfood.md)
+now provision the `workers` pool with `--disk-type=pd-standard` and `max-nodes=8`.
+`RunnerSet.maxWorkers` raised 4→8 (still far under the CPU-bound ceiling; the
+dogfood matrix is ~7 concurrent jobs). Remaining Q248 work: the pod
+`requests`/`limits` refinement (drop the CPU limit, memory limit → peak×1.3) is
+still open — orthogonal to the disk-class fix.
 
 ## Open questions
 

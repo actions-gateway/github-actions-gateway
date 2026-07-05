@@ -100,8 +100,18 @@ create_worker_pool() {
 		echo "Node pool 'workers' already exists — skipping create."
 		return
 	fi
-	echo "Creating spot worker node pool (autoscaling 0->4)..."
+	echo "Creating spot worker node pool (autoscaling 0->8)..."
 	# Taint keeps GMC/AGC/proxy off worker nodes; worker pods tolerate it.
+	# disk-type=pd-standard (HDD), NOT the GKE default pd-balanced (SSD-class):
+	# pd-balanced counts against the 500 GB regional SSD_TOTAL_GB quota, so a
+	# 100 GB balanced boot disk per worker capped the pool at ~4 nodes (Q248) —
+	# a self-inflicted ceiling, not a real quota shortage. pd-standard counts
+	# against DISKS_TOTAL_GB (4096 GB) instead, so worker capacity becomes
+	# CPU/mem-bound (200 CPU quota), not SSD-bound. The CI job classes are Go
+	# build/test/lint/envtest — CPU/mem-bound, not scratch-IOPS-bound — so HDD is
+	# fine; the 100 GB size is kept for container-image pull scratch. This lifts
+	# max-nodes 4->8 within the existing quota (no quota bump). See
+	# docs/plan/dogfood-runner-rightsizing.md.
 	gcloud container node-pools create workers \
 		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
@@ -110,9 +120,10 @@ create_worker_pool() {
 		--spot \
 		--num-nodes=0 \
 		--min-nodes=0 \
-		--max-nodes=4 \
+		--max-nodes=8 \
 		--enable-autoscaling \
 		--node-taints=dedicated=workers:NoSchedule \
+		--disk-type=pd-standard \
 		--disk-size=100GB
 }
 
@@ -438,8 +449,16 @@ spec:
   templateRef:
     name: default
   runnerLabels: ["self-hosted", "linux", "gag-ci"]
-  maxListeners: 8
-  maxWorkers: 4
+  # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
+  # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. maxListeners
+  # kept MODERATE (16): a high value multiplies GitHub runner records (one per
+  # listener index) which, when they go stale, inflate the registration/recycle
+  # churn that collapses the online pool — a wide maxListeners does NOT translate
+  # into more online idle listeners here (Q224 re-route #7 finding). Do not crank
+  # it up chasing fan-out concurrency without first solving the online-session
+  # seam and starting from a clean namespace.
+  maxListeners: 16
+  maxWorkers: 8
 EOF
 }
 

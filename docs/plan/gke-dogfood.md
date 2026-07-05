@@ -94,8 +94,16 @@ gcloud container clusters create "$CLUSTER" \
 ### A4. Add spot worker node pool
 
 ```bash
-# Spot e2-standard-4 (4 vCPU / 16 GiB), autoscaling 0→4.
+# Spot e2-standard-4 (4 vCPU / 16 GiB), autoscaling 0→8.
 # Taint keeps GMC/AGC/proxy off worker nodes; worker pods tolerate it (see Part B).
+# disk-type=pd-standard (HDD), NOT the GKE default pd-balanced (SSD-class): a
+# pd-balanced boot disk counts against the 500 GB regional SSD_TOTAL_GB quota,
+# so 100 GB/worker capped the pool at ~4 nodes (Q248) — a self-inflicted ceiling,
+# not a real quota shortage. pd-standard counts against DISKS_TOTAL_GB (4096 GB)
+# instead, so capacity is CPU/mem-bound (200 CPU quota), not SSD-bound. The CI
+# job classes are CPU/mem-bound (Go build/test/lint/envtest), not scratch-IOPS-
+# bound, so HDD is fine; 100 GB is kept for container-image pull scratch. This
+# lifts max-nodes 4→8 within existing quota (no quota bump).
 gcloud container node-pools create workers \
   --cluster="$CLUSTER" \
   --zone="$ZONE" \
@@ -103,9 +111,10 @@ gcloud container node-pools create workers \
   --spot \
   --num-nodes=0 \
   --min-nodes=0 \
-  --max-nodes=4 \
+  --max-nodes=8 \
   --enable-autoscaling \
   --node-taints=dedicated=workers:NoSchedule \
+  --disk-type=pd-standard \
   --disk-size=100GB
 ```
 
@@ -392,8 +401,12 @@ spec:
   templateRef:
     name: default
   runnerLabels: ["self-hosted", "linux", "gag-ci"]
-  maxListeners: 8
-  maxWorkers: 4
+  # maxListeners MODERATE (16), maxWorkers 8: the pd-standard disk right-size (Q248)
+  # lifted the worker-node ceiling off the SSD quota. A high maxListeners multiplies
+  # GitHub runner records and inflates registration/recycle churn without adding
+  # online idle listeners (Q224 re-route #7) — keep it moderate.
+  maxListeners: 16
+  maxWorkers: 8
 EOF
 ```
 
@@ -905,6 +918,70 @@ gh api /repos/"$REPO"/actions/runners \
 > [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md) §7.
 > Evidence: AGC debug logs (`agc:e2e-cacd4c6`), reruns `28726094554`/`28726094563`
 > (run 1, `02:52Z`) and `28725801848`/`28725801860` (run 2, `03:00Z`).
+>
+> **Re-route #7 — Q248 disk right-size (SSD ceiling GONE, no quota bump) + Q224/Q266
+> re-benchmark (2026-07-05).** Two goals in one turn-up: (1) lift the `maxWorkers ≈ 4`
+> ceiling that re-route #6 attributed to the `SSD_TOTAL_GB = 500` quota, *without* a
+> quota bump; (2) re-benchmark the fan-out matrix at the wider pool now that [Q266](../STATUS.md#Q266)
+> (#525) fixed the loser slot-stranding recycle.
+>
+> **Q248 — disk class was the ceiling; `pd-standard` removes it (FIXED + PROVEN).**
+> The ~4-node cap was **not** a quota shortage: each worker node's 100 GB boot disk was
+> **`pd-balanced`** (SSD-class), which counts against the 500 GB `SSD_TOTAL_GB` quota, so
+> ~4 worker nodes exhausted it. The CI workload is tiny, so SSD-class worker disks buy
+> nothing. Recreated `workers-od` as **`e2-standard-4 ×4` with `--disk-type=pd-standard`**
+> (HDD; counts against `DISKS_TOTAL_GB = 4096`, **not** the SSD quota). Live proof with 4
+> worker + 2 system nodes up: `DISKS_TOTAL_GB` = **400** (the 4×100 GB worker disks, now
+> HDD), `SSD_TOTAL_GB` = **220/500** (system only — workers no longer counted), `CPUS` =
+> **24/200**. Under the old `pd-balanced` config those 4 workers would have pushed SSD to
+> ~620 > 500 → blocked. Worker-node utilization during jobs: **2–5 % CPU / 8–14 % mem** —
+> confirming the SSD-class disk was pure waste. **`maxWorkers` is now CPU/mem-bound (room
+> for ~48 `e2-standard-4` nodes), not SSD-bound.** Persisted: `scripts/dogfood/setup.sh`
+> + the Part A4 recipe above now provision `--disk-type=pd-standard`, `max-nodes=8`,
+> `maxWorkers=8`; details in [`dogfood-runner-rightsizing.md`](dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
+>
+> **Deploy.** Built `agc:e2e-f681d9d` (amd64 `sha256:86aa1b1e…`, HEAD/#525 = Option A
+> default-on + Q266 loser-recycle-defer), deployed via the GMC `AGC_IMAGE` patch with **no**
+> explicit `AGC_FANOUT_COMPLETION` env (verifying the shipped default; imageID matched the
+> pushed digest). RunnerTemplate already pinned `dogfood-runner:2.335.1` (Q239 not
+> regressed), worker CPU request 1.
+>
+> **Re-benchmark — Q266's targeted seam is GONE, but a clean "holds at `maxWorkers`"
+> measurement STILL could not be obtained (same confound class as #6).** Fired the ~6-job
+> `unit-test.yml` matrix (push-event reruns of `28731081406`/`28731081446`, sha `f681d9d`).
+> - **`maxListeners = 48` (the "≫ maxWorkers×fan-out" lever):** the pool **collapsed to
+>   online = 0**. The AGC registered ~44–48 `ci-*` runner records but kept **zero online**
+>   at GitHub; the dominant seam was the **broker-credential recycle** (`broker token
+>   exchange rejected … "Registration … was not found"` 400) — the Q259/Q114 registration
+>   churn, *worsened* by the wide `maxListeners` multiplying stale records (mass runner-record
+>   delete stays **guard-denied**, so no clean namespace). *(A premature AGC restart I issued
+>   mid-run also orphaned in-flight jobs — my confound, not the code's.)*
+> - **`maxListeners = 12` (moderate, post-restart, 0 broker rejections):** the pool **held
+>   stably — no fatal collapse**. Over the wave: **dedup 7, Option A `completejob` 5** (fan-out
+>   completion firing), **deduped losers PARK** (busy-at-GitHub but pod-less, the Q266 defer
+>   behaviour), **0 `deregister conflicting`/`recycle blocked`/fatal listener exits** (Q265
+>   had 41/38), **0 `worker capacity full`**. **But throughput serialized to ~1 concurrent
+>   worker pod** (peak busy runners 4, peak concurrent pods 1): at fan-out width ≈ 6, a
+>   `maxListeners = 12` pool admits only ≈ 12/6 = **2 concurrent fan-out jobs**, and the AGC
+>   held **~0 online *idle* listeners**, so GitHub trickled jobs one fan-out per wave and
+>   several jobs stranded `in_progress`/`queued` waiting for a slot.
+>
+> **Verdict.** **Q248: DONE** (disk ceiling removed, no quota bump). **Q266: its seam is
+> eliminated** — the fatal deregister-conflict listener exits that collapsed the pool in #6
+> are **0**; losers park, Option A + dedup work live. **Q224: NOT green — do not close.** The
+> residual is neither the Q266 slot-stranding seam nor the `completejob` tax (0 capacity
+> rejections) but a **two-way bind in the many-acquirers fan-out**: throughput needs
+> `maxListeners ≈ maxWorkers × fan-out`, yet a wide `maxListeners` multiplies GitHub runner
+> records and inflates the registration/recycle churn that keeps the **online idle pool near
+> 0** — so *neither* a low nor a high `maxListeners` yields a wide, stable, online-and-idle
+> pool. The un-cleanable stale-record clutter (guard-blocked) compounds it. A truly clean
+> measurement needs (a) the **online-session / broker-credential recycle seam** fixed
+> (Q259/Q114 family) so listeners actually stay online, and (b) a **clean-namespace** run —
+> both still blocked in-session. This reinforces (does not force) the [Q264](q264-scale-set-protocol.md)
+> scale-set case (one acquirer, no fan-out, no per-listener record multiplication), which
+> stays **deferred** — no `completejob`-tax wall was seen. Evidence: AGC debug logs
+> (`agc:e2e-f681d9d`, digest `86aa1b1e`), reruns `28731081406`/`28731081446` (bursts
+> `06:29Z`/`06:45Z`); quota `DISKS_TOTAL_GB=400`, `SSD_TOTAL_GB=220/500`.
 >
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
