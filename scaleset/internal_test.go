@@ -19,7 +19,9 @@ func TestStatusError_Mapping(t *testing.T) {
 		{204, func(e error) bool { return e == nil }},
 		{401, func(e error) bool { var t *UnauthorizedError; return errors.As(e, &t) }},
 		{403, func(e error) bool { var t *UnauthorizedError; return errors.As(e, &t) }},
-		{409, func(e error) bool { var t *SessionConflictError; return errors.As(e, &t) }},
+		// statusError maps a 409 to the neutral ConflictError; each call translates it
+		// into its endpoint-specific conflict type (SessionConflict / RunnerNameConflict).
+		{409, func(e error) bool { var t *ConflictError; return errors.As(e, &t) }},
 		{404, func(e error) bool { var t *NotFoundError; return errors.As(e, &t) }},
 		{410, func(e error) bool { var t *NotFoundError; return errors.As(e, &t) }},
 		{429, func(e error) bool { var t *RateLimitError; return errors.As(e, &t) }},

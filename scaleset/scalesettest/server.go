@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,6 +85,12 @@ type Server struct {
 	// dotcom auto-assign path.
 	ghesAcquireFlow bool
 
+	// conflictJITNames holds exact runner names generatejitconfig rejects with 409, and
+	// conflictJITPrefixes holds name prefixes it always rejects — the levers for the
+	// Q270 runner-name-conflict path (a stale registered runner name).
+	conflictJITNames    map[string]bool
+	conflictJITPrefixes []string
+
 	adminToken    string
 	adminTokenTTL time.Duration
 
@@ -105,9 +112,10 @@ type Server struct {
 // New creates and starts a stub in the default dotcom auto-assign mode.
 func New() *Server {
 	s := &Server{
-		adminTokenTTL: time.Hour,
-		scaleSets:     make(map[int]*scaleSet),
-		nextReqID:     1000,
+		adminTokenTTL:    time.Hour,
+		scaleSets:        make(map[int]*scaleSet),
+		nextReqID:        1000,
+		conflictJITNames: make(map[string]bool),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orgs/{org}/actions/runners/registration-token", s.handleRegistrationToken)
@@ -149,6 +157,41 @@ func (s *Server) EnableGHESAcquireFlow() {
 	s.mu.Lock()
 	s.ghesAcquireFlow = true
 	s.mu.Unlock()
+}
+
+// FailJITConfigName makes generatejitconfig reject the exact runner name with 409
+// Conflict, modelling a stale registered runner name. Failing only the base name (and
+// not its suffixed retries) models a *transient* conflict the listener clears by
+// retrying under a fresh (numeric-suffixed) name (Q270).
+func (s *Server) FailJITConfigName(name string) {
+	s.mu.Lock()
+	s.conflictJITNames[name] = true
+	s.mu.Unlock()
+}
+
+// FailJITConfigNamePrefix makes generatejitconfig always reject any runner name with
+// the given prefix with 409 Conflict, modelling a *persistent* conflict even fresh-name
+// retries cannot clear (the base name and every numeric-suffixed retry share the
+// prefix). Scoped to one job's names, it proves a permanently stuck assignment does not
+// wedge the queue cursor behind it, so the other jobs still provision (Q270).
+func (s *Server) FailJITConfigNamePrefix(prefix string) {
+	s.mu.Lock()
+	s.conflictJITPrefixes = append(s.conflictJITPrefixes, prefix)
+	s.mu.Unlock()
+}
+
+// jitConfigConflicts reports whether generatejitconfig should 409 for name. Caller
+// holds s.mu.
+func (s *Server) jitConfigConflicts(name string) bool {
+	if s.conflictJITNames[name] {
+		return true
+	}
+	for _, p := range s.conflictJITPrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetAdminTokenTTL controls the TTL of the admin JWT minted by the
@@ -558,6 +601,12 @@ func (s *Server) handleGenerateJIT(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&in)
+	if s.jitConfigConflicts(in.Name) {
+		// A stale runner already holds this name — the runner-name 409 the client maps to
+		// *RunnerNameConflictError (Q270), distinct from a session-create conflict.
+		http.Error(w, `{"message":"runner name already exists"}`, http.StatusConflict)
+		return
+	}
 	blob := base64.StdEncoding.EncodeToString([]byte(`{".runner":{},".credentials":{}}`))
 	out := scaleset.JITRunnerConfig{EncodedJITConfig: blob}
 	out.Runner.ID = 77

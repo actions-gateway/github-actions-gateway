@@ -810,13 +810,18 @@ parallel implementation behind a flag, then cutover.
   - **U5 residual — NOT tested this run:** no mid-job eviction performed (the two
     ~10-min durations were natural runtime / a job timeout, not lock lapses).
     U5-core was offline-probed (§2b-5); U5-under-pod-eviction stays a follow-up.
-  - **Minor code findings (Queue):** (1) `scaleset.statusError` maps **every** 409 to
-    `SessionConflictError` ("session already exists") — a `generatejitconfig`
-    runner-name conflict is mislabeled ([`client.go:348`](../../scaleset/client.go)).
-    (2) The listener retries `generatejitconfig` with **no backoff** and never advances
-    the cursor on a persistent 409 → a tight ~1/s replay loop that can wedge a batch on
-    a stale registered runner-name
-    ([`listener.go:410`](../../cmd/agc/internal/scalesetlistener/listener.go)).
+  - **Minor code findings (Queue):** (1) ✅ **FIXED (Q270).** `scaleset.statusError` mapped
+    **every** 409 to `SessionConflictError` — a `generatejitconfig` runner-name conflict
+    was mislabeled. Now `statusError` yields a neutral `ConflictError` and each call
+    translates it: `CreateSession`→`SessionConflictError`, `GenerateJITConfig`→a new
+    `RunnerNameConflictError` ([`client.go`](../../scaleset/client.go),
+    [`errors.go`](../../scaleset/errors.go)).
+    (2) ✅ **FIXED (Q270).** The listener retried `generatejitconfig` with **no backoff**
+    and never advanced the cursor on a persistent 409 → a replay loop that wedged the
+    batch on a stale registered runner-name. Now a runner-name conflict retries under a
+    *fresh* runner name (bounded by `maxJITNameConflictRetries`, backed off), and a
+    persistently-conflicting job is **skipped** so the cursor advances past it and the
+    other jobs still provision ([`listener.go`](../../cmd/agc/internal/scalesetlistener/listener.go)).
     (3) **Deploy-coupling:** the scale-set worker **requires** the P3c wrapper; a stale
     wrapper silently runs the classic payload path and every worker errors
     `open …/job-payload/payload` (P5 rollout note — bump wrapper in lockstep with AGC).

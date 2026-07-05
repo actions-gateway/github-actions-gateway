@@ -66,6 +66,13 @@ const defaultPollBackoff = 2 * time.Second
 // leaves it empty (the actions-runner convention).
 const defaultWorkFolder = "_work"
 
+// maxJITNameConflictRetries bounds how many times provisioning re-mints a JIT config
+// under a fresh runner name after a RunnerNameConflictError. Past it, the assignment is
+// skipped (not replayed forever), so a persistently colliding name — a stale registered
+// runner — cannot wedge the queue cursor behind it (Q270). The skipped job is
+// re-assigned or timed out server-side.
+const maxJITNameConflictRetries = 3
+
 // Job is one assigned job the Listener hands to its ProvisionFunc. The listener has
 // already minted the JIT config; the provisioner stages it into the worker Secret and
 // creates a run.sh --jitconfig worker pod.
@@ -386,41 +393,57 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 		}
 	}
 
-	allProvisioned := true
+	ackable := true
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
-		if !l.provisionAssigned(ctx, ssID, aj) {
-			allProvisioned = false
+		if l.provisionAssigned(ctx, ssID, aj) == provisionRetry {
+			ackable = false
 		}
 	}
 	for _, cj := range completedJobs(jobs) {
 		l.completeJob(cj)
 	}
 
-	// Ack only when every assigned job in the message was provisioned; otherwise leave
-	// the cursor so the message redelivers and the failed job is retried.
-	if allProvisioned {
+	// Ack (advance the cursor) unless a job needs a redelivery retry. A provisioned or
+	// already-provisioned job is ackable; so is a permanently-skipped one (advancing past
+	// it is what stops one stuck assignment from wedging the batch — Q270). Only a
+	// transient failure (provisionRetry) holds the cursor so the message redelivers.
+	if ackable {
 		l.advanceCursor(msg.MessageID)
 	}
 }
 
+// provisionOutcome is the result of trying to provision one assigned job — the signal
+// handleMessage uses to decide whether the message may be acked (Q270).
+type provisionOutcome int
+
+const (
+	// provisionAcked: the job is provisioned (or already was) — safe to advance the cursor.
+	provisionAcked provisionOutcome = iota
+	// provisionRetry: a transient failure — leave the cursor so the message redelivers and
+	// the job is retried on a later poll.
+	provisionRetry
+	// provisionSkip: the job cannot be provisioned (a persistent runner-name conflict) —
+	// advance the cursor anyway so this one stuck assignment does not wedge the batch.
+	provisionSkip
+)
+
 // provisionAssigned mints a JIT config for an assigned job and provisions its worker,
-// idempotently. It returns true when the job is provisioned (or already was) and false
-// when provisioning failed and should be retried.
-func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) bool {
+// idempotently. It returns provisionAcked when the job is provisioned (or already was),
+// provisionRetry on a transient failure that should redeliver, and provisionSkip when a
+// persistent runner-name conflict makes the job unprovisionable (skip it rather than
+// wedge the cursor — Q270).
+func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) provisionOutcome {
 	l.mu.Lock()
 	already := l.provisioned[aj.JobID]
 	l.mu.Unlock()
 	if already {
-		return true
+		return provisionAcked
 	}
 
-	runnerName := l.runnerName(aj.JobID)
-	jit, err := l.cfg.Client.GenerateJITConfig(ctx, ssID, runnerName, l.workFolder)
-	if err != nil {
-		l.log.Warn("scaleset: generate JIT config", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
-		l.metricsIncProvisionError()
-		return false
+	jit, runnerName, outcome := l.generateJITConfig(ctx, ssID, aj.JobID)
+	if outcome != provisionAcked {
+		return outcome
 	}
 	if err := l.cfg.Provision(ctx, Job{
 		JobID:           aj.JobID,
@@ -430,13 +453,46 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	}); err != nil {
 		l.log.Warn("scaleset: provision worker", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
 		l.metricsIncProvisionError()
-		return false
+		return provisionRetry
 	}
 	l.mu.Lock()
 	l.provisioned[aj.JobID] = true
 	l.mu.Unlock()
 	l.metricsIncProvisioned()
-	return true
+	return provisionAcked
+}
+
+// generateJITConfig mints a JIT config for a job, recovering from a runner-name conflict
+// by retrying under a fresh name with backoff, bounded by maxJITNameConflictRetries. It
+// returns the config and the runner name actually registered on success (provisionAcked);
+// provisionSkip when the name conflict persists past the bound (fail this one job rather
+// than replay the same request forever — Q270); and provisionRetry on any other error, so
+// the message redelivers. Replaying the same colliding name would 409 indefinitely and
+// wedge the queue cursor, so a fresh name — not a bare replay — is the correct recovery.
+func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string) (*scaleset.JITRunnerConfig, string, provisionOutcome) {
+	for attempt := 0; ; attempt++ {
+		name := l.runnerName(jobID, attempt)
+		jit, err := l.cfg.Client.GenerateJITConfig(ctx, ssID, name, l.workFolder)
+		if err == nil {
+			return jit, name, provisionAcked
+		}
+		if !isRunnerNameConflict(err) {
+			l.log.Warn("scaleset: generate JIT config", "scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "err", err)
+			l.metricsIncProvisionError()
+			return nil, "", provisionRetry
+		}
+		if attempt >= maxJITNameConflictRetries {
+			l.log.Warn("scaleset: runner name conflict persists, skipping job",
+				"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "attempts", attempt+1, "err", err)
+			l.metricsIncProvisionError()
+			return nil, "", provisionSkip
+		}
+		l.log.Info("scaleset: runner name conflict, retrying under a fresh name",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "attempt", attempt+1)
+		if !l.backoff(ctx) { // ctx cancelled mid-backoff — a fresh listener re-reads the queue
+			return nil, "", provisionRetry
+		}
+	}
 }
 
 // completeJob records a terminal JobCompleted, counting the completion metric at most
@@ -485,10 +541,17 @@ func (l *Listener) deleteSession(ssID int, sess *scaleset.RunnerScaleSetSession)
 	}
 }
 
-// runnerName derives a deterministic runner name from a jobID, so re-provisioning the
-// same job (replay) names the same runner.
-func (l *Listener) runnerName(jobID string) string {
-	return l.cfg.ScaleSetName + "-" + jobID
+// runnerName derives a deterministic runner name from a jobID: attempt 0 is the base
+// name, so a replay of the same job (attempt 0 again) names the same runner and stays
+// idempotent. A non-zero attempt appends a numeric suffix, the fresh name used to
+// recover from a runner-name conflict — the base name collided with a stale registration
+// (Q270).
+func (l *Listener) runnerName(jobID string, attempt int) string {
+	base := l.cfg.ScaleSetName + "-" + jobID
+	if attempt == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s-%d", base, attempt)
 }
 
 func (l *Listener) metricsIncAssigned() {
@@ -530,4 +593,10 @@ func isUnauthorized(err error) bool {
 func isNotFound(err error) bool {
 	var ne *scaleset.NotFoundError
 	return errors.As(err, &ne)
+}
+
+// isRunnerNameConflict reports whether err is (or wraps) a scaleset.RunnerNameConflictError.
+func isRunnerNameConflict(err error) bool {
+	var rce *scaleset.RunnerNameConflictError
+	return errors.As(err, &rce)
 }

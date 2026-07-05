@@ -441,6 +441,30 @@ func TestClient_CreateSessionConflict(t *testing.T) {
 	}
 }
 
+// TestClient_GenerateJITConfigRunnerNameConflict maps a generatejitconfig 409 to
+// *RunnerNameConflictError — distinct from a session-create 409's *SessionConflictError,
+// so the mislabel is gone (Q270).
+func TestClient_GenerateJITConfigRunnerNameConflict(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx := testContext(t)
+	c := newClient(t, srv, nil)
+	ss, _ := setupScaleSet(t, ctx, c)
+
+	srv.FailJITConfigName("taken-name")
+	_, err := c.GenerateJITConfig(ctx, ss.ID, "taken-name", "")
+
+	var nameConflict *scaleset.RunnerNameConflictError
+	if !errors.As(err, &nameConflict) {
+		t.Fatalf("GenerateJITConfig err = %v, want *RunnerNameConflictError", err)
+	}
+	// The same 409 must NOT surface as a session conflict — that was the mislabel.
+	var sessConflict *scaleset.SessionConflictError
+	if errors.As(err, &sessConflict) {
+		t.Fatalf("GenerateJITConfig err = %v, must not be *SessionConflictError", err)
+	}
+}
+
 // TestClient_RegistrationTokenScope covers repo-scoped registration path derivation.
 func TestClient_RegistrationTokenScope(t *testing.T) {
 	srv := scalesettest.New()

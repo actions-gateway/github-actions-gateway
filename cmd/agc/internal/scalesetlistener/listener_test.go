@@ -281,6 +281,80 @@ func TestListener_GHESAcquireFlow(t *testing.T) {
 	assert.GreaterOrEqual(t, srv.AcquireJobsCalls(), 1, "the GHES path must claim via acquirejobs")
 }
 
+// TestListener_TransientRunnerNameConflictResolvesWithFreshName proves the Q270 fresh-name
+// recovery: the base runner name 409s once (a stale registration), and the listener retries
+// under a fresh suffixed name, which succeeds — the job provisions exactly once, with no
+// permanent error.
+func TestListener_TransientRunnerNameConflictResolvesWithFreshName(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv}
+	m := newCountingMetrics()
+	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+
+	_, jobID := srv.EnqueueJob(ssID)
+	// Fail only the exact base runner name; the first fresh-name retry (…-1) clears it.
+	srv.FailJITConfigName("linux-" + jobID)
+
+	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
+		"a transient runner-name conflict must resolve under a fresh name and provision the job")
+	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the job provisions exactly once")
+	assert.GreaterOrEqual(t, srv.GenerateJITCalls(), 2, "the base-name 409 forces at least one fresh-name retry")
+
+	_, provisioned, errs := m.snapshot()
+	assert.Equal(t, 1, provisioned, "one worker provisioned")
+	assert.Zero(t, errs, "a self-healed transient conflict is not counted as a provision error")
+}
+
+// TestListener_PersistentRunnerNameConflictDoesNotWedgeBatch is the core Q270 fix: a job
+// whose runner name conflicts on every attempt (base AND every fresh-name retry) is skipped
+// after a bounded number of tries, so the queue cursor advances past it and the other jobs
+// still provision — the stuck assignment no longer wedges the batch.
+func TestListener_PersistentRunnerNameConflictDoesNotWedgeBatch(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv}
+	m := newCountingMetrics()
+	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+
+	// Enqueue the stuck job FIRST so its (lower-id) message sits ahead of the healthy one:
+	// under the old no-skip behavior its unadvanced cursor would wedge the healthy job behind
+	// it. Its base name AND every numeric-suffixed retry share the prefix, so it never clears.
+	_, stuckJobID := srv.EnqueueJob(ssID)
+	srv.FailJITConfigNamePrefix("linux-" + stuckJobID)
+	_, healthyJobID := srv.EnqueueJob(ssID)
+
+	require.Eventually(t, func() bool {
+		for _, id := range prov.jobIDs() {
+			if id == healthyJobID {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond,
+		"the healthy job must provision even though an earlier job is permanently stuck")
+
+	assert.NotContains(t, prov.jobIDs(), stuckJobID, "the permanently-conflicting job never provisions")
+
+	// A job enqueued AFTER the stuck one also provisions — proof the cursor advanced past the
+	// stuck message rather than wedging behind it.
+	_, laterJobID := srv.EnqueueJob(ssID)
+	require.Eventually(t, func() bool {
+		for _, id := range prov.jobIDs() {
+			if id == laterJobID {
+				return true
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond,
+		"a later job must still provision — the stuck assignment must not wedge the cursor")
+
+	_, _, errs := m.snapshot()
+	assert.GreaterOrEqual(t, errs, 1, "the skipped stuck job is counted as a provision error")
+}
+
 // TestListener_RequiredConfig covers constructor validation.
 func TestListener_RequiredConfig(t *testing.T) {
 	_, err := scalesetlistener.New(scalesetlistener.Config{})
