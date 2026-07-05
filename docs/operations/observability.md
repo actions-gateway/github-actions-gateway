@@ -22,6 +22,7 @@ For SLO targets associated with these metrics, see [Appendix A — Capacity Targ
   - [Verifying the metrics scrape TLS (GMC manager)](#verifying-the-metrics-scrape-tls-gmc-manager)
   - [Scraping per-tenant AGC and proxy metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls)
 - [Full Metrics Reference](#full-metrics-reference)
+  - [Scale-set acquisition tier (Q264)](#scale-set-acquisition-tier-q264)
   - [Proxy metrics](#proxy-metrics)
 - [Symptom → Metric Mapping](#symptom--metric-mapping)
 - [Recommended Alert Rules](#recommended-alert-rules)
@@ -333,6 +334,17 @@ remove the files when finished.)
 | `actions_gateway_proxy_quota_exceeded` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaExceeded=True` (Q82): proxy replica creates are being rejected by the `ResourceQuota` now. Error — page. |
 | `actions_gateway_runnergroups_degraded` | Gauge | `namespace`, `name` | `1` when `RunnerGroupsDegraded=True` (Q158): one or more of the gateway's owned `RunnerGroup`s report an impairing condition (`CredentialUnavailable`/`Degraded`/`RunnerVersionTooOld`/`WorkersUnschedulable`). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate `Ready`. |
 | `actions_gateway_egress_rules_stale` | Gauge | `namespace`, `name` | `1` when `EgressRulesStale=True` (Q157): the gateway's GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy `NetworkPolicy` drift from GitHub's published ranges. Advisory — does not gate `Ready`; page if sustained, as new GitHub ranges will be silently dropped. |
+
+### Scale-set acquisition tier (Q264)
+
+These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A default (`Classic`) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_scaleset_jobs_assigned_total` | Counter | `namespace`, `runner_set` | Jobs the scale set's queue delivered as `JobAssigned` to the listener. Because the scale-set protocol assigns each job exactly once (no sibling fan-out), this tracks demand 1:1 — unlike the classic `jobs_acquired_total`, there is no duplicate-delivery series to correlate against. |
+| `actions_gateway_scaleset_jobs_provisioned_total` | Counter | `namespace`, `runner_set` | Worker pods successfully provisioned, one per assigned job. A steady gap below `…_jobs_assigned_total` means provisioning is lagging or failing — correlate with `…_provision_errors_total` and the worker-pod `ResourceQuota` gauges. |
+| `actions_gateway_scaleset_provision_errors_total` | Counter | `namespace`, `runner_set` | Failed provision attempts (JIT-config mint or worker pod create); the job is left un-provisioned and retried on a later poll. A sustained rate warrants checking the run service's `generate-jitconfig` responses and namespace quota headroom. |
+| `actions_gateway_scaleset_jobs_completed_total` | Counter | `namespace`, `runner_set`, `result` | Terminal `JobCompleted` messages the queue delivered, by GitHub-reported `result` (e.g. `succeeded`, `failed`, `canceled`). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message. |
 
 ### Proxy metrics
 
