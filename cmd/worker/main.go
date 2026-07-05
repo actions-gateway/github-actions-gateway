@@ -88,6 +88,23 @@ const (
 	// SSL_CERT_FILE points the .NET HttpClient at this file so its TLS
 	// handshake with the egress proxy succeeds.
 	proxyCABundleFile = "proxy-ca-bundle.crt"
+
+	// workerModeEnv selects the wrapper's execution mode. Empty (the default) is
+	// the classic M3 mode: the AGC already acquired the job and hands its payload
+	// to Runner.Worker over anonymous pipes. workerModeScaleSet is the Q264 Option E
+	// mode: there is no payload — the pod runs the full runner (run.sh --jitconfig),
+	// which opens its own broker session, pulls its one job, and reports its own
+	// completion (§2.4). The AGC provisioner sets this env for ScaleSet-protocol sets.
+	workerModeEnv      = "WORKER_MODE"
+	workerModeScaleSet = "scaleset"
+
+	// runnerRunScript is the full-runner entrypoint the actions-runner image ships
+	// at RUNNER_HOME_DIR/run.sh. The scale-set mode execs it with --jitconfig.
+	runnerRunScript = "run.sh"
+
+	// jitConfigFlag is the run.sh flag that consumes the base64 JIT config blob a
+	// scale-set worker registers with (the same blob generatejitconfig returns).
+	jitConfigFlag = "--jitconfig"
 )
 
 // systemCABundleCandidates lists the canonical OS trust-bundle paths we know
@@ -196,6 +213,14 @@ func logLevelFromEnv() slog.Level {
 func run() error {
 	payloadDir := envOr("PAYLOAD_SECRET_PATH", defaultPayloadPath)
 	runnerHome := envOr("RUNNER_HOME_DIR", defaultRunnerHome)
+
+	// Scale-set mode (Q264 Option E): no payload to hand off — the pod runs the full
+	// runner, which pulls its own job through its own session. The wrapper keeps only
+	// its proxy-CA trust duty; the pipes handoff and Runner.Worker spawn below do not
+	// run for a ScaleSet worker.
+	if strings.EqualFold(os.Getenv(workerModeEnv), workerModeScaleSet) {
+		return runScaleSet(payloadDir, runnerHome)
+	}
 
 	// 1. Read payload from Secret mount.
 	payload, err := readPayload(payloadDir)
@@ -310,6 +335,71 @@ func run() error {
 		return fmt.Errorf("Runner.Worker: %w", waitErr)
 	}
 	return nil
+}
+
+// runScaleSet is the Q264 Option E worker path. Unlike the classic mode there is no
+// acquired payload to hand off: the pod runs the full actions-runner via
+// `run.sh --jitconfig <blob>`, which opens its own broker session, pulls its single
+// assigned job, renews its own lock, and reports its own completion (§2.4). The
+// wrapper's only remaining duty is installing the per-tenant egress-proxy CA trust so
+// the runner's own TLS to GitHub through the proxy succeeds — the same isolation the
+// classic path preserves; the App token still never reaches the pod (only the one-shot
+// JIT config does).
+//
+// The JIT blob is the base64 value generatejitconfig returned, staged by the AGC
+// provisioner under the Secret's jitconfig key. It is passed to run.sh as the probed
+// interface exposes it (§2b-4). It appears in the runner process's argv, but grants
+// nothing the job it configures does not already run with (it is that runner's own
+// single-job credential in that runner's own pod), so it is not a privilege boundary.
+func runScaleSet(payloadDir, runnerHome string) error {
+	blob, err := readJITBlob(payloadDir)
+	if err != nil {
+		return err
+	}
+
+	proxyTrustEnv, err := installProxyCATrust(os.Getenv("PROXY_CA_CERT_PATH"), runnerHome)
+	if err != nil {
+		return fmt.Errorf("install proxy CA trust: %w", err)
+	}
+
+	runScript := filepath.Join(runnerHome, runnerRunScript)
+	cmd := exec.Command(runScript, jitConfigFlag, blob) //nolint:gosec // G204: runScript is the runner image's fixed run.sh; blob is the AGC-minted JIT config
+	cmd.Dir = runnerHome
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if len(proxyTrustEnv) > 0 {
+		cmd.Env = append(cmd.Env, proxyTrustEnv...)
+	}
+
+	slog.Info("starting scale-set runner", "script", runScript)
+	if err := cmd.Run(); err != nil {
+		// run.sh is the full runner, which already uses the conventional 0-is-success
+		// exit convention (it translates Runner.Worker's 100-offset itself), so the
+		// exit code passes through unmodified — no translateWorkerExitCode.
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return fmt.Errorf("run.sh: %w", err)
+	}
+	return nil
+}
+
+// readJITBlob reads and validates the base64 JIT config blob a scale-set worker
+// registers with, from <payloadDir>/jitconfig. Unlike the classic materializeJITConfig
+// (which decodes the blob into runner config files), the scale-set path hands the blob
+// verbatim to run.sh --jitconfig, so a missing or empty blob is a hard error: without
+// it the runner cannot register.
+func readJITBlob(payloadDir string) (string, error) {
+	raw, err := os.ReadFile(filepath.Join(payloadDir, jitConfigFile))
+	if err != nil {
+		return "", fmt.Errorf("read jitconfig: %w", err)
+	}
+	blob := strings.TrimSpace(string(raw))
+	if blob == "" {
+		return "", fmt.Errorf("empty jitconfig blob at %s/%s: a scale-set worker cannot register without a JIT config", payloadDir, jitConfigFile)
+	}
+	return blob, nil
 }
 
 // translateWorkerExitCode maps a Runner.Worker process exit code onto the exit
