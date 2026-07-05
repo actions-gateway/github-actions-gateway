@@ -2,15 +2,15 @@
 
 **Status:** ACTIVE — the Option E rewrite is committed. Phases **P0 (spike)**,
 **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
-scenarios, run 2026-07-04**)**, and **P2 (the `scaleset/` client package + its
-`scalesettest` fake, §6)** are DONE; **P3 (AGC wiring behind the
-`acquisitionProtocol` field) is IN PROGRESS** — sub-PRs (a) (API field + CEL + GMC
-webhook), (b) (the standalone `scalesetlistener` engine + the fan-out-free
-acceptance twin), and (c) (the worker `run.sh --jitconfig` mode + provisioner JIT
-staging) are landed, all default `Classic`; (d) the RunnerSet-controller wiring
-that makes `ScaleSet` live behind the field + its envtest is the remaining step
-(§6-P3). The classic AGC acquisition path is
-**still unchanged** — P2 is a standalone leaf module with no AGC wiring. Every
+scenarios, run 2026-07-04**)**, **P2 (the `scaleset/` client package + its
+`scalesettest` fake, §6)**, and **P3 (AGC wiring behind the `acquisitionProtocol`
+field) are DONE** — sub-PRs (a) (API field + CEL + GMC webhook), (b) (the standalone
+`scalesetlistener` engine + the fan-out-free acceptance twin), (c) (the worker
+`run.sh --jitconfig` mode + provisioner JIT staging), and (d) (the RunnerSet-controller
+wiring that makes `ScaleSet` live behind the field + its lifecycle envtest) are landed,
+**all default `Classic`** so nothing changes for existing users until P5. **P4 (live
+dogfood validation, the Q224 acceptance gate) is next.** A Classic RunnerSet's
+acquisition path is **byte-for-byte unchanged**. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
 the deferred fallback pursued **only if live re-route #5 rules Option A
@@ -681,7 +681,7 @@ parallel implementation behind a flag, then cutover.
   tenant before the P3 listener relies on delete-acking over pure cursor
   advance. **P3 now builds on:** `scaleset.Client` (one per RunnerSet) + the
   `scalesettest` fake for the listener's acceptance twin.
-- **P3 — parallel acquisition tier behind the API field (L).** Per U7 (§5a):
+- **P3 — parallel acquisition tier behind the API field (L). ✅ DONE.** Per U7 (§5a):
   `RunnerSet.spec.acquisitionProtocol` (v2alpha1, default `Classic`,
   immutable, CEL-validated single label) selects a scale-set listener per set
   (one goroutine: session + capacity-gated poll + dispatch) and the
@@ -728,14 +728,29 @@ parallel implementation behind a flag, then cutover.
     idempotent per jobID. Not yet called by any reconciler (default Classic
     unchanged). Unit tests: the wrapper's run.sh exec + proxy-CA trust, and the
     provisioner's JIT Secret staging + scale-set pod mode.
-  - **(d) RunnerSet-controller wiring + envtest** — the remaining step: branch the
-    AGC RunnerSet reconciler on `spec.acquisitionProtocol == ScaleSet` to build a
-    per-set `scaleset.Client` + `scalesetlistener` (Provision →
-    `ProvisionScaleSetWorker`, Capacity → the maxWorkers/priorityTiers ceiling)
-    instead of the classic pool/multiplexer, with the session lifecycle tied to the
-    RunnerSet; plus the envtest for provision-on-`JobAssigned` end to end. This is
-    the step that makes `ScaleSet` live behind the field; everything before it is
-    dead code preserving default Classic.
+  - **(d) RunnerSet-controller wiring + envtest — ✅ DONE.** The AGC RunnerSet
+    reconciler now branches on `spec.acquisitionProtocol == ScaleSet`
+    ([`runnerset_scaleset.go`](../../cmd/agc/internal/controller/runnerset_scaleset.go)):
+    once references resolve it starts exactly one `scalesetlistener` per set (session +
+    capacity-gated poll + provision-on-`JobAssigned`) via a per-set `scaleset.Client`
+    (config URL/API base from the resolved gateway's `githubURL`; a
+    `ScaleSetClientFactory` seam points tests at the `scalesettest` fake), with
+    Provision → `Provisioner.ProvisionScaleSetWorker` and Capacity → the
+    maxWorkers/priorityTiers ceiling advertised as `X-ScaleSetMaxCapacity` (default 10
+    when neither is set). Idempotent across reconciles (one session per set, §2.2); the
+    listener's context derives from the manager-scoped reconcile ctx so it stops on
+    RunnerSet delete (`stopScaleSetListener` cancels and waits for the loop to delete the
+    session) or manager shutdown — no leaked session/goroutine. A Classic set is
+    untouched (never builds a client, never registers a scale set). The listener's
+    Actions Service traffic routes through the per-tenant egress proxy exactly like
+    classic (the client clones the proxy-patched transport); the App token never reaches
+    the worker (§4). Envtest
+    ([`v2_runnerset_scaleset_test.go`](../../cmd/agc/internal/controller/integration/v2_runnerset_scaleset_test.go)):
+    a ScaleSet set registers one scale set + session, a `JobAssigned` from the fake
+    provisions one `WORKER_MODE=scaleset` worker pod with the JIT-config Secret staged
+    (no payload), and deleting the set stops the listener + deletes the session; a
+    Classic set drives the classic path and never reaches the fake. This is the step
+    that makes `ScaleSet` live behind the field — **P3 is complete**.
 - **P4 — live validation (M).** Dogfood the flagged path on the GKE cluster
   (the Q224 concurrent matrix is the acceptance gate); settles U3/U5.
 - **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate

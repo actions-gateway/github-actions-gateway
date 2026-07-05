@@ -14,6 +14,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -83,6 +84,19 @@ type RunnerSetReconciler struct {
 	multiplexers   map[types.NamespacedName]*listener.Multiplexer
 	poolsMu        sync.Mutex
 	pools          map[types.NamespacedName]*agentpool.Pool
+
+	// scaleSetListeners holds the running scale-set acquisition listener per
+	// ScaleSet-protocol RunnerSet (Q264 P3d) — one session per scale set. Classic
+	// sets never appear here; the two acquisition tiers keep separate runtime state.
+	scaleSetListenersMu sync.Mutex
+	scaleSetListeners   map[types.NamespacedName]*scaleSetListenerHandle
+
+	// ScaleSetClientFactory builds the scale-set protocol client for a ScaleSet-protocol
+	// RunnerSet. Nil selects the production factory (buildScaleSetClient), which derives
+	// the config URL/API base from the resolved gateway's githubURL and routes through
+	// the per-tenant egress proxy. Tests inject a factory pointing at the scalesettest
+	// fake so the wiring is exercised offline.
+	ScaleSetClientFactory func(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error)
 
 	conditionCh chan conditionUpdate
 
@@ -156,6 +170,9 @@ func (r *RunnerSetReconciler) ensureMaps() {
 	if r.pools == nil {
 		r.pools = make(map[types.NamespacedName]*agentpool.Pool)
 	}
+	if r.scaleSetListeners == nil {
+		r.scaleSetListeners = make(map[types.NamespacedName]*scaleSetListenerHandle)
+	}
 	if r.conditionCh == nil {
 		r.conditionCh = make(chan conditionUpdate, 256)
 	}
@@ -219,8 +236,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !res.resolved() {
 		// Stop any running listeners — a reference that vanished must not keep
 		// acquiring jobs (the per-job Resolve would fail them closed anyway, but
-		// stopping avoids the churn and reflects reality).
+		// stopping avoids the churn and reflects reality). Both tiers are stopped
+		// defensively; only the one this set actually runs is present.
 		r.stopMultiplexer(req.NamespacedName)
+		r.stopScaleSetListener(req.NamespacedName)
 		r.setReadyCondition(&rs, false, res.reason, res.message)
 		// No template resolved, so there is no known reap-blocking sidecar: clear the
 		// Q249 condition and gauge rather than leave a stale True/non-zero behind (e.g.
@@ -263,6 +282,14 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	reapAfter, podCounts, err := r.reapWorkerPods(ctx, log, &rs)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// Route by acquisition protocol (Q264 P3d). A ScaleSet-protocol set is driven by a
+	// single scale-set listener session per set instead of the classic pool/multiplexer
+	// many-acquirers path; the field is immutable (P3a), so a set never switches tiers
+	// live. Classic (the default) falls through to the unchanged path below.
+	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
+		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts)
 	}
 
 	// 3. Installation token for agent management. Process-wide (one GitHub App per
@@ -376,6 +403,7 @@ func (r *RunnerSetReconciler) stopMultiplexer(key types.NamespacedName) {
 // touches the API server, so it is safe on both the deletion and NotFound paths.
 func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.stopMultiplexer(key)
+	r.stopScaleSetListener(key)
 	r.poolsMu.Lock()
 	delete(r.pools, key)
 	r.poolsMu.Unlock()
