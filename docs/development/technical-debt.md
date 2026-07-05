@@ -86,6 +86,35 @@ the secure choice stays the default. The weaker option may exist only as a
 documented, explicit opt-in. Such a trade-off is raised and signed off *before*
 shipping, never deferred silently as ordinary debt.
 
+### Distinguish a fixable defect from an external structural ceiling
+
+Not every repeatedly-failing symptom is debt you can pay down. Some failures are a
+**structural ceiling in a system we do not control** — a server-side behaviour, a
+protocol constraint, a third-party rate limit — where each fix on our side is motion
+without progress. Misclassifying one as ordinary debt funds an open-ended loop of
+fixes that cannot converge.
+
+The signal to stop and re-triage: after the obvious on-our-side causes are fixed and
+the symptom **still reproduces on a clean setup with those causes provably quiet**,
+do not fund another fix round yet. Ask whether the residual is on our side of the
+boundary at all. The cheap way to force the question is to build the minimal case
+that isolates the external actor — a probe, a clean namespace — and read what *it*
+does, rather than iterating on our code.
+
+Worked example — the fan-out saga (Q260 → Q224 → Q264). Eight live re-routes fixed
+AGC-side seam after seam (completion accounting, planID dedup, recycle churn,
+slot-stranding, capacity) before a clean-namespace run with every seam provably quiet
+*still* wedged: the residual was GitHub's server-side fan-out dispatch, structurally
+unfixable on our side — the [Q224 lever spike](../plan/q224-fanout-dispatch-lever-spike.md)
+confirmed no AGC-side lever exists. The lesson is not "fix faster"; it is to run the
+*is-this-a-structural-ceiling?* check **earlier**, so the boundary is found before the
+Nth fix round, not after. When the answer is "external," the disposition is usually
+**defer + a watch trigger** (the external condition changing — tracked with the
+[protocol dependency register](../design/github-protocol-dependencies.md) when the
+ceiling is a GitHub protocol) or an architecture change that removes the dependency —
+not another patch. This complements the standing rule that source-reading is unverified
+until exercised end-to-end.
+
 ## Strategy: the debt lifecycle
 
 Policy decides what to do with one item. Strategy is the loop that keeps the

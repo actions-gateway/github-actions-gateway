@@ -51,6 +51,7 @@ This folder contains the full system design for the GitHub Actions Gateway, orga
 - [Appendix G — Optional Future Enhancements](appendix-g-future-enhancements.md)
 - [Appendix H — v2 API Decomposition (Proposal)](appendix-h-v2-api-decomposition.md)
 - [Network Architecture](network-architecture.md)
+- [GitHub Protocol Dependency Register](github-protocol-dependencies.md) — the GitHub-internal protocols GAG speaks, their stability tier, and drift-watch triggers
 
 **Operations**
 
