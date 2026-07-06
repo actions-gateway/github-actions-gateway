@@ -1157,13 +1157,48 @@ gh api /repos/"$REPO"/actions/runners \
 > delete left a JIT runner registered — sidestepped by switching to a fresh scale-set
 > name `gag-scaleset2`/scaleSetID 4).
 >
-> **Verdict.** The ScaleSet path **eliminates the Q224 fan-out starvation by
-> construction — proven live (7/7 assigned+ran+concluded vs classic 2/7)**; the
-> [Q264](../STATUS.md#Q264)/Option E structural claim is CONFIRMED. **Q224 stays
-> OPEN** (do not close): a pristine all-7-green needs the `WORKER_MODE` test fix on
-> `main`, then a clean re-run on adequate CPU. **P5 (default flip / classic
-> retirement) stays gated** on that green. Evidence: AGC debug logs (`agc:e2e-8a29b75`,
-> scaleSetID 4), reruns `28752455482`/`28752455509` (burst `19:55:54Z`, sha `4ea41f6`).
+> **Verdict (first pass — superseded by the clean-green re-run below).** The
+> ScaleSet path **eliminates the Q224 fan-out starvation by construction — proven
+> live (7/7 assigned+ran+concluded vs classic 2/7)**; the
+> [Q264](../STATUS.md#Q264)/Option E structural claim is CONFIRMED. This pass left
+> Q224 open pending the `WORKER_MODE` test fix on `main` + a clean re-run on adequate
+> CPU — **both delivered the same day (all 7 green), so Q224 is now CLOSED.** First-pass
+> evidence: AGC debug logs (`agc:e2e-8a29b75`, scaleSetID 4), reruns
+> `28752455482`/`28752455509` (burst `19:55:54Z`, sha `4ea41f6`).
+>
+> **Q264 P4 — CLEAN-GREEN re-run: the run that CLOSES Q224 (2026-07-05).** With the
+> two first-pass confounds fixed on `main` (Q269 `WORKER_MODE` test leak, #542; Q270
+> `generatejitconfig` 409/no-backoff-wedge hardening, #544), the 7-job matrix was
+> re-run and **every job concluded GREEN** on the ScaleSet path. Rebuilt AGC + wrapper
+> off `main`@`2025557` — `agc:e2e-2025557` (index `sha256:cef2a16b…`, amd64
+> `sha256:229435a5…`) + `wrapper:e2e-2025557` (`sha256:7974a83b…`) — via the GMC
+> `AGC_IMAGE`/`WRAPPER_IMAGE` patch. The first-pass `dogfoodss` tenant had been torn
+> down to a bare orphaned `ciss`; the gateway (`dogfoodss`, repo-scoped, direct-egress,
+> `logLevel: debug`) + template (`default-ss`, `dogfood-runner:2.335.1` + Athens, worker
+> CPU req 1) were recreated, and `ciss` was reset to a **fresh scale-set label
+> `gag-scaleset3`** (scaleSetID 5). **Why a fresh label mattered:** reconnecting to the
+> first-pass `gag-scaleset2` (scaleSetID 4) **replayed** the old sha-`4ea41f6`
+> `JobAssigned` messages from the scale-set-scoped queue (the documented recovery-replay,
+> §2b-3), which briefly provisioned 7 pre-Q269 workers — a new label = a new scale-set
+> object = an empty queue, so the re-run ran only the intended `main` jobs. Capacity:
+> `workers-od` `e2-standard-4 ×6` `pd-standard` (bumped 4→6 for CPU headroom vs the
+> first pass's 98–101% saturation), `maxWorkers: 8`. Fired via Q271 opt-in routing
+> (`workflow_dispatch` + `target_gag=true`, `GAG_RUNNER → "gag-scaleset3"`):
+> unit-test.yml `28759754797` (6 GAG jobs) + integration-test.yml `28759755655` (1).
+>
+> **Result — 7/7 GREEN, 0 dedup / 0 wedge.** The single-acquirer listener took 7
+> distinct `JobAssigned` and provisioned **7 distinct worker pods in ~2 s**
+> (00:11:30–32Z), one per job, **0 dedup / 0 `already exists` / 0 jitconfig conflict /
+> 0 cursor wedge** (the AGC log shows zero conflict/wedge lines across the run — Q270
+> holds). All 7 GAG jobs ran on `gag-scaleset3-<jobUUID>` runners and concluded
+> `success`: `unit-test` ✅ + `coverage` ✅ (**Q269 fix holds** — the two first-pass
+> `WORKER_MODE` failures are gone), `shellcheck`/`tidy-check`/`vendor-check` ✅, `lint`
+> ✅ (no `timeout-minutes: 10` lapse — the 6-node headroom removed the CPU saturation),
+> `integration-test` ✅ (no envtest `context canceled`). Worker pods reaped
+> `phase: Succeeded` (runners exited 0). **Q224 is CLOSED; [Q264](../STATUS.md#Q264) P4
+> fully validated; P5 UNBLOCKED; [Q242](../STATUS.md#Q242) concurrent-green achieved.**
+> Evidence: AGC debug logs (`agc:e2e-2025557`, scaleSetID 5), runs
+> `28759754797`/`28759755655` (burst `00:11:30Z`, sha `2025557`).
 >
 > **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
 > keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,

@@ -3,20 +3,25 @@
 **Status:** ACTIVE — the Option E rewrite is committed. Phases **P0 (spike)**,
 **P1 (live wire probes**, Investigations E and E2, §2a/§2b — `cmd/probe`
 scenarios, run 2026-07-04**)**, **P2 (the `scaleset/` client package + its
-`scalesettest` fake, §6)**, and **P3 (AGC wiring behind the `acquisitionProtocol`
-field) are DONE** — sub-PRs (a) (API field + CEL + GMC webhook), (b) (the standalone
+`scalesettest` fake, §6)**, **P3 (AGC wiring behind the `acquisitionProtocol`
+field)**, and **P4 (live dogfood validation — clean-green achieved 2026-07-05,
+Q224 CLOSED) are DONE** — sub-PRs (a) (API field + CEL + GMC webhook), (b) (the standalone
 `scalesetlistener` engine + the fan-out-free acceptance twin), (c) (the worker
 `run.sh --jitconfig` mode + provisioner JIT staging), and (d) (the RunnerSet-controller
 wiring that makes `ScaleSet` live behind the field + its lifecycle envtest) are landed,
 **all default `Classic`** so nothing changes for existing users until P5. **P4
-(live dogfood validation) RAN 2026-07-05: the Q224 fan-out distinct-delivery
-starvation is ELIMINATED by construction — the single-acquirer listener assigned,
-ran, and terminally concluded ALL 7 distinct jobs (vs classic's 2/7 with 5 starved
-forever), zero dedup/collision. A pristine all-7-green sweep was NOT obtained, but
-only for reasons ORTHOGONAL to acquisition: a self-referential `WORKER_MODE`
-test-env leak (GAG's CI on GAG's own scale-set worker) and node CPU capacity.
-Q224 stays OPEN pending the `WORKER_MODE` fix on `main` + a clean re-run; P5
-(default flip / classic retirement) stays gated on that green. Full §6-P4.** A
+(live dogfood validation) is DONE — the Q224 fan-out distinct-delivery starvation
+is ELIMINATED by construction and, on the 2026-07-05 clean-green re-run, the whole
+CI matrix went ACTUALLY all-green. The single-acquirer listener assigned, ran, and
+terminally concluded ALL 7 distinct jobs (vs classic's 2/7 with 5 starved forever),
+zero dedup/collision. First P4 pass (2026-07-05, sha `4ea41f6`) left 4 of 7 CI jobs
+non-green for reasons ORTHOGONAL to acquisition — a self-referential `WORKER_MODE`
+test-env leak (Q269) and node CPU capacity; both were fixed and the RE-RUN on
+`main`@`2025557` (Q269 #542 + Q270 #544) landed **all 7 GAG jobs GREEN** on a fresh
+scale set (`gag-scaleset3`, scaleSetID 5) with 0 dedup/wedge, `unit-test`+`coverage`
+green (WORKER_MODE fix holds) and `lint`/`integration-test` green on 6-node CPU
+headroom. Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED.
+Full §6-P4.** A
 Classic RunnerSet's acquisition path is **byte-for-byte unchanged**. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
 [Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
@@ -758,9 +763,48 @@ parallel implementation behind a flag, then cutover.
     (no payload), and deleting the set stops the listener + deletes the session; a
     Classic set drives the classic path and never reaches the fake. This is the step
     that makes `ScaleSet` live behind the field — **P3 is complete**.
-- **P4 — live validation (M). ▶ RUN 2026-07-05 — the fan-out starvation is
-  ELIMINATED by construction; a pristine all-green sweep is blocked by two issues
-  ORTHOGONAL to acquisition.** Deployed a fresh AGC built off `main`@`8a29b75`
+- **P4 — live validation (M). ✅ DONE — CLEAN-GREEN ACHIEVED 2026-07-05
+  (re-run). The whole CI matrix went actually all-green on the ScaleSet path.**
+  Two passes. The **clean-green re-run** (below) is the one that CLOSES Q224; the
+  first pass (immediately after) proved the acquisition claim but left 4 CI jobs
+  non-green for reasons orthogonal to acquisition, both since fixed.
+
+  **Clean-green re-run — 2026-07-05, `main`@`2025557` (Q269 #542 + Q270 #544 in).**
+  Rebuilt AGC + wrapper off current `main` — `agc:e2e-2025557` (index
+  `sha256:cef2a16b…`, amd64 `sha256:229435a5…`) and `wrapper:e2e-2025557`
+  (`sha256:7974a83b…`) — deployed via the GMC `AGC_IMAGE`/`WRAPPER_IMAGE` patch.
+  The stale P4 `dogfoodss` tenant had been torn down to a bare orphaned `ciss`; the
+  gateway + template were recreated, and `ciss` was reset to a **fresh scale-set
+  label `gag-scaleset3`** (scaleSetID 5) — necessary because reconnecting to P4's
+  `gag-scaleset2` (scaleSetID 4) **replayed** the old sha-`4ea41f6` `JobAssigned`
+  messages from the scale-set-scoped queue (§2b-3), which would have re-run the
+  pre-Q269 code; a new label = a new scale-set object = an empty queue. Capacity:
+  `workers-od` `e2-standard-4 ×6` `pd-standard` (bumped 4→6 for CPU headroom vs the
+  first pass's saturation), `maxWorkers: 8`, worker CPU req 1. Fired the same 7-job
+  matrix via Q271 opt-in routing (`workflow_dispatch` + `target_gag=true`,
+  `GAG_RUNNER → "gag-scaleset3"`): unit-test.yml `28759754797` (6 GAG jobs) +
+  integration-test.yml `28759755655` (1 GAG job).
+  - **Q224 GATE — MET (again, clean).** 7 distinct `JobAssigned` → **7 distinct
+    worker pods in ~2 s** (00:11:30–32Z), one per job, **0 dedup / 0
+    `already exists` / 0 jitconfig conflict / 0 cursor wedge** (Q270 fix holds —
+    the AGC log shows zero conflict/wedge lines across the run).
+  - **ALL 7 GAG jobs concluded GREEN** on `gag-scaleset3-<jobUUID>` runners (1:1
+    with the provisioned pods): `unit-test` ✅ + `coverage` ✅ (**Q269 WORKER_MODE
+    fix HOLDS** — the two jobs that failed the first pass are now green),
+    `shellcheck`/`tidy-check`/`vendor-check` ✅, `lint` ✅ (no `timeout-minutes: 10`
+    lapse — the first pass's timeout was CPU saturation, gone with 6-node headroom),
+    `integration-test` ✅ (no envtest `context canceled` — the first pass's capacity
+    confound, [Q248](../STATUS.md#Q248), resolved by the node bump). Both runs
+    concluded `success`. Worker pods reaped `phase: Succeeded` (runners exited 0).
+  - **Verdict.** ScaleSet **eliminates the Q224 fan-out starvation by construction
+    AND runs the real CI matrix pristine-green** — Option E is fully validated live.
+    **Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED**;
+    [Q242](../STATUS.md#Q242) concurrent-green is achieved. Evidence: AGC debug logs
+    (`agc:e2e-2025557`, scaleSetID 5), runs `28759754797`/`28759755655` (burst
+    `00:11:30Z`, sha `2025557`).
+
+  **First pass — 2026-07-05, `main`@`8a29b75` (the acquisition proof).** Deployed a
+  fresh AGC built off `main`@`8a29b75`
   (=#537, all P3 in) — `ghcr.io/actions-gateway/agc:e2e-8a29b75` (index
   `sha256:4c88631d…`, amd64 `sha256:91dd52ad…`) — via the GMC `AGC_IMAGE` patch,
   **plus the matching P3c wrapper** `ghcr.io/actions-gateway/wrapper:e2e-8a29b75`
@@ -827,11 +871,13 @@ parallel implementation behind a flag, then cutover.
     `open …/job-payload/payload` (P5 rollout note — bump wrapper in lockstep with AGC).
     (4) cosmetic post-completion `[RUNNER ERR BrokerServer] HttpClient` after the result
     is already reported (harmless).
-  - **Verdict.** ScaleSet **eliminates the Q224 fan-out starvation by construction —
-    proven live (7/7 assigned+ran+concluded vs classic 2/7)**; the Option E structural
-    claim is CONFIRMED. But **Q224 is NOT closed:** a pristine all-7-green needs the
-    `WORKER_MODE` fix on `main` then a clean re-run on adequate CPU. **P5 stays gated**
-    on that green. Evidence: AGC debug logs (`agc:e2e-8a29b75`, scaleSetID 4), reruns
+  - **First-pass verdict (superseded by the clean-green re-run above).** ScaleSet
+    **eliminates the Q224 fan-out starvation by construction — proven live (7/7
+    assigned+ran+concluded vs classic 2/7)**; the Option E structural claim is
+    CONFIRMED. At the time this pass left Q224 open pending the `WORKER_MODE` fix on
+    `main` + a clean re-run on adequate CPU — **both delivered on the 2026-07-05
+    re-run (all 7 green), so Q224 is now CLOSED and P5 is unblocked.** First-pass
+    evidence: AGC debug logs (`agc:e2e-8a29b75`, scaleSetID 4), reruns
     `28752455482`/`28752455509` (burst `19:55:54Z`, sha `4ea41f6`).
 
   *Observability prep (done, #538):* the tier emits per-`RunnerSet` Prometheus
