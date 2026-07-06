@@ -927,7 +927,7 @@ gh api /repos/"$REPO"/actions/runners \
 > **Re-route #7 — Q248 disk right-size (SSD ceiling GONE, no quota bump) + Q224/Q266
 > re-benchmark (2026-07-05).** Two goals in one turn-up: (1) lift the `maxWorkers ≈ 4`
 > ceiling that re-route #6 attributed to the `SSD_TOTAL_GB = 500` quota, *without* a
-> quota bump; (2) re-benchmark the fan-out matrix at the wider pool now that [Q266](../STATUS.md#Q266)
+> quota bump; (2) re-benchmark the fan-out matrix at the wider pool now that Q266
 > (#525) fixed the loser slot-stranding recycle.
 >
 > **Q248 — disk class was the ceiling; `pd-standard` removes it (FIXED + PROVEN).**
@@ -989,7 +989,7 @@ gh api /repos/"$REPO"/actions/runners \
 > `06:29Z`/`06:45Z`); quota `DISKS_TOTAL_GB=400`, `SSD_TOTAL_GB=220/500`.
 >
 > **Follow-up — the online-session/broker-credential recycle seam is now fixed
-> code-side ([Q267](../STATUS.md#Q267), 2026-07-05).** Root cause of the
+> code-side (Q267, 2026-07-05).** Root cause of the
 > `broker token exchange rejected … "Registration … was not found"` (400) churn:
 > after a recycle re-registers a fresh runner record, the immediate OAuth
 > token-exchange for that record's client credential can 400 for a brief
@@ -1035,7 +1035,7 @@ gh api /repos/"$REPO"/actions/runners \
 > `maxListeners = 48` collapsed to `online = 0` **from exactly this seam**; #8 at the
 > same width does **not** collapse. **Honest nuance:** the token-400 condition did not
 > *arise* at all (0 occurrences), so Q267's ride-out *retry path* was not exercised
-> live — the churn that triggers it did not materialize, because [Q266](../STATUS.md#Q266)
+> live — the churn that triggers it did not materialize, because Q266
 > parks deduped losers instead of recycling them (far fewer re-registrations) and the
 > clean namespace removed the stale-record amplifier. So the wide-pool hold is a
 > property of the combined **Q266 + Q267 + clean-namespace** stack; the retry logic
@@ -1101,7 +1101,7 @@ gh api /repos/"$REPO"/actions/runners \
 > **Q264 P4 — the ScaleSet path turn-up: fan-out starvation ELIMINATED by
 > construction (2026-07-05).** The first live dogfood of the runner-scale-set
 > acquisition protocol ([Q264](../STATUS.md#Q264) Option E), and the definitive
-> answer to the [Q224](../STATUS.md#Q224) fan-out class that classic stalled on at
+> answer to the Q224 fan-out class that classic stalled on at
 > 2/7 across eight re-routes. Built `agc:e2e-8a29b75` (index `sha256:4c88631d…`,
 > amd64 `sha256:91dd52ad…`, HEAD/#537 = all P3 landed) **and the matching P3c
 > wrapper** `wrapper:e2e-8a29b75` (index `sha256:0040ae1e…`), both deployed via the

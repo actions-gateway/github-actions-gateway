@@ -12,7 +12,7 @@
 > "default works" / ARC "drop-in" flips.
 >
 > **Residual:** a live GKE + real-GitHub dogfood re-validate with `workerImage`
-> unset — gold-standard extra confidence, folded into [Q224](../../STATUS.md#Q224)
+> unset — gold-standard extra confidence, folded into Q224
 > (it happens naturally when production CI routes to the default image).
 
 ## Problem

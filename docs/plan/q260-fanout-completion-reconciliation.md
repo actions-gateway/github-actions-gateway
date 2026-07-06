@@ -581,7 +581,7 @@ the seam accounting from re-route #7:
   that collapsed #7's pool to `online = 0`, the pool **held** for a 20-minute window with
   **0** token-400 (`"Registration … was not found"`), **0** Q267 ride-out retries, **0**
   fatal `deregister conflicting` exits, **0** `worker capacity full`. (Nuance: the token-400
-  *condition never arose* — 0 occurrences — because [Q266](../STATUS.md#Q266) parks losers
+  *condition never arose* — 0 occurrences — because Q266 parks losers
   instead of recycling and the clean namespace removed the stale-record amplifier; so the
   wide-pool hold is a property of the **Q266 + Q267 + clean-ns** stack, and Q267's retry
   path stays covered by its offline repro, not exercised live.) **Q267: DONE.**
