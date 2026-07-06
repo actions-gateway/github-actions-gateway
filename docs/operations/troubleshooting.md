@@ -1802,6 +1802,8 @@ After the restart the v2 controllers pick up any v2 objects already in the clust
 
 > **Note on older GMC builds.** A GMC predating this startup gate (before Q228) started the v2 controllers unconditionally, so on a v1-only install it logged `no matches for kind "ActionsGateway"/"EgressProxy" in version "actions-gateway.com/v2alpha1"` every ~10s and the IP-range reconciler logged `failed to list EgressProxies`. The fix is the same — install the CRD chart — or upgrade to a build with the gate, which logs a single info line instead.
 
+> **The per-tenant AGC has the same gate.** Each AGC checks for the `actions-gateway.com/v2alpha1` `RunnerSet` CRD once at startup and, when it is absent, disables its v2 RunnerSet reconciler and runs only the v1 RunnerGroup reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed; v1-only mode, v2 RunnerSet reconciler disabled`. An AGC predating this gate (before Q261) registered the RunnerSet reconciler unconditionally, so on a v1-only install its informer cache never synced and the pod **crash-looped** — `mgr.Start` exited after the ~2m cache-sync deadline, the pod restarted, and it repeated. If a v1 AGC pod is in `CrashLoopBackOff` with no other cause, upgrade to a build with the gate (Q261+); like the GMC, enabling v2 later requires an AGC restart, which the GMC performs automatically when it rolls the AGC Deployment.
+
 ---
 
 ## Privileged securityProfile Rejected: Namespace Not Eligible

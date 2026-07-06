@@ -613,7 +613,7 @@ the seam accounting from re-route #7:
   structural fix" conclusion was stress-tested for an AGC-side lever before the Q264
   go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md):
   unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is
-  runner-id churn), and a warm idle **listener** baseline (≠ [Q261](../STATUS.md#Q261) warm
+  runner-id churn), and a warm idle **listener** baseline (≠ Q261 warm
   *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated
   reimplementation of the scale-set model. **Verdict: Option E ([Q264](q264-scale-set-protocol.md))
   is the only reliable fix — #530 stands.**

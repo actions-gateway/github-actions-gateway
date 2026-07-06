@@ -21,7 +21,7 @@ proposed AGC-side levers against the mechanism and the existing live evidence.
   fix — and its efficacy is unconfirmed (the #8 data leans *against* it).**
   Note the reframe: the lever the dispatch problem needs is a warm baseline of
   idle **long-poll listeners** (a *new* `minIdleListeners`-style knob), **not**
-  [Q261](../STATUS.md#Q261)/[G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)
+  Q261/[G.12](../design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)
   `minIdleWorkers` (warm worker **pods**), which presents no extra idle runners to
   GitHub and so does nothing for dispatch starvation. Even in its favourable case,
   H1 converges on reimplementing the scale-set capacity model on top of the

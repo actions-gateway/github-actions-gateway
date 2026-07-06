@@ -251,7 +251,10 @@ stays under the 1 MiB limit. They are genuinely optional:
   The GMC **detects the v2 CRDs at startup**: when they are absent it logs a
   single info line — `actions-gateway.com/v2alpha1 CRDs not installed; v2
   controllers disabled` — and does **not** start the v2 controllers or the v2
-  IP-range refresh passes. v1alpha1 tenants reconcile normally.
+  IP-range refresh passes. Each per-tenant AGC does the same for its v2 RunnerSet
+  reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed;
+  v1-only mode, v2 RunnerSet reconciler disabled` and running only the v1
+  RunnerGroup reconciler. v1alpha1 tenants reconcile normally.
 - **To use v2,** install the CRD chart alongside the main chart (any order):
 
   ```sh
