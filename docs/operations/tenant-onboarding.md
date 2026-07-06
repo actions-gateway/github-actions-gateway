@@ -359,6 +359,35 @@ kubectl apply -f actionsgateway.yaml
 
 A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
 
+**Optional — worker scale-up rate limit (`scaleUp`, opt-in, default-off).** Each `runnerGroups[]` entry accepts an optional `scaleUp` token bucket that caps the **rate** at which the AGC *creates* new worker pods. It is **off by default** — omit it and provisioning stays immediate (GAG's zero-idle default). It is **not** the same as `maxWorkers`: `maxWorkers` caps how *many* worker pods run at once (a ceiling), while `scaleUp` caps how *fast* they start (a ramp). Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive **egress** path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the *onset* of connections (not the steady-state count) is what causes damage. It deliberately delays already-claimed jobs, trading time-to-pickup for a gentler ramp.
+
+```yaml
+  runnerGroups:
+    - runnerLabels: ["self-hosted", "linux"]
+      maxWorkers: 200            # ceiling: at most 200 concurrent worker pods
+      scaleUp:
+        maxPerSecond: 10         # ramp: sustained ≤10 new worker pods/second…
+        burst: 20                # …after an initial instantaneous batch of 20
+```
+
+- `maxPerSecond` (required, ≥1): the sustained pod-creation rate once the burst is spent.
+- `burst` (optional, ≥1): the largest instantaneous batch before throttling engages; **defaults to `maxPerSecond`** (one second's worth) when omitted.
+
+When the bucket is empty an acquired job **waits** for a token before its pod is created — holding its GitHub job lock (renewed in the background), so it composes with the namespace-quota retry backoff rather than dropping the job. Each throttled creation increments `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}`; a sustained non-zero rate means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)). Set `maxPerSecond` low enough to protect the shared resource but high enough that already-claimed jobs are not held long — a very low rate against a large burst can hold locks for the ramp's full duration.
+
+**Pick the right tool for the stampede.** A scale-up rate limit is the wrong fix for some bursts:
+
+| Burst symptom | Use instead |
+|---|---|
+| Every cold node re-pulls the large runner **image** | Peer-to-peer image mirror / pre-pull DaemonSet ([p2p-image-distribution.md](p2p-image-distribution.md)) — a ramp still pulls N times, just spread out |
+| Workers stampede a shared **egress** path (NAT/firewall/VPN) *at onset* | **`scaleUp`** (this knob), often alongside workflow-level `concurrency:` |
+| Sustained saturation of egress **bandwidth/ports** for the whole run | `maxWorkers` **ceiling** (a ramp only defers the cliff), plus more capacity |
+| One workflow drains the **whole shared quota** and starves others | `maxWorkers` / priority tiers (a fairness ceiling, already shipped) |
+
+It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.
+
+> **v2 (`RunnerSet`)** carries the same `spec.scaleUp` field with identical semantics.
+
 **Changing `runnerGroups` later.** Editing `spec.runnerGroups` on an existing `ActionsGateway` reconciles to the desired set: added entries create new `RunnerGroup` CRs, and **removing an entry deletes its `RunnerGroup`** (which stops its listeners and cascades to its worker pods). Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group. Removing an entry is the way to retire a runner group; `maxListeners` has a minimum of `1`, so there is no in-place scale-to-zero.
 
 **Worker image — the default works out of the box.** A plain install runs jobs with no `workerImage` set: the AGC **injects** GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream `ghcr.io/actions/actions-runner` (the default) or **any `actions/runner`-derived image**. The wrapper is what feeds the mounted job payload + JIT config into `Runner.Worker`; injecting it means the runner image no longer has to carry it. Set `workerImage` only to use a **custom** image (your own tools, a pinned digest) — the wrapper is injected into that too. The upstream `actions-runner` (and GAG's images built on it) run as UID 1001, so on every profile except `privileged` the AGC stamps `runAsNonRoot: true` and gap-fills `runAsUser: 1001` automatically. If you point `workerImage` at a **custom** image whose user is **not** UID 1001 — a different named user, or one that runs as root — set `securityContext.runAsUser` (or `runAsNonRoot: false` for a root-based image) on the runner container in the `podTemplate`; otherwise kubelet rejects the pod with `CreateContainerConfigError`. See [troubleshooting: worker pod fails to start after secure-by-default SecurityContext](troubleshooting.md#worker-pod-fails-to-start-after-secure-by-default-securitycontext).

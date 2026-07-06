@@ -118,6 +118,41 @@ type RunnerGroupSpec struct {
 	// GPU node pools). Must be at least 1s. Defaults to "10m" when omitted.
 	// +optional
 	PendingPodDeadline *metav1.Duration `json:"pendingPodDeadline,omitempty"`
+
+	// ScaleUp optionally caps the RATE at which the AGC creates new worker pods for
+	// this RunnerGroup, smoothing cold-start stampedes on a shared, rate-sensitive
+	// egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site
+	// VPN) when a burst of jobs is acquired at once. It is a token bucket over pod
+	// CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod
+	// COUNT): the ceiling bounds how many run, this bounds how fast they start.
+	// Omitted ⇒ no rate limit (the default): immediate provisioning, zero added
+	// latency. This is an availability knob for the narrow stampede case; prefer a
+	// peer-to-peer image mirror for image-pull storms and workflow-level
+	// `concurrency:` or the maxWorkers ceiling for fairness/sustained load.
+	// +optional
+	ScaleUp *ScaleUpRateLimit `json:"scaleUp,omitempty"`
+}
+
+// ScaleUpRateLimit configures the opt-in per-RunnerGroup worker-pod creation-rate
+// limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
+// Burst is the bucket depth (the largest instantaneous batch before throttling
+// engages). When the bucket is empty, an acquired job waits — holding its GitHub
+// job lock, renewed in the background — until a token frees, composing with the
+// namespace-quota retry wait rather than adding a new state machine.
+type ScaleUpRateLimit struct {
+	// MaxPerSecond is the sustained rate, in worker pods created per second, once
+	// the initial burst is spent. Required when scaleUp is set.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10000
+	MaxPerSecond int32 `json:"maxPerSecond"`
+
+	// Burst is the maximum number of worker pods that may be created in an
+	// instantaneous batch before the MaxPerSecond rate throttles subsequent
+	// creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100000
+	Burst *int32 `json:"burst,omitempty"`
 }
 
 // RunnerGroupStatus defines the observed state of a RunnerGroup.

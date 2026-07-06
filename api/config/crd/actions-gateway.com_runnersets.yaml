@@ -293,6 +293,39 @@ spec:
                   type: string
                 minItems: 1
                 type: array
+              scaleUp:
+                description: |-
+                  ScaleUp optionally caps the RATE at which the AGC creates new worker pods for
+                  this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive
+                  egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site
+                  VPN) when a burst of jobs is acquired at once. It is a token bucket over pod
+                  CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod
+                  COUNT): the ceiling bounds how many run, this bounds how fast they start.
+                  Omitted ⇒ no rate limit (the default): immediate provisioning, zero added
+                  latency. An availability knob for the narrow stampede case; prefer a
+                  peer-to-peer image mirror for image-pull storms and workflow-level
+                  `concurrency:` or the maxWorkers ceiling for fairness/sustained load.
+                properties:
+                  burst:
+                    description: |-
+                      Burst is the maximum number of worker pods that may be created in an
+                      instantaneous batch before the MaxPerSecond rate throttles subsequent
+                      creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.
+                    format: int32
+                    maximum: 100000
+                    minimum: 1
+                    type: integer
+                  maxPerSecond:
+                    description: |-
+                      MaxPerSecond is the sustained rate, in worker pods created per second, once
+                      the initial burst is spent. Required when scaleUp is set.
+                    format: int32
+                    maximum: 10000
+                    minimum: 1
+                    type: integer
+                required:
+                - maxPerSecond
+                type: object
               templateRef:
                 description: |-
                   TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate

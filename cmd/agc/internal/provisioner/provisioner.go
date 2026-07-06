@@ -325,6 +325,12 @@ type Provisioner struct {
 	// zero value is ready to use, so a struct-literal Provisioner (tests) gets a
 	// working gate without explicit initialization. See admission.go.
 	admission admissionGate
+
+	// scaleUp is the opt-in, per-RunnerGroup token bucket that rate-limits worker-pod
+	// CREATION (Q223), gating each pod creation in provision/ProvisionScaleSetWorker
+	// when the owner sets spec.scaleUp. Default-off: a nil ScaleUpConfig makes every
+	// wait a no-op. Its zero value is ready to use. See scaleuplimiter.go.
+	scaleUp scaleUpLimiter
 }
 
 // evictionEntry is the value stored in evictionCounts. count is the number of
@@ -627,7 +633,24 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		return "", err
 	}
 
-	// 4. Build and create the pod (with quota retry).
+	// 4. Scale-up rate limit (Q223): when the owner opts in via spec.scaleUp, wait
+	// for a token before creating the pod so a burst of simultaneously-acquired jobs
+	// ramps up in waves instead of all at once (default-off is a no-op). A ctx
+	// cancellation here (AGC shutdown, or the renew loop tearing the job down on a
+	// lost lock) abandons the job without a pod — same shape as a quota-retry
+	// cancellation — after cleaning up the staged Secret.
+	if err = traceStep(ctx, "scaleUpRateLimit", func(ctx context.Context) error {
+		throttled, wErr := p.scaleUp.wait(ctx, key.String(), spec.ScaleUp)
+		if throttled && p.Metrics != nil {
+			p.Metrics.ScaleUpThrottled.WithLabelValues(key.Namespace, key.Name).Inc()
+		}
+		return wErr
+	}); err != nil {
+		_ = p.deleteSecret(ctx, key.Namespace, secretName)
+		return "", err
+	}
+
+	// 5. Build and create the pod (with quota retry).
 	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
 		pod := p.buildPod(target, spec, podName, secretName, priorityClass, meta)
 		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
@@ -638,7 +661,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod created", "priorityClass", priorityClass)
 
-	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
+	// 6. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
 	var phase corev1.PodPhase
 	var reason string
 	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
@@ -673,12 +696,12 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		p.Metrics.JobDuration.WithLabelValues(key.Namespace, key.Name).Observe(duration.Seconds())
 	}
 
-	// 6. Eviction handling.
+	// 7. Eviction handling.
 	if phase == corev1.PodFailed && reason == "Evicted" {
 		p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay)
 	}
 
-	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
+	// 8. Cleanup. The job Secret is always deleted here. The pod is deleted
 	// immediately only when the owner's completedPodTTL is zero; otherwise the
 	// owner's reconciler reaper deletes it once the TTL elapses — the reaper is
 	// also the restart-safe backstop for pods no goroutine watches.
@@ -747,7 +770,19 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 		return fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods); listener will retry", count)
 	}
 
-	// 3. Build the pod and switch the wrapper into scale-set mode (run.sh --jitconfig).
+	// 3. Scale-up rate limit (Q223): gate pod creation on the owner's opt-in token
+	// bucket so a burst of scale-set assignments ramps up in waves (default-off is a
+	// no-op). A ctx cancellation abandons this assignment; the scale-set listener
+	// re-drives it on its next poll.
+	throttled, wErr := p.scaleUp.wait(ctx, key.String(), spec.ScaleUp)
+	if throttled && p.Metrics != nil {
+		p.Metrics.ScaleUpThrottled.WithLabelValues(key.Namespace, key.Name).Inc()
+	}
+	if wErr != nil {
+		return wErr
+	}
+
+	// 4. Build the pod and switch the wrapper into scale-set mode (run.sh --jitconfig).
 	pod := p.buildPod(target, spec, podName, secretName, priorityClass, jobMeta{})
 	setScaleSetWorkerMode(pod)
 

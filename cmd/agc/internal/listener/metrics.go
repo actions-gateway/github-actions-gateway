@@ -52,6 +52,11 @@ type Metrics struct {
 	EvictionRetriesExhausted *prometheus.CounterVec
 	QuotaRetries             *prometheus.CounterVec
 	QuotaRetriesExhausted    *prometheus.CounterVec
+	// Q223: worker-pod creation-rate limit (anti-stampede). Incremented when the
+	// opt-in per-RunnerGroup scale-up token bucket makes a pod creation wait for a
+	// token (the burst was spent). Only non-zero when a group sets spec.scaleUp; a
+	// sustained rate shows the ramp is actively smoothing a burst.
+	ScaleUpThrottled *prometheus.CounterVec
 	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper)
 	WorkerPodsReaped *prometheus.CounterVec
 	// Q114: single-use JIT agent recycling (emitted by listener goroutines and
@@ -169,6 +174,11 @@ func NewMetrics() *Metrics {
 			Help: "Jobs abandoned after exhausting the quota retry budget.",
 		}, []string{"namespace", "runner_group"}),
 
+		ScaleUpThrottled: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_worker_scaleup_throttled_total",
+			Help: "Worker-pod creations delayed by the opt-in per-RunnerGroup scale-up rate limit (spec.scaleUp): the token bucket was empty so the acquired job waited for a token before its pod was created (Q223). Only non-zero when scaleUp is set; a sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path.",
+		}, []string{"namespace", "runner_group"}),
+
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_pods_reaped_total",
 			Help: "Worker pods deleted by the reaper, by reason (completed_ttl, pending_deadline).",
@@ -214,6 +224,7 @@ func NewMetrics() *Metrics {
 		m.EvictionRetriesExhausted,
 		m.QuotaRetries,
 		m.QuotaRetriesExhausted,
+		m.ScaleUpThrottled,
 		m.WorkerPodsReaped,
 		m.AgentRecyclesTotal,
 		m.AgentRecycleErrorsTotal,
