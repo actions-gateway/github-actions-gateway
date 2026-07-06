@@ -15,7 +15,7 @@ that depends on the deferred validation is marked **(to be validated)**
 rather than asserted.
 
 Tracks [Q243](../STATUS.md#Q243). A v2beta1 ([Q74](../STATUS.md#Q74)) blocker
-alongside [Q224](../STATUS.md#Q224) and [Q242](../STATUS.md#Q242).
+alongside Q224 and [Q242](../STATUS.md#Q242).
 
 ---
 
