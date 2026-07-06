@@ -118,9 +118,23 @@ drop the superseded served version per the
 [graduation ladder](v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2). Because
 Q196 already shipped `spec.credentials` in `v2alpha1`, the conversion webhook maps the
 credentials block as an **identity** (`v2alpha1.credentials ↔ v2beta1.credentials`) — no
-reshape — and only handles whatever other fields differ between the served versions. It
-is the in-place graduation the webhook exists for, distinct from the M5 fan-out tool (a
-webhook cannot express a fan-out).
+reshape. It is the in-place graduation the webhook exists for, distinct from the M5
+fan-out tool (a webhook cannot express a fan-out).
+
+**The one non-identity delta — the RunnerSet protocol fields (added after this plan was
+first written).** `v2beta1` is **ScaleSet-only**
+([Q264 §5a-U7/U8](q264-scale-set-protocol.md#u7--where-the-protocol-selector-lives)), so
+the graduation **drops `RunnerSet.spec.acquisitionProtocol`** (v2alpha1-only) **and
+`maxListeners`** (meaningless under ScaleSet) from the `v2beta1` shape; the conversion
+preserves a coexistence-era spoke's values via an annotation round-trip so no `v2alpha1`
+set is silently re-protocol'd.
+
+**Sequencing — Q74 is the last rung, not independent.** Per the
+[U8 ladder](q264-scale-set-protocol.md#u8--support-matrix-policy) the ScaleSet-only cut
+**follows Q264 P5** (the `ScaleSet` default flip + positioning rewrite) and a one-minor
+Classic deprecation window: a ScaleSet-only beta while `v2alpha1` still defaults to
+`Classic` would invert the alpha/beta protocol signal. The mechanical build blueprint is
+[q74-v2beta1-conversion-webhook.md](q74-v2beta1-conversion-webhook.md).
 
 ## Design decisions
 
