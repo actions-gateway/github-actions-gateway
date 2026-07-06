@@ -88,6 +88,11 @@ func TestMigrateAll_DryRun(t *testing.T) {
 	assert.Contains(t, out, "kind: RunnerSet")
 	assert.Contains(t, out, "security-profile=restricted")
 
+	// The dry-run next-step hint points the operator at --apply, on stderr so the
+	// stdout manifest stays pipeable.
+	assert.Contains(t, stderr.String(), "Dry-run complete")
+	assert.NotContains(t, out, "Dry-run complete", "the hint must not contaminate the manifest payload")
+
 	// Dry-run must not create anything in the cluster.
 	var v2gw v2alpha1.ActionsGateway
 	err := c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "team-a"}, &v2gw)
@@ -105,6 +110,9 @@ func TestMigrateAll_Apply(t *testing.T) {
 	)
 	var stdout, stderr bytes.Buffer
 	require.NoError(t, migrateAll(ctx, c, options{namespace: "team-a", apply: true}, &stdout, &stderr))
+
+	// The apply next-step hint points the operator at validate-then-decommission.
+	assert.Contains(t, stderr.String(), "Migration applied")
 
 	// v2 objects created.
 	var v2gw v2alpha1.ActionsGateway
@@ -162,6 +170,8 @@ func TestMigrateAll_NoGateway(t *testing.T) {
 	var stderr bytes.Buffer
 	require.NoError(t, migrateAll(context.Background(), c, options{namespace: "empty"}, &bytes.Buffer{}, &stderr))
 	assert.Contains(t, stderr.String(), "no v1 ActionsGateway")
+	// Nothing migrated ⇒ no next-step hint.
+	assert.NotContains(t, stderr.String(), "Dry-run complete")
 }
 
 // TestMigrateAll_OutputDir writes a per-namespace manifest file.
