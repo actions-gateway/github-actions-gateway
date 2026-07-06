@@ -1,7 +1,7 @@
 # Q56 — Gate GMC cluster-wide `namespaces: patch` (k8s audit §B B2)
 
 **Status:** ✅ Done — shipped via the `namespace-psa-guard` VAP + marker-label contract; covered by `TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope`.
-**Queue:** [Q56](../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
+**Queue:** [Q56](../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](archive/k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
 
 ## Goal
 
@@ -96,5 +96,5 @@ is CEL immutability / downgrade-audit on `securityProfile` itself, tracked as
 - `docs/operations/troubleshooting.md` — runbook: "PSA reconcile denied / namespace
   marker missing".
 - `docs/design/02-architecture.md` — one line in the RBAC/security prose.
-- `docs/plan/k8s-best-practices.md` — mark B2 ✅ with the implemented approach.
+- `docs/plan/archive/k8s-best-practices.md` — mark B2 ✅ with the implemented approach.
 - `docs/STATUS.md` — remove Q56 row (isolated commit).

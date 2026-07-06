@@ -79,6 +79,16 @@ type GitHubIPRangeFetcher interface {
 
 * **Lifecycle Manager:** Propagates spec changes (resource limits, proxy scaling bounds, credential Secret reference changes) down to the tenant's AGC deployment and proxy HPA. When `gitHubAppRef` changes, the GMC rolls the AGC Deployment so the new Pod mounts the new Secret — Secrets are treated as immutable and are never updated in place. On `ActionsGateway` deletion, removes only the GMC-owned resources within the namespace — it does not delete the namespace itself, since the tenant owns it.
 
+### Design choice: reconciler writes use `CreateOrPatch`, not Server-Side Apply
+
+The GMC's per-reconcile `apply*` helpers (`applyServiceAccount`/`RoleBinding`/`NetworkPolicy`/`ResourceQuota`/`Deployment`/`Service`/`PDB`/`HPA`/`RunnerGroup`, plus `applyOwnedSecret`) write child resources with `controllerutil.CreateOrPatch` rather than Server-Side Apply (SSA). Both are strict improvements over the naive `Get → full-object Update`, which carried the object's `resourceVersion` as a precondition (so a racing write produced a spurious `409 Conflict` + requeue) and replaced the whole object, clobbering fields the controller doesn't manage. `CreateOrPatch` is **not** universally better than SSA; it was the better fit for *this* reconciler, for three reasons:
+
+- **Typed builders vs. applyconfigurations.** The helpers already receive fully-built *typed* objects from the `build*` functions, so `CreateOrPatch` slots in with a small mutate closure. Doing SSA *correctly* needs applyconfiguration builders (`appsv1ac.Deployment(...)`): a typed Go struct can't distinguish "field unset" from "field == zero value", so applying a typed object claims ownership of every zero-valued field and fights other managers / strips defaults. Clean SSA would mean rewriting all ten builders into a parallel applyconfiguration set — far larger and riskier than warranted.
+- **Single-writer sufficiency.** The GMC reconciler is single-writer (`MaxConcurrentReconciles: 1`), so `CreateOrPatch`'s no-precondition merge fully closes the conflict window; SSA's per-field ownership machinery buys little here.
+- **One accepted wart.** Because each closure does `obj.Spec = desired.Spec` (omitting server-defaulted fields like a Deployment's rollout `Strategy` or an HPA's `Behavior`), it emits a *non-empty* patch every reconcile that the apiserver then no-op-dedups (re-applies defaults, skips the write, no `resourceVersion` bump). SSA-with-applyconfigurations would emit no patch traffic at all. So `CreateOrPatch` here deliberately relies on the apiserver's no-op-write detection — verified against a real apiserver by the `apply_nochurn` envtest, since a fake client reproduces neither defaulting nor no-op dedup.
+
+**Where SSA remains the right tool:** `applyNamespacePSA` keeps SSA (field manager `actionsgateway-controller-psa`) precisely because PSA labels are a security control — SSA records per-field-manager ownership and surfaces a conflict when a human admin changes a field the controller owns, so an out-of-band edit is detected and reported (a `PSALabelsOverridden` Warning Event) rather than silently re-asserted. See [§5.3](05-security.md#53-security-profiles-and-the-privileged-opt-in).
+
 ---
 
 ## 2.2. Tier 2 — Actions Gateway Controller (AGC)
