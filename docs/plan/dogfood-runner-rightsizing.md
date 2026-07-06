@@ -1,10 +1,11 @@
 # GAG Dogfood CI Runner Right-Sizing
 
-> **Status: ◐ Partial — node-pool disk class RESOLVED; pod `requests`/`limits`
-> refinement still open.** Tracked as [Q248](../STATUS.md#Q248).
-> The worker pod's current `requests`/`limits` (CPU 2/4, memory 4Gi/8Gi) were
-> never measured — they are a guess. This plan replaces them with values derived
-> from observed peak usage, and sizes the worker node pool to bin-pack them.
+> **Status: ◐ Partial — node-pool disk class RESOLVED (2026-07-05); general-worker
+> pod `requests`/`limits` RIGHT-SIZED (2026-07-06); e2e-track pod sizing + an
+> optional "small" tier remain.** Tracked as [Q248](../STATUS.md#Q248).
+> The worker pod's original `requests`/`limits` (CPU 2/4, memory 4Gi/8Gi) were
+> never measured — a guess. They are now replaced with values derived from the
+> Phase 1 peak measurement — see [§ Phase 2 — derived requests/limits](#phase-2--derived-requestslimits-2026-07-06-general-workers) below.
 > **The dominant capacity ceiling turned out to be the node-pool *disk class*,
 > not the pod requests** — see [§ Node-pool disk class](#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05) below (resolved 2026-07-05: `pd-balanced`→`pd-standard`, no quota bump).
 
@@ -246,12 +247,90 @@ dogfood matrix is ~7 concurrent jobs). Remaining Q248 work: the pod
 `requests`/`limits` refinement (drop the CPU limit, memory limit → peak×1.3) is
 still open — orthogonal to the disk-class fix.
 
+## Phase 2 — derived `requests`/`limits` (2026-07-06, general workers)
+
+Applying the [resource-model principles](#resource-model-principles) to the
+[Phase 1 envelope](#phase-1-results--general-workers-2026-06-30-first-pass)
+(peak **3802m CPU, 2134Mi memory** across all runner pods):
+
+| Field | Old (guess) | New (measured) | Derivation |
+|---|---|---|---|
+| CPU `request` | `2` | `2` | Kept. On an `e2-standard-4` worker this packs one heavy pod per node (see allocatable check below), which the ~3.8 vCPU peak wants. |
+| CPU `limit` | `4` | **removed** | CPU is compressible — a limit only *throttles* bursty Go build/test/lint jobs (Phase 1 saw peak pinned against the old 4-vCPU limit). Requests-only lets a heavy pod burst to the whole node. |
+| memory `request` | `4Gi` | **`2Gi`** | ≈ measured peak (2134Mi). The old 4Gi was ~2× over-provisioned. |
+| memory `limit` | `8Gi` | **`3Gi`** | peak × ~1.4 (2134Mi × 1.4 ≈ 3Gi) for OOM headroom on the non-compressible resource. The old 8Gi was ~4× over-provisioned. |
+
+**Why keep CPU `request` at `2` rather than lower it.** A burst-tuning experiment
+(gke-dogfood.md re-route) tried `request=1` to pack ~3 pods per node; it packed
+cleanly, but the serialization it was chasing turned out to be an AGC
+agent-pool-recycling bug (Q259, since resolved), **not** node capacity. At `request=1` with no CPU limit, three co-scheduled heavy jobs (each
+peaking ~3.8 vCPU) would contend for one node's ~3.4 allocatable vCPU → ~1.1 vCPU
+each → ~3× throttle-induced slowdown, exactly what Phase 4 says to avoid. The
+measured peak says a heavy job wants ~a whole `e2-standard-4`; `request=2` reflects
+that (one heavy pod per node) while staying schedulable. Trivial jobs
+(`shellcheck`/`tidy`/`vendor`, 10–20s, near-zero CPU) over-request under this single
+tier — see the deferred "small" tier in [Open questions](#open-questions); the
+packing waste (a few short-lived spot-node-slots) is not yet material enough to
+justify a second runner label.
+
+### Node-allocatable validation (`maxWorkers` vs the worker pool)
+
+Worker node = `e2-standard-4` (4 vCPU / 16 GiB), `--disk-type=pd-standard`,
+autoscale 0→8. GKE's [reserved-resource formula](https://cloud.google.com/kubernetes-engine/docs/concepts/plan-node-sizes#memory_cpu_reservations)
+gives node allocatable ≈ **3920m CPU** (reserve 6%/1%/0.5% tiers = 80m) and
+**≈13.3 GiB memory** (reserve 25%/20%/10% tiers + 100Mi eviction). GKE system
+DaemonSets that tolerate the `dedicated=workers` taint (kube-proxy, DPv2 `anetd`,
+metadata, logging) consume a further ~0.4–0.6 vCPU / ~0.4–0.6 GiB, leaving
+**~3.3–3.5 vCPU and ~12.7 GiB available for worker pods per node**.
+
+- **CPU is binding.** `request=2` → `2 + 2 = 4 > ~3.4`, so **exactly one worker pod
+  schedules per node**. `maxWorkers=8` therefore fans out to **≤ 8 worker nodes**,
+  matching the pool's `max-nodes=8`. Consistent; no over- or under-commit.
+- **Memory is slack, not binding.** At `request=2Gi` a node could hold ~6 pods by
+  memory, but CPU caps it at 1 — so the 2Gi request / 3Gi limit never gates
+  scheduling and leaves ample OOM headroom.
+
+The sizing is therefore **CPU-bound at one heavy pod per node**, and `maxWorkers=8`
+is validated against `max-nodes=8`. (This is orthogonal to — and downstream of —
+the disk-class fix that lifted the node ceiling off the SSD quota.)
+
+### AGC control-plane pod — no change (defaults are right-sized)
+
+The per-tenant AGC pod uses the platform default footprint
+(`defaultAGCResources`: requests `500m`/`2Gi`, limits `2`/`4Gi`; overridable via
+`spec.agcResources`). The dogfood `ActionsGateway` sets **no** `agcResources`
+override, so it inherits those defaults, and it schedules on the `default-pool`
+(`e2-standard-2`, alongside the single-replica GMC and Athens — the taint keeps it
+off the worker pool). Across the extensive live dogfood runs (Q224/Q259/Q260/Q267
+re-routes, up to `maxListeners=16` / `maxWorkers=8`) the AGC has never OOMed or
+CPU-starved at these defaults, and its ~2Gi request fits comfortably beside the GMC
+(`10m`/`64Mi`) and Athens on the ~5.9 GiB-allocatable system node. **Decision: keep
+the AGC at platform defaults for dogfood** — a smaller override is unwarranted
+(2Gi is already modest for a session-multiplexing control plane) and any change
+should follow an AGC-specific `kubectl top` measurement, not a guess.
+
+## Phase 5 — persisted (2026-07-06)
+
+The right-sized general-worker `requests`/`limits` are baked into the dogfood
+`RunnerTemplate` in [`scripts/dogfood/setup.sh`](../../scripts/dogfood/setup.sh)
+(`apply_cr`) and mirrored in the [`gke-dogfood.md`](gke-dogfood.md) runbook. The
+node sizes and `maxWorkers=8` were already persisted with the disk-class fix. The
+tenant-onboarding quota formula is unchanged and remains correct — it sums only
+declared container `limits`, so dropping the worker CPU limit simply drops that
+term (documented there as "a term with no value drops out"). **Remaining Q248
+work** is the e2e-track pod sizing (deferred to live e2e validation — see
+[§ e2e track](#e2e-track--validate-then-size-kata-deferred)) and the optional
+"small" tier; the general-worker refinement is complete.
+
 ## Open questions
 
-- CPU `limit` vs requests-only — lean requests-only; confirm no noisy-neighbor
-  problem on a shared node.
-- Memory headroom factor — start at 1.3×, widen on any OOM.
-- A 2nd "small" pod tier — decide after Phase 1, not before.
+- ~~CPU `limit` vs requests-only~~ — **RESOLVED (general workers):** requests-only,
+  no CPU limit. No noisy-neighbor risk because `request=2` packs one heavy pod per
+  `e2-standard-4`, so a bursting pod has the node to itself.
+- Memory headroom factor — set to ~1.4× (peak 2134Mi → 3Gi limit); widen on any OOM.
+- A 2nd "small" pod tier — **still deferred.** Phase 1 measured only heavy jobs;
+  trivial jobs over-request a full node under the single tier, but the waste (a few
+  short-lived spot-node-slots) isn't yet material. Add only if it becomes so.
 - `e2e` pod sizing (`kind` cluster memory) — its own track (see *e2e track* above):
   validate the privileged-DinD path works first, then size, then Kata.
 - Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC

@@ -430,13 +430,24 @@ ${runner_image_field}
               value: "http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off"
             - name: GONOSUMDB
               value: "*"
+          # Right-sized from measured peak (Q248 Phase 1: heavy CI jobs — -race,
+          # lint, envtest — peaked ~3.8 vCPU / ~2.1Gi on gag-ci). CPU is
+          # compressible: requests-only, NO limit — a CPU limit only throttles
+          # bursty Go build/test jobs for no packing gain, while the request still
+          # drives packing. request=2 on an e2-standard-4 worker (~3.4 vCPU
+          # node-allocatable after GKE system daemonsets) packs exactly ONE heavy
+          # pod per node, which the ~3.8 vCPU peak wants — it bursts to the whole
+          # node rather than throttling two co-scheduled heavy jobs to ~1.7 vCPU
+          # each. Memory is non-compressible → keep a limit: request≈peak (2Gi),
+          # limit=peak×~1.4 (3Gi) for OOM headroom (was a 2×/4×-over-provisioned
+          # 4Gi/8Gi guess). maxWorkers=8 → ≤8 worker nodes, matching the pool's
+          # max-nodes=8. See docs/plan/dogfood-runner-rightsizing.md.
           resources:
             requests:
               cpu: "2"
-              memory: "4Gi"
+              memory: "2Gi"
             limits:
-              cpu: "4"
-              memory: "8Gi"
+              memory: "3Gi"
 ---
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerSet

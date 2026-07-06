@@ -382,13 +382,18 @@ spec:
               value: "http://go-module-proxy.gag-dogfood.svc.cluster.local:3000,off"
             - name: GONOSUMDB
               value: "*"
+          # Right-sized from measured peak (Q248 Phase 1: heavy CI jobs peaked
+          # ~3.8 vCPU / ~2.1Gi). CPU requests-only (no limit — compressible, a
+          # limit only throttles bursty Go jobs); request=2 packs one heavy pod
+          # per e2-standard-4 (~3.4 vCPU allocatable) so it bursts to the whole
+          # node. Memory: request≈peak (2Gi), limit=peak×~1.4 (3Gi) for OOM
+          # headroom. See docs/plan/dogfood-runner-rightsizing.md.
           resources:
             requests:
               cpu: "2"
-              memory: "4Gi"
+              memory: "2Gi"
             limits:
-              cpu: "4"
-              memory: "8Gi"
+              memory: "3Gi"
 ---
 apiVersion: actions-gateway.com/v2alpha1
 kind: RunnerSet
