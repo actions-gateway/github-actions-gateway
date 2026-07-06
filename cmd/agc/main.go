@@ -537,26 +537,47 @@ func run() error {
 		return fmt.Errorf("setup reconciler: %w", err)
 	}
 
-	// v2 RunnerSet reconciler (M3a). Runs alongside the v1 RunnerGroup reconciler
-	// during coexistence; in a v2 tenant namespace there are no RunnerGroups and in
-	// a v1 namespace there are no RunnerSets, so the two never act on the same
-	// objects. It shares the process-wide TokenManager, Registrar, Metrics, and
-	// Provisioner (the provisioner Target seam own-refs the real RunnerSet).
-	rsr := &controller.RunnerSetReconciler{
-		Client:          mgr.GetClient(),
-		Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
-		TokenManager:    tokenMgr,
-		Registrar:       registrar,
-		Metrics:         m,
-		ScaleSetMetrics: sm,
-		Provisioner:     prov,
-		AgentKeyType:    agentKeyType,
-		GatewayName:     gatewayName,
-		Recorder:        mgr.GetEventRecorder("runnerset-controller"),
-		BrokerConfig:    r.BrokerConfig,
+	// v2 RunnerSet reconciler (M3a). The RunnerSet CRD (and the sibling
+	// ActionsGateway/EgressProxy/RunnerTemplate kinds this reconciler watches) ships
+	// in the opt-in actions-gateway-crds-v2 chart, so a v1-only install serves none
+	// of them. Registering the reconciler there would leave its informer cache
+	// unable to sync, and mgr.Start would exit(1) after the cache-sync deadline —
+	// crash-looping the AGC (Q261). Detect the CRD once at startup and gate
+	// registration on it, mirroring the GMC's v2 detection (Q228). On a v1-only
+	// install the v1 RunnerGroup reconciler above runs normally; installing the v2
+	// CRDs later requires an AGC restart to enable this reconciler.
+	v2Enabled, err := controller.RunnerSetInstalled(mgr.GetRESTMapper())
+	if err != nil {
+		return fmt.Errorf("detect actions-gateway.com/v2alpha1 RunnerSet CRD: %w", err)
 	}
-	if err := rsr.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("setup runnerset reconciler: %w", err)
+	if !v2Enabled {
+		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD not installed; " +
+			"v1-only mode, v2 RunnerSet reconciler disabled " +
+			"(install the actions-gateway-crds-v2 chart and restart the AGC to enable it)")
+	} else {
+		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD detected; enabling v2 RunnerSet reconciler")
+
+		// Runs alongside the v1 RunnerGroup reconciler during coexistence; in a v2
+		// tenant namespace there are no RunnerGroups and in a v1 namespace there are
+		// no RunnerSets, so the two never act on the same objects. It shares the
+		// process-wide TokenManager, Registrar, Metrics, and Provisioner (the
+		// provisioner Target seam own-refs the real RunnerSet).
+		rsr := &controller.RunnerSetReconciler{
+			Client:          mgr.GetClient(),
+			Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
+			TokenManager:    tokenMgr,
+			Registrar:       registrar,
+			Metrics:         m,
+			ScaleSetMetrics: sm,
+			Provisioner:     prov,
+			AgentKeyType:    agentKeyType,
+			GatewayName:     gatewayName,
+			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
+			BrokerConfig:    r.BrokerConfig,
+		}
+		if err := rsr.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("setup runnerset reconciler: %w", err)
+		}
 	}
 
 	ctrl.Log.Info("starting AGC manager")
