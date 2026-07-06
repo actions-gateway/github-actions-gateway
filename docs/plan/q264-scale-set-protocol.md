@@ -20,7 +20,10 @@ test-env leak (Q269) and node CPU capacity; both were fixed and the RE-RUN on
 `main`@`2025557` (Q269 #542 + Q270 #544) landed **all 7 GAG jobs GREEN** on a fresh
 scale set (`gag-scaleset3`, scaleSetID 5) with 0 dedup/wedge, `unit-test`+`coverage`
 green (WORKER_MODE fix holds) and `lint`/`integration-test` green on 6-node CPU
-headroom. Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED.
+headroom. Q224 is CLOSED. **P5 default-flip is DONE (2026-07-06): the v2alpha1
+`acquisitionProtocol` default is now `ScaleSet` and `Classic` is deprecated; the
+one-minor-release deprecation window + the classic-machinery removal are the
+remaining P5 residual (§6-P5).**
 Full §6-P4.** A
 Classic RunnerSet's acquisition path is **byte-for-byte unchanged**. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
@@ -891,14 +894,42 @@ parallel implementation behind a flag, then cutover.
   when GAG's own CI runs on a `WORKER_MODE=scaleset` runner pod — otherwise the
   P4 dogfood CI (which runs `main`'s code) fails unit-test+coverage before the
   Q224 matrix can even run.
-- **P5 — cutover + retirement (M).** Flip the default to `ScaleSet`, migrate
-  dogfood, then run the U8 retirement sequence (§5a: one-minor-release
-  deprecation → remove classic machinery in an isolated PR), rewrite the
-  positioning docs (§4.7), update
-  [03-api-contracts §3.3](../design/03-api-contracts.md) and
-  [02-architecture §2.2](../design/02-architecture.md) — the design docs, plus
-  the operator docs per the
-  [doc-update matrix](../development/doc-update-matrix.md).
+- **P5 — cutover + retirement (M). ▶ default flip DONE 2026-07-06; deprecation
+  window + classic removal are the remaining residual.** The default of
+  `RunnerSet.spec.acquisitionProtocol` (v2alpha1) is flipped `Classic → ScaleSet`
+  (`+kubebuilder:default=ScaleSet`, CRD + both chart copies regenerated); `Classic`
+  is marked **deprecated** (godoc `Deprecated:` + the field doc + operator docs).
+  Secure-by-default holds — the flip relaxes no security property (single-acquirer
+  topology, same egress/isolation/NetworkPolicy; §5a): Classic was default only for
+  stability-by-default, now satisfied by P4 clean-green.
+  - **Consequences of the flip, handled in this step:**
+    - A bare (protocol-omitted) `RunnerSet` now defaults to `ScaleSet`, which
+      requires exactly one `runnerLabel`; a **multi-label** set must set
+      `acquisitionProtocol: Classic` explicitly. Documented in tenant-onboarding +
+      a troubleshooting entry.
+    - `gag-migrate` now emits `acquisitionProtocol: Classic` on every generated
+      set (was relying on the old default) — a migrated multi-label v1 group would
+      otherwise default to `ScaleSet` and be rejected on apply. Migrate golden +
+      unit assertion updated.
+    - Existing sets are unaffected: the value is persisted at admission, so any set
+      created while the default was `Classic` keeps `Classic`.
+  - Tests: envtest defaulting flipped to assert `ScaleSet`; a new envtest asserts a
+    bare multi-label set is now rejected and the same labels are accepted under
+    explicit `Classic`; shared v2 fixtures pin `Classic` (they exercise the classic
+    path). agc + gmc integration suites green.
+  - **Remaining P5 residual (separate later PRs, NOT this step):** run the U8
+    retirement sequence (§5a: one-minor-release deprecation → **remove** the classic
+    machinery in an isolated PR, aligned with the Q74 v2beta1 graduation). Optional
+    light dogfood re-confirm (P4 already validated ScaleSet clean-green).
+  - **Doc-ownership handoff:** the §4.7 positioning rewrite (why-gag / index /
+    website / the v1→v2 migration narrative) and the Option E design-narrative
+    updates to [03-api-contracts §3.3](../design/03-api-contracts.md) /
+    [02-architecture §2.2](../design/02-architecture.md) are **Q273's** ("make v2
+    the front door") — this step deliberately does not touch those to avoid a
+    collision. This step owns only the field default + the deprecation notice + the
+    operator docs (tenant-onboarding, troubleshooting, observability,
+    v1alpha1-deprecation) per the
+    [doc-update matrix](../development/doc-update-matrix.md).
 
 Each phase lands independently; P1/P2 are useful even if Option A wins (protocol
 knowledge + a fake that documents GitHub's dispatch model).

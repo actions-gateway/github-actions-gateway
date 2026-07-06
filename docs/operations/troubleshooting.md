@@ -1648,11 +1648,11 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 ## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
 
 > Applies to the `v2alpha1` (`actions-gateway.com`) API. `acquisitionProtocol` selects
-> how the AGC acquires jobs for a runner set: `Classic` (default — the per-runner
-> broker protocol every set uses today) or `ScaleSet` (the runner-scale-set
-> message-queue protocol, Q264 Option E). `ScaleSet` is early-adopter and opt-in per
-> set; leaving the field unset keeps the set on `Classic`, so nothing changes unless
-> you deliberately opt in.
+> how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5
+> — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic`
+> (**deprecated** — the per-runner broker protocol). Leaving the field unset selects
+> `ScaleSet`, so a runner set that omits it must declare exactly one `runnerLabel`; a
+> multi-label set must set `acquisitionProtocol: Classic` explicitly (see below).
 
 **Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
 
@@ -1681,6 +1681,11 @@ sharing it would collide — pick a distinct label
   GitHub whose *name is its single `runs-on` label* — there is no multi-label match
   like `Classic`. Set exactly one entry in `spec.runnerLabels` (e.g. `["gpu-linux"]`).
   A workflow targets it with that one label in `runs-on`.
+  - **Most common cause after the Q264 P5 default flip:** the set omits
+    `acquisitionProtocol` (so it defaults to `ScaleSet`) but declares more than one
+    label. Either reduce it to a single label, or — to keep multi-label matching —
+    set `acquisitionProtocol: Classic` explicitly (deprecated; slated for removal one
+    minor release out).
 - **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a
   full re-registration storm, so the field is frozen after creation. To change it,
   create a **new** `RunnerSet` (with a distinct name and label) and delete the old one.

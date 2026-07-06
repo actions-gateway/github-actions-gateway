@@ -115,6 +115,11 @@ func TestFanOut_RepresentativeTenant(t *testing.T) {
 		assert.Equal(t, "team-a", s.Spec.GatewayRef.Name)
 		assert.True(t, tmplNames[s.Spec.TemplateRef.Name], "templateRef %q resolves to an emitted template", s.Spec.TemplateRef.Name)
 		assert.Nil(t, s.Spec.ProxyRef, "proxyRef unset so the set inherits defaultProxyRef")
+		// Classic is pinned explicitly: the v2alpha1 default is ScaleSet (Q264 P5), but a
+		// migrated v1 group keeps classic-protocol, multi-label semantics — emitting
+		// Classic avoids a silent protocol switch and admission rejection on apply.
+		assert.Equal(t, v2alpha1.AcquisitionProtocolClassic, s.Spec.AcquisitionProtocol,
+			"migrated RunnerSet must pin Classic to preserve v1 semantics")
 		if s.Name == "team-a-linux" {
 			sharedTemplate = s.Spec.TemplateRef.Name
 		}

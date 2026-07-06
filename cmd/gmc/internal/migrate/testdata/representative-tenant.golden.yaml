@@ -71,6 +71,7 @@ metadata:
   name: team-a-gpu
   namespace: team-a
 spec:
+  acquisitionProtocol: Classic
   gatewayRef:
     name: team-a
   maxListeners: 1
@@ -91,6 +92,7 @@ metadata:
   name: team-a-linux
   namespace: team-a
 spec:
+  acquisitionProtocol: Classic
   gatewayRef:
     name: team-a
   maxListeners: 1
@@ -106,6 +108,7 @@ metadata:
   name: team-a-linux2
   namespace: team-a
 spec:
+  acquisitionProtocol: Classic
   gatewayRef:
     name: team-a
   maxListeners: 1

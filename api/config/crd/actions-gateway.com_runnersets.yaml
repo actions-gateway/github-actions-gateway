@@ -91,14 +91,23 @@ spec:
               lifecycle fields are carried over from RunnerGroup unchanged in meaning.
             properties:
               acquisitionProtocol:
-                default: Classic
+                default: ScaleSet
                 description: |-
                   AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
-                  "Classic" (default) is the per-runner broker protocol every existing set uses;
-                  "ScaleSet" is the runner-scale-set message-queue protocol (Q264 Option E), which
-                  removes the classic protocol's many-acquirers fan-out race by construction — one
-                  listener session per set, capacity-gated assignment, and a full-runner
-                  (run.sh --jitconfig) worker.
+                  "ScaleSet" (default, as of Q264 P5) is the runner-scale-set message-queue
+                  protocol (Q264 Option E) — one listener session per set, capacity-gated
+                  assignment, and a full-runner (run.sh --jitconfig) worker; it removes the
+                  classic protocol's many-acquirers fan-out race by construction. "Classic"
+                  (deprecated) is the per-runner broker protocol; select it only to retain a
+                  classic-only capability during the migration window — chiefly multi-label
+                  matching, which ScaleSet cannot express (see below).
+
+                  Because the default is ScaleSet and a ScaleSet set must declare exactly one
+                  runnerLabel, a runner set that omits this field must carry a single label; a
+                  multi-label set must set acquisitionProtocol: Classic explicitly. Existing
+                  sets are unaffected: the value is persisted at admission, so a set created
+                  while the default was Classic keeps Classic. (gag-migrate emits Classic
+                  explicitly, preserving v1 multi-label semantics on migration.)
 
                   It is immutable: switching a live set's protocol is a re-registration storm, so
                   the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.

@@ -91,10 +91,14 @@ func newRunnerSet(name, ns, gateway string) *v2alpha1.RunnerSet {
 	return &v2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:   v2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
-			MaxListeners: 1,
-			RunnerLabels: []string{"self-hosted"},
+			GatewayRef:  v2alpha1.ObjectRef{Name: gateway},
+			TemplateRef: &v2alpha1.ObjectRef{Name: "tmpl"},
+			// Pin Classic: the default is ScaleSet (Q264 P5), but these reconciler tests
+			// exercise the classic acquisition path. The ScaleSet path has its own suite
+			// (v2_runnerset_scaleset_test.go).
+			AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
+			MaxListeners:        1,
+			RunnerLabels:        []string{"self-hosted"},
 		},
 	}
 }

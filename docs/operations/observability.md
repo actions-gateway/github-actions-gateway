@@ -337,7 +337,7 @@ remove the files when finished.)
 
 ### Scale-set acquisition tier (Q264)
 
-These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A default (`Classic`) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
+These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A `Classic` (deprecated) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |

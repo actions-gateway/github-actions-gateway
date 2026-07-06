@@ -10,16 +10,27 @@ import (
 // the field, and v1alpha1 has no equivalent (classic-only). Both values are matched
 // exactly by the AGC RunnerSet controller and the GMC validating webhook.
 const (
-	// AcquisitionProtocolClassic is the default: the classic per-runner broker
-	// protocol — N pre-registered single-use agents multiplexed as listener
-	// goroutines (the M1/M2 tier). Unchanged for every existing user.
+	// AcquisitionProtocolClassic is the classic per-runner broker protocol —
+	// N pre-registered single-use agents multiplexed as listener goroutines (the
+	// M1/M2 tier).
+	//
+	// As an API value, "Classic" is DEPRECATED as of Q264 P5 (2026-07-06): ScaleSet
+	// is now the default, and Classic remains a fully-functional explicit opt-in for
+	// one minor release (chiefly multi-label runner sets, which ScaleSet cannot
+	// express), then the classic machinery is removed at the v2beta1 graduation
+	// (Q264 §5a-U8). New runner sets should omit the field (defaulting to ScaleSet)
+	// or set it to ScaleSet; select Classic only to retain a classic-only capability
+	// during the migration window. (This is an API-surface deprecation, not a Go
+	// `Deprecated:` marker — the identifier is still used internally to implement
+	// classic support, so it deliberately avoids the machine-readable token.)
 	AcquisitionProtocolClassic = "Classic"
-	// AcquisitionProtocolScaleSet selects the runner-scale-set message-queue
-	// protocol (Q264 Option E): one listener session per set, capacity-gated
-	// job assignment, and a full-runner (run.sh --jitconfig) worker. It removes
-	// the classic protocol's many-acquirers fan-out race by construction. The
-	// scale set's single runnerLabel is its runs-on match target, so a ScaleSet
-	// set must declare exactly one label (enforced by CEL).
+	// AcquisitionProtocolScaleSet is the default: the runner-scale-set
+	// message-queue protocol (Q264 Option E) — one listener session per set,
+	// capacity-gated job assignment, and a full-runner (run.sh --jitconfig)
+	// worker. It removes the classic protocol's many-acquirers fan-out race by
+	// construction (Q224, validated clean-green in Q264 P4). The scale set's
+	// single runnerLabel is its runs-on match target, so a ScaleSet set must
+	// declare exactly one label (enforced by CEL).
 	AcquisitionProtocolScaleSet = "ScaleSet"
 )
 
@@ -102,11 +113,20 @@ type RunnerSetSpec struct {
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
-	// "Classic" (default) is the per-runner broker protocol every existing set uses;
-	// "ScaleSet" is the runner-scale-set message-queue protocol (Q264 Option E), which
-	// removes the classic protocol's many-acquirers fan-out race by construction — one
-	// listener session per set, capacity-gated assignment, and a full-runner
-	// (run.sh --jitconfig) worker.
+	// "ScaleSet" (default, as of Q264 P5) is the runner-scale-set message-queue
+	// protocol (Q264 Option E) — one listener session per set, capacity-gated
+	// assignment, and a full-runner (run.sh --jitconfig) worker; it removes the
+	// classic protocol's many-acquirers fan-out race by construction. "Classic"
+	// (deprecated) is the per-runner broker protocol; select it only to retain a
+	// classic-only capability during the migration window — chiefly multi-label
+	// matching, which ScaleSet cannot express (see below).
+	//
+	// Because the default is ScaleSet and a ScaleSet set must declare exactly one
+	// runnerLabel, a runner set that omits this field must carry a single label; a
+	// multi-label set must set acquisitionProtocol: Classic explicitly. Existing
+	// sets are unaffected: the value is persisted at admission, so a set created
+	// while the default was Classic keeps Classic. (gag-migrate emits Classic
+	// explicitly, preserving v1 multi-label semantics on migration.)
 	//
 	// It is immutable: switching a live set's protocol is a re-registration storm, so
 	// the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.
@@ -120,7 +140,7 @@ type RunnerSetSpec struct {
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition protocol"
 	// +kubebuilder:validation:Enum=Classic;ScaleSet
-	// +kubebuilder:default=Classic
+	// +kubebuilder:default=ScaleSet
 	AcquisitionProtocol string `json:"acquisitionProtocol,omitempty"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count

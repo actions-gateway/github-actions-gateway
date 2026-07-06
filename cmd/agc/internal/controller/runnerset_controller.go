@@ -292,7 +292,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Route by acquisition protocol (Q264 P3d). A ScaleSet-protocol set is driven by a
 	// single scale-set listener session per set instead of the classic pool/multiplexer
 	// many-acquirers path; the field is immutable (P3a), so a set never switches tiers
-	// live. Classic (the default) falls through to the unchanged path below.
+	// live. Classic (deprecated; the default is ScaleSet as of P5) and an unset field
+	// both fall through to the unchanged classic path below.
 	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
 		return r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts)
 	}
