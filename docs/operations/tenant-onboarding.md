@@ -4,6 +4,15 @@
 
 This checklist walks from pre-conditions through first successful job. For the full setup reference, see [Getting Started](../getting-started.md). For day-2 operations after onboarding, see the [Runbook](runbook.md). **Coming from Actions Runner Controller (ARC)?** Start with the [Migrating from ARC guide](migration-from-arc.md) — it maps ARC scale-set concepts onto the steps below and walks one runner group across.
 
+!!! tip "New tenants: onboard on the v2 API"
+    Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
+    At the gateway step, the recommended shape for a **new** tenant is the **v2 API**
+    (`actions-gateway.com/v2alpha1`) — see [v2 API](#v2-api-alpha-multiple-gateways-per-namespace)
+    below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
+    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource)
+    is still fully supported but **[deprecated](v1alpha1-deprecation.md)**; already on
+    v1? [`gag-migrate`](migration-v1-to-v2.md) moves you across.
+
 ---
 
 ## Pre-Conditions
@@ -536,7 +545,7 @@ Onboarding is complete when:
 
 ## v2 API (alpha): multiple gateways per namespace
 
-> **Audience:** Platform engineer adopting the **`v2alpha1`** (`actions-gateway.com`) API. This is an **alpha, early-adopter** API served *beside* `v1alpha1` — everything above (the `v1alpha1`, `actions-gateway.github.com` flow) stays fully supported. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Optional: the v2alpha1 API](../getting-started.md#optional-the-v2alpha1-api-alpha).
+> **Audience:** Platform engineer adopting the **`v2alpha1`** (`actions-gateway.com`) API. This is an **alpha, early-adopter** API served *beside* `v1alpha1` — everything above (the `v1alpha1`, `actions-gateway.github.com` flow) stays fully supported. Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)). What that changes when onboarding a v2 tenant:
 

@@ -102,8 +102,9 @@ The fan-out preserves v1 behavior and weakens no security property:
 
 ## Prerequisites
 
-- The v2 CRDs and the GMC build that serves the v2 reconcilers are installed (the
-  v2 milestones M1–M3b have shipped).
+- The **v2 CRDs are installed** and the GMC is serving the v2 reconcilers — install
+  the opt-in `actions-gateway-crds-v2` chart and restart the GMC if it was already
+  running (see [Getting Started — the v2 CRDs](../getting-started.md#1-deploy-the-gmc)).
 - `kubectl` access to the cluster with permission to read the tenant's v1 objects and
   (for `--apply`) create v2 objects and patch the namespace.
 - Build the tool: from `cmd/gmc`, `make build-migrate` (produces `.build/gag-migrate`).

@@ -4,9 +4,25 @@
 > a local kind cluster — job → ephemeral worker pod → green on GitHub — with the
 > exact commands to reproduce it.
 
+!!! tip "New tenants: start on the v2 API"
+    The recommended shape for a new tenant is the **v2 API**
+    (`actions-gateway.com/v2alpha1`) — a decomposed `ActionsGateway` +
+    `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in
+    [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below. It is
+    **alpha** (the schema may still change before it graduates toward `v2beta1`),
+    but it is the direction the project is going and where new capabilities land.
+    The older single-CR **`v1alpha1`** API is still fully served but
+    **[deprecated](operations/v1alpha1-deprecation.md)** — reach for it only if you
+    have a specific reason to, and see the
+    [legacy v1 path](#legacy-the-v1alpha1-api-deprecated). Already on v1?
+    [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without
+    changing how your jobs are acquired.
+
 ## Prerequisites
 
-- Kubernetes 1.30+ (GA `ValidatingAdmissionPolicy`)
+- Kubernetes 1.30+ (GA `ValidatingAdmissionPolicy`); **1.31+** for the recommended
+  v2 path (per-gateway `RunnerSet` scoping uses a server-side field selector,
+  KEP-4358, that is alpha-off on 1.30)
 - A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the isolation controls to take effect
 - [cert-manager](https://cert-manager.io) installed, *or* install with `--set certManager.enabled=false` to use the chart's self-signed webhook cert
 - A GitHub App with a private key and installation ID
@@ -29,6 +45,15 @@ All four images must be **pinned by digest** — the chart refuses to render whi
 
 > **Dev/CI.** The Helm chart is the single install path — there is no kustomize alternative. To install an unreleased chart from a source checkout, substitute the local `charts/actions-gateway` path for the `oci://…` ref above; `make deploy` (used by the e2e suite) wraps the same `helm install` with floating image tags for local iteration.
 
+For the recommended **v2** path, also install the opt-in v2 CRD chart (it ships separately because the CRDs are large enough that bundling them would push the main chart's Helm release Secret past its 1 MiB limit):
+
+```sh
+helm install actions-gateway-crds-v2 \
+  oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+```
+
+The GMC **detects the v2 CRDs at startup**: with the chart present it starts the v2 controllers; without it the GMC comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`) — it does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`). See the [chart README](../charts/actions-gateway-crds-v2/README.md).
+
 ## 2. Create and mark the tenant namespace, and set its quota
 
 Create the tenant namespace and mark it as managed by the GMC. The marker label
@@ -39,6 +64,13 @@ authorizes the GMC to stamp Pod Security Admission labels on it; the
 kubectl create namespace team-a
 kubectl label namespace team-a actions-gateway.github.com/tenant=true
 ```
+
+> **v2 namespace markers.** In the recommended v2 flow the tenant marker aligns to
+> `actions-gateway.com/tenant=managed`, and the Pod Security level moves off the CR
+> onto the namespace as the `actions-gateway.com/security-profile` label (absent ⇒
+> `baseline`). The GMC dual-reads both spellings during coexistence. For the exact
+> v2 namespace labels and the profile-guard admission policy, see
+> [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace).
 
 The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the
 platform admin creates and manages it on the tenant namespace, and the gateway
@@ -107,7 +139,112 @@ stringData:
     -----END RSA PRIVATE KEY-----
 ```
 
-## 4. Create an ActionsGateway resource
+## 4. Create your gateway and runner set (v2, recommended)
+
+The **v2 API** (`actions-gateway.com/v2alpha1`) decomposes the single v1 CR into
+small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a
+`RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an
+optional `EgressProxy`. The set below is feature-equivalent to the legacy v1
+example — a proxied gateway with a GPU runner set (priority tiers) and a Linux
+runner set:
+
+```yaml
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy
+metadata:
+  name: team-a-egress
+  namespace: team-a
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate            # a reusable pod shape, referenced by many RunnerSets
+metadata:
+  name: default
+  namespace: team-a
+spec:
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway
+metadata:
+  name: team-a-gateway
+  namespace: team-a
+spec:
+  credentials:
+    type: GitHubApp             # discriminated union; WorkloadIdentity is the opt-in no-PEM member
+    githubApp:
+      name: my-github-app        # name-only Secret ref in this namespace
+  # githubURL is the org/enterprise/repo the runners register against (required,
+  # immutable). The App above must be installed on this same org/enterprise.
+  githubURL: https://github.com/my-org
+  defaultProxyRef:
+    name: team-a-egress          # every RunnerSet below inherits this unless it sets its own proxyRef
+  # securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field —
+  # all gateways in a namespace share one Pod Security level. See Tenant Onboarding.
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: gpu                      # v2 names its own runner set; no first-label-derives-name rule
+  namespace: team-a
+spec:
+  gatewayRef:  { name: team-a-gateway }
+  templateRef: { name: default }
+  runnerLabels: ["gpu", "self-hosted"]
+  maxListeners: 10
+  # priorityClassName values must be on the GMC --allowed-priority-classes
+  # allowlist (platform-owned); preemption is set on the PriorityClass object.
+  priorityTiers:
+    - priorityClassName: runner-critical
+      threshold: 5
+    - priorityClassName: runner-standard
+      threshold: 20
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: linux
+  namespace: team-a
+spec:
+  gatewayRef:  { name: team-a-gateway }
+  templateRef: { name: default }
+  runnerLabels: ["linux", "self-hosted"]
+  maxWorkers: 30
+```
+
+The GMC provisions the AGC, the proxy pool, RBAC, and network policies in
+`team-a` automatically. The **namespace `ResourceQuota` is still platform-owned**
+(Step 2) — it is not a field on any of these CRs.
+
+**The proxy is optional in v2.** Drop the `EgressProxy` and the `defaultProxyRef`
+and traffic egresses **directly** to GitHub — still `NetworkPolicy`-restricted to
+DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to
+allow-list. That collapses the minimal onboarding to three objects. For the
+proxy-less flow, reusable/cluster-default templates, multiple gateways per
+namespace, the 52-character name cap, and workload-identity credentials, see
+[Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace)
+and [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md).
+
+Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation. See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.
+
+## Legacy: the `v1alpha1` API (deprecated)
+
+!!! warning "`v1alpha1` is deprecated — new tenants should use v2 above"
+    The `actions-gateway.github.com/v1alpha1` single-CR API is still fully served
+    and supported, but it is **[deprecated](operations/v1alpha1-deprecation.md)**
+    in favor of the decomposed v2 API. It will be removed on a schedule tied to the
+    v2 API reaching beta, announced as a named release with at least one release of
+    notice. Use it only if you have a specific reason not to adopt v2 yet; if you
+    are already on v1, [`gag-migrate`](operations/migration-v1-to-v2.md) moves you
+    to v2 without changing how your jobs are acquired.
+
+The v1 API expresses the whole gateway — proxy and all runner groups — in a single
+`ActionsGateway` CR:
 
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
@@ -165,31 +302,6 @@ spec:
 ```
 
 The GMC will provision the AGC, proxy pool, RBAC, and network policies in `team-a` automatically.
-
-Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation. See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.
-
-## Optional: the v2alpha1 API (alpha)
-
-Everything above uses the **`v1alpha1`** API (`actions-gateway.github.com`), which is fully supported and is the standard path. A second, **alpha** API — **`v2alpha1`** (`actions-gateway.com`) — ships *beside* it for early adopters. It decomposes the single `ActionsGateway` CR into five smaller kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) and adds:
-
-- **multiple `ActionsGateway`s per namespace** (v1 is one-per-namespace);
-- **reusable runner templates** — a `RunnerTemplate` (or cluster-scoped `ClusterRunnerTemplate`) referenced by many runner sets, instead of an inline pod template copied into each group;
-- an **optional shared egress proxy** (`EgressProxy`) any runner set can point at — with direct egress when none is set.
-
-`v2alpha1` is **alpha and may change incompatibly**; `v1alpha1` remains fully supported and v2 is not a drop-in replacement. Adopt it only when you want the new shape.
-
-The v2 CRDs ship in a **separate, opt-in chart** — `actions-gateway-crds-v2` — because they are large enough that bundling them would push the main chart's Helm release Secret past its 1 MiB limit. Install it alongside the main `actions-gateway` chart (any order):
-
-```sh
-helm install actions-gateway-crds-v2 \
-  oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
-```
-
-The opt-in is real on the controller side too: the GMC **detects the v2 CRDs at startup**. A v1-only install (the main chart without this CRD chart) comes up clean — the GMC logs `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled` and starts only the v1 controllers; it does **not** error-loop on the missing kinds. Because detection happens once at startup, **installing the v2 CRDs into an already-running cluster requires a GMC restart** (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`) before the v2 controllers activate.
-
-The CRDs install and validate on Kubernetes ≥ 1.30, but per-gateway scoping (the `RunnerSet` `spec.gatewayRef.name` field selector, KEP-4358) requires **Kubernetes ≥ 1.31**. See the [chart README](../charts/actions-gateway-crds-v2/README.md) for details.
-
-For the v2 onboarding flow — the worked three-object example, per-gateway naming and the 52-character name cap, and the namespace-scoped security profile — see [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md), the v2 sections in [Tenant Onboarding](operations/tenant-onboarding.md#v2-api-alpha-multiple-gateways-per-namespace), and [Troubleshooting](operations/troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites).
 
 ## Rotating GitHub App Credentials
 

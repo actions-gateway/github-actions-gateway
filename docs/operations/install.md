@@ -268,8 +268,9 @@ stays under the 1 MiB limit. They are genuinely optional:
   the GMC logs `actions-gateway.com/v2alpha1 CRDs detected; enabling v2
   controllers`.
 
-See [getting-started.md § the v2alpha1 API](../getting-started.md#optional-the-v2alpha1-api-alpha)
-for what v2 adds and the Kubernetes version requirements.
+See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)
+for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc)
+for the v2 CRD chart install and the Kubernetes version requirements.
 
 ---
 

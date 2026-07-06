@@ -43,13 +43,16 @@ operations docs.
 - **Secure by default.** Pod Security Admission, default-deny network policies,
   credentials kept out of environment variables, and signed images with a
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
-- **Reusable runner templates.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed `v2alpha1`
-  (`actions-gateway.com`) API ships *beside* the standard `v1alpha1` for early
-  adopters: reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`,
-  multiple scoped gateways per namespace, per-gateway control-plane sizing
-  (`agcResources`), and a `v1 → v2` migration tool. See the migration guide's
-  [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2) for the
-  full list. Graduation toward `v2beta1` is near-term work (below).
+- **The v2 API — the recommended shape for new tenants.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed
+  `v2alpha1` (`actions-gateway.com`) API ships *beside* `v1alpha1` and is the path
+  new tenants should onboard on: reusable `RunnerTemplate` and cluster-wide
+  `ClusterRunnerTemplate`, multiple scoped gateways per namespace, an optional
+  standalone `EgressProxy`, per-gateway control-plane sizing (`agcResources`), and
+  a `v1 → v2` migration tool. The single-CR `v1alpha1` API is still fully served
+  but **[deprecated](operations/v1alpha1-deprecation.md)** — it is removed on a
+  schedule tied to v2 reaching beta, not on an adoption count. See the migration
+  guide's [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2)
+  for the full list. Graduation toward `v2beta1` is near-term work (below).
 - **Day-2 operations.** Helm upgrade and rollback paths, a backup/restore and
   disaster-recovery runbook, and troubleshooting guides.
 - **Workload-identity credentials.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> Mint short-lived GitHub credentials through

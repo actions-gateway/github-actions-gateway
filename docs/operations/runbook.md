@@ -12,7 +12,7 @@ For initial setup steps see [Getting Started](../getting-started.md). For detail
 
 1. Ensure the tenant namespace exists: `kubectl get namespace <namespace>`.
 2. Have the tenant create the GitHub App Secret in their namespace. See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret).
-3. Have the tenant create the `ActionsGateway` CR. See [Getting Started §4](../getting-started.md#4-create-an-actionsgateway-resource).
+3. Have the tenant create the gateway CR(s) — the recommended v2 `ActionsGateway` + `RunnerSet`, or the legacy v1 `ActionsGateway`. See [Getting Started §4](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
 4. Confirm the GMC has provisioned resources within ~30 seconds:
    ```sh
    kubectl get actionsgateway -n <namespace>

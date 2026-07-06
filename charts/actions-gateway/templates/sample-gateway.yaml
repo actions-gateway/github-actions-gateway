@@ -1,5 +1,8 @@
 {{- if .Values.sampleGateway.create }}
 # Example ActionsGateway for kicking the tyres on a dev cluster. OFF by default.
+# This uses the legacy v1alpha1 single-CR API for a minimal one-object sample; new
+# tenants should onboard on the recommended v2 API (actions-gateway.com/v2alpha1) —
+# see docs/getting-started.md and docs/operations/migration-v1-to-v2.md.
 # A real tenant needs its own namespace marked
 # `actions-gateway.github.com/tenant=true`, a GitHub App Secret, and a reviewed
 # quota — see docs/operations/tenant-onboarding.md. This renders into the

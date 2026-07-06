@@ -113,9 +113,14 @@ letting tenants run their own runners.
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every capability above is driven by the single `ActionsGateway` resource shown
-below (v1 API). Rows marked <span class="gag-v2-badge">v2</span> require the
-`v2alpha1` API — see the [v1 → v2 migration guide](operations/migration-v1-to-v2.md).
+Every capability above is available today. New tenants should onboard on the
+**recommended v2 API** (`actions-gateway.com/v2alpha1` — a decomposed
+`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone
+`EgressProxy`); the rows marked <span class="gag-v2-badge">v2</span> are v2-only.
+The single-CR `v1alpha1` shape shown below is still fully served but
+**[deprecated](operations/v1alpha1-deprecation.md)** — see the
+[v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
+[getting-started walkthrough](getting-started.md) for the v2 object set.
 
 For limits and Service Level Objectives behind these claims, see
 [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
@@ -167,14 +172,19 @@ For the full threat model, per-profile controls, and the abuse-response
 playbooks, see [Security](design/05-security.md) and
 [Security operations](operations/security-operations.md).
 
-## One resource, a whole gateway
+## One declaration, a whole gateway
 
-A tenant declares what they want in a single namespace-scoped resource. The
-platform marks the namespace and sets its `ResourceQuota` once; from there the
-Gateway Manager Controller (GMC) provisions the controller, proxy pool, RBAC, and
-network policies to match — all operating within that platform-owned quota, which
-the GMC never creates or mutates. No per-tenant cluster-admin involvement after
-the initial GMC install.
+A tenant declares what they want in namespace-scoped resources. The platform marks
+the namespace and sets its `ResourceQuota` once; from there the Gateway Manager
+Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies
+to match — all operating within that platform-owned quota, which the GMC never
+creates or mutates. No per-tenant cluster-admin involvement after the initial GMC
+install.
+
+The **recommended v2 API** decomposes this into small reusable kinds (a shared
+`RunnerTemplate`, a `RunnerSet` per runner type, an optional standalone
+`EgressProxy`) — see the [getting-started walkthrough](getting-started.md). The
+legacy `v1alpha1` shape below expresses the same gateway in one CR:
 
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
