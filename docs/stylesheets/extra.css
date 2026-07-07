@@ -948,6 +948,25 @@ body[data-md-color-scheme="slate"] {
   background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
 }
 
+/* Plain (non-marketing) tables: Material defaults these to 0.64rem (12.8px),
+   which reads too small against 16px body copy — more so since IBM Plex Sans has
+   a smaller x-height than Roboto. The rule above only wins for classed tables
+   (the reveal JS stamps a class on marketing tables); Material's own
+   :not([class]) selector out-specifies it for plain docs tables, so bump those
+   explicitly to 0.75rem (15px). */
+.md-typeset table:not([class]) {
+  font-size: 0.75rem;
+}
+
+/* Admonitions / collapsible details (e.g. the "New tenants: onboard on v2" tip):
+   Material defaults their content to 0.64rem (12.8px), same too-small problem as
+   plain tables. Bump the block so the title and body both read at 0.75rem (15px);
+   nested children inherit. */
+.md-typeset .admonition,
+.md-typeset details {
+  font-size: 0.75rem;
+}
+
 /* The why-gag comparison table: fill the column (so it isn't left-aligned with a
    right-hand gap) and restore roomy cell padding. Material's default cell padding
    is :not([class])-guarded, so the reveal JS that classes this table drops it —
