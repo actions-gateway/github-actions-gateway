@@ -106,4 +106,7 @@ install.
   (e.g. `n2-standard-8`) before that path is sized — the DinD pod requests do not
   port 1:1 to the smaller Kata node.
 
-Tracked under [Q231](../../docs/STATUS.md#Q231) (dogfood e2e on GKE).
+The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
+is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and
+was live-validated green on GAG on 2026-07-07 (Q231, done). The Kata isolation
+variant remains open under [Q226](../../docs/STATUS.md#Q226).
