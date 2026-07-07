@@ -123,25 +123,34 @@ footprint.
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every capability above is available today. New tenants should onboard on the
-**recommended v2 API** (`actions-gateway.com/v2alpha1` — a decomposed
-`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone
-`EgressProxy`); the rows marked <span class="gag-v2-badge">v2</span> are v2-only.
-The single-CR `v1alpha1` shape shown below is still fully served but
-**[deprecated](operations/v1alpha1-deprecation.md)** — see the
-[v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
-[getting-started walkthrough](getting-started.md) for the v2 object set.
+Every capability above is available today.
 
-For limits and Service Level Objectives behind these claims, see
-[Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
-the utilization-and-cost argument, [Appendix F — Cost model](design/appendix-f-cost-model.md).
+!!! note "Onboarding: start on v2"
 
-Where GAG is behind ARC is **maturity, not capability.** ARC is GA and widely
-deployed; GAG's recommended v2 API is still alpha and rides a Public-Preview
-runner-scale-set protocol. That is precisely why the v1 → v2 migration is handled
-on a committed, documented schedule with a working [`gag-migrate`](operations/migration-v1-to-v2.md)
-tool — the discipline is the "won't strand you" signal while the track record
-accumulates.
+    New tenants should onboard on the **recommended v2 API**
+    (`actions-gateway.com/v2alpha1` — a decomposed `ActionsGateway` + `RunnerSet` +
+    `RunnerTemplate`, with an optional standalone `EgressProxy`); the rows marked
+    <span class="gag-v2-badge">v2</span> are v2-only. The single-CR `v1alpha1` shape
+    shown below is still fully served but
+    **[deprecated](operations/v1alpha1-deprecation.md)** — see the
+    [v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
+    [getting-started walkthrough](getting-started.md) for the v2 object set.
+
+!!! info "The numbers behind these claims"
+
+    For limits and Service Level Objectives, see
+    [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
+    the utilization-and-cost argument,
+    [Appendix F — Cost model](design/appendix-f-cost-model.md).
+
+!!! warning "Where GAG is behind ARC"
+
+    It's **maturity, not capability.** ARC is GA and widely deployed; GAG's
+    recommended v2 API is still alpha and rides a Public-Preview runner-scale-set
+    protocol. That is precisely why the v1 → v2 migration is handled on a committed,
+    documented schedule with a working
+    [`gag-migrate`](operations/migration-v1-to-v2.md) tool — the discipline is the
+    "won't strand you" signal while the track record accumulates.
 
 ## Secure by default
 
