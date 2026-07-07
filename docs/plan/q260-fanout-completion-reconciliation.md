@@ -395,6 +395,11 @@ non-green result is attributable to accounting, not the runner image
 
 ## 7. Q265 — fan-out throughput benchmark (2026-07-05): tax wall or tuning?
 
+> **Superseded by §10 (2026-07-06):** this section records the first (confounded)
+> benchmark, re-route #6. The clean wide-pool run and the final Q265 verdict — classic
+> **2/7** vs ScaleSet **7/7**, comparison closed, Q265 DONE — are in §10.
+
+
 Q260 proved Option A's *accounting* is correct (§5, re-route #5). Q265 asks the
 *throughput* question that gates [Q224](gke-dogfood.md) and the Option A-vs-Option E
 ([Q264](q264-scale-set-protocol.md)) fork: on a warm, right-sized pool with
@@ -617,6 +622,55 @@ the seam accounting from re-route #7:
   *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated
   reimplementation of the scale-set model. **Verdict: Option E ([Q264](q264-scale-set-protocol.md))
   is the only reliable fix — #530 stands.**
+
+## 10. Q265 — close-out: comparison settled, ScaleSet decisively wins (2026-07-06)
+
+Q265 asked for a head-to-head fan-out (Option A / classic) vs scale-set throughput
+benchmark at a wide worker pool. **Both sides have now been measured live on the
+dogfood cluster under the clean conditions Q265 required — the two confounders that
+previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding
+seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed,
+and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../STATUS.md)).
+No further turn-up is needed: the comparison is decided.**
+
+### The measured comparison
+
+| Path | Config | Distinct jobs run to green | Binding limit |
+|---|---|---|---|
+| **Classic / Option A fan-out** | re-route #8: clean namespace (`dogfood8`/`ci8`/`gag-ci8`), `maxListeners = 48`, `maxWorkers = 8`, `pd-standard`, all recycle/capacity/tax seams (Q259/Q266/Q267/Q248/Q265) quiet | **2/7** — 5 jobs wedged `in_progress` indefinitely | GitHub server-side **fan-out distinct-delivery starvation** (§9): only 2 distinct planIDs ever delivered; the pool self-limited to 3 ≪ 48 sessions, so a wider pool does not help |
+| **ScaleSet** ([Q264](q264-scale-set-protocol.md) P4) | clean-green re-run: fresh scale-set label, `maxWorkers = 8`, same 7-job matrix | **7/7** — 7 distinct `JobAssigned`, 7 worker pods in ~2 s, 0 dedup / 0 wedge | none — one acquirer, one authoritative queue, no sibling deliveries |
+
+The clean wide-pool run Q265 set out to obtain **is** re-route #8: with Q266 + Q267 +
+a clean namespace + `pd-standard`, the pool *held* (Q267 done, 0 collapse markers over a
+20-minute window) — proving the classic **2/7** ceiling is **not** a recycle-churn or
+`completejob`-tax artifact but the intrinsic many-acquirers **dispatch** wall. ScaleSet
+clears exactly that wall by construction.
+
+### Verdict — Q265 DONE
+
+- **No completion-tax throughput wall exists** (re-route #6, §7: 0 `worker capacity full`
+  in every run) — Option A's *accounting* is correct.
+- **But classic cannot reliably clear a high-concurrency burst:** fan-out
+  distinct-delivery starvation caps it at 2–3/7 regardless of pool width — a GitHub
+  server-side limit with **no AGC-side lever**
+  ([`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md)).
+- **ScaleSet clears it decisively: 7/7 vs classic 2/7**, proven live.
+
+**Strategic close.** [Q264](q264-scale-set-protocol.md) P5 has already flipped the
+default acquisition protocol to ScaleSet (PR #553); classic — the Option A fan-out path
+— is **deprecated**. This benchmark therefore **closes the comparison and confirms the
+ScaleSet default decision**; it is *not* a reason to revive or further tune Option A.
+Option A remains correct and supported for the deprecated classic protocol (its
+accounting fix stands unchanged), but the throughput ceiling measured here is exactly
+why the product front door is now ScaleSet.
+
+A fresh confirming turn-up was **not** run: both sides are already measured under clean,
+confounder-free conditions on the shared dogfood cluster, and re-running the deprecated
+classic path would only reproduce **2/7** at cost. Evidence:
+[`gke-dogfood.md`](gke-dogfood.md) re-route #8 (classic **2/7**) + Q264 P4 clean-green
+(ScaleSet **7/7**).
+
+---
 
 ## Ruled-out, for the record
 
