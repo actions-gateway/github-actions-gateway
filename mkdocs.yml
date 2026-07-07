@@ -19,12 +19,19 @@ exclude_docs: |
   /plan/
   /development/
   /assets/README.md
+  /assets/fonts/README.md
 
 theme:
   name: material
   custom_dir: overrides
   logo: assets/logo.svg
   favicon: assets/favicon.svg
+  # Disable Material's built-in Google Fonts loader — it would fetch Roboto from
+  # fonts.gstatic.com on every page view, the one Google request left in an
+  # otherwise Google-free site. We self-host instead: @font-face declarations and
+  # the --md-text-font / --md-code-font mapping live in stylesheets/extra.css, with
+  # the woff2 files under assets/fonts/. See docs/development/website.md § Fonts.
+  font: false
   features:
     - navigation.tabs
     - navigation.sections

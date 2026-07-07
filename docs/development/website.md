@@ -71,6 +71,31 @@ domain (this is **not** a secret — it is the same `actions-gateway.com` alread
 in `site_url`) and registers that domain in their Plausible dashboard. Point
 `plausible_src` at a self-hosted Plausible to avoid the hosted `plausible.io`.
 
+## Fonts
+
+The site's typefaces are **self-hosted** — no font CDN is contacted. Material's
+built-in Google Fonts loader would otherwise fetch Roboto from
+`fonts.gstatic.com` on every page view, leaking each visitor's IP and
+User-Agent to Google (the one Google request an otherwise Google-free site
+would still make). We disable it and serve our own woff2 instead:
+
+- **`theme.font: false`** in `mkdocs.yml` turns off the loader.
+- **`@font-face` declarations + the `--md-text-font` / `--md-code-font` mapping**
+  in `docs/stylesheets/extra.css` point Material at the vendored files. Material
+  appends its own system fallback stack, so a face that fails to load degrades to
+  the OS font rather than a serif.
+- **woff2 files** live in `docs/assets/fonts/` (latin subset, SIL OFL 1.1). See
+  that directory's `README.md` for the file→role table, licensing, and the
+  re-fetch commands.
+
+The pairing is "GitHub-native": **Monaspace Neon** (GitHub's own superfamily) as
+the display face on the landing hero and each page's `h1`, **IBM Plex Sans** for
+body copy and headings `h2`–`h6`, and **Monaspace Argon** for code. To change a
+face, add its weights to `docs/assets/fonts/`, add matching `@font-face` rules,
+and update the `--md-*-font` variables (and the `h1` override for the display
+face). Keep every face self-hosted — never reintroduce a `theme.font` mapping or
+an external font `<link>`, which would restore the Google request.
+
 ## Local preview
 
 ```sh
