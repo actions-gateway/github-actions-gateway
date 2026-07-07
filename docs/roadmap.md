@@ -45,10 +45,12 @@ operations docs.
   Software Bill of Materials (SBOM) and SLSA provenance — reconciled, not opt-in.
 - **The v2 API — the recommended shape for new tenants.** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">alpha</span> A decomposed
   `v2alpha1` (`actions-gateway.com`) API ships *beside* `v1alpha1` and is the path
-  new tenants should onboard on: reusable `RunnerTemplate` and cluster-wide
-  `ClusterRunnerTemplate`, multiple scoped gateways per namespace, an optional
-  standalone `EgressProxy`, per-gateway control-plane sizing (`agcResources`), and
-  a `v1 → v2` migration tool. The single-CR `v1alpha1` API is still fully served
+  new tenants should onboard on: the single-acquirer **runner-scale-set** acquisition
+  protocol as the default (the same model ARC uses, no many-acquirers fan-out),
+  reusable `RunnerTemplate` and cluster-wide `ClusterRunnerTemplate`, multiple scoped
+  gateways per namespace, an optional standalone `EgressProxy`, per-gateway
+  control-plane sizing (`agcResources`), and a `v1 → v2` migration tool. The
+  single-CR `v1alpha1` API (and its classic acquisition protocol) is still fully served
   but **[deprecated](operations/v1alpha1-deprecation.md)** — it is removed on a
   schedule tied to v2 reaching beta, not on an adoption count. See the migration
   guide's [Why upgrade to v2](operations/migration-v1-to-v2.md#why-upgrade-to-v2)
@@ -86,7 +88,9 @@ last gaps an outside operator hits.
 - **Air-gapped / private-registry install.** Image-pull-secret support and a
   mirror-the-images guide for egress-restricted enterprises.
 - **API graduation.** Promote the v2 API from `v2alpha1` toward `v2beta1` with a
-  conversion webhook and storage migration.
+  conversion webhook and storage migration. The `v2beta1` cut is **ScaleSet-only** —
+  it retires the deprecated classic acquisition protocol and the `v1alpha1` API
+  together, on a named release announced at least one release ahead.
 
 ## Exploring / longer-term
 
