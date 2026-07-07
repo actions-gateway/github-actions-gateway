@@ -786,6 +786,19 @@ warn against Helm-managing them). The templates carry `helm.sh/resource-policy: 
 so an operator who fronts them with a GitOps tool that *does* build a Helm release
 keeps the CRDs on prune/uninstall.
 
+To keep the *manual* path a single command with no helm or chart checkout, each release
+attaches a **pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`** (rendered for
+the default `gmc-system` namespace) to its GitHub Release, so a manual install is just
+`kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml`. It is
+keyless-signed via the same Fulcio/Rekor path as the images and charts (`sign-blob` → a
+Sigstore bundle verified with `cosign verify-blob --bundle`), which also answers the
+"release assets are mutable" caveat. The asset covers the default-namespace case; a GMC
+in a non-default namespace, or a GitOps render, still uses the `helm template --set … |
+kubectl apply --server-side` path (the conversion webhook `clientConfig` namespace bakes
+in at render time). Argo CD renders the chart itself and never builds a release Secret,
+so it is unaffected by the 1 MiB limit; Flux `HelmRelease` *does* build one and uses the
+rendered manifest or a Kustomization instead.
+
 The properties this forgoes — `helm upgrade` revision history, `helm rollback`, `helm
 uninstall` cleanup — are **low-value for CRDs specifically** and partly anti-patterns:
 rolling a CRD schema *backward* can strand stored objects (removing a served/storage

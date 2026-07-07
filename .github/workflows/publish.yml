@@ -283,7 +283,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read # checkout
+      contents: write # checkout + create/upload the signed v2 CRD manifest release asset (Q276)
       packages: write # push the chart + its signature to GHCR
       id-token: write # KEYLESS cosign — same Fulcio/Rekor flow as the images
     steps:
@@ -398,11 +398,45 @@ jobs:
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
           scripts/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+      - name: Render, sign, and attach the v2 CRD manifest to the release (keyless, Q276)
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # A helm-free manual install path (Q276): the opt-in v2 CRD chart is too
+          # large to `helm install` (its release Secret exceeds the 1 MiB limit), so
+          # operators apply the rendered CRDs server-side. Ship that render as a
+          # signed release asset so the manual path is a single command with no helm
+          # or chart checkout:
+          #   kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml
+          # Rendered for the DEFAULT gmc-system namespace — the conversion webhook
+          # clientConfig namespace bakes in at render time, so a GMC in another
+          # namespace still uses the `helm template --set … | kubectl apply` path in
+          # install.md. Keyless-signed via the SAME Fulcio/Rekor path as the charts
+          # (sign-blob → a Sigstore bundle that `cosign verify-blob --bundle` checks
+          # with no key material), answering the "release assets are mutable" note in
+          # release.md.
+          out="${RUNNER_TEMP}/actions-gateway-crds-v2.yaml"
+          helm template actions-gateway-crds-v2 charts/actions-gateway-crds-v2 \
+            --namespace gmc-system > "${out}"
+          scripts/retry.sh cosign sign-blob --yes \
+            --bundle "${out}.cosign.bundle" "${out}"
+          # Attach without clobbering the release manager's curated notes: create a
+          # minimal release only if the tag has none yet, then upload (replacing a
+          # prior same-named asset so a re-publish is idempotent).
+          if ! gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" --generate-notes
+          fi
+          gh release upload "${TAG}" --repo "${REPO}" --clobber \
+            "${out}" "${out}.cosign.bundle"
       - name: Record published chart in the run summary
         env:
           REF: ${{ steps.chart.outputs.ref }}
           REF_CRDS_V2: ${{ steps.chart_crds_v2.outputs.ref }}
           TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
@@ -411,6 +445,8 @@ jobs:
             printf -- '  install: `helm install actions-gateway oci://%s/%s/charts/actions-gateway --version %s`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
             printf -- '- **chart (v2 CRDs, opt-in)** — `%s`\n' "${REF_CRDS_V2}"
-            printf -- '  install (apply-render — the chart exceeds the 1 MiB Helm release-Secret limit, so `helm install` cannot store it): `helm template actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s --namespace gmc-system | kubectl apply --server-side -f -`\n' \
+            printf -- '  install (no helm, default gmc-system namespace): `kubectl apply --server-side -f https://github.com/%s/releases/download/%s/actions-gateway-crds-v2.yaml`\n' \
+              "${REPO}" "${TAG}"
+            printf -- '  install (helm render — for a custom GMC namespace; the chart exceeds the 1 MiB release-Secret limit so `helm install` cannot store it): `helm template actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s --namespace <ns> | kubectl apply --server-side -f -`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
           } >> "${GITHUB_STEP_SUMMARY}"

@@ -54,9 +54,18 @@ therefore depends on the main `actions-gateway` chart and, by default, cert-mana
 
 ## Install
 
-Render for the GMC's namespace (so the conversion `clientConfig` resolves) and apply
-server-side — see [Why a separate chart](#why-a-separate-chart) for why not `helm
-install`:
+**No helm, default `gmc-system` namespace.** Every release attaches a pre-rendered,
+cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
+
+```bash
+kubectl apply --server-side -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+```
+
+**Custom GMC namespace (or a GitOps render).** The release asset bakes in `gmc-system`
+for the conversion `clientConfig`; if the GMC runs elsewhere, render for its namespace
+(so the `clientConfig` resolves) and apply server-side — see
+[Why a separate chart](#why-a-separate-chart) for why not `helm install`:
 
 ```bash
 helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
