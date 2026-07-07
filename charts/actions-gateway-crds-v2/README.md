@@ -16,14 +16,15 @@ on-ramp).
 ## Why a separate chart
 
 The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full
-`PodTemplateSpec` and are ~600 KB apiece. Helm stores a chart's entire release
-(rendered manifest **plus** a copy of the chart source) gzipped in a single Secret
-with a hard **1 MiB** limit; adding these to the main `actions-gateway` chart pushed
-it over. Shipping the v2 CRDs as their own chart makes v2 **opt-in** and keeps the
-main release small.
+`PodTemplateSpec` and — served at both `v2beta1` and `v2alpha1` — are ~1.1 MB apiece.
+Helm stores a chart's entire release (rendered manifest **plus** a copy of the chart
+source) gzipped in a single Secret with a hard **1 MiB** limit; adding these to the
+main `actions-gateway` chart pushed it over. Shipping the v2 CRDs as their own chart
+makes v2 **opt-in** and keeps the main release small.
 
-The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit, so this chart is
-**applied from its render, not `helm install`ed**:
+The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit — its release would
+store at ~1.1 MiB — so this chart is **applied from its render, not `helm install`ed**.
+This is the supported, deliberate install *and* upgrade path, not a stopgap:
 
 ```sh
 helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system \
@@ -53,9 +54,18 @@ therefore depends on the main `actions-gateway` chart and, by default, cert-mana
 
 ## Install
 
-Render for the GMC's namespace (so the conversion `clientConfig` resolves) and apply
-server-side — see [Why a separate chart](#why-a-separate-chart) for why not `helm
-install`:
+**No helm, default `gmc-system` namespace.** Every release attaches a pre-rendered,
+cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
+
+```bash
+kubectl apply --server-side -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+```
+
+**Custom GMC namespace (or a GitOps render).** The release asset bakes in `gmc-system`
+for the conversion `clientConfig`; if the GMC runs elsewhere, render for its namespace
+(so the `clientConfig` resolves) and apply server-side — see
+[Why a separate chart](#why-a-separate-chart) for why not `helm install`:
 
 ```bash
 helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \

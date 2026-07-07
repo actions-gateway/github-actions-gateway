@@ -760,6 +760,78 @@ CRDs), so the webhook path needs no restart. The operator-facing runbook for the
 "v2 objects not reconciling after installing the CRD chart" symptom lives in
 [troubleshooting.md](../operations/troubleshooting.md#v2-objects-not-reconciling-after-installing-the-crd-chart).
 
+### H.13.2. Install/upgrade lifecycle — apply-render, not `helm install` (Q276)
+
+Splitting the CRDs into their own chart (§H.13.1) keeps the **main** chart under the
+1 MiB release-Secret limit, but the v2 chart itself is still too large to `helm
+install`: rendered it is ~2.5 MB, and Helm stores a release as
+`base64(gzip(json(release)))` — where `json(release)` embeds **both** the rendered
+manifest **and** a base64-inflated copy of the chart source — inside one Secret the
+apiserver caps at 1 MiB. Reconstructing that encoding for the five-CRD chart lands at
+**~1.10 MiB stored, ~0.1 MiB over the ceiling.** So the chart is **applied from its
+render, not installed**:
+
+```sh
+helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system \
+  | kubectl apply --server-side -f -
+```
+
+**Decision: apply-render is the supported, deliberate install/upgrade path — not a
+stopgap.** Server-side apply is declarative and idempotent, so install and upgrade are
+the *same* command (re-run it to carry CRD field changes); it also clears kubectl's
+256 KB client-side-apply annotation ceiling, which the two ~1.16 MB `RunnerTemplate`
+CRDs blow past on their own. This is the mainstream practice for large CRDs (cert-
+manager, Crossplane, Istio, Gateway API all ship CRDs to be applied out-of-band and
+warn against Helm-managing them). The templates carry `helm.sh/resource-policy: keep`
+so an operator who fronts them with a GitOps tool that *does* build a Helm release
+keeps the CRDs on prune/uninstall.
+
+To keep the *manual* path a single command with no helm or chart checkout, each release
+attaches a **pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`** (rendered for
+the default `gmc-system` namespace) to its GitHub Release, so a manual install is just
+`kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml`. It is
+keyless-signed via the same Fulcio/Rekor path as the images and charts (`sign-blob` → a
+Sigstore bundle verified with `cosign verify-blob --bundle`), which also answers the
+"release assets are mutable" caveat. The asset covers the default-namespace case; a GMC
+in a non-default namespace, or a GitOps render, still uses the `helm template --set … |
+kubectl apply --server-side` path (the conversion webhook `clientConfig` namespace bakes
+in at render time). Argo CD renders the chart itself and never builds a release Secret,
+so it is unaffected by the 1 MiB limit; Flux `HelmRelease` *does* build one and uses the
+rendered manifest or a Kustomization instead.
+
+The properties this forgoes — `helm upgrade` revision history, `helm rollback`, `helm
+uninstall` cleanup — are **low-value for CRDs specifically** and partly anti-patterns:
+rolling a CRD schema *backward* can strand stored objects (removing a served/storage
+version or field is a deliberate migration, never a casual rollback), and cascading
+`helm uninstall` of a CRD deletes every custom resource with it (data loss — exactly
+what `resource-policy: keep` prevents). The operator-facing upgrade/rollback/uninstall
+runbook is [install.md § the v2 API CRDs](../operations/install.md#optional-the-v2-api-crds).
+
+Alternatives, each measured by reconstructing Helm's stored-Secret encoding:
+
+| Option | Stored release Secret | `helm install` | `helm upgrade` | Verdict |
+|---|---|---|---|---|
+| **Apply-render (chosen)** | n/a — no release created | n/a | re-apply, server-side | **Chosen.** Uniform install≡upgrade; clears both the 1 MiB *and* 256 KB limits; GitOps-friendly; ecosystem norm. |
+| Single templated chart (today's chart shape, helm-installed) | ~1.10 MiB | ❌ fails | — | Over the ceiling — this *is* the Q276 problem. |
+| `crds/` directory convention | ~0.72 MiB | ✅ installs | ❌ **never** upgrades/deletes | Rejected: Helm's `crds/` dir is create-only by design, so schema changes never propagate on upgrade — trades the size problem for a silent no-upgrade problem on an evolving API. |
+| Split large CRDs into per-CRD charts | ~0.50 MiB each large CRD; ~0.10 MiB for the three small ones together | ✅ installs | ✅ | Rejected: technically viable and the `spec.conversion` wiring is per-CRD so it survives the split, but it multiplies one artifact into three published/versioned charts and three releases (an umbrella chart re-aggregates into one Secret and lands back over the limit), buying a Helm CRD lifecycle you should not use (see above) at real packaging + operator-UX cost. |
+| Trim rendered size (drop descriptions / `x-kubernetes-preserve-unknown-fields`) | shrinks, but | partial | partial | Rejected: dropping descriptions degrades `kubectl explain`; replacing the embedded `PodTemplateSpec` schema with a preserve-unknown-fields blob drops server-side validation of the pod template — a secure-by-default regression. The structural Pod schema is inherently large regardless. |
+
+**Fold-back into the main chart is gated on v2 reaching a *single served version*,
+not on `v1alpha1` removal.** Measured against the same encoding: with v2 down to one
+version (`v2beta1` only — `v2alpha1` and the conversion webhook retired), the folded
+main chart stores at **~0.65 MiB, ~0.4 MiB under the ceiling.** It fits because a
+single-version v2 CRD set (~1.3 MB) is about the same footprint as the two v1 CRDs it
+replaces (~1.3 MB), and today's main chart already carries those and installs cleanly
+(**~0.62 MiB stored**). The trap is the coexistence window: while v2 serves *both*
+`v2beta1` and `v2alpha1` (which is what forces the conversion webhook), that set alone
+stores at **~1.26 MiB** — over the limit before a single controller is added, which is
+exactly why the v2 CRDs live in their own chart today. So the clean fold-back sequence
+is two removals, both required: retire `v1alpha1`, **and** drop `v2alpha1` (retiring
+the conversion webhook), leaving one served version — then the now single-version v2
+CRDs fold into the main chart with headroom to spare. Until both land, the opt-in chart
+plus apply-render stands.
+
 ## H.14. Admin policy layer — deferred until tiering is real
 
 The decomposition above mirrors Gateway API's `Gateway → route attachment` but

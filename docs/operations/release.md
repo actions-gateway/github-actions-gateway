@@ -53,6 +53,16 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   pod-template CRDs would otherwise push the main chart's Helm release Secret past
   its 1 MiB limit (Q149). Operators install it only when adopting the v2 API. Both
   chart packages are produced by the same `chart-publish` job.
+- The **signed v2 CRD manifest** (Q276), a pre-rendered
+  `actions-gateway-crds-v2.yaml` (rendered for the default `gmc-system` namespace)
+  attached to the tag's **GitHub Release** with a keyless **cosign blob signature**
+  (`sign-blob` → a Sigstore bundle, `actions-gateway-crds-v2.yaml.cosign.bundle`).
+  This is the helm-free manual install path — the v2 CRD chart is too large to
+  `helm install`, so operators
+  `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.
+  The `chart-publish` job renders, signs, and uploads it (widening the job to
+  `contents: write`), creating a minimal Release only if the tag has none yet so the
+  maintainer's curated notes are never clobbered.
 
 Both the image and chart work are automated by the
 [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on
@@ -125,6 +135,18 @@ needs no credentials once the GHCR packages are public. The equivalent explicit
 commands (and SBOM attestation retrieval) live in
 [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification);
 each is a `cosign verify --certificate-identity-regexp '…/publish\.yml@refs/tags/v.*$' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' <ref>`.
+
+`make verify-release` covers the OCI artifacts (images + both charts) but not the
+GitHub Release's **signed v2 CRD manifest** asset (Q276), which is a *blob* signature —
+verify it against the same identity with `verify-blob`. Download the manifest and its
+bundle from the release, then:
+
+```bash
+cosign verify-blob --bundle actions-gateway-crds-v2.yaml.cosign.bundle \
+  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  actions-gateway-crds-v2.yaml >/dev/null && echo OK
+```
 
 A `cosign verify` failure is a **stop-ship**: do not announce the release until it
 passes. Spot-check one SBOM attestation too so the attestation path is exercised —

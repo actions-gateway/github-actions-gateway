@@ -276,22 +276,78 @@ They are genuinely optional:
   reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed;
   v1-only mode, v2 RunnerSet reconciler disabled` and running only the v1
   RunnerGroup reconciler. v1alpha1 tenants reconcile normally.
-- **To use v2,** apply the CRD chart **rendered for the GMC's namespace**. The two
-  `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart
-  (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit — `helm install` cannot store
-  it. Render it and apply server-side instead (this also carries the `spec.conversion`
-  wiring, resolved to the GMC's namespace):
+- **To use v2,** apply the CRDs server-side — do **not** `helm install` the chart. The
+  two `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart
+  (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit and `helm install` cannot store
+  it. Applying the CRDs server-side is the **supported, deliberate install/upgrade
+  path**, not a stopgap (see below for why, and the
+  [design decision](../design/appendix-h-v2-api-decomposition.md#h132-installupgrade-lifecycle--apply-render-not-helm-install-q276)
+  for the rejected alternatives). Two equivalent ways:
+
+  **Default namespace (`gmc-system`), no helm — simplest for a manual install.** Every
+  release attaches a pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml` to its
+  [GitHub Release](https://github.com/actions-gateway/github-actions-gateway/releases).
+  Apply it straight from the release URL (pin `vX.Y.Z` to the GMC image's release):
+
+  ```sh
+  kubectl apply --server-side -f \
+    https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+  ```
+
+  Optionally verify the asset's keyless signature first (no key material — the same
+  Fulcio/Rekor identity that signs the images and charts). Download the manifest and its
+  `.cosign.bundle` from the same release, then:
+
+  ```sh
+  cosign verify-blob --bundle actions-gateway-crds-v2.yaml.cosign.bundle \
+    --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    actions-gateway-crds-v2.yaml
+  ```
+
+  **Custom GMC namespace, or a GitOps render — use helm.** The release asset bakes in the
+  default `gmc-system` namespace for the conversion webhook `clientConfig`; if the GMC
+  runs elsewhere (or cert-manager is disabled), render for that namespace and apply
+  server-side (this carries the same `spec.conversion` wiring, resolved to your
+  namespace):
 
   ```sh
   helm template actions-gateway-crds-v2 \
     oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
-    --namespace gmc-system \
+    --namespace <gmc-namespace> \
     | kubectl apply --server-side -f -
   ```
 
-  Re-run the same command to pick up CRD field changes on upgrade. Override
-  `conversion.webhook.service.namespace` / `conversion.certManager.*` with `--set` if
-  the GMC runs elsewhere or cert-manager is disabled.
+  Override `conversion.webhook.service.namespace` / `conversion.certManager.*` with
+  `--set` if the GMC runs elsewhere or cert-manager is disabled.
+
+  **Why apply-render and not `helm install`.** Server-side apply is declarative and
+  idempotent, so install and upgrade are the *same* command; it also clears kubectl's
+  256 KB client-side-apply annotation ceiling, which each ~1.16 MB `RunnerTemplate` CRD
+  exceeds on its own. This is the mainstream practice for large CRDs (cert-manager,
+  Crossplane, Istio, Gateway API all apply their CRDs out-of-band). The properties it
+  forgoes — `helm rollback`, `helm uninstall` cleanup — are ones you should not use on
+  CRDs anyway: rolling a schema backward can strand stored objects, and a cascading CRD
+  delete removes every custom resource with it.
+
+  **Upgrade.** Re-apply the newer release the same way you installed — either
+  `kubectl apply --server-side -f …/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml`
+  with the newer tag, or re-run the `helm template … | kubectl apply --server-side`
+  render with the newer chart (`--version <x.y.z>` for a pinned OCI ref). Server-side
+  apply merges the new schema in place — additive field/version changes need no other
+  step. On a running cluster the conversion `caBundle` is supplied by cert-manager's
+  ca-injector, so it resolves post-apply; a `helm template` alone cannot look it up.
+
+  **Rollback.** Re-apply the render of the *previous* chart version the same way. Treat
+  this as a deliberate migration, not a casual undo: if the newer version added a served
+  or storage version, or a field that existing objects now populate, rolling back can
+  reject or truncate stored resources. Prefer rolling *forward* with a corrected chart.
+
+  **Uninstall.** There is no Helm release to `helm uninstall`; remove the CRDs
+  explicitly and only when you intend to — deleting a CRD **cascades to every custom
+  resource of that kind** (`kubectl delete -f <(helm template actions-gateway-crds-v2 … )`).
+  The templates carry `helm.sh/resource-policy: keep`, so a GitOps tool that fronts this
+  chart with a real Helm release will not prune the CRDs on its own uninstall.
 
   Detection happens once at GMC startup, so **after installing the CRDs into a
   running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n

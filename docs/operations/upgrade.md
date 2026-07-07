@@ -74,14 +74,29 @@ The v2 (`actions-gateway.com`) API is introduced as a decomposed set of five CRD
 cluster-scoped `clusterrunnertemplates`. **The main `actions-gateway` chart upgrade
 is unchanged: it does not install these.** They ship in a separate, opt-in chart,
 `actions-gateway-crds-v2`, because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs
-each embed a full pod template (~600 KB) and would otherwise push the main chart's
-Helm release Secret past its hard 1 MiB limit.
+each embed a full pod template (~1.1 MB apiece, served at `v2beta1` + `v2alpha1`) and
+would otherwise push the main chart's Helm release Secret past its hard 1 MiB limit.
 
-**No action is required for existing tenants.** Install the v2 chart only when you
-want the v2 API available:
+**No action is required for existing tenants.** Install the v2 CRDs only when you want
+the v2 API available. They are **applied server-side, not `helm install`ed** — the chart
+is over the 1 MiB release-Secret limit — and the same command upgrades them (re-apply
+with the newer tag to carry CRD field changes). For the default `gmc-system` namespace,
+apply the signed manifest attached to the release:
 
 ```bash
-helm install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+kubectl apply --server-side -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+```
+
+For a custom GMC namespace, render the chart instead. Either way, see
+[install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds) for the full
+lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager
+overrides:
+
+```bash
+helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
+  --namespace <gmc-namespace> \
+  | kubectl apply --server-side -f -
 ```
 
 The v2 controllers now reconcile these kinds, so a v2 object set provisions a working
