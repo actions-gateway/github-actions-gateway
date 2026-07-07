@@ -53,7 +53,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q256"></a>Q256 | [e2e-calico lane: flaky infra bring-up (registry + Calico node)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | **Flaky on #487/#552, green on rerun — flake-fixes-go-first.** e2e-calico bring-up unreliable: (a) local registry resets mid image-push in bake; (b) calico-node never ready (BIRD/nodename). Fix: retry bake-push + CNI-ready gate, not HA. |
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | ▶ | L | P5 default-flip DONE 2026-07-06: v2alpha1 `acquisitionProtocol` default Classic→ScaleSet, Classic deprecated, gag-migrate pins Classic. Residual: 1-minor deprecation window + classic removal (=[Q74](#Q74) graduation). P4 clean-green holds. |
 | <a id="Q247"></a>Q247 | [AGC runner session recovery after job recycling](plan/gke-dogfood.md) | `infra` | ▶ | M | 3 facets, all fixed + live-validated: RenewJob wrong ID (#481), unbounded renewal wedge (#485), broker-token-not-job-scoped 401 (#486). Full DinD e2e green on GAG (run 28496664762). Residual self-cancel on definitively-lost lock done in Q254. |
 | <a id="Q248"></a>Q248 | [Right-size GAG dogfood CI runner pods + node pool](plan/dogfood-runner-rightsizing.md) | `infra` | 🔲 | M | Disk ceiling + general-worker pod-sizing DONE: workers now requests-only CPU (2=1 heavy pod/e2-standard-4), mem 2Gi/3Gi from measured 3.8vCPU/2.1Gi peak (was 4Gi/8Gi); maxWorkers 8 fits max-nodes 8. Residual: e2e pod sizing (live) + small tier. |
@@ -106,6 +105,7 @@ Flakes whose mitigation has shipped and that have **not recurred since**, plus r
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
+| <a id="Q256"></a>Q256 | [e2e-calico infra bring-up (registry + Calico node)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | S | Recurs on `main` after PR #555 mitigation ((a) bake-push retry `scripts/bake-with-retry.sh`; (b) pin Calico `IP_AUTODETECTION_METHOD=kubernetes-internal-ip` + calico-node readiness dump). → top of Queue, escalate. |
 | <a id="Q222"></a>Q222 | [AGC SIGTERM_DeletesAllSessions](../cmd/agc/internal/controller/integration/sigterm_test.go) | `tests` `flake` | S | Recurs after PR #415 mitigation (DELETE-on-SIGTERM ceiling 30→60s + failure dump). DELETE path itself robust. → top of Queue, escalate. |
 | <a id="Q221"></a>Q221 | [metrics-NP AllowsLabeledNamespace (calico)](../cmd/gmc/test/e2e/manager_np_test.go) | `tests` `flake` | S | Recurs after PR #411 mitigation (fold positive control into Q159 retry-gate pod, drop 2nd probe re-racing per-pod NP programming). → top of Queue, escalate. |
 | <a id="Q179"></a>Q179 | [two kindnet v1 e2e timing races](../cmd/gmc/test/e2e/isolation_test.go) | `tests` `flake` | S | Recurs after PR #369 mitigation (isolation probe budget 60→150 iters + wait 5m→6m; job_lifecycle worker-pod wait 4m→6m). → top of Queue, escalate. |

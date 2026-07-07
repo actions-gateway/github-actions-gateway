@@ -340,7 +340,12 @@ jobs:
           GHA_CACHE: "true"
         run: |
           bake_log="$(mktemp)"
-          docker buildx bake --file docker-bake.hcl >"$bake_log" 2>&1 &
+          # bake-with-retry.sh wraps `docker buildx bake` in a bounded retry so a
+          # mid-push registry connection reset (127.0.0.1:5000 resets under the
+          # six concurrent pushes — a recurring e2e-calico bring-up flake, Q256)
+          # is absorbed in-step instead of failing the run. Retries re-push from
+          # the buildkit layer cache, so they are cheap.
+          scripts/bake-with-retry.sh --file docker-bake.hcl >"$bake_log" 2>&1 &
           bake_pid=$!
           # If cluster bring-up fails (set -e aborts the step), don't leave the
           # build orphaned.

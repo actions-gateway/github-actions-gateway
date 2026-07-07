@@ -44,6 +44,23 @@ case "${KIND_CNI}" in
     ;;
 esac
 
+# dump_calico_diagnostics prints calico-node DaemonSet/pod/node state and recent
+# calico-node logs. Called when the readiness gate below times out, so a CI
+# failure captures *why* calico-node never converged (BIRD peering, IP
+# autodetection, or image pulls) instead of just "timed out waiting for the
+# condition". Every command is best-effort (|| true) so a dump never masks the
+# original failure under `set -e`.
+dump_calico_diagnostics() {
+  local ctx="$1"
+  echo "==> calico-node did not become ready; dumping diagnostics" >&2
+  kubectl --context "${ctx}" get nodes -o wide || true
+  kubectl --context "${ctx}" get pods -n kube-system -l k8s-app=calico-node -o wide || true
+  kubectl --context "${ctx}" describe daemonset/calico-node -n kube-system || true
+  kubectl --context "${ctx}" describe pods -n kube-system -l k8s-app=calico-node || true
+  kubectl --context "${ctx}" logs -n kube-system -l k8s-app=calico-node \
+    --all-containers --tail=200 || true
+}
+
 # install_calico applies the pinned Calico manifest and waits for the CNI to be
 # ready. Idempotent: re-applying the same manifest is a no-op. Refuses to run
 # against a cluster that was created with kindnet — the two CNIs cannot be
@@ -84,13 +101,36 @@ install_calico() {
   done < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "${manifest}" | sort -u)
 
   kubectl --context "${ctx}" apply -f "${manifest}"
+
+  # Pin Calico's node-IP autodetection to the node's Kubernetes InternalIP.
+  # kind nodes are Docker containers with several interfaces (the kind-network
+  # eth0 plus docker/veth interfaces); Calico's default `first-found`
+  # autodetection intermittently binds BIRD to the wrong one, so calico-node's
+  # BIRD readiness check never passes and the DaemonSet never finishes rolling
+  # out (the Q256 "BIRD/nodename" bring-up flake). `kubernetes-internal-ip`
+  # reads the address kind assigns as the node InternalIP — deterministic and
+  # always the kind-network interface — which is the method the Tigera kind
+  # quickstart recommends. Set via `kubectl set env` (rather than editing the
+  # manifest) so the fix is one readable line scoped to the calico-node
+  # container; it triggers one more rollout that the gate below then waits on.
+  kubectl --context "${ctx}" set env daemonset/calico-node -n kube-system \
+    --containers=calico-node IP_AUTODETECTION_METHOD=kubernetes-internal-ip
+
   echo "==> waiting for calico-node DaemonSet rollout"
   # 600s headroom: when images are not preloaded a cold quay.io pull of the
   # calico images on every node takes well over the kubectl default; 300s was
-  # observed too tight.
-  kubectl --context "${ctx}" rollout status daemonset/calico-node -n kube-system --timeout=600s
+  # observed too tight. On timeout, dump calico-node state/logs before failing
+  # so the cause of a non-converging rollout is visible in the CI log.
+  if ! kubectl --context "${ctx}" rollout status daemonset/calico-node \
+      -n kube-system --timeout=600s; then
+    dump_calico_diagnostics "${ctx}"
+    exit 1
+  fi
   echo "==> waiting for all nodes to be Ready"
-  kubectl --context "${ctx}" wait --for=condition=Ready nodes --all --timeout=300s
+  if ! kubectl --context "${ctx}" wait --for=condition=Ready nodes --all --timeout=300s; then
+    dump_calico_diagnostics "${ctx}"
+    exit 1
+  fi
 }
 
 # 1. Bring up the registry (idempotent). Extracted into start-registry.sh so CI
