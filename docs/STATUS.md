@@ -44,7 +44,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ⚠️ |
-| [Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
+| <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
 
 ---
 
