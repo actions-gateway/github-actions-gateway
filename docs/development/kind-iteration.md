@@ -21,7 +21,7 @@ The Makefile pipeline pushes to `127.0.0.1:5000` and the kind nodes pull from th
 make e2e-cluster KIND_CNI=calico   # disableDefaultCNI + pinned Calico manifest
 ```
 
-The script creates the cluster with `disableDefaultCNI: true` and `podSubnet: 192.168.0.0/16` (Calico's default pool), applies the Calico manifest pinned by `CALICO_VERSION` in the root Makefile, and waits for `calico-node` rollout + node readiness. A CNI cannot be swapped in place — if the cluster already exists with kindnet, the script errors and tells you to `make e2e-cluster-delete` first.
+The script creates the cluster with `disableDefaultCNI: true` and `podSubnet: 192.168.0.0/16` (Calico's default pool), applies the Calico manifest pinned by `CALICO_VERSION` in the root Makefile, pins `IP_AUTODETECTION_METHOD=kubernetes-internal-ip` on `calico-node` (kind nodes have several interfaces; Calico's default `first-found` autodetection can bind BIRD to the wrong one and stall the rollout), and waits for `calico-node` rollout + node readiness — dumping `calico-node` state and logs if that gate times out. A CNI cannot be swapped in place — if the cluster already exists with kindnet, the script errors and tells you to `make e2e-cluster-delete` first.
 
 The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) detect the CNI at runtime and skip themselves on kindnet, so the standard CI flow is unaffected; they only assert enforcement on a Calico/Cilium cluster.
 
