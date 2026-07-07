@@ -16,9 +16,12 @@ extends: default
 # Helm renders everything under templates/ as a Go template, so those files are
 # not parseable YAML and are validated as rendered output instead (helm lint +
 # kubeconform). Skip them here so the whole chart directory can be passed to
-# yamllint and new Chart/values YAML is covered automatically.
+# yamllint and new Chart/values YAML is covered automatically. The v2 CRD chart's
+# templates carry Go template syntax too (the Q74 spec.conversion clientConfig +
+# cert-manager annotation are value-driven), so they are skipped for the same reason.
 ignore: |
   charts/actions-gateway/templates/
+  charts/actions-gateway-crds-v2/templates/
 
 rules:
   # controller-gen emits CRD `description` lines well over 200 characters
