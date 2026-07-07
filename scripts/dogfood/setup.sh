@@ -291,6 +291,73 @@ QUOTA
 }
 
 # ---------------------------------------------------------------------------
+# Part B3b — wire the GMC's self-signed webhook CA into each v2 CRD's
+# spec.conversion.webhook.clientConfig.caBundle (Q279). Since Q74 the v2 kinds
+# are stored at v2beta1 and served at v2alpha1 via the GMC-hosted conversion
+# webhook; the apiserver calls that webhook over TLS and must trust its serving
+# cert via each CRD's caBundle. Dogfood is self-signed (no cert-manager), so the
+# CRD chart renders an EMPTY caBundle — without this step every CR apply (and
+# conversion read-back) fails the webhook TLS handshake ("x509: certificate
+# signed by unknown authority").
+#
+# Ordering: install_crds applies the CRDs earlier with an empty caBundle (CRD
+# registration itself does not need it), because the CA is only mintable AFTER
+# install_gag creates the webhook-server-cert Secret — and the GMC must see the
+# v2 CRDs at startup to enable its v2 controllers + conversion webhook (Q228
+# detection), so the CRDs-before-GMC order must NOT be reversed. We therefore
+# patch the caBundle in here, after the GMC is up and before apply_cr, so the
+# first CR already round-trips through a TLS-verified conversion webhook.
+#
+# Secure by default: this RESTORES webhook TLS verification. Never fall back to a
+# caBundle-less clientConfig or insecureSkipTLSVerify shortcut.
+# ---------------------------------------------------------------------------
+
+patch_crd_cabundle() {
+	echo "Wiring GMC webhook CA into the v2 CRD conversion caBundle..."
+	# The chart signs the GMC webhook serving cert with a self-signed CA it mints
+	# once and stores in webhook-server-cert (reused across renders via `lookup`,
+	# so this value is stable on re-runs). The Secret's data["ca.crt"] is already
+	# base64(PEM) — exactly the encoding a CRD caBundle wants — so pass it straight
+	# through with no decode/re-encode. Read lazily on first need so a pre-Q74
+	# image (below) never touches the Secret.
+	local ca_bundle=""
+	local crd strategy patched=0
+	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
+		# Only CRDs whose conversion strategy is Webhook have a clientConfig to wire.
+		# install_crds pins the CRDs to GAG_IMAGE_TAG; a pre-Q74 image ships
+		# single-version CRDs (strategy None, no conversion block), where patching a
+		# webhook clientConfig would be rejected ("should not be set when strategy is
+		# not Webhook"). Skip those cleanly so setup stays valid across the dogfood
+		# image-tag transition — the caBundle only matters once GAG_IMAGE_TAG is a
+		# post-Q74 release whose CRDs actually route CR conversion through /convert.
+		strategy="$(kubectl get crd "${crd}.actions-gateway.com" \
+			-o jsonpath='{.spec.conversion.strategy}' 2>/dev/null || true)"
+		if [[ "${strategy}" != "Webhook" ]]; then
+			echo "  ${crd}: conversion strategy '${strategy:-None}' (not Webhook) — no caBundle to wire, skipping."
+			continue
+		fi
+
+		if [[ -z "${ca_bundle}" ]]; then
+			ca_bundle="$(kubectl get secret webhook-server-cert -n gmc-system \
+				-o jsonpath='{.data.ca\.crt}')"
+			if [[ -z "${ca_bundle}" ]]; then
+				echo "webhook-server-cert Secret has no ca.crt — cannot wire the CRD caBundle." >&2
+				exit 1
+			fi
+		fi
+
+		# A JSON merge patch sets the caBundle leaf and leaves the chart-rendered
+		# clientConfig.service block (name/namespace/path/port) untouched. install_crds
+		# never renders caBundle, so a later server-side re-apply of the chart cannot
+		# strip this leaf (a different field manager owns it).
+		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+			-p "{\"spec\":{\"conversion\":{\"webhook\":{\"clientConfig\":{\"caBundle\":\"${ca_bundle}\"}}}}}"
+		patched=$((patched + 1))
+	done
+	echo "Wired the GMC webhook CA into ${patched} v2 CRD conversion caBundle(s)."
+}
+
+# ---------------------------------------------------------------------------
 # Part B4 — tenant namespace with the required GAG label + baseline PSA.
 # ---------------------------------------------------------------------------
 
@@ -526,6 +593,7 @@ main() {
 	preflight
 	install_crds
 	install_gag
+	patch_crd_cabundle
 	create_namespace
 	create_secret
 	apply_quota
