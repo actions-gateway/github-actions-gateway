@@ -1,0 +1,6 @@
+{
+  "prod": [
+    "gag-dogfood",
+    "actions-gateway-dogfood"
+  ]
+}
