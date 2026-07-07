@@ -6,6 +6,17 @@
 
 {% block extrahead %}
   {{ super() }}
+  {# Preload the above-the-fold typefaces so they're in memory before first paint
+     — this is what stops the font "pop" (FOUT): without it the browser only
+     requests a font after CSS parse, paints fallback text, then swaps and
+     reflows. Paired with font-display: optional in extra.css, the real face
+     paints on the first frame. Only these three are preloaded (body Regular,
+     bold, and the Monaspace Neon display face used by every h1/hero); italic,
+     semibold, and the code face load on demand. crossorigin is required even
+     same-origin — fonts are always fetched in CORS mode. #}
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{{ 'assets/fonts/IBMPlexSans-Regular.woff2' | url }}">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{{ 'assets/fonts/IBMPlexSans-Bold.woff2' | url }}">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="{{ 'assets/fonts/MonaspaceNeon-Medium.woff2' | url }}">
   {# Open Graph / Twitter card from the repo's existing social-preview asset, so
      shared links unfurl with the project card. #}
   <meta property="og:image" content="{{ config.site_url }}assets/social-preview.png">

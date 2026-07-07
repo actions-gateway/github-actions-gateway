@@ -1,5 +1,89 @@
 /* Landing-page polish. Colors use Material theme variables so both palettes work. */
 
+/* ============================================================================
+   Self-hosted typefaces — the "GitHub-native" pairing.
+
+   Material's built-in Google Fonts loader is disabled (theme.font: false in
+   mkdocs.yml), so these @font-face rules plus the --md-text-font/--md-code-font
+   mapping below replace it with zero third-party requests. woff2 files live in
+   assets/fonts/ (SIL OFL 1.1, latin subset). Roles:
+     - Monaspace Neon  — display: landing hero + each page's h1
+     - IBM Plex Sans   — body, UI, and headings h2–h6
+     - Monaspace Argon — code blocks and inline code
+   See docs/development/website.md § Fonts.
+   ========================================================================== */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url("../assets/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: italic;
+  font-weight: 400;
+  font-display: optional;
+  src: url("../assets/fonts/IBMPlexSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: optional;
+  src: url("../assets/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url("../assets/fonts/IBMPlexSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Monaspace Neon";
+  font-style: normal;
+  font-weight: 500;
+  font-display: optional;
+  src: url("../assets/fonts/MonaspaceNeon-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Monaspace Neon";
+  font-style: normal;
+  font-weight: 700;
+  font-display: optional;
+  src: url("../assets/fonts/MonaspaceNeon-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Monaspace Argon";
+  font-style: normal;
+  font-weight: 400;
+  /* Code is below the fold and not preloaded; keep swap so it always ends up in
+     real Monaspace Argon (mono→mono, so the swap barely shifts layout) rather
+     than being dropped to the system monospace on a slow first load. */
+  font-display: swap;
+  src: url("../assets/fonts/MonaspaceArgon-Regular.woff2") format("woff2");
+}
+
+:root {
+  /* Material composes these into --md-text-font-family / --md-code-font-family,
+     appending its own system fallback stack — so a face that fails to load
+     degrades to the OS UI/mono font, never to Times. */
+  --md-text-font: "IBM Plex Sans";
+  --md-code-font: "Monaspace Argon";
+}
+
+/* Display face: Monaspace Neon carries the top of the hierarchy — the landing
+   hero headline and each page's h1 title. h2–h6 stay in IBM Plex Sans so long
+   reference pages don't turn into walls of monospace. */
+.md-typeset h1,
+.gag-hero h1 {
+  font-family: "Monaspace Neon";
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
 :root {
   --gag-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -865,6 +949,25 @@ body[data-md-color-scheme="slate"] {
 
 .md-typeset table tbody tr:hover td:not(:last-child) {
   background: color-mix(in srgb, var(--md-accent-fg-color) 4%, transparent);
+}
+
+/* Plain (non-marketing) tables: Material defaults these to 0.64rem (12.8px),
+   which reads too small against 16px body copy — more so since IBM Plex Sans has
+   a smaller x-height than Roboto. The rule above only wins for classed tables
+   (the reveal JS stamps a class on marketing tables); Material's own
+   :not([class]) selector out-specifies it for plain docs tables, so bump those
+   explicitly to 0.75rem (15px). */
+.md-typeset table:not([class]) {
+  font-size: 0.75rem;
+}
+
+/* Admonitions / collapsible details (e.g. the "New tenants: onboard on v2" tip):
+   Material defaults their content to 0.64rem (12.8px), same too-small problem as
+   plain tables. Bump the block so the title and body both read at 0.75rem (15px);
+   nested children inherit. */
+.md-typeset .admonition,
+.md-typeset details {
+  font-size: 0.75rem;
 }
 
 /* The why-gag comparison table: fill the column (so it isn't left-aligned with a

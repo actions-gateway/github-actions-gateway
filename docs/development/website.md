@@ -71,6 +71,54 @@ domain (this is **not** a secret — it is the same `actions-gateway.com` alread
 in `site_url`) and registers that domain in their Plausible dashboard. Point
 `plausible_src` at a self-hosted Plausible to avoid the hosted `plausible.io`.
 
+## Fonts
+
+The site's typefaces are **self-hosted** — no font CDN is contacted. Material's
+built-in Google Fonts loader would otherwise fetch Roboto from
+`fonts.gstatic.com` on every page view, leaking each visitor's IP and
+User-Agent to Google (the one Google request an otherwise Google-free site
+would still make). We disable it and serve our own woff2 instead:
+
+- **`theme.font: false`** in `mkdocs.yml` turns off the loader.
+- **`@font-face` declarations + the `--md-text-font` / `--md-code-font` mapping**
+  in `docs/stylesheets/extra.css` point Material at the vendored files. Material
+  appends its own system fallback stack, so a face that fails to load degrades to
+  the OS font rather than a serif.
+- **woff2 files** live in `docs/assets/fonts/` (latin subset, SIL OFL 1.1). See
+  that directory's `README.md` for the file→role table, licensing, and the
+  re-fetch commands.
+
+The pairing is "GitHub-native": **Monaspace Neon** (GitHub's own superfamily) as
+the display face on the landing hero and each page's `h1`, **IBM Plex Sans** for
+body copy and headings `h2`–`h6`, and **Monaspace Argon** for code. To change a
+face, add its weights to `docs/assets/fonts/`, add matching `@font-face` rules,
+and update the `--md-*-font` variables (and the `h1` override for the display
+face). Keep every face self-hosted — never reintroduce a `theme.font` mapping or
+an external font `<link>`, which would restore the Google request.
+
+### No flash-of-unstyled-text (FOUT)
+
+Self-hosting alone would still "pop" — the browser only requests a font after
+parsing CSS, so it paints fallback text, then swaps and reflows once the real
+face arrives. Two coordinated pieces stop that:
+
+- **`font-display: optional`** on the text and display faces (`extra.css`). Unlike
+  `swap` (zero block period → always paints fallback first), `optional` gives the
+  font a brief window to arrive before first paint and never swaps *late* — so
+  there's no reflow either way. The code face (Monaspace Argon) stays `swap`: it's
+  below the fold and we'd rather it always end up in real Monaspace than be dropped
+  to the system monospace on a slow first load.
+- **`<link rel="preload">`** for the three above-the-fold faces (Plex Sans Regular
+  + Bold and Monaspace Neon Medium) in `overrides/main.html`, using the `| url`
+  filter so the path is correct in both local serve and production, and
+  `crossorigin` because fonts are always fetched in CORS mode. This starts the
+  fetch during head parse, so those faces are in memory before first paint.
+
+Net effect (verified in the preview via the Performance API): the preloaded faces
+finish loading ~30 ms in, well before first contentful paint, so text renders in
+the correct font on the first frame — no pop. If you add a weight that appears
+above the fold, preload it too, or it may briefly render in the fallback.
+
 ## Local preview
 
 ```sh
