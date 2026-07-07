@@ -39,6 +39,7 @@ on:
       - 'cmd/proxy/**'         # the egress proxy (ProxyConnectWorks)
       - 'charts/actions-gateway/**'  # manager NetworkPolicy templates (ManagerMetricsNP)
       - 'scripts/kind-with-registry.sh'  # CNI/cluster bring-up incl. Calico install
+      - 'scripts/bake-with-retry.sh'     # image bake/push retry on the bring-up critical path
       - 'Makefile'             # e2e targets + CALICO_VERSION
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'
@@ -49,6 +50,7 @@ on:
       - 'cmd/proxy/**'
       - 'charts/actions-gateway/**'
       - 'scripts/kind-with-registry.sh'
+      - 'scripts/bake-with-retry.sh'
       - 'Makefile'
       - '.github/workflows/e2e-calico.yml'
       - '.github/workflows/e2e-reusable.yml'
