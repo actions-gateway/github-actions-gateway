@@ -44,6 +44,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ⚠️ |
+| <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
 
 ---
 
@@ -55,7 +56,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 |---|---|---|---|---|---|
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | ▶ | L | P5 default-flip DONE 2026-07-06: Classic→ScaleSet default, Classic deprecated, gag-migrate pins Classic. v2beta1 + conversion webhook SHIPPED (Q74 done). Residual: 1-minor deprecation window + classic/v1alpha1 removal. P4 clean-green holds. |
 | <a id="Q247"></a>Q247 | [AGC runner session recovery after job recycling](plan/gke-dogfood.md) | `infra` | ▶ | M | 3 facets, all fixed + live-validated: RenewJob wrong ID (#481), unbounded renewal wedge (#485), broker-token-not-job-scoped 401 (#486). Full DinD e2e green on GAG (run 28496664762). Residual self-cancel on definitively-lost lock done in Q254. |
-| <a id="Q248"></a>Q248 | [Right-size GAG dogfood CI runner pods + node pool](plan/dogfood-runner-rightsizing.md) | `infra` | 🔲 | M | Disk ceiling + general-worker pod-sizing DONE: workers now requests-only CPU (2=1 heavy pod/e2-standard-4), mem 2Gi/3Gi from measured 3.8vCPU/2.1Gi peak (was 4Gi/8Gi); maxWorkers 8 fits max-nodes 8. Residual: e2e pod sizing (live) + small tier. |
 | <a id="Q242"></a>Q242 | [Implement G.1 proxy destination allowlist](plan/q242-g1-proxy-destination-allowlist.md) | `security` `infra` | ▶ | L | Impl merged #460–#464. Concurrent-green ACHIEVED via ScaleSet clean-green ([Q264](#Q264) P4, 2026-07-05: 7/7 GAG jobs GREEN, 0 dedup/wedge). FQDN [Q245](#Q245). v2beta1 blocker cleared (Q74 graduation shipped); [Q243](#Q243) egress-IP remains. |
 | <a id="Q243"></a>Q243 | [Per-tenant egress-IP reference architecture (cloud)](plan/q243-egress-ip-reference-arch.md) | `security` `infra` `docs` | 🔲 | L | Reference arch LANDED: proxy pool = per-tenant choke point, not a source IP; Cilium Egress Gateway vs per-tenant cloud NAT, single-tenant-direct vs prod topology + cost. Residual = live validation (2 tenants→distinct IPs), DEFERRED = v2beta1 gate. |
 | <a id="Q245"></a>Q245 | [FQDN egress: split intent from CNI backend + GKE backend](plan/q245-fqdn-intent-backend-split.md) | `security` `infra` | 🔲 | L | Design landed: intent CIDR\|FQDN + operator --fqdn-policy-backend (none\|cilium\|calico\|gke); gke=networking.gke.io FQDNNetworkPolicy (union, NOT default-deny→base NP must persist). v2alpha1-free reshape; v2beta1 shipped (Q74 done). Impl+live GKE deferred. |

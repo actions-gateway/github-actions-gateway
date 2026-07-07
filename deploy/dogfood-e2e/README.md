@@ -82,9 +82,23 @@ Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '["self-hosted","linux",
 ## Status
 
 - **dind:** privileged DinD confirmed working on GKE COS cgroup v2 (daemon up,
-  native-sidecar reaping verified). Full green e2e is pending the
-  [Q247](../../docs/STATUS.md#Q247) session-orphaning fix — every run's runner
-  completes its work but the job is orphaned at `CompleteJobAsync`.
-- **kata:** planned ([Q226](../../docs/STATUS.md#Q226)).
+  native-sidecar reaping verified). Full **Calico e2e ran clean-green on GAG**
+  (2026-07-07): pod `Completed`, no OOM, ~18 min. The
+  [Q247](../../docs/STATUS.md#Q247) session-orphaning is intermittent, not
+  deterministic — this run concluded cleanly; Q247 tracks hardening it.
+- **Pod sizing is measured, not guessed** ([Q248](../../docs/STATUS.md#Q248)): the
+  worker pod's `requests`/`limits` in [`overlays/dind/resources.yaml`](overlays/dind/resources.yaml)
+  are derived from that run's peak — the `runner` is CPU-heavy (~4940m peak, the
+  e2e specs + CLI), the `dind` sidecar is memory-heavy (~2343Mi peak, the in-DinD
+  `kind`+Calico cluster). CPU is requests-only (no limit → bursts); `runner(3)+dind(1)=4`
+  vCPU of requests packs exactly one worker pod per `e2-standard-8` node, so the two
+  `maxWorkers` pods land on two nodes and concurrent e2e legs don't CPU-throttle each
+  other. Full rationale + the measured table:
+  [dogfood-runner-rightsizing.md § e2e worker sizing](../../docs/plan/dogfood-runner-rightsizing.md#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
+- **kata:** planned ([Q226](../../docs/STATUS.md#Q226)). Note the measured runner
+  peak (~5 vCPU) exceeds a whole `n2-standard-4`, so the Kata node in
+  [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) needs to grow
+  (e.g. `n2-standard-8`) before that path is sized — the DinD pod requests do not
+  port 1:1 to the smaller Kata node.
 
 Tracked under [Q231](../../docs/STATUS.md#Q231) (dogfood e2e on GKE).
