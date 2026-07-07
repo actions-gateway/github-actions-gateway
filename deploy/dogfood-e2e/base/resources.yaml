@@ -18,7 +18,7 @@ spec:
   hard:
     pods: "6"
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ActionsGateway
 metadata:
   name: dogfood-e2e
@@ -30,7 +30,7 @@ spec:
       name: github-app-v1 # Secret created out-of-band (see ../README.md)
   githubURL: https://github.com/actions-gateway/github-actions-gateway
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: RunnerSet
 metadata:
   name: ci-e2e
@@ -39,11 +39,12 @@ spec:
   gatewayRef:
     name: dogfood-e2e
   # templateRef is supplied by the overlay — the isolation-specific worker shape.
-  # Classic (deprecated) is pinned because this set matches on multiple labels, which
-  # the ScaleSet default (Q264 P5) cannot express (a ScaleSet set takes exactly one
-  # runnerLabel — its scale-set name). Omitting the field would default to ScaleSet and
-  # be rejected at admission. ScaleSet is validated separately by the Q264 P4 dogfood.
-  acquisitionProtocol: Classic
-  runnerLabels: ["self-hosted", "linux", "gag-ci-e2e"]
-  maxListeners: 2
+  # Authored directly at v2beta1 — the graduated, served+storage front-door shape
+  # (Q273) — deliberately UNLIKE scripts/dogfood/setup.sh (main dogfood), which
+  # authors at v2alpha1 to exercise the conversion webhook. v2beta1 is ScaleSet-only
+  # and strips acquisitionProtocol + maxListeners (Q74 graduation / Q264 §5a): a
+  # runner set declares exactly ONE runnerLabel, which is both its runs-on target and
+  # the scale-set name registered at GitHub. e2e-{start,stop}.sh set GAG_E2E_RUNNER to
+  # this single label. (Q231)
+  runnerLabels: ["gag-ci-e2e"]
   maxWorkers: 2

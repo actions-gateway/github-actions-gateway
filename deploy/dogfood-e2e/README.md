@@ -54,8 +54,13 @@ Then apply the variant:
 kubectl apply -k deploy/dogfood-e2e/overlays/dind   # or .../overlays/kata (planned)
 ```
 
-Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '["self-hosted","linux","gag-ci-e2e"]'`
-(unset ⇒ github-hosted). This is a dogfood/dev config, not a shipped product install.
+Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '"gag-ci-e2e"'` (unset ⇒
+github-hosted). The RunnerSet is authored at **v2beta1** — ScaleSet-only, so it
+declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that
+single JSON string, not a Classic multi-label array. Prefer the on-demand
+`scripts/dogfood/e2e-start.sh` / `e2e-stop.sh`, which set this **and** spin the
+tenant AGC up/down (Q231). This is a dogfood/dev config, not a shipped product
+install.
 
 ## Load-bearing caveats (learned the hard way, 2026-06-30)
 
@@ -101,4 +106,7 @@ Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '["self-hosted","linux",
   (e.g. `n2-standard-8`) before that path is sized — the DinD pod requests do not
   port 1:1 to the smaller Kata node.
 
-Tracked under [Q231](../../docs/STATUS.md#Q231) (dogfood e2e on GKE).
+The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
+is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and
+was live-validated green on GAG on 2026-07-07 (Q231, done). The Kata isolation
+variant remains open under [Q226](../../docs/STATUS.md#Q226).
