@@ -3,7 +3,7 @@
 # ClusterRunnerTemplate is cluster-scoped (platform-owned) — v2 refuses a
 # privileged container in a namespaced (tenant) RunnerTemplate, so the privileged
 # DinD shape MUST live here.
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2beta1
 kind: ClusterRunnerTemplate
 metadata:
   name: dogfood-e2e-privileged

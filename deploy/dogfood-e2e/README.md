@@ -54,8 +54,13 @@ Then apply the variant:
 kubectl apply -k deploy/dogfood-e2e/overlays/dind   # or .../overlays/kata (planned)
 ```
 
-Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '["self-hosted","linux","gag-ci-e2e"]'`
-(unset ⇒ github-hosted). This is a dogfood/dev config, not a shipped product install.
+Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '"gag-ci-e2e"'` (unset ⇒
+github-hosted). The RunnerSet is authored at **v2beta1** — ScaleSet-only, so it
+declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that
+single JSON string, not a Classic multi-label array. Prefer the on-demand
+`scripts/dogfood/e2e-start.sh` / `e2e-stop.sh`, which set this **and** spin the
+tenant AGC up/down (Q231). This is a dogfood/dev config, not a shipped product
+install.
 
 ## Load-bearing caveats (learned the hard way, 2026-06-30)
 

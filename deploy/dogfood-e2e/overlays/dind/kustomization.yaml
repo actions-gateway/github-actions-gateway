@@ -25,9 +25,10 @@ patches:
           actions-gateway.com/privileged-profile: allowed
         annotations:
           actions-gateway.com/allow-profile-downgrade: allowed
-  # Point the RunnerSet at the privileged ClusterRunnerTemplate.
+  # Point the RunnerSet at the privileged ClusterRunnerTemplate. The apiVersion
+  # must match the base RunnerSet (v2beta1) for the strategic-merge patch to target it.
   - patch: |
-      apiVersion: actions-gateway.com/v2alpha1
+      apiVersion: actions-gateway.com/v2beta1
       kind: RunnerSet
       metadata:
         name: ci-e2e

@@ -1327,12 +1327,15 @@ gh api /repos/"$REPO"/actions/runners \
 > Evidence: AGC debug logs (`agc:e2e-2025557`, scaleSetID 5), runs
 > `28759754797`/`28759755655` (burst `00:11:30Z`, sha `2025557`).
 >
-> **Operational note (2026-07-03):** the `gag-dogfood-e2e` tenant (Part F Kata e2e)
-> keeps its own `dogfood-e2e-agc` pod (~500m CPU) running whenever the system pool is up,
-> which does not fit alongside the CI AGC + GMC + Athens on a single `e2-standard-2`
-> system node — the CI AGC stays `Pending` (`Insufficient cpu`). Turn-ups that only
-> need the CI matrix should scale `default-pool` to **2** nodes (done here) or suspend
-> the e2e tenant; the `SSD_TOTAL_GB=500` quota then bounds the `workers` pool to ~3.
+> **Operational note (2026-07-03; resolved on-demand 2026-07-07, Q231):** the
+> `gag-dogfood-e2e` tenant's `dogfood-e2e-agc` pod (~500m CPU) does not fit alongside
+> the CI AGC + GMC + Athens on a single `e2-standard-2` system node — with it running
+> the CI AGC stays `Pending` (`Insufficient cpu`). **Resolved:** the e2e tenant is now
+> **on-demand** (Part F F3) — `e2e-start.sh` spins the AGC up per run and `e2e-stop.sh`
+> deletes the `ActionsGateway` to tear it down, so it no longer stands alongside CI by
+> default. A turn-up that runs CI **and** e2e concurrently still needs the headroom:
+> scale `default-pool` to **2** nodes (the `SSD_TOTAL_GB=500` quota then bounds the
+> `workers` pool to ~3).
 >
 > **Build-capable runner image (Q239).** The bare upstream `actions-runner` has no
 > build toolchain (`make`, a C compiler), so this repo's `make`-based jobs fail
@@ -1665,46 +1668,73 @@ This script:
 1. Creates the `e2e` node pool (n2-standard-4 spot, nested virt, autoscaling 0→2, taint `dedicated=e2e:NoSchedule`)
 2. Installs the Kata DaemonSet, scoped to e2e pool nodes only (the system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install)
 3. Creates the `kata-qemu` RuntimeClass with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
-4. Creates the `gag-dogfood-e2e` namespace (baseline PSA), GitHub App Secret, ResourceQuota, and `ActionsGateway` CR with a `docker:dind` sidecar and `runtimeClassName: kata-qemu`
+4. Creates the `gag-dogfood-e2e` namespace (v2 labels `actions-gateway.com/tenant=managed` + `security-profile=baseline`), GitHub App Secret, ResourceQuota, and the **v2beta1** tenant CRs — `ActionsGateway` + `RunnerTemplate` (a `docker:dind` native sidecar under `runtimeClassName: kata-qemu`) + `RunnerSet` (ScaleSet, single `runnerLabel: gag-ci-e2e`)
+
+The tenant is authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage front-door shape (Q273), deliberately unlike `scripts/dogfood/setup.sh` (main dogfood), which authors at v2alpha1 to exercise the conversion webhook. v2beta1 is ScaleSet-only, so `acquisitionProtocol`/`maxListeners` are gone and the set declares exactly one `runnerLabel`.
 
 The DinD sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only). The `runner` container sets `DOCKER_HOST=tcp://localhost:2375`. Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
 
-### F2. Workflow change
+> **This is the Kata isolation path, and it is NOT the live/validated one.** The
+> actually-live and validated e2e isolation is the **privileged-DinD** kustomize
+> overlay ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/README.md),
+> `e2-standard-8` pool), which `e2e-start.sh` applies on demand — validated
+> clean-green on GAG (2026-07-07). The Kata path here is sized/validated under
+> [Q226](../STATUS.md#Q226): the measured runner peak (~5 vCPU) exceeds a whole
+> `n2-standard-4`, so the pool must grow (e.g. `n2-standard-8`) before Kata runs.
 
-In **`.github/workflows/e2e-reusable.yml`**, change line 28:
+### F2. Workflow change — already wired
+
+`.github/workflows/e2e-reusable.yml` already routes to GAG when `GAG_E2E_RUNNER`
+is set:
 
 ```yaml
-# Before
-runs-on: ubuntu-latest
-
-# After
 runs-on: ${{ fromJSON(vars.GAG_E2E_RUNNER || '"ubuntu-latest"') }}
 ```
 
-Both `e2e-test.yml` (kindnet) and `e2e-calico.yml` (Calico) call this
-reusable workflow, so one line change covers both CNI variants.
+Both `e2e-test.yml` (kindnet) and `e2e-calico.yml` (Calico) call this reusable
+workflow, so the one line covers both CNI variants. Because the RunnerSet is
+ScaleSet (single-label), `GAG_E2E_RUNNER` is a single JSON **string**
+(`"gag-ci-e2e"`), not the old Classic multi-label array — `e2e-start.sh` sets it,
+`e2e-stop.sh` resets it to `"ubuntu-latest"`. CI is unaffected until you enable.
 
-Set the default variable (e2e off, cluster not yet deployed):
+### F3. E2e operations — on-demand
+
+The e2e tenant's AGC is **on-demand** (Q231), not always-on: its standing
+~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the single
+`e2-standard-2` system node (leaving the CI AGC `Pending`/`Insufficient cpu`),
+and the `SSD_TOTAL_GB=500` quota bounds the workers pool. So rather than keep it
+running, `e2e-start.sh` applies the tenant to spin the AGC up per e2e session and
+`e2e-stop.sh` deletes the `ActionsGateway` to tear it back down (the namespace,
+Secret, quota, template, and RunnerSet are inert without the gateway and kept).
+The e2e **node** pool is already on-demand independently (autoscales 0→2 on job
+arrival, back to 0 ~10 min after drain).
 
 ```bash
-gh variable set GAG_E2E_RUNNER --body '"ubuntu-latest"' --repo "$REPO"
-```
+export PROJECT CLUSTER ZONE REPO   # from the Variables section
 
-Commit and push the workflow change. CI is unaffected until you flip the
-variable.
-
-### F3. E2e operations
-
-```bash
-# Enable (requires system pool to be up via dogfood/start.sh first)
+# Enable (requires the system pool up via dogfood/start.sh first): spins up the
+# on-demand AGC, then routes e2e onto GAG.
 scripts/dogfood/e2e-start.sh
 
-# Disable (e2e pool autoscales to 0 once in-flight jobs finish, ~10 min)
+# Disable: routes e2e back to github-hosted, then deletes the AGC (frees ~500m).
 scripts/dogfood/e2e-stop.sh
 ```
 
 The e2e pool toggles independently from the CI pool — you can run only one
 or both at the same time.
+
+> **Migrating a pre-existing Classic e2e tenant (one-time).** If the tenant's
+> RunnerSet was previously authored at `v2alpha1` with `acquisitionProtocol:
+> Classic`, the conversion webhook stamped a
+> `conversion.actions-gateway.com/acquisition-protocol: Classic` annotation on the
+> stored v2beta1 object. `kubectl apply` of the new v2beta1 ScaleSet spec does **not**
+> strip that webhook-added annotation, so the AGC keeps running Classic (it reads the
+> RunnerSet through the v2beta1→v2alpha1 conversion, which restores `Classic` from the
+> annotation). Recreate the RunnerSet once so it comes back v2beta1-native (annotation
+> defaults to `ScaleSet`): `kubectl delete runnerset ci-e2e -n gag-dogfood-e2e` then
+> `kubectl apply -k deploy/dogfood-e2e/overlays/dind`. A tenant created fresh by
+> `e2e-setup.sh` (authored at v2beta1 directly) never carries the annotation. Verified
+> live 2026-07-07 (Q231).
 
 ---
 
