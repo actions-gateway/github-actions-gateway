@@ -804,10 +804,20 @@ Alternatives, each measured by reconstructing Helm's stored-Secret encoding:
 | Split large CRDs into per-CRD charts | ~0.50 MiB each large CRD; ~0.10 MiB for the three small ones together | ✅ installs | ✅ | Rejected: technically viable and the `spec.conversion` wiring is per-CRD so it survives the split, but it multiplies one artifact into three published/versioned charts and three releases (an umbrella chart re-aggregates into one Secret and lands back over the limit), buying a Helm CRD lifecycle you should not use (see above) at real packaging + operator-UX cost. |
 | Trim rendered size (drop descriptions / `x-kubernetes-preserve-unknown-fields`) | shrinks, but | partial | partial | Rejected: dropping descriptions degrades `kubectl explain`; replacing the embedded `PodTemplateSpec` schema with a preserve-unknown-fields blob drops server-side validation of the pod template — a secure-by-default regression. The structural Pod schema is inherently large regardless. |
 
-Once `v1alpha1` is removed and the `RunnerTemplate` CRDs are the only large objects
-left, revisit whether the v2 CRDs fold back into the main chart (they still would not
-fit a templated release — the fold-back is itself an apply-render, or waits on a
-future schema-slimming that does not cost validation).
+**Fold-back into the main chart is gated on v2 reaching a *single served version*,
+not on `v1alpha1` removal.** Measured against the same encoding: with v2 down to one
+version (`v2beta1` only — `v2alpha1` and the conversion webhook retired), the folded
+main chart stores at **~0.65 MiB, ~0.4 MiB under the ceiling.** It fits because a
+single-version v2 CRD set (~1.3 MB) is about the same footprint as the two v1 CRDs it
+replaces (~1.3 MB), and today's main chart already carries those and installs cleanly
+(**~0.62 MiB stored**). The trap is the coexistence window: while v2 serves *both*
+`v2beta1` and `v2alpha1` (which is what forces the conversion webhook), that set alone
+stores at **~1.26 MiB** — over the limit before a single controller is added, which is
+exactly why the v2 CRDs live in their own chart today. So the clean fold-back sequence
+is two removals, both required: retire `v1alpha1`, **and** drop `v2alpha1` (retiring
+the conversion webhook), leaving one served version — then the now single-version v2
+CRDs fold into the main chart with headroom to spare. Until both land, the opt-in chart
+plus apply-render stands.
 
 ## H.14. Admin policy layer — deferred until tiering is real
 
