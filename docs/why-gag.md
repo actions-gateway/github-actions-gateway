@@ -189,77 +189,150 @@ For the full threat model, per-profile controls, and the abuse-response
 playbooks, see [Security](design/05-security.md) and
 [Security operations](operations/security-operations.md).
 
-## One declaration, a whole gateway
+## Composable building blocks, not one giant CR
 
-A tenant declares what they want in namespace-scoped resources. The platform marks
-the namespace and sets its `ResourceQuota` once; from there the Gateway Manager
+A tenant still declares only namespace-scoped resources, and the Gateway Manager
 Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies
-to match — all operating within that platform-owned quota, which the GMC never
-creates or mutates. No per-tenant cluster-admin involvement after the initial GMC
-install.
+to match — all within the **platform-owned `ResourceQuota`** the GMC never creates
+or mutates, with no per-tenant cluster-admin after the initial install. What
+changed with the **recommended v2 API** is that the single-CR monolith is
+decomposed into small, reusable kinds — and that decomposition *is* a
+differentiator ARC's inlined, per-scale-set model structurally can't express:
 
-The **recommended v2 API** decomposes this into small reusable kinds (a shared
-`RunnerTemplate`, a `RunnerSet` per runner type, an optional standalone
-`EgressProxy`) — see the [getting-started walkthrough](getting-started.md). The
-legacy `v1alpha1` shape below expresses the same gateway in one CR:
+<div class="gag-pillars gag-cols-2" markdown>
+<div class="grid cards" markdown>
+
+-   :material-content-copy:{ .lg .middle } __Reuse the pod shape__
+
+    ---
+
+    One `RunnerTemplate` — or cluster-wide `ClusterRunnerTemplate` — is referenced
+    by every `RunnerSet`. ARC inlines the pod template into each
+    `AutoscalingRunnerSet`, so N runner types means N copies to keep in sync.
+
+-   :material-account-key:{ .lg .middle } __Clean ownership boundary__
+
+    ---
+
+    Platform owns the quota, the `PriorityClass` allowlist, and cluster templates;
+    the tenant composes `RunnerSet`s within them. ARC has no primitive to separate
+    platform-owned from tenant-owned concerns.
+
+-   :material-transit-connection-variant:{ .lg .middle } __Egress on purpose__
+
+    ---
+
+    A standalone `EgressProxy` is referenced by the gateway (or per `RunnerSet`),
+    or dropped entirely for direct — still `NetworkPolicy`-restricted — egress.
+    ARC has no per-tenant egress primitive at all.
+
+-   :material-view-grid-plus:{ .lg .middle } __Many gateways, one namespace__
+
+    ---
+
+    Multiple scoped `ActionsGateway`s coexist in a namespace, each with its own
+    GitHub binding and runner sets — not one CR that must own everything.
+
+</div>
+</div>
+
+The v2 object set below is feature-equivalent to the legacy single-CR example — a
+proxied gateway with a GPU runner set (priority tiers) and a Linux runner set:
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
-kind: ActionsGateway
+apiVersion: actions-gateway.com/v2alpha1
+kind: EgressProxy               # (1)!
+metadata:
+  name: team-a-egress
+  namespace: team-a
+spec:
+  minReplicas: 2
+  maxReplicas: 10
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerTemplate            # (2)!
+metadata:
+  name: default
+  namespace: team-a
+spec:
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: ActionsGateway            # (3)!
 metadata:
   name: team-a-gateway
   namespace: team-a
 spec:
-  gitHubAppRef:
-    name: my-github-app          # (1)!
-  gitHubURL: https://github.com/team-a-org
-  securityProfile: baseline      # (2)!
-  proxy:
-    minReplicas: 2               # (3)!
-    maxReplicas: 10
-  # No namespaceQuota field: the ResourceQuota is platform-owned (4)!
-  runnerGroups:
-    - runnerLabels: ["gpu", "self-hosted"]   # first label → derived RunnerGroup name
-      maxListeners: 10
-      priorityTiers:             # (5)!
-        - priorityClassName: runner-critical
-          threshold: 5
-        - priorityClassName: runner-standard
-          threshold: 20
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-              resources:
-                limits:
-                  nvidia.com/gpu: "1"
-    - runnerLabels: ["linux", "self-hosted"]   # distinct first label ⇒ distinct name
-      maxWorkers: 30
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: my-github-app       # name-only Secret ref in this namespace
+  githubURL: https://github.com/team-a-org
+  defaultProxyRef:
+    name: team-a-egress         # every RunnerSet inherits this unless it sets proxyRef
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: gpu
+  namespace: team-a
+spec:
+  gatewayRef:  { name: team-a-gateway }
+  templateRef: { name: default }   # (4)!
+  runnerLabels: ["gpu", "self-hosted"]
+  maxListeners: 10
+  priorityTiers:                # (5)!
+    - priorityClassName: runner-critical
+      threshold: 5
+    - priorityClassName: runner-standard
+      threshold: 20
+---
+apiVersion: actions-gateway.com/v2alpha1
+kind: RunnerSet
+metadata:
+  name: linux
+  namespace: team-a
+spec:
+  gatewayRef:  { name: team-a-gateway }
+  templateRef: { name: default }
+  runnerLabels: ["linux", "self-hosted"]
+  maxWorkers: 30
 ```
 
-1.  References a `Secret` in the same namespace holding the GitHub App `appId`,
-    `installationId`, and `privateKey`. The GMC watches the reference name, not
-    the Secret contents — see [credential rotation](getting-started.md#rotating-github-app-credentials).
-2.  Selects the Pod Security Admission level the GMC stamps on the namespace.
-    Defaults to `baseline`; use `restricted` for stricter isolation or
-    `privileged` only for workloads like docker-in-docker. See
-    [Security](design/05-security.md).
-3.  The per-tenant egress proxy pool is Horizontal Pod Autoscaler (HPA)-managed between these bounds; all
-    GitHub traffic exits through it on dedicated IPs.
-4.  The single `ResourceQuota` every runner group shares is **platform-owned** —
-    the platform admin sets it on the namespace, not on this CR, so it is a real
-    cap the tenant cannot raise. Priority tiers decide who wins when it is
-    contended.
+1.  Optional. A standalone per-tenant egress proxy pool, Horizontal Pod Autoscaler
+    (HPA)-managed between these bounds; all GitHub traffic exits through it on
+    dedicated IPs. Drop it (and `defaultProxyRef`) for direct, still
+    `NetworkPolicy`-restricted egress — collapsing the minimum to three objects.
+2.  A reusable pod shape referenced by both `RunnerSet`s below via `templateRef`.
+    Define it once; a cluster-scoped `ClusterRunnerTemplate` shares one shape
+    across every namespace. The Pod Security Admission level is a **namespace
+    label** in v2, not a CR field — all gateways in a namespace share one level.
+3.  `credentials.githubApp.name` references a `Secret` in this namespace holding
+    the GitHub App `appId`, `installationId`, and `privateKey`. The GMC watches the
+    reference name, not the Secret contents — see
+    [credential rotation](getting-started.md#rotating-github-app-credentials).
+    `WorkloadIdentity` is the opt-in no-PEM credential member.
+4.  Both runner sets reference the **same** `RunnerTemplate`. There is no
+    `ResourceQuota` field on any of these CRs — the single quota every runner set
+    shares is **platform-owned**, set on the namespace by the platform admin, so it
+    is a real cap the tenant cannot raise. Priority tiers decide who wins when it
+    is contended.
 5.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier
     bursts opportunistically; the final threshold caps total concurrency. The
     `priorityClassName` values must be on the platform's allowlist (the GMC
     `--allowed-priority-classes` flag), and whether a tier preempts is set on the
     platform-owned `PriorityClass` object — a tenant cannot name a class that
     evicts other tenants' pods.
+
+The legacy single-CR `v1alpha1` shape — which expresses this whole gateway in one
+`ActionsGateway` CR — is still fully served but
+**[deprecated](operations/v1alpha1-deprecation.md)**; see the
+[getting-started walkthrough](getting-started.md#legacy-the-v1alpha1-api-deprecated)
+for it and the [v1 → v2 migration guide](operations/migration-v1-to-v2.md) to move
+across without changing how your jobs are acquired.
 
 Ready to try it? Follow the [getting-started guide](getting-started.md). Already
 running ARC? The [Migrating from ARC guide](operations/migration-from-arc.md) maps
