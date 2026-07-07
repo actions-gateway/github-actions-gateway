@@ -760,6 +760,55 @@ CRDs), so the webhook path needs no restart. The operator-facing runbook for the
 "v2 objects not reconciling after installing the CRD chart" symptom lives in
 [troubleshooting.md](../operations/troubleshooting.md#v2-objects-not-reconciling-after-installing-the-crd-chart).
 
+### H.13.2. Install/upgrade lifecycle — apply-render, not `helm install` (Q276)
+
+Splitting the CRDs into their own chart (§H.13.1) keeps the **main** chart under the
+1 MiB release-Secret limit, but the v2 chart itself is still too large to `helm
+install`: rendered it is ~2.5 MB, and Helm stores a release as
+`base64(gzip(json(release)))` — where `json(release)` embeds **both** the rendered
+manifest **and** a base64-inflated copy of the chart source — inside one Secret the
+apiserver caps at 1 MiB. Reconstructing that encoding for the five-CRD chart lands at
+**~1.10 MiB stored, ~0.1 MiB over the ceiling.** So the chart is **applied from its
+render, not installed**:
+
+```sh
+helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system \
+  | kubectl apply --server-side -f -
+```
+
+**Decision: apply-render is the supported, deliberate install/upgrade path — not a
+stopgap.** Server-side apply is declarative and idempotent, so install and upgrade are
+the *same* command (re-run it to carry CRD field changes); it also clears kubectl's
+256 KB client-side-apply annotation ceiling, which the two ~1.16 MB `RunnerTemplate`
+CRDs blow past on their own. This is the mainstream practice for large CRDs (cert-
+manager, Crossplane, Istio, Gateway API all ship CRDs to be applied out-of-band and
+warn against Helm-managing them). The templates carry `helm.sh/resource-policy: keep`
+so an operator who fronts them with a GitOps tool that *does* build a Helm release
+keeps the CRDs on prune/uninstall.
+
+The properties this forgoes — `helm upgrade` revision history, `helm rollback`, `helm
+uninstall` cleanup — are **low-value for CRDs specifically** and partly anti-patterns:
+rolling a CRD schema *backward* can strand stored objects (removing a served/storage
+version or field is a deliberate migration, never a casual rollback), and cascading
+`helm uninstall` of a CRD deletes every custom resource with it (data loss — exactly
+what `resource-policy: keep` prevents). The operator-facing upgrade/rollback/uninstall
+runbook is [install.md § the v2 API CRDs](../operations/install.md#optional-the-v2-api-crds).
+
+Alternatives, each measured by reconstructing Helm's stored-Secret encoding:
+
+| Option | Stored release Secret | `helm install` | `helm upgrade` | Verdict |
+|---|---|---|---|---|
+| **Apply-render (chosen)** | n/a — no release created | n/a | re-apply, server-side | **Chosen.** Uniform install≡upgrade; clears both the 1 MiB *and* 256 KB limits; GitOps-friendly; ecosystem norm. |
+| Single templated chart (today's chart shape, helm-installed) | ~1.10 MiB | ❌ fails | — | Over the ceiling — this *is* the Q276 problem. |
+| `crds/` directory convention | ~0.72 MiB | ✅ installs | ❌ **never** upgrades/deletes | Rejected: Helm's `crds/` dir is create-only by design, so schema changes never propagate on upgrade — trades the size problem for a silent no-upgrade problem on an evolving API. |
+| Split large CRDs into per-CRD charts | ~0.50 MiB each large CRD; ~0.10 MiB for the three small ones together | ✅ installs | ✅ | Rejected: technically viable and the `spec.conversion` wiring is per-CRD so it survives the split, but it multiplies one artifact into three published/versioned charts and three releases (an umbrella chart re-aggregates into one Secret and lands back over the limit), buying a Helm CRD lifecycle you should not use (see above) at real packaging + operator-UX cost. |
+| Trim rendered size (drop descriptions / `x-kubernetes-preserve-unknown-fields`) | shrinks, but | partial | partial | Rejected: dropping descriptions degrades `kubectl explain`; replacing the embedded `PodTemplateSpec` schema with a preserve-unknown-fields blob drops server-side validation of the pod template — a secure-by-default regression. The structural Pod schema is inherently large regardless. |
+
+Once `v1alpha1` is removed and the `RunnerTemplate` CRDs are the only large objects
+left, revisit whether the v2 CRDs fold back into the main chart (they still would not
+fit a templated release — the fold-back is itself an apply-render, or waits on a
+future schema-slimming that does not cost validation).
+
 ## H.14. Admin policy layer — deferred until tiering is real
 
 The decomposition above mirrors Gateway API's `Gateway → route attachment` but

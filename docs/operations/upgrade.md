@@ -74,14 +74,20 @@ The v2 (`actions-gateway.com`) API is introduced as a decomposed set of five CRD
 cluster-scoped `clusterrunnertemplates`. **The main `actions-gateway` chart upgrade
 is unchanged: it does not install these.** They ship in a separate, opt-in chart,
 `actions-gateway-crds-v2`, because the `RunnerTemplate`/`ClusterRunnerTemplate` CRDs
-each embed a full pod template (~600 KB) and would otherwise push the main chart's
-Helm release Secret past its hard 1 MiB limit.
+each embed a full pod template (~1.1 MB apiece, served at `v2beta1` + `v2alpha1`) and
+would otherwise push the main chart's Helm release Secret past its hard 1 MiB limit.
 
 **No action is required for existing tenants.** Install the v2 chart only when you
-want the v2 API available:
+want the v2 API available. It is **applied from its render, not `helm install`ed** —
+the chart is itself over the 1 MiB release-Secret limit, so this is the supported
+install *and* upgrade path (re-run the same command to carry CRD field changes on a
+later chart bump). See [install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds)
+for the full lifecycle (upgrade/rollback/uninstall) and namespace/cert-manager overrides:
 
 ```bash
-helm install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
+  --namespace gmc-system \
+  | kubectl apply --server-side -f -
 ```
 
 The v2 controllers now reconcile these kinds, so a v2 object set provisions a working

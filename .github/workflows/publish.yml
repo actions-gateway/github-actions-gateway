@@ -411,6 +411,6 @@ jobs:
             printf -- '  install: `helm install actions-gateway oci://%s/%s/charts/actions-gateway --version %s`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
             printf -- '- **chart (v2 CRDs, opt-in)** — `%s`\n' "${REF_CRDS_V2}"
-            printf -- '  install: `helm install actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s`\n' \
+            printf -- '  install (apply-render — the chart exceeds the 1 MiB Helm release-Secret limit, so `helm install` cannot store it): `helm template actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s --namespace gmc-system | kubectl apply --server-side -f -`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
           } >> "${GITHUB_STEP_SUMMARY}"

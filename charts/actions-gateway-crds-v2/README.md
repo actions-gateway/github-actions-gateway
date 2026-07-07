@@ -16,14 +16,15 @@ on-ramp).
 ## Why a separate chart
 
 The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full
-`PodTemplateSpec` and are ~600 KB apiece. Helm stores a chart's entire release
-(rendered manifest **plus** a copy of the chart source) gzipped in a single Secret
-with a hard **1 MiB** limit; adding these to the main `actions-gateway` chart pushed
-it over. Shipping the v2 CRDs as their own chart makes v2 **opt-in** and keeps the
-main release small.
+`PodTemplateSpec` and — served at both `v2beta1` and `v2alpha1` — are ~1.1 MB apiece.
+Helm stores a chart's entire release (rendered manifest **plus** a copy of the chart
+source) gzipped in a single Secret with a hard **1 MiB** limit; adding these to the
+main `actions-gateway` chart pushed it over. Shipping the v2 CRDs as their own chart
+makes v2 **opt-in** and keeps the main release small.
 
-The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit, so this chart is
-**applied from its render, not `helm install`ed**:
+The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit — its release would
+store at ~1.1 MiB — so this chart is **applied from its render, not `helm install`ed**.
+This is the supported, deliberate install *and* upgrade path, not a stopgap:
 
 ```sh
 helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system \
