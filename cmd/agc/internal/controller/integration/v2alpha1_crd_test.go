@@ -59,9 +59,13 @@ func newV2RunnerSet(ns, name, gateway, template string) *agcv2alpha1.RunnerSet {
 	return &agcv2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:   agcv2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:  &agcv2alpha1.ObjectRef{Name: template},
-			RunnerLabels: []string{"self-hosted", "linux"},
+			GatewayRef:  agcv2alpha1.ObjectRef{Name: gateway},
+			TemplateRef: &agcv2alpha1.ObjectRef{Name: template},
+			// Pin Classic explicitly: the default is ScaleSet (Q264 P5), which forbids
+			// this fixture's two labels, and these CRD/reconciler tests exercise the
+			// classic path. Tests asserting the new default omit or override this field.
+			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolClassic,
+			RunnerLabels:        []string{"self-hosted", "linux"},
 		},
 	}
 }
@@ -133,20 +137,45 @@ func TestV2_RunnerSet_MaxWorkersMustMatchLastTier(t *testing.T) {
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxWorkers != last tier, got %v", err)
 }
 
-func TestV2_RunnerSet_AcquisitionProtocolDefaultsClassic(t *testing.T) {
+func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {
 	const ns = "v2-runnerset-acqproto-default"
 	createNSForAGC(t, ns)
 
-	// Omit acquisitionProtocol entirely — the apiserver must default it to Classic,
-	// so nothing changes for existing users (Q264 P3, default-Classic invariant).
+	// Omit acquisitionProtocol entirely — as of Q264 P5 the apiserver must default it
+	// to ScaleSet. A bare set must therefore carry a single label (ScaleSet ⇒ one
+	// runnerLabel), so this fixture declares one.
 	rs := newV2RunnerSet(ns, "linux", "acme", "default")
+	rs.Spec.AcquisitionProtocol = "" // clear the helper's Classic pin to test the default
+	rs.Spec.RunnerLabels = []string{"self-hosted"}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
 
 	var got agcv2alpha1.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
-	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, got.Spec.AcquisitionProtocol,
-		"acquisitionProtocol must default to Classic")
+	assert.Equal(t, agcv2alpha1.AcquisitionProtocolScaleSet, got.Spec.AcquisitionProtocol,
+		"acquisitionProtocol must default to ScaleSet (Q264 P5)")
+}
+
+// TestV2_RunnerSet_BareMultiLabelRejected documents the user-visible consequence of
+// the Q264 P5 default flip: a runner set that omits acquisitionProtocol AND declares
+// more than one runnerLabel is now rejected — it defaults to ScaleSet, which requires
+// exactly one label. Such a set must set acquisitionProtocol: Classic explicitly (the
+// deprecated multi-label path) or reduce to a single label.
+func TestV2_RunnerSet_BareMultiLabelRejected(t *testing.T) {
+	const ns = "v2-runnerset-acqproto-baremulti"
+	createNSForAGC(t, ns)
+
+	bare := newV2RunnerSet(ns, "multi", "acme", "default") // two labels
+	bare.Spec.AcquisitionProtocol = ""                     // omit → defaults to ScaleSet
+	err := k8sClient.Create(ctx, bare)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err),
+		"bare multi-label set should default to ScaleSet and be Invalid, got %v", err)
+
+	// The same labels are accepted when the set opts into the deprecated Classic path.
+	classic := newV2RunnerSet(ns, "multi-classic", "acme", "default") // helper pins Classic
+	require.NoError(t, k8sClient.Create(ctx, classic))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, classic) })
 }
 
 func TestV2_RunnerSet_ScaleSetRequiresSingleLabel(t *testing.T) {

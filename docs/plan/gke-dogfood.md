@@ -405,6 +405,10 @@ spec:
     name: dogfood
   templateRef:
     name: default
+  # Classic (deprecated) pinned: this set matches multiple labels, which the ScaleSet
+  # default (Q264 P5) forbids (ScaleSet takes exactly one runnerLabel). Omitting the
+  # field would default to ScaleSet and be rejected at admission.
+  acquisitionProtocol: Classic
   runnerLabels: ["self-hosted", "linux", "gag-ci"]
   # maxListeners MODERATE (16), maxWorkers 8: the pd-standard disk right-size (Q248)
   # lifted the worker-node ceiling off the SSD quota. A high maxListeners multiplies

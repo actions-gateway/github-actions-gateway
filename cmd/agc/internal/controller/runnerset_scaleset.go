@@ -22,7 +22,8 @@ import (
 // assigned job (scalesetlistener.Listener docs) — instead of the classic
 // pool/multiplexer many-acquirers path. This file holds the reconciler branch, the
 // per-set listener lifecycle, and the scaleset.Client factory; the classic path is
-// byte-for-byte unchanged and stays the default (the field defaults to Classic).
+// byte-for-byte unchanged, but is no longer the default — the field defaults to
+// ScaleSet as of Q264 P5, and Classic is a deprecated explicit opt-in.
 
 // defaultScaleSetMaxCapacity is the X-ScaleSetMaxCapacity a ScaleSet set advertises
 // when it declares neither maxWorkers nor priorityTiers — the total number of jobs

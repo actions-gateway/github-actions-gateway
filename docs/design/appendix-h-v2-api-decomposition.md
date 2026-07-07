@@ -306,6 +306,7 @@ metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }   # kind defaults to RunnerTemplate; set kind: ClusterRunnerTemplate for a platform golden template
+  acquisitionProtocol: Classic     # multi-label ⇒ Classic (deprecated); the default is now ScaleSet (Q264 P5), which takes exactly one runnerLabel
   runnerLabels: [self-hosted, linux]
   maxListeners: 10
   maxWorkers: 50

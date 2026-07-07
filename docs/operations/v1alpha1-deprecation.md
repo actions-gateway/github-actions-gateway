@@ -20,11 +20,13 @@ working during the transition, and what changes at removal.
   fan-out, not an automatic conversion, because one v1 object becomes several v2
   objects.
 - **Migrating preserves how your jobs are acquired.** `gag-migrate` maps v1 runner
-  groups to v2 `RunnerSet`s that use the same job-acquisition path — the migration
-  changes the API objects, not the runtime behaviour, so it is safe to do ahead of
-  any other change. (A newer per-`RunnerSet` acquisition protocol is being introduced
-  separately and is opt-in; adopting it is a distinct, later step, never a side
-  effect of migrating off `v1alpha1`.)
+  groups to v2 `RunnerSet`s that use the same job-acquisition path — it writes
+  `acquisitionProtocol: Classic` onto every emitted set, so the migration changes the
+  API objects, not the runtime behaviour, and is safe to do ahead of any other change.
+  (The v2 default for *new* sets is now the runner-scale-set protocol, `ScaleSet`
+  (Q264 P5), and `Classic` is deprecated; adopting `ScaleSet` for a migrated group is a
+  distinct, later step — create a fresh single-label set — never a side effect of
+  migrating off `v1alpha1`.)
 
 ## Why v2 (what the decomposition buys)
 

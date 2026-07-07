@@ -39,6 +39,11 @@ spec:
   gatewayRef:
     name: dogfood-e2e
   # templateRef is supplied by the overlay — the isolation-specific worker shape.
+  # Classic (deprecated) is pinned because this set matches on multiple labels, which
+  # the ScaleSet default (Q264 P5) cannot express (a ScaleSet set takes exactly one
+  # runnerLabel — its scale-set name). Omitting the field would default to ScaleSet and
+  # be rejected at admission. ScaleSet is validated separately by the Q264 P4 dogfood.
+  acquisitionProtocol: Classic
   runnerLabels: ["self-hosted", "linux", "gag-ci-e2e"]
   maxListeners: 2
   maxWorkers: 2

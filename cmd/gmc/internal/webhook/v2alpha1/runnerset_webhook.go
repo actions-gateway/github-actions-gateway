@@ -28,6 +28,13 @@ import (
 
 // +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnerset,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnersets,verbs=create;update,versions=v2alpha1,name=vrunnerset-v2alpha1.kb.io,admissionReviewVersions=v1
 
+// The validator lists sibling RunnerSets to enforce ScaleSet label uniqueness, so the
+// GMC ServiceAccount needs read access to them (the AGC — not the GMC — owns their
+// lifecycle, hence read-only here). Since a ScaleSet set fails closed if this List is
+// denied, the permission is mandatory once ScaleSet is the default (Q264 P5): without
+// it every ScaleSet RunnerSet is rejected `cannot list resource "runnersets"`.
+// +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch
+
 // RunnerSetCustomValidator enforces the cross-object invariant that a spec-scoped
 // CRD CEL rule cannot express: no two ScaleSet-protocol RunnerSets under one gateway
 // may claim the same single runnerLabel (Q264 §5a-U7). The scale set's name IS that

@@ -73,6 +73,14 @@
   - update
 - apiGroups:
   - actions-gateway.com
+  resources:
+  - runnersets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - actions-gateway.com
   - actions-gateway.github.com
   resources:
   - actionsgateways/finalizers

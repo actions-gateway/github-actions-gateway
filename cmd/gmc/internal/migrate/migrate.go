@@ -379,18 +379,26 @@ func buildRunnerSet(ns, name, gatewayName, templateName string, spec agcv1alpha1
 		},
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:         v2alpha1.ObjectRef{Name: gatewayName},
-			TemplateRef:        &v2alpha1.ObjectRef{Name: templateName},
-			MaxListeners:       maxListeners,
-			MaxWorkers:         spec.MaxWorkers,
-			RunnerLabels:       spec.RunnerLabels,
-			PriorityTiers:      translatePriorityTiers(spec.PriorityTiers),
-			MaxEvictionRetries: spec.MaxEvictionRetries,
-			EvictionRetryDelay: spec.EvictionRetryDelay,
-			MaxQuotaRetries:    spec.MaxQuotaRetries,
-			QuotaRetryDelay:    spec.QuotaRetryDelay,
-			CompletedPodTTL:    spec.CompletedPodTTL,
-			PendingPodDeadline: spec.PendingPodDeadline,
+			GatewayRef:  v2alpha1.ObjectRef{Name: gatewayName},
+			TemplateRef: &v2alpha1.ObjectRef{Name: templateName},
+			// Pin Classic explicitly: the v2alpha1 default is ScaleSet (Q264 P5), but a
+			// migrated v1 group carries classic-protocol semantics and may declare
+			// multiple runnerLabels — which ScaleSet forbids (one label == the scale-set
+			// name). Emitting Classic keeps the migrated set byte-for-byte equivalent to
+			// the v1 group and lets the tenant opt into ScaleSet later on a fresh set
+			// (§5a-U7). Without this, a multi-label group would default to ScaleSet and be
+			// rejected by admission on apply.
+			AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
+			MaxListeners:        maxListeners,
+			MaxWorkers:          spec.MaxWorkers,
+			RunnerLabels:        spec.RunnerLabels,
+			PriorityTiers:       translatePriorityTiers(spec.PriorityTiers),
+			MaxEvictionRetries:  spec.MaxEvictionRetries,
+			EvictionRetryDelay:  spec.EvictionRetryDelay,
+			MaxQuotaRetries:     spec.MaxQuotaRetries,
+			QuotaRetryDelay:     spec.QuotaRetryDelay,
+			CompletedPodTTL:     spec.CompletedPodTTL,
+			PendingPodDeadline:  spec.PendingPodDeadline,
 		},
 	}
 }

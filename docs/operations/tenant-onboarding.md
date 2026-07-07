@@ -578,10 +578,9 @@ metadata: { name: linux, namespace: team-a }
 spec:
   gatewayRef:  { name: acme }
   templateRef: { name: default }
-  runnerLabels: [self-hosted, linux]
-  maxListeners: 10
+  runnerLabels: [gag-linux]   # exactly one label: the ScaleSet default's runs-on name (see below)
   maxWorkers: 50
-  # no proxyRef and no gateway defaultProxyRef ⇒ direct egress
+  # acquisitionProtocol omitted ⇒ ScaleSet (the default); no proxyRef / defaultProxyRef ⇒ direct egress
 ```
 
 What you trade, and what you do **not**:
@@ -591,6 +590,53 @@ What you trade, and what you do **not**:
 - **The trade is surfaced in status.** A proxy-less gateway and runner set report `status.proxyMode: Direct` (visible as the `Egress` print column) plus an advisory `EgressUnattributed` condition (`True`). The condition is informational — it does **not** make the object `NotReady`. Check it with `kubectl get actionsgateway,runnerset -n <ns>` (the `Egress` column) or `kubectl describe`.
 
 To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`). A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
+
+### Acquisition protocol (`spec.acquisitionProtocol`)
+
+A `RunnerSet` acquires jobs from GitHub with one of two protocols, selected by
+`spec.acquisitionProtocol`:
+
+- **`ScaleSet` (the default).** The runner-scale-set message-queue protocol: one
+  listener session per set, capacity-gated assignment, and a full-runner worker.
+  It is the default because it removes a many-acquirers job-assignment race the
+  classic protocol was subject to under high burst (validated end-to-end before
+  the default flip). A `ScaleSet` set **must declare exactly one `runnerLabel`** —
+  the scale set's name *is* its single `runs-on` match target at GitHub — and that
+  label must be unique across the `ScaleSet` sets under one gateway (a second set
+  claiming it is rejected at admission). Omitting the field selects `ScaleSet`, so
+  a runner set that does not name a protocol must carry a single label.
+- **`Classic` (deprecated).** The per-runner broker protocol. Select it explicitly
+  only to keep a classic-only capability during the migration window — chiefly
+  **multi-label matching**, which `ScaleSet` cannot express:
+
+  ```yaml
+  apiVersion: actions-gateway.com/v2alpha1
+  kind: RunnerSet
+  metadata: { name: linux, namespace: team-a }
+  spec:
+    gatewayRef:  { name: acme }
+    templateRef: { name: default }
+    acquisitionProtocol: Classic       # deprecated; required for a multi-label set
+    runnerLabels: [self-hosted, linux]
+    maxListeners: 10                   # honored under Classic; ignored under ScaleSet
+    maxWorkers: 50
+  ```
+
+  `Classic` is scheduled for removal one minor release after this deprecation
+  (Q264); new runner sets should prefer `ScaleSet` (a single label) and split a
+  multi-label group into one `ScaleSet` set per label.
+
+The field is **immutable** — switching a live set's protocol is a re-registration
+storm, so change it by creating a new `RunnerSet`, not by editing an existing one.
+**Existing sets are unaffected by the default flip:** the value is recorded at
+admission, so a set created while the default was `Classic` keeps `Classic`. And
+`gag-migrate` writes `acquisitionProtocol: Classic` onto every set it emits, so a
+migrated tenant's multi-label groups keep working unchanged (opt a migrated set
+into `ScaleSet` later by creating a fresh single-label set).
+
+`maxListeners` has no effect on a `ScaleSet` set (there is one session per set;
+concurrency is governed by `maxWorkers`/`priorityTiers`, advertised to GitHub as
+the scale set's capacity). It remains meaningful only for `Classic`.
 
 ### Optional `templateRef` (a default worker pod shape)
 
