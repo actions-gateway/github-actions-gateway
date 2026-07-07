@@ -208,15 +208,25 @@ the `spec.credentials` discriminated union in `v1.1.0-rc.3`); a mismatch makes
 every reconcile fail validation. A stale CRD that still exposes `githubAppRef`
 silently drops the credential — the GMC reads an empty App ref and provisions the
 AGC for workload-identity (Vault) instead, and the AGC crash-loops on
-`read appId: … no such file or directory`. Always upgrade this chart in lockstep
-with the GMC image (`helm upgrade`, not just `install`).
-`scripts/dogfood/setup.sh` git-archives the chart at `$GAG_IMAGE_TAG`; the manual
-equivalent for the pinned `v1.1.0-rc.6`:
+`read appId: … no such file or directory`. Always apply this chart in lockstep
+with the GMC image.
+
+Since Q74 graduated each v2 CRD to two served versions (v2beta1 + v2alpha1), the
+rendered chart exceeds Helm's 1 MiB release-Secret limit, so `helm install`/`upgrade`
+can no longer store the release and fails outright. The supported install≡upgrade
+path is **apply-render**: `helm template` the chart, then `kubectl apply --server-side`
+(Q276). Dogfood uses the **from-source render** variant — it git-archives the local
+chart at `$GAG_IMAGE_TAG` to exercise pre-release code, so it cannot depend on the
+signed release asset (which exists only for `v*` tags). `scripts/dogfood/setup.sh`
+does this automatically; the manual equivalent for the pinned `v1.1.0-rc.6`:
 
 ```bash
 git archive v1.1.0-rc.6 charts/actions-gateway-crds-v2 | tar -x -C tmp/
-helm install actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
-  --namespace gmc-system --create-namespace
+# --namespace gmc-system resolves each CRD's conversion-webhook clientConfig to the
+# GMC's webhook-service; --force-conflicts takes field ownership on a re-apply.
+helm template actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
+  --namespace gmc-system \
+  | kubectl apply --server-side --force-conflicts -f -
 ```
 
 Then install the GMC chart:
