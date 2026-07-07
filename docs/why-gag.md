@@ -11,7 +11,7 @@ hide:
 
 # Why GitHub Actions Gateway over ARC?
 
-<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner groups, for many tenants, in one shared cluster — cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
+<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster — cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Migrating from ARC](operations/migration-from-arc.md){ .md-button }
@@ -81,7 +81,7 @@ letting tenants run their own runners.
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
     <span class="gag-stat__num">600&nbsp;KiB</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner groups</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner sets</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -93,7 +93,7 @@ letting tenants run their own runners.
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Resource a tenant declares</strong> — controller, proxy pool, RBAC, and network policies, provisioned to run within the platform-owned quota</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong> — declare your gateway and runner sets; the GMC provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
   </div>
 </div>
 
@@ -114,9 +114,9 @@ footprint.
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
 | Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [auto lock-cancel + re-queue](design/04-operational-flows.md) |
-| Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner group](design/02-architecture.md) |
+| Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |
-| Listener memory, 10 runner groups at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
+| Listener memory, 10 runner sets at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus per tenant + group](operations/observability.md)<br><span class="gag-cont">job counts in `kubectl get`; ready-to-apply [tenant dashboard + alerts as code](operations/observability.md#tenant-dashboard)</span> |
 | Cross-tenant fleet health view (platform admin) | :material-close-circle:{ .gag-no } controller + per-scale-set metrics, aggregated by hand; no bundled dashboard | :material-check-circle:{ .gag-yes } [single-pane GMC fleet rollups](operations/observability.md#full-metrics-reference)<br><span class="gag-cont">degraded / egress-stale / quota per gateway, + a [platform dashboard](operations/observability.md#platform-dashboard)</span> |
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
