@@ -152,23 +152,26 @@ make validate-cluster
 
 ```bash
 cat > tmp/values-dogfood.yaml <<'EOF'
-# Dogfood / dev mode: pin a released image tag rather than digests.
+# Dogfood / dev mode: pin an image built from a post-Q74 git ref, not digests.
 # Production installs must use digest-pinned images from the release page.
-# NOTE: `latest` is never published (publish.yml builds only on v* tags), so a
-# real released tag is required — see https://github.com/actions-gateway/github-actions-gateway/pkgs/container/gmc
+# This is NOT limited to cut `v*` releases: dogfood tracks pre-release code, and
+# the publish pipeline builds images only on `v*` tags — so the post-Q74 image at
+# this ref was built + pushed by hand (see "Tracking post-Q74 pre-release builds"
+# below). The SAME ref pins both this image tag and the git-archived v2 CRD chart
+# (B3), so they can never drift. `latest` is never published, so never float to it.
 allowFloatingImageTags: true
 # Single GMC replica for dogfood (production wants the default 2 for HA); frees
 # capacity on the small system node for the per-tenant AGC pod.
 replicaCount: 1
 gmc:
   image:
-    tag: v1.1.0-rc.6
+    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
 agc:
   image:
-    tag: v1.1.0-rc.6
+    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
 proxy:
   image:
-    tag: v1.1.0-rc.6
+    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
 # WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
 # every AGC, which injects the wrapper into each worker pod so the runner
 # container can be the unmodified upstream actions-runner. Pin it: the chart's
@@ -176,7 +179,7 @@ proxy:
 # and ImagePullBackOffs the injection.
 wrapper:
   image:
-    tag: v1.1.0-rc.6
+    tag: 0ef4c6fa50fc78f3ea1ddee84e7237be251ea971
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -217,11 +220,13 @@ can no longer store the release and fails outright. The supported install≡upgr
 path is **apply-render**: `helm template` the chart, then `kubectl apply --server-side`
 (Q276). Dogfood uses the **from-source render** variant — it git-archives the local
 chart at `$GAG_IMAGE_TAG` to exercise pre-release code, so it cannot depend on the
-signed release asset (which exists only for `v*` tags). `scripts/dogfood/setup.sh`
-does this automatically; the manual equivalent for the pinned `v1.1.0-rc.6`:
+signed release asset (which exists only for `v*` tags). Because `$GAG_IMAGE_TAG` is
+a git ref, the archived chart is guaranteed to match the control-plane image built
+from that same ref. `scripts/dogfood/setup.sh` does this automatically; the manual
+equivalent for the pinned ref:
 
 ```bash
-git archive v1.1.0-rc.6 charts/actions-gateway-crds-v2 | tar -x -C tmp/
+git archive "$GAG_IMAGE_TAG" charts/actions-gateway-crds-v2 | tar -x -C tmp/
 # --namespace gmc-system resolves each CRD's conversion-webhook clientConfig to the
 # GMC's webhook-service; --force-conflicts takes field ownership on a re-apply.
 helm template actions-gateway-crds-v2 tmp/charts/actions-gateway-crds-v2 \
@@ -285,22 +290,70 @@ this automatically.
 
 **Image-tag transition (pre- vs post-Q74).** `install_crds` pins the CRDs to
 `GAG_IMAGE_TAG`. The conversion webhook itself landed in Q74 (PR #557), so a
-**pre-Q74** GMC release (e.g. the `v1.1.0-rc.6` default at the time of writing) ships
-**single-version** CRDs with conversion `strategy: None` and no webhook clientConfig —
-there is nothing to wire, and patching a webhook clientConfig onto them would be rejected
-(`should not be set when strategy is not Webhook`). `patch_crd_cabundle` therefore reads
-each CRD's `spec.conversion.strategy` and only patches the ones set to `Webhook`, cleanly
-skipping the rest. So the caBundle wiring is a no-op until `GAG_IMAGE_TAG` is bumped to a
-post-Q74 release whose multi-version CRDs actually route CR conversion through `/convert`
-— at which point the same step activates automatically with no further change. **Bumping
-`GAG_IMAGE_TAG` to a post-Q74 release is the follow-up that makes the full apply → convert
-→ read-back round-trip live on dogfood** (there was no post-Q74 release yet when this was
-written).
+**pre-Q74** GMC build (e.g. the old `v1.1.0-rc.6` default) ships **single-version**
+CRDs with conversion `strategy: None` and no webhook clientConfig — there is nothing
+to wire, and patching a webhook clientConfig onto them would be rejected (`should not
+be set when strategy is not Webhook`). `patch_crd_cabundle` therefore reads each CRD's
+`spec.conversion.strategy` and only patches the ones set to `Webhook`, cleanly skipping
+the rest. So on a pre-Q74 build the caBundle wiring is a no-op; on a **post-Q74** build
+whose multi-version CRDs route CR conversion through `/convert`, the same step activates
+automatically with no further change.
+
+**Live-validated post-Q74 (Q281, 2026-07-07).** `GAG_IMAGE_TAG` is now pinned to a
+post-Q74 `main` SHA (`0ef4c6f…`) whose control-plane image was built + pushed by hand
+(see [Tracking post-Q74 pre-release builds](#tracking-post-q74-pre-release-builds)),
+so the full **apply → convert → read-back round-trip is live on dogfood**. Confirmed
+end-to-end on `gag-dogfood`: with the post-Q74 GMC serving `/convert`, `ActionsGateway`,
+`RunnerTemplate`, and `RunnerSet` all apply at `v2alpha1` and read back at **both**
+`v2beta1` (storage) and `v2alpha1` (served through the TLS-verified conversion webhook)
+with **no `/convert` 404 and no `x509` error** — exercising Q279's `caBundle` wiring for
+real. (Before the bump the cluster was in the exact dormant state Q279 anticipated:
+post-Q74 CRDs at `strategy: Webhook` but a pre-Q74 rc.6 GMC with no `/convert` handler,
+so `kubectl get actionsgateways` failed `conversion webhook … the server could not find
+the requested resource`.)
 
 > **Security — keep the webhook TLS-verified.** An empty `caBundle` can tempt a
 > `caBundle`-less or `insecureSkipTLSVerify: true` shortcut to "just make CRs apply."
 > Do **not**: that lets any pod impersonating the webhook Service intercept every CR
 > conversion. Wiring the real CA is the secure-by-default fix.
+
+#### Tracking post-Q74 pre-release builds
+
+Dogfood deliberately runs **pre-release** control-plane code so new behaviour (like
+the Q74 conversion webhook) can be exercised end-to-end *before* a release is cut. It
+must therefore be able to pin an arbitrary post-Q74 point, **not** wait for a `v*`
+release. The single `GAG_IMAGE_TAG` variable makes this safe by construction: it is a
+**git ref** (SHA, branch, or tag) used two ways that must agree —
+
+1. as the published control-plane image tag under
+   `ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>` (the images the chart pulls), and
+2. as the git object `install_crds` runs `git archive <ref> charts/actions-gateway-crds-v2`
+   against (the v2 CRD chart, whose alpha schema drifts between refs).
+
+Because both come from the **same ref**, the running image and the installed CRDs can
+never disagree on the v2 schema. The publish pipeline builds images only on `v*` tags,
+so for a non-release ref you build and push the four control-plane images by hand once,
+then set `GAG_IMAGE_TAG` to that ref. GKE nodes are amd64, so a single-arch build is
+enough for dogfood:
+
+```bash
+SHA="$(git rev-parse origin/main)"          # any post-Q74 ref that carries the v2 CRD chart
+gh auth token | docker login ghcr.io -u "$(gh api user --jq .login)" --password-stdin
+GIT_SHA="$SHA" docker buildx bake gmc agc proxy wrapper \
+  --set '*.platform=linux/amd64' \
+  --set "gmc.tags=ghcr.io/actions-gateway/gmc:$SHA" \
+  --set "agc.tags=ghcr.io/actions-gateway/agc:$SHA" \
+  --set "proxy.tags=ghcr.io/actions-gateway/proxy:$SHA" \
+  --set "wrapper.tags=ghcr.io/actions-gateway/wrapper:$SHA"
+GAG_IMAGE_TAG="$SHA" scripts/dogfood/setup.sh   # (with the other Variables exported)
+```
+
+The `{gmc,agc,proxy,wrapper}` packages already exist and are **public**, so a new tag
+inherits that visibility — no GHCR visibility flip is needed (a brand-new package would
+default to private and `ImagePullBackOff`; flip it to public in the GHCR UI). Pushing to
+`ghcr.io/actions-gateway` needs the `write:packages` scope (`gh auth refresh -s
+write:packages` if your token lacks it). This is a dev/dogfood convenience only —
+**production always pins release digests**, never a floating SHA tag.
 
 ### B4. Create tenant namespace
 
