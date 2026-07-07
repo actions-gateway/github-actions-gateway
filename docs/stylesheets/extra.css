@@ -17,48 +17,51 @@
   font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 400;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/IBMPlexSans-Regular.woff2") format("woff2");
 }
 @font-face {
   font-family: "IBM Plex Sans";
   font-style: italic;
   font-weight: 400;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/IBMPlexSans-Italic.woff2") format("woff2");
 }
 @font-face {
   font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 600;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
 }
 @font-face {
   font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/IBMPlexSans-Bold.woff2") format("woff2");
 }
 @font-face {
   font-family: "Monaspace Neon";
   font-style: normal;
   font-weight: 500;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/MonaspaceNeon-Medium.woff2") format("woff2");
 }
 @font-face {
   font-family: "Monaspace Neon";
   font-style: normal;
   font-weight: 700;
-  font-display: swap;
+  font-display: optional;
   src: url("../assets/fonts/MonaspaceNeon-Bold.woff2") format("woff2");
 }
 @font-face {
   font-family: "Monaspace Argon";
   font-style: normal;
   font-weight: 400;
+  /* Code is below the fold and not preloaded; keep swap so it always ends up in
+     real Monaspace Argon (mono→mono, so the swap barely shifts layout) rather
+     than being dropped to the system monospace on a slow first load. */
   font-display: swap;
   src: url("../assets/fonts/MonaspaceArgon-Regular.woff2") format("woff2");
 }

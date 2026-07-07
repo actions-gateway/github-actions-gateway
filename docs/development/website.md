@@ -96,6 +96,29 @@ and update the `--md-*-font` variables (and the `h1` override for the display
 face). Keep every face self-hosted — never reintroduce a `theme.font` mapping or
 an external font `<link>`, which would restore the Google request.
 
+### No flash-of-unstyled-text (FOUT)
+
+Self-hosting alone would still "pop" — the browser only requests a font after
+parsing CSS, so it paints fallback text, then swaps and reflows once the real
+face arrives. Two coordinated pieces stop that:
+
+- **`font-display: optional`** on the text and display faces (`extra.css`). Unlike
+  `swap` (zero block period → always paints fallback first), `optional` gives the
+  font a brief window to arrive before first paint and never swaps *late* — so
+  there's no reflow either way. The code face (Monaspace Argon) stays `swap`: it's
+  below the fold and we'd rather it always end up in real Monaspace than be dropped
+  to the system monospace on a slow first load.
+- **`<link rel="preload">`** for the three above-the-fold faces (Plex Sans Regular
+  + Bold and Monaspace Neon Medium) in `overrides/main.html`, using the `| url`
+  filter so the path is correct in both local serve and production, and
+  `crossorigin` because fonts are always fetched in CORS mode. This starts the
+  fetch during head parse, so those faces are in memory before first paint.
+
+Net effect (verified in the preview via the Performance API): the preloaded faces
+finish loading ~30 ms in, well before first contentful paint, so text renders in
+the correct font on the first frame — no pop. If you add a weight that appears
+above the fold, preload it too, or it may briefly render in the fallback.
+
 ## Local preview
 
 ```sh
