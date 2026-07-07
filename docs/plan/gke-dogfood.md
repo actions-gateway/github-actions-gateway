@@ -247,6 +247,61 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 > (`systemCriticalPriorityQuota.enabled=true`), so no manual `kubectl apply` is
 > needed here. See [install.md](../operations/install.md#gke-and-other-restricted-priorityclass-clusters).
 
+#### Wire the webhook CA into the CRD conversion `caBundle` (Q279)
+
+Since Q74 the v2 kinds are stored at `v2beta1` and served at `v2alpha1` through the
+GMC-hosted conversion webhook. The apiserver calls that webhook over TLS and only
+trusts it if each CRD's `spec.conversion.webhook.clientConfig.caBundle` carries the
+CA that signed the GMC's serving cert. Dogfood is **self-signed** (no cert-manager),
+and the CRD chart renders an empty `caBundle` when `conversion.certManager.enabled=false`
+and `conversion.caBundle` is unset — so **without this step every CR `apply` (and its
+conversion read-back) fails the TLS handshake** with `x509: certificate signed by
+unknown authority`.
+
+The chart mints that CA once and stores it in the `webhook-server-cert` Secret in
+`gmc-system` (reused across renders via Helm `lookup`, so it is stable on re-runs).
+The Secret's `data["ca.crt"]` is already `base64(PEM)` — exactly the encoding a CRD
+`caBundle` wants — so it passes straight through:
+
+```bash
+CA="$(kubectl get secret webhook-server-cert -n gmc-system -o jsonpath='{.data.ca\.crt}')"
+for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
+  kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+    -p "{\"spec\":{\"conversion\":{\"webhook\":{\"clientConfig\":{\"caBundle\":\"${CA}\"}}}}}"
+done
+```
+
+**Why patch instead of `--set conversion.caBundle=…` at CRD-render time?** The CA only
+exists after the GMC install creates its Secret, but the CRDs must be installed
+*before* the GMC so it detects the v2 kinds at startup and enables its v2 controllers +
+conversion webhook (Q228 — installing the CRDs later needs a GMC restart). Reversing
+that order to obtain the CA first would break the detection. So `scripts/dogfood/setup.sh`
+keeps the order **install CRDs (empty `caBundle`) → install GMC (mints the Secret) →
+`patch_crd_cabundle`**, and the patch runs before the first CR is applied. A JSON merge
+patch sets only the `caBundle` leaf, leaving the chart-rendered `clientConfig.service`
+block intact; a later server-side re-apply of the CRD chart never renders `caBundle`, so
+it cannot strip this leaf (a different field manager owns it). `setup.sh` does all of
+this automatically.
+
+**Image-tag transition (pre- vs post-Q74).** `install_crds` pins the CRDs to
+`GAG_IMAGE_TAG`. The conversion webhook itself landed in Q74 (PR #557), so a
+**pre-Q74** GMC release (e.g. the `v1.1.0-rc.6` default at the time of writing) ships
+**single-version** CRDs with conversion `strategy: None` and no webhook clientConfig —
+there is nothing to wire, and patching a webhook clientConfig onto them would be rejected
+(`should not be set when strategy is not Webhook`). `patch_crd_cabundle` therefore reads
+each CRD's `spec.conversion.strategy` and only patches the ones set to `Webhook`, cleanly
+skipping the rest. So the caBundle wiring is a no-op until `GAG_IMAGE_TAG` is bumped to a
+post-Q74 release whose multi-version CRDs actually route CR conversion through `/convert`
+— at which point the same step activates automatically with no further change. **Bumping
+`GAG_IMAGE_TAG` to a post-Q74 release is the follow-up that makes the full apply → convert
+→ read-back round-trip live on dogfood** (there was no post-Q74 release yet when this was
+written).
+
+> **Security — keep the webhook TLS-verified.** An empty `caBundle` can tempt a
+> `caBundle`-less or `insecureSkipTLSVerify: true` shortcut to "just make CRs apply."
+> Do **not**: that lets any pod impersonating the webhook Service intercept every CR
+> conversion. Wiring the real CA is the secure-by-default fix.
+
 ### B4. Create tenant namespace
 
 ```bash
