@@ -166,15 +166,30 @@ preflight() {
 # ---------------------------------------------------------------------------
 
 install_crds() {
-	echo "Installing/upgrading v2 CRDs from ${GAG_IMAGE_TAG} (matching the GMC image)..."
+	echo "Rendering + applying v2 CRDs from ${GAG_IMAGE_TAG} (matching the GMC image)..."
 	local crd_src
 	crd_src="$(mktemp -d)"
 	trap 'rm -rf "${crd_src:-}"' EXIT
 	git -C "${REPO_ROOT}" archive "${GAG_IMAGE_TAG}" charts/actions-gateway-crds-v2 \
 		| tar -x -C "${crd_src}"
-	helm upgrade --install actions-gateway-crds-v2 \
+	# apply-render, NOT `helm upgrade --install` (Q276/Q277). Since Q74 graduated
+	# each v2 CRD to two served versions (v2beta1 + v2alpha1), the rendered chart
+	# exceeds Helm's 1 MiB release-Secret limit, so Helm can no longer store the
+	# release and `helm install`/`upgrade` fails outright. Render the chart and
+	# apply it server-side instead — the supported, deliberate install≡upgrade
+	# path (also clears kubectl's 256 KB client-side-apply annotation ceiling that
+	# each ~1.16 MB RunnerTemplate CRD blows on its own). Dogfood deliberately uses
+	# the from-source render (not the signed release asset): it installs a locally
+	# git-archived chart at an arbitrary build tag to exercise pre-release code, so
+	# it cannot depend on the release-only `v*` asset. --namespace gmc-system
+	# resolves each CRD's conversion-webhook clientConfig to the GMC's
+	# webhook-service (identical wiring to what the old helm install baked in via
+	# the chart's default values). --force-conflicts takes field ownership from any
+	# pre-Q277 helm-installed release of this chart so re-runs stay idempotent.
+	helm template actions-gateway-crds-v2 \
 		"${crd_src}/charts/actions-gateway-crds-v2" \
-		--namespace gmc-system --create-namespace
+		--namespace gmc-system \
+		| kubectl apply --server-side --force-conflicts -f -
 	rm -rf "${crd_src}"
 	trap - EXIT
 }
