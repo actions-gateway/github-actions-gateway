@@ -327,6 +327,10 @@ spec:
   templateRef:
     name: tmpl
   maxListeners: 2
+  # Classic (deprecated): the default is now ScaleSet (Q264 P5), but the e2e fakegithub
+  # implements only the classic protocol — these tests exercise gateway plumbing, not
+  # acquisition. Omitting the field would default to ScaleSet and fail to register.
+  acquisitionProtocol: Classic
   runnerLabels: ["e2e-alpha"]
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -340,6 +344,7 @@ spec:
   templateRef:
     name: tmpl
   maxListeners: 2
+  acquisitionProtocol: Classic   # see set-alpha: e2e fakegithub is classic-only (Q264 P5)
   runnerLabels: ["e2e-beta"]
 `, ns, secretName, workerImage)
 }
