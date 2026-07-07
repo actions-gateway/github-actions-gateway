@@ -48,11 +48,13 @@ All four images must be **pinned by digest** — the chart refuses to render whi
 For the recommended **v2** path, also install the opt-in v2 CRD chart (it ships separately because the CRDs are large enough that bundling them would push the main chart's Helm release Secret past its 1 MiB limit):
 
 ```sh
-helm install actions-gateway-crds-v2 \
-  oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+helm template actions-gateway-crds-v2 \
+  oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
+  --namespace gmc-system \
+  | kubectl apply --server-side -f -
 ```
 
-The GMC **detects the v2 CRDs at startup**: with the chart present it starts the v2 controllers; without it the GMC comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`) — it does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`). See the [chart README](../charts/actions-gateway-crds-v2/README.md).
+Render it **for the GMC's namespace** and apply server-side (the CRDs are too large for a Helm release Secret; `--server-side` also avoids the 256 KB client-side apply limit): each v2 CRD is served at `v2beta1` (the storage/hub version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC — so the rendered `clientConfig` must resolve to the GMC's `webhook-service` (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds)). The GMC **detects the v2 CRDs at startup**: with the chart present it starts the v2 controllers; without it the GMC comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`) — it does not error-loop. Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`). See the [chart README](../charts/actions-gateway-crds-v2/README.md).
 
 ## 2. Create and mark the tenant namespace, and set its quota
 

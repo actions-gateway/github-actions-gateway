@@ -216,6 +216,8 @@ func TestAGC_Reconciler_Delete_AllGoroutinesExit(t *testing.T) {
 	<-mgrDone
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 	goleak.VerifyNone(t,
+		// Q74: ignore the suite's long-lived conversion webhook manager goroutines.
+		suiteGoroutineBaseline,
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*State).Start.func1"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),
@@ -487,6 +489,8 @@ func TestAGC_Reconciler_ScaleDown(t *testing.T) {
 	<-mgrDone
 	http.DefaultTransport.(*http.Transport).CloseIdleConnections()
 	goleak.VerifyNone(t,
+		// Q74: ignore the suite's long-lived conversion webhook manager goroutines.
+		suiteGoroutineBaseline,
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*State).Start.func1"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).ListAndWatch"),
 		goleak.IgnoreTopFunction("k8s.io/client-go/tools/cache.(*Reflector).watchHandler"),

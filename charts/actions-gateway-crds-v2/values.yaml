@@ -1,4 +1,34 @@
-# This chart ships only CustomResourceDefinitions for the v2alpha1
-# (actions-gateway.com) API; it has no configurable values. The CRD templates
-# under templates/crds/ are generated from the controller-gen sources by
-# scripts/sync-chart-crds.sh — do not hand-edit them.
+# This chart ships the CustomResourceDefinitions for the v2 (actions-gateway.com)
+# API. The CRD templates under templates/crds/ are generated from the controller-gen
+# sources by scripts/sync-chart-crds.sh — do not hand-edit them.
+#
+# The only configurable surface is the conversion webhook below. As of Q74 the v2
+# kinds are multi-version (v2beta1 is the served + storage/hub version, v2alpha1 the
+# served spoke), so each CRD carries a spec.conversion that points the apiserver at
+# the GMC-hosted /convert endpoint. The GMC (and its webhook Service) ship in the
+# separate, main `actions-gateway` chart, so these values must point at that install.
+conversion:
+  webhook:
+    service:
+      # Namespace of the GMC webhook Service (the main actions-gateway chart's
+      # release namespace). Empty defaults to THIS chart's release namespace, which
+      # is correct when both charts are installed into the same namespace (the
+      # recommended layout). Override only if the GMC runs in a different namespace.
+      namespace: ""
+      # Name of the GMC webhook Service. Fixed as "webhook-service" by the main chart
+      # (it also fronts the validating webhooks); change both together if renamed.
+      name: webhook-service
+      # Service port fronting the webhook server (443 -> container 9443).
+      port: 443
+  certManager:
+    # When true (default, matching the main chart), cert-manager's ca-injector
+    # populates each CRD's spec.conversion.webhook.clientConfig.caBundle from the GMC
+    # webhook serving Certificate. Requires the main chart's certManager.enabled=true.
+    enabled: true
+    # Name of the GMC webhook serving Certificate (main chart: "serving-cert"), in
+    # the webhook Service namespace above.
+    certificateName: serving-cert
+  # Base64-encoded CA bundle for the conversion webhook when certManager.enabled is
+  # false. Must be the CA that signed the GMC webhook serving cert. Ignored when
+  # cert-manager is enabled (the ca-injector overwrites it).
+  caBundle: ""

@@ -31,12 +31,14 @@ import (
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	actionsgatewaygithubcomv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
@@ -58,6 +60,11 @@ func init() {
 	// api module, so a single AddToScheme registers them all. M2 reconciles EgressProxy;
 	// the ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
 	utilruntime.Must(v2alpha1.AddToScheme(scheme))
+	// Register the v2beta1 kinds (Q74): the graduated, ScaleSet-only API and the
+	// conversion-hub / storage version. Both v2alpha1 (spoke) and v2beta1 (hub) must be
+	// in the scheme for the GMC-hosted conversion webhook to resolve each kind as
+	// convertible and serve /convert.
+	utilruntime.Must(v2beta1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -617,6 +624,15 @@ func main() {
 		// one gateway (the scale-set name collision a spec-scoped CEL rule cannot see).
 		if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerSet")
+			os.Exit(1)
+		}
+		// Q74: the GMC-hosted conversion webhook (/convert) for the five v2 hub kinds.
+		// v2beta1 is the storage/hub version; v2alpha1 is the served spoke, so a v2alpha1
+		// read/write is converted through this endpoint. Admission validation is not
+		// duplicated on the hub: matchPolicy=Equivalent runs a v2beta1 request through the
+		// v2alpha1 validators after converting it back.
+		if err := webhookv2beta1.SetupConversionWebhooksWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "conversion")
 			os.Exit(1)
 		}
 	}

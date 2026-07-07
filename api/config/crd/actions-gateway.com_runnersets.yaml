@@ -519,6 +519,474 @@ spec:
     selectableFields:
     - jsonPath: .spec.gatewayRef.name
     served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .spec.gatewayRef.name
+      name: Gateway
+      type: string
+    - jsonPath: .status.activeSessions
+      name: ActiveSessions
+      type: integer
+    - jsonPath: .status.activeJobs
+      name: ActiveJobs
+      type: integer
+    - jsonPath: .status.pendingJobs
+      name: PendingJobs
+      type: integer
+    - jsonPath: .status.proxyMode
+      name: Egress
+      type: string
+    - jsonPath: .status.templateSource
+      name: Template
+      priority: 1
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .status.observedGeneration
+      name: ObservedGen
+      priority: 1
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v2beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod
+          shape (templateRef) and an optional egress proxy (proxyRef) to a GitHub gateway
+          (gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
+          v1alpha1. Worker pods are provisioned per acquired job and released on completion.
+
+          The .spec.gatewayRef.name selectable field (KEP-4358, used by the AGC to scope its
+          RunnerSet watch server-side) is deliberately declared ONLY on v2alpha1, NOT here.
+          The apiserver hoists per-version selectableFields to spec level when they are
+          identical across all served versions, but leaves the schema per-version when the
+          versions' schemas differ (v2beta1 drops acquisitionProtocol/maxListeners). A
+          spec-level selectableFields with a nil spec-level schema is rejected
+          ("selectableFields may only be set when validations.schema is included"), so
+          declaring the field on both versions makes the RunnerSet CRD un-installable. The
+          AGC operates on v2alpha1 during coexistence, so v2alpha1 is the version that needs
+          the field selector; when v2beta1 becomes the sole served version (the v2alpha1
+          removal at the ScaleSet-only cut) the marker moves here and v2alpha1's is dropped —
+          so the two are never declared simultaneously. See Q74.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              RunnerSetSpec is the desired state of a RunnerSet — the small scheduling/quota
+              binder that replaces v1alpha1's RunnerGroup. The large PodTemplateSpec no longer
+              lives here: it moves to a referenced RunnerTemplate / ClusterRunnerTemplate so a
+              runner set stays a fixed-size object and a template is reused across many sets
+              (docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
+              lifecycle fields are carried over from RunnerGroup unchanged in meaning.
+            properties:
+              completedPodTTL:
+                description: |-
+                  CompletedPodTTL is how long a worker pod that has reached a terminal phase is
+                  retained before the AGC deletes it. Set to "0s" to delete immediately on
+                  completion. Must not be negative. Defaults to "5m" when omitted.
+                type: string
+              evictionRetryDelay:
+                description: |-
+                  EvictionRetryDelay is the minimum time to wait before re-queuing an evicted
+                  job. Must be at least 1s. Defaults to "5s" when omitted.
+                type: string
+              gatewayRef:
+                description: |-
+                  GatewayRef names the ActionsGateway that supplies this runner set's GitHub
+                  binding and control plane. Under multi-gateway-per-namespace each AGC
+                  reconciles only the RunnerSets whose gatewayRef targets it — which is why
+                  spec.gatewayRef.name is a CRD selectable field (KEP-4358), so that scoping
+                  runs server-side (§H.7). Required: a runner set with no gateway has no GitHub
+                  connection to register against. Resolved at runtime, not admission.
+                properties:
+                  kind:
+                    description: |-
+                      Kind optionally selects the referent kind when more than one is valid. It is
+                      load-bearing only on templateRef, where it chooses between RunnerTemplate
+                      (the namespaced default) and ClusterRunnerTemplate (a platform golden
+                      template). gatewayRef and proxyRef each have a single valid kind, so Kind is
+                      left empty there.
+                    enum:
+                    - RunnerTemplate
+                    - ClusterRunnerTemplate
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referenced object. Bounded by the same 52-char budget every v2
+                      object name carries (§H.6), so a well-formed ref can always name a valid object.
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              maxEvictionRetries:
+                description: |-
+                  MaxEvictionRetries controls how many times the AGC automatically re-queues a
+                  job whose worker pod was evicted. Set to 0 to disable auto-retry entirely.
+                  Defaults to 2 when omitted.
+                format: int32
+                maximum: 10
+                minimum: 0
+                type: integer
+              maxQuotaRetries:
+                description: |-
+                  MaxQuotaRetries controls how many times the AGC retries pod creation when the
+                  namespace ResourceQuota is exhausted. Set to 0 to disable quota retry.
+                  Defaults to 5 when omitted.
+                format: int32
+                maximum: 20
+                minimum: 0
+                type: integer
+              maxWorkers:
+                description: |-
+                  MaxWorkers caps the number of worker pods this RunnerSet may run concurrently.
+                  A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard,
+                  cluster-enforced limit.
+                format: int32
+                minimum: 1
+                type: integer
+              pendingPodDeadline:
+                description: |-
+                  PendingPodDeadline is the maximum time a worker pod may remain Pending before
+                  the AGC deletes it, releasing the concurrency-ceiling slot. Must be at least
+                  1s. Defaults to "10m" when omitted.
+                type: string
+              priorityTiers:
+                description: |-
+                  PriorityTiers defines PriorityClass assignments and cumulative pod-count
+                  thresholds. Tiers must be in strictly ascending threshold order.
+                items:
+                  description: |-
+                    PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
+                    threshold. Thresholds must be in strictly ascending order. Unchanged in meaning
+                    from v1alpha1; carried onto the RunnerSet (was RunnerGroup).
+                  properties:
+                    priorityClassName:
+                      description: |-
+                        PriorityClassName is the name of an existing cluster-scoped PriorityClass.
+                        The platform owns which classes a tenant may reference: the GMC admission
+                        path rejects any name not on the platform allowlist (--allowed-priority-classes),
+                        so a tenant cannot name a high-priority, preempting class and evict other
+                        tenants' worker pods. The named class — including its preemptionPolicy — is
+                        platform-created; see docs/operations/security-operations.md.
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    threshold:
+                      description: Threshold is the cumulative active-pod count at
+                        which this tier is exhausted.
+                      format: int32
+                      minimum: 1
+                      type: integer
+                  required:
+                  - priorityClassName
+                  - threshold
+                  type: object
+                maxItems: 10
+                type: array
+              proxyRef:
+                description: |-
+                  ProxyRef optionally names the EgressProxy this runner set's traffic egresses
+                  through. Unset means inherit the gateway's defaultProxyRef; both unset means
+                  direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined
+                  behavior, so the dependency is simply droppable, which is why proxyRef is
+                  optional where templateRef is required (§H.4, §H.10). Direct egress is reflected
+                  in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a
+                  proxyRef/defaultProxyRef that names a *missing* proxy still fails closed
+                  (ProxyNotFound), not direct egress (Q168).
+                properties:
+                  kind:
+                    description: |-
+                      Kind optionally selects the referent kind when more than one is valid. It is
+                      load-bearing only on templateRef, where it chooses between RunnerTemplate
+                      (the namespaced default) and ClusterRunnerTemplate (a platform golden
+                      template). gatewayRef and proxyRef each have a single valid kind, so Kind is
+                      left empty there.
+                    enum:
+                    - RunnerTemplate
+                    - ClusterRunnerTemplate
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referenced object. Bounded by the same 52-char budget every v2
+                      object name carries (§H.6), so a well-formed ref can always name a valid object.
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              quotaRetryDelay:
+                description: |-
+                  QuotaRetryDelay is the time to wait between pod creation retries when the
+                  namespace ResourceQuota is exhausted. Must be at least 1s. Defaults to "30s"
+                  when omitted.
+                type: string
+              runnerLabels:
+                description: |-
+                  RunnerLabels is the label set matched against workflow runs-on values. v2beta1
+                  is ScaleSet-only, so exactly one label is required (enforced by the spec-level
+                  CEL rule above): the scale set's single runnerLabel is its runs-on match target,
+                  and the label doubles as the scale-set name registered at GitHub. Each label
+                  must be non-empty and contain no whitespace or commas (comma is the runs-on list
+                  separator). A workload needing multi-label matching must stay on a v2alpha1
+                  Classic RunnerSet during the deprecation window (Q264 §5a-U7).
+                items:
+                  maxLength: 256
+                  pattern: ^[^,\s]+$
+                  type: string
+                minItems: 1
+                type: array
+              scaleUp:
+                description: |-
+                  ScaleUp optionally caps the RATE at which the AGC creates new worker pods for
+                  this RunnerSet, smoothing cold-start stampedes on a shared, rate-sensitive
+                  egress path (NAT/SNAT gateway, stateful-firewall conntrack table, site-to-site
+                  VPN) when a burst of jobs is acquired at once. It is a token bucket over pod
+                  CREATION and is distinct from maxWorkers (a ceiling on the concurrent pod
+                  COUNT): the ceiling bounds how many run, this bounds how fast they start.
+                  Omitted ⇒ no rate limit (the default): immediate provisioning, zero added
+                  latency. An availability knob for the narrow stampede case; prefer a
+                  peer-to-peer image mirror for image-pull storms and workflow-level
+                  `concurrency:` or the maxWorkers ceiling for fairness/sustained load.
+                properties:
+                  burst:
+                    description: |-
+                      Burst is the maximum number of worker pods that may be created in an
+                      instantaneous batch before the MaxPerSecond rate throttles subsequent
+                      creations — the token-bucket depth. Defaults to MaxPerSecond when omitted.
+                    format: int32
+                    maximum: 100000
+                    minimum: 1
+                    type: integer
+                  maxPerSecond:
+                    description: |-
+                      MaxPerSecond is the sustained rate, in worker pods created per second, once
+                      the initial burst is spent. Required when scaleUp is set.
+                    format: int32
+                    maximum: 10000
+                    minimum: 1
+                    type: integer
+                required:
+                - maxPerSecond
+                type: object
+              templateRef:
+                description: |-
+                  TemplateRef optionally names the RunnerTemplate (default) or ClusterRunnerTemplate
+                  (set kind: ClusterRunnerTemplate) that supplies the worker pod shape. Unset means
+                  inherit the gateway's defaultTemplateRef; both unset means the single cluster-default
+                  ClusterRunnerTemplate (the one marked IsDefaultTemplateAnnotation). If none of the
+                  three resolves the set fails closed Ready=False/TemplateNotFound — the AGC never
+                  synthesizes a phantom worker pod without a pod shape (Q172, §H.4). This relaxes the
+                  GA-era required templateRef to optional-with-a-default (a backward-compatible
+                  required→optional change): a set that sets templateRef behaves exactly as before.
+                  The referent is resolved at runtime; a set pointing at a not-yet-applied template
+                  sits Ready=False/TemplateNotFound until it syncs (§H.7). status.templateSource
+                  reports which rung resolved.
+                properties:
+                  kind:
+                    description: |-
+                      Kind optionally selects the referent kind when more than one is valid. It is
+                      load-bearing only on templateRef, where it chooses between RunnerTemplate
+                      (the namespaced default) and ClusterRunnerTemplate (a platform golden
+                      template). gatewayRef and proxyRef each have a single valid kind, so Kind is
+                      left empty there.
+                    enum:
+                    - RunnerTemplate
+                    - ClusterRunnerTemplate
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referenced object. Bounded by the same 52-char budget every v2
+                      object name carries (§H.6), so a well-formed ref can always name a valid object.
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - gatewayRef
+            - runnerLabels
+            type: object
+            x-kubernetes-validations:
+            - message: maxWorkers must equal the last priorityTiers threshold when
+                both are set
+              rule: '!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size()
+                == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold'
+            - message: evictionRetryDelay must be at least 1s
+              rule: '!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay)
+                >= duration(''1s'')'
+            - message: quotaRetryDelay must be at least 1s
+              rule: '!has(self.quotaRetryDelay) || duration(self.quotaRetryDelay)
+                >= duration(''1s'')'
+            - message: completedPodTTL must not be negative
+              rule: '!has(self.completedPodTTL) || duration(self.completedPodTTL)
+                >= duration(''0s'')'
+            - message: pendingPodDeadline must be at least 1s
+              rule: '!has(self.pendingPodDeadline) || duration(self.pendingPodDeadline)
+                >= duration(''1s'')'
+            - message: 'a v2beta1 runner set must declare exactly one runnerLabel:
+                v2beta1 is ScaleSet-only and the scale set''s name is its single runs-on
+                match target (Q264)'
+              rule: size(self.runnerLabels) == 1
+          status:
+            description: |-
+              RunnerSetStatus is the observed state of a RunnerSet. It follows the uniform v2
+              status/condition contract (§H.7): a listType=map Conditions slice keyed on type,
+              an ObservedGeneration, and a Ready condition with the shared reason vocabulary
+              (see conditions.go). Reference-resolution failures surface as Ready=False with a
+              specific reason (TemplateNotFound / ProxyNotFound / …) and a message naming the
+              missing object.
+            properties:
+              activeJobs:
+                description: |-
+                  ActiveJobs is the number of worker pods currently in the Running phase
+                  (a job is actively executing). Derived from the worker pod phase count
+                  during each reconcile; see also PendingJobs.
+                format: int32
+                type: integer
+              activeSessions:
+                description: ActiveSessions is the number of currently open long-poll
+                  sessions.
+                format: int32
+                type: integer
+              conditions:
+                description: 'Conditions are the observed conditions of the runner
+                  set. Known types: Ready.'
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the .metadata.generation the most
+                  recent reconcile acted on.
+                format: int64
+                type: integer
+              pendingJobs:
+                description: |-
+                  PendingJobs is the number of worker pods currently in the Pending phase
+                  (a job has been acquired and a pod spawned, but the pod is not yet
+                  running — waiting on scheduling, image pull, or node readiness). Pods
+                  that remain Pending past spec.pendingPodDeadline are deleted by the
+                  controller; a sustained non-zero count warrants checking events and
+                  scheduling constraints.
+                format: int32
+                type: integer
+              proxyMode:
+                description: |-
+                  ProxyMode records how this runner set's worker egress reaches GitHub:
+                  "Proxied" (through the resolved EgressProxy, with stable per-tenant egress IPs)
+                  or "Direct" (no proxyRef/defaultProxyRef, still NetworkPolicy-restricted to
+                  GitHub + DNS but without per-tenant IP attribution). Explicit so "no proxy" is
+                  an auditable state, not an inferred absence (§H.10). Paired with the advisory
+                  EgressUnattributed condition when Direct.
+                enum:
+                - Proxied
+                - Direct
+                type: string
+              templateSource:
+                description: |-
+                  TemplateSource records which rung of the template-resolution chain supplied this
+                  runner set's worker pod shape (Q172, §H.4): "TemplateRef" (its own spec.templateRef),
+                  "GatewayDefault" (the gateway's spec.defaultTemplateRef, inherited because templateRef
+                  was unset), or "ClusterDefault" (the single cluster-default ClusterRunnerTemplate,
+                  resolved because neither was set). Explicit so an operator can audit whether a set
+                  runs on an explicit template or a default without inspecting the gateway and cluster
+                  state. Empty until the references resolve.
+                enum:
+                - TemplateRef
+                - GatewayDefault
+                - ClusterDefault
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: 'metadata.name must be at most 52 characters: v2 derives child
+            resource names as <name>-<suffix> and reserves the remainder of the 63-char
+            label/Service-name budget'
+          rule: self.metadata.name.size() <= 52
+    served: true
     storage: true
     subresources:
       status: {}

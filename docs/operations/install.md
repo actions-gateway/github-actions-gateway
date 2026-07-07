@@ -238,13 +238,34 @@ Flux `HelmRelease` examples (with the CRD-pruning gotcha handled) and shows how 
 source the GitHub App credential Secret securely — External Secrets Operator or
 Sealed Secrets — so the private key is never committed to Git.
 
-### Optional: the v2alpha1 (alpha) API CRDs
+### Optional: the v2 API CRDs
 
 The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — the
-fully supported, standard path. The **alpha** `v2alpha1` (`actions-gateway.com`)
-API ships its five CRDs in a **separate, opt-in chart**,
-`actions-gateway-crds-v2`, split out so the main chart's Helm release Secret
-stays under the 1 MiB limit. They are genuinely optional:
+fully supported, standard path. The v2 (`actions-gateway.com`) API ships its five
+CRDs in a **separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the
+main chart's Helm release Secret stays under the 1 MiB limit.
+
+Each v2 CRD is served at **two versions**: **`v2beta1`** (the served **and** storage
+version — the graduated, ScaleSet-only shape) and **`v2alpha1`** (still served for
+coexistence and the `gag-migrate` on-ramp). The apiserver converts between them
+through a **conversion webhook hosted by the GMC** (the `/convert` endpoint on the
+same `webhook-service` that fronts the validating webhooks). Two consequences for an
+operator:
+
+- **The v2 CRD chart depends on the main chart + cert-manager.** The conversion
+  webhook's `clientConfig` points at the GMC `webhook-service`, and cert-manager's
+  ca-injector supplies its CA. Install the v2 CRD chart into the **same namespace as
+  the GMC** (`--namespace gmc-system`) so the webhook `clientConfig` resolves, or set
+  `conversion.webhook.service.namespace` explicitly. With cert-manager disabled, set
+  `conversion.certManager.enabled=false` and supply `conversion.caBundle` (the CA that
+  signed the GMC webhook serving cert).
+- **Create v2 objects only once the GMC is running.** The CRDs may be installed in
+  any order, but a `RunnerSet`/`RunnerTemplate`/… create is routed through `/convert`,
+  so it fails until the GMC (the conversion webhook server) is `Ready`. On a fresh
+  install this resolves itself; on an existing cluster, install the CRDs and let the
+  GMC roll out before applying v2 objects.
+
+They are genuinely optional:
 
 - **You do not need them for v1.** A plain `helm install` of the main chart
   (without `actions-gateway-crds-v2`) is a complete, supported v1-only install.
@@ -255,12 +276,22 @@ stays under the 1 MiB limit. They are genuinely optional:
   reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed;
   v1-only mode, v2 RunnerSet reconciler disabled` and running only the v1
   RunnerGroup reconciler. v1alpha1 tenants reconcile normally.
-- **To use v2,** install the CRD chart alongside the main chart (any order):
+- **To use v2,** apply the CRD chart **rendered for the GMC's namespace**. The two
+  `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart
+  (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit — `helm install` cannot store
+  it. Render it and apply server-side instead (this also carries the `spec.conversion`
+  wiring, resolved to the GMC's namespace):
 
   ```sh
-  helm install actions-gateway-crds-v2 \
-    oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2
+  helm template actions-gateway-crds-v2 \
+    oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
+    --namespace gmc-system \
+    | kubectl apply --server-side -f -
   ```
+
+  Re-run the same command to pick up CRD field changes on upgrade. Override
+  `conversion.webhook.service.namespace` / `conversion.certManager.*` with `--set` if
+  the GMC runs elsewhere or cert-manager is disabled.
 
   Detection happens once at GMC startup, so **after installing the CRDs into a
   running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n
