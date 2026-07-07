@@ -110,6 +110,24 @@ type ResolvedSpec struct {
 	// SecurityProfile scales the secure-by-default worker SecurityContext to the
 	// namespace's Pod Security Admission level (baseline/restricted/privileged).
 	SecurityProfile string
+
+	// ScaleUp is the opt-in worker-pod creation-rate limit (Q223), or nil for no
+	// limit (the default). Nil ⇒ immediate provisioning; non-nil ⇒ the provisioner
+	// gates each pod creation through a per-owner token bucket. The v1/v2 adapters
+	// fill it from RunnerGroup/RunnerSet.spec.scaleUp, defaulting Burst to
+	// MaxPerSecond when the spec omits it.
+	ScaleUp *ScaleUpConfig
+}
+
+// ScaleUpConfig is the neutral, already-defaulted worker-pod creation-rate limit,
+// decoupled from the v1/v2 API ScaleUpRateLimit types so the scaleUpLimiter is
+// shared across both APIs (the TierThreshold pattern). MaxPerSecond is the
+// sustained token refill rate (pods/sec) and Burst is the token-bucket depth; both
+// are ≥1 by the time they reach here (the adapter applies the Burst=MaxPerSecond
+// default and the CRD enforces the minimums).
+type ScaleUpConfig struct {
+	MaxPerSecond int32
+	Burst        int32
 }
 
 // TierThreshold is a neutral priority tier (PriorityClass name + cumulative

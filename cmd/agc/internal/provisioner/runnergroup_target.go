@@ -99,7 +99,22 @@ func (t *runnerGroupTarget) Resolve(ctx context.Context) (*ResolvedSpec, error) 
 	if rg.Spec.QuotaRetryDelay != nil && rg.Spec.QuotaRetryDelay.Duration > 0 {
 		spec.QuotaRetryDelay = rg.Spec.QuotaRetryDelay.Duration
 	}
+	spec.ScaleUp = scaleUpConfigFromV1(rg.Spec.ScaleUp)
 	return spec, nil
+}
+
+// scaleUpConfigFromV1 converts the v1 ScaleUpRateLimit into the neutral
+// ScaleUpConfig the limiter consumes, applying the Burst=MaxPerSecond default when
+// the spec omits burst. Nil in ⇒ nil out (no rate limit).
+func scaleUpConfigFromV1(s *v1alpha1.ScaleUpRateLimit) *ScaleUpConfig {
+	if s == nil {
+		return nil
+	}
+	burst := s.MaxPerSecond
+	if s.Burst != nil {
+		burst = *s.Burst
+	}
+	return &ScaleUpConfig{MaxPerSecond: s.MaxPerSecond, Burst: burst}
 }
 
 // current re-reads the RunnerGroup named by the listener-start snapshot from the

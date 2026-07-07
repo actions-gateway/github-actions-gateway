@@ -163,7 +163,22 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 	if rs.Spec.QuotaRetryDelay != nil && rs.Spec.QuotaRetryDelay.Duration > 0 {
 		spec.QuotaRetryDelay = rs.Spec.QuotaRetryDelay.Duration
 	}
+	spec.ScaleUp = scaleUpConfigFromV2(rs.Spec.ScaleUp)
 	return spec, nil
+}
+
+// scaleUpConfigFromV2 converts the v2 ScaleUpRateLimit into the neutral
+// provisioner.ScaleUpConfig, defaulting Burst to MaxPerSecond when the spec omits
+// it. Nil in ⇒ nil out (no rate limit), mirroring the v1 adapter.
+func scaleUpConfigFromV2(s *v2alpha1.ScaleUpRateLimit) *provisioner.ScaleUpConfig {
+	if s == nil {
+		return nil
+	}
+	burst := s.MaxPerSecond
+	if s.Burst != nil {
+		burst = *s.Burst
+	}
+	return &provisioner.ScaleUpConfig{MaxPerSecond: s.MaxPerSecond, Burst: burst}
 }
 
 // resolvedRefs holds a RunnerSet's resolved references: the gateway it binds to,

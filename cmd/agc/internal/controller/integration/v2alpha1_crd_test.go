@@ -137,6 +137,53 @@ func TestV2_RunnerSet_MaxWorkersMustMatchLastTier(t *testing.T) {
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxWorkers != last tier, got %v", err)
 }
 
+// TestV2_RunnerSet_ScaleUpRoundTrip proves the opt-in worker-pod creation-rate
+// limit (Q223) installs and round-trips through the real apiserver, including the
+// optional burst pointer. The Burst=MaxPerSecond default is applied in the AGC (CRD
+// defaulting cannot reference another field), so an omitted burst stays nil here.
+func TestV2_RunnerSet_ScaleUpRoundTrip(t *testing.T) {
+	const ns = "v2-runnerset-scaleup"
+	createNSForAGC(t, ns)
+
+	rs := newV2RunnerSet(ns, "linux", "acme", "default")
+	burst := int32(20)
+	rs.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 10, Burst: &burst}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+
+	var got agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
+	require.NotNil(t, got.Spec.ScaleUp, "scaleUp must round-trip")
+	assert.Equal(t, int32(10), got.Spec.ScaleUp.MaxPerSecond)
+	require.NotNil(t, got.Spec.ScaleUp.Burst)
+	assert.Equal(t, int32(20), *got.Spec.ScaleUp.Burst)
+
+	// Omitting burst is valid: it stays nil (the AGC defaults it to maxPerSecond).
+	rs2 := newV2RunnerSet(ns, "linux2", "acme", "default")
+	rs2.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 5}
+	require.NoError(t, k8sClient.Create(ctx, rs2))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs2) })
+	var got2 agcv2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux2"}, &got2))
+	require.NotNil(t, got2.Spec.ScaleUp)
+	assert.Equal(t, int32(5), got2.Spec.ScaleUp.MaxPerSecond)
+	assert.Nil(t, got2.Spec.ScaleUp.Burst, "an omitted burst stays nil at the apiserver")
+}
+
+// TestV2_RunnerSet_ScaleUpRejectsZeroRate proves the apiserver enforces the
+// maxPerSecond minimum (a zero/negative rate is a footgun, not "disabled" — omit
+// scaleUp entirely to disable).
+func TestV2_RunnerSet_ScaleUpRejectsZeroRate(t *testing.T) {
+	const ns = "v2-runnerset-scaleup-invalid"
+	createNSForAGC(t, ns)
+
+	rs := newV2RunnerSet(ns, "linux", "acme", "default")
+	rs.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 0}
+	err := k8sClient.Create(ctx, rs)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxPerSecond: 0, got %v", err)
+}
+
 func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {
 	const ns = "v2-runnerset-acqproto-default"
 	createNSForAGC(t, ns)
