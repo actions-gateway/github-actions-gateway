@@ -1,13 +1,17 @@
 # GAG Dogfood CI Runner Right-Sizing
 
-> **Status: ◐ Partial — node-pool disk class RESOLVED (2026-07-05); general-worker
-> pod `requests`/`limits` RIGHT-SIZED (2026-07-06); e2e-track pod sizing + an
-> optional "small" tier remain.** Tracked as [Q248](../STATUS.md#Q248).
-> The worker pod's original `requests`/`limits` (CPU 2/4, memory 4Gi/8Gi) were
-> never measured — a guess. They are now replaced with values derived from the
-> Phase 1 peak measurement — see [§ Phase 2 — derived requests/limits](#phase-2--derived-requestslimits-2026-07-06-general-workers) below.
-> **The dominant capacity ceiling turned out to be the node-pool *disk class*,
-> not the pod requests** — see [§ Node-pool disk class](#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05) below (resolved 2026-07-05: `pd-balanced`→`pd-standard`, no quota bump).
+> **Status: ✅ COMPLETE (2026-07-07).** Node-pool disk class RESOLVED (2026-07-05);
+> general-worker pod `requests`/`limits` RIGHT-SIZED (2026-07-06); **e2e-worker
+> (DinD) pod `requests`/`limits` RIGHT-SIZED from a measured clean-green Calico run
+> (2026-07-07)**; the optional "small" tier **measured and formally declined** (the
+> packing waste is not material). Tracked as [Q248](../STATUS.md#Q248).
+> Every worker pod's original `requests`/`limits` were an unmeasured guess; they are
+> now replaced with values derived from measured peak — general workers see
+> [§ Phase 2 — general](#phase-2--derived-requestslimits-2026-07-06-general-workers),
+> e2e workers see [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07),
+> the small tier see [§ Small tier](#small-tier--measured-then-declined-2026-07-07).
+> **The dominant general-pool capacity ceiling turned out to be the node-pool *disk
+> class*, not the pod requests** — see [§ Node-pool disk class](#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05) below (resolved 2026-07-05: `pd-balanced`→`pd-standard`, no quota bump).
 
 ## Goal
 
@@ -127,16 +131,20 @@ e2e is the heaviest, most mis-sizing-sensitive job (`kind`-in-DinD OOMs mid
 cluster-bringup if under-sized) and the priciest pool, so it gets its own track.
 The chosen sequence is **functional validation first, security hardening later**:
 
-1. **Validate e2e works on GAG via privileged DinD — no Kata.** Privileged DinD
+1. **✅ Validate e2e works on GAG via privileged DinD — no Kata.** Privileged DinD
    needs no nested virtualization (dockerd uses the host kernel directly), so it
    runs on a normal spot pool with no N2 / no Kata DaemonSet. The empirical risk
    is `kind`-in-DinD on GKE COS **cgroup v2** — validate by running it, not by
    inspection. This is a **deliberate, platform-gated, dogfood-only** use of the
    `privileged` profile (v2 gates it by the platform-set namespace label
    `actions-gateway.com/security-profile=privileged` + PSA `enforce=privileged`;
-   tenants cannot self-elevate). It is **never** a shipped default.
-2. **Right-size** the DinD/`kind` pod and the e2e node from measured peak usage
-   (same Phase 1–3 method, on the e2e pool).
+   tenants cannot self-elevate). It is **never** a shipped default. *Confirmed
+   working — a full Calico e2e ran clean-green on GAG (2026-07-07), pod
+   `Completed`, no OOM.*
+2. **✅ Right-size** the DinD/`kind` pod from measured peak usage — done 2026-07-07,
+   see [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
+   (The e2e *node* was found memory-over-provisioned but kept for `kind`-OOM headroom;
+   see the node-allocatable check there.)
 3. **Re-introduce Kata** (`baseline` profile, KVM micro-VM) for isolation once the
    functional path and sizing are settled — the secure end-state. Tracked as the
    follow-up; the privileged path is the validation scaffold, not the destination.
@@ -309,6 +317,111 @@ the AGC at platform defaults for dogfood** — a smaller override is unwarranted
 (2Gi is already modest for a session-multiplexing control plane) and any change
 should follow an AGC-specific `kubectl top` measurement, not a guess.
 
+## e2e worker sizing — measured, then derived (DinD, 2026-07-07)
+
+The e2e worker is the DinD variant ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/overlays/dind)):
+a `runner` container + a native-sidecar `docker:dind` initContainer, on the
+`e2-standard-8` spot e2e pool (no nested virt). This is the plan's step-2 sizing
+target — the Kata end-state (step 3, [Q226](../STATUS.md#Q226)) is deferred and, per
+the finding below, needs a *bigger* nested-virt node than the current
+`n2-standard-4`, so its sizing is tracked separately.
+
+**Measurement (Phase 1).** Routed a full **Calico** e2e run (the heaviest lane —
+most container images, so the conservative peak) to GAG and sampled
+`kubectl top pod --containers` every 3s over the ~18-min run. The pod reached
+`Completed` (clean; no [Q247](../STATUS.md#Q247) orphan this run) with **zero OOM
+events**:
+
+| Container | Peak CPU | Peak memory | Role |
+|---|---|---|---|
+| `runner` | **4940m** | 1034Mi | drives the e2e specs + `kubectl`/`helm`/`kind` CLI — the **CPU-heavy** half |
+| `dind` | 1308m | **2343Mi** | the `kind`+Calico cluster (node containers + CNI images/pods) lives inside dockerd — the **memory-heavy** half |
+
+Envelope per worker pod: **~6.25 vCPU / ~3.3 GiB combined peak.** The split is the
+key insight — CPU concentrates in the runner (test execution), memory in the dind
+sidecar (the nested cluster). *Caveat: 3s sampling, and dind memory varies run-to-run
+(a second clean-green run at the derived sizing peaked dind at only 859Mi but the
+runner higher at 5638m) — hence the memory limits below carry ≥1.7× headroom over the
+worst observed peak, with the "widen on OOM" rule as the escape hatch.*
+
+**Applied + re-validated (2026-07-07).** The derived values below were applied to the
+live `ClusterRunnerTemplate` and a second full Calico run went clean-green (pod
+`Completed`, **no OOM/eviction**, ~15 min): the pod scheduled with the higher
+combined `request` (4 vCPU) on a single `e2-standard-8` node — one pod per node, as
+designed — the runner burst to 5638m (well past its `request=3`, no CPU limit), and
+both memory limits (runner 3Gi, dind 4Gi) cleared the observed peaks with headroom.
+*Concurrent 2-worker scheduling is guaranteed by construction — the 4-vCPU combined
+request admits exactly one pod per ~7-vCPU node — rather than exercised with two
+simultaneous e2e jobs (not run, to bound spot cost).*
+
+**Derivation (Phase 2)** — same [principles](#resource-model-principles) as the
+general worker (CPU requests-only, memory `limit ≈ peak × ~1.4`):
+
+| Container · field | Old (guess) | New (measured) | Derivation |
+|---|---|---|---|
+| `runner` CPU `request` | `2` | **`3`** | ↑ from an under-reserved 2. `runner(3)+dind(1)=4` vCPU of requests is the *packing* lever — see node check below. |
+| `runner` CPU `limit` | `6` | **removed** | Compressible → requests-only; bursts to its ~5-vCPU peak. |
+| `runner` memory `request` | `4Gi` | **`1Gi`** | ≈ peak (1034Mi); the old 4Gi was ~4× over. |
+| `runner` memory `limit` | `12Gi` | **`3Gi`** | Headroom for occasional Go-build spikes (matches the general worker); old 12Gi was ~12× over. |
+| `dind` CPU `request` | `1` | `1` | Kept (peak 1308m). |
+| `dind` CPU `limit` | `4` | **removed** | Compressible → requests-only (throttling dind would slow the whole in-DinD cluster). |
+| `dind` memory `request` | `2Gi` | **`3Gi`** | ↑ — the old 2Gi was *under* the 2343Mi peak (risked eviction under node pressure). |
+| `dind` memory `limit` | `8Gi` | **`4Gi`** | peak × ~1.7 for the OOM-sensitive `kind` bringup; old 8Gi was ~3.4× over. |
+
+### Node-allocatable validation (`maxWorkers` vs the e2e pool)
+
+e2e node = `e2-standard-8` (8 vCPU / 32 GiB) spot, taint `dedicated=e2e`, autoscale
+0→2. GKE reserves ~90m CPU + ~3.6 GiB → **≈7.4 vCPU / ≈28 GiB allocatable**; system
+DaemonSets that tolerate the taint take a further ~0.4–0.6 vCPU.
+
+- **CPU is the binding/packing resource.** Combined `request` = `3 + 1 = 4` vCPU.
+  A second pod (another 4) would need `8 > ~7`, so **exactly one worker pod schedules
+  per node**. `maxWorkers=2` therefore fans out to **≤2 e2e nodes**, matching the
+  pool's `max-nodes=2`. This is deliberate: the ~6.25-vCPU combined *peak* means two
+  co-scheduled pods would contend for one node's ~7 vCPU and CPU-throttle each other —
+  bad when e2e's kindnet and Calico legs run concurrently (both trigger on push to
+  main). One-pod-per-node prevents that; the removed CPU limits let the lone pod burst
+  to the whole node.
+- **Memory is hugely slack.** Combined `request` = `1 + 3 = 4Gi`, peak ~3.3 GiB, vs
+  ~28 GiB allocatable — memory never gates scheduling and leaves ample OOM headroom.
+  The `e2-standard-8` is consequently ~8× over-provisioned *on memory* for this
+  workload; an `e2-highcpu-8` (8 vCPU / 8 GiB) would right-size it and cut spot cost,
+  since the workload is CPU-bound. **Deferred, not taken:** the surplus memory is
+  cheap insurance for the OOM-sensitive `kind` bringup (esp. on a heavier future
+  suite), and the node-type swap warrants its own validation run. Recorded as a cost
+  lever if memory stays low across more runs.
+
+**Kata-track finding (informs [Q226](../STATUS.md#Q226)).** The runner's ~5-vCPU
+peak *exceeds a whole `n2-standard-4`* (4 vCPU) — the node the current Kata
+`e2e-setup.sh` provisions. So the Kata end-state needs a bigger nested-virt node
+(e.g. `n2-standard-8`) to avoid CPU-starving e2e; the DinD pod `requests` above do
+**not** port 1:1 to the smaller Kata node. Left for the Kata stand-up, not changed
+here.
+
+## Small tier — measured, then declined (2026-07-07)
+
+Routed the general CI matrix (`target_gag=true`) to the general pool and sampled the
+trivial jobs' real peak. The measured spread against the heavy jobs:
+
+| Job class | Duration | Peak CPU | Peak memory |
+|---|---|---|---|
+| trivial (`shellcheck`/`tidy-check`/`vendor-check`) | 21–58s | ≤ **945m** | ≤ **707Mi** |
+| heavy (`unit-test -race`, `coverage`, `lint`) | 274–414s | 2343–**3643m** | 1891–**2502Mi** |
+
+(The heavy peak also **cross-validates** the general-worker sizing: 3643m / 2502Mi
+sits right at the [Phase 1 envelope](#phase-1-results--general-workers-2026-06-30-first-pass)
+of 3802m / 2134Mi, and 2502Mi stays under the committed 3Gi memory limit — no OOM.)
+
+**Decision: no small tier — keep the single general tier.** The
+[criterion](#plan) (trivial ≤1 vCPU/≤1 GiB *and* the packing waste is material) is
+half-met: trivial jobs are indeed ≤1 vCPU/≤1 GiB, but the waste is **not** material.
+A trivial job over-requesting ~1.1 vCPU for 20–58s on a spot node costs a fraction of
+a node-minute a few times per PR; a second runner tier costs a **permanent** coupling
+of the workflow files to the runner taxonomy (the maintenance tax this plan's
+[design decision](#design-decision--do-we-need-multiple-runner-types) warns against).
+The measured data confirms the standing deferral rather than overturning it —
+this open question is now **closed with numbers**, not just reasoning.
+
 ## Phase 5 — persisted (2026-07-06)
 
 The right-sized general-worker `requests`/`limits` are baked into the dogfood
@@ -317,10 +430,17 @@ The right-sized general-worker `requests`/`limits` are baked into the dogfood
 node sizes and `maxWorkers=8` were already persisted with the disk-class fix. The
 tenant-onboarding quota formula is unchanged and remains correct — it sums only
 declared container `limits`, so dropping the worker CPU limit simply drops that
-term (documented there as "a term with no value drops out"). **Remaining Q248
-work** is the e2e-track pod sizing (deferred to live e2e validation — see
-[§ e2e track](#e2e-track--validate-then-size-kata-deferred)) and the optional
-"small" tier; the general-worker refinement is complete.
+term (documented there as "a term with no value drops out").
+
+The right-sized **e2e-worker** `requests`/`limits` are baked into the DinD overlay's
+`ClusterRunnerTemplate` in
+[`deploy/dogfood-e2e/overlays/dind/resources.yaml`](../../deploy/dogfood-e2e/overlays/dind/resources.yaml)
+and its rationale mirrored in the deploy
+[`README`](../../deploy/dogfood-e2e/README.md). Applied live and re-validated by a
+second clean-green Calico run. **All Q248 work is complete**: node disk class,
+general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only
+residual is the deferred Kata end-state, tracked separately under
+[Q226](../STATUS.md#Q226).
 
 ## Open questions
 
@@ -328,11 +448,14 @@ work** is the e2e-track pod sizing (deferred to live e2e validation — see
   no CPU limit. No noisy-neighbor risk because `request=2` packs one heavy pod per
   `e2-standard-4`, so a bursting pod has the node to itself.
 - Memory headroom factor — set to ~1.4× (peak 2134Mi → 3Gi limit); widen on any OOM.
-- A 2nd "small" pod tier — **still deferred.** Phase 1 measured only heavy jobs;
-  trivial jobs over-request a full node under the single tier, but the waste (a few
-  short-lived spot-node-slots) isn't yet material. Add only if it becomes so.
-- `e2e` pod sizing (`kind` cluster memory) — its own track (see *e2e track* above):
-  validate the privileged-DinD path works first, then size, then Kata.
+- ~~A 2nd "small" pod tier~~ — **RESOLVED (declined, 2026-07-07):** trivial jobs
+  measured at ≤945m/≤707Mi, but the packing waste isn't material vs the permanent
+  workflow-coupling cost of a second runner label. See
+  [§ Small tier](#small-tier--measured-then-declined-2026-07-07).
+- ~~`e2e` pod sizing~~ — **RESOLVED (2026-07-07):** the DinD path is validated and
+  the pod is right-sized from a measured clean-green run. See
+  [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
+  Kata (step 3) remains the deferred secure end-state ([Q226](../STATUS.md#Q226)).
 - Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC
   re-provisions cleanly (interacts with the [Q247](../STATUS.md#Q247) session-
   recovery investigation).
