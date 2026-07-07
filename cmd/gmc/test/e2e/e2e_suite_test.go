@@ -167,7 +167,6 @@ var _ = SynchronizedAfterSuite(
 			return
 		}
 		teardownGMC()
-		teardownV2CRDs()
 		teardownFakegithub()
 		teardownCertManager()
 	},
@@ -251,23 +250,31 @@ func setupGMC() {
 // chart ships only the v1 CRDs; the v2 CRDs live in the actions-gateway-crds-v2
 // chart, which operators install separately.
 //
-// The chart is installed (rather than a raw `kubectl apply -f api/config/crd`)
-// because as of Q74 each v2 CRD carries a spec.conversion pointing at the GMC-hosted
-// /convert webhook: v2beta1 is the served + storage/hub version and v2alpha1 the
-// served spoke, so without the conversion stanza the apiserver would silently prune
-// the ScaleSet-only-stripped RunnerSet fields on storage. Only the chart carries that
-// deployment wiring (the controller-gen output under api/config/crd stays
-// conversion-free). It is installed into gmcNamespace so the conversion webhook's
-// default clientConfig namespace (.Release.Namespace) resolves to the GMC's namespace,
-// and with certManager on (the default) so cert-manager injects the webhook CA.
-// Installed before the GMC so its v2 informers sync on first start; the conversion
-// webhook is only exercised once v2 objects exist, by which point the GMC is Ready.
+// The CRDs are applied from the chart RENDER (`helm template | kubectl apply
+// --server-side`) rather than `helm install` or a raw `kubectl apply -f
+// api/config/crd`. Two reasons:
+//   - As of Q74 each v2 CRD carries a spec.conversion pointing at the GMC-hosted
+//     /convert webhook (v2beta1 is served + storage/hub, v2alpha1 the served spoke),
+//     so the deployment-specific conversion stanza must be present or the apiserver
+//     silently prunes the ScaleSet-only-stripped RunnerSet fields on storage. Only the
+//     chart carries that wiring — api/config/crd stays conversion-free.
+//   - The two RunnerTemplate CRDs embed a full PodTemplateSpec (~600 KB each), so the
+//     rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit — `helm
+//     install` cannot store it. Server-side apply sidesteps that and the 256 KB
+//     client-side apply ceiling.
+//
+// Rendered with .Release.Namespace = gmcNamespace so the conversion clientConfig +
+// cert-manager annotation resolve to the GMC's namespace. Installed before the GMC so
+// its v2 informers sync on first start; the conversion webhook is only exercised once
+// v2 objects exist, by which point the GMC is Ready.
 func setupV2CRDs() {
-	By("installing the v2 (actions-gateway.com) CRDs via the actions-gateway-crds-v2 chart")
-	cmd := exec.Command("helm", "upgrade", "--install", "actions-gateway-crds-v2", v2CRDChartDir(),
-		"--namespace", gmcNamespace, "--create-namespace", "--wait", "--timeout=60s")
+	By("installing the v2 (actions-gateway.com) CRDs from the actions-gateway-crds-v2 chart render")
+	render := fmt.Sprintf(
+		"set -o pipefail; helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -",
+		v2CRDChartDir(), gmcNamespace)
+	cmd := exec.Command("bash", "-c", render)
 	_, err := utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs chart")
+	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs (helm template | kubectl apply)")
 }
 
 // v2CRDChartDir returns the absolute path to the actions-gateway-crds-v2 chart,
@@ -279,15 +286,6 @@ func v2CRDChartDir() string {
 	Expect(ok).To(BeTrue(), "resolve caller for v2 CRD chart path")
 	root := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
 	return filepath.Join(root, "charts", "actions-gateway-crds-v2")
-}
-
-// teardownV2CRDs uninstalls the v2 CRD chart. The CRDs carry
-// helm.sh/resource-policy: keep, so they survive the uninstall — fine here, as the
-// kind cluster is deleted by the workflow's final step.
-func teardownV2CRDs() {
-	By("uninstalling the v2 CRD chart")
-	cmd := exec.Command("helm", "uninstall", "actions-gateway-crds-v2", "--namespace", gmcNamespace)
-	_, _ = utils.Run(cmd)
 }
 
 func teardownGMC() {

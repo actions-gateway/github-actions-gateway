@@ -17,16 +17,23 @@ on-ramp).
 
 The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full
 `PodTemplateSpec` and are ~600 KB apiece. Helm stores a chart's entire release
-(rendered manifest **plus** a copy of the chart source) gzipped in a single
-Secret with a hard **1 MiB** limit; adding these to the main `actions-gateway`
-chart pushed it over. Shipping the v2 CRDs as their own release keeps each chart
-within budget — and makes v2 **opt-in**: install this chart only when a cluster
-adopts the v2 API.
+(rendered manifest **plus** a copy of the chart source) gzipped in a single Secret
+with a hard **1 MiB** limit; adding these to the main `actions-gateway` chart pushed
+it over. Shipping the v2 CRDs as their own chart makes v2 **opt-in** and keeps the
+main release small.
 
-The CRDs live under `templates/crds/` (not the chart-root `crds/` directory) with
-`helm.sh/resource-policy: keep`, so `helm upgrade` carries v2 CRD field changes
-and `helm uninstall` preserves tenant objects — the same management model the main
-chart uses for the v1 CRDs.
+The rendered chart (~2.5 MB) is itself over the 1 MiB Secret limit, so this chart is
+**applied from its render, not `helm install`ed**:
+
+```sh
+helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system \
+  | kubectl apply --server-side -f -
+```
+
+`--server-side` also avoids kubectl's 256 KB client-side apply ceiling. Re-run the
+same command to carry CRD field changes on upgrade. (The templates carry
+`helm.sh/resource-policy: keep` for operators who front this chart with a GitOps tool
+that manages a real Helm release; the `kubectl apply` path above does not create one.)
 
 ## Conversion webhook
 
@@ -46,10 +53,14 @@ therefore depends on the main `actions-gateway` chart and, by default, cert-mana
 
 ## Install
 
+Render for the GMC's namespace (so the conversion `clientConfig` resolves) and apply
+server-side — see [Why a separate chart](#why-a-separate-chart) for why not `helm
+install`:
+
 ```bash
-# Install into the GMC's namespace so the conversion webhook clientConfig resolves.
-helm install actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
-  --namespace gmc-system
+helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
+  --namespace gmc-system \
+  | kubectl apply --server-side -f -
 ```
 
 The CRDs install and validate on Kubernetes ≥ 1.30. The `RunnerSet`

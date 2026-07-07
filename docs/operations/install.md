@@ -276,14 +276,22 @@ They are genuinely optional:
   reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed;
   v1-only mode, v2 RunnerSet reconciler disabled` and running only the v1
   RunnerGroup reconciler. v1alpha1 tenants reconcile normally.
-- **To use v2,** install the CRD chart into the GMC's namespace alongside the main
-  chart:
+- **To use v2,** apply the CRD chart **rendered for the GMC's namespace**. The two
+  `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart
+  (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit — `helm install` cannot store
+  it. Render it and apply server-side instead (this also carries the `spec.conversion`
+  wiring, resolved to the GMC's namespace):
 
   ```sh
-  helm install actions-gateway-crds-v2 \
+  helm template actions-gateway-crds-v2 \
     oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
-    --namespace gmc-system
+    --namespace gmc-system \
+    | kubectl apply --server-side -f -
   ```
+
+  Re-run the same command to pick up CRD field changes on upgrade. Override
+  `conversion.webhook.service.namespace` / `conversion.certManager.*` with `--set` if
+  the GMC runs elsewhere or cert-manager is disabled.
 
   Detection happens once at GMC startup, so **after installing the CRDs into a
   running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n
