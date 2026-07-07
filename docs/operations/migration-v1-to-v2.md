@@ -16,11 +16,14 @@ coexistence/rollback story, and the post-migration teardown.
 
 ## Why upgrade to v2
 
-v2 is **opt-in and `v2alpha1` (alpha)** — the schema may still change incompatibly
-before it graduates toward `v2beta1`, and it is **not a drop-in replacement** (new
-API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted
-fan-out). `v1alpha1` stays fully supported. Migrate a tenant when one of these is worth
-that trade-off.
+v2 is **opt-in**. It is served at two versions: **`v2beta1`** (the graduated,
+ScaleSet-only storage/hub version) and **`v2alpha1`** (still served for coexistence).
+`gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps its
+Classic protocol and multi-label matching during the deprecation window; a tenant then
+moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs
+Classic. v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one
+CR decomposed into several kinds, a tool-assisted fan-out). `v1alpha1` stays fully
+supported. Migrate a tenant when one of these is worth that trade-off.
 
 **New capabilities — no v1 equivalent:**
 
