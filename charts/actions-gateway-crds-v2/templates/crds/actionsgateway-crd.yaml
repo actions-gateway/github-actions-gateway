@@ -9,8 +9,27 @@ metadata:
     # day-2 `helm upgrade` carries CRD field changes and `helm uninstall`
     # preserves every tenant's v2 (actions-gateway.com) objects.
     helm.sh/resource-policy: keep
+{{- if .Values.conversion.certManager.enabled }}
+    # cert-manager's ca-injector copies the GMC webhook serving CA into the
+    # spec.conversion.webhook.clientConfig.caBundle below (Q74 conversion webhook).
+    cert-manager.io/inject-ca-from: {{ printf "%s/%s" (.Values.conversion.webhook.service.namespace | default .Release.Namespace) .Values.conversion.certManager.certificateName }}
+{{- end }}
   name: actionsgateways.actions-gateway.com
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: {{ .Values.conversion.webhook.service.name }}
+          namespace: {{ .Values.conversion.webhook.service.namespace | default .Release.Namespace }}
+          path: /convert
+          port: {{ int .Values.conversion.webhook.service.port }}
+{{- if and (not .Values.conversion.certManager.enabled) .Values.conversion.caBundle }}
+        caBundle: {{ .Values.conversion.caBundle }}
+{{- end }}
   group: actions-gateway.com
   names:
     categories:
@@ -45,6 +64,640 @@ spec:
       name: Age
       type: date
     name: v2alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          ActionsGateway is a namespace-scoped CRD reconciled by the GMC: it binds a GitHub
+          identity and provisions the per-tenant AGC control plane. v2 permits multiple per
+          namespace (multi-gateway support lands in M3b).
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              ActionsGatewaySpec is the desired state of a v2 ActionsGateway: the GitHub
+              identity plus the AGC control plane only. v2 decomposes the v1alpha1 monolith —
+              the inline proxy moves to a standalone EgressProxy and the bootstrap runner
+              groups become explicit RunnerSet objects, both removed from this spec (§H.4).
+              Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
+              dropped); the multi-gateway controller behavior lands in M3b.
+
+              The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
+              on this per-gateway object, but Pod Security Admission is a namespace-scoped control
+              in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
+              the single namespace PSA label. v2 moves the profile to the namespace itself — the
+              operator sets the actions-gateway.com/security-profile label on the tenant namespace
+              and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+              docs/operations/security-operations.md.
+            properties:
+              agcResources:
+                description: |-
+                  AGCResources tunes the CPU/memory requests and limits stamped on this
+                  gateway's AGC control-plane container (Q171). It is an additive, per-key
+                  override of the platform default — the documented Appendix A sizing of
+                  requests {cpu: 500m, memory: 2Gi}, limits {cpu: 2, memory: 4Gi}. The GMC
+                  starts from that default and overlays only the request/limit keys set
+                  here, so a value that sets just one knob keeps the sensible default for
+                  the others. Unset ⇒ the platform default unchanged. Changing it is a
+                  rolling restart of the AGC, not a hot reload.
+
+                  Tune cautiously: the AGC is a single pod holding all listener-goroutine
+                  state in memory. A memory limit below the AGC's working set OOMKills the
+                  control plane, and a request larger than any node (or the namespace
+                  ResourceQuota) leaves the AGC pod unschedulable (Pending). See
+                  docs/operations/tenant-onboarding.md and
+                  docs/design/appendix-e-capacity-planning.md for sizing guidance and the
+                  recommended floor.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              credentials:
+                description: |-
+                  Credentials configures how this gateway authenticates to GitHub. It is a
+                  discriminated union keyed by credentials.type: exactly the member the discriminator
+                  names is set (GitHubApp today; workload identity joins as an additive second member,
+                  Q197). v2 nests the credential under this explicit-discriminator parent before the
+                  v2beta1 freeze so adding an auth method never reshapes the spec again
+                  (§H.15).
+                properties:
+                  githubApp:
+                    description: |-
+                      GitHubApp configures GitHub App authentication: a name-only reference to the Secret
+                      in this gateway's own namespace holding the App credentials ({appId, installationId,
+                      privateKey}). Set iff Type is GitHubApp. The reference name is deliberately mutable —
+                      changing it is the supported credential-rotation path.
+                    properties:
+                      name:
+                        description: Name of the referenced Secret in the same namespace.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  type:
+                    description: |-
+                      Type selects the active credential member (the union discriminator). The member it
+                      names must be set and all others absent. It is required and explicit — an absent or
+                      implicit discriminator would have to become required later, itself a breaking
+                      change, so v2 fixes it before beta.
+                    enum:
+                    - GitHubApp
+                    - WorkloadIdentity
+                    type: string
+                  workloadIdentity:
+                    description: |-
+                      WorkloadIdentity configures workload-identity authentication (Q197): the App JWT is
+                      signed by an external signer the AGC reaches by proving its pod identity, so no App
+                      private key is ever held in the cluster (the delegation model). Set iff Type is
+                      WorkloadIdentity. This is the on-strategy, no-PEM credential method; GitHubApp
+                      remains the secure-by-default in-cluster option.
+                    properties:
+                      appId:
+                        description: |-
+                          AppID is the GitHub App's numeric ID (the JWT issuer). Non-secret; inline rather
+                          than in a Secret because it identifies, not authenticates.
+                        format: int64
+                        minimum: 1
+                        type: integer
+                      installationId:
+                        description: InstallationID is the GitHub App installation's
+                          numeric ID. Non-secret; inline.
+                        format: int64
+                        minimum: 1
+                        type: integer
+                      signer:
+                        description: |-
+                          Signer configures the external signer that signs the App JWT. The signing key lives
+                          in the signer's trust anchor (Vault transit in the MVP), never in the cluster.
+                        properties:
+                          provider:
+                            description: |-
+                              Provider selects the active signer backend (the union discriminator). The member it
+                              names must be set and all others absent.
+                            enum:
+                            - Vault
+                            type: string
+                          vault:
+                            description: Vault configures the HashiCorp Vault transit
+                              signer. Set iff Provider is Vault.
+                            properties:
+                              address:
+                                description: |-
+                                  Address is the Vault API base URL (e.g. https://vault.vault.svc:8200). HTTPS is
+                                  required for production because the AGC's ServiceAccount token transits this channel
+                                  at login; a plaintext address is permitted only under an explicit dev/test opt-in in
+                                  the AGC (mirroring the GitHub token-exchange channel, docs/design/05-security.md).
+                                maxLength: 2048
+                                minLength: 1
+                                pattern: ^https?://
+                                type: string
+                              auth:
+                                description: |-
+                                  Auth configures how the AGC authenticates to Vault (Vault Kubernetes auth in the
+                                  MVP).
+                                properties:
+                                  mount:
+                                    default: kubernetes
+                                    description: |-
+                                      Mount is the path the Vault Kubernetes auth method is mounted at. Optional; defaults
+                                      to "kubernetes", Vault's conventional mount path.
+                                    maxLength: 255
+                                    type: string
+                                  role:
+                                    description: |-
+                                      Role is the Vault Kubernetes auth role the AGC logs in as. The operator binds this
+                                      role to the AGC ServiceAccount and namespace in Vault.
+                                    maxLength: 255
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - role
+                                type: object
+                              keyName:
+                                description: |-
+                                  KeyName is the name of the Vault transit key that signs the App JWT. The key must be
+                                  an RSA key (GitHub App keys are RSA); transit signs it as RS256
+                                  (pkcs1v15 + sha2-256).
+                                maxLength: 255
+                                minLength: 1
+                                type: string
+                              networkPolicy:
+                                description: |-
+                                  NetworkPolicy optionally tells the GMC how to reach Vault as a NetworkPolicy egress
+                                  peer (Q202). On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies
+                                  egress (DNS + GitHub + the kube API server); Vault is not otherwise expressible as a
+                                  peer because Address is an opaque URL, so set this and the GMC emits a scoped AGC→Vault
+                                  egress rule on the Vault API port (parsed from Address). Leave it unset on a non-
+                                  enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band — the rule
+                                  is a strict tightening that is only ever added, never a broaden-to-all-egress. Set on a
+                                  GitHubApp gateway it has no effect (no Vault egress is emitted for the possession model).
+
+                                  The value is a shared EgressPeer (Q204): the selector/CIDR peer the GMC scopes the rule
+                                  to. Its Port is left unset for Vault (the port is derived from Address); set it only to
+                                  override that derived port.
+                                properties:
+                                  cidr:
+                                    description: |-
+                                      CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually
+                                      exclusive with the pod/namespace selectors.
+                                    maxLength: 43
+                                    pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F:]+)/[0-9]{1,3}$
+                                    type: string
+                                  namespaceSelector:
+                                    description: |-
+                                      NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g.
+                                      {kubernetes.io/metadata.name: vault}). Combined with PodSelector when both are set.
+                                      Mutually exclusive with CIDR.
+                                    properties:
+                                      matchExpressions:
+                                        description: matchExpressions is a list of
+                                          label selector requirements. The requirements
+                                          are ANDed.
+                                        items:
+                                          description: |-
+                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                            relates the key and values.
+                                          properties:
+                                            key:
+                                              description: key is the label key that
+                                                the selector applies to.
+                                              type: string
+                                            operator:
+                                              description: |-
+                                                operator represents a key's relationship to a set of values.
+                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                              type: string
+                                            values:
+                                              description: |-
+                                                values is an array of string values. If the operator is In or NotIn,
+                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                the values array must be empty. This array is replaced during a strategic
+                                                merge patch.
+                                              items:
+                                                type: string
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                          required:
+                                          - key
+                                          - operator
+                                          type: object
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                      matchLabels:
+                                        additionalProperties:
+                                          type: string
+                                        description: |-
+                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                        type: object
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  podSelector:
+                                    description: |-
+                                      PodSelector selects the in-cluster peer pods the AGC may reach (e.g. {app.kubernetes.io/name:
+                                      vault}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer
+                                      semantics. Mutually exclusive with CIDR.
+                                    properties:
+                                      matchExpressions:
+                                        description: matchExpressions is a list of
+                                          label selector requirements. The requirements
+                                          are ANDed.
+                                        items:
+                                          description: |-
+                                            A label selector requirement is a selector that contains values, a key, and an operator that
+                                            relates the key and values.
+                                          properties:
+                                            key:
+                                              description: key is the label key that
+                                                the selector applies to.
+                                              type: string
+                                            operator:
+                                              description: |-
+                                                operator represents a key's relationship to a set of values.
+                                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                                              type: string
+                                            values:
+                                              description: |-
+                                                values is an array of string values. If the operator is In or NotIn,
+                                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                                the values array must be empty. This array is replaced during a strategic
+                                                merge patch.
+                                              items:
+                                                type: string
+                                              type: array
+                                              x-kubernetes-list-type: atomic
+                                          required:
+                                          - key
+                                          - operator
+                                          type: object
+                                        type: array
+                                        x-kubernetes-list-type: atomic
+                                      matchLabels:
+                                        additionalProperties:
+                                          type: string
+                                        description: |-
+                                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                        type: object
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  port:
+                                    description: |-
+                                      Port optionally pins the destination port (1–65535) the egress rule permits. Leave it
+                                      unset for a peer whose port is derivable elsewhere — the Vault signer derives it from
+                                      VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose
+                                      port is not otherwise derivable, or to override the derived port.
+                                    format: int32
+                                    maximum: 65535
+                                    minimum: 1
+                                    type: integer
+                                type: object
+                                x-kubernetes-validations:
+                                - message: exactly one of cidr or a pod/namespace
+                                    selector must be set
+                                  rule: (has(self.cidr) && size(self.cidr) > 0) !=
+                                    (has(self.podSelector) || has(self.namespaceSelector))
+                              transitMount:
+                                default: transit
+                                description: |-
+                                  TransitMount is the path the Vault transit secrets engine is mounted at. Optional;
+                                  defaults to "transit", Vault's conventional mount path.
+                                maxLength: 255
+                                type: string
+                            required:
+                            - address
+                            - auth
+                            - keyName
+                            type: object
+                        required:
+                        - provider
+                        type: object
+                        x-kubernetes-validations:
+                        - message: vault must be set when signer.provider is Vault
+                            and unset otherwise
+                          rule: has(self.vault) == (self.provider == 'Vault')
+                    required:
+                    - appId
+                    - installationId
+                    - signer
+                    type: object
+                required:
+                - type
+                type: object
+                x-kubernetes-validations:
+                - message: githubApp must be set when credentials.type is GitHubApp
+                    and unset otherwise
+                  rule: has(self.githubApp) == (self.type == 'GitHubApp')
+                - message: workloadIdentity must be set when credentials.type is WorkloadIdentity
+                    and unset otherwise
+                  rule: has(self.workloadIdentity) == (self.type == 'WorkloadIdentity')
+              defaultProxyRef:
+                description: |-
+                  DefaultProxyRef names an EgressProxy used for AGC control-plane egress and
+                  inherited by RunnerSets under this gateway that do not set their own proxyRef.
+                  Optional: unset means the control plane egresses directly (subject to
+                  NetworkPolicy). Same-namespace unless the target EgressProxy grants
+                  cross-namespace use (§H.4, §H.9).
+                properties:
+                  name:
+                    description: Name of the referenced object. Bounded by the v2
+                      52-char name budget (§H.6).
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              defaultTemplateRef:
+                description: |-
+                  DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate
+                  (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets
+                  under this gateway that set no spec.templateRef of their own (Q172). Optional: it
+                  is the second rung of the template-resolution chain — an unset RunnerSet templateRef
+                  resolves rs.templateRef → this defaultTemplateRef → the single cluster-default
+                  ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in
+                  the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent
+                  is cluster-scoped. A defaultTemplateRef that names a *missing* template fails the
+                  inheriting set closed (TemplateNotFound), exactly like an explicit templateRef.
+                properties:
+                  kind:
+                    description: |-
+                      Kind optionally selects the referent kind when more than one is valid. It is
+                      load-bearing only on templateRef, where it chooses between RunnerTemplate
+                      (the namespaced default) and ClusterRunnerTemplate (a platform golden
+                      template). gatewayRef and proxyRef each have a single valid kind, so Kind is
+                      left empty there.
+                    enum:
+                    - RunnerTemplate
+                    - ClusterRunnerTemplate
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referenced object. Bounded by the same 52-char budget every v2
+                      object name carries (§H.6), so a well-formed ref can always name a valid object.
+                    maxLength: 52
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              githubURL:
+                description: |-
+                  GitHubURL is the GitHub organization, enterprise, or repository URL this
+                  gateway's runners register against (e.g. "https://github.com/my-org"). It is
+                  immutable: rebinding a running gateway's GitHub org is a footgun, so v2 freezes
+                  it via a CEL transition rule (§H.15). Casing follows the v2 convention —
+                  "github" is one lowercased word, the trailing initialism stays uppercase.
+                maxLength: 2048
+                minLength: 1
+                pattern: ^https://
+                type: string
+                x-kubernetes-validations:
+                - message: githubURL is immutable; create a new ActionsGateway to
+                    bind a different GitHub org/enterprise/repo
+                  rule: self == oldSelf
+              logLevel:
+                default: info
+                description: |-
+                  LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info
+                  (default), debug. Changing it is a rolling restart of the AGC, not a hot
+                  reload. Use debug only for a bug repro.
+                enum:
+                - info
+                - debug
+                type: string
+              tracing:
+                description: |-
+                  Tracing configures opt-in OpenTelemetry distributed tracing for this tenant's
+                  AGC. Tracing stays off unless tracing.endpoint is set.
+                properties:
+                  endpoint:
+                    description: |-
+                      Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the
+                      AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+                    type: string
+                  insecure:
+                    description: |-
+                      Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS
+                      required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+                    type: boolean
+                  resourceAttributes:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ResourceAttributes are extra OpenTelemetry resource attributes merged onto
+                      every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES.
+                    type: object
+                  sampler:
+                    description: |-
+                      Sampler selects the trace sampler. When empty the SDK default applies. Maps to
+                      OTEL_TRACES_SAMPLER.
+                    enum:
+                    - always_on
+                    - always_off
+                    - traceidratio
+                    - parentbased_always_on
+                    - parentbased_always_off
+                    - parentbased_traceidratio
+                    type: string
+                  samplerArg:
+                    description: |-
+                      SamplerArg is the argument for the chosen Sampler — for ratio-based samplers
+                      the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG.
+                    type: string
+                type: object
+            required:
+            - credentials
+            - githubURL
+            type: object
+          status:
+            description: |-
+              ActionsGatewayStatus is the observed state of an ActionsGateway, following the
+              uniform v2 status/condition contract (§H.7).
+            properties:
+              conditions:
+                description: |-
+                  Conditions are the observed conditions of the gateway. Known types: Ready,
+                  AGCAvailable, CredentialUnavailable, Degraded.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: ObservedGeneration is the .metadata.generation the most
+                  recent reconcile acted on.
+                format: int64
+                type: integer
+              proxyMode:
+                description: |-
+                  ProxyMode records how this gateway's AGC control-plane egress reaches GitHub:
+                  "Proxied" (through the EgressProxy named by defaultProxyRef, with stable
+                  per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy-
+                  restricted to GitHub + DNS + kube API but without per-tenant IP attribution).
+                  Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10).
+                enum:
+                - Proxied
+                - Direct
+                type: string
+            type: object
+        type: object
+        x-kubernetes-validations:
+        - message: 'metadata.name must be at most 52 characters: the GMC derives child
+            resource names as <name>-<suffix> and reserves the remainder of the 63-char
+            label/Service-name budget'
+          rule: self.metadata.name.size() <= 52
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .spec.githubURL
+      name: URL
+      type: string
+    - jsonPath: .status.proxyMode
+      name: Egress
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - jsonPath: .status.observedGeneration
+      name: ObservedGen
+      priority: 1
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v2beta1
     schema:
       openAPIV3Schema:
         description: |-

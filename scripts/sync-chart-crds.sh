@@ -70,6 +70,37 @@ V2_BLOCK="$(cat <<'EOF'
     # day-2 `helm upgrade` carries CRD field changes and `helm uninstall`
     # preserves every tenant's v2 (actions-gateway.com) objects.
     helm.sh/resource-policy: keep
+{{- if .Values.conversion.certManager.enabled }}
+    # cert-manager's ca-injector copies the GMC webhook serving CA into the
+    # spec.conversion.webhook.clientConfig.caBundle below (Q74 conversion webhook).
+    cert-manager.io/inject-ca-from: {{ printf "%s/%s" (.Values.conversion.webhook.service.namespace | default .Release.Namespace) .Values.conversion.certManager.certificateName }}
+{{- end }}
+EOF
+)"
+
+# spec.conversion block injected under `spec:` for the v2 CRDs only (Q74). The v2
+# kinds are multi-version — v2beta1 is served + storage/hub, v2alpha1 the served
+# spoke — so the apiserver must call the GMC-hosted /convert webhook to serve or
+# admit either version. controller-gen emits no conversion stanza (the authoritative
+# api/config/crd output stays deployment-agnostic and conversion-free), so this
+# deployment wiring is injected here, mirroring how sync-chart-webhook.sh re-injects
+# the validating webhook's Helm wiring. The clientConfig points at the GMC webhook
+# Service shipped by the main actions-gateway chart.
+V2_CONVERSION_BLOCK="$(cat <<'EOF'
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions:
+      - v1
+      clientConfig:
+        service:
+          name: {{ .Values.conversion.webhook.service.name }}
+          namespace: {{ .Values.conversion.webhook.service.namespace | default .Release.Namespace }}
+          path: /convert
+          port: {{ int .Values.conversion.webhook.service.port }}
+{{- if and (not .Values.conversion.certManager.enabled) .Values.conversion.caBundle }}
+        caBundle: {{ .Values.conversion.caBundle }}
+{{- end }}
 EOF
 )"
 
@@ -79,11 +110,13 @@ EOF
 CRD_SRCS=()
 CRD_DSTS=()
 CRD_BLOCKS=()
+CRD_CONVERSIONS=()
 
-add_crd() { # add_crd SRC DST BLOCK
+add_crd() { # add_crd SRC DST BLOCK [CONVERSION_BLOCK]
 	CRD_SRCS+=("$1")
 	CRD_DSTS+=("$2")
 	CRD_BLOCKS+=("$3")
+	CRD_CONVERSIONS+=("${4:-}")
 }
 
 # v1alpha1 — actions-gateway.github.com.
@@ -103,32 +136,43 @@ add_crd "$SRC_RUNNERGROUP" \
 # controller-gen output under api/config/crd is the single source.
 V2_CHART="charts/actions-gateway-crds-v2/templates/crds"
 add_crd "api/config/crd/actions-gateway.com_actionsgateways.yaml" \
-	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_egressproxies.yaml" \
-	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_runnersets.yaml" \
-	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_runnertemplates.yaml" \
-	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
-	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK"
+	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
 
 # render SRC DST BLOCK — copy SRC to DST, inserting BLOCK right after the
 # `controller-gen.kubebuilder.io/version:` annotation line. BLOCK is passed
 # through the environment (ENVIRON), not `-v`: a multi-line `-v` assignment is
 # rejected by BSD awk (macOS), while ENVIRON is portable across BSD awk and gawk.
 render() {
-	local src="$1" dst="$2" block="$3"
+	local src="$1" dst="$2" block="$3" conversion="${4:-}"
 	mkdir -p "$(dirname "$dst")"
-	BLOCK="$block" awk '
+	BLOCK="$block" CONVERSION="$conversion" awk '
 		{ print }
 		!injected && /^    controller-gen\.kubebuilder\.io\/version:/ {
 			printf "%s\n", ENVIRON["BLOCK"]
 			injected = 1
 		}
+		# For the v2 CRDs, inject the deployment-specific spec.conversion block
+		# immediately after the top-level `spec:` line (Q74). CONVERSION is empty for
+		# the v1 CRDs, so this is a no-op there.
+		!conv_injected && ENVIRON["CONVERSION"] != "" && /^spec:$/ {
+			printf "%s\n", ENVIRON["CONVERSION"]
+			conv_injected = 1
+		}
 		END {
 			if (!injected) {
 				print "sync-chart-crds: no controller-gen version line found in source" > "/dev/stderr"
+				exit 1
+			}
+			if (ENVIRON["CONVERSION"] != "" && !conv_injected) {
+				print "sync-chart-crds: no top-level spec: line found for conversion injection" > "/dev/stderr"
 				exit 1
 			}
 		}
@@ -138,7 +182,7 @@ render() {
 sync() {
 	local i
 	for i in "${!CRD_SRCS[@]}"; do
-		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}"
+		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 	done
 }
 
@@ -151,7 +195,7 @@ check() {
 	for i in "${!CRD_SRCS[@]}"; do
 		tmp="$(mktemp)"
 		TMP_FILES+=("$tmp")
-		render "${CRD_SRCS[$i]}" "$tmp" "${CRD_BLOCKS[$i]}"
+		render "${CRD_SRCS[$i]}" "$tmp" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 		if ! diff -u "${CRD_DSTS[$i]}" "$tmp"; then
 			echo "ERROR: ${CRD_DSTS[$i]} is out of sync with ${CRD_SRCS[$i]}." >&2
 			echo "Re-sync and commit: make chart-crds" >&2
