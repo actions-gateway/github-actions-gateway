@@ -29,6 +29,11 @@ operations docs.
   per-job retry budget — no manual rerun.
 - **Priority tiers per runner group.** Reserve a guaranteed floor of slots for
   expensive runner types so cheap CPU jobs can't starve critical GPU work.
+- **Worker scale-up rate limiting (opt-in).** An optional per-runner-group token
+  bucket (`scaleUp.maxPerSecond`/`burst`) that caps how *fast* worker pods start —
+  distinct from the count ceiling — to smooth cold-start stampedes on shared
+  egress (NAT / firewall / VPN) when many jobs land at once. Off by default; ARC
+  exposes only a `maxRunners` count cap, not a creation-rate control.
 - **Scale-to-zero workers with low listener overhead.** Worker pods exist only
   while a job runs; listeners are goroutines (~60 KiB each) in one shared pod
   rather than a .NET pod per runner group.
