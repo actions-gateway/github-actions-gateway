@@ -14,7 +14,7 @@ to keep it off the dogfood cluster and off the cloud bill. Every guarantee
 that depends on the deferred validation is marked **(to be validated)**
 rather than asserted.
 
-Tracks [Q243](../STATUS.md#Q243). A v2beta1 ([Q74](../STATUS.md#Q74)) blocker
+Tracks [Q243](../STATUS.md#Q243). A v2beta1 (Q74) blocker
 alongside Q224 and [Q242](../STATUS.md#Q242).
 
 ---
@@ -440,7 +440,7 @@ own Queue row when a session picks it up and a cloud spike is scheduled.
   (tenant → IP) the GMC consumes, or out-of-band infra (Terraform) the operator
   wires. Leaning platform-owned (secure-by-default: tenants must not choose
   their own egress IP). Decide with the API-graduation work
-  ([Q74](../STATUS.md#Q74)).
+  (Q74).
 - **Per-RunnerSet egress IPs** — whether a heavy runner group can get its own
   IP (finer than per-tenant). Out of scope until per-tenant is proven.
 - **SNAT port exhaustion under thousands-of-sessions fan-out** — both

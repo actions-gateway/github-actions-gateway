@@ -17,7 +17,7 @@ to a follow-up (see [Live-validation plan](#live-validation-plan-deferred-follow
 to keep it off the cloud bill. Every `gke`-backend guarantee that depends on the
 deferred validation is marked **(to be validated)** rather than asserted.
 
-Tracks [Q245](../STATUS.md#Q245). A v2beta1 ([Q74](../STATUS.md#Q74)) input
+Tracks [Q245](../STATUS.md#Q245). A v2beta1 (Q74) input
 alongside [Q242](../STATUS.md#Q242) / [Q243](../STATUS.md#Q243), though — see
 [Migration](#migration--compatibility) — the reshape is **free to land in
 `v2alpha1` now** and does not block on the beta cut. Promoted from the

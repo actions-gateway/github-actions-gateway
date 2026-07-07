@@ -6,7 +6,13 @@
 (the protocol-field strip + the P5-first sequencing). This doc is the implementation
 blueprint for the conversion-webhook step, to execute once its dependency clears.
 
-**Status:** ❌ Blocked on Q264 P5 (2026-07-06). Design settled; not yet implemented.
+**Status:** ✅ Done (2026-07-06). v2beta1 shipped as served + storage/hub alongside
+v2alpha1, GMC-hosted conversion webhook wired, `acquisitionProtocol`/`maxListeners`
+stripped from the v2beta1 RunnerSet (annotation round-trip preserves them), chart +
+e2e install the conversion stanza, unit + envtest round-trip tests green. The classic
+machinery / v1alpha1 removal (dropping v2alpha1, the destructive storage sweep) is the
+separate deprecation-window step tracked under Q264's residual — deliberately **not**
+part of this change (§Scope "Machinery + coexist").
 
 ## Blocked on Q264 P5 (the load-bearing finding)
 
