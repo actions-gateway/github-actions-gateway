@@ -2,6 +2,13 @@
 
 > **Audience:** Platform engineer / tenant operator
 
+!!! warning "`v1alpha1` is deprecated — new tenants should start on v2"
+    Onboard new tenants on the **v2 API** (`actions-gateway.com/v2alpha1`) — see
+    [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
+    `v1alpha1` stays fully served until removal, so nothing is forced, but it is the
+    terminal API. Migrate existing tenants with [`gag-migrate`](migration-v1-to-v2.md)
+    at your convenience — the move changes the API objects, not how jobs are acquired.
+
 The `actions-gateway.github.com/v1alpha1` API group — the monolithic
 `ActionsGateway` (with an inline `proxy` and inline `runnerGroups[]`) and the
 standalone `RunnerGroup` kind — is **deprecated** in favor of the decomposed
@@ -67,8 +74,12 @@ the policies and the webhook.
 
 ## Removal timeline
 
-`v1alpha1` is removed on its own track once v2 adoption is sufficient. Removal will be
-announced as a **named release** with at least one release of notice. At removal:
+`v1alpha1` removal is gated on the **v2 API reaching beta** (the `v2beta1`
+graduation) — a *technical* readiness bar, not an adoption count — and will be
+announced as a **named release** with at least one release of notice. Gating on v2
+maturity is what lets the schedule be committed rather than open-ended: you are
+never asked to move onto an alpha, and there is no adopter census to wait on. At
+removal:
 
 - The `actions-gateway.github.com` CRDs (`ActionsGateway`, `RunnerGroup`) are
   withdrawn; any remaining v1 objects must be migrated first.

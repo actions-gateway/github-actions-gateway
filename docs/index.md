@@ -207,7 +207,7 @@ GAG targets a specific audience: teams that **must** self-host runners and run t
 
 ## How it fits together
 
-A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`.
+A four-tier system: a cluster-scoped manager gives each tenant an isolated gateway from its `ActionsGateway`. Jobs are acquired with the **same single-acquirer runner-scale-set protocol ARC uses** — the shipped default — so GAG is a strict superset of ARC's model, not a different-architecture trade-off.
 
 </div>
 

@@ -124,12 +124,34 @@ func migrateAll(ctx context.Context, c client.Client, opts options, stdout, stde
 		fprintln(stderr, "no namespaces with a v1 ActionsGateway found; nothing to migrate")
 		return nil
 	}
+	migratedAny := false
 	for _, ns := range namespaces {
-		if err := migrateNamespace(ctx, c, ns, opts, stdout, stderr); err != nil {
+		did, err := migrateNamespace(ctx, c, ns, opts, stdout, stderr)
+		if err != nil {
 			return fmt.Errorf("namespace %q: %w", ns, err)
 		}
+		migratedAny = migratedAny || did
+	}
+	if migratedAny {
+		printNextSteps(opts.apply, stderr)
 	}
 	return nil
+}
+
+// printNextSteps writes a short "what to do next" hint to stderr after a successful
+// run — the dry-run path points at --apply, the apply path at validate-then-teardown.
+// It writes to stderr so it never contaminates the manifest payload on stdout.
+func printNextSteps(applied bool, stderr io.Writer) {
+	const guide = "docs/operations/migration-v1-to-v2.md"
+	if applied {
+		fprintf(stderr, "\nMigration applied. v1 still runs beside v2 (coexistence) — nothing was deleted.\n")
+		fprintf(stderr, "Next: validate the v2 path end to end (trigger a workflow on the v2 runner labels,\n")
+		fprintf(stderr, "confirm a worker pod is provisioned and egresses through the proxy), then decommission\n")
+		fprintf(stderr, "v1 when ready. Guide: %s\n", guide)
+		return
+	}
+	fprintf(stderr, "\nDry-run complete — no changes were applied. Review the manifests above, then re-run\n")
+	fprintf(stderr, "with --apply to create the v2 objects (v1 keeps running beside them). Guide: %s\n", guide)
 }
 
 // targetNamespaces resolves the set of namespaces to migrate. A single --namespace
@@ -161,23 +183,23 @@ func targetNamespaces(ctx context.Context, c client.Client, opts options) ([]str
 // handled safely), each gateway is fanned out independently and the relocated
 // securityProfile is the most-restrictive across them (never weakening any tenant's
 // posture).
-func migrateNamespace(ctx context.Context, c client.Client, ns string, opts options, stdout, stderr io.Writer) error {
+func migrateNamespace(ctx context.Context, c client.Client, ns string, opts options, stdout, stderr io.Writer) (bool, error) {
 	var gateways gmcv1alpha1.ActionsGatewayList
 	if err := c.List(ctx, &gateways, client.InNamespace(ns)); err != nil {
-		return fmt.Errorf("list ActionsGateways: %w", err)
+		return false, fmt.Errorf("list ActionsGateways: %w", err)
 	}
 	if len(gateways.Items) == 0 {
 		fprintf(stderr, "namespace %q has no v1 ActionsGateway; skipping\n", ns)
-		return nil
+		return false, nil
 	}
 
 	var rgList agcv1alpha1.RunnerGroupList
 	if err := c.List(ctx, &rgList, client.InNamespace(ns)); err != nil {
-		return fmt.Errorf("list RunnerGroups: %w", err)
+		return false, fmt.Errorf("list RunnerGroups: %w", err)
 	}
 	var nsObj corev1.Namespace
 	if err := c.Get(ctx, types.NamespacedName{Name: ns}, &nsObj); err != nil {
-		return fmt.Errorf("get namespace: %w", err)
+		return false, fmt.Errorf("get namespace: %w", err)
 	}
 
 	// Compute the most-restrictive profile up front so each per-gateway patch agrees.
@@ -198,7 +220,7 @@ func migrateNamespace(ctx context.Context, c client.Client, ns string, opts opti
 			RunnerGroups:         groups,
 		})
 		if err != nil {
-			return err
+			return false, err
 		}
 		// Override the relocated profile with the namespace-wide most-restrictive
 		// value so co-located gateways converge on one posture.
@@ -212,16 +234,16 @@ func migrateNamespace(ctx context.Context, c client.Client, ns string, opts opti
 
 		if opts.apply {
 			if err := applyResult(ctx, c, res, stderr); err != nil {
-				return err
+				return false, err
 			}
 			fprintf(stderr, "applied v2 object set for gateway %q in namespace %q\n", gw.Name, ns)
 			continue
 		}
 		if err := emitDryRun(res, ns, gw.Name, opts.outputDir, stdout); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // groupsForGateway returns the RunnerGroups a gateway owns. With a single gateway in

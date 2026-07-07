@@ -11,7 +11,7 @@ hide:
 
 # Why GitHub Actions Gateway over ARC?
 
-<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner groups, for many tenants, in one shared cluster — cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
+<p class="gag-vs-hero__lede">Actions Runner Controller (ARC) scale-set mode struggles with one job: running <strong>many runner sets, for many tenants, in one shared cluster — cost-effectively, with each tenant safely capped by its own <code>ResourceQuota</code></strong>. GAG was built for exactly that, without giving up the self-service that makes a shared cluster worth running.</p>
 
 [Get started](getting-started.md){ .md-button .md-button--primary }
 [Migrating from ARC](operations/migration-from-arc.md){ .md-button }
@@ -81,7 +81,7 @@ letting tenants run their own runners.
 <div class="gag-stats" markdown="0">
   <div class="gag-stat">
     <span class="gag-stat__num">600&nbsp;KiB</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner groups</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Listener memory for 10 runner sets</strong> — one shared pod, versus ~2.5 GiB across 10 on ARC</span>
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">0</span>
@@ -93,33 +93,54 @@ letting tenants run their own runners.
   </div>
   <div class="gag-stat">
     <span class="gag-stat__num">1</span>
-    <span class="gag-stat__label"><strong class="gag-stat__lead">Resource a tenant declares</strong> — controller, proxy pool, RBAC, and network policies, provisioned to run within the platform-owned quota</span>
+    <span class="gag-stat__label"><strong class="gag-stat__lead">Namespace a tenant self-serves in</strong> — declare your gateway and runner sets; the GMC provisions the controller, proxy pool, RBAC, and network policies to run within the platform-owned quota, no per-tenant cluster-admin</span>
   </div>
 </div>
 
 ## GAG vs ARC (scale-set mode)
 
+GAG acquires jobs with the **same runner-scale-set protocol ARC uses** — a single
+acquirer per runner set, capacity-gated assignment, no many-acquirers fan-out — and
+it is the **shipped default** in the v2 API. So the comparison below is
+capability-for-capability against ARC's *own* model: every GAG row is **additive**,
+not a different-architecture trade-off. The difference is what surrounds the shared
+acquisition core — quota safety, priority tiers, per-tenant egress, and control-plane
+footprint.
+
 | Capability | ARC (scale-set mode) | GitHub Actions Gateway |
 | --- | --- | --- |
+| Runner-scale-set acquisition (single-acquirer, no fan-out) | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes, by default <span class="gag-v2-badge">v2</span> |
 | Ephemeral, single-use runner pods | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
 | Safe under a per-tenant `ResourceQuota` | :material-close-circle:{ .gag-no } quota-blocked jobs stall; manual cleanup + rerun | :material-check-circle:{ .gag-yes } [auto lock-cancel + re-queue](design/04-operational-flows.md) |
-| Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner group](design/02-architecture.md) |
+| Guaranteed floor for critical runner types | :material-close-circle:{ .gag-no } no per-quota primitive | :material-check-circle:{ .gag-yes } [priority tiers per runner set](design/02-architecture.md) |
 | Per-tenant dedicated egress IPs | :material-close-circle:{ .gag-no } shared cluster egress | :material-check-circle:{ .gag-yes } [per-tenant proxy pool](design/network-architecture.md)<br><span class="gag-cont"><span class="gag-v2-badge">v2</span> proxy optional</span> |
-| Listener memory, 10 runner groups at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
+| Listener memory, 10 runner sets at rest | :material-close-circle:{ .gag-no } ~2.5 GiB across 10 pods | :material-check-circle:{ .gag-yes } ~600 KiB in 1 shared pod |
 | Per-tenant utilization metrics | :material-close-circle:{ .gag-no } scale-set metrics, not tenant-scoped | :material-check-circle:{ .gag-yes } [Prometheus per tenant + group](operations/observability.md)<br><span class="gag-cont">job counts in `kubectl get`; ready-to-apply [tenant dashboard + alerts as code](operations/observability.md#tenant-dashboard)</span> |
 | Cross-tenant fleet health view (platform admin) | :material-close-circle:{ .gag-no } controller + per-scale-set metrics, aggregated by hand; no bundled dashboard | :material-check-circle:{ .gag-yes } [single-pane GMC fleet rollups](operations/observability.md#full-metrics-reference)<br><span class="gag-cont">degraded / egress-stale / quota per gateway, + a [platform dashboard](operations/observability.md#platform-dashboard)</span> |
 | Multiple gateways per namespace | :material-check-circle:{ .gag-yes } multiple `AutoscalingRunnerSet`s | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> [multiple scoped gateways per namespace](operations/migration-v1-to-v2.md) |
 | Reusable runner pod templates | :material-close-circle:{ .gag-no } template inlined per `AutoscalingRunnerSet` | :material-check-circle:{ .gag-yes } <span class="gag-v2-badge">v2</span> shared [`RunnerTemplate`](operations/migration-v1-to-v2.md)<br><span class="gag-cont">cluster-wide [`ClusterRunnerTemplate`](operations/migration-v1-to-v2.md)</span> |
 
-Every capability above is driven by the single `ActionsGateway` resource shown
-below (v1 API). Rows marked <span class="gag-v2-badge">v2</span> require the
-`v2alpha1` API — see the [v1 → v2 migration guide](operations/migration-v1-to-v2.md).
+Every capability above is available today. New tenants should onboard on the
+**recommended v2 API** (`actions-gateway.com/v2alpha1` — a decomposed
+`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone
+`EgressProxy`); the rows marked <span class="gag-v2-badge">v2</span> are v2-only.
+The single-CR `v1alpha1` shape shown below is still fully served but
+**[deprecated](operations/v1alpha1-deprecation.md)** — see the
+[v1 → v2 migration guide](operations/migration-v1-to-v2.md) and the
+[getting-started walkthrough](getting-started.md) for the v2 object set.
 
 For limits and Service Level Objectives behind these claims, see
 [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
 the utilization-and-cost argument, [Appendix F — Cost model](design/appendix-f-cost-model.md).
+
+Where GAG is behind ARC is **maturity, not capability.** ARC is GA and widely
+deployed; GAG's recommended v2 API is still alpha and rides a Public-Preview
+runner-scale-set protocol. That is precisely why the v1 → v2 migration is handled
+on a committed, documented schedule with a working [`gag-migrate`](operations/migration-v1-to-v2.md)
+tool — the discipline is the "won't strand you" signal while the track record
+accumulates.
 
 ## Secure by default
 
@@ -167,14 +188,19 @@ For the full threat model, per-profile controls, and the abuse-response
 playbooks, see [Security](design/05-security.md) and
 [Security operations](operations/security-operations.md).
 
-## One resource, a whole gateway
+## One declaration, a whole gateway
 
-A tenant declares what they want in a single namespace-scoped resource. The
-platform marks the namespace and sets its `ResourceQuota` once; from there the
-Gateway Manager Controller (GMC) provisions the controller, proxy pool, RBAC, and
-network policies to match — all operating within that platform-owned quota, which
-the GMC never creates or mutates. No per-tenant cluster-admin involvement after
-the initial GMC install.
+A tenant declares what they want in namespace-scoped resources. The platform marks
+the namespace and sets its `ResourceQuota` once; from there the Gateway Manager
+Controller (GMC) provisions the controller, proxy pool, RBAC, and network policies
+to match — all operating within that platform-owned quota, which the GMC never
+creates or mutates. No per-tenant cluster-admin involvement after the initial GMC
+install.
+
+The **recommended v2 API** decomposes this into small reusable kinds (a shared
+`RunnerTemplate`, a `RunnerSet` per runner type, an optional standalone
+`EgressProxy`) — see the [getting-started walkthrough](getting-started.md). The
+legacy `v1alpha1` shape below expresses the same gateway in one CR:
 
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
