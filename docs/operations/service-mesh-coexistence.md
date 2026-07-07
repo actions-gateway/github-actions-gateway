@@ -26,17 +26,20 @@ posture is to opt the GAG tenant namespace out of the mesh entirely.** One label
 resolves both problems at once, and it costs you nothing GAG-specific — see
 [The one-label answer](#the-one-label-answer).
 
-> **Validation status (read before relying on the in-mesh recipes).** The
-> failure analysis and the [namespace opt-out](#the-one-label-answer) are
-> verified against GAG's implementation, and the opt-out needs no field
-> validation — removing GAG from the mesh removes the conflict by construction.
-> The **in-mesh** mitigations below (native sidecars, egress exclusions, the
-> per-mesh knob names and version floors) are derived from each mesh's upstream
-> documentation and have **not** been validated end-to-end against a running
-> Istio or Linkerd cluster (tracked as Q220). Treat them as starting points to
-> confirm in a staging cluster against your mesh version, not as a certified
-> procedure — knob names and defaults drift between mesh releases. When in doubt,
-> prefer the opt-out.
+> **Validation status.** The failure analysis, the
+> [namespace opt-out](#the-one-label-answer), and the in-mesh mitigations below were
+> exercised end-to-end on a live **kind** cluster (Kubernetes 1.35) against **Istio
+> 1.30.2** and **Linkerd edge-26.6.3** (Q220). The exercise both confirmed the two
+> hazards *and* surfaced two hard prerequisites the earlier draft omitted — a meshed GAG
+> namespace does **not** work until you satisfy both
+> [in-mesh prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace)
+> (mesh CNI for Pod Security, and a NetworkPolicy that reaches the mesh control plane).
+> Mesh knob names and defaults still drift between releases (notably: modern Istio and
+> Linkerd now inject **native sidecars by default** — see [Fix B](#fix-b--native-sidecars-kubernetes-128)),
+> so confirm against your own mesh version. **The opt-out remains the recommended
+> default, and the validation made the in-mesh path look *more* involved, not less** —
+> Linkerd in particular broke GAG's egress even after both prerequisites were met (see
+> [the Linkerd recipe](#linkerd)).
 
 ---
 
@@ -123,10 +126,99 @@ proxy, and any in-flight workers afterward) so existing pods are recreated
 without a sidecar.
 
 If your organization mandates mesh membership for *every* namespace and a blanket
-opt-out is not allowed, read on: [problem 1](#problem-1-sidecars-strand-worker-slots)
-and [problem 2](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy) cover
-the in-mesh mitigations (native sidecars, ambient, egress exclusions) and their
-trade-offs.
+opt-out is not allowed, read on: first the two
+[in-mesh prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace) that a
+meshed GAG namespace cannot start without, then
+[problem 1](#problem-1-sidecars-strand-worker-slots) and
+[problem 2](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy) with the
+per-mesh mitigations.
+
+---
+
+## Two hard prerequisites for any in-mesh GAG namespace
+
+Before the lifecycle and egress fixes below matter at all, an in-mesh GAG namespace
+must clear two gates that GAG's own hardening puts in the sidecar's way. Both were found
+during live validation (Q220); miss either and the tenant never starts — the symptom is
+*"no pods"* or *"pods stuck at `Init`"*, not a slow leak.
+
+### 1. Pod Security Admission rejects the classic proxy-init container — use the mesh CNI
+
+The GMC stamps `pod-security.kubernetes.io/enforce=baseline` on every tenant namespace.
+A mesh's **classic** sidecar injection adds an init container (`istio-init`,
+`linkerd-init`) that requests the `NET_ADMIN` + `NET_RAW` capabilities to program the
+iptables redirect. `baseline` forbids those capabilities, so the apiserver **rejects the
+AGC, proxy, and worker pods at creation** — the Deployments sit at zero replicas with
+`FailedCreate` events and no pod (hence no sidecar, and none of Problem 1's stranding)
+ever exists:
+
+```
+Error creating: pods "actions-gateway-controller-…" is forbidden: violates PodSecurity
+"baseline:latest": non-default capabilities (container "istio-init" must not include
+"NET_ADMIN", "NET_RAW" in securityContext.capabilities.add)
+```
+
+The fix is the mesh's **CNI plugin**, which programs the redirect at the node level so no
+privileged init container is injected (a capability-free `istio-validation` /
+`linkerd-network-validator` init runs instead, which `baseline` allows):
+
+| Mesh | Do this |
+|---|---|
+| **Istio** | Install the `istio/cni` chart **and** tell istiod about it (`--set pilot.cni.enabled=true` on the `istio/istiod` chart). Verified: without `pilot.cni.enabled`, istiod keeps injecting the privileged `istio-init` even with the CNI daemonset running. |
+| **Linkerd** | Install the `linkerd2-cni` chart **and** set `cniEnabled=true` on the `linkerd-control-plane` chart. |
+| **Cilium / ambient / any sidecar-less mesh** | No per-pod proxy, no init container — this gate does not apply. |
+
+The alternative — relaxing the namespace to `enforce=privileged` — is a Pod Security
+regression and is **not** recommended. Prefer the CNI, or [opt out](#the-one-label-answer).
+
+### 2. GAG's default-deny egress NetworkPolicy blocks the sidecar's control-plane path
+
+Even once pods are admitted (CNI in place), the sidecar has to reach its own control
+plane to get configuration and a workload certificate. GAG's per-tenant NetworkPolicies
+are **default-deny egress** — they permit only DNS, the per-tenant proxy, the kube-API,
+and whatever additive rules you add. They do **not** anticipate a mesh control plane, so
+the sidecar's connection is silently dropped, it never becomes Ready, and the pod hangs
+at `Init` (native sidecar) or never-Ready (classic) — the AGC never registers a session:
+
+```
+# Istio: the native-sidecar proxy cannot reach istiod
+failed to warm certificate: … dial tcp <istiod>:15012: i/o timeout
+# Linkerd: the proxy cannot reach destination/identity/policy
+linkerd-identity-headless.linkerd.svc.cluster.local:8080: service in fail-fast
+```
+
+You must add an **additive** NetworkPolicy that lets the GAG pods reach the mesh control
+plane. Additive policies only *add* an allowed path; they do not weaken the deny-by-default
+for everything else:
+
+```yaml
+# Istio — allow egress to istiod (xDS + CA). Verified on Istio 1.30.2.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-istiod-egress, namespace: <tenant-ns>}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: istio-system}}}]
+    ports: [{port: 15012, protocol: TCP}, {port: 15010, protocol: TCP}]
+---
+# Linkerd — allow egress to destination/identity/policy. Verified on edge-26.6.3.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-linkerd-egress, namespace: <tenant-ns>}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: linkerd}}}]
+    ports: [{port: 8086, protocol: TCP}, {port: 8080, protocol: TCP}, {port: 8090, protocol: TCP}]
+```
+
+(Also confirmed in passing: the tenant namespace must carry
+`actions-gateway.com/tenant=managed` for the GMC to reconcile it at all — this is normal
+[tenant onboarding](tenant-onboarding.md), not mesh-specific, but a fresh meshed namespace
+created by hand will otherwise be refused by the GMC's namespace-PSA admission policy.)
 
 ---
 
@@ -148,7 +240,9 @@ runner-builders-a1b2c3       1/2     Running   0          14m   # job done 12m a
 GAG never sees a terminal phase, so it never frees the slot. With
 `maxWorkers: N`, after `N` jobs every slot is held by a done-but-`Running` pod
 and **no new job is ever admitted**. This is the top silent-breakage mesh users
-hit.
+hit. (Reproduced on Istio 1.30.2 with `ENABLE_NATIVE_SIDECARS=false` — Q220: the
+`runner` container exited but `istio-proxy` stayed `running`, leaving the pod at
+`READY 1/2` and non-terminal 90 s+ after the job finished.)
 
 > **Why the reaper does not save you.** `completedPodTTL` only deletes pods that
 > reached a *terminal* phase, and `pendingPodDeadline` only deletes pods stuck
@@ -162,34 +256,38 @@ here unless mesh membership is mandatory.
 
 ### Fix B — native sidecars (Kubernetes 1.28+)
 
-If the namespace must stay in the mesh, run a mesh version that injects its proxy
-as a **native sidecar** — a Kubernetes *sidecar container* (an init container
-with `restartPolicy: Always`, the `SidecarContainers` feature, GA in Kubernetes
-1.29). The kubelet treats native sidecars specially: once all *regular*
-containers exit, it terminates the native sidecars and the pod reaches a terminal
-phase. A run-to-completion worker pod then completes normally and GAG reaps it.
+If the namespace must stay in the mesh, run the proxy as a **native sidecar** — a
+Kubernetes *sidecar container* (an init container with `restartPolicy: Always`, the
+`SidecarContainers` feature, GA in Kubernetes 1.29). The kubelet treats native sidecars
+specially: once all *regular* containers exit, it terminates the native sidecars and the
+pod reaches a terminal phase. A run-to-completion worker pod then completes normally and
+GAG reaps it.
 
-- **Istio** — enable on `istiod`: set `ENABLE_NATIVE_SIDECARS=true`
-  (`values.pilot.env.ENABLE_NATIVE_SIDECARS=true` in the Helm install, or the
-  equivalent `IstioOperator` `pilot.env`). Requires Kubernetes ≥ 1.28. The proxy
-  is then injected as a native sidecar cluster-wide; existing meshed Jobs benefit
-  too.
-- **Linkerd** — install (or upgrade) with `--set proxy.nativeSidecar=true`
-  (Linkerd 2.16+ / recent edge releases). Requires Kubernetes ≥ 1.28.
+**Good news from validation (Q220): current meshes do this by default.** On Istio 1.30.2
+the proxy was injected as a native sidecar with `ENABLE_NATIVE_SIDECARS` *unset*, and
+Linkerd edge-26.6.3 likewise injected `linkerd-proxy` with `restartPolicy: Always` by
+default. So on a recent mesh you typically get Fix B for free — the knobs below matter
+for *older* meshes or for confirming the mode, and `ENABLE_NATIVE_SIDECARS=false` is what
+*re-introduces* the stranding bug:
 
-> **Not yet validated against a running mesh (Q220).** The mechanism is sound —
-> GAG worker pods are `RestartPolicy: Never` with a single regular container, so
-> the kubelet should terminate the native-sidecar proxy once the runner exits —
-> but the exact flag/value names and version floors above are from upstream docs,
-> not a tested run. Confirm against your mesh version in staging, and watch a
-> completed worker pod actually reach `Succeeded`/`Failed` (see
-> [Verifying coexistence](#verifying-coexistence)) before trusting it in
-> production.
+- **Istio** — native sidecars are the default on ≥ 1.28. To force it (older releases):
+  `values.pilot.env.ENABLE_NATIVE_SIDECARS=true`. Requires Kubernetes ≥ 1.28.
+- **Linkerd** — native sidecars are the default on recent edge releases; `--set
+  proxy.nativeSidecar=true` forces it on 2.16+. Requires Kubernetes ≥ 1.28.
 
-> **Native sidecars fix termination, not interception.** A native-sidecar proxy
-> still transparently intercepts the worker's outbound traffic, so you must
-> *also* apply the [egress exclusions](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy)
-> below, or GAG's per-tenant egress proxy is bypassed. Two problems, two fixes.
+> **Verified (Istio 1.30.2, k8s 1.35).** A native-sidecar worker pod terminated cleanly:
+> the `runner` container exited, and the kubelet terminated the `istio-proxy` native
+> sidecar **one second later** (exit 0, `Completed`), so the pod reached a terminal phase
+> and GAG reaped it — no stranding. The inverse (`ENABLE_NATIVE_SIDECARS=false`) left the
+> pod `Running` indefinitely with `istio-proxy` still up 90 s+ after the runner exited,
+> reproducing [Problem 1](#problem-1-sidecars-strand-worker-slots) exactly.
+
+> **Fix B does not work on its own.** A meshed namespace still needs both
+> [in-mesh prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace) (the mesh
+> CNI for Pod Security, and a control-plane egress NetworkPolicy) or no worker pod is ever
+> admitted / the sidecar never starts. Native sidecars also fix termination, **not**
+> interception — a native-sidecar proxy still transparently intercepts the worker's
+> outbound traffic, so also read [problem 2](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy).
 
 ### Fix C — sidecar-less / ambient mesh
 
@@ -206,6 +304,14 @@ worker pod:
 
 Ambient is the preferred coexistence story when you want *some* mesh presence in
 the cluster but cannot afford the worker-pod lifecycle conflict.
+
+> **Scope of Q220 validation.** The end-to-end validation covered Istio and Linkerd in
+> **sidecar** mode (the modes that exhibit both hazards). Ambient (`ztunnel`) and Cilium
+> Service Mesh were **not** exercised on a live cluster — the reasoning that a per-node L4
+> proxy adds no per-pod container to strand a worker is sound, but treat the ambient/Cilium
+> recipes as unverified and confirm the lifecycle + egress checks in your own cluster. Note
+> that ambient still relies on the node CNI redirect, so the [Pod Security prerequisite](#two-hard-prerequisites-for-any-in-mesh-gag-namespace)
+> is satisfied differently there than in sidecar mode.
 
 ### Fix D — proxy-shutdown hooks (last resort)
 
@@ -273,10 +379,24 @@ So for an in-mesh worker namespace you configure exclusions at the **mesh-instal
 
 ### Istio — sidecar mode (in-mesh, if opt-out is not allowed)
 
-1. Lifecycle: enable native sidecars so workers terminate
-   (`ENABLE_NATIVE_SIDECARS=true`, [Fix B](#fix-b--native-sidecars-kubernetes-128)).
-2. Egress: exclude GAG's proxy port and the cluster service CIDR from outbound
-   capture. The per-pod form (shown for reference) is:
+Validated end-to-end on Istio 1.30.2 / k8s 1.35 (Q220). The full working sequence:
+
+0. **Prerequisites** ([details](#two-hard-prerequisites-for-any-in-mesh-gag-namespace)) —
+   without both, the tenant never starts:
+   - Install the Istio **CNI** (`istio/cni` chart) and set `pilot.cni.enabled=true` on
+     istiod, so the `NET_ADMIN` `istio-init` container is not injected (Pod Security).
+   - Add the **istiod-egress NetworkPolicy** (allow `istio-system` `:15012`/`:15010`) so
+     the sidecar can reach istiod for config + certs.
+1. Lifecycle: native sidecars (the Istio ≥ 1.28 default) let workers terminate — verify
+   with [Fix B](#fix-b--native-sidecars-kubernetes-128); do **not** set
+   `ENABLE_NATIVE_SIDECARS=false`.
+2. Egress: with no egress `Gateway`/`ServiceEntry` in play, the sidecar transparently
+   forwards the worker→proxy CONNECT and GAG's per-tenant egress path is **preserved** —
+   validation confirmed a meshed, workload-labeled pod reaching GitHub *through the tenant
+   proxy* returned HTTP 200, identical to a sidecar-excluded baseline. Excluding GAG's
+   proxy port (`8080`) and the cluster service CIDR from outbound capture is therefore an
+   **optimization** (it skips the extra Envoy hop and the mTLS-wrap of the worker→proxy
+   leg), not a correctness requirement. The per-pod form (shown for reference) is:
 
    ```yaml
    # Reference only — GAG drops these from the worker podTemplate.
@@ -323,30 +443,43 @@ recommended choice.
 
 ### Linkerd
 
-Injection is **opt-in**, so a GAG namespace gets no proxy unless something
-enrolls it.
+Injection is **opt-in** and driven by an **annotation** (not a label like Istio's
+`istio-injection`), so a GAG namespace gets no proxy unless something enrolls it.
 
 - Default: do nothing. Confirm there is no inherited
-  `linkerd.io/inject=enabled`.
+  `linkerd.io/inject=enabled` **annotation**.
 - If a parent scope injects, opt the namespace out:
 
   ```sh
   kubectl annotate namespace <tenant-ns> linkerd.io/inject=disabled
   ```
 
-- If the namespace **must** be meshed: install with native sidecars
-  (`--set proxy.nativeSidecar=true`, [Fix B](#fix-b--native-sidecars-kubernetes-128))
-  for the lifecycle fix, and skip outbound capture of the proxy port with the
-  Linkerd skip-ports annotation at the install/namespace level:
+> **Validation warning (Q220): Linkerd in-mesh coexistence is materially harder than
+> Istio, and the opt-out is strongly preferred.** On Linkerd edge-26.6.3 / k8s 1.35, even
+> after clearing both
+> [in-mesh prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace) — the
+> `linkerd2-cni` chart + `cniEnabled=true` for Pod Security, and a control-plane egress
+> NetworkPolicy for `linkerd-dst:8086` / `linkerd-identity:8080` / `linkerd-policy:8090` —
+> the Linkerd proxy still **broke GAG's data-plane egress**. Linkerd does client-side
+> load-balancing directly to endpoint pod IPs, and that connection was dropped under GAG's
+> NetworkPolicy-gated egress (HTTP 504 at Linkerd's 1 s connect timeout) where Istio's
+> passthrough was preserved. The concrete consequence: the meshed AGC's installation-token
+> fetch failed (`POST access_tokens returned 504`) and the controller never started. The
+> same knobs Istio needs (native sidecars — the edge default; PSA + NP prerequisites) all
+> apply, plus you must additionally stop Linkerd from capturing the GAG egress ports:
 
   ```sh
-  # Namespace-level default applied to injected pods in this namespace.
+  # Namespace-level default applied to injected pods. Skip Linkerd capture of the
+  # per-tenant proxy port (8080) AND the ports GAG uses to reach GitHub directly.
   kubectl annotate namespace <tenant-ns> config.linkerd.io/skip-outbound-ports=8080
   ```
 
   As with Istio, the per-pod `config.linkerd.io/skip-outbound-ports` annotation
   does **not** reach GAG worker pods if set on the `podTemplate`; apply it at the
-  namespace so Linkerd's injector picks it up.
+  namespace so Linkerd's injector picks it up. **Note:** the validation observed the 504
+  egress break but did not confirm that `skip-outbound-ports` alone fully restores every
+  GAG egress path on Linkerd — treat an in-mesh Linkerd deployment as needing careful
+  per-path verification, and prefer the [namespace opt-out](#the-one-label-answer).
 
 ### Cilium Service Mesh
 
@@ -361,17 +494,23 @@ control, prefer expressing the GitHub allowlist as `toFQDNs`/`toCIDR` policy tha
 
 ### Generic pattern (any mesh)
 
-For a mesh not listed above, apply the same three rules:
+For a mesh not listed above, apply the same rules, in order:
 
+0. **Admission** — the sidecar must be *creatable* and *startable*: use the mesh's
+   node-level CNI so no `NET_ADMIN` proxy-init container is injected (GAG enforces
+   `baseline` Pod Security), and add a NetworkPolicy that lets the sidecar reach the mesh
+   control plane (GAG's egress is default-deny). See
+   [the two prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace).
 1. **Lifecycle** — guarantee the worker pod reaches a terminal phase: prefer
-   namespace injection opt-out; else a native-sidecar (Kubernetes 1.28+) install
-   mode; else a sidecar-less/ambient data plane. Never rely on a classic sidecar
-   that runs forever.
-2. **Egress** — exclude GAG's proxy `Service` port (`8080` by default) and the
-   cluster service CIDR from the mesh's outbound capture, configured at the
-   **mesh-install / namespace level** (GAG strips per-pod `podTemplate`
-   annotations). Never let a mesh egress gateway claim GitHub hostnames for the
-   GAG namespace.
+   namespace injection opt-out; else a native-sidecar (Kubernetes 1.28+) mode (now the
+   default on current Istio/Linkerd); else a sidecar-less/ambient data plane. Never rely
+   on a classic sidecar that runs forever.
+2. **Egress** — confirm the worker→proxy→GitHub path survives the sidecar (validation
+   showed Istio preserves it, Linkerd broke it). Exclude GAG's proxy `Service` port
+   (`8080` by default) and the cluster service CIDR from the mesh's outbound capture,
+   configured at the **mesh-install / namespace level** (GAG strips per-pod `podTemplate`
+   annotations) — an optimization on Istio, closer to mandatory on Linkerd. Never let a
+   mesh egress gateway claim GitHub hostnames for the GAG namespace.
 3. **Identity** — after rollout, confirm GitHub still sees the per-tenant proxy
    egress IP, not a mesh egress-gateway IP ([verify](#verifying-coexistence)).
 
@@ -391,14 +530,28 @@ kubectl get pods -n <tenant-ns> -l actions-gateway/runner-group=<name> -w
 # means a sidecar is still pinning it — revisit problem 1.
 ```
 
-Check the container set on a live worker — two containers where you expected one
-is a sidecar:
+Check the container layout on a live worker. What "correct" looks like depends on
+whether you opted out or stayed in-mesh:
 
 ```sh
+# Regular containers:
 kubectl get pod -n <tenant-ns> <worker-pod> \
   -o jsonpath='{.spec.containers[*].name}{"\n"}'
-# Expect just the runner container (e.g. "runner"), not "runner istio-proxy".
+# Native-sidecar init containers (restartPolicy: Always):
+kubectl get pod -n <tenant-ns> <worker-pod> \
+  -o jsonpath='{range .spec.initContainers[*]}{.name}({.restartPolicy}) {end}{"\n"}'
 ```
+
+- **Opted out** ([Fix A](#the-one-label-answer)): just the runner container, no proxy
+  anywhere. The safest state.
+- **In-mesh, native sidecar** ([Fix B](#fix-b--native-sidecars-kubernetes-128)): the proxy
+  shows up as an **init** container with `restartPolicy: Always` (e.g. `istio-proxy(Always)`
+  or `linkerd-proxy(Always)`). This is fine — the kubelet terminates it when the runner
+  exits, so the pod still reaches a terminal phase.
+- **In-mesh, classic sidecar (the bug):** the proxy is a **regular** container
+  (`istio-proxy` under `.spec.containers`). When the runner exits, the pod sits at
+  `READY 1/2 STATUS Running` forever — revisit [problem 1](#problem-1-sidecars-strand-worker-slots)
+  and switch the mesh to native sidecars.
 
 **Egress — GitHub sees the per-tenant proxy IP:** follow the egress-isolation
 check in the [network architecture validation](../design/network-architecture.md#how-to-validate-network-isolation)
@@ -418,8 +571,9 @@ out.
 
 | Situation | Do this |
 |---|---|
-| You can keep the GAG namespace out of the mesh | [Opt the namespace out](#the-one-label-answer). Done — both problems gone. |
-| Mesh membership is mandatory, Kubernetes ≥ 1.28 | [Native sidecars](#fix-b--native-sidecars-kubernetes-128) for lifecycle **plus** [egress exclusions](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy) at the mesh-install level. |
+| You can keep the GAG namespace out of the mesh | [Opt the namespace out](#the-one-label-answer). Done — both problems gone. Validation only reinforced this as the default. |
+| Mesh membership is mandatory, Kubernetes ≥ 1.28 | Satisfy **both** [in-mesh prerequisites](#two-hard-prerequisites-for-any-in-mesh-gag-namespace) (mesh CNI for Pod Security **and** a control-plane egress NetworkPolicy) or nothing starts; then rely on [native sidecars](#fix-b--native-sidecars-kubernetes-128) (the modern default) for lifecycle and confirm the [egress path](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy) end-to-end. |
+| You run Linkerd and must stay in-mesh | Hardest path — validation saw the sidecar break GAG egress (504) even after both prerequisites. [Prefer the opt-out](#linkerd); if you can't, verify every egress path individually. |
 | You run Istio ambient / Cilium Service Mesh | Sidecar-less — leave the GAG namespace [out of the data plane](#istio--ambient-mode) and confirm no egress redirect. |
 | You were about to set mesh annotations on the RunnerGroup `podTemplate` | Don't — [GAG strips them](#why-per-pod-podtemplate-annotations-will-not-save-you). Configure the namespace and the mesh install instead. |
 
