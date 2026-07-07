@@ -4,6 +4,7 @@
 # ignored dir, so the negations would be dead.)
 .claude/*
 !.claude/settings.json
+!.claude/prod-guard.json
 !.claude/commands/
 !.claude/agents/
 !.claude/skills/
