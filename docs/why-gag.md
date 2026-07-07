@@ -99,8 +99,17 @@ letting tenants run their own runners.
 
 ## GAG vs ARC (scale-set mode)
 
+GAG acquires jobs with the **same runner-scale-set protocol ARC uses** — a single
+acquirer per runner set, capacity-gated assignment, no many-acquirers fan-out — and
+it is the **shipped default** in the v2 API. So the comparison below is
+capability-for-capability against ARC's *own* model: every GAG row is **additive**,
+not a different-architecture trade-off. The difference is what surrounds the shared
+acquisition core — quota safety, priority tiers, per-tenant egress, and control-plane
+footprint.
+
 | Capability | ARC (scale-set mode) | GitHub Actions Gateway |
 | --- | --- | --- |
+| Runner-scale-set acquisition (single-acquirer, no fan-out) | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes, by default <span class="gag-v2-badge">v2</span> |
 | Ephemeral, single-use runner pods | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Custom runner pod template & image | :material-check-circle:{ .gag-yes } yes | :material-check-circle:{ .gag-yes } yes |
 | Workers scale to zero between jobs | :material-check-circle:{ .gag-yes } yes, with `minRunners: 0` | :material-check-circle:{ .gag-yes } yes, by default |
@@ -125,6 +134,13 @@ The single-CR `v1alpha1` shape shown below is still fully served but
 For limits and Service Level Objectives behind these claims, see
 [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md); for
 the utilization-and-cost argument, [Appendix F — Cost model](design/appendix-f-cost-model.md).
+
+Where GAG is behind ARC is **maturity, not capability.** ARC is GA and widely
+deployed; GAG's recommended v2 API is still alpha and rides a Public-Preview
+runner-scale-set protocol. That is precisely why the v1 → v2 migration is handled
+on a committed, documented schedule with a working [`gag-migrate`](operations/migration-v1-to-v2.md)
+tool — the discipline is the "won't strand you" signal while the track record
+accumulates.
 
 ## Secure by default
 
