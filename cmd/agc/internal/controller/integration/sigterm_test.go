@@ -19,6 +19,8 @@ func TestAGC_SIGTERM_DeletesAllSessions(t *testing.T) {
 	// Detect goroutine leaks after this test.
 	// Note: IgnoreAnyFunction/IgnoreTopFunction use exact function-name matching.
 	defer goleak.VerifyNone(t,
+		// Q74: ignore the suite's long-lived conversion webhook manager goroutines.
+		suiteGoroutineBaseline,
 		// envtest process-watcher goroutines (kube-apiserver + etcd; live for the whole suite).
 		goleak.IgnoreAnyFunction("sigs.k8s.io/controller-runtime/pkg/internal/testing/process.(*State).Start.func1"),
 		// client-go informer goroutines managed by the controller-runtime manager.

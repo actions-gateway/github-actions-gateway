@@ -167,6 +167,7 @@ var _ = SynchronizedAfterSuite(
 			return
 		}
 		teardownGMC()
+		teardownV2CRDs()
 		teardownFakegithub()
 		teardownCertManager()
 	},
@@ -248,34 +249,45 @@ func setupGMC() {
 // setupV2CRDs installs the five v2 (actions-gateway.com) CRDs so the GMC's v2
 // reconcilers and the v2 multi-gateway e2e have their kinds present. The main
 // chart ships only the v1 CRDs; the v2 CRDs live in the actions-gateway-crds-v2
-// chart (operators install it separately). The controller-gen output under
-// api/config/crd is the single source those chart templates are generated from,
-// and it is plain (un-templated) YAML, so kubectl applies it directly. Installed
-// before the GMC so its v2 informers sync on first start.
+// chart, which operators install separately.
+//
+// The chart is installed (rather than a raw `kubectl apply -f api/config/crd`)
+// because as of Q74 each v2 CRD carries a spec.conversion pointing at the GMC-hosted
+// /convert webhook: v2beta1 is the served + storage/hub version and v2alpha1 the
+// served spoke, so without the conversion stanza the apiserver would silently prune
+// the ScaleSet-only-stripped RunnerSet fields on storage. Only the chart carries that
+// deployment wiring (the controller-gen output under api/config/crd stays
+// conversion-free). It is installed into gmcNamespace so the conversion webhook's
+// default clientConfig namespace (.Release.Namespace) resolves to the GMC's namespace,
+// and with certManager on (the default) so cert-manager injects the webhook CA.
+// Installed before the GMC so its v2 informers sync on first start; the conversion
+// webhook is only exercised once v2 objects exist, by which point the GMC is Ready.
 func setupV2CRDs() {
-	By("installing the v2 (actions-gateway.com) CRDs")
-	// Resolve the CRD directory from this source file's location rather than a
-	// CWD-relative path: the e2e binary's working directory differs between a
-	// local `go test` (package dir) and CI's `ginkgo run` invocation, so a fixed
-	// `../../..` would break in one of them.
-	//
-	// --server-side: the RunnerTemplate/ClusterRunnerTemplate CRDs embed the full
-	// pod-template OpenAPI schema and exceed the 256KB client-side apply ceiling
-	// (kubectl stores the whole object in the last-applied-configuration annotation
-	// otherwise). Server-side apply has no such annotation, matching how Helm
-	// installs these CRDs in production.
-	cmd := exec.Command("kubectl", "apply", "--server-side", "--force-conflicts", "-f", v2CRDDir())
+	By("installing the v2 (actions-gateway.com) CRDs via the actions-gateway-crds-v2 chart")
+	cmd := exec.Command("helm", "upgrade", "--install", "actions-gateway-crds-v2", v2CRDChartDir(),
+		"--namespace", gmcNamespace, "--create-namespace", "--wait", "--timeout=60s")
 	_, err := utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs")
+	Expect(err).NotTo(HaveOccurred(), "install v2 CRDs chart")
 }
 
-// v2CRDDir returns the absolute path to api/config/crd (the five v2 CRDs),
-// derived from this file's compile-time location: <root>/cmd/gmc/test/e2e/.
-func v2CRDDir() string {
+// v2CRDChartDir returns the absolute path to the actions-gateway-crds-v2 chart,
+// derived from this file's compile-time location: <root>/cmd/gmc/test/e2e/. Resolving
+// from the source file (rather than a CWD-relative path) keeps it correct whether the
+// e2e binary runs from the package dir (`go test`) or CI's `ginkgo run` invocation.
+func v2CRDChartDir() string {
 	_, thisFile, _, ok := runtime.Caller(0)
-	Expect(ok).To(BeTrue(), "resolve caller for v2 CRD path")
+	Expect(ok).To(BeTrue(), "resolve caller for v2 CRD chart path")
 	root := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	return filepath.Join(root, "api", "config", "crd")
+	return filepath.Join(root, "charts", "actions-gateway-crds-v2")
+}
+
+// teardownV2CRDs uninstalls the v2 CRD chart. The CRDs carry
+// helm.sh/resource-policy: keep, so they survive the uninstall — fine here, as the
+// kind cluster is deleted by the workflow's final step.
+func teardownV2CRDs() {
+	By("uninstalling the v2 CRD chart")
+	cmd := exec.Command("helm", "uninstall", "actions-gateway-crds-v2", "--namespace", gmcNamespace)
+	_, _ = utils.Run(cmd)
 }
 
 func teardownGMC() {

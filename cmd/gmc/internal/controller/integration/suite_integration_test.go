@@ -17,11 +17,13 @@ import (
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
+	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -94,6 +96,10 @@ func TestMain(m *testing.M) {
 	_ = agcv1alpha1.AddToScheme(testScheme)
 	_ = gmcv1alpha1.AddToScheme(testScheme)
 	_ = v2alpha1.AddToScheme(testScheme)
+	// Register the v2beta1 hub so envtest's modifyConversionWebhooks recognizes the
+	// five v2 kinds as convertible and redirects their CRD conversion to the local
+	// webhook server (Q74). Both spoke and hub must be in the scheme for conversion.
+	_ = v2beta1.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
@@ -201,6 +207,12 @@ func startValidatingWebhook() error {
 	// fail closed.
 	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)
+	}
+	// Q74: serve /convert for the five v2 hub kinds. envtest patches each convertible
+	// CRD's spec.conversion to point at this same server, so a v2beta1<->v2alpha1
+	// read/write round-trips through the real conversion path, not a fake client.
+	if err := webhookv2beta1.SetupConversionWebhooksWithManager(mgr); err != nil {
+		return fmt.Errorf("register conversion webhooks: %w", err)
 	}
 
 	var mgrCtx context.Context
