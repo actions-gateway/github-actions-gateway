@@ -26,20 +26,38 @@
 #
 # Optional env vars:
 #   ASSUME_YES=1     Skip the interactive "proceed?" confirmation (automation).
-#   GAG_IMAGE_TAG    GAG control-plane image tag (default below). The publish
-#                    pipeline only builds on v* release tags and never pushes
-#                    `latest`, so a real released tag is required — bump this as
-#                    new releases land. Tags: https://github.com/actions-gateway/github-actions-gateway/pkgs/container/gmc
+#   GAG_IMAGE_TAG    Git ref (SHA, branch, or tag) identifying the GAG control-
+#                    plane build to install (default below). It is used TWICE and
+#                    must resolve BOTH ways: (a) as a published image tag under
+#                    ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>, and
+#                    (b) as a git object git-archived for the matching v2 CRD chart
+#                    (install_crds). The single ref keeps the image and the CRD
+#                    chart on the SAME code, so the v2 alpha schema can never drift
+#                    between them. Dogfood deliberately exercises PRE-RELEASE code,
+#                    so this is NOT limited to cut `v*` releases: point it at any
+#                    post-Q74 ref whose control-plane image has been built + pushed
+#                    to GHCR. Build one for a ref with (amd64 GKE nodes):
+#                      SHA=<ref>; GIT_SHA="$SHA" docker buildx bake gmc agc proxy wrapper \
+#                        --set '*.platform=linux/amd64' \
+#                        --set "gmc.tags=ghcr.io/actions-gateway/gmc:$SHA" \
+#                        --set "agc.tags=ghcr.io/actions-gateway/agc:$SHA" \
+#                        --set "proxy.tags=ghcr.io/actions-gateway/proxy:$SHA" \
+#                        --set "wrapper.tags=ghcr.io/actions-gateway/wrapper:$SHA"
+#                    See docs/plan/gke-dogfood.md § "Tracking post-Q74 pre-release
+#                    builds".
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
 
-# Default to the newest published release. `latest` does not exist in this
-# project's registry (publish.yml builds only on v* tags), so floating to it
-# yields ImagePullBackOff — pin a real tag instead.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.1.0-rc.6}"
+# Default: a post-Q74 main SHA whose control-plane image is published to GHCR and
+# whose tree carries the v2beta1+v2alpha1 conversion-webhook CRD chart (Q281). This
+# is a plain git ref, not a `v*` release: dogfood tracks pre-release code and must
+# not wait for a cut release, and the publish pipeline builds images only on `v*`
+# tags — so the post-Q74 image at this ref was built + pushed by hand (see the
+# GAG_IMAGE_TAG note above). `latest` is never published, so never float to it.
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-0ef4c6fa50fc78f3ea1ddee84e7237be251ea971}"
 
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC
@@ -156,10 +174,10 @@ preflight() {
 # unconditionally, so without the v2 CRDs it error-loops and the IP-range
 # reconciler fails to list EgressProxies. Install them alongside the GMC.
 #
-# CRITICAL: install the CRDs from the SAME release as the GMC image
-# (GAG_IMAGE_TAG), not the local worktree. The v2 alpha API schema drifts
-# between releases (e.g. ActionsGateway spec.githubAppRef in v1.1.0-rc.2 became
-# the spec.credentials discriminated union in v1.1.0-rc.3); a mismatch makes
+# CRITICAL: install the CRDs from the SAME ref as the GMC image (GAG_IMAGE_TAG),
+# not the local worktree. The v2 alpha API schema drifts between refs (e.g.
+# ActionsGateway spec.githubAppRef in v1.1.0-rc.2 became the spec.credentials
+# discriminated union in v1.1.0-rc.3); a mismatch makes
 # every reconcile fail validation ("unknown field" / "spec.X: Required value"),
 # and a stale githubAppRef CRD silently drops the credential so the AGC
 # crash-loops on a missing App key. git-archive pins the CRDs to the image's tag.
@@ -541,6 +559,15 @@ spec:
     name: dogfood
   templateRef:
     name: default
+  # Classic (deprecated) pinned: this set matches multiple labels, which the
+  # ScaleSet default (Q264 P5) forbids — a ScaleSet runner set takes exactly one
+  # runnerLabel (its name is the single runs-on target). Omitting the field would
+  # default to ScaleSet and be rejected at admission. Kept on Classic so the
+  # 3-label routing (start.sh's GAG_RUNNER + the migrated workflows' runs-on) is
+  # unchanged; migrating dogfood main CI to a single-label ScaleSet is a separate
+  # Q264-residual decision. Matches the e2e pool (deploy/dogfood-e2e) and the
+  # gke-dogfood.md B7 manifest.
+  acquisitionProtocol: Classic
   runnerLabels: ["self-hosted", "linux", "gag-ci"]
   # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
   # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. maxListeners
