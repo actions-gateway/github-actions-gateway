@@ -630,8 +630,11 @@ func main() {
 			os.Exit(1)
 		}
 		// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
-		// kinds (the rejection v1 did by silent override at pod-build time).
-		if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
+		// kinds (the rejection v1 did by silent override at pod-build time). Q289: the
+		// namespaced kind's podTemplate.spec.priorityClassName is gated against the same
+		// platform PriorityClass allowlist as priorityTiers, closing the second route to
+		// cross-tenant preemption.
+		if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr, priorityClassAllowlist); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerTemplate")
 			os.Exit(1)
 		}

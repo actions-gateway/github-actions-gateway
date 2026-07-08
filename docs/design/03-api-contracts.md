@@ -483,8 +483,10 @@ type RunnerGroupSpec struct {
     // platform should use preemptionPolicy: Never unless cross-tenant preemption
     // is intended). Tiers must be listed in strictly ascending threshold order.
     //
-    // When PriorityTiers is empty, no PriorityClass is set on worker pods and
-    // the namespace ResourceQuota is the only active ceiling.
+    // When PriorityTiers is empty the AGC stamps no PriorityClass of its own, and
+    // the namespace ResourceQuota is the only active ceiling — but the worker pod
+    // still inherits podTemplate.spec.priorityClassName if the template sets one
+    // (itself allowlist-gated at admission, Q289).
     // +optional
     // +kubebuilder:validation:MaxItems=10
     PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`

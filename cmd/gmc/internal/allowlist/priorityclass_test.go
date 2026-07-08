@@ -114,3 +114,50 @@ func TestConcurrentAccess(t *testing.T) {
 		t.Errorf("static class lost after concurrent churn")
 	}
 }
+
+func TestAllowedPodPriorityClass(t *testing.T) {
+	a := New([]string{"runner-standard"})
+
+	// The empty string means "this pod names no PriorityClass" — always permitted, so
+	// the secure default forbids named classes without forbidding ordinary pods.
+	if !a.AllowedPodPriorityClass("") {
+		t.Errorf("unset priorityClassName must be permitted")
+	}
+	if !a.AllowedPodPriorityClass("runner-standard") {
+		t.Errorf("allowlisted class must be permitted")
+	}
+	if a.AllowedPodPriorityClass("system-cluster-critical") {
+		t.Errorf("off-allowlist class must be rejected (Q289)")
+	}
+
+	// The dynamic (ConfigMap, Q188) half applies to pod-level references too.
+	a.SetDynamic([]string{"runner-burst"})
+	if !a.AllowedPodPriorityClass("runner-burst") {
+		t.Errorf("dynamic class must be permitted")
+	}
+}
+
+func TestAllowedPodPriorityClass_EmptyAllowlist(t *testing.T) {
+	// The secure default: an unset --allowed-priority-classes flag.
+	a := New(nil)
+	if !a.AllowedPodPriorityClass("") {
+		t.Errorf("unset priorityClassName must stay admissible under an empty allowlist")
+	}
+	for _, name := range []string{"system-cluster-critical", "system-node-critical", "anything"} {
+		if a.AllowedPodPriorityClass(name) {
+			t.Errorf("empty allowlist must reject %q", name)
+		}
+	}
+}
+
+func TestNilAllowlist_AllowedPodPriorityClass(t *testing.T) {
+	// A nil allowlist is the zero-value validator's state; it must deny named classes
+	// without panicking, and still admit the unset case.
+	var a *PriorityClassAllowlist
+	if !a.AllowedPodPriorityClass("") {
+		t.Errorf("nil allowlist must still permit an unset priorityClassName")
+	}
+	if a.AllowedPodPriorityClass("system-cluster-critical") {
+		t.Errorf("nil allowlist must permit nothing named")
+	}
+}

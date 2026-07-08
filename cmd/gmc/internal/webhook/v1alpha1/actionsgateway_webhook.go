@@ -394,31 +394,51 @@ func validateRunnerGroups(ag *gmcv1alpha1.ActionsGateway) error {
 	return nil
 }
 
-// validatePriorityClasses rejects any priorityTiers entry whose
-// priorityClassName is not on the platform allowlist. PriorityClass is a
-// cluster-scoped resource carrying a priority value and a preemptionPolicy; an
-// unvalidated tenant-chosen class lets a tenant name a high-priority, preempting
-// class and have the scheduler evict OTHER tenants' running worker pods —
-// breaking the cross-tenant isolation the per-tenant model promises (Q132). The
-// platform pre-creates the permitted classes and lists their names via
-// --allowed-priority-classes (or the watched allowlist ConfigMap, Q188); the GMC
-// only validates references against that list (it never creates the
+// validatePriorityClasses rejects any tenant-authored reference to a cluster-scoped
+// PriorityClass that is not on the platform allowlist. PriorityClass carries a
+// priority value and a preemptionPolicy; an unvalidated tenant-chosen class lets a
+// tenant name a high-priority, preempting class and have the scheduler evict OTHER
+// tenants' running worker pods — breaking the cross-tenant isolation the per-tenant
+// model promises (Q132). The platform pre-creates the permitted classes and lists
+// their names via --allowed-priority-classes (or the watched allowlist ConfigMap,
+// Q188); the GMC only validates references against that list (it never creates the
 // cluster-scoped classes — that stays platform-owned, consistent with the
 // Q121/Q122/Q130 confinement model). An empty allowlist forbids every reference
 // (secure default).
 //
+// A v1 ActionsGateway reaches a worker pod's priorityClassName by TWO routes, and
+// both are gated here (Q289):
+//
+//   - runnerGroups[].priorityTiers[].priorityClassName — the tier the AGC stamps once
+//     a concurrency threshold is crossed. Required, so an empty name is itself invalid.
+//   - runnerGroups[].podTemplate.spec.priorityClassName — the full PodTemplateSpec the
+//     GMC copies into the bootstrapped RunnerGroup and the AGC then copies verbatim
+//     into the worker pod, overriding it only when a tier matches. Optional, so an
+//     empty name means "no PriorityClass" and is always permitted.
+//
+// Gating only the first left the second wide open: Kubernetes ships
+// system-cluster-critical (value 2000000000, preemptionPolicy PreemptLowerPriority)
+// in every cluster and does not restrict it to kube-system, so a tenant could preempt
+// every other tenant's workers and egress proxies with no setup at all.
+//
 // This is a webhook check, not a CRD CEL rule, because the allowlist is dynamic
 // platform config a spec-scoped CEL XValidation cannot read.
 func (v *ActionsGatewayCustomValidator) validatePriorityClasses(ag *gmcv1alpha1.ActionsGateway) error {
+	const remedy = "the platform admin must pre-create the PriorityClass and add it to the GMC --allowed-priority-classes flag " +
+		"or the watched PriorityClass allowlist ConfigMap"
 	for i, rg := range ag.Spec.RunnerGroups {
 		for j, tier := range rg.PriorityTiers {
 			if !v.priorityClasses.Allowed(tier.PriorityClassName) {
 				return fmt.Errorf(
-					"runnerGroups[%d].priorityTiers[%d]: priorityClassName %q is not in the platform allowlist %v; "+
-						"the platform admin must pre-create the PriorityClass and add it to the GMC --allowed-priority-classes flag "+
-						"or the watched PriorityClass allowlist ConfigMap",
-					i, j, tier.PriorityClassName, v.priorityClasses.Names())
+					"runnerGroups[%d].priorityTiers[%d]: priorityClassName %q is not in the platform allowlist %v; %s",
+					i, j, tier.PriorityClassName, v.priorityClasses.Names(), remedy)
 			}
+		}
+		if pc := rg.PodTemplate.Spec.PriorityClassName; !v.priorityClasses.AllowedPodPriorityClass(pc) {
+			return fmt.Errorf(
+				"runnerGroups[%d].podTemplate.spec.priorityClassName: %q is not in the platform allowlist %v; "+
+					"a PriorityClass sets the scheduler's preemption order across the whole cluster, so %s",
+				i, pc, v.priorityClasses.Names(), remedy)
 		}
 	}
 	return nil
