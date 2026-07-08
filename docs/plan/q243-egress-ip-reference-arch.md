@@ -434,9 +434,14 @@ nodeSelector/toleration to the tenant pool"; **that binding does not exist in th
 API today**, and the existing anti-affinity actively works against it. Until the
 API can pin a tenant's proxy pods to one egress path (a `spec.scheduling` block,
 a platform-owned tenant→pool mapping the GMC consumes, or per-namespace scheduler
-policy), GAG delivers the *choke point* but not the *per-tenant IP*. **Follow-up
-Queue item filed** (add egress-path binding to `EgressProxy`); Q243's v2beta1-gate
-status carries to it.
+policy), GAG delivers the *choke point* but not the *per-tenant IP*. Filed as
+**[Q282](../STATUS.md#Q282)** — scheduling pass-through on the `EgressProxy` +
+`ActionsGateway` CRs (workers already have it via `RunnerTemplate.podTemplate`).
+Two design points it must resolve: (a) operator-supplied affinity must **merge
+with / override** the builder's required cross-node anti-affinity (else a pinned
+2nd replica stays `Pending` on a 1-node pool); (b) the egress-IP-binding placement
+is **platform-owned, not tenant-set** (secure-by-default — a tenant must not
+self-select an egress IP). Q243's v2beta1-gate status carries to Q282.
 
 ## Live-validation plan (original spec — retained for the deferred parts)
 

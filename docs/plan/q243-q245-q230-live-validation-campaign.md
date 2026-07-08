@@ -207,4 +207,6 @@ it honestly here and file a follow-up; do not paper over it (secure-by-default).
 - **Q243 is NOT fully closed.** The reference-arch mechanism claim (distinct +
   stable per-tenant egress IP via Cloud NAT) is validated, but delivering it
   through GAG needs an EgressProxy API change (bind a tenant's proxy pods to one
-  egress path). Filed as a follow-up; Q243's v2beta1-gate status carries to it.
+  egress path). Filed as **[Q282](../STATUS.md#Q282)** (scheduling pass-through on
+  the `EgressProxy` + `ActionsGateway` CRs, platform-governed); Q243's v2beta1-gate
+  status carries to it.
