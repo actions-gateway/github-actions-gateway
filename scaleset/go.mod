@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/scaleset
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/actions-gateway/github-actions-gateway/githubapp v0.0.0-00010101000000-000000000000
