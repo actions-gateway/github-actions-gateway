@@ -3,7 +3,9 @@
 // semantics the live probes settled (Q264 plan §2a/§2b): auto-assign under an
 // advertised capacity, the GHES-style JobAvailable→acquire flow, cursor-based
 // at-least-once message replay (including replay to a re-created session),
-// message-queue token expiry, and claim-once acquisition.
+// message-queue token expiry, claim-once acquisition, and the queue's long poll —
+// an empty poll is held until a message lands or the poll window elapses, so a client
+// looping on it does not spin (see DefaultPollTimeout).
 //
 // A single httptest server serves the whole chain — the REST registration-token
 // call, the RemoteAuth runner-registration hop, and the Actions Service
@@ -25,6 +27,17 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 )
+
+// DefaultPollTimeout is how long the stub holds an empty poll open before answering
+// 202 ("nothing to deliver") — the long-poll window. The real message queue blocks
+// ~50s; the stub uses a far shorter window so a test that *wants* to observe a 202
+// (a capacity-gated poll, say) does not stall, while an idle listener still issues
+// ~1 request per second instead of hot-looping (Q287).
+//
+// The window is only a ceiling: a poll parked on an empty queue wakes the instant the
+// queue changes (a job enqueued, acquired, or completed, or the session dropped), so
+// message delivery stays immediate and tests stay fast. Override with SetPollTimeout.
+const DefaultPollTimeout = time.Second
 
 // jobState is the lifecycle of a queued job inside the stub.
 type jobState int
@@ -94,6 +107,16 @@ type Server struct {
 	adminToken    string
 	adminTokenTTL time.Duration
 
+	// pollTimeout bounds how long an empty poll is held open; zero answers 202 at once.
+	pollTimeout time.Duration
+	// wake is closed (and replaced) whenever the queue state changes, broadcasting to
+	// every parked poll so it re-evaluates. Guarded by mu.
+	wake chan struct{}
+	// closed is closed by Close, releasing any parked poll so httptest's Close — which
+	// waits for outstanding requests — cannot hang behind a long-poll.
+	closed    chan struct{}
+	closeOnce sync.Once
+
 	scaleSets  map[int]*scaleSet
 	nextSSID   int
 	nextSessID int
@@ -113,6 +136,9 @@ type Server struct {
 func New() *Server {
 	s := &Server{
 		adminTokenTTL:    time.Hour,
+		pollTimeout:      DefaultPollTimeout,
+		wake:             make(chan struct{}),
+		closed:           make(chan struct{}),
 		scaleSets:        make(map[int]*scaleSet),
 		nextReqID:        1000,
 		conflictJITNames: make(map[string]bool),
@@ -147,8 +173,30 @@ func (s *Server) HTTPClient() *http.Client {
 	return s.server.Client()
 }
 
-// Close shuts down the stub server.
-func (s *Server) Close() { s.server.Close() }
+// Close shuts down the stub server. It first releases any parked long-poll, because
+// httptest.Server.Close waits for outstanding requests to finish and would otherwise
+// block for a whole poll window. Safe to call more than once.
+func (s *Server) Close() {
+	s.closeOnce.Do(func() { close(s.closed) })
+	s.server.Close()
+}
+
+// SetPollTimeout overrides how long an empty poll is held open before the stub answers
+// 202 (DefaultPollTimeout). Zero restores the non-blocking behavior — a poll with
+// nothing to deliver returns 202 immediately — which a test asserting that response
+// directly wants, but which makes a polling client hot-loop (Q287). Takes effect on the
+// next poll.
+func (s *Server) SetPollTimeout(d time.Duration) {
+	s.mu.Lock()
+	s.pollTimeout = d
+	s.mu.Unlock()
+}
+
+// notifyLocked broadcasts a queue-state change to every parked poll. Caller holds s.mu.
+func (s *Server) notifyLocked() {
+	close(s.wake)
+	s.wake = make(chan struct{})
+}
 
 // EnableGHESAcquireFlow switches the stub to the GHES path: queued jobs are offered
 // as JobAvailable and the client must claim them with acquirejobs (auto-assign is
@@ -218,6 +266,9 @@ func (s *Server) EnqueueJob(scaleSetID int) (reqID int64, jobID string) {
 	s.nextJobSeq++
 	j := &job{reqID: s.nextReqID, jobID: fmt.Sprintf("job-%d", s.nextJobSeq), state: jobQueued}
 	ss.jobs = append(ss.jobs, j)
+	// A queued job produces no message until a poll re-evaluates it against the
+	// advertised capacity, so wake the parked polls to do exactly that.
+	s.notifyLocked()
 	return j.reqID, j.jobID
 }
 
@@ -241,6 +292,7 @@ func (s *Server) CompleteAssignedJob(scaleSetID int, jobID, result string) bool 
 				JobID:       j.jobID,
 				Result:      result,
 			}})
+			s.notifyLocked()
 			return true
 		}
 	}
@@ -257,6 +309,8 @@ func (s *Server) ExpireQueueToken(scaleSetID int) {
 	if ss := s.scaleSets[scaleSetID]; ss != nil && ss.session != nil {
 		s.nextSessID++
 		ss.session.queueToken = fmt.Sprintf("queue-token-rotated-%d", s.nextSessID)
+		// A parked poll authorized under the old token must wake and 401 now.
+		s.notifyLocked()
 	}
 }
 
@@ -269,6 +323,9 @@ func (s *Server) DropSession(scaleSetID int) {
 	defer s.mu.Unlock()
 	if ss := s.scaleSets[scaleSetID]; ss != nil {
 		ss.session = nil
+		// A parked poll on the now-dead session must wake and 404 now, so the client
+		// re-creates the session promptly rather than after the poll window.
+		s.notifyLocked()
 	}
 }
 
@@ -584,6 +641,7 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if ss := s.scaleSets[id]; ss != nil {
 		ss.session = nil // the queue log persists; a re-created session replays it
+		s.notifyLocked() // release any poll still parked on the deleted session
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -650,43 +708,101 @@ func (s *Server) handleAcquireJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	if won == nil {
 		won = []int64{}
+	} else {
+		s.notifyLocked() // the JobAssigned messages just appended are deliverable now
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(won), "value": won})
 }
 
+// handlePoll serves the message queue's long poll. It re-evaluates assignment against
+// the capacity this request advertised, and if that yields nothing deliverable it parks
+// the request — waking on any queue-state change (notifyLocked) to re-evaluate, and
+// answering 202 only once the poll window elapses. Returning 202 immediately, as the
+// stub used to, makes a polling client re-poll with no pause: ~5,000 requests/second per
+// listener, which burns CI CPU and amplifies timing flakes (Q287). The real queue blocks
+// ~50s; SetPollTimeout(0) restores the non-blocking behavior for a test that asserts the
+// 202 directly.
+//
+// The advertised capacity is fixed for the life of one request, exactly as on the real
+// backend — a client whose free-slot count grows mid-poll only advertises the new value
+// on its next poll, so the window also bounds how stale that value can get.
 func (s *Server) handlePoll(w http.ResponseWriter, r *http.Request) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	id, _ := strconv.Atoi(r.PathValue("id"))
 	capacity, _ := strconv.Atoi(r.Header.Get("X-ScaleSetMaxCapacity"))
 	last, _ := strconv.ParseInt(r.URL.Query().Get("lastMessageId"), 10, 64)
+
+	s.mu.Lock()
+	// Record once per request, not once per wake, so Calls() counts HTTP polls.
 	s.record("poll id=%d cap=%d last=%d", id, capacity, last)
+	s.mu.Unlock()
 
-	ss := s.scaleSets[id]
-	if ss == nil || ss.session == nil {
-		http.Error(w, `{"message":"session not found"}`, http.StatusNotFound)
-		return
-	}
-	if r.Header.Get("Authorization") != "Bearer "+ss.session.queueToken {
-		http.Error(w, `{"message":"invalid queue token"}`, http.StatusUnauthorized)
-		return
-	}
+	// The poll window starts on the first evaluation that finds nothing to deliver, and
+	// spans every subsequent wake — so a stream of no-op wakes cannot extend it.
+	var timer *time.Timer
+	var deadline <-chan time.Time
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 
-	// Re-evaluate assignment on every poll against the advertised capacity — the
-	// dynamic gate the live probe proved (§2b-1). GHES instead offers each queued
-	// job as JobAvailable for the client to claim.
-	if s.ghesAcquireFlow {
-		ss.offerAvailable(s.newMsgID)
-	} else {
-		ss.assignUnderCapacity(capacity, s.newMsgID)
-	}
+	for {
+		s.mu.Lock()
+		ss := s.scaleSets[id]
+		if ss == nil || ss.session == nil {
+			s.mu.Unlock()
+			http.Error(w, `{"message":"session not found"}`, http.StatusNotFound)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+ss.session.queueToken {
+			s.mu.Unlock()
+			http.Error(w, `{"message":"invalid queue token"}`, http.StatusUnauthorized)
+			return
+		}
 
-	msg := ss.nextMessageAfter(last)
-	if msg == nil {
-		w.WriteHeader(http.StatusAccepted) // 202 — nothing to deliver, poll again
-		return
+		// Re-evaluate assignment on every poll against the advertised capacity — the
+		// dynamic gate the live probe proved (§2b-1). GHES instead offers each queued
+		// job as JobAvailable for the client to claim.
+		if s.ghesAcquireFlow {
+			ss.offerAvailable(s.newMsgID)
+		} else {
+			ss.assignUnderCapacity(capacity, s.newMsgID)
+		}
+
+		if msg := ss.nextMessageAfter(last); msg != nil {
+			out := s.encodeMessage(ss, msg)
+			s.mu.Unlock()
+			_ = json.NewEncoder(w).Encode(out)
+			return
+		}
+
+		// Nothing to deliver. Snapshot the wake channel before releasing the lock so a
+		// change landing in the gap still wakes us.
+		wake := s.wake
+		timeout := s.pollTimeout
+		s.mu.Unlock()
+
+		if timeout <= 0 {
+			w.WriteHeader(http.StatusAccepted) // long-polling disabled
+			return
+		}
+		if deadline == nil { // start the window on the first empty evaluation
+			timer = time.NewTimer(timeout)
+			deadline = timer.C
+		}
+
+		select {
+		case <-wake: // queue state changed — re-evaluate
+		case <-deadline:
+			w.WriteHeader(http.StatusAccepted) // 202 — window elapsed, nothing to deliver
+			return
+		case <-s.closed:
+			w.WriteHeader(http.StatusAccepted) // stub shutting down; release the client
+			return
+		case <-r.Context().Done():
+			return // client hung up (its ctx was cancelled)
+		}
 	}
-	_ = json.NewEncoder(w).Encode(s.encodeMessage(ss, msg))
 }
 
 func (s *Server) handleDeleteMessage(w http.ResponseWriter, r *http.Request) {
