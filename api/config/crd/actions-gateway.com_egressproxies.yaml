@@ -86,8 +86,9 @@ spec:
                   DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may
                   forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always
                   allowed and need not be listed; empty (the default) means GitHub-only.
-                  Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
-                  since the pod-egress layer expresses them as toFQDNs rules. Opening egress
+                  Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated
+                  CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs
+                  rules. Opening egress
                   beyond GitHub is an admin decision: the GMC rejects any entry not on its
                   --allowed-egress-fqdns platform allowlist (empty allowlist denies all).
                   G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).
@@ -100,12 +101,14 @@ spec:
                 description: |-
                   EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
                   allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
-                  reconcile, works on every CNI) or a CNI-native DNS-aware FQDN mode
-                  (CiliumFQDN / CalicoFQDN) that requires a DNS-aware policy CNI. It has no
-                  effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for
-                  the secure-by-default (fail-closed) guarantee.
+                  reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
+                  whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
+                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
+                  managedNetworkPolicy is false. See the EgressPolicyMode docs for the
+                  secure-by-default (fail-closed) guarantee.
                 enum:
                 - CIDR
+                - FQDN
                 - CiliumFQDN
                 - CalicoFQDN
                 type: string
@@ -225,10 +228,12 @@ spec:
             - message: minReplicas must not exceed maxReplicas
               rule: '!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas
                 <= self.maxReplicas'
-            - message: destinationFQDNs requires egressPolicyMode CiliumFQDN or CalicoFQDN
+            - message: destinationFQDNs requires an FQDN egressPolicyMode (FQDN, or
+                deprecated CiliumFQDN/CalicoFQDN)
               rule: '!has(self.destinationFQDNs) || self.destinationFQDNs.size() ==
-                0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == ''CiliumFQDN''
-                || self.egressPolicyMode == ''CalicoFQDN''))'
+                0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == ''FQDN''
+                || self.egressPolicyMode == ''CiliumFQDN'' || self.egressPolicyMode
+                == ''CalicoFQDN''))'
           status:
             description: |-
               EgressProxyStatus is the observed state of an EgressProxy, following the uniform
@@ -385,8 +390,9 @@ spec:
                   DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may
                   forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always
                   allowed and need not be listed; empty (the default) means GitHub-only.
-                  Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
-                  since the pod-egress layer expresses them as toFQDNs rules. Opening egress
+                  Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated
+                  CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs
+                  rules. Opening egress
                   beyond GitHub is an admin decision: the GMC rejects any entry not on its
                   --allowed-egress-fqdns platform allowlist (empty allowlist denies all).
                   G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).
@@ -399,12 +405,14 @@ spec:
                 description: |-
                   EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
                   allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
-                  reconcile, works on every CNI) or a CNI-native DNS-aware FQDN mode
-                  (CiliumFQDN / CalicoFQDN) that requires a DNS-aware policy CNI. It has no
-                  effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for
-                  the secure-by-default (fail-closed) guarantee.
+                  reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
+                  whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
+                  CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
+                  managedNetworkPolicy is false. See the EgressPolicyMode docs for the
+                  secure-by-default (fail-closed) guarantee.
                 enum:
                 - CIDR
+                - FQDN
                 - CiliumFQDN
                 - CalicoFQDN
                 type: string
@@ -524,10 +532,12 @@ spec:
             - message: minReplicas must not exceed maxReplicas
               rule: '!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas
                 <= self.maxReplicas'
-            - message: destinationFQDNs requires egressPolicyMode CiliumFQDN or CalicoFQDN
+            - message: destinationFQDNs requires an FQDN egressPolicyMode (FQDN, or
+                deprecated CiliumFQDN/CalicoFQDN)
               rule: '!has(self.destinationFQDNs) || self.destinationFQDNs.size() ==
-                0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == ''CiliumFQDN''
-                || self.egressPolicyMode == ''CalicoFQDN''))'
+                0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == ''FQDN''
+                || self.egressPolicyMode == ''CiliumFQDN'' || self.egressPolicyMode
+                == ''CalicoFQDN''))'
           status:
             description: |-
               EgressProxyStatus is the observed state of an EgressProxy, following the uniform

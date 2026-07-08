@@ -1,5 +1,17 @@
 # FQDN Egress: Split Tenant Intent from the CNI/Platform Backend
 
+> **Status (2026-07-07): Phase 1 + Phase 2 implemented (offline), live GKE validation
+> deferred.** The intent/backend split shipped as a **non-breaking compatible superset**:
+> `egressPolicyMode` gains `CIDR`/`FQDN` while `CiliumFQDN`/`CalicoFQDN` stay
+> accepted-but-deprecated in both `v2alpha1` and `v2beta1` (each pins its namesake
+> backend; the webhook warns). The GMC gains `--fqdn-policy-backend=none|cilium|calico|gke`
+> (default `none`, which rejects `FQDN` intent at admission), a `(intent, backend)`
+> resolver replacing the enum switch, and a `gke` `FQDNNetworkPolicy` emitter with the base
+> default-deny NetworkPolicy kept alongside it (the additive-allow invariant). Conversion
+> carries the mode verbatim (fuzzed over every enum value). The **only** residual is the
+> deferred [live GKE enforcement validation](#live-validation-plan-deferred-follow-up); the
+> cluster-scoped `aks`/`eks` backends (Phase 3) remain a separate follow-up.
+
 Design for decoupling the **tenant-facing egress intent** (`CIDR` vs `FQDN`)
 from the **platform-chosen FQDN enforcement backend** (Cilium, Calico, GKE
 Dataplane V2, …), and for adding a `gke` backend that emits GKE's managed

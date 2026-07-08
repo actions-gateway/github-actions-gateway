@@ -91,6 +91,12 @@ spec:
         # Additive to the flags above; fail-safe on a missing/bad CM.
         - --egress-destination-allowlist-configmap={{ . }}
         {{- end }}
+        {{- with .Values.fqdnPolicyBackend }}
+        # Q245: CNI/platform mechanism enforcing an FQDN egressPolicyMode intent
+        # (none|cilium|calico|gke). Operator's install-wide choice; unset defaults to
+        # none, which rejects FQDN intent at admission (secure default).
+        - --fqdn-policy-backend={{ . }}
+        {{- end }}
         {{- with .Values.apiServerCIDRs }}
         # Opt-in tightening (Q145): scope the AGC NetworkPolicy apiserver
         # (443/6443) egress to these CIDRs. Empty/unset keeps any-destination —

@@ -47,8 +47,11 @@ supported. Migrate a tenant when one of these is worth that trade-off.
 - **Per-gateway control-plane sizing.** `ActionsGateway.spec.agcResources` tunes the AGC
   container CPU/memory per gateway (an additive overlay of the platform default). v1 has
   no equivalent field ([§H.4](../design/appendix-h-v2-api-decomposition.md#h4-spec-sketches)).
-- **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds `CiliumFQDN` /
-  `CalicoFQDN` modes (default `CIDR`) to allowlist GitHub by hostname on a DNS-aware CNI.
+- **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds an `FQDN` intent
+  (default `CIDR`) to allowlist GitHub by hostname; the operator picks the enforcement
+  mechanism with the GMC `--fqdn-policy-backend` flag (`none`|`cilium`|`calico`|`gke`).
+  The earlier per-CNI `CiliumFQDN` / `CalicoFQDN` values remain accepted-but-deprecated
+  (Q245).
 
 **Quality-of-life and hardening — batched into the one schema break:**
 

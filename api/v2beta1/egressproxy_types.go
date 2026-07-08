@@ -6,36 +6,52 @@ import (
 )
 
 // EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
-// allowlist.
+// allowlist. It is TENANT INTENT: the tenant says how egress should be expressed (by
+// CIDR or by hostname); when hostname (FQDN) intent is chosen the platform operator —
+// not the tenant — selects the enforcement mechanism via the GMC --fqdn-policy-backend
+// flag (cilium, calico, or gke). This split keeps the tenant API stable as CNI/platform
+// FQDN mechanisms proliferate (Q245).
 //
 //   - CIDR (the default) emits a standard Kubernetes NetworkPolicy whose egress
 //     allowlist is the GitHub IP ranges, refreshed from api.github.com/meta every
 //     24h by the GMC's IPRangeReconciler. It works on every NetworkPolicy-enforcing
-//     CNI and requires no DNS awareness.
-//   - CiliumFQDN / CalicoFQDN instead emit a CNI-native, DNS-aware egress policy
-//     (a CiliumNetworkPolicy with toFQDNs, or a Calico NetworkPolicy with
-//     destination domains) scoped to the GitHub hostnames — no CIDR feed to keep
-//     current. These REQUIRE a CNI that enforces the corresponding DNS policy
-//     (Cilium with toFQDNs / Calico with DNS-based policy); see the operator docs.
+//     CNI and requires no DNS awareness or operator backend.
+//   - FQDN expresses the GitHub (and any Q242 destinationFQDNs) allowlist by hostname.
+//     The GMC emits a CNI-native, DNS-aware egress policy whose kind is chosen by the
+//     operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
+//     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
+//     closed and loud, never a silent runtime Degraded.
+//   - CiliumFQDN / CalicoFQDN are DEPRECATED aliases retained for backward
+//     compatibility. Each pins its namesake mechanism (a CiliumNetworkPolicy with
+//     toFQDNs, or a Calico NetworkPolicy with destination domains) regardless of the
+//     operator backend. Prefer FQDN + --fqdn-policy-backend; these values still work
+//     but will be removed in a future release, on the classic/v1alpha1 deprecation
+//     clock.
 //
-// The FQDN modes are fail-closed: the standard NetworkPolicy still default-denies
-// GitHub egress, so if the CNI cannot enforce the native policy, GitHub egress stays
-// denied rather than opening wide. Selecting an FQDN mode therefore never silently
-// weakens the default.
+// All FQDN-family modes are fail-closed: the standard NetworkPolicy still
+// default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
+// allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE
+// FQDNNetworkPolicy is absent — GitHub egress stays denied rather than opening wide.
+// Selecting an FQDN mode therefore never silently weakens the default.
 //
-// +kubebuilder:validation:Enum=CIDR;CiliumFQDN;CalicoFQDN
+// +kubebuilder:validation:Enum=CIDR;FQDN;CiliumFQDN;CalicoFQDN
 type EgressPolicyMode string
 
 const (
 	// EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub
 	// IP-range allowlist, refreshed every 24h. Works on every CNI.
 	EgressPolicyModeCIDR EgressPolicyMode = "CIDR"
-	// EgressPolicyModeCiliumFQDN emits a CiliumNetworkPolicy with toFQDNs rules
-	// scoped to the GitHub hostnames. Requires Cilium with DNS-aware policy.
+	// EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The
+	// concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend
+	// (cilium/calico/gke); FQDN intent with no backend is rejected at admission.
+	EgressPolicyModeFQDN EgressPolicyMode = "FQDN"
+	// EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium
+	// backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend.
+	// Prefer FQDN + --fqdn-policy-backend=cilium.
 	EgressPolicyModeCiliumFQDN EgressPolicyMode = "CiliumFQDN"
-	// EgressPolicyModeCalicoFQDN emits a Calico (projectcalico.org/v3) NetworkPolicy
-	// with destination-domain rules scoped to the GitHub hostnames. Requires Calico
-	// with DNS-based policy enabled.
+	// EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico
+	// backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless
+	// of --fqdn-policy-backend. Prefer FQDN + --fqdn-policy-backend=calico.
 	EgressPolicyModeCalicoFQDN EgressPolicyMode = "CalicoFQDN"
 )
 
@@ -45,7 +61,7 @@ const (
 // GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",message="minReplicas must not exceed maxReplicas"
-// +kubebuilder:validation:XValidation:rule="!has(self.destinationFQDNs) || self.destinationFQDNs.size() == 0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == 'CiliumFQDN' || self.egressPolicyMode == 'CalicoFQDN'))",message="destinationFQDNs requires egressPolicyMode CiliumFQDN or CalicoFQDN"
+// +kubebuilder:validation:XValidation:rule="!has(self.destinationFQDNs) || self.destinationFQDNs.size() == 0 || (has(self.egressPolicyMode) && (self.egressPolicyMode == 'FQDN' || self.egressPolicyMode == 'CiliumFQDN' || self.egressPolicyMode == 'CalicoFQDN'))",message="destinationFQDNs requires an FQDN egressPolicyMode (FQDN, or deprecated CiliumFQDN/CalicoFQDN)"
 type EgressProxySpec struct {
 	// MinReplicas is the floor of the proxy pool's HPA.
 	//
@@ -92,10 +108,11 @@ type EgressProxySpec struct {
 
 	// EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress
 	// allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range
-	// reconcile, works on every CNI) or a CNI-native DNS-aware FQDN mode
-	// (CiliumFQDN / CalicoFQDN) that requires a DNS-aware policy CNI. It has no
-	// effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for
-	// the secure-by-default (fail-closed) guarantee.
+	// reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy
+	// whose mechanism the operator picks via --fqdn-policy-backend). The deprecated
+	// CiliumFQDN/CalicoFQDN aliases pin their namesake backend. It has no effect when
+	// managedNetworkPolicy is false. See the EgressPolicyMode docs for the
+	// secure-by-default (fail-closed) guarantee.
 	//
 	// +optional
 	// +kubebuilder:default=CIDR
@@ -104,8 +121,9 @@ type EgressProxySpec struct {
 	// DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may
 	// forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always
 	// allowed and need not be listed; empty (the default) means GitHub-only.
-	// Host-suffix entries REQUIRE an FQDN egressPolicyMode (CiliumFQDN/CalicoFQDN),
-	// since the pod-egress layer expresses them as toFQDNs rules. Opening egress
+	// Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated
+	// CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs
+	// rules. Opening egress
 	// beyond GitHub is an admin decision: the GMC rejects any entry not on its
 	// --allowed-egress-fqdns platform allowlist (empty allowlist denies all).
 	// G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).

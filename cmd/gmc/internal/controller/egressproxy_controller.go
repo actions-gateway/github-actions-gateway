@@ -16,12 +16,14 @@ limitations under the License.
 
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=egressproxies,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=egressproxies/status,verbs=get;update;patch
-// CNI-native FQDN egress (Q208): in CiliumFQDN/CalicoFQDN mode the EgressProxy
-// reconciler creates/patches/deletes a CiliumNetworkPolicy or Calico NetworkPolicy
-// scoped to the GitHub FQDNs. These grants are no-ops on a cluster without the
-// corresponding CRD installed (the default CIDR mode emits neither object).
+// CNI-native FQDN egress (Q208/Q245): for an FQDN egressPolicyMode the EgressProxy
+// reconciler creates/patches/deletes the CNI-native policy chosen by the operator
+// --fqdn-policy-backend — a CiliumNetworkPolicy, a Calico NetworkPolicy, or a GKE
+// FQDNNetworkPolicy — scoped to the GitHub FQDNs. These grants are no-ops on a cluster
+// without the corresponding CRD installed (the default CIDR mode emits no such object).
 // +kubebuilder:rbac:groups=cilium.io,resources=ciliumnetworkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=projectcalico.org,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.gke.io,resources=fqdnnetworkpolicies,verbs=get;list;watch;create;update;patch;delete
 // EgressProxy owns its proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
 // self-signed proxy TLS Secret via controller owner references (§H.8); the
 // deployments/services/hpa/pdb/networkpolicies/secrets write verbs are already
@@ -74,6 +76,12 @@ type EgressProxyReconciler struct {
 	// first fetch lands (mirrors the ActionsGatewayReconciler contract).
 	IPCache    *IPRangeCache
 	ProxyImage string
+	// FQDNBackend is the operator-selected CNI/platform mechanism used to enforce an
+	// FQDN egressPolicyMode intent (the GMC --fqdn-policy-backend flag). The zero value
+	// is treated as FQDNBackendNone: FQDN intent emits no CNI-native policy (and is
+	// rejected at admission). The deprecated CiliumFQDN/CalicoFQDN intents ignore this
+	// field and always emit their namesake policy (Q245).
+	FQDNBackend FQDNBackend
 }
 
 // Reconcile drives an EgressProxy toward its desired proxy pool. EgressProxy uses
@@ -132,34 +140,45 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	return nil
 }
 
-// reconcileFQDNPolicy emits or removes the CNI-native FQDN egress policy (Q208) to
-// match spec.egressPolicyMode. In CiliumFQDN/CalicoFQDN mode it applies the matching
-// CNI policy and removes the other one; in CIDR mode (the default) or when the GMC is
-// not managing this proxy's policy, it removes both. The opposite-mode/disabled
-// removals make a mode switch converge cleanly. Deletes tolerate a missing object and
-// a missing CRD (a CIDR-mode cluster need not have the Cilium/Calico CRDs installed),
-// so the default path never fails on their absence.
+// reconcileFQDNPolicy emits or removes the CNI-native FQDN egress policy (Q208/Q245) to
+// match the (spec.egressPolicyMode, --fqdn-policy-backend) resolution. It applies the one
+// resolved CNI policy (Cilium/Calico/GKE) and removes every other one sharing the FQDN
+// policy name; in CIDR mode (the default), when FQDN intent has no operator backend, or
+// when the GMC is not managing this proxy's policy, it removes all three. Those removals
+// make a mode/backend switch converge cleanly. Deletes tolerate a missing object and a
+// missing CRD (a CIDR-mode cluster need not have any FQDN CRD installed), so the default
+// path never fails on their absence.
 func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
-	mode := egressModeOf(ep.Spec)
-
-	wantCilium := managed && mode == gmcv2alpha1.EgressPolicyModeCiliumFQDN
-	wantCalico := managed && mode == gmcv2alpha1.EgressPolicyModeCalicoFQDN
-
-	if wantCilium {
-		if err := r.applyCNIPolicy(ctx, ep, buildEgressProxyCiliumNetworkPolicy(ep)); err != nil {
-			return err
-		}
-	} else if err := r.deleteCNIPolicy(ctx, ep.Namespace, egressProxyFQDNPolicyName(ep), ciliumNetworkPolicyGVK); err != nil {
-		return err
+	emitter := fqdnEmitNone
+	if managed {
+		emitter = resolveFQDNEmitter(egressModeOf(ep.Spec), r.FQDNBackend)
 	}
 
-	if wantCalico {
-		if err := r.applyCNIPolicy(ctx, ep, buildEgressProxyCalicoNetworkPolicy(ep)); err != nil {
+	// Each CNI-native policy shares the "<ep>-proxy-fqdn" name, so at most one is applied
+	// and the others are deleted — that convergence is what makes a mode/backend switch
+	// clean. The GKE FQDNNetworkPolicy is additive-allow, so its fail-closed guarantee
+	// relies on the base standard NetworkPolicy (always applied above) default-denying
+	// GitHub egress; the GKE object only ever widens the union (Q245).
+	policies := []struct {
+		gvk   schema.GroupVersionKind
+		build func(*gmcv2alpha1.EgressProxy) *unstructured.Unstructured
+		want  bool
+	}{
+		{ciliumNetworkPolicyGVK, buildEgressProxyCiliumNetworkPolicy, emitter == fqdnEmitCilium},
+		{calicoNetworkPolicyGVK, buildEgressProxyCalicoNetworkPolicy, emitter == fqdnEmitCalico},
+		{gkeFQDNNetworkPolicyGVK, buildEgressProxyGKEFQDNNetworkPolicy, emitter == fqdnEmitGKE},
+	}
+	for _, p := range policies {
+		if p.want {
+			if err := r.applyCNIPolicy(ctx, ep, p.build(ep)); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := r.deleteCNIPolicy(ctx, ep.Namespace, egressProxyFQDNPolicyName(ep), p.gvk); err != nil {
 			return err
 		}
-	} else if err := r.deleteCNIPolicy(ctx, ep.Namespace, egressProxyFQDNPolicyName(ep), calicoNetworkPolicyGVK); err != nil {
-		return err
 	}
 	return nil
 }

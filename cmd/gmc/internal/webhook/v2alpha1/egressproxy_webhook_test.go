@@ -24,6 +24,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -168,4 +169,80 @@ func TestEgressProxyCustomValidator_ValidateDelete(t *testing.T) {
 	v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
 	_, err := v.ValidateDelete(context.Background(), newEgressProxy("team-a", "ep", []string{"anything-goes.example.com"}, nil))
 	require.NoError(t, err, "delete is a no-op regardless of allowlist state")
+}
+
+// epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the
+// Q245 intent/backend admission cases.
+func epWithMode(mode agcv2alpha1.EgressPolicyMode) *agcv2alpha1.EgressProxy {
+	return &agcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
+		Spec:       agcv2alpha1.EgressProxySpec{EgressPolicyMode: mode},
+	}
+}
+
+// TestEgressProxyCustomValidator_FQDNBackend covers the Q245 intent/backend split at
+// admission: FQDN intent is rejected when the cluster declares no backend (fail-closed
+// and loud), admitted when a backend is configured, and CIDR/deprecated modes are never
+// gated by the backend.
+func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
+	list := allowlist.NewEgressDestination(nil, nil)
+
+	cases := []struct {
+		name    string
+		mode    agcv2alpha1.EgressPolicyMode
+		backend controller.FQDNBackend
+		wantErr bool
+	}{
+		{"FQDN + none rejected", agcv2alpha1.EgressPolicyModeFQDN, controller.FQDNBackendNone, true},
+		{"FQDN + empty (zero value) rejected", agcv2alpha1.EgressPolicyModeFQDN, "", true},
+		{"FQDN + cilium admitted", agcv2alpha1.EgressPolicyModeFQDN, controller.FQDNBackendCilium, false},
+		{"FQDN + gke admitted", agcv2alpha1.EgressPolicyModeFQDN, controller.FQDNBackendGKE, false},
+		{"CIDR + none admitted", agcv2alpha1.EgressPolicyModeCIDR, controller.FQDNBackendNone, false},
+		{"deprecated Cilium + none admitted", agcv2alpha1.EgressPolicyModeCiliumFQDN, controller.FQDNBackendNone, false},
+		{"deprecated Calico + none admitted", agcv2alpha1.EgressPolicyModeCalicoFQDN, controller.FQDNBackendNone, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := &EgressProxyCustomValidator{Allowlist: list, FQDNBackend: tc.backend}
+			_, err := v.ValidateCreate(context.Background(), epWithMode(tc.mode))
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "--fqdn-policy-backend")
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestEgressProxyCustomValidator_DeprecationWarnings asserts the deprecated CNI-specific
+// modes are admitted with a non-blocking warning, while FQDN/CIDR emit none.
+func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
+	v := &EgressProxyCustomValidator{
+		Allowlist:   allowlist.NewEgressDestination(nil, nil),
+		FQDNBackend: controller.FQDNBackendCilium,
+	}
+
+	cases := []struct {
+		mode      agcv2alpha1.EgressPolicyMode
+		wantWarn  bool
+		wantToken string
+	}{
+		{agcv2alpha1.EgressPolicyModeCiliumFQDN, true, "CiliumFQDN is deprecated"},
+		{agcv2alpha1.EgressPolicyModeCalicoFQDN, true, "CalicoFQDN is deprecated"},
+		{agcv2alpha1.EgressPolicyModeFQDN, false, ""},
+		{agcv2alpha1.EgressPolicyModeCIDR, false, ""},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			warns, err := v.ValidateCreate(context.Background(), epWithMode(tc.mode))
+			require.NoError(t, err)
+			if !tc.wantWarn {
+				assert.Empty(t, warns)
+				return
+			}
+			require.Len(t, warns, 1)
+			assert.Contains(t, warns[0], tc.wantToken)
+		})
+	}
 }

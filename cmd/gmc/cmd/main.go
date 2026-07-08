@@ -173,6 +173,16 @@ func main() {
 			"CIDRs (comma/newline-separated). Additive and fail-safe: a missing or "+
 			"malformed ConfigMap leaves the static flag allowlists in force. Empty "+
 			"(default) disables the watch — flag-only behavior.")
+	var fqdnPolicyBackend string
+	flag.StringVar(&fqdnPolicyBackend, "fqdn-policy-backend", string(controller.FQDNBackendNone),
+		"CNI/platform mechanism the GMC uses to enforce an FQDN egressPolicyMode intent "+
+			"(Q245): none|cilium|calico|gke. This is the operator's install-wide choice — a "+
+			"tenant expresses intent (egressPolicyMode: FQDN) and this flag picks how it is "+
+			"enforced (cilium=CiliumNetworkPolicy, calico=Calico NetworkPolicy, gke=GKE "+
+			"Dataplane V2 FQDNNetworkPolicy). The secure default 'none' declares no backend, "+
+			"so an EgressProxy requesting FQDN intent is rejected at admission rather than "+
+			"silently degrading. The deprecated CiliumFQDN/CalicoFQDN modes ignore this flag "+
+			"and always emit their namesake policy. An unrecognized value fails startup.")
 	var apiServerCIDRs string
 	flag.StringVar(&apiServerCIDRs, "apiserver-cidrs", "",
 		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
@@ -294,6 +304,16 @@ func main() {
 		os.Exit(1)
 	}
 	egressDestinationAllowlist := allowlist.NewEgressDestination(parseAllowedPriorityClasses(allowedEgressFQDNs), egressCIDRs)
+
+	// The FQDN egress backend (Q245): the operator's install-wide choice of how an FQDN
+	// egressPolicyMode intent is enforced. Both the EgressProxy reconciler (which emits
+	// the resolved CNI-native policy) and its admission webhook (which rejects FQDN intent
+	// when the backend is none) read it. An unrecognized value fails startup.
+	fqdnBackend, err := controller.ParseFQDNBackend(fqdnPolicyBackend)
+	if err != nil {
+		setupLog.Error(err, "Invalid --fqdn-policy-backend")
+		os.Exit(1)
+	}
 
 	podNamespace := os.Getenv("POD_NAMESPACE")
 
@@ -528,10 +548,11 @@ func main() {
 		// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
 		// current. Same-namespace only at this milestone.
 		if err := (&controller.EgressProxyReconciler{
-			Client:     mgr.GetClient(),
-			Scheme:     mgr.GetScheme(),
-			IPCache:    ipCache,
-			ProxyImage: proxyImage,
+			Client:      mgr.GetClient(),
+			Scheme:      mgr.GetScheme(),
+			IPCache:     ipCache,
+			ProxyImage:  proxyImage,
+			FQDNBackend: fqdnBackend,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
 			os.Exit(1)
@@ -615,8 +636,9 @@ func main() {
 			os.Exit(1)
 		}
 		// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs
-		// against the platform egress allowlist (deny-all-non-GitHub by default).
-		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist); err != nil {
+		// against the platform egress allowlist (deny-all-non-GitHub by default). Q245:
+		// also reject FQDN intent when the cluster declares no --fqdn-policy-backend.
+		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist, fqdnBackend); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "EgressProxy")
 			os.Exit(1)
 		}

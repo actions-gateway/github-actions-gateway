@@ -197,8 +197,10 @@ func startValidatingWebhook() error {
 	// EgressProxy create in the suite would fail closed. It is wired to a fixed
 	// static allowlist (egressTestAllowlist) broad enough to permit the destinations
 	// the reconciler tests request; the dedicated admission test asserts off-allowlist
-	// rejection against the same set.
-	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist); err != nil {
+	// rejection against the same set. The FQDN backend is cilium (Q245) so an FQDN-intent
+	// EgressProxy is admitted here (backend != none); the FQDN+none admission rejection is
+	// covered by the webhook unit test, which can vary the backend freely.
+	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist, controller.FQDNBackendCilium); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the RunnerSet webhook
@@ -396,8 +398,18 @@ func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
 // startEgressProxyReconciler starts an EgressProxyReconciler for the duration of a
 // test against the envtest apiserver. The optional ipCache is shared so a test can
 // stamp GitHub CIDRs the proxy NetworkPolicy should pick up; a nil cache allocates a
-// fresh (empty) one, which the reconciler tolerates.
+// fresh (empty) one, which the reconciler tolerates. The FQDN backend is none — enough
+// for the deprecated CiliumFQDN/CalicoFQDN modes (which pin their own backend) and the
+// CIDR default; use startEgressProxyReconcilerWithBackend for FQDN-intent tests.
 func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) {
+	t.Helper()
+	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendNone)
+}
+
+// startEgressProxyReconcilerWithBackend is startEgressProxyReconciler with an explicit
+// FQDN egress backend (Q245), so a test can drive the FQDN intent through the operator's
+// chosen mechanism (cilium/calico/gke).
+func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -419,10 +431,11 @@ func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) 
 	}
 
 	err = (&controller.EgressProxyReconciler{
-		Client:     mgr.GetClient(),
-		Scheme:     mgr.GetScheme(),
-		IPCache:    ipCache,
-		ProxyImage: "proxy:test",
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		IPCache:     ipCache,
+		ProxyImage:  "proxy:test",
+		FQDNBackend: backend,
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 

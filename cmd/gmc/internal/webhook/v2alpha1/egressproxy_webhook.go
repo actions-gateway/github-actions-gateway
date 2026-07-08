@@ -23,9 +23,45 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
+
+// validateFQDNBackend rejects an EgressProxy whose egressPolicyMode requests the FQDN
+// intent on a cluster that declares no FQDN egress backend (--fqdn-policy-backend=none,
+// the secure default). This is the fail-closed-and-loud contract of the intent/backend
+// split (Q245): the operator learns at apply time, not from a stranded proxy pool that
+// silently goes Degraded. The deprecated CiliumFQDN/CalicoFQDN intents pin their own
+// backend and so are never gated here.
+func validateFQDNBackend(spec *agcv2alpha1.EgressProxySpec, backend controller.FQDNBackend) error {
+	// Only an explicitly-configured cilium/calico/gke backend admits FQDN intent; none,
+	// the empty zero value, and any other value all fail closed (main.go normalizes the
+	// flag via ParseFQDNBackend, so only valid values reach production).
+	backendConfigured := backend == controller.FQDNBackendCilium ||
+		backend == controller.FQDNBackendCalico ||
+		backend == controller.FQDNBackendGKE
+	if spec.EgressPolicyMode == agcv2alpha1.EgressPolicyModeFQDN && !backendConfigured {
+		return fmt.Errorf(
+			"spec.egressPolicyMode: FQDN requires the platform operator to configure an FQDN egress backend (GMC --fqdn-policy-backend=cilium|calico|gke); this cluster has none. Use egressPolicyMode: CIDR, or ask the platform operator to enable an FQDN backend")
+	}
+	return nil
+}
+
+// deprecatedModeWarning returns a non-blocking admission warning when an EgressProxy
+// still names a deprecated CNI-specific egressPolicyMode. The value is accepted and
+// keeps working (it pins its namesake backend), but the operator is nudged toward the
+// FQDN intent + --fqdn-policy-backend split (Q245). An empty string means no warning.
+func deprecatedModeWarning(mode agcv2alpha1.EgressPolicyMode) string {
+	switch mode {
+	case agcv2alpha1.EgressPolicyModeCiliumFQDN:
+		return "spec.egressPolicyMode CiliumFQDN is deprecated: use FQDN and have the platform operator set GMC --fqdn-policy-backend=cilium. CiliumFQDN still works but will be removed in a future release."
+	case agcv2alpha1.EgressPolicyModeCalicoFQDN:
+		return "spec.egressPolicyMode CalicoFQDN is deprecated: use FQDN and have the platform operator set GMC --fqdn-policy-backend=calico. CalicoFQDN still works but will be removed in a future release."
+	default:
+		return ""
+	}
+}
 
 // validateEgressDestinations rejects any EgressProxy.spec.destinationFQDNs /
 // destinationCIDRs entry the platform allowlist does not cover (Q242 G.1). The
@@ -71,23 +107,40 @@ type EgressProxyCustomValidator struct {
 	// Allowlist is the shared platform egress allowlist (static flags ∪ ConfigMap
 	// dynamic set). A nil allowlist denies every non-GitHub destination.
 	Allowlist *allowlist.EgressDestinationAllowlist
+	// FQDNBackend is the cluster's operator-selected FQDN egress backend (the GMC
+	// --fqdn-policy-backend flag). The secure default (none) rejects FQDN intent at
+	// admission (Q245).
+	FQDNBackend controller.FQDNBackend
 }
 
-// ValidateCreate rejects an EgressProxy requesting an off-allowlist destination.
-func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+// validate runs the shared admission checks for both create and update: it reject an
+// FQDN intent with no operator backend, gates any extra destinations against the
+// platform allowlist, and attaches a non-blocking deprecation warning for the legacy
+// CiliumFQDN/CalicoFQDN modes.
+func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+	var warnings admission.Warnings
+	if w := deprecatedModeWarning(obj.Spec.EgressPolicyMode); w != "" {
+		warnings = append(warnings, w)
+	}
+	if err := validateFQDNBackend(&obj.Spec, v.FQDNBackend); err != nil {
+		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
-		return nil, logRejection(ctx, "EgressProxy", "create", obj.Namespace, obj.Name, err)
+		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
-	return nil, nil
+	return warnings, nil
 }
 
-// ValidateUpdate applies the same allowlist gate on update, so widening the
-// destinations on an existing EgressProxy is checked too.
+// ValidateCreate rejects an EgressProxy requesting an off-allowlist destination or an
+// FQDN intent with no operator backend, warning on a deprecated CNI-specific mode.
+func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+	return v.validate(ctx, "create", obj)
+}
+
+// ValidateUpdate applies the same gates on update, so widening the destinations or
+// switching mode on an existing EgressProxy is checked too.
 func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
-	if err := validateEgressDestinations(&newObj.Spec, v.Allowlist); err != nil {
-		return nil, logRejection(ctx, "EgressProxy", "update", newObj.Namespace, newObj.Name, err)
-	}
-	return nil, nil
+	return v.validate(ctx, "update", newObj)
 }
 
 // ValidateDelete is a no-op.
@@ -96,12 +149,12 @@ func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2a
 }
 
 // SetupEgressProxyWebhookWithManager registers the validating webhook for the
-// EgressProxy data kind, wired to the shared platform egress allowlist. The
-// manager's scheme must already include agcv2alpha1 (the GMC registers it at
-// startup).
-func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist) error {
+// EgressProxy data kind, wired to the shared platform egress allowlist and the cluster's
+// FQDN egress backend. The manager's scheme must already include agcv2alpha1 (the GMC
+// registers it at startup).
+func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.EgressProxy{}).
-		WithValidator(&EgressProxyCustomValidator{Allowlist: list}).
+		WithValidator(&EgressProxyCustomValidator{Allowlist: list, FQDNBackend: backend}).
 		Complete(); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
