@@ -52,6 +52,28 @@ import (
 // its proxy onto another pool's egress path, traffic from both tenants leaves via one
 // IP and per-tenant IP attribution no longer holds. Nothing about namespace
 // isolation, RBAC, or the egress choke point changes. See docs/design/05-security.md.
+//
+// # Why a narrow block rather than a PodTemplateSpec
+//
+// Worker pods take placement through the full corev1.PodTemplateSpec on
+// RunnerTemplate. This type deliberately does not, for two reasons:
+//
+//   - Size. A PodTemplateSpec generates ~600 KB of OpenAPI. It is why the
+//     RunnerTemplate CRDs weigh 1.21 MB each and why the v2 CRDs ship in their own
+//     opt-in chart at all (§H.13, Q149 — embedding them pushed the main chart's Helm
+//     release Secret past 1 MiB). Two more copies, across two served versions, would
+//     put single CRD objects at the apiserver's ~1.5 MiB ceiling.
+//   - Ownership. The proxy and AGC pods' image, container, and securityContext are
+//     controller-enforced invariants. A PodTemplateSpec would invite an author to set
+//     them and then require a reserved-field CEL guardrail to reject it, which is the
+//     complexity RunnerTemplate carries and these kinds do not need.
+//
+// The consequence is a real gap: workers can express topologySpreadConstraints,
+// priorityClassName, schedulerName, runtimeClassName, and nodeName; these pods cannot.
+// The two that matter are topologySpreadConstraints (the modern successor to the
+// anti-affinity spread this proxy pool already relies on) and priorityClassName (an
+// evicted proxy pod takes that tenant's whole egress path down). Growing this struct
+// is purely additive — no conversion work, no breaking change. Tracked as Q284.
 type PodScheduling struct {
 	// NodeSelector constrains the pods to nodes carrying all of these labels — the
 	// simplest way to pin a proxy pool to a tenant's node pool (and thus to that
