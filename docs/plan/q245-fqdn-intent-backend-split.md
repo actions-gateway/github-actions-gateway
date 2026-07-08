@@ -18,9 +18,11 @@ to keep it off the cloud bill. Every `gke`-backend guarantee that depends on the
 deferred validation is marked **(to be validated)** rather than asserted.
 
 Tracks [Q245](../STATUS.md#Q245). A v2beta1 (Q74) input
-alongside [Q242](../STATUS.md#Q242) / [Q243](../STATUS.md#Q243), though — see
-[Migration](#migration--compatibility) — the reshape is **free to land in
-`v2alpha1` now** and does not block on the beta cut. Promoted from the
+alongside [Q242](../STATUS.md#Q242) / [Q243](../STATUS.md#Q243). **Note (2026-07-06):
+`egressPolicyMode` has already graduated into `v2beta1` (served + storage) via
+Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs
+a compatible-superset + conversion path (see [Migration](#migration--compatibility)).**
+Promoted from the
 [Q242 plan § Provider FQDN-egress fragmentation](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
 
 ---
@@ -348,14 +350,34 @@ self-contained follow-up, out of scope here; the security model is unaffected
 
 ## Migration / compatibility
 
-**The reshape is free to land in `v2alpha1` now — it does not block on the
-v2beta1 cut.** Per [v2beta1.md](v2beta1.md) (Q196 credentials precedent):
-"alpha carries no stability contract, so the reshape is free now, and the beta
-cut then inherits the correct shape." `egressPolicyMode` is `v2alpha1`, and the
-only consumers of `CiliumFQDN`/`CalicoFQDN` are tests and docs — the dogfood is
-direct-egress and never exercised an FQDN mode (Q242 finding). So the clean
-break (drop `CiliumFQDN`/`CalicoFQDN`, add `FQDN` + the operator flag) can be
-made directly, with **no additive-alias deprecation dance**.
+**Update (2026-07-06): the original "free in alpha" premise below is stale.** It
+was written before Q74 (#557) graduated the v2 kinds. `egressPolicyMode` now
+lives in **both `v2alpha1` and `v2beta1` (served + storage)** — confirm against
+the rendered CRD (`charts/actions-gateway-crds-v2/templates/crds/egressproxy-crd.yaml`),
+not the old "it's only `api/v2alpha1`" assumption. So **dropping
+`CiliumFQDN`/`CalicoFQDN` outright is now a breaking change to a served + storage
+beta field**, not a free alpha reshape.
+
+**Default path (secure-by-default / no-regression): a compatible superset.** Keep
+`CiliumFQDN`/`CalicoFQDN` accepted-but-deprecated in both versions, add
+`CIDR`/`FQDN`, normalize the old CNI-specific values to `FQDN` + the matching
+operator backend (with a deprecation warning), and map old→new in the Q74
+conversion webhook (fuzz-test the v2beta1→v2alpha1→v2beta1 round-trip so the
+Cilium-vs-Calico distinction isn't silently dropped). Remove the old values only
+at a later, deliberate breaking hop — on the **same deprecation clock as
+classic/v1alpha1**.
+
+A **clean break** (drop the old values immediately) breaks any v2beta1 object
+that set an FQDN mode. Real usage is thin — the only known consumers of
+`CiliumFQDN`/`CalicoFQDN` are tests and docs; dogfood is direct-egress and never
+exercised an FQDN mode (Q242 finding) — so a clean break *may* still be
+acceptable, but that is now an **explicit "zero external adopters + accept a beta
+break" sign-off**, not an assumed "free" reshape. Confirm before choosing it.
+
+Historical note (the original, now-superseded reasoning): "alpha carries no
+stability contract, so the reshape is free now, and the beta cut then inherits
+the correct shape" ([v2beta1.md](v2beta1.md), Q196 credentials precedent) — valid
+only while the field was alpha-only, which Q74 ended.
 
 Tie-in with **Q74** (v2alpha1→v2beta1 conversion webhook): because the reshape
 lands in `v2alpha1`, the beta cut inherits the already-correct
