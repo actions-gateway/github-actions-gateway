@@ -1,16 +1,26 @@
 # FQDN Egress: Split Tenant Intent from the CNI/Platform Backend
 
-> **Status (2026-07-07): Phase 1 + Phase 2 implemented (offline), live GKE validation
-> deferred.** The intent/backend split shipped as a **non-breaking compatible superset**:
+> **Status (2026-07-07): DONE — Phase 1 + Phase 2 implemented AND live-GKE validated.**
+> The `gke` backend's `FQDNNetworkPolicy` enforcement was confirmed end-to-end on a
+> real GKE Dataplane V2 cluster with `--enable-fqdn-network-policy` (throwaway
+> cluster, [campaign](q243-q245-q230-live-validation-campaign.md), 2026-07-07):
+> the GMC emits `networking.gke.io/v1alpha1 FQDNNetworkPolicy`; from a governed pod,
+> GitHub hosts return HTTP 200 while a non-allowlisted host (`example.com`) resolves
+> but is TCP-blocked by the base default-deny NetworkPolicy (the additive-allow
+> invariant); and **fail-closed is confirmed** — deleting the FQDNNetworkPolicy
+> re-blocks GitHub, proving the FQDN policy is the sole opener and its absence
+> (feature/CRD absent) leaves egress denied. The Phase-3 cluster-scoped `aks`/`eks`
+> backends remain a separate follow-up.
+> The intent/backend split shipped as a **non-breaking compatible superset**:
 > `egressPolicyMode` gains `CIDR`/`FQDN` while `CiliumFQDN`/`CalicoFQDN` stay
 > accepted-but-deprecated in both `v2alpha1` and `v2beta1` (each pins its namesake
 > backend; the webhook warns). The GMC gains `--fqdn-policy-backend=none|cilium|calico|gke`
 > (default `none`, which rejects `FQDN` intent at admission), a `(intent, backend)`
 > resolver replacing the enum switch, and a `gke` `FQDNNetworkPolicy` emitter with the base
 > default-deny NetworkPolicy kept alongside it (the additive-allow invariant). Conversion
-> carries the mode verbatim (fuzzed over every enum value). The **only** residual is the
-> deferred [live GKE enforcement validation](#live-validation-plan-deferred-follow-up); the
-> cluster-scoped `aks`/`eks` backends (Phase 3) remain a separate follow-up.
+> carries the mode verbatim (fuzzed over every enum value). The live GKE enforcement
+> validation is now **done** (§ Live-validation below); only the cluster-scoped
+> `aks`/`eks` backends (Phase 3) remain a separate follow-up.
 
 Design for decoupling the **tenant-facing egress intent** (`CIDR` vs `FQDN`)
 from the **platform-chosen FQDN enforcement backend** (Cilium, Calico, GKE
@@ -21,15 +31,14 @@ directly into the tenant API, so the same intent ("allow GitHub egress by
 hostname") is spelled differently on every CNI and cannot scale past the
 enum.
 
-**Scope of this document / this plan's PR: design + phased implementation plan
-only.** No cluster is stood up and no live GKE enforcement is validated here —
-the `gke` backend interacts with GKE Dataplane V2's in-kernel FQDN enforcement,
-which can only be confirmed on a real GKE cluster; that is deliberately deferred
-to a follow-up (see [Live-validation plan](#live-validation-plan-deferred-follow-up))
-to keep it off the cloud bill. Every `gke`-backend guarantee that depends on the
-deferred validation is marked **(to be validated)** rather than asserted.
+**Scope of this document: design + phased implementation plan.** The `gke`
+backend interacts with GKE Dataplane V2's in-kernel FQDN enforcement, which can
+only be confirmed on a real GKE cluster; that live validation was originally
+deferred and has since been **completed** (see the Live-validation section
+below). Guarantees previously marked **(to be validated)** are now validated,
+except the wildcard-blob 50-IP ceiling, which remains unstressed.
 
-Tracks [Q245](../STATUS.md#Q245). A v2beta1 (Q74) input
+Tracks Q245 (shipped + validated). A v2beta1 (Q74) input
 alongside [Q242](../STATUS.md#Q242) / [Q243](../STATUS.md#Q243). **Note (2026-07-06):
 `egressPolicyMode` has already graduated into `v2beta1` (served + storage) via
 Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs
@@ -448,26 +457,36 @@ and (except the live GKE pass) offline-testable.
 Needs the cluster-scoped ownership/GC design. File as its own Queue item on
 completion of Phase 1 (it's unblocked by the split, but is a distinct chunk).
 
-## Live-validation plan (deferred follow-up)
+## Live-validation — DONE (2026-07-07)
 
-The `gke` backend's actual **enforcement** — that Dataplane V2 drops non-GitHub
-egress while the base NP + `FQDNNetworkPolicy` union permits GitHub, that the
-50-IP ceiling behavior on `*.blob.core.windows.net` is tolerable, that DNS
-resolution is unaffected — can only be confirmed on a real GKE cluster with
-`--enable-fqdn-network-policy`. Deferred to keep it off the cloud bill and
-because CLAUDE.md requires end-to-end confirmation before asserting a finding.
-The validation steps (run on the existing `gag-dogfood` GKE cluster or a
-throwaway):
+Validated end-to-end on a throwaway GKE Standard / Dataplane V2 cluster
+(`--enable-fqdn-network-policy`, NodeLocal DNSCache), GMC built from HEAD
+(`daf977b`) installed `--fqdn-policy-backend=gke`. Full setup + evidence:
+[the campaign plan](q243-q245-q230-live-validation-campaign.md).
 
-1. Enable `--enable-fqdn-network-policy` on the cluster (Dataplane V2 already on).
-2. Apply an `EgressProxy` with `egressPolicyMode: FQDN`, GMC
-   `--fqdn-policy-backend=gke`.
-3. Confirm the `FQDNNetworkPolicy` is emitted, owned, and enforced: GitHub
-   CONNECT succeeds; a non-allowlisted host is dropped; DNS still resolves.
-4. Stress the wildcard-blob 50-IP ceiling under real Actions cache/artifact
-   load; record whether blob egress is intermittently dropped.
+1. ✅ Cluster came up with the `networking.gke.io FQDNNetworkPolicy` CRD present
+   (feature enabled).
+2. ✅ An `EgressProxy` with `egressPolicyMode: FQDN` was **admitted** (backend
+   `gke`, not `none`) and the GMC emitted the `FQDNNetworkPolicy`
+   (`proxy-a-proxy-fqdn`), owned by the EgressProxy, listing the GitHub FQDNs +
+   `*.blob.core.windows.net` on 443.
+3. ✅ **Enforcement:** from a pod governed by the proxy selector — `api.github.com`
+   + `github.com` returned **HTTP 200**; a non-allowlisted host (`example.com`)
+   resolved via DNS but its TCP:443 connect **timed out**, dropped by the base
+   default-deny `NetworkPolicy` (the union permits only DNS + the FQDN allowlist).
+4. ✅ **Fail-closed (secure-by-default):** deleting the `FQDNNetworkPolicy` (GMC
+   scaled to 0 so it couldn't re-emit) made `api.github.com` **time out too** —
+   the base NP carries no GitHub allow in FQDN mode, so the FQDN policy is the
+   *only* opener; its absence (feature/CRD absent → `NoMatch` → no object) leaves
+   GitHub egress **denied**, never open. Restoring the GMC re-emitted the policy
+   and GitHub returned to HTTP 200.
+5. ✅ **DNS unaffected** under the FQDN policy (see Q230 in the campaign — DNS
+   resolves through the base NP's `node-local-dns` peer).
 
-Until then, `gke`-backend enforcement guarantees are marked **(to be validated)**.
+**Still (to be validated):** the wildcard-blob **50-IP resolution ceiling** on
+`*.blob.core.windows.net` under real Actions cache/artifact load was *not*
+stressed (no workers/jobs in this control-plane-only validation). That caveat
+(§ `gke` caveats) stands; reserve it for a run that drives real artifact traffic.
 
 ## Docs to update when this lands
 

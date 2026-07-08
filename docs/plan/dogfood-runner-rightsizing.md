@@ -184,9 +184,10 @@ Setup for step 1 (no nested virt): a dedicated `e2-standard-8` spot e2e pool
   to seed a future precise allowlist.
 - **Durable hardening (deferred, backlog):** the destinations are CDN-fronted
   (Docker Hub→Cloudflare, helm→Azure, quay→Fastly), so an IP allowlist rots and a
-  precise **FQDN** allowlist can't be *enforced* on GKE Dataplane V2 today — its
-  managed Cilium has no `CiliumNetworkPolicy`, and GKE's `FQDNNetworkPolicy` is
-  alpha and GAG doesn't emit it ([Q245](../STATUS.md#Q245)). The durable answer is
+  precise **FQDN** allowlist isn't *enforced* on the dogfood cluster today — its
+  managed Cilium has no `CiliumNetworkPolicy`, and while GKE's alpha
+  `FQDNNetworkPolicy` is now emitted by GAG's `gke` backend, dogfood doesn't
+  enable the opt-in `--enable-fqdn-network-policy` it needs ([Q245](q245-fqdn-intent-backend-split.md)). The durable answer is
   an **in-cluster pull-through mirror** (collapses e2e egress to one in-cluster
   destination — air-gappable, no CDN rot), pairing with the Kata variant for
   untrusted jobs.

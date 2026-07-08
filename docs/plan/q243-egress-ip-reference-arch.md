@@ -7,12 +7,24 @@ production mechanisms (Cilium Egress Gateway vs per-tenant cloud NAT),
 documents the single-tenant-direct (dogfood) vs multi-tenant (production)
 topology and its cost, and defines a live-validation plan for a follow-up.
 
-**Scope of this document / this plan's PR: design + written reference
-architecture only.** No cloud cluster is stood up and no live egress spike is
-run here — that is deliberately deferred (see [Live-validation plan](#live-validation-plan-deferred-follow-up))
-to keep it off the dogfood cluster and off the cloud bill. Every guarantee
-that depends on the deferred validation is marked **(to be validated)**
-rather than asserted.
+**Scope of this document: design + written reference architecture.** The live
+validation has now run ([campaign, 2026-07-07](q243-q245-q230-live-validation-campaign.md))
+on a throwaway GKE Dataplane V2 cluster and reached a **split result**, updated
+inline below:
+
+- ✅ The **Cloud NAT mechanism is proven**: two tenants (distinguished by node
+  pool + pod secondary range) egress from **distinct, stable** source IPs, stable
+  across pod reschedule (see [Live-validation results](#live-validation-results-2026-07-07)).
+- ⚠️ **GAG cannot yet deliver it**: `EgressProxy.spec` has no scheduling controls
+  and the builder's anti-affinity **spreads** proxy pods across node pools, so a
+  tenant's proxy pods land on *different* NATs — the per-tenant single-IP property
+  the mechanism provides is not bindable through the current API. Filed as a
+  follow-up (see below).
+- 📝 **GKE mechanism corrected**: Approach B's "dedicated *subnet* per tenant" is
+  inaccurate for GKE (all node pools share the cluster subnet). The working
+  primitive is a **dedicated pod secondary range per tenant node pool + a per-range
+  Cloud NAT + `--disable-default-snat`** (so pod IPs, not the node IP, are the NAT
+  source). Corrected in [Approach B](#approach-b--per-tenant-cloud-nat).
 
 Tracks [Q243](../STATUS.md#Q243). A v2beta1 (Q74) blocker
 alongside Q224 and [Q242](../STATUS.md#Q242).
@@ -217,6 +229,22 @@ NAT gateway.
 Cloud NAT is a **VPC/subnet-level** construct — it has **no native
 per-namespace granularity**
 ([GCP Cloud NAT docs](https://docs.cloud.google.com/nat/docs/ports-and-addresses)).
+
+> **Corrected against live validation (2026-07-07).** On GKE all node pools of a
+> cluster share the **cluster subnet** — you cannot put node pools on separate
+> subnets in one cluster, so "a dedicated *subnet* per tenant" (the diagram below)
+> is not how it works on a single GKE cluster. The validated mechanism is a
+> **dedicated pod *secondary range* per tenant node pool** (`--pod-ipv4-range`),
+> a **per-range Cloud NAT** (`--nat-custom-subnet-ip-ranges=SUBNET:RANGE`, one per
+> tenant, all on one Cloud Router), and **`--disable-default-snat`** on the
+> cluster so pods egress with their pod IP (from the tenant range) instead of
+> being masqueraded to the shared node IP — that is what makes the per-range NAT
+> deterministic. Confirmed: 3 NATs covering 3 disjoint secondary ranges of one
+> subnet coexist on one router, giving distinct + stable per-tenant IPs
+> ([results](#live-validation-results-2026-07-07)). Read "subnet" below as "pod
+> secondary range." The EKS/AKS shapes (genuinely per-subnet / per-node-pool NAT)
+> are unaffected.
+
 Per-tenant IPs are achieved by pinning each tenant's proxy pods to a dedicated
 **node pool** on a dedicated **subnet**, and attaching a Cloud NAT config with
 a reserved static IP pool to that subnet's ranges:
@@ -376,12 +404,47 @@ cost for managed HA and portability), not billable numbers.
 
 ---
 
-## Live-validation plan (deferred follow-up)
+## Live-validation results (2026-07-07)
 
-**Deferred to a follow-up task — not run in this plan's PR.** Rationale: a live
+Run on a throwaway GKE Standard / Dataplane V2 cluster (`gag-val`, project
+deleted after) — full setup in [the campaign plan](q243-q245-q230-live-validation-campaign.md).
+The mechanism used was **Approach B on a single cluster**: three pod secondary
+ranges (`pods-default`/`pods-a`/`pods-b`) on one subnet, one node pool per
+tenant pinned to its range (`--pod-ipv4-range`), three per-range Cloud NAT
+gateways on one router, and `--disable-default-snat` so pod IPs are the NAT
+source.
+
+| Property (from "what the spike must prove") | Result |
+|---|---|
+| **Distinct egress IPs** — 2 tenants → disjoint source IPs | ✅ tenant-A `34.24.58.224` (nat-a), tenant-B `34.26.87.185` (nat-b), disjoint, consistent over 3 runs, observed at an external IP reflector |
+| **Stability across reschedule** — delete/relocate a pod, IP unchanged | ✅ pool-a pod deleted+recreated (pod IP 10.5.0.6→10.5.0.7) → still `34.24.58.224` (the IP binds to the pod *range*, not the pod) |
+| **Composition intact** — base NetworkPolicy still enforces the choke point | ✅ validated alongside Q245 (base default-deny NP blocks non-allowlisted egress) |
+| **GAG can bind a tenant's proxy to its egress IP** | ❌ **gap** — see below |
+
+**The gap (real finding, not paper-over).** `EgressProxy.spec` exposes no
+`nodeSelector`/`tolerations`/`affinity` ([`api/v2beta1/egressproxy_types.go`](../../api/v2beta1/egressproxy_types.go)),
+and `buildEgressProxyDeployment` sets a **required cross-node pod anti-affinity**
+that *spreads* proxy pods across nodes
+([`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go)).
+Live proof: scaling one tenant's `EgressProxy` to 2 replicas landed the pods on
+**different** pools — `10.5.0.5` (pool-a → nat-a → `34.24.58.224`) *and* `10.6.0.6`
+(pool-b → nat-b → `34.26.87.185`) — so a single tenant egressed from **two** IPs.
+The reference arch's Approach B assumes "the tenant's `EgressProxy` pods … via
+nodeSelector/toleration to the tenant pool"; **that binding does not exist in the
+API today**, and the existing anti-affinity actively works against it. Until the
+API can pin a tenant's proxy pods to one egress path (a `spec.scheduling` block,
+a platform-owned tenant→pool mapping the GMC consumes, or per-namespace scheduler
+policy), GAG delivers the *choke point* but not the *per-tenant IP*. **Follow-up
+Queue item filed** (add egress-path binding to `EgressProxy`); Q243's v2beta1-gate
+status carries to it.
+
+## Live-validation plan (original spec — retained for the deferred parts)
+
+**The distinct/stable/composition parts above are DONE.** The parts below that
+were *not* exercised (Approach A's fail-open window, kill-switch, SNAT-port
+headroom) stay deferred. Rationale for the original deferral: a live
 egress spike consumes cloud spend and would contend with / risk the shared
-dogfood cluster. This section specifies what that follow-up must prove so it
-can be scoped and costed later.
+dogfood cluster.
 
 ### What the spike must prove
 
