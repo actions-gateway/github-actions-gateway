@@ -18,6 +18,7 @@ import (
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,11 +40,11 @@ import (
 // the classic multiplexer path untouched — it never registers a scale set.
 
 // scaleSetTestMetrics is the shared scale-set metrics registry for the integration
-// tests. It is created once at package init: scalesetlistener.NewMetrics registers with
-// the global controller-runtime registry, and MustRegister panics on a duplicate, so it
-// must not be re-created per test. Counters are labelled per (namespace, runner_set), so
-// the tests' distinct namespaces keep independent series.
-var scaleSetTestMetrics = scalesetlistener.NewMetrics()
+// tests. It registers into a throwaway prometheus.Registry rather than the global
+// controller-runtime one, so it neither collides with the AGC's real collectors nor
+// with a second NewMetrics call (Q288). Counters are labelled per
+// (namespace, runner_set), so the tests' distinct namespaces keep independent series.
+var scaleSetTestMetrics = scalesetlistener.NewMetrics(prometheus.NewRegistry())
 
 // startRunnerSetReconcilerWithScaleSet wires and starts a RunnerSetReconciler like
 // startRunnerSetReconciler, but injects a ScaleSetClientFactory that points every
