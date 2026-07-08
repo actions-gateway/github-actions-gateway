@@ -17,7 +17,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **`Last touched:` is one line, date only.** Do not append session narrative.
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook. Overflow → move detail to the linked plan doc.
 
-Last touched: 2026-07-06
+Last touched: 2026-07-08
 ---
 
 ## Progress
@@ -54,7 +54,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q285"></a>Q285 | Flake: TestListener_AssignedCountReconciliation — dup provisioner after session re-create | `infra` | 🔲 | M | unit-test -race flaked on #578 (rerun of same commit passed; 8/8 local). After 'session gone, re-creating', job-1 logs attempt=1 TWICE, burns 4 name-conflict retries, job skipped, count never drains. Suspect dup provisioner on replay, not slow CI |
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | ▶ | L | P5 default-flip DONE 2026-07-06: Classic→ScaleSet default, Classic deprecated, gag-migrate pins Classic. v2beta1 + conversion webhook SHIPPED (Q74 done). Residual: 1-minor deprecation window + classic/v1alpha1 removal. P4 clean-green holds. |
 | <a id="Q247"></a>Q247 | [AGC runner session recovery after job recycling](plan/gke-dogfood.md) | `infra` | ▶ | M | 3 facets, all fixed + live-validated: RenewJob wrong ID (#481), unbounded renewal wedge (#485), broker-token-not-job-scoped 401 (#486). Full DinD e2e green on GAG (run 28496664762). Residual self-cancel on definitively-lost lock done in Q254. |
 | <a id="Q242"></a>Q242 | [Implement G.1 proxy destination allowlist](plan/q242-g1-proxy-destination-allowlist.md) | `security` `infra` | ▶ | L | Impl merged #460–#464. Concurrent-green ACHIEVED via ScaleSet clean-green ([Q264](#Q264) P4, 2026-07-05: 7/7 GAG jobs GREEN, 0 dedup/wedge). FQDN egress shipped (Q245). v2beta1 blocker cleared (Q74 shipped); [Q243](#Q243) egress-IP remains. |
@@ -62,6 +61,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q243"></a>Q243 | [Per-tenant egress-IP reference architecture (cloud)](plan/q243-egress-ip-reference-arch.md) | `security` `infra` `docs` | 🔲 | L | Reference arch done. Live validation 2026-07-07: per-range Cloud NAT gives 2 tenants distinct+stable IPs (proven). Scheduling blocker CLEARED by Q282 (spec.scheduling on EgressProxy+AG). Remaining: live-validate proxy-pool pinning end-to-end. |
 | <a id="Q284"></a>Q284 | Expand PodScheduling to the full desirable scheduling surface (EgressProxy + ActionsGateway) | `infra` | 🔲 | S | PodScheduling has only nodeSelector/tolerations/affinity; workers get a full PodTemplateSpec. Add topologySpreadConstraints (proxy spreads via anti-affinity today) + priorityClassName (evicted proxy = tenant egress down; Q132/Q188 gate). Additive. |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Q226 delivered the validated reference arch (unprivileged kind-in-Kata proven live; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e on. [plan](plan/kata-on-gke.md) |
+| <a id="Q287"></a>Q287 | scalesettest fake never long-polls — the scale-set listener hot-loops | `tests` `infra` | 🔲 | S | Its 202 (nothing to deliver) returns instantly, so `Listener.run` re-polls with no pause: ~2,600 req/s per listener, measured. Burns CI CPU, amplifies timing flakes. Hold the poll until a message lands or a deadline, as `fakegithub` does (Q148). |
+| <a id="Q288"></a>Q288 | scalesetlistener metrics panic under `go test -count>1` | `tests` | 🔲 | S | `NewMetrics()` `MustRegister`s on the default registry, so `TestMetricsRecorderIncrements` panics "duplicate metrics collector registration" on the 2nd run — blocking `-count` flake hunting. Register into a fresh `prometheus.Registry`. |
 | <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | ▶ | M | **Do-now slice DONE:** README/getting-started/roadmap/why-gag/onboarding routed to v2, deprecate-v1 banners, gag-migrate CLI+guide polished (§6.2). Full 'v2-only' (v1 removal) gated on v2beta1 (Q74 SHIPPED) + the Classic deprecation window. |
 ---
 
@@ -103,6 +104,7 @@ Flakes whose mitigation has shipped and that have **not recurred since**, plus r
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
+| <a id="Q285"></a>Q285 | [TestListener_AssignedCountReconciliation](../cmd/agc/internal/scalesetlistener/listener_test.go) | `tests` `flake` | M | Recurs after the root-cause fix (test completed only the jobs the provisioner had recorded; `Status.AssignedJobs` leads provisioning, so the list was short and the rest never drained). No product bug: the "dup provisioner" reading was interleaved stderr from later tests. → top of Queue, escalate. |
 | <a id="Q256"></a>Q256 | [e2e-calico infra bring-up (registry + Calico node)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | S | Recurs on `main` after PR #555 mitigation ((a) bake-push retry `scripts/bake-with-retry.sh`; (b) pin Calico `IP_AUTODETECTION_METHOD=kubernetes-internal-ip` + calico-node readiness dump). → top of Queue, escalate. |
 | <a id="Q222"></a>Q222 | [AGC SIGTERM_DeletesAllSessions](../cmd/agc/internal/controller/integration/sigterm_test.go) | `tests` `flake` | S | Recurs after PR #415 mitigation (DELETE-on-SIGTERM ceiling 30→60s + failure dump). DELETE path itself robust. → top of Queue, escalate. |
 | <a id="Q221"></a>Q221 | [metrics-NP AllowsLabeledNamespace (calico)](../cmd/gmc/test/e2e/manager_np_test.go) | `tests` `flake` | S | Recurs after PR #411 mitigation (fold positive control into Q159 retry-gate pod, drop 2nd probe re-racing per-pod NP programming). → top of Queue, escalate. |

@@ -205,7 +205,10 @@ type Status struct {
 	// ScaleSetID is the server-assigned scale-set id (0 until ensured).
 	ScaleSetID int
 	// AssignedJobs is the server-authoritative totalAssignedJobs from the last poll —
-	// the ARC clamp target and the RunnerSet's ActiveSessions/ActiveJobs proxy.
+	// the ARC clamp target and the RunnerSet's ActiveSessions/ActiveJobs proxy. It is
+	// not a count of provisioned workers and leads one: a single poll may assign a
+	// whole batch, and every envelope carries the fresh statistics, so the first
+	// JobAssigned the Listener handles already reports the entire batch as assigned.
 	AssignedJobs int
 	// RunningJobs is the server-authoritative totalRunningJobs from the last poll.
 	RunningJobs int
