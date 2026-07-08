@@ -253,13 +253,29 @@ kubectl apply -f docs/operations/examples/policies/gatekeeper/restrict-gag-place
 Namespaces without the label are left untouched, so the Kyverno policy is safe to
 apply before you have labelled anything.
 
-### The taint bypass
+### The taint bypass — and why validation alone is not enough
 
 A toleration with `operator: Exists` and **no `key`** tolerates *every* taint in the
-cluster — including the taints that reserve a node pool for one tenant. No
-GAG-emitted pod needs one, so both samples deny it. If you pin by mutation you do
-not strictly need this rule (the pinned `nodeSelector` already bounds the pod), but
-it costs nothing and it protects clusters that only validate.
+cluster, including the taints that reserve a node pool for one tenant. No GAG-emitted
+pod needs one, so both samples deny it.
+
+**But do not mistake that rule for a control.** It blocks only the *blanket* case. A
+pod that names the target pool's taint explicitly —
+
+```yaml
+tolerations:
+  - {key: dedicated, operator: Equal, value: pool-tenant-b, effect: NoSchedule}
+```
+
+— walks straight past it, and taint keys are conventional and readable
+(`kubectl get nodes -o jsonpath='{.items[*].spec.taints}'`). Denying keyless `Exists`
+raises the floor; it does not close the door.
+
+**The mutating pin is the only sound control of the two.** It holds even against a pod
+that sets `nodeName` directly to bypass the scheduler, because kubelet's
+`PodMatchNodeSelector` admission re-checks `nodeSelector` and required `nodeAffinity`
+against the node it actually landed on. If you take one thing from this section, apply
+the mutation; treat the toleration rule as a cheap extra, not a substitute.
 
 > **Not a substitute for tenant RBAC.** These policies act on **pods**, so they
 > cover worker, proxy, AGC, *and* any pod a tenant creates directly. That breadth is

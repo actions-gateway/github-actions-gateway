@@ -89,10 +89,17 @@ spec:
             nodeSelector:
               cloud.google.com/gke-nodepool: "{{ tenantPool }}"
 ---
-# Defense in depth, for clusters that prefer not to mutate. A toleration with
-# `operator: Exists` and NO key tolerates EVERY taint in the cluster — including
-# the taints that keep other tenants' dedicated pools private. Nothing GAG emits
-# needs one, so denying it costs nothing and closes the taint-bypass.
+# A cheap extra — NOT a substitute for the mutating pin above.
+#
+# A toleration with `operator: Exists` and NO key tolerates EVERY taint in the
+# cluster, including the taints that keep other tenants' dedicated pools private.
+# Nothing GAG emits needs one, so denying it costs nothing.
+#
+# Be clear about what this does NOT do: it blocks only the BLANKET case. A pod that
+# names the target pool's taint explicitly —
+#     tolerations: [{key: dedicated, operator: Equal, value: pool-tenant-b}]
+# — passes this rule, and taint keys are conventional and readable from
+# `kubectl get nodes`. Only the mutating pin above actually bounds placement.
 #
 # Ships in Audit. Review `kubectl get policyreport -A`, then flip
 # validationFailureAction to Enforce.

@@ -458,15 +458,20 @@ end-to-end in envtest rather than assumed.
 placement must be "platform-owned, not tenant-set (a tenant must not self-select an
 egress IP)". **That was wrong**, and Q282 reversed it after review:
 
-- The identical capability **already existed, un-gated**:
-  `RunnerTemplate.spec.podTemplate` is a full `PodTemplateSpec` whose reserved-field
-  guardrail (§H.4) withholds `serviceAccountName`, `automountServiceAccountToken`,
-  `hostPID`, `hostNetwork`, `hostIPC` — and *deliberately not* scheduling. In
-  direct-egress mode (§H.10) worker placement already selects the egress IP. Gating
-  the `EgressProxy` alone buys an asymmetry, not a property.
 - **A distinct egress IP is a feature, not an escape.** Tenants want one so they do
   not share a rate limit or a block radius. Electing one's own egress path is the
   intended use.
+- The capability is **already reachable, but the symmetry is only partial** — worth
+  stating precisely rather than overselling. `RunnerTemplate.spec.podTemplate` is a
+  full `PodTemplateSpec` whose reserved-field guardrail (§H.4) withholds
+  `serviceAccountName`, `automountServiceAccountToken`, `hostPID`, `hostNetwork`,
+  `hostIPC` — and *deliberately not* scheduling. In **direct**-egress mode (§H.10)
+  worker placement already selects the egress IP, un-gated. In the **proxied default**
+  it does not: NetworkPolicy forces worker traffic through the proxy, so the *proxy
+  pool's* placement selects the IP. `EgressProxy.spec.scheduling` therefore does
+  extend the capability to the default posture. Gating it would still leave the
+  direct-egress path open — and, per the next bullet, no validating gate could be
+  sound regardless.
 - **A validating allowlist of placement values is unsound.**
   `affinity.nodeAffinity` supports `NotIn`/`DoesNotExist`, so "any pool except mine"
   is expressible and no key=value allowlist rejects it in general. Pinning

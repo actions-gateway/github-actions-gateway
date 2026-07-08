@@ -22,27 +22,31 @@ import (
 // These fields are NOT gated by a platform allowlist, and that is a deliberate,
 // reviewed decision rather than an oversight (Q282):
 //
-//   - The capability already exists. RunnerTemplate.podTemplate is a full
-//     PodTemplateSpec whose reserved-field guardrail (§H.4) withholds
-//     serviceAccountName, automountServiceAccountToken, hostPID, hostNetwork, and
-//     hostIPC — but deliberately not nodeSelector/tolerations/affinity. In direct-
-//     egress mode (§H.10, no proxyRef) a tenant's worker pods reach GitHub without a
-//     proxy at all, so their placement already determines their egress IP. Gating the
-//     EgressProxy alone would buy an asymmetry, not a security property.
-//
 //   - Choosing an egress path is a feature, not an escape. Distinct per-tenant egress
 //     IPs exist so tenants do not share a rate-limit or block radius with each other.
 //     A tenant electing where its own traffic leaves the cluster is the intended use.
 //
-//   - Constraining placement is the platform's job, and it has the right tool.
-//     Restricting which nodes a namespace's pods may target is a general Kubernetes
-//     concern that a policy engine (Gatekeeper, Kyverno) expresses far better than a
-//     per-CRD allowlist could — not least because affinity.nodeAffinity supports
-//     NotIn/DoesNotExist, so "any pool except my own" is expressible and no key=value
-//     allowlist can soundly reject it. Tolerations are the field that defeats a taint,
-//     and taints are how an admin marks a pool off-limits; that is where a policy
-//     should look first. See docs/operations/security-operations.md for ready-to-apply
-//     Gatekeeper and Kyverno examples covering both this type and RunnerTemplate.
+//   - The capability is already reachable, though the symmetry is partial — state it
+//     precisely. RunnerTemplate.podTemplate is a full PodTemplateSpec whose
+//     reserved-field guardrail (§H.4) withholds serviceAccountName,
+//     automountServiceAccountToken, hostPID, hostNetwork, and hostIPC — but
+//     deliberately not nodeSelector/tolerations/affinity. In DIRECT-egress mode
+//     (§H.10, no proxyRef) worker pods reach GitHub without a proxy, so worker
+//     placement already selects the egress IP with no gate. In PROXIED mode (the
+//     default) it does not: NetworkPolicy forces worker traffic through the proxy, so
+//     the proxy pool's placement is what selects the IP. This field therefore does
+//     extend the capability to the default posture — it is not purely a symmetry
+//     argument, and gating it would still leave the direct-egress path open.
+//
+//   - Constraining placement is the platform's job, and only the platform has a sound
+//     tool. A per-CRD *validating* allowlist of permitted placement values cannot
+//     work: affinity.nodeAffinity supports NotIn/DoesNotExist, so "any pool except my
+//     own" is expressible and no key=value allowlist rejects it in general. Pinning
+//     nodeSelector by MUTATION is sound — Kubernetes ANDs nodeSelector with
+//     nodeAffinity, so affinity can only narrow the candidate nodes, never widen them
+//     — and mutation is a policy-engine (Gatekeeper, Kyverno) capability, not a CRD
+//     webhook one. See docs/operations/admission-policies.md for ready-to-apply
+//     samples covering this type and RunnerTemplate alike.
 //
 // The property this weakens is *attribution*, not isolation: if a tenant retargets
 // its proxy onto another pool's egress path, traffic from both tenants leaves via one

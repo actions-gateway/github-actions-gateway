@@ -243,10 +243,11 @@ func egressProxyTolerations(ep *gmcv2alpha1.EgressProxy) []corev1.Toleration {
 
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
 // It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
-// required cross-node anti-affinity, self-signed proxy TLS mount, /healthz +
-// /readyz probes, 60s graceful drain) but is keyed on the EgressProxy: the pod
-// labels/selector and the anti-affinity term use the per-EgressProxy identity so
-// pools in one namespace stay isolated.
+// cross-node anti-affinity, self-signed proxy TLS mount, /healthz + /readyz probes,
+// 60s graceful drain) but is keyed on the EgressProxy: the pod labels/selector and
+// the anti-affinity term use the per-EgressProxy identity so pools in one namespace
+// stay isolated. Unlike v1's, the anti-affinity is a *default* the author can
+// override via spec.scheduling.affinity (Q282) — see egressProxyAffinity.
 //
 // M2 omits v1's metrics-mTLS volume/port/env: that listener shares a per-tenant
 // metrics CA jointly owned with the AGC, which lands in M3a. Exposing a metrics

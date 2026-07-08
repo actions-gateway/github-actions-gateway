@@ -45,11 +45,15 @@ spec:
     assign:
       value: pool-tenant-a
 ---
-# 2. DENY BLANKET TOLERATIONS — defense in depth.
+# 2. DENY BLANKET TOLERATIONS — a cheap extra, NOT a substitute for the pin above.
 #
 # A toleration with `operator: Exists` and no `key` tolerates EVERY taint in the
 # cluster, including the taints that reserve a node pool for one tenant. Nothing
 # GAG emits needs one.
+#
+# What this does NOT do: it blocks only the BLANKET case. A pod naming the target
+# pool's taint explicitly (`{key: dedicated, operator: Equal, value: pool-tenant-b}`)
+# passes it. Only the Assign mutation above actually bounds placement.
 apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
