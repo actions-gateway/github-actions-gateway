@@ -39,15 +39,93 @@ const (
 	egressProxyFQDNPolicySuffix = "-proxy-fqdn"
 )
 
-// ciliumNetworkPolicyGVK / calicoNetworkPolicyGVK identify the CNI-native policy
-// kinds the GMC emits in FQDN mode. They are addressed as unstructured objects so the
-// GMC never takes a compile-time dependency on the Cilium or Calico API modules, and
-// so a cluster without the matching CRD installed simply NoMatch-errors loudly rather
-// than forcing the dependency on every install.
+// ciliumNetworkPolicyGVK / calicoNetworkPolicyGVK / gkeFQDNNetworkPolicyGVK identify the
+// CNI-native policy kinds the GMC emits in FQDN mode. They are addressed as unstructured
+// objects so the GMC never takes a compile-time dependency on the Cilium, Calico, or GKE
+// API modules, and so a cluster without the matching CRD installed simply NoMatch-errors
+// loudly rather than forcing the dependency on every install.
 var (
-	ciliumNetworkPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
-	calicoNetworkPolicyGVK = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkPolicy"}
+	ciliumNetworkPolicyGVK  = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
+	calicoNetworkPolicyGVK  = schema.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkPolicy"}
+	gkeFQDNNetworkPolicyGVK = schema.GroupVersionKind{Group: "networking.gke.io", Version: "v1alpha1", Kind: "FQDNNetworkPolicy"}
 )
+
+// FQDNBackend selects the CNI/platform mechanism the GMC uses to enforce an FQDN
+// egressPolicyMode intent. It is an operator-level, install-wide choice (the GMC
+// --fqdn-policy-backend flag), NOT a tenant field: a tenant expresses the durable
+// intent (egressPolicyMode: FQDN) and the platform operator picks how it is enforced
+// (Q245). The secure default is none — a cluster that declares no backend rejects FQDN
+// intent at admission rather than guessing a mechanism or silently degrading.
+type FQDNBackend string
+
+const (
+	// FQDNBackendNone is the secure default: the cluster declares no FQDN egress
+	// backend, so FQDN intent is rejected at admission (fail-closed and loud).
+	FQDNBackendNone FQDNBackend = "none"
+	// FQDNBackendCilium emits a cilium.io/v2 CiliumNetworkPolicy (toFQDNs).
+	FQDNBackendCilium FQDNBackend = "cilium"
+	// FQDNBackendCalico emits a projectcalico.org/v3 NetworkPolicy (destination domains).
+	FQDNBackendCalico FQDNBackend = "calico"
+	// FQDNBackendGKE emits a networking.gke.io/v1alpha1 FQDNNetworkPolicy (the managed
+	// GKE Dataplane V2 built-in). Additive-allow, so it composes with — never replaces —
+	// the base default-deny NetworkPolicy (Q245).
+	FQDNBackendGKE FQDNBackend = "gke"
+)
+
+// ParseFQDNBackend validates and normalizes the --fqdn-policy-backend flag value. An
+// empty value is treated as the secure default (none); any other unrecognized value is
+// a startup error so an operator typo fails loudly rather than silently disabling FQDN.
+func ParseFQDNBackend(s string) (FQDNBackend, error) {
+	switch FQDNBackend(s) {
+	case "", FQDNBackendNone:
+		return FQDNBackendNone, nil
+	case FQDNBackendCilium, FQDNBackendCalico, FQDNBackendGKE:
+		return FQDNBackend(s), nil
+	default:
+		return "", fmt.Errorf("invalid --fqdn-policy-backend %q: want one of none, cilium, calico, gke", s)
+	}
+}
+
+// fqdnEmitterKind identifies which CNI-native FQDN policy the reconciler must emit for a
+// given (intent, backend) pair — or none.
+type fqdnEmitterKind int
+
+const (
+	fqdnEmitNone fqdnEmitterKind = iota
+	fqdnEmitCilium
+	fqdnEmitCalico
+	fqdnEmitGKE
+)
+
+// resolveFQDNEmitter maps the tenant intent (egressPolicyMode) and the operator backend
+// (--fqdn-policy-backend) to the concrete CNI-native emitter — the single decision point
+// that replaces the old per-CNI enum switch (Q245). The deprecated CNI-specific intents
+// CiliumFQDN/CalicoFQDN pin their namesake mechanism regardless of the operator backend,
+// preserving exact pre-split behavior for stored objects; the intent value FQDN defers to
+// the operator backend, and FQDN+none emits nothing. That last case is rejected at
+// admission, so it is not reached in practice — and if it were, the base NetworkPolicy
+// still default-denies GitHub egress, so it fails closed rather than opening wide.
+func resolveFQDNEmitter(mode gmcv2alpha1.EgressPolicyMode, backend FQDNBackend) fqdnEmitterKind {
+	switch mode {
+	case gmcv2alpha1.EgressPolicyModeCiliumFQDN:
+		return fqdnEmitCilium
+	case gmcv2alpha1.EgressPolicyModeCalicoFQDN:
+		return fqdnEmitCalico
+	case gmcv2alpha1.EgressPolicyModeFQDN:
+		switch backend {
+		case FQDNBackendCilium:
+			return fqdnEmitCilium
+		case FQDNBackendCalico:
+			return fqdnEmitCalico
+		case FQDNBackendGKE:
+			return fqdnEmitGKE
+		default: // none or unset
+			return fqdnEmitNone
+		}
+	default: // CIDR or empty
+		return fqdnEmitNone
+	}
+}
 
 // githubEgressFQDNs is the GitHub hostname allowlist used by the FQDN egress modes —
 // the DNS equivalent of the api/actions/web CIDR families the IPRangeReconciler tracks
@@ -70,9 +148,9 @@ var githubEgressFQDNs = []string{
 // egressFQDNs returns the full FQDN allowlist an FQDN-mode CNI policy must permit:
 // the implicit GitHub hostnames (always allowed) plus the operator's extra
 // destinationFQDNs (Q242 G.1). The extras are valid only in an FQDN mode (the CRD's
-// CEL rule rejects destinationFQDNs without CiliumFQDN/CalicoFQDN), so they only ever
-// reach the CNI-native policy. A fresh slice is returned so callers never mutate the
-// shared githubEgressFQDNs backing array.
+// CEL rule rejects destinationFQDNs without an FQDN-family egressPolicyMode), so they
+// only ever reach the CNI-native policy. A fresh slice is returned so callers never
+// mutate the shared githubEgressFQDNs backing array.
 func egressFQDNs(ep *gmcv2alpha1.EgressProxy) []string {
 	out := make([]string, 0, len(githubEgressFQDNs)+len(ep.Spec.DestinationFQDNs))
 	out = append(out, githubEgressFQDNs...)
@@ -251,6 +329,54 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructu
 				dnsRule("UDP", dnsNodeLocalPodValue), dnsRule("TCP", dnsNodeLocalPodValue),
 				githubRule,
 			},
+		},
+	}}
+}
+
+// buildEgressProxyGKEFQDNNetworkPolicy builds the managed GKE Dataplane V2 built-in
+// networking.gke.io/v1alpha1 FQDNNetworkPolicy emitted for the gke backend (Q245). It
+// selects this pool's proxy pods and allows TCP/443 to the GitHub FQDNs, each split into
+// {name: …} (exact) or {pattern: …} (wildcard) exactly like the Cilium/Calico builders.
+//
+// Unlike Cilium/Calico, this object carries NO DNS rule and is NOT self-default-denying:
+// GKE's FQDNNetworkPolicy is additive-allow (a union with any NetworkPolicy on the same
+// pod), and DNS bypasses FQDN enforcement entirely. Both concerns are handled by the base
+// standard NetworkPolicy that the reconciler always applies — it default-denies GitHub
+// egress (dropping the CIDR rule) and carries the DNS-only allow (including the Q229
+// node-local-dns peer). So the fail-closed guarantee for gke DEPENDS on that base NP being
+// present: the FQDNNetworkPolicy only widens the union to permit GitHub, and if it is
+// absent or unenforced, GitHub egress stays denied by the base NP rather than opening wide.
+func buildEgressProxyGKEFQDNNetworkPolicy(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
+	allFQDNs := egressFQDNs(ep)
+	matches := make([]interface{}, 0, len(allFQDNs))
+	for _, f := range allFQDNs {
+		if strings.Contains(f, "*") {
+			matches = append(matches, map[string]interface{}{"pattern": f})
+		} else {
+			matches = append(matches, map[string]interface{}{"name": f})
+		}
+	}
+
+	githubEgress := map[string]interface{}{
+		"matches": matches,
+		"ports": []interface{}{
+			map[string]interface{}{"protocol": "TCP", "port": int64(443)},
+		},
+	}
+
+	return &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": gkeFQDNNetworkPolicyGVK.GroupVersion().String(),
+		"kind":       gkeFQDNNetworkPolicyGVK.Kind,
+		"metadata": map[string]interface{}{
+			"name":      egressProxyFQDNPolicyName(ep),
+			"namespace": ep.Namespace,
+			"labels":    toUnstructuredLabels(egressProxyLabels(ep)),
+		},
+		"spec": map[string]interface{}{
+			"podSelector": map[string]interface{}{
+				"matchLabels": toUnstructuredLabels(egressProxyPodSelector(ep)),
+			},
+			"egress": []interface{}{githubEgress},
 		},
 	}}
 }

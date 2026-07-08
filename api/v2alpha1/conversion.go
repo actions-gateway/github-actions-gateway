@@ -120,6 +120,15 @@ func (r *ActionsGateway) ConvertFrom(srcRaw conversion.Hub) error {
 
 // --- EgressProxy (identity) ---
 
+// EgressProxy is a pure identity conversion: v2beta1 has the same shape, and both
+// versions carry the same egressPolicyMode enum superset (CIDR;FQDN;CiliumFQDN;
+// CalicoFQDN). The deprecated CiliumFQDN/CalicoFQDN values ride across VERBATIM — the
+// conversion never collapses them to FQDN — which is what keeps the Cilium-vs-Calico
+// distinction lossless for a stored object during coexistence (Q245). The choice of FQDN
+// enforcement backend for the intent value FQDN is operator config (--fqdn-policy-backend),
+// not a CRD field, so it never enters conversion. The round-trip is fuzzed over every enum
+// value in conversion_test.go to lock this in.
+
 // ConvertTo converts this v2alpha1 EgressProxy to the v2beta1 hub.
 func (r *EgressProxy) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*v2beta1.EgressProxy)

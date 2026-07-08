@@ -650,8 +650,8 @@ If instead you want to express the **proxy's own** GitHub egress as FQDN rules u
 a DNS-aware CNI, you have two supported options:
 
 - **First-class, GMC-managed (recommended on a v2 `EgressProxy`)** — set
-  `spec.egressPolicyMode: CiliumFQDN` (or `CalicoFQDN`) and the GMC emits the
-  CNI-native FQDN policy for you, keeping it owned and reconciled. See
+  `spec.egressPolicyMode: FQDN` and have the operator select `--fqdn-policy-backend`;
+  the GMC emits the CNI-native FQDN policy for you, keeping it owned and reconciled. See
   [Expressing GitHub egress by FQDN](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
   below.
 - **Full hand-off** — set `spec.proxy.managedNetworkPolicy: false` (v1
@@ -697,10 +697,18 @@ GMC-managed regardless.
 
 By default the GMC expresses the proxy pool's GitHub allowlist as **IP CIDR ranges**,
 refreshed from `api.github.com/meta` every 24h (`egressPolicyMode: CIDR`). This works
-on every NetworkPolicy-enforcing CNI and needs no DNS awareness. If you run a CNI that
-enforces DNS-based egress, you can instead have the GMC emit a **CNI-native FQDN
-policy** scoped to the GitHub hostnames — no CIDR feed to keep current. This is an
-opt-in on the v2 `EgressProxy`:
+on every NetworkPolicy-enforcing CNI and needs no DNS awareness. If your cluster
+enforces DNS-based egress, you can instead have the GMC express the allowlist by
+**hostname** — no CIDR feed to keep current.
+
+The choice is split across **two roles** (Q245), so the tenant API stays stable as
+CNI/platform FQDN mechanisms proliferate:
+
+- **The tenant expresses intent** on the v2 `EgressProxy` — `egressPolicyMode: FQDN`
+  means "allow my GitHub (and any `destinationFQDNs`) egress by hostname." The tenant
+  does **not** name Cilium/Calico/GKE.
+- **The operator picks the mechanism**, once per cluster, via the GMC
+  `--fqdn-policy-backend` flag (chart: `fqdnPolicyBackend`).
 
 ```yaml
 apiVersion: actions-gateway.com/v2alpha1
@@ -709,38 +717,65 @@ metadata:
   name: shared
   namespace: team-a
 spec:
-  egressPolicyMode: CiliumFQDN   # or CalicoFQDN; default is CIDR
+  egressPolicyMode: FQDN   # intent only; default is CIDR
 ```
 
-When set to `CiliumFQDN` the GMC reconciles a `CiliumNetworkPolicy` (`cilium.io/v2`)
-with `toFQDNs` rules; `CalicoFQDN` reconciles a Calico `NetworkPolicy`
-(`projectcalico.org/v3`) with destination `domains`. Both are named `<proxy>-proxy-fqdn`,
-owned by the `EgressProxy` (garbage-collected with it), and cover the GitHub Actions
-runner endpoint families: `api.github.com`, `github.com`, `codeload.github.com`,
-`objects.githubusercontent.com`, `*.actions.githubusercontent.com`, and
-`*.blob.core.windows.net`. In an FQDN mode the standard `NetworkPolicy` drops its
-GitHub-CIDR rule (DNS + ingress are unchanged) and the 24h IP-range reconcile skips
-this proxy.
+```yaml
+# values.yaml — the platform operator picks how FQDN intent is enforced, cluster-wide.
+fqdnPolicyBackend: cilium   # none (default) | cilium | calico | gke
+```
 
-**Prerequisites — this is the operator's responsibility:**
+**Operator backend selector (`--fqdn-policy-backend`):**
 
-| Mode | Requires | If the CNI cannot enforce it |
+| Backend | GMC emits | Requires |
 | --- | --- | --- |
-| `CiliumFQDN` | A **self-managed** Cilium with DNS-aware policy (`toFQDNs`) **and the `cilium.io/v2 CiliumNetworkPolicy` CRD installed** | The GMC's apply fails loudly and the `EgressProxy` goes `Degraded`. GitHub egress stays **denied** (the standard NetworkPolicy default-denies it), never silently opened. |
-| `CalicoFQDN` | Calico with DNS-based policy enabled, and the `projectcalico.org/v3` `NetworkPolicy` CRD installed | As above — fail-closed. |
+| `none` (default) | *(nothing)* — FQDN intent is **rejected at admission** | — the cluster declares no FQDN backend |
+| `cilium` | `CiliumNetworkPolicy` (`cilium.io/v2`) with `toFQDNs` | A **self-managed** Cilium with DNS-aware policy **and the `cilium.io/v2 CiliumNetworkPolicy` CRD installed** |
+| `calico` | Calico `NetworkPolicy` (`projectcalico.org/v3`) with destination `domains` | Calico with DNS-based policy enabled, and the `projectcalico.org/v3 NetworkPolicy` CRD installed |
+| `gke` | GKE `FQDNNetworkPolicy` (`networking.gke.io/v1alpha1`) | GKE Dataplane V2 with `--enable-fqdn-network-policy` |
 
-> **Managed "Cilium" platforms usually do NOT support `CiliumFQDN`.** The CRD test is
-> literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
+The emitted object is named `<proxy>-proxy-fqdn`, owned by the `EgressProxy`
+(garbage-collected with it), and covers the GitHub Actions runner endpoint families:
+`api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`,
+`*.actions.githubusercontent.com`, and `*.blob.core.windows.net`. In an FQDN mode the
+standard `NetworkPolicy` drops its GitHub-CIDR rule (DNS + ingress are unchanged) and
+the 24h IP-range reconcile skips this proxy.
+
+> **The default `none` denies FQDN intent — loudly, at apply time.** A tenant that sets
+> `egressPolicyMode: FQDN` on a cluster with `--fqdn-policy-backend=none` is **rejected
+> by the admission webhook** ("this cluster has no FQDN egress backend configured; ask
+> the platform operator, or use egressPolicyMode: CIDR"), not left with a silently
+> `Degraded` proxy pool. The default never guesses a mechanism or auto-detects.
+
+**Deprecated `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values still work:
+each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing
+`EgressProxy` objects keep behaving exactly as before. They are **deprecated** — the
+admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend` —
+and will be removed in a future release (on the classic/v1alpha1 deprecation clock).
+Migrate by changing the tenant field to `FQDN` and setting the matching operator backend.
+
+> **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD
+> test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
 > **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE
-> 1.21.5-gke.1300) — `CiliumFQDN` there goes `Degraded` (verified 2026-06-29).
-> Managed platforms ship their own FQDN mechanism that GAG does **not yet** emit
-> (GKE `FQDNNetworkPolicy`; AKS `CiliumClusterwideNetworkPolicy` via Advanced
-> Container Networking Services; EKS DNS-based `ClusterNetworkPolicy` on Auto Mode;
-> OpenShift OVN `EgressFirewall` `dnsName`). On those clusters, prefer an
-> **in-cluster caching mirror** (see § Worker egress destinations — the recommended
-> path for remote dependencies regardless) or set `managedNetworkPolicy: false` and
-> layer your own CNI policy. Per-provider backend support is tracked in the
-> [Q242 plan](../plan/q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
+> 1.21.5-gke.1300) — use `--fqdn-policy-backend=gke` there, not `cilium`. If a selected
+> backend's CRD is absent, the GMC's apply fails loudly and the `EgressProxy` goes
+> `Degraded`; GitHub egress stays **denied** (the base NetworkPolicy default-denies it),
+> never silently opened. The still-deferred cluster-scoped backends (AKS
+> `CiliumClusterwideNetworkPolicy`, EKS `ClusterNetworkPolicy`) and OpenShift OVN
+> `EgressFirewall` are tracked in the
+> [Q245 plan](../plan/q245-fqdn-intent-backend-split.md).
+
+> **The `gke` backend is additive-allow, so the base NetworkPolicy is load-bearing.**
+> Unlike Cilium/Calico policies (which are self-default-denying), a GKE `FQDNNetworkPolicy`
+> only *adds* an allow — it is a union with any NetworkPolicy on the same pod, not a
+> default-deny. GAG's fail-closed guarantee therefore depends on the base standard
+> NetworkPolicy (always emitted, GitHub-CIDR rule dropped in FQDN mode) staying present:
+> the FQDN object widens the union to permit GitHub, and if it is absent or unenforced,
+> GitHub egress stays denied by the base NP. **`gke`-backend enforcement is not yet
+> live-validated on a real GKE cluster** (see the Q245 plan's live-validation follow-up);
+> also note GKE's ~50-IP-per-FQDN resolution ceiling can intermittently drop egress for a
+> wide wildcard like `*.blob.core.windows.net` under load — reserve FQDN egress for what
+> an in-cluster caching mirror can't proxy.
 
 **Secure-by-default guarantee.** Selecting an FQDN mode can never weaken egress: the
 standard NetworkPolicy still default-denies GitHub egress, so if the CNI-native policy
@@ -826,7 +861,7 @@ metadata:
   name: shared
   namespace: team-a
 spec:
-  egressPolicyMode: CiliumFQDN
+  egressPolicyMode: FQDN   # (or the deprecated CiliumFQDN/CalicoFQDN); requires an operator --fqdn-policy-backend
   destinationFQDNs: [proxy.golang.org, sum.golang.org]   # rejected unless covered by --allowed-egress-fqdns
   destinationCIDRs: []                                   # rejected unless contained in --allowed-egress-cidrs
 ```

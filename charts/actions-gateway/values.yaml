@@ -142,6 +142,19 @@ egressDestinationAllowlist:
   # docs/operations/security-operations.md § Worker egress destinations.
   configMapName: ""
 
+# fqdnPolicyBackend is the operator's cluster-wide choice of how an FQDN
+# egressPolicyMode intent on a tenant EgressProxy is enforced (Q245), passed to the
+# GMC as --fqdn-policy-backend: none | cilium | calico | gke. The tenant expresses
+# intent (egressPolicyMode: FQDN); this flag picks the mechanism — cilium emits a
+# CiliumNetworkPolicy, calico a Calico NetworkPolicy, gke a GKE Dataplane V2
+# FQDNNetworkPolicy. Empty/"none" (default) declares NO backend, so an EgressProxy
+# requesting FQDN intent is rejected at admission rather than silently degrading —
+# the secure default. The gke backend is additive-allow, so the base default-deny
+# NetworkPolicy is always kept alongside it (never replaced). See
+# docs/operations/security-operations.md § Expressing GitHub egress by FQDN.
+# e.g. fqdnPolicyBackend: cilium
+fqdnPolicyBackend: ""
+
 # apiServerCIDRs optionally scopes the AGC NetworkPolicy's Kubernetes API server
 # (443/6443) egress rule to a known apiserver CIDR set, passed to the GMC as
 # --apiserver-cidrs. By default this rule allows egress to ANY destination on

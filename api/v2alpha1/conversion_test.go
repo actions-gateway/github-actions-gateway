@@ -271,6 +271,62 @@ func TestEgressProxyConversion_RoundTrip(t *testing.T) {
 	assertDeepEqual(t, "EgressProxy", want, &back)
 }
 
+// TestEgressProxyConversion_EgressPolicyModeRoundTrip fuzzes the v2beta1→v2alpha1→v2beta1
+// round-trip over EVERY egressPolicyMode enum value, including the deprecated
+// CiliumFQDN/CalicoFQDN aliases (Q245). It locks in the security-relevant invariant that
+// the conversion carries the mode VERBATIM and never collapses the CNI-specific values to
+// FQDN — so the Cilium-vs-Calico distinction of a stored object is never silently dropped
+// when the enforcement backend moves to operator config (--fqdn-policy-backend).
+func TestEgressProxyConversion_EgressPolicyModeRoundTrip(t *testing.T) {
+	modes := []v2alpha1.EgressPolicyMode{
+		v2alpha1.EgressPolicyModeCIDR,
+		v2alpha1.EgressPolicyModeFQDN,
+		v2alpha1.EgressPolicyModeCiliumFQDN,
+		v2alpha1.EgressPolicyModeCalicoFQDN,
+		"", // an object that skipped apiserver defaulting must also round-trip
+	}
+	for _, mode := range modes {
+		t.Run(string(mode), func(t *testing.T) {
+			// Start from a v2beta1 (hub / storage) object, since the fuzz targets a stored
+			// object surviving a read-as-v2alpha1 and write-back.
+			hub := &v2beta1.EgressProxy{
+				ObjectMeta: metav1.ObjectMeta{Name: "proxy", Namespace: "ns"},
+				Spec: v2beta1.EgressProxySpec{
+					EgressPolicyMode: v2beta1.EgressPolicyMode(mode),
+					DestinationFQDNs: fqdnsFor(mode),
+				},
+			}
+			want := hub.DeepCopy()
+
+			// hub -> spoke -> hub
+			var spoke v2alpha1.EgressProxy
+			if err := spoke.ConvertFrom(hub); err != nil {
+				t.Fatalf("ConvertFrom: %v", err)
+			}
+			if got := spoke.Spec.EgressPolicyMode; got != mode {
+				t.Errorf("mode must survive hub->spoke verbatim (not collapsed to FQDN): got %q, want %q", got, mode)
+			}
+
+			var back v2beta1.EgressProxy
+			if err := spoke.ConvertTo(&back); err != nil {
+				t.Fatalf("ConvertTo: %v", err)
+			}
+			assertDeepEqual(t, "EgressProxy egressPolicyMode="+string(mode), want, &back)
+		})
+	}
+}
+
+// fqdnsFor returns a destinationFQDNs slice valid for the given mode: an FQDN-family mode
+// may carry extra host suffixes (they exercise more of the spec), CIDR/empty may not.
+func fqdnsFor(mode v2alpha1.EgressPolicyMode) []string {
+	switch mode {
+	case v2alpha1.EgressPolicyModeFQDN, v2alpha1.EgressPolicyModeCiliumFQDN, v2alpha1.EgressPolicyModeCalicoFQDN:
+		return []string{"proxy.golang.org"}
+	default:
+		return nil
+	}
+}
+
 func TestRunnerTemplateConversion_RoundTrip(t *testing.T) {
 	origRT := &v2alpha1.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: "ns"},

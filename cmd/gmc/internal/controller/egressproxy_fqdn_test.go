@@ -32,8 +32,123 @@ func TestEgressModeHelpers(t *testing.T) {
 	assert.Equal(t, gmcv2alpha1.EgressPolicyModeCIDR, egressModeOf(gmcv2alpha1.EgressProxySpec{}))
 	assert.True(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{}))
 	assert.True(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCIDR}))
+	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN}))
 	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN}))
 	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCalicoFQDN}))
+}
+
+func TestParseFQDNBackend(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    FQDNBackend
+		wantErr bool
+	}{
+		{"", FQDNBackendNone, false}, // empty ⇒ secure default
+		{"none", FQDNBackendNone, false},
+		{"cilium", FQDNBackendCilium, false},
+		{"calico", FQDNBackendCalico, false},
+		{"gke", FQDNBackendGKE, false},
+		{"Cilium", "", true}, // case-sensitive; a typo fails loudly
+		{"aks", "", true},    // deferred backend, not yet valid
+		{"bogus", "", true},
+	}
+	for _, tc := range cases {
+		got, err := ParseFQDNBackend(tc.in)
+		if tc.wantErr {
+			assert.Error(t, err, "ParseFQDNBackend(%q) should error", tc.in)
+			continue
+		}
+		require.NoError(t, err, "ParseFQDNBackend(%q)", tc.in)
+		assert.Equal(t, tc.want, got, "ParseFQDNBackend(%q)", tc.in)
+	}
+}
+
+// TestResolveFQDNEmitter is the table that replaces the old per-CNI enum switch (Q245):
+// deprecated CiliumFQDN/CalicoFQDN pin their namesake mechanism regardless of backend,
+// FQDN intent defers to the operator backend, FQDN+none emits nothing (admission-rejected),
+// and CIDR/empty never emit.
+func TestResolveFQDNEmitter(t *testing.T) {
+	cases := []struct {
+		name    string
+		mode    gmcv2alpha1.EgressPolicyMode
+		backend FQDNBackend
+		want    fqdnEmitterKind
+	}{
+		{"CIDR any backend", gmcv2alpha1.EgressPolicyModeCIDR, FQDNBackendGKE, fqdnEmitNone},
+		{"empty mode", "", FQDNBackendCilium, fqdnEmitNone},
+		{"deprecated Cilium ignores backend none", gmcv2alpha1.EgressPolicyModeCiliumFQDN, FQDNBackendNone, fqdnEmitCilium},
+		{"deprecated Cilium ignores backend gke", gmcv2alpha1.EgressPolicyModeCiliumFQDN, FQDNBackendGKE, fqdnEmitCilium},
+		{"deprecated Calico ignores backend none", gmcv2alpha1.EgressPolicyModeCalicoFQDN, FQDNBackendNone, fqdnEmitCalico},
+		{"FQDN + none emits nothing", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendNone, fqdnEmitNone},
+		{"FQDN + cilium", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendCilium, fqdnEmitCilium},
+		{"FQDN + calico", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendCalico, fqdnEmitCalico},
+		{"FQDN + gke", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendGKE, fqdnEmitGKE},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, resolveFQDNEmitter(tc.mode, tc.backend))
+		})
+	}
+}
+
+func TestBuildEgressProxyGKEFQDNNetworkPolicy(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.DestinationFQDNs = []string{"proxy.golang.org"}
+	})
+	u := buildEgressProxyGKEFQDNNetworkPolicy(ep)
+
+	assert.Equal(t, "networking.gke.io/v1alpha1", u.GetAPIVersion())
+	assert.Equal(t, "FQDNNetworkPolicy", u.GetKind())
+	assert.Equal(t, "shared-proxy-fqdn", u.GetName())
+	assert.Equal(t, "team-a", u.GetNamespace())
+	assert.Equal(t, "shared", u.GetLabels()[egressProxyComponentLabel], "carries the managed identity label")
+
+	// podSelector scopes to this pool's proxy pods.
+	sel, found, err := unstructured.NestedStringMap(u.Object, "spec", "podSelector", "matchLabels")
+	require.NoError(t, err)
+	require.True(t, found)
+	assert.Equal(t, proxyAppName, sel["app"])
+	assert.Equal(t, "shared", sel[egressProxyComponentLabel])
+
+	// A single egress entry: GitHub (+ extra) FQDNs on TCP/443. NO DNS rule — DNS is
+	// handled by the base NetworkPolicy, and GKE FQDN enforcement bypasses DNS (Q245).
+	egress, found, err := unstructured.NestedSlice(u.Object, "spec", "egress")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Len(t, egress, 1, "GKE FQDNNetworkPolicy carries a single GitHub-FQDN egress rule (no DNS rule)")
+
+	rule := egress[0].(map[string]interface{})
+	matches, found, err := unstructured.NestedSlice(rule, "matches")
+	require.NoError(t, err)
+	require.True(t, found)
+	// Exact hosts become {name: …}; wildcards become {pattern: …}; the extra destination
+	// is appended alongside the implicit GitHub set.
+	assertGKEMatchPresent(t, matches, "name", "api.github.com")
+	assertGKEMatchPresent(t, matches, "pattern", "*.actions.githubusercontent.com")
+	assertGKEMatchPresent(t, matches, "name", "proxy.golang.org")
+	assert.Len(t, matches, len(githubEgressFQDNs)+1, "matches = GitHub set + the one extra destination")
+
+	ports, found, err := unstructured.NestedSlice(rule, "ports")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Len(t, ports, 1)
+	p0 := ports[0].(map[string]interface{})
+	assert.Equal(t, "TCP", p0["protocol"])
+	assert.Equal(t, int64(443), p0["port"])
+}
+
+func assertGKEMatchPresent(t *testing.T, matches []interface{}, key, host string) {
+	t.Helper()
+	for _, m := range matches {
+		mm, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if mm[key] == host {
+			return
+		}
+	}
+	t.Fatalf("expected GKE match %s=%q", key, host)
 }
 
 // TestBuildEgressProxyNetworkPolicy_FQDNModeDropsCIDR asserts the secure-by-default,
