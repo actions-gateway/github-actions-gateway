@@ -789,6 +789,77 @@ procedure). `egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
 > path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off
 > above.
 
+### Pinning a tenant's proxy pool to its egress IP: `spec.scheduling`
+
+A per-tenant egress IP is realized *below* Kubernetes: a node pool whose egress path
+(a per-range cloud NAT gateway, a dedicated subnet, a SNAT-ing gateway node) owns
+that IP. So the pod's **node** decides which IP its traffic leaves by, and pinning
+the tenant's proxy pool to the tenant's node pool is what binds the two.
+
+`EgressProxy.spec.scheduling` carries the standard `nodeSelector`, `tolerations`, and
+`affinity`; `ActionsGateway.spec.scheduling` does the same for the AGC control-plane
+pod. (Worker pods have always had the full surface via
+`RunnerTemplate.spec.podTemplate`.)
+
+```yaml
+apiVersion: actions-gateway.com/v2beta1
+kind: EgressProxy
+metadata:
+  name: shared
+  namespace: tenant-a
+spec:
+  minReplicas: 2
+  scheduling:
+    # Pin to tenant-a's node pool -> tenant-a's Cloud NAT -> tenant-a's egress IP.
+    nodeSelector:
+      cloud.google.com/gke-nodepool: pool-tenant-a
+    # Tolerate the taint that keeps other workloads off that pool.
+    tolerations:
+      - key: dedicated
+        operator: Equal
+        value: tenant-a
+        effect: NoSchedule
+```
+
+**Anti-affinity precedence.** The GMC stamps a **required** cross-node
+`podAntiAffinity` on every proxy pool, so replicas land on distinct nodes and one
+node failure cannot take the pool down. Composition with `spec.scheduling.affinity`:
+
+| You set | Result |
+|---|---|
+| nothing | Built-in required cross-node spread (unchanged behaviour) |
+| `nodeAffinity` and/or `podAffinity` | Applied **alongside** the built-in spread, which is preserved |
+| `podAntiAffinity` (any non-nil value) | **Replaces** the built-in term entirely — set it and you own it |
+
+That last row is the escape hatch a **single-node tenant pool** needs: the required
+built-in term would otherwise strand every replica after the first in `Pending`.
+Either opt out of spreading explicitly —
+
+```yaml
+spec:
+  scheduling:
+    affinity:
+      podAntiAffinity: {}   # explicit empty: no spreading at all
+```
+
+— or set `minReplicas: 1`. A soft spread (`preferredDuringScheduling…`) is the middle
+ground: it prefers distinct nodes but still schedules on a one-node pool.
+
+> **Placement is CR-author-settable, by design.** These fields are not gated by a
+> platform allowlist. Choosing an egress path is a feature — tenants should not have
+> to share a rate limit or a block radius — and worker pods have always been able to
+> do it. The consequence: if you attribute traffic by source IP and do not fully trust
+> your tenant CR authors, **you** must constrain placement, at the pod admission layer.
+> A validating allowlist of `nodeSelector` values is *unsound* (`nodeAffinity` supports
+> `NotIn`/`DoesNotExist`, so "any pool but mine" is expressible); pinning `nodeSelector`
+> by **mutation** is sound, because Kubernetes ANDs it with `nodeAffinity`. Ready-to-apply
+> Kyverno and Gatekeeper samples:
+> [admission-policies.md § Governing where GAG pods schedule](admission-policies.md#governing-where-gag-pods-schedule).
+
+The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives,
+cost model, and the live-validated GKE recipe — is in the
+[Q243 plan](../plan/q243-egress-ip-reference-arch.md).
+
 ---
 
 ## Worker egress destinations: the egress allowlist

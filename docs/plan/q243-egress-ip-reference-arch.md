@@ -15,11 +15,14 @@ inline below:
 - ✅ The **Cloud NAT mechanism is proven**: two tenants (distinguished by node
   pool + pod secondary range) egress from **distinct, stable** source IPs, stable
   across pod reschedule (see [Live-validation results](#live-validation-results-2026-07-07)).
-- ⚠️ **GAG cannot yet deliver it**: `EgressProxy.spec` has no scheduling controls
-  and the builder's anti-affinity **spreads** proxy pods across node pools, so a
-  tenant's proxy pods land on *different* NATs — the per-tenant single-IP property
-  the mechanism provides is not bindable through the current API. Filed as a
-  follow-up (see below).
+- ✅ **GAG can now bind to it** *(was ⚠️; resolved by [Q282](../STATUS.md), 2026-07-07)*:
+  `EgressProxy.spec.scheduling` and `ActionsGateway.spec.scheduling` carry
+  `nodeSelector`/`tolerations`/`affinity` through to the proxy pool and AGC pods, and
+  a supplied `podAntiAffinity` now **replaces** the builder's required cross-node
+  spread (so a single-node tenant pool no longer strands replicas in `Pending`). The
+  gap the live validation found — one tenant egressing from *two* IPs because the
+  anti-affinity spread its pool across node pools — is closed. See
+  [Placement pass-through](#placement-pass-through-q282) below.
 - 📝 **GKE mechanism corrected**: Approach B's "dedicated *subnet* per tenant" is
   inaccurate for GKE (all node pools share the cluster subnet). The working
   primitive is a **dedicated pod secondary range per tenant node pool + a per-range
@@ -419,29 +422,68 @@ source.
 | **Distinct egress IPs** — 2 tenants → disjoint source IPs | ✅ tenant-A `34.24.58.224` (nat-a), tenant-B `34.26.87.185` (nat-b), disjoint, consistent over 3 runs, observed at an external IP reflector |
 | **Stability across reschedule** — delete/relocate a pod, IP unchanged | ✅ pool-a pod deleted+recreated (pod IP 10.5.0.6→10.5.0.7) → still `34.24.58.224` (the IP binds to the pod *range*, not the pod) |
 | **Composition intact** — base NetworkPolicy still enforces the choke point | ✅ validated alongside Q245 (base default-deny NP blocks non-allowlisted egress) |
-| **GAG can bind a tenant's proxy to its egress IP** | ❌ **gap** — see below |
+| **GAG can bind a tenant's proxy to its egress IP** | ✅ *(was ❌; closed by Q282 — see below)* |
 
-**The gap (real finding, not paper-over).** `EgressProxy.spec` exposes no
-`nodeSelector`/`tolerations`/`affinity` ([`api/v2beta1/egressproxy_types.go`](../../api/v2beta1/egressproxy_types.go)),
-and `buildEgressProxyDeployment` sets a **required cross-node pod anti-affinity**
-that *spreads* proxy pods across nodes
-([`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go)).
+**The gap as found (2026-07-07).** `EgressProxy.spec` exposed no
+`nodeSelector`/`tolerations`/`affinity`, and `buildEgressProxyDeployment` set a
+**required cross-node pod anti-affinity** that *spreads* proxy pods across nodes.
 Live proof: scaling one tenant's `EgressProxy` to 2 replicas landed the pods on
 **different** pools — `10.5.0.5` (pool-a → nat-a → `34.24.58.224`) *and* `10.6.0.6`
 (pool-b → nat-b → `34.26.87.185`) — so a single tenant egressed from **two** IPs.
 The reference arch's Approach B assumes "the tenant's `EgressProxy` pods … via
-nodeSelector/toleration to the tenant pool"; **that binding does not exist in the
-API today**, and the existing anti-affinity actively works against it. Until the
-API can pin a tenant's proxy pods to one egress path (a `spec.scheduling` block,
-a platform-owned tenant→pool mapping the GMC consumes, or per-namespace scheduler
-policy), GAG delivers the *choke point* but not the *per-tenant IP*. Filed as
-**[Q282](../STATUS.md#Q282)** — scheduling pass-through on the `EgressProxy` +
-`ActionsGateway` CRs (workers already have it via `RunnerTemplate.podTemplate`).
-Two design points it must resolve: (a) operator-supplied affinity must **merge
-with / override** the builder's required cross-node anti-affinity (else a pinned
-2nd replica stays `Pending` on a 1-node pool); (b) the egress-IP-binding placement
-is **platform-owned, not tenant-set** (secure-by-default — a tenant must not
-self-select an egress IP). Q243's v2beta1-gate status carries to Q282.
+nodeSelector/toleration to the tenant pool"; that binding did not exist in the API,
+and the anti-affinity actively worked against it. GAG delivered the *choke point*
+but not the *per-tenant IP*.
+
+### Placement pass-through (Q282)
+
+**Closed 2026-07-07.** [`EgressProxy.spec.scheduling`](../../api/v2beta1/egressproxy_types.go)
+and `ActionsGateway.spec.scheduling` (a shared `PodScheduling`:
+`nodeSelector`/`tolerations`/`affinity`, served at both `v2alpha1` and `v2beta1`) are
+plumbed into the proxy pool Deployment and the AGC Deployment
+([`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go),
+[`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)).
+The two design points the gap raised were resolved as:
+
+**(a) Anti-affinity composition.** A supplied `nodeAffinity`/`podAffinity` is applied
+*alongside* the builder's required cross-node anti-affinity, which is preserved
+(pinning to a pool should not disable HA *within* it). A supplied `podAntiAffinity` —
+any non-nil value — **replaces** the built-in term entirely. An explicit
+`podAntiAffinity: {}` therefore opts out of spreading, which is what a single-node
+tenant pool needs; `minReplicas: 1` is the other route. That the apiserver preserves
+an empty known object as a non-nil pointer is the load-bearing fact, asserted
+end-to-end in envtest rather than assumed.
+
+**(b) Governance — reversed from the original framing.** The gap note asserted
+placement must be "platform-owned, not tenant-set (a tenant must not self-select an
+egress IP)". **That was wrong**, and Q282 reversed it after review:
+
+- The identical capability **already existed, un-gated**:
+  `RunnerTemplate.spec.podTemplate` is a full `PodTemplateSpec` whose reserved-field
+  guardrail (§H.4) withholds `serviceAccountName`, `automountServiceAccountToken`,
+  `hostPID`, `hostNetwork`, `hostIPC` — and *deliberately not* scheduling. In
+  direct-egress mode (§H.10) worker placement already selects the egress IP. Gating
+  the `EgressProxy` alone buys an asymmetry, not a property.
+- **A distinct egress IP is a feature, not an escape.** Tenants want one so they do
+  not share a rate limit or a block radius. Electing one's own egress path is the
+  intended use.
+- **A validating allowlist of placement values is unsound.**
+  `affinity.nodeAffinity` supports `NotIn`/`DoesNotExist`, so "any pool except mine"
+  is expressible and no key=value allowlist rejects it in general. Pinning
+  `nodeSelector` by **mutation** *is* sound (Kubernetes ANDs it with `nodeAffinity`,
+  and affinity can only narrow) — which is a policy-engine job, not a CRD-webhook job.
+
+What this actually costs is **attribution**, not isolation: a CR author who retargets
+onto another pool's egress path makes both tenants leave via one IP. Recorded in
+[05-security.md §5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped),
+with Kyverno + Gatekeeper mutating-pin samples in
+[admission-policies.md § Governing where GAG pods schedule](../operations/admission-policies.md#governing-where-gag-pods-schedule)
+for operators who attribute by source IP and do not fully trust tenant CR authors.
+The same layer is where a cluster granting tenants `pods: create` must constrain
+placement anyway — GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled
+tenant-created pod is selected by none of them.
+
+Operator recipe: [security-operations.md § Pinning a tenant's proxy pool to its egress IP](../operations/security-operations.md#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling).
 
 ## Live-validation plan (original spec — retained for the deferred parts)
 
