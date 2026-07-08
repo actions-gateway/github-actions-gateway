@@ -3,14 +3,16 @@ package scalesetlistener
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 // TestMetricsRecorderIncrements verifies that a per-RunnerSet recorder increments the
 // right counter under the right (namespace, runner_set[, result]) labels, and that
-// distinct RunnerSets keep separate series.
+// distinct RunnerSets keep separate series. It registers into a throwaway registry, so
+// the test is isolated and re-runnable under `go test -count=N` (Q288).
 func TestMetricsRecorderIncrements(t *testing.T) {
-	m := NewMetrics()
+	m := NewMetrics(prometheus.NewRegistry())
 	rec := m.RecorderFor("tenant-a", "set-1")
 
 	rec.IncJobAssigned()

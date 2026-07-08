@@ -116,6 +116,11 @@ func TestClient_AutoAssignCapacityGating(t *testing.T) {
 	c := newClient(t, srv, nil)
 	ss, sess := setupScaleSet(t, ctx, c)
 
+	// This test asserts the capacity-0 poll's 202 directly, so disable the stub's
+	// long-poll window — otherwise that one call would park for it (Q287). Every other
+	// poll here has a message waiting and returns at once either way.
+	srv.SetPollTimeout(0)
+
 	srv.EnqueueJob(ss.ID)
 	srv.EnqueueJob(ss.ID)
 

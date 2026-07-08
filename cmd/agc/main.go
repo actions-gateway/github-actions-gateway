@@ -61,6 +61,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // version is the AGC build version, stamped as the OpenTelemetry service.version
@@ -271,7 +272,7 @@ func run() error {
 	// The ScaleSet acquisition tier (Q264 Option E) emits its own counter series,
 	// separate from the classic listener metrics; a Classic-only AGC simply never
 	// increments them.
-	sm := scalesetlistener.NewMetrics()
+	sm := scalesetlistener.NewMetrics(ctrlmetrics.Registry)
 
 	// ── 4. Build scheme ──────────────────────────────────────────────────────
 	scheme := runtime.NewScheme()

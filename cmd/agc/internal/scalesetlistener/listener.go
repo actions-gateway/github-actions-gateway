@@ -62,6 +62,20 @@ const systemLabelType = "System"
 // long-poll blocks ~50s server-side, so this only paces the error path.
 const defaultPollBackoff = 2 * time.Second
 
+// minPollInterval is the floor on the time between two polls that deliver nothing (a
+// 202). It exists because the loop otherwise re-polls a 202 with no pause at all: a
+// server that answers "nothing to deliver" promptly — a GHES tenant with a short poll
+// window, an intermediary that terminates the long poll, a backend that declines to
+// hold a zero-capacity poll — would spin the Listener into a request storm against
+// GitHub, and the rate limiter would answer for us. Every error path already backs off;
+// this is the same pacing for the one path that lacked it.
+//
+// It is a floor on the *interval*, not a sleep per poll, so a server that really does
+// long-poll (the real queue blocks ~50s) never waits on it: only a 202 that came back
+// faster than the floor is padded out to it. The cost on such a server is exactly zero,
+// and the delay it can add to a job assignment is bounded by minPollInterval.
+const minPollInterval = 100 * time.Millisecond
+
 // defaultWorkFolder is the runner work directory baked into a JIT config when Config
 // leaves it empty (the actions-runner convention).
 const defaultWorkFolder = "_work"
@@ -295,6 +309,10 @@ func (l *Listener) createSession(ctx context.Context, ssID int) (*scaleset.Runne
 // a worker per assigned job, refreshes the queue token on 401, and re-creates the
 // session (replaying unacked messages from cursor 0) on 404. It returns when ctx is
 // cancelled or an unrecoverable error occurs, deleting the session on the way out.
+//
+// Every path out of a poll is paced: an error backs off (pollBackoff), and a 202 that
+// the server did not hold is padded to minPollInterval, so no server response can turn
+// the loop into a spin.
 func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession) {
 	defer l.deleteSession(ssID, sess)
 
@@ -310,6 +328,7 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 		cursor := l.lastMessageID
 		l.mu.Unlock()
 
+		polledAt := time.Now()
 		msg, err := l.cfg.Client.GetMessage(ctx, sess, capacity, cursor)
 		if err != nil {
 			if !l.handlePollError(ctx, ssID, sess, err) {
@@ -318,9 +337,33 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 			continue
 		}
 		if msg == nil { // 202 — nothing to deliver
+			// Pace the empty path: a server that did not actually hold the poll must not
+			// spin the loop (minPollInterval). A real long-poll already outlasts the floor.
+			if !l.paceEmptyPoll(ctx, time.Since(polledAt)) {
+				return
+			}
 			continue
 		}
 		l.handleMessage(ctx, ssID, sess, msg)
+	}
+}
+
+// paceEmptyPoll enforces minPollInterval between polls that delivered nothing: it waits
+// out whatever is left of the floor after a poll that took elapsed, and returns false if
+// ctx was cancelled while waiting. A poll that blocked at least minPollInterval — every
+// poll against a server that honours the long poll — returns immediately.
+func (l *Listener) paceEmptyPoll(ctx context.Context, elapsed time.Duration) bool {
+	remaining := minPollInterval - elapsed
+	if remaining <= 0 {
+		return ctx.Err() == nil
+	}
+	t := time.NewTimer(remaining)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }
 

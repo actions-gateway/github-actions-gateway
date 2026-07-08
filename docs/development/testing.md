@@ -174,6 +174,15 @@ Two rules keep a new test deterministic:
 - **Scope every session assertion and enqueue to your RunnerGroup's owner.** Use `ActiveSessionsForOwner("<rg-name>")` and `enqueueJobOnOwnerSession(...)` instead of the global accessors. A RunnerGroup name is unique to one test, so owner-scoping returns exactly the sessions you created — never a sibling's. `enqueueJobOnOwnerSession` also retries until an owner session is present, so it is immune to the picked session having just idle-shut.
 - **Wait on the condition, not the clock.** Prefer the stub's channel-based waiters (`WaitForFirstPoll`, `WaitForSessionDelete`) over wall-clock sleeps; they return the instant the event happens. The timeout you pass is only a safety ceiling, not the expected latency — size it generously for a CPU-starved 2-vCPU CI runner (seconds of headroom, well inside the package's 5m test timeout), since raising a too-tight ceiling alone just moves a flake rather than fixing it.
 
+### Test doubles must long-poll
+
+Both GitHub doubles model the real backend's long poll: an empty poll is **held** until a message lands or a poll window elapses. A double that answers "nothing to deliver" instantly turns any polling client into a spin loop, which burns CI CPU on every unrelated test in the package and widens the timing windows other tests race against.
+
+- [`scaleset/scalesettest`](../../scaleset/scalesettest/) — `DefaultPollTimeout` (1s) bounds the wait, and a parked poll wakes the instant the queue changes (a job enqueued, acquired, or completed; the session dropped), so delivery stays immediate and tests stay fast. `Server.SetPollTimeout(0)` restores the non-blocking behavior — use it *only* in a test that asserts the 202 itself, never in one that drives a polling client. Before this landed (Q287) an idle scale-set listener polled the stub ~5,000×/s; it is now ~1/s.
+- [`test/fakegithub`](../../test/fakegithub/) — long-polls job delivery for the same reason (Q148, where an instantly-returning fake collapsed the listener pool: replacement listeners idle-exited in milliseconds).
+
+The AGC's scale-set listener also enforces its own floor (`minPollInterval`) between two consecutive polls that deliver nothing, so a *real* backend that declines to hold the poll cannot spin it either. That is defense in depth, not a substitute — a double that does not long-poll still distorts every timing assertion around it.
+
 ## Load tests
 
 The load harness (Q13) pins the design's headline capacity claim — thousands of virtual runner sessions multiplexed per AGC, each costing one re-registration per job (the single-use JIT lifecycle, Q114). It is gated by the `//go:build load` tag and lives under [`cmd/agc/test/load/`](../../cmd/agc/test/load/); its [README](../../cmd/agc/test/load/README.md) documents every knob and how to read the output, and [milestone-5.md §2](../plan/milestone-5.md) the design rationale.

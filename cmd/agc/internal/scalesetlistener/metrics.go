@@ -2,7 +2,6 @@ package scalesetlistener
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // Metrics holds the Prometheus counters the scale-set acquisition tier emits, mirroring
@@ -30,11 +29,19 @@ type Metrics struct {
 	JobsCompletedTotal *prometheus.CounterVec
 }
 
-// NewMetrics creates and registers the scale-set tier's metrics with the
-// controller-runtime metrics registry. Call it once per process (at startup): it
-// registers fresh collectors, and prometheus.MustRegister panics if a collector with
-// the same name is already registered, so a second call would panic on the duplicate.
-func NewMetrics() *Metrics {
+// NewMetrics creates the scale-set tier's metrics and registers them with reg, which
+// must be non-nil. Production passes the controller-runtime registry
+// (sigs.k8s.io/controller-runtime/pkg/metrics.Registry) so the collectors are exposed
+// on the AGC's /metrics endpoint; a test passes a throwaway prometheus.NewRegistry()
+// so each call is isolated.
+//
+// Registration uses MustRegister, so calling NewMetrics twice against the *same*
+// registry panics on the duplicate collector. That is deliberate: a second registration
+// against the process registry means the production wiring built two metric sets and
+// half the increments would be invisible, and the panic surfaces it at startup. Taking
+// the registry as a parameter (rather than reaching for the global) is what lets a test
+// call NewMetrics repeatedly — once per `go test -count` iteration — without tripping it.
+func NewMetrics(reg prometheus.Registerer) *Metrics {
 	m := &Metrics{
 		JobsAssignedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_scaleset_jobs_assigned_total",
@@ -56,7 +63,7 @@ func NewMetrics() *Metrics {
 			Help: "Total terminal JobCompleted messages the scale set's queue delivered, by result (the completion signal the classic protocol never delivered).",
 		}, []string{"namespace", "runner_set", "result"}),
 	}
-	metrics.Registry.MustRegister(
+	reg.MustRegister(
 		m.JobsAssignedTotal,
 		m.JobsProvisionedTotal,
 		m.ProvisionErrorsTotal,
