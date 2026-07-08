@@ -2,7 +2,7 @@
 
 The Kata Containers isolation variant lands here as a sibling overlay to
 [`../dind`](../dind): `kind` in a KVM micro-VM at **`baseline`** security profile,
-**no privileged pod**. Tracked as [Q283](../../../../docs/STATUS.md#Q283) /
+**no privileged pod**. Tracked as [Q286](../../../../docs/STATUS.md#Q286) /
 [Kata-on-GKE plan](../../../../docs/plan/kata-on-gke.md).
 
 It reuses the same [`../../base`](../../base); the delta vs `dind/` is the

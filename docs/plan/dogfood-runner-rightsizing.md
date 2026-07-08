@@ -323,7 +323,7 @@ should follow an AGC-specific `kubectl top` measurement, not a guess.
 The e2e worker is the DinD variant ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/overlays/dind)):
 a `runner` container + a native-sidecar `docker:dind` initContainer, on the
 `e2-standard-8` spot e2e pool (no nested virt). This is the plan's step-2 sizing
-target — the Kata end-state (step 3, [Q283](../STATUS.md#Q283)) is deferred and, per
+target — the Kata end-state (step 3, [Q286](../STATUS.md#Q286)) is deferred and, per
 the finding below, needs a *bigger* nested-virt node than the current
 `n2-standard-4`, so its sizing is tracked separately.
 
@@ -392,7 +392,7 @@ DaemonSets that tolerate the taint take a further ~0.4–0.6 vCPU.
   suite), and the node-type swap warrants its own validation run. Recorded as a cost
   lever if memory stays low across more runs.
 
-**Kata-track finding (informs [Q283](../STATUS.md#Q283)).** The runner's ~5-vCPU
+**Kata-track finding (informs [Q286](../STATUS.md#Q286)).** The runner's ~5-vCPU
 peak *exceeds a whole `n2-standard-4`* (4 vCPU) — the node the current Kata
 `e2e-setup.sh` provisions. So the Kata end-state needs a bigger nested-virt node
 (e.g. `n2-standard-8`) to avoid CPU-starving e2e; the DinD pod `requests` above do
@@ -441,7 +441,7 @@ and its rationale mirrored in the deploy
 second clean-green Calico run. **All Q248 work is complete**: node disk class,
 general-worker sizing, e2e-worker sizing, and the (declined) small tier. The only
 residual is the deferred Kata end-state, tracked separately under
-[Q283](../STATUS.md#Q283).
+[Q286](../STATUS.md#Q286).
 
 ## Open questions
 
@@ -456,7 +456,7 @@ residual is the deferred Kata end-state, tracked separately under
 - ~~`e2e` pod sizing~~ — **RESOLVED (2026-07-07):** the DinD path is validated and
   the pod is right-sized from a measured clean-green run. See
   [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
-  Kata (step 3) remains the deferred secure end-state ([Q283](../STATUS.md#Q283)).
+  Kata (step 3) remains the deferred secure end-state ([Q286](../STATUS.md#Q286)).
 - Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC
   re-provisions cleanly (interacts with the [Q247](../STATUS.md#Q247) session-
   recovery investigation).
