@@ -48,6 +48,20 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 		Expect(out).To(Equal(proxyName))
 	})
 
+	// This test used to patch the HPA's spec.minReplicas directly, which made it
+	// flaky (Q176) for a reason no timeout increase could fix. The GMC owns the
+	// HPA's whole spec, derived from the ActionsGateway's spec.proxy.minReplicas
+	// (1 here) — and it reconciles on every proxy Deployment event because it
+	// Owns(&appsv1.Deployment{}). So the HPA's own scale-out write was what
+	// triggered the reconcile that reset spec.minReplicas back to 1 (and, before
+	// Q283, the Deployment's replicas along with it). desiredReplicas==2 was true
+	// only inside the window between the HPA's scale-out and its next sync, and
+	// the assertion polled every 5s hoping to land in it. Once the window closed
+	// it never reopened, so a longer Eventually could not help.
+	//
+	// Drive the floor through the ActionsGateway CR instead: that is the supported
+	// path, the GMC keeps the HPA's minReplicas at 2 rather than fighting it, and
+	// the resulting state is steady rather than transient.
 	It("E2E_GMC_HPADrivesScaleUp: HPA drives proxy Deployment replica count", func() {
 		// The HPA controller only enforces minReplicas when it can read metrics.
 		// Wait for ScalingActive=True before patching so the HPA is guaranteed to act.
@@ -61,14 +75,14 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			g.Expect(out).To(Equal("True"), "HPA not yet scaling-active")
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
-		By("patching HPA minReplicas to 2 to trigger scale-up")
-		cmd := exec.Command("kubectl", "patch", "hpa", proxyName,
-			"-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":2}}`)
+		By("raising ActionsGateway spec.proxy.minReplicas to 2 to trigger scale-up")
+		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
+			"-n", tenantNS, "--type=merge", "-p", `{"spec":{"proxy":{"minReplicas":2}}}`)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() {
-			cmd := exec.Command("kubectl", "patch", "hpa", proxyName,
-				"-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":1}}`)
+			cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
+				"-n", tenantNS, "--type=merge", "-p", `{"spec":{"proxy":{"minReplicas":1}}}`)
 			_, _ = utils.Run(cmd)
 		})
 
@@ -84,14 +98,21 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			}
 		})
 
+		By("waiting for the GMC to propagate the floor to the HPA")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "hpa", proxyName,
+				"-n", tenantNS, "-o", "jsonpath={.spec.minReplicas}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Equal("2"), "GMC has not propagated proxy.minReplicas to the HPA yet")
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
+
 		// minReplicas is a hard floor the HPA enforces via its
 		// currentReplicas<minReplicas branch, independent of metric readings —
 		// so the scale-up is deterministic once the controller reconciles. The
-		// only variable is reconcile latency: kube-controller-manager's HPA
-		// sync loop can lag well past two minutes on a CPU-starved CI runner
-		// (notably under Calico, where it competes with slower pod networking),
-		// which is the historical source of this test's flakiness. Allow the
-		// full suite-default window rather than a tight 2-minute one.
+		// only remaining variable is reconcile latency: kube-controller-manager's
+		// HPA sync loop can lag on a CPU-starved CI runner (notably under Calico,
+		// where it competes with slower pod networking).
 		//
 		// desiredReplicas reflects the HPA's computed target (min-clamped);
 		// currentReplicas requires the pod to actually start, which is
@@ -104,6 +125,18 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("2"), "HPA desired replicas have not reached 2 yet")
 		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+
+		// Q283 regression guard: the reconciler must not claim .spec.replicas back
+		// from the HPA. Every proxy pod that reaches Ready re-triggers a reconcile
+		// via the Owns(Deployment) watch, so this window covers many passes.
+		By("asserting the reconciler leaves the HPA's replica count alone")
+		Consistently(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "deployment", proxyName,
+				"-n", tenantNS, "-o", "jsonpath={.spec.replicas}")
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Equal("2"), "reconciler reverted the HPA's scale-out (Q283)")
+		}, 30*time.Second, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_PDBPreventsEvictionBelowMinAvailable: PDB blocks eviction when at minimum",
@@ -111,9 +144,12 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			By("waiting for proxy deployment to stabilize before eviction")
 			utils.WaitForDeploymentReady(tenantNS, proxyName, 2*time.Minute)
 
-			// The preceding Ordered/Serial test (HPADrivesScaleUp) patches HPA
-			// minReplicas back to 1 in its DeferCleanup, which triggers an
-			// HPA-driven scale-down from 2 → 1 that runs asynchronously. Between
+			// The preceding Ordered/Serial test (HPADrivesScaleUp) patches the
+			// ActionsGateway's proxy.minReplicas back to 1 in its DeferCleanup,
+			// which lowers the HPA's floor and eventually triggers an HPA-driven
+			// scale-down from 2 → 1 that runs asynchronously (the HPA's 5-minute
+			// downscale stabilisation window means the pool usually still has two
+			// replicas here, so the eviction below typically succeeds). Between
 			// reading a pod name and issuing the eviction the pod we sampled
 			// may be terminated by the ReplicaSet controller — surfacing as
 			// "Error from server (NotFound)" instead of the PDB's 429

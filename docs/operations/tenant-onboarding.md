@@ -316,6 +316,11 @@ spec:
   # below). Changing it is a rolling restart of the AGC and proxy, not a hot reload.
   logLevel: info
   proxy:
+    # minReplicas is a floor, not a replica count: the GMC applies it when the pool
+    # is first created (or has been scaled to zero) and passes it to the pool's HPA.
+    # Above the floor, .spec.replicas belongs to the HPA — raising minReplicas on a
+    # running pool takes effect through the HPA, which needs a healthy metrics-server.
+    # See troubleshooting: "Proxy Pool Never Scales Out".
     minReplicas: 2
     maxReplicas: 10
     # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.

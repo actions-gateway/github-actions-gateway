@@ -260,7 +260,7 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 
 	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
 	step("proxy Deployment + Service")
-	if err := r.applyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
+	if err := r.applyProxyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
 		return fmt.Errorf("proxy Deployment: %w", err)
 	}
 	if err := r.applyService(ctx, buildProxyService(ag)); err != nil {
@@ -1210,11 +1210,28 @@ func (r *ActionsGatewayReconciler) applyNetworkPolicy(ctx context.Context, desir
 // applyDeployment creates or patches a Deployment and sets an owner reference so
 // that the Owns(&appsv1.Deployment{}) watch on the controller fires when the
 // Deployment's status changes (e.g. ReadyReplicas increases after pod startup).
+//
+// The whole Spec is replaced, which is only correct for a Deployment no other
+// controller writes to. Its one caller is the AGC Deployment (a fixed single
+// replica, no HPA); the HPA-targeted proxy pool uses applyProxyDeployment.
 func (r *ActionsGatewayReconciler) applyDeployment(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
 	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
 		obj.Labels = desired.Labels
 		obj.Spec = desired.Spec
+		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
+	})
+	return err
+}
+
+// applyProxyDeployment creates or patches the proxy pool Deployment, which the
+// pool's HPA names in its scaleTargetRef. `.spec.replicas` therefore belongs to
+// the HPA and is assigned selectively — see assignHPATargetDeploymentSpec (Q283).
+func (r *ActionsGatewayReconciler) applyProxyDeployment(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *appsv1.Deployment) error {
+	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.Labels = desired.Labels
+		assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
 		return controllerutil.SetControllerReference(ag, obj, r.Scheme)
 	})
 	return err
