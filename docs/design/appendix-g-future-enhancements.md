@@ -630,4 +630,74 @@ replaces pre-registered idle runners); [appendix-f cost model](appendix-f-cost-m
 
 ---
 
+## G.13. Server-Side Apply for the GMC's Child Resources
+
+**Current behavior.** The GMC's per-reconcile `apply*` helpers write child
+resources with `controllerutil.CreateOrPatch` and a mutate closure that replaces
+the whole `Spec` — see the rationale in [§2 architecture](02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply).
+Only `applyNamespacePSA` uses Server-Side Apply (SSA), because PSA labels are a
+security control whose out-of-band edits must be *detected*, not silently
+re-asserted.
+
+**The gap it would close — conflict surfacing, not churn.** Whole-`Spec`
+replacement is correct only where the GMC is the sole writer of every field in
+that spec. Two children break that, and today the exceptions are hand-maintained:
+
+| Child | Second writer | How the exception is encoded |
+|---|---|---|
+| Proxy `Service` | apiserver (`.spec.clusterIP`) | `applyService` assigns `type`/`selector`/`ports` only |
+| Proxy `Deployment` | the pool's HPA (`.spec.replicas`) | `assignHPATargetDeploymentSpec` |
+
+The `Deployment` exception was found the hard way (Q283): the reconciler reverted
+every HPA scale-out within milliseconds, capping each tenant's egress capacity at
+`minReplicas`, and it did so *silently* for the project's whole lifetime. Under
+SSA the same mistake is loud — applying a field another manager owns returns a
+`409 Conflict` naming the field and the manager, so the reconciler errors on the
+first pass instead of ping-ponging. **That, not patch-traffic reduction, is the
+case for migrating.** (The steady-state churn SSA also removes is already a no-op:
+the apiserver dedups it, verified by the `apply_nochurn` envtest.)
+
+**What it would cost.** SSA cannot be handed a typed `*appsv1.Deployment`. A typed
+Go struct cannot distinguish "field unset" from "field == zero value", so applying
+one claims ownership of every zero-valued field (`strategy: {}`, `resources: {}`)
+and fights the apiserver's defaulters. Doing it correctly means rewriting the ten
+`build*` functions into a parallel set of applyconfiguration builders
+(`appsv1ac.Deployment(...)`), of which the proxy `Deployment`'s full `PodSpec` —
+containers, probes, volumes, affinity, security contexts — is by far the largest.
+
+**What it would *not* buy.** SSA gives "never own `.spec.replicas`" for free: omit
+`WithReplicas(...)` from the apply configuration and the field is never claimed.
+Omission *is* un-ownership; no follow-up patch to disown a field is needed, and
+attempting one is a footgun — **SSA deletes a field that drops out of your apply
+set unless another manager owns it.** An "apply with `replicas`, then un-own it"
+sequence would therefore strip `.spec.replicas` on the second reconcile whenever
+the HPA has not yet written the `scale` subresource (no metrics-server, or simply
+`ScalingActive=False` on a cold cluster), and the apiserver would re-default the
+pool to **1 replica**. Q283's failure mode, re-entered through a different door.
+
+Nor does SSA remove the floor logic. "Seed `minReplicas` at create" and "restore a
+pool found at zero" are imperative writes under a separate field manager either
+way. SSA relocates the special case; it does not delete it.
+
+**Open question to settle first.** The HPA takes ownership of `.spec.replicas` via
+an `Update` on the `scale` *subresource*, which records a `managedFields` entry
+scoped to that subresource. Whether that entry produces a conflict against an
+`Apply` on the parent resource is not obvious from the SSA spec and must be
+confirmed by envtest before the conflict-surfacing argument can be relied on. If
+it does **not** conflict, the primary motivation for this item evaporates and the
+hand-maintained exceptions above are the right answer permanently.
+
+**Status — parked, no Queue row.** Trigger: a *third* child resource acquires a
+second writer, or the envtest above confirms subresource-scoped ownership does
+conflict on parent applies — at which point the migration converts a class of
+silent correctness bugs into loud reconcile errors, and the builder rewrite starts
+paying for itself.
+
+**Related.** [§2 architecture](02-architecture.md#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply)
+(why `CreateOrPatch` was chosen, and the two exceptions it forces);
+[§5.3 security](05-security.md#53-security-profiles-and-the-privileged-opt-in)
+(`applyNamespacePSA`, the one place SSA is already the right tool).
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)
