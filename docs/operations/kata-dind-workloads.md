@@ -311,6 +311,43 @@ resort — and even then it should be *paired* with a sandbox runtime, which
 is the same mechanism described here applied on top of `privileged`; see
 [In-runner image builds — privileged DinD](in-runner-image-builds.md#approach-4--plain-privileged-dind-avoid-where-possible).
 
+### What Kata does not buy you
+
+Kata is one layer, not a security posture. Four limits worth stating plainly
+before you conclude "Kata, therefore safe":
+
+- **The capability set is close to privileged-equivalent.** An unprivileged
+  Kata DinD runner still needs `SYS_ADMIN`, `NET_ADMIN`, `SYS_PTRACE`,
+  `SYS_CHROOT`, and read-write remounts of `/sys/fs/cgroup` and `/proc/sys`.
+  On an ordinary `runc` container that list is nearly `privileged: true`. It is
+  safe here *only* because those capabilities act on the guest kernel. There is
+  no defence in depth from the capability set — the entire argument rests on
+  the VM boundary holding.
+- **You trade one CVE class for another.** The Linux syscall interface is a
+  large, well-trodden attack surface (`CVE-2019-5736` runc, `CVE-2022-0847`
+  Dirty Pipe, the io_uring family). QEMU's device emulation is a much smaller
+  and more exotic one, but it is not empty (`CVE-2019-14378`, the VENOM class).
+  Kata makes escape *much harder*, not impossible. On GKE the hypervisor is
+  itself running inside a GCE VM (nested virtualisation), so the stack is
+  deeper and less battle-tested than Kata on bare metal.
+- **Kata *without* Workload Identity can be worse than privileged DinD *with*
+  compensating controls.** Both configurations let a compromised runner mint
+  the node's service-account token over the pod network. The Kata one *feels*
+  safe, so the metadata control is more likely to be skipped. Do not deploy
+  this architecture without the Workload Identity step above.
+- **GAG has proven the boundary exists, not that it is unbreakable.** Q226
+  verified the guest kernel differs from the node kernel and that the pod holds
+  no host privilege. No breakout was attempted. Treat the containment claim as
+  "designed and structurally sound", not "empirically tested against an
+  exploit".
+
+The honest recommendation: **prefer Kata over privileged DinD for untrusted
+code** — it is the only option here that puts a machine boundary around an
+inner Docker daemon, and it converts a kernel escape from node compromise into
+a discarded guest. But deploy it *with* Workload Identity,
+`automountServiceAccountToken: false`, and ideally a NetworkPolicy denying
+egress to `169.254.169.254/32`. Kata alone is not the control.
+
 ## Caveats and limitations
 
 - **Startup overhead is small — but the `overhead` accounting is not.** Measured

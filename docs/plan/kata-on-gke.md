@@ -136,7 +136,19 @@ surgery. Lower isolation gain than Kata (shared kernel vs. micro-VM).
 **Kata Containers** — Runs each pod inside a lightweight VM via an OCI-compatible
 `RuntimeClass`. The pod itself requires no `privileged: true`; isolation is enforced at
 the hypervisor layer. Inside the Kata VM, Docker and kind run natively with no DinD
-tricks. This is the highest-security option available on GKE.
+tricks. This is the strongest *container-escape* boundary available on GKE.
+
+It is not, on its own, a security posture. Kata bounds the kernel, not the pod network:
+the node's metadata server stays reachable (measured — see [Motivation](#1-oss-pwn-request-threat)),
+so Workload Identity is a prerequisite. The capabilities an unprivileged DinD runner still
+needs inside the guest (`SYS_ADMIN`, `NET_ADMIN`, `SYS_PTRACE`, `SYS_CHROOT`, rw `/proc/sys`
+and `/sys/fs/cgroup`) approach `privileged` on an ordinary runtime, so the guarantee rests
+entirely on the VM boundary rather than on defence in depth. And it trades a large,
+well-trodden kernel-CVE surface for a smaller, more exotic hypervisor one — much harder to
+exploit, not impossible, and on GKE the hypervisor is itself nested inside a GCE VM.
+Q226 verified the boundary exists (guest kernel ≠ node kernel, no host privilege); it did
+not attempt a breakout. The full accounting is in
+[What Kata does not buy you](../operations/kata-dind-workloads.md#what-kata-does-not-buy-you).
 
 > **Common confusion:** GKE's nested-virtualization documentation mentions
 > `securityContext.privileged: true` in some contexts. That requirement applies to pods
