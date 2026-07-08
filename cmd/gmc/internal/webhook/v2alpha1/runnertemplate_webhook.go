@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -97,6 +98,45 @@ func isPrivileged(sc *corev1.SecurityContext) bool {
 	return sc != nil && sc.Privileged != nil && *sc.Privileged
 }
 
+// validatePodTemplatePriorityClass rejects a namespaced RunnerTemplate whose
+// podTemplate.spec.priorityClassName is not on the platform allowlist (Q289).
+//
+// podTemplate is a full corev1.PodTemplateSpec and the AGC copies it verbatim into
+// the worker pod (provisioner.buildPod), overriding priorityClassName only when a
+// priorityTiers tier matches. So this field is a SECOND, previously ungated route to
+// the very escalation the Q132 allowlist exists to stop: a tenant naming a
+// high-priority, preempting cluster-scoped PriorityClass has the scheduler evict
+// OTHER tenants' running worker pods — and their egress proxies — to place its own.
+//
+// The escalation needs no setup on the tenant's part. Kubernetes ships
+// system-cluster-critical (value 2000000000, preemptionPolicy PreemptLowerPriority)
+// in every cluster, and — verified against a real apiserver, not assumed — nothing
+// restricts it to kube-system: a pod naming it in a tenant namespace is admitted and
+// resolves to that value. Gating the field here is what makes the Q132 guarantee
+// ("a tenant cannot preempt another tenant") actually hold.
+//
+// The empty string means the pod names no PriorityClass and is always permitted, so
+// the secure default (an unset --allowed-priority-classes flag) forbids every named
+// class without forbidding ordinary unprioritized workers.
+//
+// Only the namespaced kind is gated. ClusterRunnerTemplate is cluster-scoped and
+// therefore platform-authored — a tenant cannot create one — so the platform may name
+// any class there, exactly as it may declare privileged containers there (§H.4/§H.6).
+//
+// This is a webhook check, not a CRD CEL rule, because the allowlist is dynamic
+// platform config a spec-scoped CEL XValidation cannot read.
+func validatePodTemplatePriorityClass(spec *agcv2alpha1.RunnerTemplateSpec, list *allowlist.PriorityClassAllowlist) error {
+	name := spec.PodTemplate.Spec.PriorityClassName
+	if list.AllowedPodPriorityClass(name) {
+		return nil
+	}
+	return fmt.Errorf(
+		"podTemplate.spec.priorityClassName: %q is not in the platform allowlist %v; "+
+			"a PriorityClass sets the scheduler's preemption order across the whole cluster, so the platform admin must "+
+			"pre-create it and add it to the GMC --allowed-priority-classes flag or the watched PriorityClass allowlist ConfigMap",
+		name, list.Names())
+}
+
 // reapBlockingSidecarWarnings returns a NON-BLOCKING admission warning when a
 // template carries a regular (non-native) sidecar container that may keep the worker
 // pod alive after the runner container exits, stranding the runner slot (Q249, the
@@ -131,27 +171,42 @@ func logRejection(ctx context.Context, kind, op, namespace, name string, err err
 // +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-runnertemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=runnertemplates,verbs=create;update,versions=v2alpha1,name=vrunnertemplate-v2alpha1.kb.io,admissionReviewVersions=v1
 
 // RunnerTemplateCustomValidator validates the namespaced RunnerTemplate data kind.
-// It rejects the reserved per-container pod fields, including privileged containers.
+// It rejects the reserved per-container pod fields, including privileged containers,
+// and gates podTemplate.spec.priorityClassName against the platform allowlist (Q289).
 //
 // +kubebuilder:object:generate=false
-type RunnerTemplateCustomValidator struct{}
+type RunnerTemplateCustomValidator struct {
+	// PriorityClasses is the platform allowlist of cluster-scoped PriorityClass names
+	// a tenant may name on a worker pod. A nil allowlist forbids every named class
+	// (the secure default), matching the v1 ActionsGateway validator.
+	PriorityClasses *allowlist.PriorityClassAllowlist
+}
 
-// ValidateCreate rejects a RunnerTemplate carrying reserved pod fields and emits a
-// non-blocking reap-blocking-sidecar warning (Q249).
+// ValidateCreate rejects a RunnerTemplate carrying reserved pod fields or an
+// off-allowlist priorityClassName, and emits a non-blocking reap-blocking-sidecar
+// warning (Q249).
 func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
-	if err := validateReservedPodFields(&obj.Spec, true); err != nil {
+	if err := v.validate(&obj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&obj.Spec, obj.Annotations), nil
 }
 
-// ValidateUpdate applies the same reserved-pod-field checks and reap-blocking-sidecar
-// warning on update.
+// ValidateUpdate applies the same checks on update, so an existing RunnerTemplate
+// cannot be edited to smuggle in a reserved field or an off-allowlist PriorityClass.
 func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerTemplate) (admission.Warnings, error) {
-	if err := validateReservedPodFields(&newObj.Spec, true); err != nil {
+	if err := v.validate(&newObj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&newObj.Spec, newObj.Annotations), nil
+}
+
+// validate runs the shared create/update gates for the namespaced kind.
+func (v *RunnerTemplateCustomValidator) validate(spec *agcv2alpha1.RunnerTemplateSpec) error {
+	if err := validateReservedPodFields(spec, true); err != nil {
+		return err
+	}
+	return validatePodTemplatePriorityClass(spec, v.PriorityClasses)
 }
 
 // ValidateDelete is a no-op.
@@ -163,9 +218,11 @@ func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agc
 
 // ClusterRunnerTemplateCustomValidator validates the cluster-scoped
 // ClusterRunnerTemplate. It rejects the reserved proxy env vars but ALLOWS
-// privileged containers: the cluster-scoped kind is platform-authored (a tenant
-// cannot create cluster-scoped objects), and its documented purpose is golden
-// privileged templates. PSA remains the runtime backstop.
+// privileged containers AND any podTemplate.spec.priorityClassName: the cluster-scoped
+// kind is platform-authored (a tenant cannot create cluster-scoped objects), and its
+// documented purpose is golden privileged templates. Gating the PriorityClass here
+// would only constrain the platform against itself — the allowlist exists to stop a
+// TENANT naming a preempting class (Q132/Q289). PSA remains the runtime backstop.
 //
 // +kubebuilder:object:generate=false
 type ClusterRunnerTemplateCustomValidator struct{}
@@ -195,10 +252,12 @@ func (v *ClusterRunnerTemplateCustomValidator) ValidateDelete(_ context.Context,
 // SetupRunnerTemplateWebhooksWithManager registers the validating webhooks for both
 // the namespaced RunnerTemplate and the cluster-scoped ClusterRunnerTemplate. The
 // manager's scheme must already include agcv2alpha1 (the GMC registers it at
-// startup).
-func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager) error {
+// startup). priorityClasses is the shared platform PriorityClass allowlist the
+// namespaced kind's podTemplate is gated against (Q289); nil forbids every named
+// class, the secure default.
+func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.RunnerTemplate{}).
-		WithValidator(&RunnerTemplateCustomValidator{}).
+		WithValidator(&RunnerTemplateCustomValidator{PriorityClasses: priorityClasses}).
 		Complete(); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhook: %w", err)
 	}

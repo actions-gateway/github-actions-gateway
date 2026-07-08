@@ -189,7 +189,11 @@ func startValidatingWebhook() error {
 	// (failurePolicy=Fail), including the v2 RunnerTemplate/ClusterRunnerTemplate
 	// webhooks, so the same server must serve their paths or every runnertemplate
 	// create in the suite would fail with a connection error.
-	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr); err != nil {
+	// A nil PriorityClass allowlist is the secure default (no named class permitted),
+	// matching the v1 registration above. Suite templates name no PriorityClass; the
+	// Q289 gate is exercised against a live, ConfigMap-backed allowlist in
+	// priorityclass_allowlist_test.go.
+	if err := webhookv2alpha1.SetupRunnerTemplateWebhooksWithManager(mgr, nil); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhooks: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the EgressProxy webhook

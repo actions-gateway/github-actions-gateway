@@ -500,6 +500,68 @@ func agWithPriorityTier(priorityClassName string) *gmcv1alpha1.ActionsGateway {
 	return ag
 }
 
+// agWithPodTemplatePriorityClass returns a tenant-namespace AG whose single
+// RunnerGroup names the given PriorityClass in podTemplate.spec — the second route to
+// a worker pod's priorityClassName, alongside priorityTiers (Q289). An empty name
+// leaves the field unset.
+func agWithPodTemplatePriorityClass(priorityClassName string) *gmcv1alpha1.ActionsGateway {
+	ag := newAG("team-a")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
+		{
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					PriorityClassName: priorityClassName,
+					Containers:        []corev1.Container{{Name: "runner", Image: "runner:latest"}},
+				},
+			},
+		},
+	}
+	return ag
+}
+
+// TestWebhook_PodTemplatePriorityClassBypass is the Q289 regression test. Before the
+// fix, priorityTiers was gated but podTemplate.spec.priorityClassName was not, so a
+// tenant could name system-cluster-critical (value 2000000000, PreemptLowerPriority —
+// present in every cluster and NOT restricted to kube-system) and have the scheduler
+// preempt every other tenant's workers and egress proxies.
+func TestWebhook_PodTemplatePriorityClassBypass(t *testing.T) {
+	t.Run("system-cluster-critical rejected under the secure default", func(t *testing.T) {
+		v := NewActionsGatewayCustomValidator("", nil)
+		_, err := v.ValidateCreate(context.Background(), agWithPodTemplatePriorityClass("system-cluster-critical"))
+		require.Error(t, err, "an empty allowlist must reject a podTemplate PriorityClass reference")
+		assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName", "error should name the offending field")
+		assert.Contains(t, err.Error(), "system-cluster-critical")
+	})
+
+	t.Run("off-allowlist class rejected and names the allowed set", func(t *testing.T) {
+		v := NewActionsGatewayCustomValidator("", []string{"runner-standard"})
+		_, err := v.ValidateCreate(context.Background(), agWithPodTemplatePriorityClass("tenant-escalated"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "tenant-escalated")
+		assert.Contains(t, err.Error(), "runner-standard")
+	})
+
+	t.Run("allowlisted class admitted", func(t *testing.T) {
+		v := NewActionsGatewayCustomValidator("", []string{"runner-standard"})
+		_, err := v.ValidateCreate(context.Background(), agWithPodTemplatePriorityClass("runner-standard"))
+		require.NoError(t, err)
+	})
+
+	t.Run("unset is always admitted, even with an empty allowlist", func(t *testing.T) {
+		v := NewActionsGatewayCustomValidator("", nil)
+		_, err := v.ValidateCreate(context.Background(), agWithPodTemplatePriorityClass(""))
+		require.NoError(t, err, "an unprioritized worker pod must stay admissible under the secure default")
+	})
+
+	t.Run("update cannot smuggle it in", func(t *testing.T) {
+		v := NewActionsGatewayCustomValidator("", []string{"runner-standard"})
+		old := agWithPodTemplatePriorityClass("runner-standard")
+		_, err := v.ValidateUpdate(context.Background(), old, agWithPodTemplatePriorityClass("system-cluster-critical"))
+		require.Error(t, err)
+	})
+}
+
 func TestWebhook_RejectsDisallowedPriorityClass(t *testing.T) {
 	v := NewActionsGatewayCustomValidator("", []string{"runner-standard"})
 	_, err := v.ValidateCreate(context.Background(), agWithPriorityTier("system-cluster-critical"))

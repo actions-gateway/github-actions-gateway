@@ -28,6 +28,13 @@ import (
 type RunnerTemplateSpec struct {
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the
 	// large field this kind exists to isolate.
+	//
+	// On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName
+	// is gated by the GMC validating webhook against the platform PriorityClass allowlist
+	// (--allowed-priority-classes; empty forbids every named class). PriorityClass is
+	// cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the
+	// platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped
+	// ClusterRunnerTemplate is platform-authored and therefore exempt.
 	PodTemplate corev1.PodTemplateSpec `json:"podTemplate"`
 
 	// WorkerImage is the fully-qualified container image for the runner container.

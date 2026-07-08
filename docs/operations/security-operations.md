@@ -1147,13 +1147,26 @@ stub env and therefore always enforces HTTPS.
 
 ## Priority classes: the `allowed-priority-classes` allowlist
 
-A tenant `RunnerGroup` can request scheduling priority for its worker pods via
-`priorityTiers[].priorityClassName`, which the AGC stamps onto the pods as
-`spec.priorityClassName`. `PriorityClass` is a **cluster-scoped** object carrying
-a priority *value* and a `preemptionPolicy` (Kubernetes default
-`PreemptLowerPriority`). Left unvalidated, a tenant could name a high-priority,
-preempting class and have the scheduler **evict other tenants' running worker
-pods** to schedule its own — a cross-tenant isolation break (Q132).
+A tenant can request scheduling priority for its worker pods in two places, and
+both land on the pod as `spec.priorityClassName`:
+
+| Where a tenant sets it | On which kind |
+|---|---|
+| `priorityTiers[].priorityClassName` | v1 `ActionsGateway` / `RunnerGroup`, v2 `RunnerSet` |
+| `podTemplate.spec.priorityClassName` | v1 `ActionsGateway.runnerGroups[]`, v2 `RunnerTemplate` |
+
+`PriorityClass` is a **cluster-scoped** object carrying a priority *value* and a
+`preemptionPolicy` (Kubernetes default `PreemptLowerPriority`). Left unvalidated,
+a tenant could name a high-priority, preempting class and have the scheduler
+**evict other tenants' running worker pods — and their egress proxies** — to
+schedule its own: a cross-tenant isolation break (Q132, Q289).
+
+> **`system-cluster-critical` is not reserved for `kube-system`.** Kubernetes ships
+> `system-cluster-critical` (value `2000000000`, `preemptionPolicy:
+> PreemptLowerPriority`) and `system-node-critical` in every cluster, and **nothing
+> restricts them to the `kube-system` namespace** — a pod in any namespace may name
+> one. The allowlist is what stands between a tenant and cluster-wide preemption.
+> Leave it unset (the default) unless you mean to grant it.
 
 The platform owns which classes a tenant may use:
 
@@ -1177,9 +1190,10 @@ The platform owns which classes a tenant may use:
 
 2. **The platform allowlists the names on the GMC.** Set the
    `--allowed-priority-classes` flag (comma-separated) on the GMC controller. The
-   validating webhook rejects any `ActionsGateway` whose
-   `runnerGroups[].priorityTiers[].priorityClassName` is not on the list, naming
-   both the offending class and the permitted set.
+   validating webhook rejects — naming both the offending class and the permitted
+   set — any `ActionsGateway` whose `runnerGroups[].priorityTiers[].priorityClassName`
+   or `runnerGroups[].podTemplate.spec.priorityClassName` is off the list, and any
+   `RunnerTemplate` whose `podTemplate.spec.priorityClassName` is off the list.
 
    ```yaml
    # GMC Deployment / Helm values — args on the controller-manager container
@@ -1187,14 +1201,50 @@ The platform owns which classes a tenant may use:
      - --allowed-priority-classes=runner-standard,runner-opportunistic
    ```
 
-   **An empty/unset allowlist forbids every `priorityTiers` PriorityClass
-   reference** (secure default): out of the box no tenant can set a
-   `PriorityClass`. Tenants that only need a soft concurrency ceiling can use
-   `maxWorkers` instead, which requires no `PriorityClass`.
+   **An empty/unset allowlist forbids every named PriorityClass** (secure default):
+   out of the box no tenant can set one. An *unset* `podTemplate.spec.priorityClassName`
+   is always admitted — the default forbids named classes, not ordinary unprioritized
+   worker pods. Tenants that only need a soft concurrency ceiling can use `maxWorkers`
+   instead, which requires no `PriorityClass`.
+
+The cluster-scoped `ClusterRunnerTemplate` is **exempt**: only the platform can create
+cluster-scoped objects, so it may name any class — the same reasoning that lets it
+declare privileged containers.
 
 There is deliberately no tenant-settable per-tier `preemptionPolicy` field;
 preemption is governed entirely by the platform-created `PriorityClass` object.
 See [§5.2 — Cross-Tenant Pod Preemption via PriorityClass](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+
+### Upgrading: `podTemplate.spec.priorityClassName` is now gated
+
+Before this gate, `podTemplate.spec.priorityClassName` was accepted unvalidated on
+`RunnerTemplate` and `ActionsGateway.runnerGroups[]`, bypassing the allowlist
+entirely. It is now rejected unless allowlisted, so **an existing CR that names an
+off-allowlist class will fail its next `create`/`update`** (admission webhooks do
+not re-validate already-stored objects, so nothing breaks until the CR is edited).
+
+Before upgrading, find the affected objects and either add their class to
+`--allowed-priority-classes` or remove the field:
+
+```bash
+# v2 RunnerTemplates
+kubectl --context "$CTX" get runnertemplates -A -o json | jq -r '
+  .items[]
+  | select(.spec.podTemplate.spec.priorityClassName != null)
+  | "\(.metadata.namespace)/\(.metadata.name) -> \(.spec.podTemplate.spec.priorityClassName)"'
+
+# v1 ActionsGateways (the class lives on each runnerGroups[] entry)
+kubectl --context "$CTX" get actionsgateways.actions-gateway.github.com -A -o json | jq -r '
+  .items[]
+  | .metadata.namespace as $ns | .metadata.name as $name
+  | (.spec.runnerGroups // [])[]
+  | select(.podTemplate.spec.priorityClassName != null)
+  | "\($ns)/\($name) -> \(.podTemplate.spec.priorityClassName)"'
+```
+
+Any class these print that is **not** in your `--allowed-priority-classes` was an
+open cross-tenant preemption lever; treat a `system-cluster-critical` or
+`system-node-critical` result as an incident, not a config change.
 
 ### Self-service additions via a watched ConfigMap (Q188)
 

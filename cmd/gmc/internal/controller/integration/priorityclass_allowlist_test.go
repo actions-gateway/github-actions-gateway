@@ -7,9 +7,13 @@ import (
 	"testing"
 	"time"
 
+	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
+	webhookv2alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -20,6 +24,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
+
+// agWithPodTemplatePriorityClass returns an ActionsGateway whose single RunnerGroup
+// names the given PriorityClass in podTemplate.spec — the v1 route to a worker pod's
+// priorityClassName that Q132 left ungated (Q289). An empty name leaves it unset.
+func agWithPodTemplatePriorityClass(name, ns, priorityClassName string) *gmcv1alpha1.ActionsGateway {
+	ag := newActionsGateway(name, ns, "github-app")
+	ag.Spec.RunnerGroups = []agcv1alpha1.RunnerGroupSpec{
+		{
+			MaxListeners: 1,
+			RunnerLabels: []string{"self-hosted"},
+			PodTemplate: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					PriorityClassName: priorityClassName,
+					Containers:        []corev1.Container{{Name: "runner", Image: "runner:test"}},
+				},
+			},
+		},
+	}
+	return ag
+}
+
+// rtWithPodTemplatePriorityClass returns a namespaced RunnerTemplate naming the given
+// PriorityClass in podTemplate.spec — the v2 route (Q289). Empty leaves it unset.
+func rtWithPodTemplatePriorityClass(name, ns, priorityClassName string) *agcv2alpha1.RunnerTemplate {
+	rt := runnerTemplateWithContainer(ns, name, corev1.Container{Name: "runner", Image: "runner:test"})
+	rt.Spec.PodTemplate.Spec.PriorityClassName = priorityClassName
+	return rt
+}
 
 // startPriorityClassAllowlistReconciler starts a PriorityClassAllowlistReconciler
 // against the envtest apiserver for the duration of the test, wired to the given
@@ -129,6 +161,83 @@ func TestIntegration_PriorityClassAllowlist_ConfigMapWatch(t *testing.T) {
 	require.NoError(t, k8sClient.Delete(ctx, cm))
 	waitForAllowed(t, al, dynamicClass, false)
 	require.True(t, al.Allowed(staticClass), "the static class must remain after the ConfigMap is deleted")
+}
+
+// TestIntegration_PriorityClassAllowlist_PodTemplateSurface is the Q289 regression
+// test against a real apiserver. Q132 gated priorityTiers but left the OTHER route to
+// a worker pod's priorityClassName ungated: the full podTemplate.spec, which the AGC
+// copies verbatim into the pod. The same platform allowlist — including its
+// ConfigMap-sourced dynamic half — must now govern both v1 runnerGroups[].podTemplate
+// and the v2 RunnerTemplate.podTemplate.
+//
+// The webhook server runs without TLS in envtest, so the validators are called
+// directly; the allowlist they read is the live one the reconciler maintains.
+func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
+	const (
+		ns           = "gmc-q289"
+		cmName       = "priority-class-allowlist"
+		staticClass  = "runner-standard"
+		dynamicClass = "runner-bursty"
+		// Present in every Kubernetes cluster, value 2000000000, preemptionPolicy
+		// PreemptLowerPriority — and NOT restricted to kube-system. The escalation a
+		// tenant could reach with zero setup before this gate existed.
+		escalation = "system-cluster-critical"
+	)
+
+	createNamespace(t, ns)
+
+	al := allowlist.New([]string{staticClass})
+	v1Validator := webhookv1alpha1.NewActionsGatewayCustomValidatorWithAllowlist("", al)
+	v2Validator := &webhookv2alpha1.RunnerTemplateCustomValidator{PriorityClasses: al}
+
+	startPriorityClassAllowlistReconciler(t, al, ns, cmName)
+
+	// The headline claim: a tenant cannot preempt another tenant. Neither surface
+	// admits system-cluster-critical, under the static allowlist as configured.
+	_, err := v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-escalate", "team-a", escalation))
+	require.Error(t, err, "v1 runnerGroups[].podTemplate must not admit %s", escalation)
+	assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName")
+
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-escalate", "team-a", escalation))
+	require.Error(t, err, "v2 RunnerTemplate.podTemplate must not admit %s", escalation)
+	assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName")
+
+	// An unset priorityClassName stays admissible on both — the secure default must
+	// not forbid ordinary, unprioritized worker pods.
+	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-unset", "team-a", ""))
+	require.NoError(t, err)
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-unset", "team-a", ""))
+	require.NoError(t, err)
+
+	// The allowlisted static class is admitted on both.
+	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-static", "team-a", staticClass))
+	require.NoError(t, err)
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-static", "team-a", staticClass))
+	require.NoError(t, err)
+
+	// The dynamic class is rejected until the platform admin adds it to the watched
+	// ConfigMap — and then admitted on both surfaces, with no restart.
+	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-dyn-early", "team-a", dynamicClass))
+	require.Error(t, err)
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn-early", "team-a", dynamicClass))
+	require.Error(t, err)
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: ns},
+		Data:       map[string]string{controller.PriorityClassAllowlistConfigMapKey: dynamicClass},
+	}
+	require.NoError(t, k8sClient.Create(ctx, cm))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, cm) })
+	waitForAllowed(t, al, dynamicClass, true)
+
+	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-dyn", "team-a", dynamicClass))
+	require.NoError(t, err, "the ConfigMap-sourced class must reach the v1 podTemplate surface")
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn", "team-a", dynamicClass))
+	require.NoError(t, err, "the ConfigMap-sourced class must reach the v2 podTemplate surface")
+
+	// A ConfigMap widening the allowlist must never reach the escalation class.
+	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-escalate-2", "team-a", escalation))
+	require.Error(t, err, "%s must stay rejected regardless of the dynamic set", escalation)
 }
 
 func updateConfigMap(t *testing.T, ns, name string, data map[string]string) {

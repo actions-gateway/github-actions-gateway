@@ -1,6 +1,8 @@
-// Package allowlist holds the GMC's PriorityClass admission allowlist: the set
-// of cluster-scoped PriorityClass names a tenant RunnerGroup may reference in
-// priorityTiers. The allowlist is the union of a static base (the
+// Package allowlist holds the GMC's PriorityClass admission allowlist: the set of
+// cluster-scoped PriorityClass names a tenant may cause a worker pod to reference,
+// from ANY tenant-authorable surface — priorityTiers on a RunnerGroup /
+// ActionsGateway, and podTemplate.spec.priorityClassName on a RunnerTemplate or a
+// v1 runnerGroups[] entry (Q289). The allowlist is the union of a static base (the
 // --allowed-priority-classes flag) and a dynamic set sourced from a watched
 // ConfigMap (Q188), so a platform admin can grow the allowlist without editing
 // the flag and rolling out the GMC.
@@ -58,6 +60,21 @@ func (a *PriorityClassAllowlist) Allowed(name string) bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.dynamic[name]
+}
+
+// AllowedPodPriorityClass reports whether a POD-LEVEL priorityClassName is
+// permitted. It differs from Allowed in exactly one way: the empty string means
+// "this pod names no PriorityClass" (the Kubernetes default) and is always
+// permitted, so an empty allowlist forbids every *named* class without forbidding
+// unprioritized pods.
+//
+// Use this for any field whose zero value means unset — RunnerTemplate /
+// ClusterRunnerTemplate podTemplate.spec.priorityClassName, and the v1
+// runnerGroups[].podTemplate.spec.priorityClassName that feeds it (Q289). Use
+// Allowed for priorityTiers[].priorityClassName, where the name is required and an
+// empty value is itself a misconfiguration.
+func (a *PriorityClassAllowlist) AllowedPodPriorityClass(name string) bool {
+	return name == "" || a.Allowed(name)
 }
 
 // Names returns the effective allowlist as a sorted, de-duplicated slice for

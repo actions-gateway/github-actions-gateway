@@ -63,7 +63,12 @@ type RunnerGroupSpec struct {
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods.
-	// Privileged containers are rejected by the GMC admission webhook.
+	// Privileged containers are rejected by the GMC admission webhook, as is a
+	// podTemplate.spec.priorityClassName that is not on the platform PriorityClass
+	// allowlist (--allowed-priority-classes; empty forbids every named class). The
+	// AGC copies this spec verbatim onto the worker pod, overriding priorityClassName
+	// only when a PriorityTiers tier matches — so the template is a real route to the
+	// pod's scheduling priority and the platform, not the tenant, owns it (Q132/Q289).
 	PodTemplate corev1.PodTemplateSpec `json:"podTemplate"`
 
 	// WorkerImage is the fully-qualified container image for the runner container.
