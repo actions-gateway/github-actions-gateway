@@ -51,6 +51,45 @@ func (p *recordingProvisioner) count() int {
 	return len(p.provisioned)
 }
 
+// gateProvisioner blocks in Provision until unblocked, so a test can observe the
+// Listener's Status while the first worker is still mid-provision.
+type gateProvisioner struct {
+	release   chan struct{}
+	closeOnce sync.Once
+
+	mu        sync.Mutex
+	enteredN  int
+	completed []string
+}
+
+func (p *gateProvisioner) provision(_ context.Context, job scalesetlistener.Job) error {
+	p.mu.Lock()
+	p.enteredN++
+	p.mu.Unlock()
+	<-p.release
+	p.mu.Lock()
+	p.completed = append(p.completed, job.JobID)
+	p.mu.Unlock()
+	return nil
+}
+
+// unblock opens the gate; it is safe to call more than once.
+func (p *gateProvisioner) unblock() { p.closeOnce.Do(func() { close(p.release) }) }
+
+// entered counts the Provision calls started (including the one currently gated).
+func (p *gateProvisioner) entered() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.enteredN
+}
+
+// finishedJobIDs returns the jobs whose Provision call has returned.
+func (p *gateProvisioner) finishedJobIDs() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.completed...)
+}
+
 // countingMetrics records the listener's job accounting for assertions.
 type countingMetrics struct {
 	mu                           sync.Mutex
@@ -105,10 +144,10 @@ type stubTokenProvider string
 
 func (s stubTokenProvider) Token(context.Context) (string, error) { return string(s), nil }
 
-// startListener registers a scale set on the fake, then starts a listener with the
-// given capacity function and provisioner, returning the listener, the scale-set id,
-// and a cancel that stops it and waits for the loop to exit.
-func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, prov *recordingProvisioner, m scalesetlistener.MetricsRecorder) (*scalesetlistener.Listener, int) {
+// startListenerFunc registers a scale set on the fake, then starts a listener with the
+// given capacity and provision functions, returning the listener and the scale-set id.
+// A cleanup stops it and waits for the loop to exit.
+func startListenerFunc(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, provision scalesetlistener.ProvisionFunc, m scalesetlistener.MetricsRecorder) (*scalesetlistener.Listener, int) {
 	t.Helper()
 	client := newClient(t, srv)
 
@@ -116,7 +155,7 @@ func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlist
 		Client:       client,
 		ScaleSetName: "linux",
 		OwnerName:    "acme/linux",
-		Provision:    prov.provision,
+		Provision:    provision,
 		Capacity:     capacity,
 		Metrics:      m,
 		PollBackoff:  20 * time.Millisecond,
@@ -126,9 +165,8 @@ func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlist
 	ctx, cancel := context.WithCancel(context.Background())
 	done, err := l.Start(ctx)
 	require.NoError(t, err)
-	// The listener created the scale set on Start; wire its id into the provisioner.
-	prov.scaleSetID = l.Status().ScaleSetID
-	require.NotZero(t, prov.scaleSetID)
+	ssID := l.Status().ScaleSetID
+	require.NotZero(t, ssID)
 
 	t.Cleanup(func() {
 		cancel()
@@ -138,7 +176,16 @@ func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlist
 			t.Fatal("listener did not stop within 5s")
 		}
 	})
-	return l, prov.scaleSetID
+	return l, ssID
+}
+
+// startListener starts a listener driving the given recordingProvisioner, wiring the
+// scale-set id the listener created on Start back into it.
+func startListener(t *testing.T, srv *scalesettest.Server, capacity scalesetlistener.CapacityFunc, prov *recordingProvisioner, m scalesetlistener.MetricsRecorder) (*scalesetlistener.Listener, int) {
+	t.Helper()
+	l, ssID := startListenerFunc(t, srv, capacity, prov.provision, m)
+	prov.scaleSetID = ssID
+	return l, ssID
 }
 
 // fixedCapacity returns a CapacityFunc advertising a constant number of free slots.
@@ -221,18 +268,68 @@ func TestListener_AssignedCountReconciliation(t *testing.T) {
 	l, ssID := startListener(t, srv, fixedCapacity(3), prov, nil)
 
 	const n = 3
+	queued := make([]string, 0, n)
 	for i := 0; i < n; i++ {
-		srv.EnqueueJob(ssID)
+		_, jobID := srv.EnqueueJob(ssID)
+		queued = append(queued, jobID)
 	}
 	require.Eventually(t, func() bool { return l.Status().AssignedJobs == n }, 5*time.Second, 10*time.Millisecond,
 		"status must reflect the server-authoritative assigned count while jobs run")
 
-	// Complete the assigned jobs; the assigned count must drain back to zero.
-	for _, id := range prov.jobIDs() {
-		srv.CompleteAssignedJob(ssID, id, "succeeded")
+	// Complete every job the *server* assigned, keyed by the id EnqueueJob returned.
+	// Reading the ids back off the provisioner would race: AssignedJobs reaches n the
+	// moment the first message is handled (that one poll assigned all n and every
+	// envelope carries the fresh statistics), while the other JobAssigned messages —
+	// one per poll — have not reached the provisioner yet. Completing its short list
+	// leaves the rest assigned forever and the count never drains (Q285).
+	for _, id := range queued {
+		require.True(t, srv.CompleteAssignedJob(ssID, id, "succeeded"),
+			"job %s must be assigned server-side before it can complete", id)
 	}
 	require.Eventually(t, func() bool { return l.Status().AssignedJobs == 0 }, 5*time.Second, 10*time.Millisecond,
 		"completed jobs must drop out of the assigned count")
+}
+
+// TestListener_StatusReportsServerCountAheadOfProvisioning pins the semantic Q285's
+// flake tripped over: Status.AssignedJobs is the server-authoritative
+// statistics.totalAssignedJobs read off every envelope — NOT a count of provisioned
+// workers. It reaches n while only the first job is even in flight, so no test (and no
+// reconciler) may infer "n workers exist" from it.
+func TestListener_StatusReportsServerCountAheadOfProvisioning(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &gateProvisioner{release: make(chan struct{})}
+
+	// Advertise no capacity until every job is queued, so a single poll assigns all n
+	// at once — the shape that makes the first envelope report totalAssignedJobs == n.
+	var capVal atomicInt
+	l, ssID := startListenerFunc(t, srv, func(context.Context) int { return capVal.get() }, prov.provision, nil)
+	// Registered after the listener-stop cleanup, so it runs before it (cleanups are
+	// LIFO): the loop must leave the blocked Provision call before it can observe the
+	// cancelled context, including on an early t.FailNow.
+	t.Cleanup(prov.unblock)
+
+	const n = 3
+	for i := 0; i < n; i++ {
+		srv.EnqueueJob(ssID)
+	}
+	capVal.set(n)
+
+	// The listener is single-threaded and blocks inside the first Provision, so it can
+	// never hand over a second job while gated.
+	require.Eventually(t, func() bool { return prov.entered() == 1 }, 5*time.Second, 10*time.Millisecond,
+		"the first assigned job must reach the provisioner")
+	require.Eventually(t, func() bool { return l.Status().AssignedJobs == n }, 5*time.Second, 10*time.Millisecond,
+		"the server-authoritative assigned count must reach n on the first envelope")
+
+	assert.Equal(t, 1, prov.entered(), "exactly one job is in flight while the provisioner is gated")
+	assert.Empty(t, prov.finishedJobIDs(), "no worker has finished provisioning yet")
+
+	// Releasing the gate lets the remaining JobAssigned messages drain through.
+	prov.unblock()
+	require.Eventually(t, func() bool { return len(prov.finishedJobIDs()) == n }, 5*time.Second, 10*time.Millisecond,
+		"every assigned job provisions once the gate opens")
 }
 
 // TestListener_SessionRecreateReplayNoDoubleProvision proves the recovery model: after
