@@ -1,193 +1,222 @@
-# Kata-on-GKE spike runbook
+# Kata-on-GKE runbook
 
-Step-by-step go/no-go for the Q226 spike: prove that a GitHub Actions runner can
-run `dockerd` + `kind` + GAG's e2e suite inside a Kata Containers micro-VM on
-GKE, with **no** `privileged: true` on the runner pod. Each step below maps to
-one of the six [spike acceptance criteria](../plan/kata-on-gke.md#spike-acceptance-criteria).
+Reproduce the Q226 result: a GitHub Actions runner running `dockerd` + `kind`
+inside a Kata Containers micro-VM on GKE, with **no** `privileged: true` on the
+runner pod.
 
-The artifacts this runbook applies are authored and statically validated
-(`make manifest-validate`, `make shellcheck`); see
-[deploy/kata-ci/](../../deploy/kata-ci/). What remains is the **live** validation
-below.
+**This was run live and passed** (GKE `1.35.5-gke.1241004`, Ubuntu 24.04 /
+containerd 2.1.5, `c2-standard-4` nested-virt, Kata 3.32.0 / QEMU). Results and
+the full constraint list are in
+[Kata Containers on GKE](../plan/kata-on-gke.md); the cluster-side how-to for
+operators is [Running DinD workloads under Kata](kata-dind-workloads.md).
+
+Steps below mutate cloud resources. Use a **throwaway project or cluster** — never
+a production one — and tear it down when finished.
 
 ## Before you start
 
-> **This is the live half. It needs a GKE cluster and authenticated GCP
-> credentials.** Steps tagged **🔴 LIVE** mutate cloud resources or a cluster.
-> Steps tagged **🟢 OFFLINE** can be run now without credentials. Do not run the
-> 🔴 steps until [Q224](../STATUS.md)'s GKE cluster is available.
-
-Prerequisites for the live run:
-
-- An existing **GKE Standard** cluster (Autopilot blocks nested virtualization).
-- `gcloud` authenticated to the project, with permission to create node pools.
-- `kubectl` pointed at the cluster.
-- The GAG e2e runner image (the one bundling `dockerd`, `kind`, and the test
-  toolchain) pushed to a registry the cluster can pull. Set its reference in
-  [`deploy/kata-ci/runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml)
-  (`image:` — replace `REPLACE_ME`, pin by digest).
-
-Set the environment used by the provisioning script (no real values are
-committed):
+- `gcloud` authenticated, with permission to create clusters.
+- `kubectl` and `helm` on `PATH` (`make doctor` checks both).
+- Pin `--project` / `--zone` on every `gcloud` call, and `--context` on every
+  `kubectl` call. Parallel sessions share `~/.kube/config` and `~/.config/gcloud`.
 
 ```bash
-export PROJECT=<your-gcp-project>
-export CLUSTER=<your-gke-standard-cluster>
-export REGION=<your-region>        # or set LOCATION_FLAG=--zone for a zonal cluster
-```
-
-Resolve the `kindest/node` image version GAG's e2e suite pins, so step 3 uses the
-same one:
-
-```bash
-grep -rEn "kindest/node" .github/ scripts/ test/ | head
+export PROJECT=<throwaway-gcp-project>
+export CLUSTER=<throwaway-cluster>
+export ZONE=us-central1-a
+export CTX="gke_${PROJECT}_${ZONE}_${CLUSTER}"
 ```
 
 ---
 
-## Step 0 — Preview the provisioning command 🟢 OFFLINE
+## Step 1 — Create a nested-virt cluster
 
-Confirm the node-pool invocation is what you expect before spending cloud time.
+> Acceptance criterion **#1**.
+
+Create the nested-virt pool as the cluster's *initial* pool. A separate
+`node-pools create` that hits a capacity stockout holds a cluster-level lock and
+blocks every other mutation — including deleting the stuck pool — for tens of
+minutes.
 
 ```bash
-DRY_RUN=1 PROJECT=demo CLUSTER=demo REGION=us-central1 scripts/kata-node-pool.sh
+gcloud container clusters create "$CLUSTER" \
+  --project="$PROJECT" --zone="$ZONE" \
+  --num-nodes=1 --machine-type=c2-standard-4 \
+  --image-type=UBUNTU_CONTAINERD \
+  --enable-nested-virtualization \
+  --disk-size=100 --release-channel=regular \
+  --node-labels=gag.dev/kata-ci=true \
+  --workload-pool="${PROJECT}.svc.id.goog"
 ```
 
-**Expected:** the fully-expanded `gcloud container node-pools create …` command
-prints, including `--enable-nested-virtualization`, an n2/n2d/c2/c2d machine
-type, and `--node-labels katacontainers.io/kata-runtime=true`. Nothing is
-created.
+`--enable-nested-virtualization` requires `UBUNTU_CONTAINERD` (or
+`COS_CONTAINERD` ≥ `1.28.4-gke.1083000`) and GKE **Standard** — Autopilot cannot
+do it. Machine family must be `n2`/`n2d`/`c2`/`c2d`; `e2` and the GPU families
+(`a2`/`a3`/`g2`) cannot. If you hit `ZONE_RESOURCE_POOL_EXHAUSTED`, that is a
+capacity stockout, not a quota error — try another family or zone. Check the
+**per-family** quota too (`C2_CPUS` defaults to 8 on a fresh project).
+
+Harden the metadata server — Kata does **not** do this for you:
+
+```bash
+gcloud container node-pools update default-pool \
+  --project="$PROJECT" --cluster="$CLUSTER" --zone="$ZONE" \
+  --workload-metadata=GKE_METADATA        # recreates the nodes
+```
+
+**Verify `/dev/kvm` — the flag asserts intent, the device is the proof:**
+
+```bash
+kubectl --context "$CTX" debug node/"$(kubectl --context "$CTX" get nodes \
+  -o jsonpath='{.items[0].metadata.name}')" -it --image=busybox -- ls -l /host/dev/kvm
+```
+
+**Expected:** `crw-rw---- ... 10, 232 /host/dev/kvm`. If absent, nested
+virtualization did not take effect and nothing below will work.
 
 ---
 
-## Step 1 — Provision the nested-virt node pool 🔴 LIVE
+## Step 2 — Install Kata and the RuntimeClass
 
-> Acceptance criterion **#1**: a GKE Standard node pool with nested
-> virtualization can be provisioned with documented steps.
+> Acceptance criterion **#2**.
 
-```bash
-scripts/kata-node-pool.sh
-```
-
-**VERIFY** the nested-virt enablement surface against current GKE docs first
-(the gcloud flag names evolve — see the note in the script header). Then confirm
-`/dev/kvm` is present on a node:
+Upstream no longer publishes `kata-deploy.yaml` / `kata-rbac.yaml` release assets
+(they 404). Install from the OCI Helm chart:
 
 ```bash
-NODE=$(kubectl get nodes -l katacontainers.io/kata-runtime=true \
-  -o jsonpath='{.items[0].metadata.name}')
-kubectl debug node/"$NODE" -it --image=busybox -- ls -l /host/dev/kvm
+helm --kube-context "$CTX" install kata-deploy \
+  oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version 3.32.0 -n kube-system \
+  -f deploy/kata-ci/kata-values.yaml --wait --timeout 15m
+
+kubectl --context "$CTX" apply -f deploy/kata-ci/runtimeclass.yaml
 ```
 
-**Expected:** `/host/dev/kvm` exists (a character device). If it does not,
-nested virtualization is not enabled — the spike cannot proceed; record the
-gcloud surface that *does* enable it and update `scripts/kata-node-pool.sh`.
+Confirm the runtime landed and the node self-labelled. GKE preinstalls unrelated
+`gvisor` / `confidential-linked-runner` classes, so check the label too:
+
+```bash
+kubectl --context "$CTX" -n kube-system rollout status ds/kata-deploy --timeout=10m
+kubectl --context "$CTX" get nodes -l katacontainers.io/kata-runtime=true
+kubectl --context "$CTX" get runtimeclass kata kata-qemu
+```
+
+**Expected:** the DaemonSet is Ready, the node carries
+`katacontainers.io/kata-runtime=true` (applied by `kata-deploy`, *not* by you),
+and both classes exist.
 
 ---
 
-## Step 2 — Install Kata + start the unprivileged runner 🔴 LIVE
+## Step 3 — Start the unprivileged runner
 
-> Acceptance criterion **#2**: a runner pod with `runtimeClassName: kata` (no
-> privileged context) starts and a `dockerd` daemon runs inside it.
-
-Install the runtime, register the RuntimeClasses, then schedule the runner:
+> Acceptance criterion **#2** (continued).
 
 ```bash
-kubectl apply -f deploy/kata-ci/kata-deploy.yaml
-kubectl -n kube-system rollout status ds/kata-deploy --timeout=10m
-kubectl apply -f deploy/kata-ci/runtimeclass.yaml
-kubectl get runtimeclass kata kata-qemu
-
-kubectl apply -f deploy/kata-ci/runner-pod.yaml
-kubectl wait --for=condition=Ready pod/kata-runner --timeout=5m
+kubectl --context "$CTX" apply -f deploy/kata-ci/runner-pod.yaml
+kubectl --context "$CTX" wait --for=condition=Ready pod/kata-runner --timeout=7m
 ```
 
-Confirm the pod is genuinely unprivileged and that `dockerd` came up inside the
-guest VM:
+Prove it is unprivileged, and that the boundary is a real VM:
 
 ```bash
-# No privileged context anywhere on the pod (expect: empty output).
-kubectl get pod kata-runner -o jsonpath='{.spec.containers[*].securityContext.privileged}{"\n"}'
-# dockerd reachable inside the Kata guest.
-kubectl exec kata-runner -- docker info
+# Expect 0. Any other number means the invariant is broken.
+kubectl --context "$CTX" get pod kata-runner -o json | grep -c '"privileged": true'
+
+# Node kernel vs guest kernel MUST differ — identical means a silent runc fallback.
+kubectl --context "$CTX" get node -o jsonpath='{.items[0].status.nodeInfo.kernelVersion}'; echo
+kubectl --context "$CTX" exec kata-runner -- uname -r
+
+# dockerd must be on overlay2. `vfs` means the block volume did not mount.
+kubectl --context "$CTX" exec kata-runner -- docker info --format '{{.Driver}}'
 ```
 
-**Expected:** `privileged` prints `false` (never `true`); `docker info` reports a
-healthy daemon. If `dockerd` fails to start, add ONE capability at a time to the
-runner pod's `securityContext.capabilities.add` (start from the documented
-minimal set) and re-test — **never** set `privileged: true`. Record the final
-capability set for the reference architecture doc.
+**Expected:** `0`; two different kernels (spike saw `6.8.0-1054-gke` vs
+`6.18.35`); `overlay2`.
+
+If `dockerd` fails, add **one** capability at a time and re-test. Never set
+`privileged: true` — that defeats the entire design.
 
 ---
 
-## Step 3 — Create a kind cluster inside the runner 🔴 LIVE
+## Step 4 — `kind create cluster` inside the micro-VM
 
-> Acceptance criterion **#3**: `kind create cluster` (same `kindest/node` image
-> version as GAG's e2e suite) completes inside the runner pod.
+> Acceptance criteria **#3**, **#4**, **#6**. This is the headline claim.
+
+`kind` needs the guest's `/dev/kmsg` bound into its node container:
 
 ```bash
-kubectl exec kata-runner -- \
-  kind create cluster --image kindest/node:vX.Y.Z   # use the version from "Before you start"
-kubectl exec kata-runner -- kubectl --context kind-kind get nodes
+kubectl --context "$CTX" exec kata-runner -- sh -c 'cat > /root/kind-config.yaml <<YAML
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraMounts:
+  - hostPath: /dev/kmsg
+    containerPath: /dev/kmsg
+YAML'
+
+kubectl --context "$CTX" exec kata-runner -- \
+  kind create cluster --name kata-spike --config /root/kind-config.yaml \
+  --image "$KIND_NODE_IMAGE" --wait 300s     # same digest as .github/workflows/e2e-reusable.yml
+
+kubectl --context "$CTX" exec kata-runner -- kubectl --context kind-kata-spike get nodes
+kubectl --context "$CTX" exec kata-runner -- sh -c \
+  'docker pull -q busybox:latest && kind load docker-image --name kata-spike busybox:latest'
 ```
 
-**Expected:** the kind control-plane node reaches `Ready`. Capture wall-clock for
-step 6.
+**Expected:** the kind control-plane node reaches `Ready`, and `kind load` succeeds.
+Spike timings: 58 s cold / 43 s warm for `kind create cluster`; 2 s for `kind load`
+— well inside the ≤ ~6 min ceiling.
 
 ---
 
-## Step 4 — Load an image into the kind cluster 🔴 LIVE
+## Step 5 — Confirm the metadata server is closed
 
-> Acceptance criterion **#4**: `kind load docker-image` loads an image.
+Kata isolates the kernel, not the pod network. Verify Workload Identity is doing
+its job. **Never print the token body.**
 
 ```bash
-kubectl exec kata-runner -- sh -c 'docker pull busybox:latest && kind load docker-image busybox:latest'
-kubectl exec kata-runner -- docker exec kind-control-plane crictl images | grep busybox
+kubectl --context "$CTX" run meta-id --image=busybox:1.36 --restart=Never \
+  --overrides='{"spec":{"runtimeClassName":"kata"}}' --command -- sh -c \
+  'wget -qO- --header="Metadata-Flavor: Google" \
+    http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/email'
+kubectl --context "$CTX" logs meta-id
 ```
 
-**Expected:** `busybox` appears in the kind node's image list.
+**Expected:** `<project>.svc.id.goog` — the workload-pool identity. If it returns a
+`*-compute@developer.gserviceaccount.com` address, the pod can mint **node**
+credentials: `GKE_METADATA` is not in effect and the runner is not safe for
+untrusted code.
 
 ---
 
-## Step 5 — Run the GAG e2e suite inside the runner 🔴 LIVE
+## Step 6 — Tear down
 
-> Acceptance criterion **#5**: `make e2e` passes inside the runner pod on that
-> cluster.
+Delete the PVC **first**. A `Delete` reclaim policy only fires when the *PVC* is
+deleted — tearing down the cluster orphans the underlying PD, which keeps billing:
 
 ```bash
-kubectl exec kata-runner -- sh -c 'cd /workspace/github-actions-gateway && make e2e'
+kubectl --context "$CTX" delete -f deploy/kata-ci/runner-pod.yaml   # pod + PVC
+gcloud container clusters delete "$CLUSTER" --project="$PROJECT" --zone="$ZONE" --quiet
 ```
 
-(Adjust the path to wherever the runner image checks out the repo.)
+Confirm you are deleting the throwaway cluster, then check for orphans — the
+100Gi `pd-balanced` behind the Block PVC is the one that gets left behind:
 
-**Expected:** the e2e suite passes — the same green result it produces under
-privileged DinD today.
+```bash
+gcloud compute disks list     --project="$PROJECT"    # expect: Listed 0 items.
+gcloud compute instances list --project="$PROJECT"
+gcloud compute addresses list --project="$PROJECT"
+```
+
+Delete any survivor with `gcloud compute disks delete <name> --zone="$ZONE"`.
 
 ---
 
-## Step 6 — Check the startup-overhead ceiling 🔴 LIVE
+## What is still outstanding
 
-> Acceptance criterion **#6**: `kind create cluster` inside Kata is ≤ 3× the
-> current baseline (~2 min → ceiling ~6 min).
-
-Time the step-3 command (e.g. wrap it in `time`, or compare timestamps):
-
-```bash
-kubectl exec kata-runner -- sh -c \
-  'time kind create cluster --image kindest/node:vX.Y.Z'
-```
-
-**Expected:** wall-clock ≤ ~6 min. Record the actual number.
-
----
-
-## Verdict
-
-The spike is a **go** only if all six criteria pass. Record the outcome (and the
-final runner-pod capability set, measured timings, and the confirmed gcloud
-nested-virt flags) in [docs/plan/kata-on-gke.md](../plan/kata-on-gke.md).
-
-If any criterion fails with no known fix inside the timebox, the recommendation
-reverts to privileged DinD on a dedicated locked-down node pool (Tier 3 of the
-[reference architecture](../plan/kata-on-gke.md#reference-architecture-deliverable)),
-with the security trade-off documented explicitly.
+`make e2e` inside the runner (acceptance criterion #5) has **not** been run: it
+needs a GAG e2e runner image bundling `dockerd`, `kind` and the Go/test toolchain,
+which does not exist yet. Everything beneath it — Docker, `kind`, image loading,
+pod scheduling in the inner cluster — is proven above. See
+[CI integration](../plan/kata-on-gke.md#ci-integration--the-follow-up).

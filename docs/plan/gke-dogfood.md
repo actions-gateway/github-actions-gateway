@@ -1679,7 +1679,7 @@ The DinD sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-intern
 > overlay ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/README.md),
 > `e2-standard-8` pool), which `e2e-start.sh` applies on demand — validated
 > clean-green on GAG (2026-07-07). The Kata path here is sized/validated under
-> [Q226](../STATUS.md#Q226): the measured runner peak (~5 vCPU) exceeds a whole
+> [Q283](../STATUS.md#Q283): the measured runner peak (~5 vCPU) exceeds a whole
 > `n2-standard-4`, so the pool must grow (e.g. `n2-standard-8`) before Kata runs.
 
 ### F2. Workflow change — already wired
