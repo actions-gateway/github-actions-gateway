@@ -177,6 +177,70 @@ func proxyHostSuffix(fqdn string) string {
 	return strings.TrimPrefix(fqdn, "*.")
 }
 
+// defaultEgressProxyAntiAffinity is the built-in cross-node spread every proxy pool
+// gets unless the author overrides it: a REQUIRED anti-affinity keyed on this pool's
+// identity, so replicas land on distinct nodes and one node failure never takes the
+// whole pool down. Trade-off: it needs at least minReplicas schedulable nodes.
+func defaultEgressProxyAntiAffinity(selector map[string]string) *corev1.PodAntiAffinity {
+	return &corev1.PodAntiAffinity{
+		RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{{
+			LabelSelector: &metav1.LabelSelector{MatchLabels: selector},
+			TopologyKey:   "kubernetes.io/hostname",
+		}},
+	}
+}
+
+// egressProxyAffinity composes spec.scheduling.affinity with the built-in cross-node
+// anti-affinity (Q282). The precedence contract, documented on the PodScheduling API
+// type and in docs/operations/:
+//
+//   - No affinity supplied ⇒ the built-in anti-affinity alone.
+//   - nodeAffinity / podAffinity supplied ⇒ applied as given, and the built-in
+//     anti-affinity is PRESERVED alongside them (the common case: pin to a node pool,
+//     keep spreading across that pool's nodes).
+//   - podAntiAffinity supplied (any non-nil value) ⇒ it REPLACES the built-in term
+//     entirely — set it and you own it. An explicit `podAntiAffinity: {}` is a non-nil
+//     pointer with no terms, so it opts out of spreading altogether. That is the
+//     escape hatch a single-node tenant node pool needs: the required built-in term
+//     would otherwise strand every replica after the first in Pending (Q243).
+func egressProxyAffinity(ep *gmcv2alpha1.EgressProxy, selector map[string]string) *corev1.Affinity {
+	builtIn := defaultEgressProxyAntiAffinity(selector)
+	if ep.Spec.Scheduling == nil || ep.Spec.Scheduling.Affinity == nil {
+		return &corev1.Affinity{PodAntiAffinity: builtIn}
+	}
+	// DeepCopy: the returned Affinity is written into a Deployment the caller may
+	// mutate, and ep is a shared informer object that must never be modified.
+	affinity := ep.Spec.Scheduling.Affinity.DeepCopy()
+	if affinity.PodAntiAffinity == nil {
+		affinity.PodAntiAffinity = builtIn
+	}
+	return affinity
+}
+
+// egressProxyNodeSelector / egressProxyTolerations return the pass-through placement
+// fields, deep-copied out of the (shared, informer-owned) EgressProxy spec.
+func egressProxyNodeSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
+	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.NodeSelector) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(ep.Spec.Scheduling.NodeSelector))
+	for k, v := range ep.Spec.Scheduling.NodeSelector {
+		out[k] = v
+	}
+	return out
+}
+
+func egressProxyTolerations(ep *gmcv2alpha1.EgressProxy) []corev1.Toleration {
+	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.Tolerations) == 0 {
+		return nil
+	}
+	out := make([]corev1.Toleration, len(ep.Spec.Scheduling.Tolerations))
+	for i, t := range ep.Spec.Scheduling.Tolerations {
+		t.DeepCopyInto(&out[i])
+	}
+	return out
+}
+
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
 // It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
 // required cross-node anti-affinity, self-signed proxy TLS mount, /healthz +
@@ -216,19 +280,14 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 				Spec: corev1.PodSpec{
 					SecurityContext:               nonrootPodSecurityContext(),
 					TerminationGracePeriodSeconds: ptr(int64(60)),
-					// Required (not preferred) anti-affinity keyed on this pool's
-					// identity: replicas land on distinct nodes so one node failure
-					// never takes the whole pool down. Trade-off: needs at least
-					// minReplicas schedulable nodes (set minReplicas=1 on single-node
-					// dev clusters).
-					Affinity: &corev1.Affinity{
-						PodAntiAffinity: &corev1.PodAntiAffinity{
-							RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{{
-								LabelSelector: &metav1.LabelSelector{MatchLabels: selector},
-								TopologyKey:   "kubernetes.io/hostname",
-							}},
-						},
-					},
+					// Placement pass-through (Q282): spec.scheduling pins the pool to a
+					// tenant's node pool — and thus to that pool's egress IP (Q243).
+					// egressProxyAffinity composes any supplied affinity with the
+					// built-in required cross-node anti-affinity; see its doc comment
+					// for the precedence contract.
+					Affinity:     egressProxyAffinity(ep, selector),
+					NodeSelector: egressProxyNodeSelector(ep),
+					Tolerations:  egressProxyTolerations(ep),
 					Volumes: []corev1.Volume{
 						{
 							Name: proxyTLSVolumeName,

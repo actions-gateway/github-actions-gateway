@@ -149,6 +149,16 @@ type EgressProxySpec struct {
 	//
 	// +optional
 	Sharing *ProxySharing `json:"sharing,omitempty"`
+
+	// Scheduling pins this proxy pool's pods to specific nodes — the mechanism that
+	// binds a tenant to a per-tenant egress IP (Q243/Q282), since the pod's node
+	// determines which cloud NAT / egress path its traffic leaves by. A
+	// podAntiAffinity set here replaces the built-in required cross-node spread; see
+	// PodScheduling for the full precedence rules and the tenant-settable-by-design
+	// rationale.
+	//
+	// +optional
+	Scheduling *PodScheduling `json:"scheduling,omitempty"`
 }
 
 // EgressProxyStatus is the observed state of an EgressProxy, following the uniform

@@ -96,6 +96,15 @@ type ActionsGatewaySpec struct {
 	//
 	// +optional
 	Tracing TracingConfig `json:"tracing,omitempty"`
+
+	// Scheduling places this gateway's AGC control-plane pod on specific nodes — for
+	// example onto the same tenant node pool as the proxy pool, or onto a
+	// control-plane pool distinct from where workers run (Q282). Unlike the
+	// EgressProxy, the AGC pod carries no built-in affinity, so the block applies
+	// verbatim. See PodScheduling.
+	//
+	// +optional
+	Scheduling *PodScheduling `json:"scheduling,omitempty"`
 }
 
 // CredentialType is the discriminator of the GitHubCredentials union: it names which
