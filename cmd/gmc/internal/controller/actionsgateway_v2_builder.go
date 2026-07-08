@@ -417,7 +417,37 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		serviceAccount:   agcNameV2(ag),
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
-	return buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
+	dep := buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyTLSSecret, agcImage, env, agcResources(ag.Spec.AGCResources))
+	// Placement pass-through (Q282). Applied here rather than threaded through the
+	// v1-shared buildAGCDeploymentFrom: spec.scheduling is a v2-only field, and the
+	// AGC pod carries no built-in affinity, so the block applies verbatim with no
+	// composition rules (unlike the EgressProxy's — see egressProxyAffinity).
+	applyPodSchedulingV2(&dep.Spec.Template.Spec, ag.Spec.Scheduling)
+	return dep
+}
+
+// applyPodSchedulingV2 stamps a v2 spec.scheduling block onto a pod spec, deep-copying
+// out of the (shared, informer-owned) CR. A nil block leaves the pod spec untouched,
+// so a gateway that sets no scheduling produces a byte-for-byte unchanged Deployment.
+func applyPodSchedulingV2(pod *corev1.PodSpec, s *gmcv2alpha1.PodScheduling) {
+	if s == nil {
+		return
+	}
+	if len(s.NodeSelector) > 0 {
+		pod.NodeSelector = make(map[string]string, len(s.NodeSelector))
+		for k, v := range s.NodeSelector {
+			pod.NodeSelector[k] = v
+		}
+	}
+	if len(s.Tolerations) > 0 {
+		pod.Tolerations = make([]corev1.Toleration, len(s.Tolerations))
+		for i, t := range s.Tolerations {
+			t.DeepCopyInto(&pod.Tolerations[i])
+		}
+	}
+	if s.Affinity != nil {
+		pod.Affinity = s.Affinity.DeepCopy()
+	}
 }
 
 // credentialEnvV2 returns the AGC environment that selects and configures the

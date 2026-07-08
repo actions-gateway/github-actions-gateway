@@ -159,6 +159,8 @@ engines:
 | [`kyverno/policyexception-gag.yaml`](examples/policies/kyverno/policyexception-gag.yaml) | Kyverno | **Allow** GAG where a strict cluster policy would block it (read-only-rootfs, drop-ALL-caps) — scoped to tenant namespaces and the GMC install namespace. |
 | [`gatekeeper/enforce-gag-worker-hardening.yaml`](examples/policies/gatekeeper/enforce-gag-worker-hardening.yaml) | Gatekeeper | Same **enforce** intent as the Kyverno policy, as a `ConstraintTemplate` + `Constraint`. |
 | [`gatekeeper/exclude-gag-namespaces.yaml`](examples/policies/gatekeeper/exclude-gag-namespaces.yaml) | Gatekeeper | **Exclude** GAG namespaces from strict cluster `Constraint`s, two ways: `excludedNamespaces` and a namespace-marker `labelSelector`. |
+| [`kyverno/restrict-gag-placement.yaml`](examples/policies/kyverno/restrict-gag-placement.yaml) | Kyverno | **Govern placement**: pin each tenant namespace's pods to that tenant's node pool, and forbid keyless `Exists` tolerations. See [Governing where GAG pods schedule](#governing-where-gag-pods-schedule) below. |
+| [`gatekeeper/restrict-gag-placement.yaml`](examples/policies/gatekeeper/restrict-gag-placement.yaml) | Gatekeeper | Same **placement** intent, as an `Assign` mutation plus a `ConstraintTemplate` + `Constraint`. |
 
 All samples key off two stable signals so they keep working as tenants come and
 go:
@@ -200,6 +202,88 @@ kubectl apply -f docs/operations/examples/policies/gatekeeper/exclude-gag-namesp
 Read the comments in each file: the exceptions are deliberately **narrow** (only
 the properties GAG legitimately cannot satisfy, only in GAG namespaces) so they
 do not widen your cluster posture more than necessary.
+
+## Governing where GAG pods schedule
+
+GAG passes pod placement through to the CR author, in three places:
+
+| Field | Governs | Since |
+|---|---|---|
+| `RunnerTemplate.spec.podTemplate` (a full `PodTemplateSpec`) | Worker pods | v2, always |
+| `EgressProxy.spec.scheduling` | Egress-proxy pool pods | v2 |
+| `ActionsGateway.spec.scheduling` | AGC control-plane pod | v2 |
+
+Each carries the standard `nodeSelector`, `tolerations`, and `affinity`. **This is
+deliberate and not admin-gated.** Distinct per-tenant egress IPs exist so tenants
+do not share a rate limit or a block radius; a tenant electing where its own
+traffic leaves the cluster is the intended use, and worker placement has always
+been able to do it.
+
+It follows that **per-tenant egress-IP *attribution* is a property of your cluster
+configuration, not something GAG enforces on its own.** If a downstream firewall
+allowlist or an audit trail attributes traffic by source IP, and CR authors in
+tenant namespaces are not fully trusted, constrain placement here — at the pod
+admission layer, where it also covers any pod a tenant can create directly.
+
+### Pin by mutation, not by an allowlist
+
+The instinct is to validate an allowlist of permitted `nodeSelector` values. **That
+is not sound.** `affinity.nodeAffinity` is a small query language supporting
+`NotIn` and `DoesNotExist`, so "any pool except my own" is expressible, and no
+key=value allowlist rejects it in general.
+
+Stamping the `nodeSelector` by **mutation** *is* sound, because Kubernetes ANDs
+`nodeSelector` with `nodeAffinity` — affinity can only narrow the candidate nodes,
+never widen them. Once admission pins the pod to a pool, no affinity expression
+moves it off. The worst a hostile author achieves is an unschedulable pod
+(`Pending`), never another tenant's egress IP.
+
+Label each tenant namespace with the pool it owns, then apply the policy:
+
+```bash
+kubectl label namespace tenant-a actions-gateway.com/node-pool=pool-tenant-a
+
+# Kyverno — reads the label, pins every pod in that namespace
+kubectl apply -f docs/operations/examples/policies/kyverno/restrict-gag-placement.yaml
+
+# Gatekeeper — one Assign per tenant namespace, plus the toleration Constraint
+kubectl apply -f docs/operations/examples/policies/gatekeeper/restrict-gag-placement.yaml
+```
+
+Namespaces without the label are left untouched, so the Kyverno policy is safe to
+apply before you have labelled anything.
+
+### The taint bypass — and why validation alone is not enough
+
+A toleration with `operator: Exists` and **no `key`** tolerates *every* taint in the
+cluster, including the taints that reserve a node pool for one tenant. No GAG-emitted
+pod needs one, so both samples deny it.
+
+**But do not mistake that rule for a control.** It blocks only the *blanket* case. A
+pod that names the target pool's taint explicitly —
+
+```yaml
+tolerations:
+  - {key: dedicated, operator: Equal, value: pool-tenant-b, effect: NoSchedule}
+```
+
+— walks straight past it, and taint keys are conventional and readable
+(`kubectl get nodes -o jsonpath='{.items[*].spec.taints}'`). Denying keyless `Exists`
+raises the floor; it does not close the door.
+
+**The mutating pin is the only sound control of the two.** It holds even against a pod
+that sets `nodeName` directly to bypass the scheduler, because kubelet's
+`PodMatchNodeSelector` admission re-checks `nodeSelector` and required `nodeAffinity`
+against the node it actually landed on. If you take one thing from this section, apply
+the mutation; treat the toleration rule as a cheap extra, not a substitute.
+
+> **Not a substitute for tenant RBAC.** These policies act on **pods**, so they
+> cover worker, proxy, AGC, *and* any pod a tenant creates directly. That breadth is
+> the point: GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled pod a
+> tenant creates in its own namespace is selected by no policy and egresses
+> unrestricted. If tenants hold `pods: create` in their namespaces, placement is the
+> least of what a policy engine needs to constrain. See
+> [security design §5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 
 ## See also
 

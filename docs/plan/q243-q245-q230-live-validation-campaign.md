@@ -205,8 +205,13 @@ it honestly here and file a follow-up; do not paper over it (secure-by-default).
   (`cmd/gmc/internal/controller/builder_test.go`, Q136/Q229). Guard = that unit
   test; re-run *this* manual live validation at major egress-path changes.
 - **Q243 is NOT fully closed.** The reference-arch mechanism claim (distinct +
-  stable per-tenant egress IP via Cloud NAT) is validated, but delivering it
-  through GAG needs an EgressProxy API change (bind a tenant's proxy pods to one
-  egress path). Filed as **[Q282](../STATUS.md#Q282)** (scheduling pass-through on
-  the `EgressProxy` + `ActionsGateway` CRs, platform-governed); Q243's v2beta1-gate
-  status carries to it.
+  stable per-tenant egress IP via Cloud NAT) is validated, and the EgressProxy API
+  change needed to bind a tenant's proxy pods to one egress path has since landed
+  (**Q282** — `spec.scheduling` pass-through on the `EgressProxy` +
+  `ActionsGateway` CRs; see
+  [Placement pass-through](q243-egress-ip-reference-arch.md#placement-pass-through-q282)).
+  What remains for Q243 is a live end-to-end validation that a pinned proxy pool
+  egresses from exactly one IP. Note Q282 reversed this campaign's original
+  "platform-governed placement" design point — placement is CR-author-settable, and
+  constraining it is a policy-engine concern; the reasoning is recorded in the Q243
+  plan.
