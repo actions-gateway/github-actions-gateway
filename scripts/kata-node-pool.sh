@@ -19,23 +19,41 @@
 #
 # Optional env (defaults shown):
 #   NODE_POOL          kata-pool        node-pool name to create
-#   MACHINE_TYPE       n2-standard-4    MUST be a nested-virt-capable family
+#   MACHINE_TYPE       c2-standard-4    MUST be a nested-virt-capable family
 #                                       (n2/n2d/c2/c2d); a2/a3/g2 GPU families
 #                                       do NOT support nested virt on GKE.
 #   NUM_NODES          1                nodes in the pool
 #   DISK_SIZE          100              boot disk GiB (kind needs headroom)
 #   IMAGE_TYPE         UBUNTU_CONTAINERD  Kata's kata-deploy targets containerd;
 #                                       Ubuntu nodes carry the KVM module set.
+#                                       COS_CONTAINERD works at 1.28.4-gke.1083000+.
+#   POOL_LABEL         gag.dev/kata-ci=true  label used to SCOPE the kata-deploy
+#                                       installer. Deliberately NOT
+#                                       katacontainers.io/kata-runtime -- see below.
 #   LOCATION_FLAG      --region         use --zone for a zonal cluster
 #   DRY_RUN            unset            set to 1 to print, not run
 #
-# NOTE — VERIFY AT SPIKE TIME: the exact nested-virt enablement surface on GKE
-# evolves across gcloud releases (node-pool flag vs. node-system-config vs. a
-# privileged kvm-device-plugin DaemonSet). Confirming that this invocation
-# yields a node with /dev/kvm present is acceptance criterion #1 of the spike;
-# cross-check against `gcloud container node-pools create --help` and the GKE
-# nested-virtualization docs before the live run. Update this script with the
-# confirmed flags as the spike's first recorded result.
+# VALIDATED (Q226, 2026-07): --enable-nested-virtualization is a GA gcloud flag on
+# `container node-pools create`, and the resulting node exposes /dev/kvm
+# (crw-rw---- 10, 232) with the CPU `vmx` flag. Confirmed on GKE
+# 1.35.5-gke.1241004 / Ubuntu 24.04 / c2-standard-4.
+#
+# CAPACITY: a nested-virt pool draws from the ordinary machine-family capacity
+# pool (nested virt does not narrow it). n2/n2d were ZONE_RESOURCE_POOL_EXHAUSTED
+# in us-central1-a during validation while quota sat at 0/200 -- a stockout, not a
+# quota error. c2/c2d worked. Check the PER-FAMILY regional quota too (C2_CPUS
+# defaults to 8 on a fresh project).
+#
+# PREFER `gcloud container clusters create --enable-nested-virtualization` where
+# you can: it accepts the same flag, and a stockout during a *separate*
+# `node-pools create` holds a cluster-level lock that blocks every other mutation
+# -- including deleting the stuck pool -- for tens of minutes.
+#
+# SECURITY: this script does not enable Workload Identity. Kata isolates the
+# kernel, NOT the pod network: the GKE metadata server stays reachable from inside
+# the micro-VM and will serve the node's service-account token. Pass
+# --workload-metadata=GKE_METADATA on the pool (and --workload-pool on the cluster)
+# before running untrusted code. See docs/operations/kata-dind-workloads.md.
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -48,10 +66,11 @@ main() {
 	: "${REGION:?REGION must be set (cluster region or zone)}"
 
 	local node_pool="${NODE_POOL:-kata-pool}"
-	local machine_type="${MACHINE_TYPE:-n2-standard-4}"
+	local machine_type="${MACHINE_TYPE:-c2-standard-4}"
 	local num_nodes="${NUM_NODES:-1}"
 	local disk_size="${DISK_SIZE:-100}"
 	local image_type="${IMAGE_TYPE:-UBUNTU_CONTAINERD}"
+	local pool_label="${POOL_LABEL:-gag.dev/kata-ci=true}"
 	local location_flag="${LOCATION_FLAG:---region}"
 
 	# Fail early on a known-incompatible machine family rather than after a slow
@@ -76,12 +95,14 @@ main() {
 		--disk-size "${disk_size}"
 		--image-type "${image_type}"
 		# Expose nested virtualization (KVM) to the node guest — the prerequisite
-		# for Kata's QEMU hypervisor. VERIFY this flag against current gcloud (see
-		# header note); it is the crux of spike acceptance criterion #1.
+		# for Kata's QEMU hypervisor. GA flag; validated to yield /dev/kvm.
 		--enable-nested-virtualization
-		# Label the pool so the runner pod / ActionsGateway CR can target it via a
-		# nodeSelector and so Kata's kata-deploy DaemonSet can be scoped to it.
-		--node-labels "katacontainers.io/kata-runtime=true"
+		# Scope the kata-deploy installer to this pool. Deliberately NOT
+		# katacontainers.io/kata-runtime: kata-deploy SETS that label itself once
+		# the runtime is installed, and the RuntimeClass schedules pods on it.
+		# Pre-applying it here would let a Kata pod land on a node before the
+		# runtime exists.
+		--node-labels "${pool_label}"
 	)
 
 	if [[ -n "${DRY_RUN:-}" ]]; then

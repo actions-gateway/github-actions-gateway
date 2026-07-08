@@ -9,7 +9,7 @@ deploy/dogfood-e2e/
   base/                 # isolation-agnostic: namespace, quota, ActionsGateway, RunnerSet
   overlays/
     dind/               # privileged DinD  — simple, NO isolation (trusted CI only)   ← validated
-    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← planned (Q226)
+    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← arch validated (Q286)
 ```
 
 ## The two variants
@@ -100,7 +100,7 @@ install.
   `maxWorkers` pods land on two nodes and concurrent e2e legs don't CPU-throttle each
   other. Full rationale + the measured table:
   [dogfood-runner-rightsizing.md § e2e worker sizing](../../docs/plan/dogfood-runner-rightsizing.md#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
-- **kata:** planned ([Q226](../../docs/STATUS.md#Q226)). Note the measured runner
+- **kata:** planned ([Q286](../../docs/STATUS.md#Q286)). Note the measured runner
   peak (~5 vCPU) exceeds a whole `n2-standard-4`, so the Kata node in
   [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) needs to grow
   (e.g. `n2-standard-8`) before that path is sized — the DinD pod requests do not
@@ -109,4 +109,4 @@ install.
 The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
 is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and
 was live-validated green on GAG on 2026-07-07 (Q231, done). The Kata isolation
-variant remains open under [Q226](../../docs/STATUS.md#Q226).
+variant remains open under [Q286](../../docs/STATUS.md#Q286).

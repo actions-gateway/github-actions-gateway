@@ -6,8 +6,13 @@
 #
 # NOTE: this is the Kata isolation path. It is NOT the live/validated e2e path —
 # that is the privileged-DinD kustomize overlay (deploy/dogfood-e2e/overlays/dind,
-# e2-standard-8 pool), which e2e-start.sh applies on demand. Kata is sized/validated
-# under Q226 (the runner's ~5-vCPU peak needs a node bigger than n2-standard-4).
+# e2-standard-8 pool), which e2e-start.sh applies on demand.
+#
+# Q226 validated unprivileged dockerd + kind inside a Kata microVM on GKE and
+# corrected this script's Kata install (the old release-asset URLs 404; the
+# RuntimeClass used an invalid scheduling.nodeClassification field; the pool did
+# not pin --image-type so it got COS). Running GAG's e2e suite through this path
+# is still a follow-up — see docs/plan/kata-on-gke.md.
 #
 # Run once after the main cluster setup (Parts A–B of the runbook).
 # Idempotent and safe to re-run: the e2e node-pool create is skipped if the
@@ -22,16 +27,24 @@
 #   INSTALLATION_ID  GitHub App installation ID for this repo
 #
 # Optional:
-#   KATA_VERSION     Kata Containers release tag (default: stable-3.x from GH)
+#   KATA_VERSION     Kata Containers chart/appVersion (default below)
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
 
-# Kata deploy manifests — pin a version; check https://github.com/kata-containers/kata-containers/releases
-KATA_VERSION="${KATA_VERSION:-3.14.0}"
-KATA_BASE="https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}"
+# Kata is installed from upstream's OCI Helm chart. Kata no longer publishes the
+# kata-deploy-stable.yaml / kata-rbac.yaml release assets this script used to
+# fetch — those URLs now return HTTP 404 (verified under Q226). Pin a released
+# version: https://github.com/kata-containers/kata-containers/releases
+KATA_VERSION="${KATA_VERSION:-3.32.0}"
+KATA_CHART="oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy"
+# Label that scopes the kata-deploy installer to the e2e pool. Deliberately NOT
+# katacontainers.io/kata-runtime: kata-deploy SETS that label once the runtime is
+# installed, and the RuntimeClass schedules on it. Conflating the two lets a Kata
+# pod land on a node whose runtime does not exist yet.
+KATA_POOL_LABEL_KEY="gag.dev/kata-ci"
 
 create_node_pool() {
 	if gcloud container node-pools describe e2e \
@@ -40,65 +53,86 @@ create_node_pool() {
 		return
 	fi
 	echo "Creating e2e node pool with nested virtualization..."
-	# n2-standard-4: N2 family is required for nested virtualization on GCP.
-	# --enable-nested-virtualization exposes /dev/kvm on the node, which
-	# Kata uses to spin up a microVM per pod.
+	# --enable-nested-virtualization exposes /dev/kvm on the node, which Kata uses
+	# to spin up a microVM per pod. It requires an n2/n2d/c2/c2d machine family AND
+	# --image-type=UBUNTU_CONTAINERD (or COS_CONTAINERD at 1.28.4-gke.1083000+) —
+	# without the explicit image type GKE defaults to COS, and kata-deploy cannot
+	# install onto it. Verified under Q226.
+	#
+	# --workload-metadata=GKE_METADATA is a SECURITY PREREQUISITE, not a nicety:
+	# Kata isolates the kernel, not the pod network, so without Workload Identity
+	# the runner can still mint the node's service-account token from the metadata
+	# server. Requires --workload-pool on the cluster.
 	gcloud container node-pools create e2e \
 		--project="${PROJECT}" \
 		--cluster="${CLUSTER}" \
 		--zone="${ZONE}" \
-		--machine-type=n2-standard-4 \
+		--machine-type=c2-standard-8 \
+		--image-type=UBUNTU_CONTAINERD \
 		--enable-nested-virtualization \
+		--workload-metadata=GKE_METADATA \
 		--spot \
 		--num-nodes=0 \
 		--min-nodes=0 \
 		--max-nodes=2 \
 		--enable-autoscaling \
+		--node-labels="${KATA_POOL_LABEL_KEY}=true" \
 		--node-taints=dedicated=e2e:NoSchedule \
 		--disk-size=100GB
 }
 
 install_kata() {
-	local kata_deploy="${KATA_BASE}/kata-deploy-stable.yaml"
+	require_cmd helm "https://helm.sh/docs/intro/install/"
 
-	echo "Applying Kata RBAC..."
-	kubectl apply -f "${KATA_BASE}/kata-rbac.yaml"
+	# Scope the installer to the e2e pool via the pool's own label. The chart
+	# creates the kata-qemu RuntimeClass (with the correct pod overhead); we add
+	# the `kata` alias separately in apply_runtimeclass.
+	echo "Installing kata-deploy ${KATA_VERSION} via Helm (scoped to the e2e pool)..."
+	helm upgrade --install kata-deploy "${KATA_CHART}" \
+		--version "${KATA_VERSION}" \
+		--namespace kube-system \
+		--set "nodeSelector.${KATA_POOL_LABEL_KEY//./\\.}=true" \
+		--set shims.disableAll=true \
+		--set shims.qemu.enabled=true \
+		--set defaultShim.amd64=qemu \
+		--set monitor.enabled=false \
+		--set runtimeClasses.enabled=true \
+		--set runtimeClasses.createDefault=false
 
-	echo "Applying Kata DaemonSet (version ${KATA_VERSION})..."
-	kubectl apply -f "${kata_deploy}"
-
-	# Scope Kata to e2e pool nodes only — the system/workers pools use COS
-	# by default which Kata does not support (no /dev/kvm).
-	echo "Scoping kata-deploy DaemonSet to e2e pool nodes..."
-	kubectl patch daemonset kata-deploy -n kube-system \
-		--type=merge \
-		-p '{"spec":{"template":{"spec":{"nodeSelector":{"cloud.google.com/gke-nodepool":"e2e"}}}}}'
-
-	echo "Waiting for Kata DaemonSet (will only complete once e2e nodes exist)..."
+	echo "Waiting for Kata DaemonSet (only completes once e2e nodes exist)..."
 	echo "  (With 0 e2e nodes running, this may print a warning and continue.)"
 	kubectl rollout status daemonset/kata-deploy -n kube-system --timeout=2m || true
 }
 
 apply_runtimeclass() {
-	echo "Applying kata-qemu RuntimeClass..."
+	# The `kata` alias -> kata-qemu handler, so the hypervisor can be retargeted
+	# without editing every pod spec. The chart already owns `kata-qemu` itself.
+	#
+	# NOTE: `scheduling` accepts ONLY `nodeSelector` and `tolerations`. An earlier
+	# revision nested them under `scheduling.nodeClassification`, which the API
+	# server rejects outright ("strict decoding error: unknown field
+	# scheduling.nodeClassification") — caught under Q226.
+	#
+	# nodeSelector pins Kata pods to nodes where kata-deploy has FINISHED
+	# installing (it applies katacontainers.io/kata-runtime=true on completion).
+	# No tolerations here: the tenant's podTemplate already tolerates
+	# dedicated=e2e:NoSchedule, and this alias must stay identical to the one in
+	# deploy/kata-ci/runtimeclass.yaml.
+	echo "Applying kata RuntimeClass alias..."
 	kubectl apply -f - <<'EOF'
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
-  name: kata-qemu
+  name: kata
 handler: kata-qemu
+overhead:
+  podFixed:
+    memory: "160Mi"
+    cpu: "250m"
 scheduling:
-  nodeClassification:
-    nodeSelector:
-      katacontainers.io/kata-runtime: "true"
-    tolerations:
-      - key: dedicated
-        value: e2e
-        effect: NoSchedule
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
 EOF
-	# scheduling.nodeClassification ensures pods using this RuntimeClass only
-	# schedule on nodes where the Kata DaemonSet has finished installing
-	# (it labels nodes katacontainers.io/kata-runtime=true on completion).
 }
 
 create_namespace() {

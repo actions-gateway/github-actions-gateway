@@ -1,0 +1,64 @@
+# Helm values for upstream's kata-deploy chart (Q226).
+#
+# Kata Containers no longer ships raw `kata-deploy.yaml` / `kata-rbac.yaml` base
+# manifests -- as of 3.x the canonical installer is an OCI Helm chart, and the
+# old release-asset URLs 404. Install with:
+#
+#   helm install kata-deploy \
+#     oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version 3.32.0 -n kube-system -f deploy/kata-ci/kata-values.yaml --wait
+#
+# The chart's DaemonSet is privileged by necessity: installing a node-level
+# container runtime means writing /opt/kata, /usr/local/bin and /etc/containerd.
+# That privilege is confined to the trusted, operator-run installer. The runner
+# pod that later uses `runtimeClassName: kata` stays fully unprivileged --
+# see runner-pod.yaml. That asymmetry IS the Kata model.
+#
+# Validated live on GKE 1.35.5-gke.1241004, Ubuntu 24.04 / containerd 2.1.5,
+# c2-standard-4 with nested virtualization. See docs/plan/kata-on-gke.md.
+
+# Install ONLY on the nested-virt CI pool.
+#
+# IMPORTANT: select on the pool's OWN label (gag.dev/kata-ci), never on
+# katacontainers.io/kata-runtime. kata-deploy SETS the latter once the runtime is
+# actually installed, and the RuntimeClass schedules pods on it. Using one label
+# for both creates a race in which a Kata pod can land on a node whose runtime
+# does not exist yet.
+nodeSelector:
+  gag.dev/kata-ci: "true"
+
+# Only the QEMU shim -- the sole handler our RuntimeClass references. Fewer shims
+# means a smaller install surface on the node.
+shims:
+  disableAll: true
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+
+defaultShim:
+  amd64: qemu
+
+# Let the chart own the kata-qemu RuntimeClass; it renders the correct pod
+# `overhead` and a katacontainers.io/kata-version annotation. We ship only the
+# `kata` alias ourselves (runtimeclass.yaml) so pods get one stable name.
+runtimeClasses:
+  enabled: true
+  createDefault: false
+
+# No always-on kata-monitor component on a CI pool.
+monitor:
+  enabled: false
+
+# GKE ships stock containerd under /etc/containerd/.
+k8sDistribution: "k8s"
+
+# Default is ["nydus"]. GAG does not use guest-pull / confidential containers,
+# so skip snapshotter setup entirely.
+snapshotter:
+  setup: []
+
+# Node Feature Discovery would gate installs on detected virt capability. The
+# pool is provisioned with --enable-nested-virtualization, so this is redundant.
+node-feature-discovery:
+  enabled: false

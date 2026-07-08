@@ -1,36 +1,28 @@
-# Kata Containers RuntimeClass objects.
+# The `kata` alias RuntimeClass.
 #
-# A RuntimeClass tells the kubelet which containerd runtime handler to use for a
-# pod. kata-deploy installs the `kata-qemu` handler into containerd's config on
-# each labelled node; these objects expose it to the API. A pod opts in with
-# `runtimeClassName: kata` (or `kata-qemu`) — see runner-pod.yaml.
+# kata-deploy's Helm chart already creates `kata-qemu` (with pod overhead and a
+# katacontainers.io/kata-version annotation). We deliberately do NOT redeclare it
+# here -- doing so would fight Helm for ownership of the same object.
 #
-# We ship these explicitly (and set CREATE_RUNTIMECLASSES=false on the
-# kata-deploy DaemonSet) so the RuntimeClass surface is reviewable in-repo and
-# version-controlled, rather than created as a side effect of the installer.
+# `kata` is a stable alias mapping to the QEMU handler, so the hypervisor can be
+# retargeted later (e.g. to Cloud Hypervisor, `kata-clh`) by editing one object
+# rather than every pod spec.
 #
-# `kata` is a convenience alias mapping to the QEMU handler — the spike and the
-# runner pod reference `kata` so the handler can be retargeted (e.g. to Cloud
-# Hypervisor, `kata-clh`) by editing one object without touching every pod spec.
+# `scheduling.nodeSelector` pins kata pods to nodes where kata-deploy has finished
+# installing the runtime -- kata-deploy applies this label itself, post-install.
+# `overhead` mirrors what the chart renders for kata-qemu: the scheduler must
+# account for the micro-VM's memory/CPU footprint on top of the container's own
+# requests, or the node is oversubscribed.
 ---
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:
   name: kata
-# handler MUST match a runtime configured in containerd on the node. kata-deploy
-# registers `kata-qemu` (among others); we alias `kata` to it.
 handler: kata-qemu
-scheduling:
-  # Only schedule kata pods onto nodes kata-deploy has provisioned. kata-deploy
-  # sets this label once the runtime binaries are installed on the node.
-  nodeSelector:
-    katacontainers.io/kata-runtime: "true"
----
-apiVersion: node.k8s.io/v1
-kind: RuntimeClass
-metadata:
-  name: kata-qemu
-handler: kata-qemu
+overhead:
+  podFixed:
+    memory: "160Mi"
+    cpu: "250m"
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"

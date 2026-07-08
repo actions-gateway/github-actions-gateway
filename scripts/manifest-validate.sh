@@ -62,6 +62,9 @@ yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/co
 # Schema-validate them directly since there is no longer a kustomize overlay that
 # renders them. The deploy/kata-ci/ manifests (Q226 Kata-on-GKE spike) are plain
 # static YAML with no chart/overlay either, so they are schema-validated here too.
+# deploy/kata-ci/kata-values.yaml is a Helm *values* file for upstream's
+# kata-deploy chart, not a Kubernetes manifest — yamllint covers it (via
+# yamllint_paths above); kubeconform must not try to schema-check it.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
 cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
 api/config/crd/actions-gateway.com_runnersets.yaml
@@ -76,7 +79,6 @@ cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml
-deploy/kata-ci/kata-deploy.yaml
 deploy/kata-ci/runtimeclass.yaml
 deploy/kata-ci/runner-pod.yaml"
 
