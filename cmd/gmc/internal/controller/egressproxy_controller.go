@@ -258,12 +258,21 @@ func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2al
 // re-reads the object, the mutate closure writes only the controller-managed
 // fields, and every child gets a controller owner reference on the EgressProxy so
 // the apiserver garbage-collects it when the EgressProxy is deleted (§H.8).
+//
+// A whole-Spec overwrite is only safe where no other controller owns a subfield.
+// That holds for the HPA, PDB and NetworkPolicy below (their specs are derived
+// wholly from the EgressProxy spec, and none carries a scale subresource) but not
+// for the Service (the apiserver assigns ClusterIP) nor the Deployment (the HPA
+// owns `.spec.replicas`) — both of which assign fields selectively instead.
 
+// applyDeployment creates or patches the proxy pool Deployment. It is the target
+// of the pool's HPA, so `.spec.replicas` is assigned selectively rather than by a
+// blanket spec overwrite — see assignHPATargetDeploymentSpec (Q283).
 func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: desired.Namespace, Name: desired.Name}}
 	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
 		obj.Labels = desired.Labels
-		obj.Spec = desired.Spec
+		assignHPATargetDeploymentSpec(&obj.Spec, desired.Spec)
 		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
 	})
 	return err

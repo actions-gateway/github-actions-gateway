@@ -65,6 +65,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Worker HTTPS_PROXY Returns connection refused During Proxy Rollout](#worker-https_proxy-returns-connection-refused-during-proxy-rollout)
 - [Prometheus Not Scraping Proxy or AGC Metrics](#prometheus-not-scraping-proxy-or-agc-metrics)
 - [Proxy Replica Stuck Pending After Enabling HA Defaults](#proxy-replica-stuck-pending-after-enabling-ha-defaults)
+- [Proxy Pool Never Scales Out](#proxy-pool-never-scales-out)
 
 ## How to Validate a Fresh Deployment
 
@@ -2106,6 +2107,53 @@ tainted and only one worker is schedulable) the second replica can never place.
   nodes for the proxy pods (the default kind config ships two workers).
 - Single-node dev clusters: set `spec.proxy.minReplicas: 1` on the
   `ActionsGateway` to run a single proxy replica.
+
+---
+
+## Proxy Pool Never Scales Out
+
+**Symptom.** Under load the proxy pool sits at `minReplicas` no matter what the
+HorizontalPodAutoscaler (HPA) wants. `kubectl get hpa -n <tenant-namespace>`
+shows a `TARGETS` percentage well above the target and `REPLICAS` climbing,
+while `kubectl get deploy` keeps reporting `minReplicas`. Scaling by hand
+(`kubectl scale deploy <proxy> --replicas=5`) reverts within a second.
+
+**Cause.** Fixed in the release that carries this page. Before it, the GMC's
+proxy reconciler rewrote the proxy Deployment's `.spec.replicas` on every pass
+and re-triggered itself on the HPA's own scale write, so the pool oscillated
+between `minReplicas` and the HPA's target and could never stay scaled out. Every
+tenant's egress capacity was capped at `proxy.minReplicas`.
+
+**Resolution.** Upgrade the GMC. On a fixed GMC, `.spec.replicas` belongs to the
+HPA; the reconciler only owns the *floor*:
+
+| Situation | Who sets `.spec.replicas` |
+|---|---|
+| Deployment first created | Reconciler, to `minReplicas` |
+| Deployment sitting at `0` | Reconciler, back to `minReplicas` (an HPA will not scale a target off zero) |
+| Anything else | The HPA, bounded by its own `minReplicas`/`maxReplicas` |
+
+Two consequences worth knowing:
+
+- **Raising `spec.proxy.minReplicas` no longer bumps the Deployment directly.**
+  The GMC raises the HPA's `minReplicas`, and the HPA scales the pool. That needs
+  a working metrics pipeline — check `ScalingActive=True`:
+
+  ```sh
+  kubectl get hpa <proxy> -n <tenant-namespace> \
+    -o jsonpath='{.status.conditions[?(@.type=="ScalingActive")].status}{"\n"}'
+  ```
+
+  `False` with reason `FailedGetResourceMetric` means metrics-server is missing or
+  unhealthy; install it, or the floor will not be enforced.
+- **Lowering `spec.proxy.minReplicas` no longer shrinks the pool immediately.** The
+  HPA's downscale stabilisation window (5 minutes by default) applies.
+
+An out-of-band `kubectl scale` on the proxy Deployment is likewise no longer
+reverted — but the HPA will pull the count back toward its own bounds on its next
+sync, so it is not a durable way to resize a pool. Change
+`spec.proxy.minReplicas` / `spec.proxy.maxReplicas` on the `ActionsGateway`
+(v1) or `spec.minReplicas` / `spec.maxReplicas` on the `EgressProxy` (v2) instead.
 
 ---
 
