@@ -80,9 +80,9 @@ install.
 - **e2e needs broad egress** (Docker Hub / quay / registry.k8s.io / helm CDN),
   which GAG's default-deny + GitHub-only worker `NetworkPolicy` blocks and v2 has
   no opt-out for. The `dind` overlay opens egress additively — **trusted-only**.
-  The durable answer (in-cluster mirror; FQDN enforcement is not available on GKE
-  Dataplane V2 — [Q245](../../docs/STATUS.md#Q245)) is the hardened path that pairs
-  with the Kata variant.
+  The durable answer (in-cluster mirror; GKE's FQDN enforcement needs the opt-in
+  `--enable-fqdn-network-policy`, which dogfood does not enable — [Q245](../../docs/plan/q245-fqdn-intent-backend-split.md))
+  is the hardened path that pairs with the Kata variant.
 
 ## Status
 
