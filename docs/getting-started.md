@@ -26,7 +26,7 @@
 - A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the isolation controls to take effect
 - [cert-manager](https://cert-manager.io) installed, *or* install with `--set certManager.enabled=false` to use the chart's self-signed webhook cert
 - A GitHub App with a private key and installation ID
-- Go 1.24+ only if you build the images yourself
+- Go 1.26+ only if you build the images yourself
 
 ## 1. Deploy the GMC
 
