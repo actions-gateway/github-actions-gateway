@@ -16,7 +16,7 @@ Make the smallest change that achieves the goal. If you notice problems outside 
 
 The full fix/flag/defer/decline policy, the classification taxonomy, and what we do and don't measure are in `docs/development/technical-debt.md`.
 
-Capture knowledge durably, don't leave it in chat. When the user states a standing preference or decision, persist it in the repo (CLAUDE.md, the relevant `docs/` file, or memory) rather than applying it once and moving on. When follow-up work surfaces mid-task, record it on the Queue — including the *why* of any decision it depends on — instead of only mentioning it in the response.
+Capture knowledge durably, don't leave it in chat. When the user states a standing preference or decision, persist it in the repo (CLAUDE.md, the relevant `docs/` file, or memory) rather than applying it once and moving on. When follow-up work surfaces mid-task, record it on the Queue — including the *why* of any decision it depends on — instead of only mentioning it in the response. The Queue row caps at 250 chars: when the *why* doesn't fit, write the doc and link it. Never drop context to make a row fit.
 
 Before introducing a new pattern or abstraction, check whether the codebase already solves the problem.
 
@@ -135,7 +135,7 @@ When working on specific tasks, read the relevant doc before starting:
 | Deciding whether to fix, flag, defer, or decline tech debt | `docs/development/technical-debt.md` |
 | Picking the next task, tracking progress, adding new items | `docs/STATUS.md` — run `gh pr list` first and skip any Queue item already covered by an open PR |
 | **Spawning, creating, or making any worker/agent session(s)** — including a single one — or dispatching/parallelizing work across sessions, or clearing a batch of backlog items (dispatcher + one session/PR per task). Read this **before** spawning: workers must be full Claude Code sessions (task chips), **never** Agent/Task sub-agents, and carry the Auto-fix + background conflict-watch self-healing contract. | `docs/development/parallel-dispatch.md` |
-| Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes have a **hard 250-char cap** (lint-enforced; a markdown link counts its full source length). Count before committing. |
+| Editing `docs/STATUS.md` (any change to the Queue, Progress table, or header) | `docs/development/maintaining-backlog.md` — Queue Notes are **present tense, no status history**, **hard 250-char cap**, and **>200 chars must link a doc** (all lint-enforced; a link counts its full source length). If fitting the cap means dropping a decision or a finding, write the doc first — durable rationale → `docs/design/`, in-flight context → `docs/plan/` — whatever the item's `Sz`. |
 | Security-relevant changes | `docs/design/05-security.md` + the operator half per `docs/development/doc-update-matrix.md` |
 | Cutting a release, or editing the image publish/sign/SBOM pipeline (`publish.yml`) | `docs/operations/release.md` |
 | Editing the docs/marketing website — MkDocs config, brand assets, or the progressive-enhancement JS | `docs/development/website.md` |

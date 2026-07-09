@@ -7,6 +7,7 @@
 1. **Isolate `docs/STATUS.md` edits in their own commit**, separate from code and plan-doc changes. Rebase conflicts on STATUS.md should always be resolvable by `git checkout --theirs` or `--ours` on a single file. This is also stated in `CLAUDE.md` and is the highest-leverage rule in this doc.
 2. **Run `gh pr list` before picking a task.** A Queue row already covered by an open PR should be skipped, not re-started. The open PR — not a `▶ Started` marker — is the real "in-flight" signal.
 3. **Verify 🚫 blockers are still real before treating an item as blocked.** A previous session may have silently completed the dependency without flipping the row. Grep for the deliverables (test names, env vars, code paths) before skipping.
+4. **Never compress a Queue row until its context is gone.** If the 250-char cap won't hold a decision the work depends on or a finding a future session would otherwise re-derive, [write the doc and link it](#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size) — whatever the item's `Sz`. Rule 4 of the linter enforces the link; only you can enforce that the doc is worth linking.
 
 ## Flake fixes go first
 
@@ -84,18 +85,73 @@ Do **not** append a session narrative, do **not** preserve prior entries with "E
 
 A multi-paragraph `Last refreshed:` block is the single largest source of merge conflicts in this file. Every concurrent branch edits it, every session feels pressure to imitate the prior format and add their own entry. Resist.
 
-### Queue `Notes` column: ≤2 sentences, hard cap 250 characters
+### The Notes cell is a pointer, not a summary
 
 `Notes` answers two questions only:
 
 - **What is this item, in one sentence?** (often just a pointer: "→ M3/M4 kind end-to-end" for blocked items.)
 - **What unblocks it or what's the next concrete step?**
 
-**The 250-character cap is hard and lint-enforced** ([`scripts/lint-status.sh`](../../scripts/lint-status.sh) rule 3, run by the pre-commit hook and CI). Count before you commit — a markdown link counts its full `[text](url)` source length, so two short sentences with one link can blow the cap (this is the usual way it's exceeded). When you edit a Notes cell, check its length up front rather than waiting for the hook to reject the commit. The cap is configurable via the `NOTES_MAX_CHARS` env var but defaults to 250 everywhere.
+Both are answered in the **present tense**. A Notes cell describes the item's *current state*, never the path it took to get there.
 
-Anything longer — dry-run write-ups, root-cause analyses, design rationale — belongs in the linked plan doc, not the row. Plan docs aren't high-contention; STATUS.md is.
+#### Notes carry no status history
 
-If a row's Notes is growing past two sentences (or nears 250 chars), that's the signal to move the content to `docs/plan/<plan>.md` and replace the row Notes with a link.
+Merged-PR lists, dated validation results, and "ACHIEVED"/"DONE"/"SHIPPED" narration do not belong in a Queue row. They are the `Last touched:` anti-pattern relocated one column over, and they are the single biggest consumer of the character budget. History already has three homes: the commit message, `git log docs/STATUS.md`, and the linked plan doc.
+
+Q242's row, as it stood before this rule, had drifted into changelog:
+
+```text
+Impl merged #460–#464. Concurrent-green ACHIEVED via ScaleSet clean-green ([Q264](#Q264) P4,
+2026-07-05: 7/7 GAG jobs GREEN, 0 dedup/wedge). FQDN egress shipped (Q245). v2beta1 blocker
+cleared (Q74 shipped); [Q243](#Q243) egress-IP remains.
+```
+
+242 of the 250 characters available, and it answers neither question — a reader still doesn't know what the item *is*, or what to do next. Rewritten in the present tense:
+
+```text
+Admin-set destination allowlist on the per-tenant egress proxy. Remaining: per-tenant
+egress IP ([Q243](#Q243)).
+```
+
+112 characters, both questions answered. The rest — which PRs landed, which validation ran when — belongs in the plan doc, where it isn't competing for space with the next reader's ability to understand the item.
+
+#### The two limits, and what they mean
+
+| Limit | Value | Enforced by | Meaning |
+|---|---|---|---|
+| Hard cap | 250 chars | [`lint-status.sh`](../../scripts/lint-status.sh) rule 3 (`NOTES_MAX_CHARS`) | The cell may not be longer. |
+| Link threshold | 200 chars | [`lint-status.sh`](../../scripts/lint-status.sh) rule 4 (`NOTES_LINK_CHARS`) | Past this length the row **must** link another document from its Item or Notes cell. |
+
+Both run in the pre-commit hook and CI. A markdown link counts its full `[text](url)` source length, so two short sentences with one link can blow the hard cap — count before you commit rather than waiting for the hook.
+
+Rule 4 exists because the hard cap alone is a silent failure mode. When a row approaches 250 characters the author stops *tightening prose* and starts *deleting information* — the decision the work depends on, the finding a future session would otherwise re-derive. Requiring a link at that point puts the gate exactly at the loss boundary: either the row is short enough to stand alone, or it names the doc holding what the cell could not.
+
+**A sibling-row anchor is not an overflow target.** `[Q289](#Q289)` points at another Queue row, which is bound by the same 250-character cap and therefore cannot hold what this row couldn't. Rule 4 requires a link *out* of `STATUS.md` — to `docs/plan/` or `docs/design/`. Cross-referencing a related row is still encouraged; it just doesn't discharge the obligation. (This is not hypothetical: Q284 carried a security governance decision that existed nowhere in the repo, hidden behind exactly such a cross-reference.)
+
+#### When the context doesn't fit, write the doc — whatever the item's size
+
+**The trigger for writing a doc is information loss, not item size.** `Sz` estimates effort; it says nothing about how much context the work depends on. A one-session `S` item can rest on a governance decision that took an afternoon to reach, and that decision has to live somewhere a future session will find it.
+
+Write (or extend) a doc when fitting the Notes cell means deleting any of:
+
+- **A decision the work depends on** — why this approach and not the obvious alternative, especially where the obvious alternative is a security regression.
+- **Prior investigation findings** — what was measured, tried, or ruled out. This is the direct cause of re-work: the next session re-runs the experiment because the row only had room for the conclusion.
+- **A blocker's rationale** — *why* the dependency blocks, not just that it does.
+
+Compressing prose is fine. Dropping a clause because it doesn't fit is the signal.
+
+#### Two homes: durable rationale vs. in-flight context
+
+Once you've decided to write it down, the content picks the file:
+
+| Kind of context | Home | Why |
+|---|---|---|
+| **Durable rationale** — decisions, security governance, why a default is what it is, API-surface constraints | `docs/design/` | Survives plan archival. A design doc is still there in two years; an archived plan doc is history. |
+| **In-flight work context** — investigation findings, phases, dry-run results, what's left to do | `docs/plan/<qNNN>-<slug>.md` | Archived on close, per [Archiving completed plan docs](#archiving-completed-plan-docs). |
+
+This is the same split [the archival rule](#archiving-completed-plan-docs) already applies to code references — code cites the durable layer, never a plan path, because plans move. Queue rows are longer-lived than plans too: a row can outlive several plan docs. When a plan closes, **promote its load-bearing conclusions into `docs/design/`** rather than letting them archive out of reach.
+
+Don't invent a third artifact class for "small context." A short plan doc is a legitimate plan doc — the archival cost is a `git mv` plus one `docs/plan/README.md` row edit, and that cost is the reason the context survives at all.
 
 ### Don't use `▶ Started` markers for solo work
 
@@ -188,6 +244,8 @@ A plan that is partially complete should stay in `docs/plan/`. Archive is for "e
 
 - **Narrating recent session work in the conventions header.** That's what commit messages are for.
 - **Carrying root-cause writeups in Queue Notes.** That's what plan docs are for.
+- **Narrating session history in Queue Notes.** Merged-PR lists and dated "ACHIEVED" results are the same anti-pattern one column over — [Notes are present tense](#notes-carry-no-status-history).
+- **Compressing a Notes cell until the context is gone.** If fitting 250 chars means dropping a decision or a finding, [write the doc](#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size) — regardless of the item's `Sz`.
 - **Splitting bulk discovery into many one-row commits.** That maximizes rebase pain.
 - **Renumbering existing IDs to "tidy up".** IDs are pointers; renumbering invalidates every external reference.
 - **Pre-assigning future release versions to items.** A version tag with no scoped release behind it is churn without signal — [scope the release first, then label](#dont-pre-assign-release-versions-to-backlog-items).

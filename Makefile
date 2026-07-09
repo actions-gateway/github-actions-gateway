@@ -116,9 +116,10 @@ go-version-check: ## Assert a single `go` directive across go.work / go.mod / go
 # parsing, Q184). Lightweight pure-bash checks; part of `check` and the CI
 # shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
+	scripts/lint-status-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
