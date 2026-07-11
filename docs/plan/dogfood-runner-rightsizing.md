@@ -330,7 +330,7 @@ the finding below, needs a *bigger* nested-virt node than the current
 **Measurement (Phase 1).** Routed a full **Calico** e2e run (the heaviest lane —
 most container images, so the conservative peak) to GAG and sampled
 `kubectl top pod --containers` every 3s over the ~18-min run. The pod reached
-`Completed` (clean; no [Q247](../STATUS.md#Q247) orphan this run) with **zero OOM
+`Completed` (clean; no [Q247](gke-dogfood.md) orphan this run) with **zero OOM
 events**:
 
 | Container | Peak CPU | Peak memory | Role |
@@ -458,5 +458,5 @@ residual is the deferred Kata end-state, tracked separately under
   [§ e2e worker sizing](#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
   Kata (step 3) remains the deferred secure end-state ([Q286](../STATUS.md#Q286)).
 - Spot preemption — a preempted job re-provisions on a fresh pod; confirm the AGC
-  re-provisions cleanly (interacts with the [Q247](../STATUS.md#Q247) session-
+  re-provisions cleanly (interacts with the [Q247](gke-dogfood.md) session-
   recovery investigation).

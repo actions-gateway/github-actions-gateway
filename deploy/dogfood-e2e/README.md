@@ -89,8 +89,9 @@ install.
 - **dind:** privileged DinD confirmed working on GKE COS cgroup v2 (daemon up,
   native-sidecar reaping verified). Full **Calico e2e ran clean-green on GAG**
   (2026-07-07): pod `Completed`, no OOM, ~18 min. The
-  [Q247](../../docs/STATUS.md#Q247) session-orphaning is intermittent, not
-  deterministic — this run concluded cleanly; Q247 tracks hardening it.
+  [Q247](../../docs/plan/gke-dogfood.md) session-orphaning was intermittent, not
+  deterministic — this run concluded cleanly; Q247's renewal + self-teardown
+  fixes (resolved) hardened it.
 - **Pod sizing is measured, not guessed** ([Q248](../../docs/STATUS.md#Q248)): the
   worker pod's `requests`/`limits` in [`overlays/dind/resources.yaml`](overlays/dind/resources.yaml)
   are derived from that run's peak — the `runner` is CPU-heavy (~4940m peak, the

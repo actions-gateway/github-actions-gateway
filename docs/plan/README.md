@@ -64,7 +64,7 @@ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ❌ Open — turn-up done 2026-07-01 (every CI job green per-job on `gag-ci`, Q246/Q247 hold); concurrent-matrix recycle-under-burst wedge (Q259) code-fixed, pending live re-validation next turn-up |
+| [gke-dogfood.md](gke-dogfood.md) | On-demand GKE cluster for dogfooding GAG's own CI — GCP setup, GAG install, workflow variable toggle, start/stop/teardown runbook | ✅ Complete (2026-07-07) — turn-up + per-job-green + concurrent-matrix-green on the ScaleSet default (Q224 closed via Q264 P4, #545); v2beta1 dogfood path live (Q231). Turn-up findings Q246/Q247/Q254/Q259/Q260 all resolved. Stays as the living operational runbook |
 | [dogfood-runner-rightsizing.md](dogfood-runner-rightsizing.md) | Measure peak CPU/mem per CI job class on GAG and right-size worker pod requests/limits + node pool; decide pod tiers (general + e2e) | ✅ Complete (2026-07-07) — disk-class ceiling resolved; general-worker (2Gi/3Gi) + e2e-worker (runner req 3vCPU/1Gi/3Gi, dind 3Gi/4Gi) pods right-sized from measured peak; "small" tier measured and declined. Kata end-state deferred to [Q286](../STATUS.md#Q286) |
 
 ## Cross-cutting

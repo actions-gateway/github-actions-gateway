@@ -4,6 +4,17 @@ On-demand GKE cluster for dogfooding GAG's own CI. The cluster costs $0 at
 rest (zero nodes), roughly $0.07/hr when idling with the system node only, and
 adds ≈$0.04/hr per spot worker node while jobs are running.
 
+> **Status: Complete (2026-07-07).** The dogfood plan's deliverables have all
+> landed and are live-validated: turn-up (2026-07-01), per-job-green, and
+> concurrent-matrix-green on the ScaleSet default (Q224 closed via [Q264](../STATUS.md#Q264)
+> P4, #545), plus the v2beta1 dogfood path (Q231, #573). The turn-up findings that
+> gated it are all resolved — session recovery (Q247: renew by RunnerRequestID,
+> bounded RenewJob, job-scoped renewal token, and Q254 worker teardown on definitive
+> lock loss), release-asset diagnosis (Q246), agent-recycle under burst (Q259), and
+> the dup-acquisition wedge (Q260). No open Queue rows remain. This doc stays in
+> place as the living operational runbook — the sections below are the
+> turn-up/start/stop/teardown reference, not open work.
+
 **What runs where after setup**
 
 | Workflow | Jobs migrated to GAG | Jobs kept on `ubuntu-latest` |
