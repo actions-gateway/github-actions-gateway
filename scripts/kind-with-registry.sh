@@ -84,6 +84,46 @@ install_calico() {
   curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "${manifest}" \
     "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/calico.yaml"
 
+  # Pin Calico's node-IP autodetection to the node's Kubernetes InternalIP by
+  # editing the manifest BEFORE it is applied, so calico-node starts exactly
+  # once with the correct config. kind nodes are Docker containers with several
+  # interfaces (the kind-network eth0 plus docker/veth interfaces); Calico's
+  # default `first-found` autodetection intermittently binds BIRD to the wrong
+  # one, so BIRD never initialises `/var/lib/calico/nodename`, the readiness
+  # check never passes, and the whole cluster cascades into
+  # FailedCreatePodSandBox (the Q256 "BIRD/nodename" bring-up flake).
+  # `kubernetes-internal-ip` reads the address kind assigns as the node
+  # InternalIP — deterministic and always the kind-network interface — the
+  # method the Tigera kind quickstart recommends. Earlier we applied the
+  # manifest and then `kubectl set env`, but that second, disruptive rollout
+  # meant calico-node started twice (first with the racy `first-found` method),
+  # which is itself a source of the wedge; baking the env in removes that start.
+  # Inject the env entry right after the `IP: autodetect` pair, matching the
+  # surrounding indentation. Verified below so a CALICO_VERSION bump that
+  # reshapes the upstream env block fails loudly instead of silently regressing.
+  local patched
+  patched="$(mktemp)"
+  # shellcheck disable=SC2064  # intentional: capture this call's patched path now
+  trap "rm -f '${manifest}' '${patched}'" RETURN
+  awk '
+    prev ~ /- name: IP$/ && $0 ~ /value: "autodetect"$/ {
+      print
+      match($0, /^[[:space:]]*/); pad = substr($0, 1, RLENGTH)
+      item = substr(pad, 1, length(pad) - 2)
+      print item "- name: IP_AUTODETECTION_METHOD"
+      print pad "value: \"kubernetes-internal-ip\""
+      prev = $0
+      next
+    }
+    { print; prev = $0 }
+  ' "${manifest}" > "${patched}"
+  mv "${patched}" "${manifest}"
+  if ! grep -q 'IP_AUTODETECTION_METHOD' "${manifest}"; then
+    echo "error: failed to inject IP_AUTODETECTION_METHOD into the Calico manifest;" >&2
+    echo "       the upstream env block layout for ${CALICO_VERSION} may have changed." >&2
+    exit 1
+  fi
+
   # Preload any Calico images already present in the local Docker daemon onto the
   # kind nodes so the rollout below pulls nothing from quay.io — the dominant
   # flake/latency source on this CNI's bring-up, and one the local registry
@@ -101,20 +141,6 @@ install_calico() {
   done < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "${manifest}" | sort -u)
 
   kubectl --context "${ctx}" apply -f "${manifest}"
-
-  # Pin Calico's node-IP autodetection to the node's Kubernetes InternalIP.
-  # kind nodes are Docker containers with several interfaces (the kind-network
-  # eth0 plus docker/veth interfaces); Calico's default `first-found`
-  # autodetection intermittently binds BIRD to the wrong one, so calico-node's
-  # BIRD readiness check never passes and the DaemonSet never finishes rolling
-  # out (the Q256 "BIRD/nodename" bring-up flake). `kubernetes-internal-ip`
-  # reads the address kind assigns as the node InternalIP — deterministic and
-  # always the kind-network interface — which is the method the Tigera kind
-  # quickstart recommends. Set via `kubectl set env` (rather than editing the
-  # manifest) so the fix is one readable line scoped to the calico-node
-  # container; it triggers one more rollout that the gate below then waits on.
-  kubectl --context "${ctx}" set env daemonset/calico-node -n kube-system \
-    --containers=calico-node IP_AUTODETECTION_METHOD=kubernetes-internal-ip
 
   echo "==> waiting for calico-node DaemonSet rollout"
   # 600s headroom: when images are not preloaded a cold quay.io pull of the
