@@ -208,10 +208,16 @@ func startValidatingWebhook() error {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the RunnerSet webhook
-	// (Q264 P3, failurePolicy=Fail), which enforces ScaleSet runnerLabel uniqueness;
-	// this server must serve its path or every RunnerSet create in the suite would
-	// fail closed.
-	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
+	// (Q264 P3, failurePolicy=Fail), which enforces ScaleSet runnerLabel uniqueness
+	// and gates priorityTiers against the PriorityClass allowlist (Q289); this
+	// server must serve its path or every RunnerSet create in the suite would fail
+	// closed. The static allowlist carries only the tier class the representative
+	// migration fixture names (v2_migration_test.go): in production a migrated
+	// tenant's tier class is necessarily already allowlisted, or the v1 gateway
+	// naming it could never have been admitted. The gate's own semantics — including
+	// the nil/secure default — are exercised in priorityclass_allowlist_test.go and
+	// the webhook unit tests.
+	if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr, allowlist.New([]string{"high"})); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)
 	}
 	// Q74: serve /convert for the five v2 hub kinds. envtest patches each convertible

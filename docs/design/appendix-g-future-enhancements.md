@@ -208,7 +208,8 @@ enforced by the GMC validating webhooks on the tenant-facing CRs: an
 `ActionsGateway` whose `runnerGroups[].priorityTiers[].priorityClassName` or
 `runnerGroups[].podTemplate.spec.priorityClassName` is off `--allowed-priority-classes`
 is rejected at admission, as is a `RunnerTemplate` whose
-`podTemplate.spec.priorityClassName` is. RunnerGroup CRs themselves are authored only
+`podTemplate.spec.priorityClassName` is and a v2 `RunnerSet` whose
+`priorityTiers[].priorityClassName` is. RunnerGroup CRs themselves are authored only
 by the GMC ServiceAccount (gated to tenant namespaces by the `gmc-tenant-resource-guard`
 ValidatingAdmissionPolicy); tenants are not expected to hold direct `runnergroups`
 create/update RBAC.
@@ -224,7 +225,7 @@ create/update RBAC.
 - Admission webhooks never re-validate **already-stored** objects. A CR that named an
   off-allowlist class before the Q289 gate shipped keeps working until it is next
   written. See the upgrade sweep in
-  [security-operations.md § Priority classes](../operations/security-operations.md#upgrading-podtemplatespecpriorityclassname-is-now-gated).
+  [security-operations.md § Priority classes](../operations/security-operations.md#upgrading-previously-ungated-priorityclassname-fields-are-now-gated).
 
 **What "added" would look like.** A `ValidatingAdmissionPolicy` on the
 `runnergroups` resource (alongside the existing GMC-SA guards in

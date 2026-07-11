@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -141,5 +142,69 @@ func TestRunnerSetWebhook_NilReaderSkips(t *testing.T) {
 	// The direct-construction path (no reader) is a no-op — production always wires one.
 	v := &RunnerSetCustomValidator{}
 	_, err := v.ValidateCreate(context.Background(), scaleSetRS("newset", "tenant", "gw", "linux"))
+	require.NoError(t, err)
+}
+
+// tieredRS builds a Classic RunnerSet whose priorityTiers name the given classes.
+func tieredRS(name string, classes ...string) *agcv2alpha1.RunnerSet {
+	rs := classicRS(name, "tenant", "gw", "linux")
+	for i, c := range classes {
+		rs.Spec.PriorityTiers = append(rs.Spec.PriorityTiers, agcv2alpha1.PriorityTier{
+			PriorityClassName: c,
+			Threshold:         int32(10 * (i + 1)),
+		})
+	}
+	return rs
+}
+
+func TestRunnerSetWebhook_NilAllowlistRejectsAnyTierClass(t *testing.T) {
+	// The secure default: no allowlist wired forbids every named class — including
+	// the zero-setup escalation Kubernetes ships in every cluster.
+	v := &RunnerSetCustomValidator{}
+	_, err := v.ValidateCreate(context.Background(), tieredRS("newset", "system-cluster-critical"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "priorityTiers[0]")
+	assert.Contains(t, err.Error(), "system-cluster-critical")
+}
+
+func TestRunnerSetWebhook_AllowsAllowlistedTierClasses(t *testing.T) {
+	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard", "runner-bursty"})}
+	_, err := v.ValidateCreate(context.Background(), tieredRS("newset", "runner-standard", "runner-bursty"))
+	require.NoError(t, err)
+}
+
+func TestRunnerSetWebhook_RejectsOffAllowlistTierClass(t *testing.T) {
+	// The second tier is off-allowlist; the rejection names the offending index.
+	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard"})}
+	_, err := v.ValidateCreate(context.Background(), tieredRS("newset", "runner-standard", "system-cluster-critical"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "priorityTiers[1]")
+	assert.Contains(t, err.Error(), "system-cluster-critical")
+}
+
+func TestRunnerSetWebhook_RejectsEmptyTierClassName(t *testing.T) {
+	// A tier's priorityClassName is required — unlike podTemplate.spec, the empty
+	// string is a misconfiguration, not "unset", so it is off-allowlist too.
+	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard"})}
+	_, err := v.ValidateCreate(context.Background(), tieredRS("newset", ""))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "priorityTiers[0]")
+}
+
+func TestRunnerSetWebhook_UpdateCannotSmuggleTierClass(t *testing.T) {
+	// An existing (possibly pre-gate) RunnerSet cannot be edited onto an
+	// off-allowlist class.
+	v := &RunnerSetCustomValidator{PriorityClasses: allowlist.New([]string{"runner-standard"})}
+	old := tieredRS("self", "runner-standard")
+	_, err := v.ValidateUpdate(context.Background(), old, tieredRS("self", "system-cluster-critical"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "priorityTiers[0]")
+}
+
+func TestRunnerSetWebhook_NoTiersNeedsNoAllowlist(t *testing.T) {
+	// A RunnerSet with no priorityTiers is admitted under the secure default — the
+	// gate must not forbid ordinary, unprioritized runner sets.
+	v := &RunnerSetCustomValidator{}
+	_, err := v.ValidateCreate(context.Background(), classicRS("newset", "tenant", "gw", "linux"))
 	require.NoError(t, err)
 }

@@ -1192,8 +1192,9 @@ The platform owns which classes a tenant may use:
    `--allowed-priority-classes` flag (comma-separated) on the GMC controller. The
    validating webhook rejects — naming both the offending class and the permitted
    set — any `ActionsGateway` whose `runnerGroups[].priorityTiers[].priorityClassName`
-   or `runnerGroups[].podTemplate.spec.priorityClassName` is off the list, and any
-   `RunnerTemplate` whose `podTemplate.spec.priorityClassName` is off the list.
+   or `runnerGroups[].podTemplate.spec.priorityClassName` is off the list, any
+   `RunnerTemplate` whose `podTemplate.spec.priorityClassName` is off the list, and
+   any v2 `RunnerSet` whose `priorityTiers[].priorityClassName` is off the list.
 
    ```yaml
    # GMC Deployment / Helm values — args on the controller-manager container
@@ -1215,13 +1216,15 @@ There is deliberately no tenant-settable per-tier `preemptionPolicy` field;
 preemption is governed entirely by the platform-created `PriorityClass` object.
 See [§5.2 — Cross-Tenant Pod Preemption via PriorityClass](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 
-### Upgrading: `podTemplate.spec.priorityClassName` is now gated
+### Upgrading: previously ungated `priorityClassName` fields are now gated
 
-Before this gate, `podTemplate.spec.priorityClassName` was accepted unvalidated on
-`RunnerTemplate` and `ActionsGateway.runnerGroups[]`, bypassing the allowlist
-entirely. It is now rejected unless allowlisted, so **an existing CR that names an
-off-allowlist class will fail its next `create`/`update`** (admission webhooks do
-not re-validate already-stored objects, so nothing breaks until the CR is edited).
+Two of the tenant-reachable routes shipped before their gate did:
+`podTemplate.spec.priorityClassName` was accepted unvalidated on `RunnerTemplate`
+and `ActionsGateway.runnerGroups[]`, and `priorityTiers[].priorityClassName` was
+accepted unvalidated on the v2 `RunnerSet`. Both are now rejected unless
+allowlisted, so **an existing CR that names an off-allowlist class will fail its
+next `create`/`update`** (admission webhooks do not re-validate already-stored
+objects, so nothing breaks until the CR is edited).
 
 Before upgrading, find the affected objects and either add their class to
 `--allowed-priority-classes` or remove the field:
@@ -1232,6 +1235,13 @@ kubectl --context "$CTX" get runnertemplates -A -o json | jq -r '
   .items[]
   | select(.spec.podTemplate.spec.priorityClassName != null)
   | "\(.metadata.namespace)/\(.metadata.name) -> \(.spec.podTemplate.spec.priorityClassName)"'
+
+# v2 RunnerSets (each priorityTiers[] entry names a class)
+kubectl --context "$CTX" get runnersets.actions-gateway.com -A -o json | jq -r '
+  .items[]
+  | .metadata.namespace as $ns | .metadata.name as $name
+  | (.spec.priorityTiers // [])[]
+  | "\($ns)/\($name) -> \(.priorityClassName)"'
 
 # v1 ActionsGateways (the class lives on each runnerGroups[] entry)
 kubectl --context "$CTX" get actionsgateways.actions-gateway.github.com -A -o json | jq -r '

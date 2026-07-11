@@ -647,7 +647,10 @@ func main() {
 		}
 		// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under
 		// one gateway (the scale-set name collision a spec-scoped CEL rule cannot see).
-		if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr); err != nil {
+		// Q289: also gate the tenant-authored priorityTiers[].priorityClassName against
+		// the platform PriorityClass allowlist — the AGC stamps the matched tier's class
+		// onto worker pods, so an ungated tier is a route to cross-tenant preemption.
+		if err := webhookv2alpha1.SetupRunnerSetWebhookWithManager(mgr, priorityClassAllowlist); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "RunnerSet")
 			os.Exit(1)
 		}
