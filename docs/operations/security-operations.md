@@ -1316,6 +1316,40 @@ Because the dynamic set is additive and resets to the static base on any error,
 the worst case of a bad ConfigMap is that recently-added self-service classes stop
 being accepted until it is fixed — never that an unintended class becomes allowed.
 
+### Defense-in-depth: the `priorityclass-allowlist-guard` policy (Q289)
+
+The webhooks above gate every *tenant-facing* CR, but `RunnerGroup` CRs have no
+webhook of their own — they are normally authored only by the GMC from an
+already-validated `ActionsGateway`. A principal granted **direct `runnergroups`
+write RBAC** would therefore bypass the allowlist entirely. The chart ships a
+`ValidatingAdmissionPolicy` (`<release>-priorityclass-allowlist-guard`, on by
+default under `admissionPolicy.enabled`, Kubernetes ≥ 1.30) that rejects any
+`runnergroups` create/update — from **any** writer, the GMC included — whose
+`priorityTiers[].priorityClassName` or `podTemplate.spec.priorityClassName` is
+off the allowlist. Unlike a webhook, the policy also **re-validates every write
+to an existing object**, so a pre-gate stored RunnerGroup naming an
+off-allowlist class is caught on its next update, not just its next re-create.
+
+The policy reads its allowlist from a **parameter ConfigMap** (the apiserver
+cannot read the GMC flag):
+
+- **Default:** the chart renders `<release>-priorityclass-allowlist` in the GMC
+  namespace from `allowedPriorityClasses` — the same value that feeds
+  `--allowed-priority-classes` — so the webhook and the policy cannot drift.
+- **With `priorityClassAllowlist.configMapName` set:** that admin-owned watched
+  ConfigMap becomes the policy parameter instead. Keep it a **superset of the
+  flag** (or leave the flag empty and manage everything in the ConfigMap):
+  the policy sees only the ConfigMap, so a class allowed by flag alone would be
+  admitted by the webhook but denied here on the direct-write path — a
+  fail-closed skew, but a confusing one.
+
+**Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the
+parameter ConfigMap is **deleted**, every `runnergroups` create/update is denied
+(`no params found for policy binding`) until it is recreated — loud and
+fail-closed rather than silently off. The GMC surfaces this as provisioning
+errors on affected gateways; recreate the ConfigMap (or `helm upgrade`) to
+recover. Deleting the ConfigMap does not affect running workloads.
+
 ---
 
 ## License attribution in images

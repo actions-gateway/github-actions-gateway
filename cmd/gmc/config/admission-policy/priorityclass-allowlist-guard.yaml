@@ -1,0 +1,106 @@
+# ValidatingAdmissionPolicy backstop for the platform PriorityClass allowlist
+# (Q289 / Appendix G §G.7).
+#
+# The allowlist's primary enforcement is the GMC validating webhooks on the
+# tenant-facing CRs (ActionsGateway, RunnerTemplate, RunnerSet). RunnerGroup CRs
+# have no webhook of their own: they are normally authored only by the GMC (from an
+# already-validated ActionsGateway), so a cluster operator who grants a tenant
+# direct `runnergroups` write RBAC bypasses the allowlist entirely — the tenant
+# could name system-cluster-critical in priorityTiers or podTemplate.spec and have
+# the AGC stamp it onto worker pods, preempting other tenants cluster-wide.
+#
+# This policy is that gap's gate, and defense-in-depth if the GMC webhook is ever
+# bypassed or disabled. It rejects any runnergroups write whose
+# priorityTiers[].priorityClassName or podTemplate.spec.priorityClassName is not in
+# the allowlist supplied via the paramKind ConfigMap below. Unlike a webhook, a VAP
+# also re-validates on EVERY write to an existing object, narrowing the
+# stored-object residual (objects admitted before the gate shipped).
+#
+# The param ConfigMap is the policy's single allowlist source — the apiserver
+# cannot read the GMC's --allowed-priority-classes flag. Keep the ConfigMap a
+# superset of the flag (the Helm chart renders both from the same values), or
+# GMC-authored RunnerGroups naming flag-only classes will be denied here.
+# parameterNotFoundAction: Deny fails closed if the ConfigMap is missing — and
+# because the apiserver resolves binding params BEFORE any per-object filtering,
+# a missing ConfigMap denies EVERY runnergroups create/update, not just
+# class-naming ones. The ConfigMap ships with this policy (below) and with the
+# chart, so that state is an explicit deletion; recreate the ConfigMap to
+# recover. Fail-open (Allow) is not an option: deleting one ConfigMap would
+# silently disable the guard.
+#
+# The empty-value ConfigMap shipped below is the secure default: no named class is
+# permitted until the platform admin lists it.
+#
+# This is the canonical, fixed-name copy (gmc-system) the GMC integration suite
+# loads to exercise the real deployed CEL; the Helm chart renders the
+# parameterized install copy (templates/priorityclass-allowlist-guard.yaml) with
+# the param ConfigMap generated from .Values.allowedPriorityClasses.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: gag-priorityclass-allowlist-guard
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: v1
+    kind: ConfigMap
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["actions-gateway.github.com"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["runnergroups"]
+  variables:
+    # The allowlist: the param ConfigMap's allowedPriorityClasses value, split on
+    # the same separators the GMC's ConfigMap watcher accepts (commas, newlines,
+    # tabs, spaces). A missing key or empty value yields an empty allowlist —
+    # deny every named class, the secure default.
+    - name: allowed
+      expression: >-
+        (has(params.data) && 'allowedPriorityClasses' in params.data)
+        ? params.data['allowedPriorityClasses'].replace('\n', ',').replace('\r', ',').replace('\t', ',').replace(' ', ',').split(',').filter(s, s != '')
+        : []
+    - name: tierClasses
+      expression: "has(object.spec.priorityTiers) ? object.spec.priorityTiers.map(t, t.priorityClassName) : []"
+    - name: podClass
+      expression: >-
+        (has(object.spec.podTemplate) && has(object.spec.podTemplate.spec)
+         && has(object.spec.podTemplate.spec.priorityClassName))
+        ? object.spec.podTemplate.spec.priorityClassName : ''
+  validations:
+    - expression: "variables.tierClasses.all(c, c in variables.allowed)"
+      messageExpression: >-
+        'priorityTiers priorityClassName ' + variables.tierClasses.filter(c, !(c in variables.allowed)).join(', ')
+        + ' is not in the platform PriorityClass allowlist ConfigMap; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
+      reason: Forbidden
+    - expression: "variables.podClass == '' || variables.podClass in variables.allowed"
+      messageExpression: >-
+        'podTemplate.spec.priorityClassName ' + variables.podClass
+        + ' is not in the platform PriorityClass allowlist ConfigMap; a PriorityClass sets cluster-wide scheduling preemption order, so the platform admin must pre-create it and add it to the allowlist'
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: gag-priorityclass-allowlist-guard-binding
+spec:
+  policyName: gag-priorityclass-allowlist-guard
+  # Deny is the secure default; a missing param ConfigMap denies every
+  # runnergroups write until it is recreated (see the header comment).
+  validationActions: [Deny]
+  paramRef:
+    name: gag-priorityclass-allowlist
+    namespace: gmc-system
+    parameterNotFoundAction: Deny
+---
+# The default (empty) allowlist parameter: no named PriorityClass is permitted
+# until the platform admin lists it here. This is the dev/`make deploy` copy; the
+# Helm chart renders the same ConfigMap from .Values.allowedPriorityClasses so the
+# webhook flag and this policy stay in lockstep.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gag-priorityclass-allowlist
+  namespace: gmc-system
+data:
+  allowedPriorityClasses: ""

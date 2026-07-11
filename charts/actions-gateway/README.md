@@ -32,10 +32,14 @@ not chart resources.
   (`make chart-rbac-check`) fails if they fall out of sync. Do not hand-edit them.
 - The validating webhook (`ValidatingWebhookConfiguration` + Service) and its
   serving cert (cert-manager or self-signed — see below).
-- Two ValidatingAdmissionPolicies that confine the GMC's cluster-wide write
-  grants to marked tenant namespaces: `namespace-psa-guard` (the namespace
+- Three ValidatingAdmissionPolicies: `namespace-psa-guard` (the namespace
   PSA-label patch) and `tenant-resource-guard` (create/update/delete of
-  Deployments, Secrets, RoleBindings, NetworkPolicies, etc.).
+  Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's
+  cluster-wide write grants to marked tenant namespaces;
+  `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on
+  direct `runnergroups` writes that bypass the GMC webhooks (its parameter
+  ConfigMap is rendered from `allowedPriorityClasses`, or is the
+  `priorityClassAllowlist.configMapName` ConfigMap when set).
 - NetworkPolicies (default-deny ingress + metrics/webhook allows) and the
   metrics Service / optional ServiceMonitor.
 
@@ -125,7 +129,7 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `metrics.tls.certManager.enabled` | `true` | Issue a cert-manager metrics serving cert that the ServiceMonitor verifies (secure default). `false`/`certManager.enabled=false` falls back to the self-signed cert scraped with `insecureSkipVerify` (MITM trade-off). |
 | `networkPolicy.enabled` | `true` | Ship the GMC ingress NetworkPolicies (needs an enforcing CNI). |
 | `podDisruptionBudget.enabled` | `true` | Ship the `minAvailable: 1` PDB. |
-| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard` and `tenant-resource-guard` VAPs + bindings (needs k8s ≥ 1.30). |
+| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard`, `tenant-resource-guard`, and `priorityclass-allowlist-guard` VAPs + bindings (needs k8s ≥ 1.30). |
 | `certManager.enabled` | `true` | Issue the webhook cert via cert-manager; `false` uses the self-signed fallback. |
 | `certManager.selfSignedCertDurationDays` | `3650` | Validity of the self-signed cert when cert-manager is disabled. |
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |
