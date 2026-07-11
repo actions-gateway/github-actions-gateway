@@ -92,6 +92,10 @@ all: generate build test ## Generate, build, and test all modules
 # separate too.
 .PHONY: check
 check: lint lint-status plan-index-check no-plan-refs-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
+	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
+	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
+	@scripts/check-dep-advisory.sh
 
 # Markdown link + anchor integrity gate (Q52). scripts/check-doc-links.sh walks
 # every tracked, non-vendored Markdown file and fails on dead relative file
@@ -116,10 +120,11 @@ go-version-check: ## Assert a single `go` directive across go.work / go.mod / go
 # parsing, Q184). Lightweight pure-bash checks; part of `check` and the CI
 # shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-status-test.sh
+	scripts/check-dep-advisory-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in
