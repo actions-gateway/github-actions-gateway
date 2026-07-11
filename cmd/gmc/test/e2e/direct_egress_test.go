@@ -143,8 +143,7 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 		// The retry budget was widened (90s→150s, ceiling 3m→4m) after this spec
 		// red-flaked alongside the two proxy-connect egress specs on e2e-calico
 		// (Q291): three 30s attempts exactly exhausted the old 90s budget before
-		// Felix finished programming the ipBlock. See
-		// docs/plan/q291-e2e-calico-egress-github-flake.md.
+		// Felix finished programming the ipBlock.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:

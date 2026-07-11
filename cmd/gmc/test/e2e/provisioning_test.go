@@ -264,8 +264,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   widened (60s→150s, ceiling 2m→4m) after this spec red-flaked in a set
 		//   with the other two real-GitHub egress specs on the e2e-calico lane
 		//   (Q291): the transient Felix-ipBlock-programming / GitHub-dial window
-		//   under CI load outlasted the old 60s budget. See
-		//   docs/plan/q291-e2e-calico-egress-github-flake.md.
+		//   under CI load outlasted the old 60s budget.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
