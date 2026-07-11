@@ -19,7 +19,7 @@ Single source of truth for progress and priorities across the full project. `doc
 - **Queue `Notes` ≤ 250 characters** (hard, lint-enforced), and **> 200 characters must link a doc** from the Item or Notes cell (also lint-enforced). A markdown link counts its full `[text](url)` source length — count before committing rather than waiting for the hook.
 - **Context that won't fit a row → write the doc and link it, whatever the item's `Sz`.** Size estimates effort, not context: a one-session `S` item can rest on a decision that took an afternoon. Durable rationale (decisions, security governance) → `docs/design/`; in-flight findings → `docs/plan/`. Never compress a row until a decision or a finding is gone. See [when the context doesn't fit](development/maintaining-backlog.md#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size).
 
-Last touched: 2026-07-08
+Last touched: 2026-07-11
 ---
 
 ## Progress
@@ -45,7 +45,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [e2e test speed](plan/e2e-tests-speed.md) | `speed` `tests` | ✅ |
 | [v2 API decomposition](plan/v2-api.md) | `infra` | ✅ |
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
-| [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ⚠️ |
+| [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
 
 ---
@@ -58,7 +58,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 |---|---|---|---|---|---|
 | <a id="Q256"></a>Q256 | [e2e-calico infra bring-up (registry + Calico node)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | Recurred after #555 (bake-retry + Calico pin): e2e-calico dies at image-build/cluster bring-up (#585, #588, `main` 07-08/09) — mitigation not holding. Sub-cause unconfirmed (logs purged before capture). Top of Queue per flakes-first. |
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | ▶ | L | ScaleSet is the default acquisition protocol; Classic is deprecated. Remaining: serve the one-minor deprecation window, then remove the classic machinery and v1alpha1. |
-| <a id="Q247"></a>Q247 | [AGC runner session recovery after job recycling](plan/gke-dogfood.md) | `infra` | ▶ | M | Three facets fixed and live-validated (RenewJob ID, unbounded renewal wedge, broker-token job scope); the self-cancel residual landed in Q254. Remaining: a close-out check that nothing is outstanding, then delete this row. |
 | <a id="Q242"></a>Q242 | [Implement G.1 proxy destination allowlist](plan/q242-g1-proxy-destination-allowlist.md) | `security` `infra` | ▶ | L | Admin-set destination allowlist on the per-tenant egress proxy. Remaining: per-tenant egress IP ([Q243](#Q243)). |
 | <a id="Q243"></a>Q243 | [Per-tenant egress-IP reference architecture (cloud)](plan/q243-egress-ip-reference-arch.md) | `security` `infra` `docs` | 🔲 | L | Reference arch and mechanism are live-validated: per-range Cloud NAT gives two tenants distinct, stable IPs. The scheduling blocker is cleared (Q282). Remaining: live-validate proxy-pool pinning end-to-end. |
 | <a id="Q289"></a>Q289 | [ValidatingAdmissionPolicy backstop for the PriorityClass allowlist](design/appendix-g-future-enhancements.md#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement) | `security` | 🔲 | S | The webhook gates `podTemplate.spec.priorityClassName`, but direct `runnergroups` RBAC bypasses it and stored objects are never re-validated. Fix: a VAP with a `paramKind` allowlist. |
