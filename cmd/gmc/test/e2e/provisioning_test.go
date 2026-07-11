@@ -260,7 +260,12 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   fails on every retry and still fails the test — --retry-all-errors only
 		//   adds bounded retries, it cannot turn a deterministic failure green.
 		//   --retry-max-time caps total retrying so a real persistent failure still
-		//   terminates well inside the 2-minute pod-phase wait.
+		//   terminates well inside the 4-minute pod-phase wait. The budget was
+		//   widened (60s→150s, ceiling 2m→4m) after this spec red-flaked in a set
+		//   with the other two real-GitHub egress specs on the e2e-calico lane
+		//   (Q291): the transient Felix-ipBlock-programming / GitHub-dial window
+		//   under CI load outlasted the old 60s budget. See
+		//   docs/plan/q291-e2e-calico-egress-github-flake.md.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
@@ -280,7 +285,7 @@ spec:
       set -eu
       curl --silent --show-error \
            --max-time 30 \
-           --retry 5 --retry-delay 2 --retry-max-time 60 --retry-all-errors \
+           --retry 8 --retry-delay 2 --retry-max-time 150 --retry-all-errors \
            --proxy %s \
            --proxy-cacert /etc/proxy-ca/tls.crt \
            --output /tmp/body \
@@ -319,7 +324,7 @@ spec:
 			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")),
 				"curl pod still in phase %q", out)
 			finalPhase = out
-		}, 2*time.Minute, 3*time.Second).Should(Succeed())
+		}, 4*time.Minute, 3*time.Second).Should(Succeed())
 
 		// Always dump logs — even on success — so the CI artifact has the
 		// HTTP_CODE/BODY_BYTES line for visual confirmation.

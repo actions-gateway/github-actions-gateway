@@ -140,6 +140,11 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 		// allow rule can still be propagating on Calico just after the YAML appears).
 		// A 200 or rate-limit 403 both prove the request reached GitHub; a real NP/DNS
 		// regression fails the connection (curl 6/7/28) → pod Failed.
+		// The retry budget was widened (90s→150s, ceiling 3m→4m) after this spec
+		// red-flaked alongside the two proxy-connect egress specs on e2e-calico
+		// (Q291): three 30s attempts exactly exhausted the old 90s budget before
+		// Felix finished programming the ipBlock. See
+		// docs/plan/q291-e2e-calico-egress-github-flake.md.
 		manifest := fmt.Sprintf(`apiVersion: v1
 kind: Pod
 metadata:
@@ -159,7 +164,7 @@ spec:
       set -eu
       curl --silent --show-error \
            --max-time 30 \
-           --retry 5 --retry-delay 2 --retry-max-time 90 --retry-all-errors \
+           --retry 8 --retry-delay 2 --retry-max-time 150 --retry-all-errors \
            --output /tmp/body \
            --write-out 'HTTP_CODE=%%{http_code}\n' \
            https://api.github.com/zen
@@ -180,7 +185,7 @@ spec:
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")), "curl pod still in phase %q", out)
 			finalPhase = out
-		}, 3*time.Minute, 3*time.Second).Should(Succeed())
+		}, 4*time.Minute, 3*time.Second).Should(Succeed())
 
 		logs, logsErr := utils.Run(exec.Command("kubectl", "logs", curlPod, "-n", tenantNS))
 		Expect(logsErr).NotTo(HaveOccurred(), "fetch curl pod logs")
