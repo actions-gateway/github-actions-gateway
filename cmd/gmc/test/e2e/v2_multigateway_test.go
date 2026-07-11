@@ -167,7 +167,7 @@ spec:
       set -eu
       curl --silent --show-error \
            --max-time 30 \
-           --retry 5 --retry-delay 2 --retry-max-time 60 --retry-all-errors \
+           --retry 8 --retry-delay 2 --retry-max-time 150 --retry-all-errors \
            --proxy %s \
            --proxy-cacert /etc/proxy-ca/tls.crt \
            --output /tmp/body \
@@ -201,7 +201,7 @@ spec:
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Or(Equal("Succeeded"), Equal("Failed")), "curl pod still in phase %q", out)
 			finalPhase = out
-		}, 2*time.Minute, 3*time.Second).Should(Succeed())
+		}, 4*time.Minute, 3*time.Second).Should(Succeed())
 
 		logs, logsErr := utils.Run(exec.Command("kubectl", "logs", curlPod, "-n", tenantNS))
 		Expect(logsErr).NotTo(HaveOccurred(), "fetch curl pod logs")

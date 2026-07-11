@@ -48,6 +48,7 @@ run commands live in
 |---|---|---|
 | [milestone-1-tests.md](milestone-1-tests.md) | M1 unit-test coverage gaps | ✅ Done — all five gaps closed |
 | [coverage-to-75-per-module.md](coverage-to-75-per-module.md) | Every Go module's hand-written unit-test coverage to ≥75% (Q255) | ✅ Done — all 8 code modules ≥75% (probe/gmc reached via a `runProbe`/fake-client refactor + tests) |
+| [q291-e2e-calico-egress-github-flake.md](q291-e2e-calico-egress-github-flake.md) | Three real-GitHub egress specs (2 proxy-connect + direct-egress) red the `e2e-calico` leg together when the Felix ipBlock-programming / GitHub-dial window outlasts the curl retry budget under CI load; widen the bounded retry budget without weakening assertions | ❌ Open — mitigation shipped (retry budget 60/90s→150s, ceiling→4m); keep open until `e2e-calico` soaks clean on `main` ([Q291](../STATUS.md#Q291)) |
 
 ## Speed improvements
 
