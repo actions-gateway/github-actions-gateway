@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -35,16 +36,24 @@ import (
 // it every ScaleSet RunnerSet is rejected `cannot list resource "runnersets"`.
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch
 
-// RunnerSetCustomValidator enforces the cross-object invariant that a spec-scoped
-// CRD CEL rule cannot express: no two ScaleSet-protocol RunnerSets under one gateway
-// may claim the same single runnerLabel (Q264 §5a-U7). The scale set's name IS that
-// label, so two such sets would register the same scale-set name at GitHub and
-// collide. Everything else about acquisitionProtocol — the enum, the default, the
-// immutability, and the ScaleSet⇒exactly-one-label rule — is enforced by CRD CEL on
-// the RunnerSet type itself; this webhook adds only the sibling-uniqueness check.
+// RunnerSetCustomValidator enforces the RunnerSet invariants a spec-scoped CRD CEL
+// rule cannot express:
+//
+//   - No two ScaleSet-protocol RunnerSets under one gateway may claim the same single
+//     runnerLabel (Q264 §5a-U7). The scale set's name IS that label, so two such sets
+//     would register the same scale-set name at GitHub and collide. Everything else
+//     about acquisitionProtocol — the enum, the default, the immutability, and the
+//     ScaleSet⇒exactly-one-label rule — is enforced by CRD CEL on the RunnerSet type.
+//   - Every priorityTiers[].priorityClassName must be on the platform PriorityClass
+//     allowlist (Q132/Q289): the allowlist is dynamic platform config CEL cannot read.
 //
 // +kubebuilder:object:generate=false
 type RunnerSetCustomValidator struct {
+	// PriorityClasses is the platform allowlist of cluster-scoped PriorityClass names
+	// a tenant may reference in priorityTiers. A nil allowlist forbids every named
+	// class (the secure default), matching the v1 ActionsGateway validator.
+	PriorityClasses *allowlist.PriorityClassAllowlist
+
 	// reader lists sibling RunnerSets for the label-uniqueness guard. It is the
 	// manager's uncached API reader in production (wired by
 	// SetupRunnerSetWebhookWithManager): a just-created sibling may not be in the
@@ -56,23 +65,55 @@ type RunnerSetCustomValidator struct {
 	reader client.Reader
 }
 
-// ValidateCreate rejects a ScaleSet RunnerSet whose single runnerLabel collides with
-// an existing ScaleSet sibling under the same gateway.
+// ValidateCreate rejects a RunnerSet naming an off-allowlist PriorityClass in
+// priorityTiers, or a ScaleSet RunnerSet whose single runnerLabel collides with an
+// existing ScaleSet sibling under the same gateway.
 func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	if err := v.validatePriorityTiers(obj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
+	}
 	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
 	return nil, nil
 }
 
-// ValidateUpdate re-checks label uniqueness on update. acquisitionProtocol itself is
-// immutable (CRD CEL), but runnerLabels and gatewayRef can change, so an update can
-// still move a ScaleSet set onto a colliding label.
+// ValidateUpdate applies the same checks on update: an existing RunnerSet cannot be
+// edited to smuggle in an off-allowlist PriorityClass, and — acquisitionProtocol
+// itself being immutable (CRD CEL) — runnerLabels and gatewayRef can still change,
+// so an update can still move a ScaleSet set onto a colliding label.
 func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
+	if err := v.validatePriorityTiers(newObj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
+	}
 	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
+}
+
+// validatePriorityTiers rejects any priorityTiers[].priorityClassName not on the
+// platform PriorityClass allowlist (Q132/Q289). The RunnerSet is tenant-authored —
+// it is the v2 front door — and the AGC stamps the matched tier's class verbatim
+// onto worker pods (provisioner.buildPod), so an ungated tier is a direct route to
+// the escalation the allowlist exists to stop: Kubernetes ships
+// system-cluster-critical (value 2000000000, preemptionPolicy PreemptLowerPriority)
+// in every cluster with nothing restricting it to kube-system, so a tenant naming it
+// would have the scheduler evict OTHER tenants' running workers — and their egress
+// proxies — to place its own. Mirrors the v1 ActionsGateway webhook's
+// validatePriorityClasses; the tier name is required, so an empty string is itself
+// off-allowlist rather than "unset".
+func (v *RunnerSetCustomValidator) validatePriorityTiers(rs *agcv2alpha1.RunnerSet) error {
+	for i, tier := range rs.Spec.PriorityTiers {
+		if !v.PriorityClasses.Allowed(tier.PriorityClassName) {
+			return fmt.Errorf(
+				"priorityTiers[%d]: priorityClassName %q is not in the platform allowlist %v; "+
+					"a PriorityClass sets the scheduler's preemption order across the whole cluster, so the platform admin must "+
+					"pre-create it and add it to the GMC --allowed-priority-classes flag or the watched PriorityClass allowlist ConfigMap",
+				i, tier.PriorityClassName, v.PriorityClasses.Names())
+		}
+	}
+	return nil
 }
 
 // ValidateDelete is a no-op.
@@ -137,9 +178,11 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 // SetupRunnerSetWebhookWithManager registers the validating webhook for the
 // namespaced RunnerSet. The manager's scheme must already include agcv2alpha1 (the
 // GMC registers it at startup). The uncached API reader backs the sibling-uniqueness
-// guard, matching the v1 ActionsGateway singleton webhook.
-func SetupRunnerSetWebhookWithManager(mgr ctrl.Manager) error {
-	v := &RunnerSetCustomValidator{reader: mgr.GetAPIReader()}
+// guard, matching the v1 ActionsGateway singleton webhook. priorityClasses is the
+// shared platform PriorityClass allowlist priorityTiers are gated against
+// (Q132/Q289); nil forbids every named class, the secure default.
+func SetupRunnerSetWebhookWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist) error {
+	v := &RunnerSetCustomValidator{reader: mgr.GetAPIReader(), PriorityClasses: priorityClasses}
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.RunnerSet{}).
 		WithValidator(v).
 		Complete(); err != nil {

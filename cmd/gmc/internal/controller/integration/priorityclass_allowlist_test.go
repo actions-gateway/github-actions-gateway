@@ -53,6 +53,23 @@ func rtWithPodTemplatePriorityClass(name, ns, priorityClassName string) *agcv2al
 	return rt
 }
 
+// rsWithTierPriorityClass returns a RunnerSet naming the given PriorityClass in
+// priorityTiers — the tenant-authored v2 tier route to a worker pod's
+// priorityClassName (Q289): the AGC stamps the matched tier's class onto the pod,
+// overriding the template.
+func rsWithTierPriorityClass(name, ns, priorityClassName string) *agcv2alpha1.RunnerSet {
+	return &agcv2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: agcv2alpha1.RunnerSetSpec{
+			GatewayRef:   agcv2alpha1.ObjectRef{Name: "gateway"},
+			RunnerLabels: []string{"self-hosted"},
+			PriorityTiers: []agcv2alpha1.PriorityTier{
+				{PriorityClassName: priorityClassName, Threshold: 5},
+			},
+		},
+	}
+}
+
 // startPriorityClassAllowlistReconciler starts a PriorityClassAllowlistReconciler
 // against the envtest apiserver for the duration of the test, wired to the given
 // shared allowlist and watching the named ConfigMap in the given namespace.
@@ -164,11 +181,13 @@ func TestIntegration_PriorityClassAllowlist_ConfigMapWatch(t *testing.T) {
 }
 
 // TestIntegration_PriorityClassAllowlist_PodTemplateSurface is the Q289 regression
-// test against a real apiserver. Q132 gated priorityTiers but left the OTHER route to
-// a worker pod's priorityClassName ungated: the full podTemplate.spec, which the AGC
-// copies verbatim into the pod. The same platform allowlist — including its
-// ConfigMap-sourced dynamic half — must now govern both v1 runnerGroups[].podTemplate
-// and the v2 RunnerTemplate.podTemplate.
+// test against a real apiserver. Q132 gated v1 priorityTiers but left the OTHER
+// tenant-reachable routes to a worker pod's priorityClassName ungated: the full
+// podTemplate.spec, which the AGC copies verbatim into the pod (v1
+// runnerGroups[].podTemplate and the v2 RunnerTemplate.podTemplate), and the v2
+// RunnerSet's own priorityTiers, whose matched tier the AGC stamps over the
+// template. The same platform allowlist — including its ConfigMap-sourced dynamic
+// half — must govern all of them.
 //
 // The webhook server runs without TLS in envtest, so the validators are called
 // directly; the allowlist they read is the live one the reconciler maintains.
@@ -189,10 +208,11 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	al := allowlist.New([]string{staticClass})
 	v1Validator := webhookv1alpha1.NewActionsGatewayCustomValidatorWithAllowlist("", al)
 	v2Validator := &webhookv2alpha1.RunnerTemplateCustomValidator{PriorityClasses: al}
+	rsValidator := &webhookv2alpha1.RunnerSetCustomValidator{PriorityClasses: al}
 
 	startPriorityClassAllowlistReconciler(t, al, ns, cmName)
 
-	// The headline claim: a tenant cannot preempt another tenant. Neither surface
+	// The headline claim: a tenant cannot preempt another tenant. No surface
 	// admits system-cluster-critical, under the static allowlist as configured.
 	_, err := v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-escalate", "team-a", escalation))
 	require.Error(t, err, "v1 runnerGroups[].podTemplate must not admit %s", escalation)
@@ -202,6 +222,10 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	require.Error(t, err, "v2 RunnerTemplate.podTemplate must not admit %s", escalation)
 	assert.Contains(t, err.Error(), "podTemplate.spec.priorityClassName")
 
+	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-escalate", "team-a", escalation))
+	require.Error(t, err, "v2 RunnerSet.priorityTiers must not admit %s", escalation)
+	assert.Contains(t, err.Error(), "priorityTiers[0]")
+
 	// An unset priorityClassName stays admissible on both — the secure default must
 	// not forbid ordinary, unprioritized worker pods.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-unset", "team-a", ""))
@@ -209,17 +233,21 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-unset", "team-a", ""))
 	require.NoError(t, err)
 
-	// The allowlisted static class is admitted on both.
+	// The allowlisted static class is admitted on every surface.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-static", "team-a", staticClass))
 	require.NoError(t, err)
 	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-static", "team-a", staticClass))
 	require.NoError(t, err)
+	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-static", "team-a", staticClass))
+	require.NoError(t, err)
 
 	// The dynamic class is rejected until the platform admin adds it to the watched
-	// ConfigMap — and then admitted on both surfaces, with no restart.
+	// ConfigMap — and then admitted on every surface, with no restart.
 	_, err = v1Validator.ValidateCreate(ctx, agWithPodTemplatePriorityClass("v1-dyn-early", "team-a", dynamicClass))
 	require.Error(t, err)
 	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn-early", "team-a", dynamicClass))
+	require.Error(t, err)
+	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-dyn-early", "team-a", dynamicClass))
 	require.Error(t, err)
 
 	cm := &corev1.ConfigMap{
@@ -234,9 +262,13 @@ func TestIntegration_PriorityClassAllowlist_PodTemplateSurface(t *testing.T) {
 	require.NoError(t, err, "the ConfigMap-sourced class must reach the v1 podTemplate surface")
 	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-dyn", "team-a", dynamicClass))
 	require.NoError(t, err, "the ConfigMap-sourced class must reach the v2 podTemplate surface")
+	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-dyn", "team-a", dynamicClass))
+	require.NoError(t, err, "the ConfigMap-sourced class must reach the v2 RunnerSet tier surface")
 
 	// A ConfigMap widening the allowlist must never reach the escalation class.
 	_, err = v2Validator.ValidateCreate(ctx, rtWithPodTemplatePriorityClass("v2-escalate-2", "team-a", escalation))
+	require.Error(t, err, "%s must stay rejected regardless of the dynamic set", escalation)
+	_, err = rsValidator.ValidateCreate(ctx, rsWithTierPriorityClass("rs-escalate-2", "team-a", escalation))
 	require.Error(t, err, "%s must stay rejected regardless of the dynamic set", escalation)
 }
 
