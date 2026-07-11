@@ -4,7 +4,7 @@
 > during the GKE-dogfood privileged-DinD e2e validation (2026-06-30): a
 > `docker:dind` sidecar declared as a **regular** container kept the worker pod
 > at `1/2` after the runner exited, so the AGC counted it as an active session
-> and `maxWorkers` saturated — the [Q247](../../STATUS.md#Q247) stranding symptom,
+> and `maxWorkers` saturated — the [Q247](../gke-dogfood.md) stranding symptom,
 > reproduced deterministically. This surfaces that misconfiguration at admission
 > + status + metrics and steers operators to native sidecars. **No custom reaper.**
 >
@@ -136,7 +136,7 @@ tests.
   its own change if broken.
 - **Un-clean-session GC backstop** — a pod left behind by a *crash* or a
   *superseded/orphaned* job (not a misconfig) strands regardless of sidecar
-  shape. That belongs to **[Q247](../../STATUS.md#Q247)**; the fix there is light
+  shape. That belongs to **[Q247](../gke-dogfood.md)**; the fix there is light
   GC (owner-reference / TTL / reconcile-time cleanup of pods whose session is
   gone), still **not** a bespoke reaper.
 
