@@ -2,7 +2,7 @@
 
 **Status: COMPLETE (evidence record).** Istio and Linkerd **sidecar mode** were validated
 end-to-end on kind (k8s 1.35) and the guide
-[`docs/operations/service-mesh-coexistence.md`](../operations/service-mesh-coexistence.md)
+[`docs/operations/service-mesh-coexistence.md`](../../operations/service-mesh-coexistence.md)
 was corrected accordingly. Istio ambient / Cilium, and the Linkerd worker-lifecycle
 (blocked by a sidecar egress break), remain for the follow-up (Q280).
 

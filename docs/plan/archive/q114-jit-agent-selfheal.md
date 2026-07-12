@@ -2,7 +2,7 @@
 
 **Status: in progress.**
 
-Primary source: [milestone-4.md §12](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112),
+Primary source: [milestone-4.md §12](../milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112),
 bug 2 — live-found 2026-06-12 during the M4 validation run.
 
 ## Problem

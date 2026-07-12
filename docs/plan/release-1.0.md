@@ -144,7 +144,7 @@ policy) can exist until there is an artifact to install and scan.
   and live-proven 2026-06-12 (digest-pinned `helm install` → working
   tenant → green job; CRD `resource-policy: keep` observed on
   uninstall). Evidence:
-  [q12-helm-chart.md](q12-helm-chart.md#live-validation-track-a--2026-06-12).
+  [q12-helm-chart.md](archive/q12-helm-chart.md#live-validation-track-a--2026-06-12).
   **Publishing pipeline proven live 2026-06-15** by the first real tag
   **`v1.0.0-rc.1`** ([Q98](../STATUS.md)): `publish.yml` pushed all four
   multi-arch (amd64+arm64) images to GHCR, keyless-cosign-signed them

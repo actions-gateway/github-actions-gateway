@@ -1,6 +1,6 @@
 # Q121 / Q122 / Q125 — GMC RBAC confinement + fail-closed teardown
 
-Three `1.0-gate` findings from [security-audit-2026-06](security-audit-2026-06.md),
+Three `1.0-gate` findings from [security-audit-2026-06](../security-audit-2026-06.md),
 sharing the GMC RBAC + reconcile/teardown surface. Implemented together.
 
 ## Q121 — GMC Secret RBAC: cluster-wide vs. name-scoped claim

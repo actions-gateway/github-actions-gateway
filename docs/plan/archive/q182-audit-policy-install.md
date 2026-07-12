@@ -8,7 +8,7 @@ and documenting the realistic per-provider managed-cluster path everywhere else.
 
 **Approach:**
 1. Keep the existing policy asset
-   [`docs/operations/examples/apiserver-audit-policy.yaml`](../operations/examples/apiserver-audit-policy.yaml).
+   [`docs/operations/examples/apiserver-audit-policy.yaml`](../../operations/examples/apiserver-audit-policy.yaml).
    Its rules were written against the security model (§5.1 GMC Secret-read
    residual; the `gmc-tenant-resource-guard` and `namespace-psa-guard` VAPs) and
    match the detection table in `security-operations.md` — **do not invent new

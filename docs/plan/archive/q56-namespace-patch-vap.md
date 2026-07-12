@@ -1,7 +1,7 @@
 # Q56 — Gate GMC cluster-wide `namespaces: patch` (k8s audit §B B2)
 
 **Status:** ✅ Done — shipped via the `namespace-psa-guard` VAP + marker-label contract; covered by `TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope`.
-**Queue:** [Q56](../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](archive/k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
+**Queue:** [Q56](../../STATUS.md) · **Finding:** [k8s-best-practices.md §B B2](k8s-best-practices.md#b-rbac--cluster-wide-privilege-)
 
 ## Goal
 
@@ -39,7 +39,7 @@ RBAC stays cluster-wide: RBAC cannot express "namespaces carrying label X", so t
 ### Why no blanket "GMC may never write `privileged`"
 
 `securityProfile: privileged` is a supported onboarding path (DinD / kernel-module
-tenants — see [05-security.md §5.3](../design/05-security.md), `securityProfile` enum
+tenants — see [05-security.md §5.3](../../design/05-security.md), `securityProfile` enum
 `baseline;restricted;privileged`). The GMC legitimately stamps PSA `privileged` on such
 a tenant's namespace, so a value ban on `privileged` would break supported tenants. The
 marker scope already bounds the blast radius to GMC-managed tenant namespaces.
@@ -50,7 +50,7 @@ A compromised GMC can still flip the PSA profile *within a tenant namespace it a
 manages* (e.g. `baseline` → `privileged` on that one tenant). That blast radius is
 inherent — the GMC's whole job is managing that tenant's PSA. The complementary control
 is CEL immutability / downgrade-audit on `securityProfile` itself, tracked as
-[Q33](../STATUS.md) (k8s audit §D D5). Q56 is strictly about non-tenant namespaces.
+[Q33](../../STATUS.md) (k8s audit §D D5). Q56 is strictly about non-tenant namespaces.
 
 ## Deliverables
 

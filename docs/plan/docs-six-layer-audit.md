@@ -18,7 +18,7 @@ and not a restructure.
 | 6 | Reusable content blocks | ✅ done | `go test` list canonical in testing.md; human docs no longer link to CLAUDE.md; no partials mechanism (by decision) |
 
 **All findings resolved.** The Layer 3 metrics gap was closed by Q51 (see
-[q51-metrics-reconcile.md](q51-metrics-reconcile.md)). The optional Layer 2
+[q51-metrics-reconcile.md](archive/q51-metrics-reconcile.md)). The optional Layer 2
 link-check CI gate was subsequently delivered by Q52 (`scripts/check-doc-links.sh`,
 slug-aware, wired into `make check`).
 
@@ -136,7 +136,7 @@ Task:
    (`_bucket`/`_sum` suffixes on histograms are Prometheus-derived, not separate
    metrics — not counted as gaps.)
 
-   **Resolved by Q51** — see [q51-metrics-reconcile.md](q51-metrics-reconcile.md)
+   **Resolved by Q51** — see [q51-metrics-reconcile.md](archive/q51-metrics-reconcile.md)
    for the per-metric rationale. Docs and code now agree: every documented
    non-`(planned)` metric is registered, and the re-pointed name matches what
    controller-runtime actually emits.

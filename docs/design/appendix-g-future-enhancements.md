@@ -229,7 +229,7 @@ the other kinds.
 - Stored-object upgrade sweep:
   [security-operations.md § Upgrading](../operations/security-operations.md#upgrading-previously-ungated-priorityclassname-fields-are-now-gated).
 
-**Related finding.** [docs/plan/q132-priorityclass-allowlist.md](../plan/q132-priorityclass-allowlist.md).
+**Related finding.** [docs/plan/q132-priorityclass-allowlist.md](../plan/archive/q132-priorityclass-allowlist.md).
 
 ---
 

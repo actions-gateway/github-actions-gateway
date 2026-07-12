@@ -7,7 +7,7 @@ nodes; **0 Secret/Pod `already exists` in two bursts**). But the concurrent matr
 **not fully green**: the remaining blocker has shifted to GitHub's broker **fan-out
 completion/assignment accounting**, which is distinct from and beyond this dedup, and which the
 #513 completejob-abandon flag does **not** resolve (it makes the end-state worse — keep it OFF).
-Full evidence in [`gke-dogfood.md`](gke-dogfood.md) re-route #4 (and the re-route #4 update
+Full evidence in [`gke-dogfood.md`](../gke-dogfood.md) re-route #4 (and the re-route #4 update
 block below). **Q224/Q260/Q242 stay open.**
 
 > **Update (redelivery residual code-complete).** Residual (2) — the late-redelivery
@@ -22,7 +22,7 @@ block below). **Q224/Q260/Q242 stay open.**
 >
 > **Update (re-route #4, 2026-07-04 — live-tested; #513 flag does NOT resolve, keep OFF).**
 > The combined capacity + flag-on/flag-off turn-up ran on stable non-preemptible capacity
-> (full evidence in [`gke-dogfood.md`](gke-dogfood.md) re-route #4). Findings: **capacity
+> (full evidence in [`gke-dogfood.md`](../gke-dogfood.md) re-route #4). Findings: **capacity
 > (Q248) and collisions (#512) are both FIXED** — 3 non-preempted nodes, and **0 Secret/Pod
 > `already exists` collisions in both bursts** (10 dedup events each). But **neither flag state
 > reaches green**: the blocker is now GitHub's broker **fan-out completion/assignment
@@ -103,7 +103,7 @@ block below). **Q224/Q260/Q242 stay open.**
 
 The first Q260 fix (commit `c850764`, #503) deduped job acquisition by claiming the
 per-delivery `RunnerRequestID` **before** `AcquireJob`. Live turn-up #2 (2026-07-03,
-recorded in [`gke-dogfood.md`](gke-dogfood.md)) proved it **ineffective**: GitHub's
+recorded in [`gke-dogfood.md`](../gke-dogfood.md)) proved it **ineffective**: GitHub's
 broker fan-out delivers one job to N sibling listener sessions as messages with
 **distinct** `RunnerRequestID`s. Each sibling's `claimJob(distinctReqID)` succeeds, all
 pass the gate, all acquire, and all collide on the **shared** per-job worker Secret
@@ -113,10 +113,10 @@ pass the gate, all acquire, and all collide on the **shared** per-job worker Sec
 ## Root cause — wrong key
 
 - The colliding Secret is named from the job's **`planID`** — `resp.Plan.PlanID`, from
-  the AcquireJob **response** ([`provisioner.go:541`](../../cmd/agc/internal/provisioner/provisioner.go)
+  the AcquireJob **response** ([`provisioner.go:541`](../../../cmd/agc/internal/provisioner/provisioner.go)
   `secretName := "job-" + safeName(planID)`; the pod name too). `planID` is the
   codebase's per-job unique identity.
-- The pre-acquire broker message ([`RunnerJobRequestBody`](../../broker/types.go)) carries
+- The pre-acquire broker message ([`RunnerJobRequestBody`](../../../broker/types.go)) carries
   only `RunnerRequestID` + `RunServiceURL` + `BillingOwnerID` — **no** plan id. Siblings
   get distinct `RunnerRequestID`s, so the pre-acquire gate never collapses the fan-out.
 - `planID` is only known **post-acquire**, so the dedup must move to a post-acquire,
@@ -156,17 +156,17 @@ used (avoids shipping a third speculative key).
 
 ## Tests (must fail against `c850764`)
 
-- **Unit** ([`multiplexer_test.go`](../../cmd/agc/internal/listener/multiplexer_test.go)):
+- **Unit** ([`multiplexer_test.go`](../../../cmd/agc/internal/listener/multiplexer_test.go)):
   rework `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` so each sibling gets a
   **distinct** `RunnerRequestID` but AcquireJob returns a **constant** `planID`. Peak
   concurrent provisions must be 1; N-1 deduped. Against `c850764` (reqID key) all N
   provision → peak = N.
-- **Unit** ([`goroutine_test.go`](../../cmd/agc/internal/listener/goroutine_test.go)):
+- **Unit** ([`goroutine_test.go`](../../../cmd/agc/internal/listener/goroutine_test.go)):
   `TestListener_DuplicateJobDeliverySkipsAcquire` reworked to the post-acquire semantics —
   the loser **does** acquire (post-acquire gate) but does **not** provision, increments
   the metric, and returns `acquired=true` (runner recycles).
 - **Integration/envtest**
-  ([`controller/integration`](../../cmd/agc/internal/controller/integration)): real
+  ([`controller/integration`](../../../cmd/agc/internal/controller/integration)): real
   provisioner + real apiserver. Fix the AcquireJob response to a constant planID; drive
   the baseline session to win + hold the planID claim (blocked in `waitForCompletion`),
   then deliver the **same** planID job (distinct reqID) to the replacement session —

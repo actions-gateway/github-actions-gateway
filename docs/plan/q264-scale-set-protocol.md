@@ -27,7 +27,7 @@ remaining P5 residual (§6-P5).**
 Full §6-P4.** A
 Classic RunnerSet's acquisition path is **byte-for-byte unchanged**. Every
 protocol-level unknown is probed; the residuals are integration-level (P4). This is
-[Option E in the Q260 design](q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
+[Option E in the Q260 design](archive/q260-fanout-completion-reconciliation.md#option-e--single-acquirer-topology--adopt-the-runner-scale-set-protocol-treat-the-cause):
 the deferred fallback pursued **only if live re-route #5 rules Option A
 (winner fan-out completion) infeasible**. The go/no-go stays with re-route #5;
 this doc exists so that fork is not started cold.
@@ -66,7 +66,7 @@ its **many-acquirers topology** on GitHub's classic per-runner broker protocol:
 concurrency = registered runners = acquirers, so GitHub fans one logical job out
 to N sibling sessions, all acquire it (shared planID), and N−1 assignments
 dangle on GitHub's books until the unstarted-job timeout cancels the whole job
-([Q260 §1–§2](q260-fanout-completion-reconciliation.md#1-the-protocol-from-the-code-and-the-live-evidence)).
+([Q260 §1–§2](archive/q260-fanout-completion-reconciliation.md#1-the-protocol-from-the-code-and-the-live-evidence)).
 Option A reconciles the accounting AGC-side; Option E removes the race **by
 construction** by adopting the protocol modern ARC uses: one listener per scale
 set acquires each job exactly once via a batch message-queue claim, then a

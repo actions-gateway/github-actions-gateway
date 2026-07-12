@@ -112,8 +112,8 @@ So:
 
 Grounded in the live dogfood series
 ([gke-dogfood.md](gke-dogfood.md) re-routes #3–#8), the Q260 saga
-([q260-fanout-completion-reconciliation.md](q260-fanout-completion-reconciliation.md),
-[q260-planid-dedup-refix.md](q260-planid-dedup-refix.md)), and the lever spike
+([q260-fanout-completion-reconciliation.md](archive/q260-fanout-completion-reconciliation.md),
+[q260-planid-dedup-refix.md](archive/q260-planid-dedup-refix.md)), and the lever spike
 ([q224-fanout-dispatch-lever-spike.md](q224-fanout-dispatch-lever-spike.md)). The
 answer is **not binary** — it depends entirely on the concurrency class.
 
@@ -199,12 +199,12 @@ have already been fixed*.
 - Completion accounting — losers silently abandoned → Option A winner-driven
   `completejob` per delivery, **live-confirmed GO** (re-route #5: `completejob`
   returns OK on a live sibling, jobs conclude green and survive the 15-min timeout;
-  [Q260 §5 re-route #5](q260-fanout-completion-reconciliation.md#re-route-5-confirmed-2026-07-04--go)).
+  [Q260 §5 re-route #5](archive/q260-fanout-completion-reconciliation.md#re-route-5-confirmed-2026-07-04--go)).
 - planID dedup keyed correctly (#512), recycle 422 churn (Q259), slot-stranding
   (Q266), token-400 ride-out (Q267), SSD capacity ceiling (Q248) — all resolved and
   confirmed quiet in re-route #8.
 - The Q265 benchmark explicitly found **no completion-tax throughput wall**
-  ([Q260 §7](q260-fanout-completion-reconciliation.md#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning)) —
+  ([Q260 §7](archive/q260-fanout-completion-reconciliation.md#7-q265--fan-out-throughput-benchmark-2026-07-05-tax-wall-or-tuning)) —
   Option A's accounting is *not* the bottleneck.
 
 **What is a structural ceiling (unfixable AGC-side):** *fan-out distinct-delivery

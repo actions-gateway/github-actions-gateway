@@ -6,7 +6,7 @@ metrics, so operators can both see the problem in `kubectl describe` and alert o
 it without depending on kube-state-metrics scraping CRD conditions.
 
 Resolves E8 (k8s-best-practices audit). Replaces the original Q82 admission-webhook
-sketch — see [05-security.md](../design/05-security.md) and the rationale below.
+sketch — see [05-security.md](../../design/05-security.md) and the rationale below.
 
 ## Why not a webhook / runtime gate
 

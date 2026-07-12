@@ -2,7 +2,7 @@
 
 Working plan for the M3a core build. Tracks the two reconcilers and the
 provisioner owner-ref seam. Companion to the milestone plan in
-[v2-api.md](v2-api.md) (§ M3a) — that doc holds the parity checklist this build
+[v2-api.md](../v2-api.md) (§ M3a) — that doc holds the parity checklist this build
 must close; this doc holds the implementation decisions.
 
 ## Scope (this PR)
@@ -112,7 +112,7 @@ parity), then remove finalizer.
   v2 worker-set label, reading tunables off RunnerSet.
 
 ## Status / parity checklist
-Tracked in [v2-api.md](v2-api.md) § "Per-field / -condition parity checklist".
+Tracked in [v2-api.md](../v2-api.md) § "Per-field / -condition parity checklist".
 Close each row as implemented + tested.
 
 ## Testing

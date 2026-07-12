@@ -185,7 +185,7 @@ Rules:
   a healthy workload to not-ready.
 - Shipped examples: `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the
   `ActionsGateway` (GMC) and `WorkerQuotaPressure`/`WorkerQuotaExceeded` on the
-  `RunnerGroup` (AGC). See [Q82](../plan/quota-pressure-conditions.md).
+  `RunnerGroup` (AGC). See [Q82](../plan/archive/quota-pressure-conditions.md).
 
 ### Mirror alertable conditions as a controller-exported gauge
 

@@ -759,7 +759,7 @@ gh api /repos/"$REPO"/actions/runners \
 > sibling is deduped rather than hitting the real Secret `AlreadyExists`. **The wedge only
 > reproduces under a real burst, so end-to-end confirmation is still deferred to the next
 > dogfood turn-up — Q224/Q242 stay open/blocked and Q260 stays open until then.**
-> Plan: [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md).
+> Plan: [`q260-planid-dedup-refix.md`](archive/q260-planid-dedup-refix.md).
 >
 > **Q260 planID dedup live-validated EFFECTIVE — the burst-start collapse does NOT recur;
 > but the matrix still isn't fully green, now blocked by capacity + a late-redelivery edge
@@ -841,7 +841,7 @@ gh api /repos/"$REPO"/actions/runners \
 > pod completes yet GitHub cancels the job on a deduped sibling delivery) now has its run-service
 > protocol call — `broker.CompleteJob` + a guarded loser-abandon path, described next — but it
 > stays **off by default** pending live confirmation of the completion semantics. See
-> [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) Follow-up item 2. This code lands
+> [`q260-planid-dedup-refix.md`](archive/q260-planid-dedup-refix.md) Follow-up item 2. This code lands
 > ahead of the dispatcher's combined **capacity (Q248) + re-route #4** turn-up, which
 > re-validates green on stable worker capacity. **Q224/Q260/Q242 stay open until then.**
 >
@@ -858,7 +858,7 @@ gh api /repos/"$REPO"/actions/runners \
 > previously-cancelled job (`tidy-check`) now concludes instead of cancelling.
 > If completion turns out to be planID-scoped (would cancel the winner), revert the flag and
 > pursue the claim-release-post-GC path instead. See
-> [`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md) follow-up item 2.
+> [`q260-planid-dedup-refix.md`](archive/q260-planid-dedup-refix.md) follow-up item 2.
 >
 > **Combined capacity fix + flag-on/flag-off comparison — capacity & collisions
 > FIXED, but still NOT green; the blocker is now GitHub's broker fan-out
@@ -1053,7 +1053,7 @@ gh api /repos/"$REPO"/actions/runners \
 > tax wall → **Q264 stays deferred**; fix the recycle slot-stranding seam (new Queue item)
 > and re-benchmark on a fresh clean namespace before any Option E reconsideration. Full
 > analysis + method + results table:
-> [`q260-fanout-completion-reconciliation.md`](q260-fanout-completion-reconciliation.md) §7.
+> [`q260-fanout-completion-reconciliation.md`](archive/q260-fanout-completion-reconciliation.md) §7.
 > Evidence: AGC debug logs (`agc:e2e-cacd4c6`), reruns `28726094554`/`28726094563`
 > (run 1, `02:52Z`) and `28725801848`/`28725801860` (run 2, `03:00Z`).
 >

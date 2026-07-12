@@ -878,7 +878,7 @@ One session on a 3-node kind cluster (`make e2e-cluster`, kindnet CNI,
 cert-manager installed) with the real GitHub App `actions-gateway-test`
 (App ID 3752347, installation 135739122) against the repo
 `actions-gateway/gateway-test` (workflow `test-job.yml`, `runs-on: e2e`).
-This session also served as the [Q12 track-A live `helm install` proof](q12-helm-chart.md#live-validation-track-a--2026-06-12)
+This session also served as the [Q12 track-A live `helm install` proof](archive/q12-helm-chart.md#live-validation-track-a--2026-06-12)
 and closed Q71.
 
 ### Setup
@@ -1001,7 +1001,7 @@ caught by unit/Tier-A/Tier-B tiers:
    job (and heals 401/EOF-stale sessions found after a restart,
    resolving the surviving-name 409 by ID lookup); fakegithub can
    simulate the single-use behaviour for Tier B regression coverage —
-   see [q114-jit-agent-selfheal.md](q114-jit-agent-selfheal.md).
+   see [q114-jit-agent-selfheal.md](archive/q114-jit-agent-selfheal.md).
 3. **Q117 — RunnerGroup `podTemplate` changes don't reach running
    listeners.** After patching the CR (observedGeneration advanced),
    newly provisioned worker pods still used the old template until the
