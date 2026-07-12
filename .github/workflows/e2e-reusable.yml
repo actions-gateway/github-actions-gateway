@@ -112,6 +112,35 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      - name: Free runner disk space
+        # The job runs the GitHub-hosted image close to its free-disk ceiling:
+        # the kind node image, a 3-node cluster with Calico/cert-manager/
+        # metrics-server images preloaded onto every node, six bake-built
+        # images, and the restored cache tars all land on the same root
+        # filesystem — and the background bake peaks exactly while images are
+        # being kind-loaded. One cold-ish buildx cache was enough to tip a
+        # main run into ENOSPC mid `kind load` with 59 MB free (Q292). Drop
+        # the preinstalled toolchains this job never touches (~15–20 GB)
+        # before any heavy step. Hosted-only: a self-hosted runner
+        # (GAG_E2E_RUNNER) owns its own image and won't have these dirs.
+        if: runner.environment == 'github-hosted'
+        run: |
+          set -euo pipefail
+          echo "==> disk before cleanup"
+          df -h /
+          # Deletions run concurrently — the Android SDK alone is tens of
+          # thousands of files and dominates a serial rm. Absent paths are a
+          # silent no-op under -f.
+          sudo rm -rf /usr/local/lib/android &
+          sudo rm -rf /usr/share/dotnet &
+          sudo rm -rf /opt/hostedtoolcache/CodeQL &
+          sudo rm -rf /usr/share/swift &
+          sudo rm -rf /opt/ghc /usr/local/.ghcup &
+          sudo rm -rf /usr/local/share/powershell &
+          wait
+          echo "==> disk after cleanup"
+          df -h /
+
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.work
@@ -440,6 +469,9 @@ jobs:
         if: always() && (failure() || cancelled())
         run: |
           set +e
+          echo "=== runner disk (ENOSPC during bring-up is Q292's signature) ==="
+          df -h /
+          echo
           echo "=== nodes ==="
           kubectl get nodes -o wide
           echo
