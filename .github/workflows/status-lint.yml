@@ -3,13 +3,13 @@ on:
   pull_request:
     paths:
       - 'docs/STATUS.md'
-      - 'scripts/lint-status.sh'
+      - 'scripts/lint-backlog.sh'
       - '.github/workflows/status-lint.yml'
   push:
     branches: [main]
     paths:
       - 'docs/STATUS.md'
-      - 'scripts/lint-status.sh'
+      - 'scripts/lint-backlog.sh'
       - '.github/workflows/status-lint.yml'
 
 # Cancel superseded runs of this workflow on the same PR; pushes to main are
@@ -26,4 +26,4 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: lint docs/STATUS.md format
-        run: scripts/lint-status.sh
+        run: scripts/lint-backlog.sh

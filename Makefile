@@ -64,7 +64,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
-        ginkgo golangci-lint lint lint-status plan-index-check no-plan-refs-check shellcheck queue-unblock \
+        ginkgo golangci-lint lint lint-backlog plan-index-check no-plan-refs-check shellcheck queue-unblock \
         third-party-notices third-party-notices-check vendor-check tidy-check \
         vulncheck govulncheck trivy-scan polaris-scan manifest-validate
 
@@ -91,7 +91,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-status plan-index-check no-plan-refs-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -123,7 +123,7 @@ go-version-check: ## Assert a single `go` directive across go.work / go.mod / go
 scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
-	scripts/lint-status-test.sh
+	scripts/lint-backlog-test.sh
 	scripts/check-dep-advisory-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
@@ -256,9 +256,9 @@ mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked session
 lint: $(GOLANGCI_LINT) ## Run gofmt and golangci-lint across all workspace modules (golangci-lint includes govet)
 	GOLANGCI_LINT=$(GOLANGCI_LINT) scripts/go-lint.sh
 
-.PHONY: lint-status
-lint-status: ## Enforce churn-reduction format rules on docs/STATUS.md
-	scripts/lint-status.sh
+.PHONY: lint-backlog
+lint-backlog: ## Enforce backlog format rules on docs/STATUS.md (vendored from the backlog skill)
+	scripts/lint-backlog.sh
 
 # Catches the "closed plan never archived" drift that makes docs/plan/README.md
 # read as stale. Rationale + the ⓘ exemption live in the script header.

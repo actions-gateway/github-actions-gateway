@@ -17,10 +17,12 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 | [verify-release.sh](verify-release.sh) | Verify the cosign signatures of a published release (5 images + chart). Backs `make verify-release`. |
 | [download-cosign.sh](download-cosign.sh) | Download the pinned cosign release binary for the current platform. Backs the Makefile's `$(COSIGN)` rule. |
 | [gen-third-party-notices.sh](gen-third-party-notices.sh) | Regenerate (or `--check`) THIRD-PARTY-NOTICES from the committed vendor/ trees. Backs `make third-party-notices(-check)`. |
-| [lint-status.sh](lint-status.sh) | Lint `docs/STATUS.md` for format rules: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars. Runs in CI (`unit-test.yml`), by `make check`, and by the pre-commit hook. |
+| [lint-backlog.sh](lint-backlog.sh) | Lint `docs/STATUS.md` for backlog format rules (vendored from the backlog skill): `**Next ID:**` counter, unique IDs + matching anchors, 🔲/🚫-only states, Notes ≤250 chars with the >200-char doc-link rule, Deferred trigger tags. `--staged` (pre-commit mode) also enforces commit isolation. Runs in CI (`unit-test.yml`, `status-lint.yml`), by `make check`, and by the pre-commit hook. |
 | [check-doc-links.sh](check-doc-links.sh) | GitHub-slug-aware Markdown link/anchor checker: fails on dead relative file links or `#anchors` with no matching heading slug / `<a id>`. Backs `make doc-links` and the CI `doc-links` workflow. |
 | [local-throttle.sh](local-throttle.sh) | Detect an interactive GUI dev shell and emit a parallelism cap + low-priority QoS command prefix (empty on CI/headless), so heavy gates stay desktop-safe. |
 | [queue-unblock.sh](queue-unblock.sh) | List `docs/STATUS.md` Queue items blocked on a given ID. Backs `make queue-unblock`. |
+| [next-task.sh](next-task.sh) | Print a kickoff prompt (or `--title`) for the top ready 🔲 Queue row in `docs/STATUS.md`, for starting a fresh session on the next task. Vendored from the backlog skill. |
+| [backlog-metrics.sh](backlog-metrics.sh) | Replay `docs/STATUS.md` git history into per-item events and flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only. Vendored from the backlog skill. |
 
 Other helpers:
 
@@ -40,4 +42,4 @@ Other helpers:
 | [claude-go-throttle-hook.sh](claude-go-throttle-hook.sh) | Claude Code `PreToolUse` hook that rewrites a bare `go build`/`go test` to carry the local-throttle prefix (Q92). Wired in `.claude/settings.json`. |
 | [kata-node-pool.sh](kata-node-pool.sh) | Provision (or `DRY_RUN=1` print) a GKE Standard node pool with nested virtualization on a nested-virt-capable machine family (n2/n2d/c2/c2d), for the Q226 Kata-on-GKE spike. Params: `PROJECT`/`CLUSTER`/`REGION` (required), `MACHINE_TYPE`/`NODE_POOL`/`NUM_NODES`/… (optional). See [deploy/kata-ci/](../deploy/kata-ci/). |
 
-The tracked git hooks live in [`.githooks/`](../.githooks/). Install them with `make hooks` (or `scripts/setup.sh`, which does it for you); the pre-commit hook runs a sub-second gate (gofmt on staged Go files, plus `lint-status.sh` when `docs/STATUS.md` is staged). Bypass a single commit with `git commit --no-verify`.
+The tracked git hooks live in [`.githooks/`](../.githooks/). Install them with `make hooks` (or `scripts/setup.sh`, which does it for you); the pre-commit hook runs a sub-second gate (gofmt on staged Go files, plus `lint-backlog.sh --staged` when `docs/STATUS.md` is staged — format rules and the isolated-commit requirement). Bypass a single commit with `git commit --no-verify`.

@@ -75,7 +75,7 @@ jobs:
               - '.github/workflows/unit-test.yml'
             status:
               - 'docs/STATUS.md'
-              - 'scripts/lint-status.sh'
+              - 'scripts/lint-backlog.sh'
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
@@ -137,7 +137,7 @@ jobs:
       - name: gofmt + golangci-lint (make lint)
         run: make lint
       - name: lint STATUS.md
-        run: make lint-status
+        run: make lint-backlog
       # Enforce a single Go version across go.work / all go.mod / all go.work.gen
       # (Q68). The go.work.gen files feed `make manifests` and have drifted before.
       - name: single Go version (make go-version-check)
