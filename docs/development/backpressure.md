@@ -38,7 +38,7 @@ linked worktree. Bypass the hook for a single commit with `git commit --no-verif
 | Integration tests | envtest, `integration` build tag, `cmd/agc` + `cmd/gmc` `internal/controller/integration/` | `make test-integration`; [`integration-test.yml`](../../.github/workflows/integration-test.yml) |
 | End-to-end tests | `kind` cluster, `e2e` build tag, Tier A/B/C (see [07-test-plan.md](../design/07-test-plan.md) §7.3) | `make e2e`; [`e2e-test.yml`](../../.github/workflows/e2e-test.yml) |
 | Linting / formatting | `gofmt -s`, `golangci-lint` (govet, staticcheck, ineffassign, unused) | `.githooks/pre-commit` (gofmt); `make check`; `unit-test.yml` |
-| Structural rules | `scripts/lint-status.sh` — `docs/STATUS.md` format: single-line `Last touched:`, no duplicate Queue IDs, Notes ≤250 chars | `.githooks/pre-commit`; `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
+| Structural rules | `scripts/lint-backlog.sh` — `docs/STATUS.md` format: `**Next ID:**` counter, unique IDs + anchors, 🔲/🚫-only states, Notes/trigger caps with the doc-link rule | `.githooks/pre-commit` (also enforces isolated STATUS.md commits); `make check`; [`status-lint.yml`](../../.github/workflows/status-lint.yml) |
 | Vulnerability scan | `govulncheck` (symbol-reachable CVEs, per module) | `make vulncheck`; [`security-scan.yml`](../../.github/workflows/security-scan.yml) |
 | Image scan | `trivy` (OS + library CVEs, per image) | `make trivy-scan`; `security-scan.yml` |
 
@@ -68,7 +68,7 @@ Type checking (Go compiler + `go vet`), three test tiers (unit/integration/e2e),
 formatting and linting (`gofmt -s`, `golangci-lint` with govet/staticcheck/
 ineffassign/unused per [`.golangci.yml`](../../.golangci.yml)), supply-chain
 scanning (`govulncheck`, `trivy`), and custom structural eval scripts
-(`scripts/lint-status.sh`, `scripts/queue-unblock.sh`). Browser/screenshot
+(`scripts/lint-backlog.sh`, `scripts/queue-unblock.sh`). Browser/screenshot
 sensors are correctly absent — there is no user interface.
 
 ### Layer by speed — A
@@ -97,7 +97,7 @@ the one command rather than a single consolidated checklist.
 ### Self-reinforcing (correct twice → automate) — A
 The article's core principle is visibly practiced. [`.golangci.yml`](../../.golangci.yml)
 states its scope is to "catch regressions of the bugs and idiom violations
-tracked in Queue items 38–41." `scripts/lint-status.sh` exists solely because
+tracked in Queue items 38–41." `scripts/lint-backlog.sh` exists solely because
 the `docs/STATUS.md` format (e.g. the 250-char Notes cap) kept getting violated.
 The workspace-guard PreToolUse hook is real-time backpressure on file
 operations, and branch-guard is the same on git operations — prompting
