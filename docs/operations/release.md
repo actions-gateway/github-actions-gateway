@@ -100,6 +100,38 @@ The maintainer's job is to cut the tag and verify the result.
 - Choose the version `vX.Y.Z` (semver). The tag **must** match `v*` or
   `publish.yml` will refuse to publish.
 
+#### Validate the release candidate on dogfood
+
+Before promoting a release-candidate line to a **stable** `vX.Y.Z` tag, validate
+the *latest RC* functionally on the dogfood cluster. `main`-green covers
+unit/integration/kind-e2e, but publishing an image the pipeline signed is not the
+same as proving it runs jobs — this gate exercises real GAG-provisions-runners-on-GKE
+behaviour the CI tiers can't observe. Run it before every GA (`vX.Y.Z`) cut; skip it
+only for an RC-to-RC or a patch tag that changes nothing an operator runs.
+
+The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves
+both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as
+a git ref (for the matching CRDs) — an RC tag satisfies both by construction. From a
+detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
+
+1. **Deploy the RC to dogfood.** `GAG_IMAGE_TAG=vX.Y.Z-rc.N scripts/dogfood/setup.sh`,
+   then `scripts/dogfood/start.sh` (one-time `scripts/dogfood/e2e-setup.sh` first if
+   the e2e node pool / GitHub App Secret aren't set up yet). The cluster, context
+   pinning, and prod-guard cautions are in
+   [gke-dogfood.md](../plan/gke-dogfood.md).
+2. **Run the e2e job matrix on GAG runners.** `scripts/dogfood/e2e-start.sh` routes the
+   repo's own e2e CI jobs onto the RC's GAG-provisioned runners. Require the matrix
+   **green** — this is GAG running its own CI end-to-end on the RC images.
+3. **Smoke the signed v2 CRD asset.** Download the RC release's
+   `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the
+   publish identity (step 3 below), `kubectl apply --server-side` it, and assert the
+   five v2 CRDs register — the helm-free install path operators actually use.
+4. **Tear down.** `scripts/dogfood/e2e-stop.sh`, then `scripts/dogfood/stop.sh`
+   (dogfood scales to 0 at rest).
+
+A red matrix or a failed CRD smoke is a **stop-ship for the GA tag**: fix forward and
+cut a new RC — never promote a known-bad RC to a stable tag.
+
 ### 2. Tag and push
 
 ```bash
