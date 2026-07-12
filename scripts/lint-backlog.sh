@@ -63,7 +63,7 @@ if (( STAGED )); then
     if [[ -n "$others" ]]; then
         {
             printf 'lint-backlog: %s must be committed in isolation, but these files are staged with it:\n' "$rel"
-            sed 's/^/  /' <<<"$others"
+            awk '{ print "  " $0 }' <<<"$others"
             printf 'commit the backlog edit separately (git reset <files>, or commit them first)\n'
         } >&2
         exit 1

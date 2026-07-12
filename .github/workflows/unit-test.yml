@@ -111,7 +111,7 @@ jobs:
 
   lint:
     needs: [changes]
-    # gofmt/golangci need code; lint-status needs the STATUS.md filter.
+    # gofmt/golangci need code; lint-backlog needs the STATUS.md filter.
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.status == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.target_gag) && fromJSON(vars.GAG_RUNNER || '"ubuntu-latest"') || 'ubuntu-latest' }}
     timeout-minutes: 10
