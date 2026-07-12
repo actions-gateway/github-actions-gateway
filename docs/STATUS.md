@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q293
+**Next ID:** Q297
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -55,6 +55,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q284"></a>Q284 | [Expand PodScheduling to the full desirable scheduling surface](plan/q284-podscheduling-surface.md) | `infra` `security` | 🔲 | M | Add `topologySpreadConstraints` + `priorityClassName` (an evicted proxy takes a tenant's egress down). Needs a *separate* infra allowlist and a v2 `ActionsGateway` webhook, which doesn't exist yet — see the plan. |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | 🔲 | M | Front door, deprecate-v1 banners, and the `gag-migrate` slice are in place. Remaining: full v2-only (v1 removal), gated on the Classic deprecation window (§6.2). |
+| <a id="Q295"></a>Q295 | [Fix setup.sh: preserve RunnerTemplate workerImage when DOGFOOD_RUNNER_IMAGE unset](plan/release-friction-reduction.md) | `infra` | 🔲 | S | An idempotent re-run of setup.sh without DOGFOOD_RUNNER_IMAGE silently resets the tenant runner image to the toolchain-less default (broke unit/integration during the v1.1.0 gate). Read the existing workerImage back and preserve it. |
+| <a id="Q293"></a>Q293 | [publish.yml owns the whole Release: tag-derived prerelease flag + auto notes/digests](plan/release-friction-reduction.md) | `infra` `docs` | 🔲 | M | Derive `artifacthub.io/prerelease` from the tag at package time (kills the manual flip PR) and have the job write correct notes (5 index digests + verify cmd + changelog) with `--prerelease` set. Highest-leverage release-friction fix. |
+| <a id="Q296"></a>Q296 | [Release-doc + Calico-filter cleanups from the v1.1.0 cut](plan/release-friction-reduction.md) | `docs` `tests` `infra` | 🔲 | S | Correct release.md's dogfood-gate section (setup.sh env, 0-nodes→start.sh, gh-run-rerun e2e trigger, +1-node contention) and narrow e2e-calico.yml's chart filter to `templates/**` so metadata-only Chart.yaml edits skip the flaky lane. |
+| <a id="Q294"></a>Q294 | [One-command dogfood release-validation gate wrapper](plan/release-friction-reduction.md) | `infra` `tests` | 🔲 | M | `scripts/dogfood/validate-release.sh <rc-tag>`: setup→start→e2e-start→rerun→CRD-smoke→teardown with the env baked in (App IDs, DOGFOOD_RUNNER_IMAGE preserved, ASSUME_YES, e2e-AGC node scaling); idempotent + self-cleaning. |
 
 ---
 
