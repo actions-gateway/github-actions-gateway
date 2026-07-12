@@ -54,7 +54,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q284"></a>Q284 | [Expand PodScheduling to the full desirable scheduling surface](plan/q284-podscheduling-surface.md) | `infra` `security` | 🔲 | M | Add `topologySpreadConstraints` + `priorityClassName` (an evicted proxy takes a tenant's egress down). Needs a *separate* infra allowlist and a v2 `ActionsGateway` webhook, which doesn't exist yet — see the plan. |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | 🔲 | M | Front door, deprecate-v1 banners, and the `gag-migrate` slice are in place. Remaining: full v2-only (v1 removal), gated on the Classic deprecation window (§6.2). |
-| <a id="Q290"></a>Q290 | `make plan-index-check` misses plan docs absent from the index | `docs` `infra` | 🔲 | S | It only checks README→STATUS. A plan doc on disk but missing from [plan/README.md](plan/README.md) is invisible — `q264-scale-set-protocol.md` was, for its whole life. Add the disk→README direction. |
 
 ---
 
