@@ -1,252 +1,83 @@
 # Agent reference: Maintaining the backlog
 
-`docs/STATUS.md` is the single source of truth for project progress and priorities. It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate. This doc captures the rules that keep merge conflicts trivial and the file readable.
+`docs/STATUS.md` is the single source of truth for project progress and priorities. It is high-contention — almost every session edits it — so keeping churn low matters as much as keeping it accurate.
 
-## The non-negotiables
+The format and process come from the globally-installed **backlog skill** (agents: invoke the `backlog` skill for the full playbook — grooming checklist, staleness signals, parallel dispatch, migration). The repo vendors the skill's tooling so the rules hold for every contributor, with or without the skill:
 
-1. **Isolate `docs/STATUS.md` edits in their own commit**, separate from code and plan-doc changes. Rebase conflicts on STATUS.md should always be resolvable by `git checkout --theirs` or `--ours` on a single file. This is also stated in `CLAUDE.md` and is the highest-leverage rule in this doc.
-2. **Run `gh pr list` before picking a task.** A Queue row already covered by an open PR should be skipped, not re-started. The open PR — not a `▶ Started` marker — is the real "in-flight" signal.
-3. **Verify 🚫 blockers are still real before treating an item as blocked.** A previous session may have silently completed the dependency without flipping the row. Grep for the deliverables (test names, env vars, code paths) before skipping.
-4. **Never compress a Queue row until its context is gone.** If the 250-char cap won't hold a decision the work depends on or a finding a future session would otherwise re-derive, [write the doc and link it](#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size) — whatever the item's `Sz`. Rule 4 of the linter enforces the link; only you can enforce that the doc is worth linking.
+- [`scripts/lint-backlog.sh`](../../scripts/lint-backlog.sh) — enforces every format rule below; its header comment is the canonical rule list. Runs in `make check` (`make lint-backlog`), CI ([`status-lint.yml`](../../.github/workflows/status-lint.yml) and `unit-test.yml`), and the pre-commit hook. The hook's `--staged` mode also rejects any commit that stages `docs/STATUS.md` alongside other files.
+- [`scripts/next-task.sh`](../../scripts/next-task.sh) — prints a kickoff prompt (or `--title`) for the top ready 🔲 Queue row, for starting a fresh session on the next task.
+- [`scripts/backlog-metrics.sh`](../../scripts/backlog-metrics.sh) — replays the file's git history into flow metrics (throughput, cycle time, prune ratio, aging WIP). Read-only.
 
-## Flake fixes go first
+## The shared process, in brief
 
-When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work. Then pick it up next.
+- **Position is priority.** The Queue is read top-to-bottom; pick from the top. Decide a new item's priority *before* inserting it and place the row where it belongs — never append by default. Rank by severity/blast radius, then leverage (what it unblocks), ready over blocked; size only as a tiebreaker.
+- **Two Queue states only: 🔲 ready and 🚫 blocked.** Done rows are **deleted** (git is the archive), "started" is signaled by the open PR (run `gh pr list` before picking; skip rows an open PR covers), and parked rows live in the Deferred table.
+- **Verify 🚫 blockers before treating a row as blocked** — a prior session may have shipped the dependency without flipping the row; grep for its deliverables. Cross-item blockers are machine-readable: a 🚫 row's Notes start with `Blocked by [QN](#QN)`, and `make queue-unblock ID=QN` lists every dependent when the blocker lands.
+- **The `**Next ID:**` counter is the allocator.** Take it for a new row, bump it in the same edit. IDs are stable, never reused or renumbered, and never get sub-IDs (`5a`) — a trackable child gets its own top-level ID. The `Q` prefix keeps `Q44` from auto-linking to PR/issue #44; use the bare ID in commits and PRs.
+- **Notes are present tense, ≤ 250 chars (hard cap); past 200 chars the row must link a doc** from its Item or Notes cell — a `#QN` sibling anchor doesn't count, since sibling rows are capped too. No merged-PR lists or "SHIPPED" narration — history lives in `git log` and the plan doc. The same caps apply to Deferred trigger cells. Write for a skimmer: cut detail and link a doc rather than compressing into fragments.
+- **Deferred rows carry a concrete revive trigger**, tagged by source: `**Demand:**` (an outside ask) · `**Event:**` (an observable outside-our-control condition) · `**Decision:**` (our own call — grep `**Decision:**` for what we could move on unilaterally). When the trigger fires, move the row back into the Queue at the position it then deserves. A non-commitment belongs in [appendix-g](../design/appendix-g-future-enhancements.md), not Deferred.
+- **`docs/STATUS.md` edits are isolated commits** — never mixed with code or plan-doc changes, even when completing an item mid-feature (the pre-commit hook enforces this). Use `docs(status):` subjects, and name the removal reason with a fixed verb — `complete QN`, `prune QN`, `merge QN into QM`, `defer QN` — so metrics can tell throughput from garbage collection. Batch bulk additions (one audit's discoveries) into one commit; keep reshuffles separate from additions.
+- **M/L items get a plan doc** under `docs/plan/`, linked from the Item cell.
 
-The reasoning: flake cost compounds. A 1-hour flake fix saves N hours of cumulative CI wait + diagnostic time + context-switch overhead across every future PR that hits it. Even a low-frequency flake (1-in-5 reruns) on a 10-minute job adds up to roughly half a wasted runner-hour per ten PRs, plus the human investigation time on each occurrence.
+## When the context doesn't fit, write the doc — whatever the item's size
 
-The convention overrides default Queue ordering even when other items are 🔴 critical security — security items are typically M/L-sized and will themselves benefit from flake-free CI during their multi-session work. Annotate the row's Notes with "**Top of queue per flakes-first rule**" with a link to this section so the priority is self-documenting.
-
-Exceptions:
-- A flake whose root cause is genuinely an outside-the-repo service (GitHub API outage, registry hiccup) and that has not recurred in many runs — file but don't bump.
-- A flake whose fix is blocked on infrastructure not yet built (e.g. requires a CNI that the cluster doesn't have) — file, mark 🚫, and don't bump.
-
-### Once the mitigation ships: move it to Flake watch
-
-The flakes-first bump is for an *observed, unfixed* flake — something to pick up next. Once a mitigation has landed, the row is no longer actionable: there is nothing to do until CI proves the fix didn't hold. Leaving it at the top of the Queue makes "pick from the top" lie — the next session reads non-actionable watch rows as priority work.
-
-So when a flake's fix ships and it has not recurred since, move the row out of the Queue into the **[Flake watch](../STATUS.md#flake-watch)** subsection of [Deferred](#deferred-items-live-below-the-queue-not-in-it). Its state — *resolved unless CI proves otherwise* — is the Deferred contract: parked, no priority position, revive on an explicit trigger. The trigger is the flake recurring on `main` after the mitigation.
-
-Don't *close* it. Keeping the row preserves the memory that a fix was already attempted, so a second occurrence is recognised as a recurrence (the mitigation didn't hold → escalate) rather than mis-filed as a fresh flake.
-
-On recurrence, flakes-first applies as normal: pull the row back to the **top of the Queue**, now escalated. The lifecycle:
-
-- **Observed, unfixed** → Queue top (flakes-first); pick next.
-- **Mitigation shipped, not recurred** → Deferred § Flake watch; trigger = recurs on `main`.
-- **Recurs** → back to Queue top, escalated (the first fix was insufficient).
-
-## Prioritize new items on entry
-
-When you identify a new item, decide its priority **before** adding it — place it at the Queue position it deserves, not at the bottom by default. The Queue is read top-to-bottom ("Pick from the top"), so position *is* the priority signal. A row appended to the bottom is a row you've silently declared the lowest priority in the project; make that an explicit judgement, not a fallback you reach for to avoid deciding.
-
-To place a new row, compare it against its prospective neighbours:
-
-- **Severity / blast radius.** A correctness or security defect that can reach users outranks a cleanup or docs item. `bug`, `security`, and flake items generally sort high; `docs` and idiom-cleanup items generally sort low — but judge the specific item, not the label.
-- **Leverage.** Work that unblocks other Queue items, or removes a recurring cost (see [flake fixes go first](#flake-fixes-go-first)), sorts above equal-severity work that doesn't.
-- **Blocked vs. ready.** A new item blocked by an unlanded dependency goes *below* that dependency, marked 🚫 with `Blocked by [QN](#QN)` in its Notes (see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers)). Ready work sorts above blocked work of similar severity.
-- **Size as a tiebreaker only.** Between two items of equal priority, a smaller (S) item that clears quickly may go first — but never let size override severity.
-
-If you genuinely can't tell where it belongs, slot it next to the nearest comparable item rather than defaulting to the bottom, and note the reasoning in the commit message. Re-prioritizing later (moving existing rows) is a deliberate, separate STATUS.md commit — don't bundle a reshuffle with the addition of a new row.
-
-## Deferred items live below the Queue, not in it
-
-The Queue is for work with a priority position — things you'd pick from the top. An item that is intentionally parked — waiting on an explicit trigger, with no near-term intent to act — does **not** belong in the priority ordering, where it would sit at the bottom collecting dust and diluting the signal that "bottom of Queue" means "lowest priority we still intend to do soon." (The trigger need not be *external*: "a maintainer decides X" is a valid park when we've chosen not to act until then — see the trigger-source tag below.)
-
-Such items move to the **Deferred** section below the Queue in `docs/STATUS.md`. A row belongs in Deferred when **all** of these hold:
-
-- It has a concrete trigger condition that must fire first (a dependency that isn't on the Queue, a tool/cluster that doesn't exist yet, a usage threshold not yet hit).
-- There is no near-term intent to do it — reviving it is conditional, not scheduled.
-- It is still a real commitment (otherwise it's a non-commitment and belongs in [`appendix-g-future-enhancements.md`](../design/appendix-g-future-enhancements.md), not STATUS.md at all).
-
-Mechanics:
-
-- The Deferred table keeps each row's stable `Q`-prefixed ID and inline anchor, so cross-references (`[Q19](#Q19)`) keep resolving. IDs are not reused when an item moves sections.
-- Its columns drop `St` (every row is implicitly 💤) and replace `Notes` with **`Trigger to revive`** — one phrase naming the condition that returns it to the Queue.
-- **Prefix each `Trigger to revive` with a source tag:** `**Demand:**` (an outside operator/user must ask) · `**Event:**` (an observable outside-our-control condition — an upstream fix, a measured threshold) · `**Decision:**` (our own call; we're the blocker). The tag makes "what could we move on unilaterally?" a `grep '**Decision:**'` away, and stops a `Decision`-gated row from masquerading as if it waits on the world.
-- **When a trigger fires, move the row back into the Queue at the position it then deserves** (see [Prioritize new items on entry](#prioritize-new-items-on-entry)) — don't just flip a status in place.
-- **Section vs. tag — distinct lifecycle vs. attribute.** Give a parked group its own `###` subsection only when it has a different *revive mechanic* (e.g. [Flake watch](#once-the-mitigation-ships-move-it-to-flake-watch) auto-yanks back to the Queue *top* via flakes-first). A mere difference in trigger *source* is an attribute of one shared lifecycle — encode it as the tag above, not a subsection. Sections cost a row-move on recategorisation and force borderline items into a placement fight; tags are a one-cell edit.
-- This is the home for the three statuses that aren't actionable-now: a genuinely-parked item enters Deferred directly rather than being added to the Queue and immediately marked 💤. (A 🚫 *blocked-by-another-Queue-item* row stays in the Queue, below its blocker — see [the cross-item blockers rule](#use-blocked-by-qnqn-for-cross-item-blockers) — because it revives automatically the moment the blocker lands.)
-
-## Format rules that exist to reduce churn
-
-### `Last touched:` is one line, date only
-
-The header line under "Conventions" is for the date of the most recent edit and nothing else:
-
-```
-Last touched: 2026-05-30
-```
-
-Do **not** append a session narrative, do **not** preserve prior entries with "Earlier: …", do **not** describe what changed. That information lives in:
-
-- the commit message (for the most recent change),
-- `git log docs/STATUS.md` (for the full history),
-- the linked plan doc under `docs/plan/` (for design context).
-
-A multi-paragraph `Last refreshed:` block is the single largest source of merge conflicts in this file. Every concurrent branch edits it, every session feels pressure to imitate the prior format and add their own entry. Resist.
-
-### The Notes cell is a pointer, not a summary
-
-`Notes` answers two questions only:
-
-- **What is this item, in one sentence?** (often just a pointer: "→ M3/M4 kind end-to-end" for blocked items.)
-- **What unblocks it or what's the next concrete step?**
-
-Both are answered in the **present tense**. A Notes cell describes the item's *current state*, never the path it took to get there.
-
-#### Notes carry no status history
-
-Merged-PR lists, dated validation results, and "ACHIEVED"/"DONE"/"SHIPPED" narration do not belong in a Queue row. They are the `Last touched:` anti-pattern relocated one column over, and they are the single biggest consumer of the character budget. History already has three homes: the commit message, `git log docs/STATUS.md`, and the linked plan doc.
-
-Q242's row, as it stood before this rule, had drifted into changelog:
-
-```text
-Impl merged #460–#464. Concurrent-green ACHIEVED via ScaleSet clean-green ([Q264](#Q264) P4,
-2026-07-05: 7/7 GAG jobs GREEN, 0 dedup/wedge). FQDN egress shipped (Q245). v2beta1 blocker
-cleared (Q74 shipped); [Q243](#Q243) egress-IP remains.
-```
-
-242 of the 250 characters available, and it answers neither question — a reader still doesn't know what the item *is*, or what to do next. Rewritten in the present tense:
-
-```text
-Admin-set destination allowlist on the per-tenant egress proxy. Remaining: per-tenant
-egress IP ([Q243](#Q243)).
-```
-
-112 characters, both questions answered. The rest — which PRs landed, which validation ran when — belongs in the plan doc, where it isn't competing for space with the next reader's ability to understand the item.
-
-#### The two limits, and what they mean
-
-| Limit | Value | Enforced by | Meaning |
-|---|---|---|---|
-| Hard cap | 250 chars | [`lint-status.sh`](../../scripts/lint-status.sh) rule 3 (`NOTES_MAX_CHARS`) | The cell may not be longer. |
-| Link threshold | 200 chars | [`lint-status.sh`](../../scripts/lint-status.sh) rule 4 (`NOTES_LINK_CHARS`) | Past this length the row **must** link another document from its Item or Notes cell. |
-
-Both run in the pre-commit hook and CI. A markdown link counts its full `[text](url)` source length, so two short sentences with one link can blow the hard cap — count before you commit rather than waiting for the hook.
-
-Rule 4 exists because the hard cap alone is a silent failure mode. When a row approaches 250 characters the author stops *tightening prose* and starts *deleting information* — the decision the work depends on, the finding a future session would otherwise re-derive. Requiring a link at that point puts the gate exactly at the loss boundary: either the row is short enough to stand alone, or it names the doc holding what the cell could not.
-
-**A sibling-row anchor is not an overflow target.** `[Q289](#Q289)` points at another Queue row, which is bound by the same 250-character cap and therefore cannot hold what this row couldn't. Rule 4 requires a link *out* of `STATUS.md` — to `docs/plan/` or `docs/design/`. Cross-referencing a related row is still encouraged; it just doesn't discharge the obligation. (This is not hypothetical: Q284 carried a security governance decision that existed nowhere in the repo, hidden behind exactly such a cross-reference.)
-
-#### When the context doesn't fit, write the doc — whatever the item's size
-
-**The trigger for writing a doc is information loss, not item size.** `Sz` estimates effort; it says nothing about how much context the work depends on. A one-session `S` item can rest on a governance decision that took an afternoon to reach, and that decision has to live somewhere a future session will find it.
-
-Write (or extend) a doc when fitting the Notes cell means deleting any of:
-
-- **A decision the work depends on** — why this approach and not the obvious alternative, especially where the obvious alternative is a security regression.
-- **Prior investigation findings** — what was measured, tried, or ruled out. This is the direct cause of re-work: the next session re-runs the experiment because the row only had room for the conclusion.
-- **A blocker's rationale** — *why* the dependency blocks, not just that it does.
-
-Compressing prose is fine. Dropping a clause because it doesn't fit is the signal.
-
-#### Two homes: durable rationale vs. in-flight context
-
-Once you've decided to write it down, the content picks the file:
+The trigger for writing a doc is **information loss, not item size**: `Sz` estimates effort, not how much context the work rests on. If fitting the caps means dropping a decision the work depends on, an investigation finding a future session would re-derive, or a blocker's rationale — write (or extend) the doc and link it. Compressing prose is fine; dropping a clause because it doesn't fit is the signal. The content picks the home:
 
 | Kind of context | Home | Why |
 |---|---|---|
-| **Durable rationale** — decisions, security governance, why a default is what it is, API-surface constraints | `docs/design/` | Survives plan archival. A design doc is still there in two years; an archived plan doc is history. |
-| **In-flight work context** — investigation findings, phases, dry-run results, what's left to do | `docs/plan/<qNNN>-<slug>.md` | Archived on close, per [Archiving completed plan docs](#archiving-completed-plan-docs). |
+| **Durable rationale** — decisions, security governance, why a default is what it is | `docs/design/` | Survives plan archival; still there in two years. |
+| **In-flight work context** — findings, phases, what's left | `docs/plan/<qNNN>-<slug>.md` | Archived on close (below). |
 
-This is the same split [the archival rule](#archiving-completed-plan-docs) already applies to code references — code cites the durable layer, never a plan path, because plans move. Queue rows are longer-lived than plans too: a row can outlive several plan docs. When a plan closes, **promote its load-bearing conclusions into `docs/design/`** rather than letting them archive out of reach.
+When a plan closes, **promote its load-bearing conclusions into `docs/design/`** rather than letting them archive out of reach — Queue rows and code cite the durable layer, never a plan path.
 
-Don't invent a third artifact class for "small context." A short plan doc is a legitimate plan doc — the archival cost is a `git mv` plus one `docs/plan/README.md` row edit, and that cost is the reason the context survives at all.
+## Flake fixes go first
 
-### Don't use `▶ Started` markers for solo work
+When a CI flake is observed (test passes on rerun, no code change in between), file it as a Queue item **and move it to the top of the Queue** before continuing other work. Then pick it up next. Flake cost compounds: a 1-hour fix saves cumulative CI wait + diagnosis + context-switch overhead across every future PR that hits it. This overrides default ordering even over critical security items — those are typically M/L-sized and themselves benefit from flake-free CI. Annotate the row's Notes with "**Top of queue per flakes-first rule**" linking this section.
 
-The `Maintaining this file` section in STATUS.md historically said to mark M/L items `▶ Started`. In practice:
+Exceptions: a flake rooted in an outside service that hasn't recurred (file, don't bump); a flake whose fix is blocked on infrastructure that doesn't exist yet (file, mark 🚫, don't bump).
 
-- The open PR (visible to `gh pr list`) is the started signal, and the `gh pr list` check before picking already prevents double-starting.
-- Marking ▶ Started adds one wasted isolated commit per task (one to mark started, one to delete the row on completion).
-- The marker rots if a session is abandoned, requiring cleanup churn later.
+**Once the mitigation ships, move the row to [Flake watch](../STATUS.md#flake-watch)** — a Deferred subsection whose revive mechanic differs from the rest of the table: the trigger is always `**Event:** recurs on main after the fix`, and on recurrence the row returns to the **top** of the Queue, escalated (the first mitigation didn't hold). Keeping the row (rather than closing it) preserves the memory that a fix was already attempted, so a second occurrence reads as a recurrence, not a fresh find. The lifecycle:
 
-Only set `▶ Started` if you have a specific reason to broadcast in-progress state beyond the open PR (e.g. an exploratory task with no PR yet, an item you've reserved but won't start for several days). Default to not setting it.
+- **Observed, unfixed** → Queue top (flakes-first); pick next.
+- **Mitigation shipped, not recurred** → Deferred § Flake watch.
+- **Recurs** → back to Queue top, escalated.
 
-### Don't pre-assign release versions to backlog items
+## The Progress table
 
-Do **not** tag Queue rows with speculative future release versions (`1.1`, `1.2`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?").
+`docs/STATUS.md` keeps a plan-level **Progress** table above the Queue — one row per plan doc. Update it only when a plan's overall status changes (⚠️ → ✅, a new plan lands, a plan retires); most STATUS.md commits touch only the Queue. If completing a Queue row closes the last open item under a Progress row, update both in the same commit.
 
-The reasoning:
-
-- **It generates churn for no signal.** Post-release version estimates are guesses that move, and every re-estimate is another commit on this high-contention file. Same family as the banned sub-IDs and renumbering.
-- **Position already encodes priority.** The Queue is read top-to-bottom; a version tag duplicates that ordering coarsely and can drift out of agreement with it.
-- **Undefined versions anchor nothing.** A `1.1` tag with no `1.1` scope doc just asserts a roadmap that doesn't exist.
-
-The "when" of an item is already partitioned without versions: a release label (e.g. `1.0-gate`, defined by [release-1.0.md](../plan/release-1.0.md)) marks what blocks that tag; an un-labelled Queue row is "after that release, priority = its position"; [Deferred](#deferred-items-live-below-the-queue-not-in-it) is "parked until a trigger"; [appendix-g](../design/appendix-g-future-enhancements.md) is "long-horizon non-commitment." The right pattern is the one `1.0-gate` followed: **scope the release in a plan doc first, then add the label** — not the reverse.
-
-### Use `Blocked by [QN](#QN)` for cross-item blockers
-
-When a 🚫 Queue row is blocked by another Queue item, start its Notes with `Blocked by [QN](#QN)` (or comma-separated for multiple). External dependencies that have no Queue ID — "needs a cluster with gVisor installed", a third-party sign-off — stay as plain prose.
-
-The structured form pairs with `make queue-unblock ID=QN` (the `Q` prefix is optional — `ID=12` works too), which lists every row currently blocked on that ID. When the dependency lands, run it to enumerate dependents and clear them in a single isolated STATUS.md commit. Free-text "→ M5 packaging" notes are not machine-readable; `Blocked by [Q12](#Q12)` is.
-
-### Stable IDs; do not reuse
-
-Each Queue row has a `Q`-prefixed ID (e.g. `Q44`). Once assigned, it stays — even if the row is deleted. New rows take the next unused integer (continuing the same sequence). This makes cross-references in plan docs, commit messages, and PR descriptions stable.
-
-The `Q` prefix exists so that references like `Q44` in a commit message or PR body are **not** auto-linked by GitHub to PR/issue 44 — `#NN` would be, `Q<N>` is not. Use the bare ID (`Q44`) in commits, PRs, and prose. Inside `docs/STATUS.md`, each row carries an inline anchor (`<a id="Q44"></a>Q44`), so cross-references between rows render as Markdown links: `[Q34](#Q34)`.
-
-**Do not introduce sub-IDs (`5a`, `5b`, `5h`)** to track derivative work under a parent item. The 5a–5j sequence in early 2026 caused multiple "rewrite/renumber" churn commits. If a child task is discrete enough to track, give it its own top-level ID.
-
-### Batch audit-discovery items in one commit
-
-When a single review pass surfaces many new items (security audit → Q20–Q29, k8s audit → Q30–Q36, Go audit → Q37–Q41), add them all in one commit. One commit moving a contiguous block of rows is far easier to rebase than N commits each inserting one row.
-
-The same applies to bulk completions: if a session verifies that a stale Queue entry was actually finished weeks ago, fold the deletion into the same commit as the verification work rather than splitting.
-
-## When to update the Progress table vs. the Queue
-
-- **Progress table** (plan-level rows): updated only when a plan's overall status changes — ⚠️ becomes ✅, a brand-new ⚠️ row appears, or a plan doc is added/retired. Edits here are rare.
-- **Queue**: updated whenever a specific item is started, completed, blocked, unblocked, or newly identified. Most STATUS.md commits touch only the Queue.
-
-If you completed work that closes the last ⚠️ open item under a Progress row, update both in the same commit.
-
-When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — a "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. `v2alpha1`/alpha) so the roadmap doesn't overclaim. This is the same trigger as the website-positioning row in the [doc-update matrix](doc-update-matrix.md); the roadmap is hand-maintained, so nothing else catches the drift.
+When you remove a Queue row for a **shipped user-facing capability**, also check whether it graduates a bullet on the website [roadmap.md](../roadmap.md) — an "In progress / near-term" item moving to "Available now (1.0)" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim. The roadmap is hand-maintained; nothing else catches the drift.
 
 ### `⚠️` means an open *Queue* row remains — deferred residuals don't count
 
-A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in the [Deferred](#deferred-items-live-below-the-queue-not-in-it) section (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)), and they **do not keep a plan `⚠️`**. A plan whose only remainders are Deferred rows or accepted-by-design residuals is `✅`, not `⚠️`.
+A plan is `⚠️` only while it has at least one open row **in the Queue**. Intentionally-deferred residuals live in Deferred (or, for non-commitments, in [appendix-g](../design/appendix-g-future-enhancements.md)) and do **not** keep a plan `⚠️`: a plan whose only remainders are Deferred rows is `✅`. This keeps the table honest — `⚠️` reads as "active work remains," not "a box was once left unchecked."
 
-This keeps the Progress table honest: `⚠️` reads as "active work remains on this plan," not "a box was once left unchecked." Leaving a finished-but-for-deferrals plan at `⚠️` makes old, intentionally-parked work look like an open obligation.
+When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc naming the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). The plan doc is **not** archived in this case — its `✅` Progress row still references it.
 
-When you flip a plan to `✅`, add (or update) a **Status** banner at the top of its plan doc that names the Deferred IDs carrying its residuals (e.g. "Status: Complete — residuals deferred as [Q11](../STATUS.md#Q11)"). That makes the deferral auditable from the plan itself, and explains the `✅` to anyone who notices the plan still lists open-sounding items in its body. The plan doc is **not** archived in this case — it stays in `docs/plan/` because its `✅` Progress row still references it (archival is only for plans no longer referenced anywhere; see [Archiving completed plan docs](#archiving-completed-plan-docs)).
+## Don't pre-assign release versions to backlog items
+
+Do **not** tag Queue rows with speculative future release versions (`1.1`, `2.0`). Introduce a release label only once that release is *concretely scoped* — a plan doc defining its Definition of Done exists — at which point the label answers a real yes/no question ("does this block that tag?"). Post-release estimates are guesses that move (churn without signal), position already encodes priority, and an undefined version anchors nothing. The right pattern is the one `1.0-gate` followed: scope the release in a plan doc first, then add the label.
 
 ## Archiving completed plan docs
 
 When a plan's work fully lands and `docs/STATUS.md` no longer references it (no Progress row, no Queue/Deferred row), move the doc under `docs/plan/archive/` rather than deleting it. The rationale is usually more valuable than the diff, but a fully-closed plan in the top level of `docs/plan/` is noise for the next session scanning for active work.
 
-**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open. Closed plans left in place pile up and make the index read as though finished projects still have work — the exact drift this rule exists to prevent. Two gates (both in `make check`) enforce it so the omission can't ship silently:
+**Archive on close, not on audit.** Do this in the same body of work that removes the plan's last `STATUS.md` reference — the moment you delete its final Queue row, or flip its Progress row to `✅` with nothing left open. Two gates (both in `make check`) enforce it so the omission can't ship silently:
+
 - **`make plan-index-check`** fails when an active, non-ⓘ plan listed in `docs/plan/README.md` is no longer referenced by `STATUS.md` — i.e. a plan that should have been archived. To clear it: archive the plan (below), or, if it's ongoing spec/strategy/research, mark its README row `ⓘ`.
 - **`make doc-links`** fails on any broken link the move introduces.
 
-The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit (don't wait for someone to notice it citing a since-completed `QNN`).
+The same change should also keep the plan's `docs/plan/README.md` **status text** current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
 
-**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md` (or `../plan/<file>.md`); cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched, since IDs are never reused and design sections don't move on plan close). If a plan's conclusion is load-bearing enough that code wants to cite it, **promote that conclusion to a durable doc when the plan closes** (the [doc-update matrix](doc-update-matrix.md) already requires the design/operations update on the code change); the plan keeps the full derivation as history, and code points at the durable home. `make no-plan-refs-check` (in `make check`) fails on any `docs/plan/` path in a `.go` file, so the coupling can't re-accrete. Prose mentions of a plan's *content* ("Milestone 1 §8", "the worker-egress-proxy plan") are fine — only file *paths* rot.
+**Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move. The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched). If a plan's conclusion is load-bearing enough that code wants to cite it, promote that conclusion to a durable doc when the plan closes. `make no-plan-refs-check` (in `make check`) fails on any `docs/plan/` path in a `.go` file. Prose mentions of a plan's *content* ("Milestone 1 §8") are fine — only file *paths* rot.
 
 **Protocol:**
 
 1. **Confirm STATUS.md doesn't reference the doc.** `grep -n "<docname>" docs/STATUS.md` should be empty.
-2. **Confirm the work actually landed.** Read the plan's Status banner if it has one; otherwise grep the codebase for the named tests, types, or behaviors the plan promised. A plan with one of three fixes still ❌ Open is **not** archive-ready — leave it in place and (if not already there) add the open work to STATUS.md as a Queue row.
+2. **Confirm the work actually landed.** Read the plan's Status banner if it has one; otherwise grep the codebase for the named tests, types, or behaviors the plan promised. A plan with open work is **not** archive-ready — leave it in place and make sure the open work has a Queue row.
 3. `git mv docs/plan/<docname>.md docs/plan/archive/<docname>.md` — preserves history.
-4. **Update any in-repo links** to the new path. Likely candidates:
-   - `docs/plan/README.md` — move the doc's row from its current section into the **Archive** section and update the status text.
-   - Other plan docs cross-referencing it (`grep -rn "<docname>.md" docs/plan/`).
-   - `docs/development/`, `docs/design/`, `docs/operations/` if the plan is cited there.
-   - Code comments (rare, but worth checking with `grep -rn "<docname>" --include="*.go"`). Prose mentions (e.g. "see foo Theme E") don't break; only `](…<docname>.md…)` *links* need rewriting.
-   - **The moved doc's *own* outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself: each `](../…)` needs one more `../`, and a bare same-dir link to a doc still in `plan/` becomes `](../name.md)`. Easy to miss; `make doc-links` catches it.
-5. **Bundle archival in one commit.** If multiple plans are being archived in the same session (e.g. after a sweep), move them together — easier to review and to revert as a unit if a reference was missed.
-6. **Do not edit STATUS.md in the same commit** as the archive move. STATUS.md edits are always isolated (see §1 of the non-negotiables).
+4. **Update any in-repo links** to the new path: `docs/plan/README.md` (move the row to the **Archive** section), other plan docs (`grep -rn "<docname>.md" docs/plan/`), the `docs/development|design|operations` trees, and **the moved doc's own outbound links** — dropping a level into `archive/` breaks every relative link in the doc itself (`make doc-links` catches all of these).
+5. **Bundle archival in one commit** when several plans close in the same session — easier to review and revert as a unit.
+6. **Do not edit STATUS.md in the same commit** as the archive move — STATUS.md edits are always isolated.
 
-A plan that is partially complete should stay in `docs/plan/`. Archive is for "everything in this doc has shipped," not "most of it has."
-
-## Anti-patterns to watch for
-
-- **Narrating recent session work in the conventions header.** That's what commit messages are for.
-- **Carrying root-cause writeups in Queue Notes.** That's what plan docs are for.
-- **Narrating session history in Queue Notes.** Merged-PR lists and dated "ACHIEVED" results are the same anti-pattern one column over — [Notes are present tense](#notes-carry-no-status-history).
-- **Compressing a Notes cell until the context is gone.** If fitting 250 chars means dropping a decision or a finding, [write the doc](#when-the-context-doesnt-fit-write-the-doc--whatever-the-items-size) — regardless of the item's `Sz`.
-- **Splitting bulk discovery into many one-row commits.** That maximizes rebase pain.
-- **Renumbering existing IDs to "tidy up".** IDs are pointers; renumbering invalidates every external reference.
-- **Pre-assigning future release versions to items.** A version tag with no scoped release behind it is churn without signal — [scope the release first, then label](#dont-pre-assign-release-versions-to-backlog-items).
-- **Editing STATUS.md alongside a code change.** Conflicts on the code commit cascade into the STATUS.md edit. Always a separate commit.
+A plan that is partially complete stays in `docs/plan/`. Archive is for "everything in this doc has shipped," not "most of it has."

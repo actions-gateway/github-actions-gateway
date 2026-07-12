@@ -124,7 +124,7 @@ whole codebase from accumulating debt faster than we pay it down.
    [backpressure](backpressure.md) — the pre-commit hook, `make check`, and CI —
    rejects whole classes of debt at authoring time. The guiding habit is
    **correct it twice, then automate it**: a mistake worth catching once is worth
-   a gate (this is why `scripts/lint-status.sh` and the [bucket-F gates](#quality-gates-as-debt-brakes) exist).
+   a gate (this is why `scripts/lint-backlog.sh` and the [bucket-F gates](#quality-gates-as-debt-brakes) exist).
 2. **Detect.** What prevention misses, a periodic **review pass** finds: read the
    code for the taxonomy above, scan for stale markers, and check whether new
    work re-introduced a class a gate was supposed to hold. Flaky CI is itself a
