@@ -203,46 +203,33 @@ D-5.
 
 ## G.7. ValidatingAdmissionPolicy for direct RunnerGroup PriorityClass enforcement
 
-**Current behavior.** The platform-owned PriorityClass allowlist (Q132/Q289) is
-enforced by the GMC validating webhooks on the tenant-facing CRs: an
-`ActionsGateway` whose `runnerGroups[].priorityTiers[].priorityClassName` or
-`runnerGroups[].podTemplate.spec.priorityClassName` is off `--allowed-priority-classes`
-is rejected at admission, as is a `RunnerTemplate` whose
-`podTemplate.spec.priorityClassName` is and a v2 `RunnerSet` whose
-`priorityTiers[].priorityClassName` is. RunnerGroup CRs themselves are authored only
-by the GMC ServiceAccount (gated to tenant namespaces by the `gmc-tenant-resource-guard`
-ValidatingAdmissionPolicy); tenants are not expected to hold direct `runnergroups`
-create/update RBAC.
+> **✅ Implemented (Q289).** The `priorityclass-allowlist-guard`
+> `ValidatingAdmissionPolicy` ships with the chart (on by default under
+> `admissionPolicy.enabled`) and in `cmd/gmc/config/admission-policy/`. It is
+> retained here as a stub so existing cross-references resolve; the live design
+> and operator docs are authoritative.
 
-**Gap.** Two residuals, both requiring a bypass of the webhook rather than a flaw in it:
+The GMC webhooks gate every tenant-facing CR's PriorityClass references
+(Q132/Q289), but RunnerGroup CRs have no webhook of their own — they are
+normally authored only by the GMC from an already-validated `ActionsGateway` —
+so a tenant granted **direct `runnergroups` write RBAC** bypassed the allowlist
+entirely, and webhooks never re-validate **already-stored** objects. The policy
+closes both: it rejects any `runnergroups` create/update (from *any* writer,
+GMC included) whose `priorityTiers[].priorityClassName` or
+`podTemplate.spec.priorityClassName` is not in the allowlist supplied via its
+`paramKind` ConfigMap, and re-validates on every write to an existing object. A
+`paramKind` carries the allowlist because CRD CEL `XValidation` cannot read
+external config — the same reason the webhook, not a CRD rule, enforces it on
+the other kinds.
 
-- A cluster operator who *does* grant a tenant direct `runnergroups` or
-  `runnertemplates` write access bypasses the `ActionsGateway` webhook, since that
-  webhook matches only `actionsgateways`. (`runnertemplates` has its own webhook, so
-  only the `runnergroups` path is uncovered.) Such a tenant could create a RunnerGroup
-  naming an off-allowlist PriorityClass directly — in `priorityTiers` or in
-  `podTemplate.spec` — and the AGC would stamp it onto worker pods.
-- Admission webhooks never re-validate **already-stored** objects. A CR that named an
-  off-allowlist class before the Q289 gate shipped keeps working until it is next
-  written. See the upgrade sweep in
-  [security-operations.md § Priority classes](../operations/security-operations.md#upgrading-previously-ungated-priorityclassname-fields-are-now-gated).
+- Threat model and enforcement matrix: [05-security.md § Cross-tenant pod
+  preemption via PriorityClass](05-security.md#cross-tenant-pod-preemption-via-priorityclass).
+- Operator runbook, param-ConfigMap contract, and failure modes:
+  [security-operations.md § Priority classes](../operations/security-operations.md#priority-classes-the-allowed-priority-classes-allowlist).
+- Stored-object upgrade sweep:
+  [security-operations.md § Upgrading](../operations/security-operations.md#upgrading-previously-ungated-priorityclassname-fields-are-now-gated).
 
-**What "added" would look like.** A `ValidatingAdmissionPolicy` on the
-`runnergroups` resource (alongside the existing GMC-SA guards in
-`cmd/gmc/config/admission-policy/`) that rejects any `priorityTiers` entry or
-`podTemplate.spec.priorityClassName` whose class is not in an allowlist supplied via a
-`paramKind` (a ConfigMap or small custom resource the platform owns — CRD CEL
-`XValidation` cannot read external config, which is why the webhook, not a CRD rule,
-carries the allowlist today). This applies to *any* creator, including direct tenant
-writes, closing the bypass as defense-in-depth. A VAP also re-validates on every write
-to an existing object, which narrows the stored-object residual.
-
-**What would trigger building it.** A deployment model where tenants are granted
-direct RunnerGroup RBAC, or a hardening requirement that the allowlist hold even if
-the GMC webhook is bypassed or disabled.
-
-**Related finding.** [docs/plan/q132-priorityclass-allowlist.md](../plan/q132-priorityclass-allowlist.md);
-[05-security.md § Cross-Tenant Pod Preemption via PriorityClass](05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+**Related finding.** [docs/plan/q132-priorityclass-allowlist.md](../plan/q132-priorityclass-allowlist.md).
 
 ---
 

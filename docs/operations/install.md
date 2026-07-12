@@ -12,8 +12,9 @@ After the GMC is installed, the [Migrating from ARC guide](migration-from-arc.md
 maps ARC scale sets onto tenant gateways and walks one runner group across.
 
 The Helm chart installs the GMC and its cluster prerequisites **only** — CRDs,
-RBAC, the validating webhook, the `namespace-psa-guard` and
-`gmc-tenant-resource-guard` admission policies, and NetworkPolicies. Per-tenant Actions Gateway Controller (AGC) instances and
+RBAC, the validating webhook, the `namespace-psa-guard`,
+`gmc-tenant-resource-guard`, and `priorityclass-allowlist-guard` admission
+policies, and NetworkPolicies. Per-tenant Actions Gateway Controller (AGC) instances and
 egress proxy pools are **not** chart resources; the GMC provisions them at
 runtime from each tenant's `ActionsGateway` CR. The chart is the **sole** install
 path — there is no kustomize overlay; the plain-YAML files under `cmd/gmc/config/`
@@ -407,10 +408,11 @@ kubectl wait --for=condition=Established \
   crd/actionsgateways.actions-gateway.github.com \
   crd/runnergroups.actions-gateway.github.com
 
-# 4. The validating webhook and both admission policies are present.
+# 4. The validating webhook and the admission policies are present.
 # (Resource names carry the chart namePrefix, default "gmc-".)
 kubectl get validatingwebhookconfiguration | grep actions-gateway
-kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resource-guard
+kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resource-guard \
+  gmc-priorityclass-allowlist-guard
 
 # 5. No errors in the GMC manager logs.
 kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=30

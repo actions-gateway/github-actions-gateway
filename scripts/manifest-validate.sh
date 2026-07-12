@@ -79,6 +79,7 @@ cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml
+cmd/gmc/config/admission-policy/priorityclass-allowlist-guard.yaml
 deploy/kata-ci/runtimeclass.yaml
 deploy/kata-ci/runner-pod.yaml"
 

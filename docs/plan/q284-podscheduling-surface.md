@@ -128,11 +128,13 @@ standing up a v2 `ActionsGateway` validating webhook from scratch — registrati
 wiring (`make chart-webhook-check` enforces drift), and envtest coverage. **This is the
 bulk of the work, and it is the reason Q284 is not the trivial `S` its diff size suggests.**
 
-The same residual G.7 records for the worker allowlist applies here: an operator who
+The same residual G.7 recorded for the worker allowlist applies here: an operator who
 grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored
-objects are never re-validated. [Q289](../STATUS.md#Q289) tracks the
-`ValidatingAdmissionPolicy` backstop; whatever it lands should cover the infra allowlist
-on the same pass.
+objects are never re-validated. The Q289 `ValidatingAdmissionPolicy` backstop is now
+delivered for the worker PriorityClass allowlist
+([G.7](../design/appendix-g-future-enhancements.md#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement));
+a Q284 infra allowlist should get the same VAP treatment on its own pass, following that
+policy's paramKind-ConfigMap pattern.
 
 ## 3. `topologySpreadConstraints` — composes with the built-in anti-affinity
 

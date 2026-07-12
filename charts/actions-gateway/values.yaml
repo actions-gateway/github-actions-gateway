@@ -111,7 +111,14 @@ priorityClassAllowlist:
   # the static allowlist, passed to the GMC as --priority-class-allowlist-configmap.
   # Setting it also renders a namespaced Role/RoleBinding granting the GMC
   # get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read). Empty
-  # (default) disables the watch — flag-only behavior, unchanged. See
+  # (default) disables the watch — flag-only behavior, unchanged.
+  #
+  # When admissionPolicy.enabled is true, this ConfigMap (when set) is ALSO the
+  # priorityclass-allowlist-guard policy's parameter — the apiserver cannot read
+  # the GMC flag — so keep it a SUPERSET of allowedPriorityClasses, or direct
+  # RunnerGroup writes naming flag-only classes will be denied by the policy.
+  # (Unset, the chart renders its own parameter ConfigMap from
+  # allowedPriorityClasses and no superset discipline is needed.) See
   # docs/operations/security-operations.md § Priority classes.
   configMapName: ""
 
@@ -242,11 +249,14 @@ certManager:
   # Validity (days) of the self-signed cert when certManager.enabled=false.
   selfSignedCertDurationDays: 3650
 
-# admissionPolicy ships two ValidatingAdmissionPolicies that confine the GMC's
-# cluster-wide write grants to marked tenant namespaces: namespace-psa-guard
-# (the namespace PSA-label patch) and tenant-resource-guard (create/update/delete
-# of Deployments, Secrets, RoleBindings, NetworkPolicies, etc.). ON by default
-# (secure-by-default). Requires Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
+# admissionPolicy ships three ValidatingAdmissionPolicies: namespace-psa-guard
+# and tenant-resource-guard confine the GMC's cluster-wide write grants to marked
+# tenant namespaces, and priorityclass-allowlist-guard backstops the PriorityClass
+# allowlist on direct runnergroups writes that bypass the GMC webhooks (Q289 /
+# design Appendix G §G.7) — its allowlist parameter is a ConfigMap rendered from
+# allowedPriorityClasses above (or the priorityClassAllowlist ConfigMap when
+# configured; see there). ON by default (secure-by-default). Requires
+# Kubernetes >= 1.30 (GA ValidatingAdmissionPolicy).
 admissionPolicy:
   enabled: true
 
