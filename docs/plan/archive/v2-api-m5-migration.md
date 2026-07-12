@@ -1,7 +1,7 @@
 # Q165 — v2 API M5: migration tool + v1/v2 cutover (implementation plan)
 
-Closes the v2 API plan ([v2-api.md](v2-api.md) § M5). Design source of truth:
-[appendix-h](../design/appendix-h-v2-api-decomposition.md) §H.11 (fan-out), §H.12
+Closes the v2 API plan ([v2-api.md](../v2-api.md) § M5). Design source of truth:
+[appendix-h](../../design/appendix-h-v2-api-decomposition.md) §H.11 (fan-out), §H.12
 (dual-read window), §H.17 (migration invariants).
 
 **Goal.** Ship a one-shot tool that fans a `v1alpha1` tenant out to the `v2alpha1`

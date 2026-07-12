@@ -19,14 +19,14 @@ parent** — we add a second member per the existing `+unionDiscriminator`.
 `alpha → beta` is the last free breaking change. Q196 fixed the union *shape*;
 Q197 validates it against a *real* second consumer (the signer interface + a Vault
 impl), so the beta shape ships with both auth methods designed-and-built, not
-designed-and-unbuilt. See [appendix-h §H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)
-and [v2beta1.md](v2beta1.md).
+designed-and-unbuilt. See [appendix-h §H.15](../../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)
+and [v2beta1.md](../v2beta1.md).
 
 ## Security invariants (non-negotiable)
 
 - **Secure-by-default unchanged.** In-cluster PEM (`githubApp`) stays the default;
   the external signer is an explicit opt-in union member. No existing validation or
-  default is relaxed. See [05-security.md](../design/05-security.md) and
+  default is relaxed. See [05-security.md](../../design/05-security.md) and
   [[feedback_secure_by_default]].
 - **No private key in the cluster, ever.** The whole point: the App JWT is signed
   by an external trust anchor (Vault transit) that the AGC reaches by proving its
@@ -70,7 +70,7 @@ and [v2beta1.md](v2beta1.md).
    delegation model), v2beta1.md (shipped shape), and operator docs
    (tenant-onboarding: how to configure workload identity).
 
-**Deferred to a follow-up (Q201), the kind-e2e tier per [v2beta1.md](v2beta1.md#testing):**
+**Deferred to a follow-up (Q201), the kind-e2e tier per [v2beta1.md](../v2beta1.md#testing):**
 full GMC provisioning of a `workloadIdentity` AGC Deployment (stamp the signer
 env, project the SA token volume, bind the AGC ServiceAccount to its Vault role),
 the AGC `main.go` consumption branch (build the vault-signer provider), and the

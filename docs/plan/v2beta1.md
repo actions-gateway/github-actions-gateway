@@ -134,7 +134,7 @@ set is silently re-protocol'd.
 **follows Q264 P5** (the `ScaleSet` default flip + positioning rewrite) and a one-minor
 Classic deprecation window: a ScaleSet-only beta while `v2alpha1` still defaults to
 `Classic` would invert the alpha/beta protocol signal. The mechanical build blueprint is
-[q74-v2beta1-conversion-webhook.md](q74-v2beta1-conversion-webhook.md).
+[q74-v2beta1-conversion-webhook.md](archive/q74-v2beta1-conversion-webhook.md).
 
 ## Design decisions
 

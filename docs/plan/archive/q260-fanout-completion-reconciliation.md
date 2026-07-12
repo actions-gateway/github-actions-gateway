@@ -21,7 +21,7 @@ gate) passes; the companion `…AccountingGap` (flag off) still asserts the pre-
 This closed the last blocker for Q224 "route production CI green," after the earlier
 Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID
 dedup key ([`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md)). Full live
-evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #4 (fails-today control) +
+evidence: [`gke-dogfood.md`](../gke-dogfood.md) re-route #4 (fails-today control) +
 re-route #5 (Option A confirmed).
 
 ---
@@ -32,7 +32,7 @@ Three id spaces are involved. Keeping them distinct is the whole game:
 
 | id | source | scope | in the code |
 |---|---|---|---|
-| `RunnerRequestID` | broker `GET /message` body ([`RunnerJobRequestBody`](../../broker/types.go)) | **one per delivery** — distinct per sibling under fan-out | `jobBody.RunnerRequestID`; sent as `jobMessageId` (acquire) and `jobId` (renew/complete) |
+| `RunnerRequestID` | broker `GET /message` body ([`RunnerJobRequestBody`](../../../broker/types.go)) | **one per delivery** — distinct per sibling under fan-out | `jobBody.RunnerRequestID`; sent as `jobMessageId` (acquire) and `jobId` (renew/complete) |
 | `planID` | `POST /acquirejob` **response** (`resp.Plan.PlanID`) | **one per logical job** — shared across all sibling deliveries | `provisioner`'s `job-<planID>` Secret/Pod name; the dedup key (#503→#512) |
 | `sessionID` | `POST /session` | one per listener goroutine | the long-poll identity |
 
@@ -44,7 +44,7 @@ to N sibling sessions** as N separate `RunnerJobRequest` messages with **distinc
 **same `planID`** (re-route #2/#4: 5 sessions all provisioning `job-<samePlanID>`).
 So GitHub does **not** enforce single-acquisition per job — `acquirejob` is the
 atomic claim of a **delivery**, not of the job (consistent with Investigation A,
-[`03-api-contracts.md`](../design/03-api-contracts.md#33-re-implemented-broker-api-endpoints):
+[`03-api-contracts.md`](../../design/03-api-contracts.md#33-re-implemented-broker-api-endpoints):
 "`acquirejob` alone is the atomic claim", and `POST /acknowledge` is **not required**
 for correct delivery — so the missing message-ack is *not* the bug).
 
@@ -68,7 +68,7 @@ Two more server facts, confirmed live in re-route #4:
 
 ### What the AGC does (our behaviour — from the code)
 
-`handleJob` ([`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)) per delivery:
+`handleJob` ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) per delivery:
 
 1. `AcquireJob(jobMessageId = RunnerRequestID)` → learns `planID` + a per-delivery
    job token (`AcquireJobResponse.JobAuthToken`).
@@ -83,7 +83,7 @@ Two more server facts, confirmed live in re-route #4:
 Critically: the loser path does **nothing** to its acquired delivery (default), and
 the **JobHandler never learns the job's real succeeded/failed result** — the
 provisioner returns `nil` even on `PodFailed`
-([`provisioner.go`](../../cmd/agc/internal/provisioner/provisioner.go), step 5–7); only
+([`provisioner.go`](../../../cmd/agc/internal/provisioner/provisioner.go), step 5–7); only
 the worker's runner binary reports the real result, and only for the winner delivery.
 
 ### Why this is GAG-specific — ARC has one acquirer
@@ -95,15 +95,15 @@ the claim, assuming each acquired delivery is either run-to-completion or reclai
 
 Modern ARC (`gha-runner-scale-set`) never surfaces it because it runs **one**
 `Runner.Listener` per scale set
-([`01-executive-summary.md`](../design/01-executive-summary.md),
-[`appendix-f-cost-model.md`](../design/appendix-f-cost-model.md)): that single listener
+([`01-executive-summary.md`](../../design/01-executive-summary.md),
+[`appendix-f-cost-model.md`](../../design/appendix-f-cost-model.md)): that single listener
 acquires each job **once**, then spins a dedicated ephemeral pod to run it — a strict
 1:1 acquire-to-run with **no sibling deliveries to reconcile**. ARC separates
 *acquire* (one listener) from *run* (a fresh pod).
 
 GAG instead runs a permanent baseline plus up to `maxListeners` concurrent
 long-polling sessions per RunnerGroup, **each independently able to `acquirejob`**
-([`02-architecture.md`](../design/02-architecture.md)). That is the ~60 KiB/session
+([`02-architecture.md`](../../design/02-architecture.md)). That is the ~60 KiB/session
 virtual-runner model GAG is built on — and it is exactly what lets GitHub hand one
 job to several sessions, all acquire it (shared planID), and leave N assignments for
 one logical job. **The fan-out is intrinsic to the many-acquirers topology**; the
@@ -156,7 +156,7 @@ distinct from Q259 (the recycle 422 is the same seam observed from the runner si
 The default `brokertest.Server` modeled **neither** the fan-out **nor** per-delivery
 completion: every `acquirejob` returned a fresh `test-plan-N`, and `completejob` was
 just a counter. The Q260 envtest
-([`q260_duplicate_delivery_test.go`](../../cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go))
+([`q260_duplicate_delivery_test.go`](../../../cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go))
 forced a constant planID and asserted the **dedup** — then had the winner **block
 forever** in `waitForCompletion`. It never modeled a job *concluding*, so the
 accounting gap was invisible. That is exactly why the dedup looked green offline yet
@@ -347,7 +347,7 @@ Option E (Q264) is **not needed** — the many-acquirers topology is reconcilabl
 Confound handled: a Dependabot rebase merge-train briefly polluted the shared runner pool
 with pull_request runs that concurrency-cancelled on each force-push (cancels in ~4 min,
 distinct from the 15-min accounting timeout). The clean signal came from the **push**-event
-238b8df reruns, which are concurrency-immune. Full evidence: [`gke-dogfood.md`](gke-dogfood.md)
+238b8df reruns, which are concurrency-immune. Full evidence: [`gke-dogfood.md`](../gke-dogfood.md)
 re-route #5.
 
 The alternative outcomes the experiment was designed to distinguish, for the record:
@@ -362,7 +362,7 @@ The alternative outcomes the experiment was designed to distinguish, for the rec
 Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate`
 reverted to the toolchain-less upstream image — `make: command not found`), so a
 non-green result is attributable to accounting, not the runner image
-([`gke-dogfood.md`](gke-dogfood.md) re-route #4 secondary observation).
+([`gke-dogfood.md`](../gke-dogfood.md) re-route #4 secondary observation).
 
 ---
 
@@ -401,8 +401,8 @@ non-green result is attributable to accounting, not the runner image
 
 
 Q260 proved Option A's *accounting* is correct (§5, re-route #5). Q265 asks the
-*throughput* question that gates [Q224](gke-dogfood.md) and the Option A-vs-Option E
-([Q264](q264-scale-set-protocol.md)) fork: on a warm, right-sized pool with
+*throughput* question that gates [Q224](../gke-dogfood.md) and the Option A-vs-Option E
+([Q264](../q264-scale-set-protocol.md)) fork: on a warm, right-sized pool with
 `maxListeners ≫ maxWorkers × fan-out-width` (so listener supply is not the bottleneck),
 does the busy-worker pool **hold near `maxWorkers`** under sustained fan-out burst
 (→ Option A sufficient; re-route #5's "2/8" was tuning), or does the completion tax
@@ -461,9 +461,9 @@ deleted` → **fatal listener exit**.
    **and** Option A fans `completejob` to release the sibling.
 3. So each loser slot is 422-blocked for the **winner's entire job runtime**, which
    **exceeds** the bounded recycle backoff (`registerAgentWithBusyRetry`, tens of seconds,
-   [`pool.go:382`](../../cmd/agc/internal/agentpool/pool.go)). The backoff **exhausts**,
+   [`pool.go:382`](../../../cmd/agc/internal/agentpool/pool.go)). The backoff **exhausts**,
    the recycle fails, and the listener goroutine **exits**
-   ([`pool.go:344`](../../cmd/agc/internal/agentpool/pool.go)).
+   ([`pool.go:344`](../../../cmd/agc/internal/agentpool/pool.go)).
 4. Each fanned-out job thus strands and eventually loses F−1 listener slots; under
    sustained burst this collapses the pool faster than winners complete.
 
@@ -508,9 +508,9 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
   the online idle pool near 0 (see §8 and re-route #7), so the clean measurement is still
   gated on that seam + a clean namespace.
 - **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above
-  and (b) worker capacity ([Q248](../STATUS.md)) — both tuning/fix, not architectural.
+  and (b) worker capacity ([Q248](../../STATUS.md)) — both tuning/fix, not architectural.
 
-Full live evidence: [`gke-dogfood.md`](gke-dogfood.md) re-route #6.
+Full live evidence: [`gke-dogfood.md`](../gke-dogfood.md) re-route #6.
 
 ## 8. Q266 — the slot-stranding recycle fix (2026-07-04)
 
@@ -526,8 +526,8 @@ in place and resumes polling. The wait reuses the #512 claim registry: when a lo
 the `planID` claim to a still-running winner, `claimJob` hands back the claim's
 `WinnerConcluded` channel (closed exactly once when the winner's `Complete` runs), and the
 loser blocks on it before returning to the recycle path
-([`multiplexer.go`](../../cmd/agc/internal/listener/multiplexer.go),
-[`goroutine.go`](../../cmd/agc/internal/listener/goroutine.go)).
+([`multiplexer.go`](../../../cmd/agc/internal/listener/multiplexer.go),
+[`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)).
 
 Key properties:
 
@@ -537,7 +537,7 @@ Key properties:
   before the job), so a parked loser is never mistaken for available polling capacity.
 - **Worker capacity is freed.** A loser provisions no pod, so it **releases its `Admit`
   worker-capacity reservation before parking** — otherwise F−1 losers would pin the tight
-  `maxWorkers` ceiling ([Q248](../STATUS.md)) with runners that do nothing.
+  `maxWorkers` ceiling ([Q248](../../STATUS.md)) with runners that do nothing.
 - **Bounded fallback for a stuck winner.** If the winner never concludes (crash/hang), the
   wait is capped at `defaultLoserRecycleDeferTimeout` (16 min, just past GitHub's ~15-minute
   unstarted-job timeout that force-releases the assignment), so a loser slot can never leak.
@@ -550,14 +550,14 @@ Key properties:
 
 **Regression test.**
 `TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes`
-([`goroutine_q266_test.go`](../../cmd/agc/internal/listener/goroutine_q266_test.go)) drives a
+([`goroutine_q266_test.go`](../../../cmd/agc/internal/listener/goroutine_q266_test.go)) drives a
 sustained fan-out burst through the `brokertest` fan-out model with a `RecycleAgent` that
 `422`s until the winner concludes (the live mechanism), and asserts the pool **holds** —
 no loser strands+exits while the winner runs, and each loser recycles in place on the
 winner's conclusion. It FAILS against pre-Q266 behaviour (the eager losers exit) and needs
 no GKE turn-up.
 
-**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood.md) re-route #7).** Q266's
+**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](../gke-dogfood.md) re-route #7).** Q266's
 targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal
 `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38)
 were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A
@@ -570,14 +570,14 @@ that keeps the **online idle pool near 0**, collapsing to `online = 0`; a modera
 (12) is stable but serializes to ≈ `maxListeners / fan-out ≈ 2` concurrent jobs. Un-cleanable
 stale records (guard-blocked mass-delete) compound it. A clean measurement needs the
 **online-session / broker-credential recycle seam** fixed *and* a clean namespace — both still
-blocked in-session, so [Q224](../STATUS.md) full-matrix green **cannot yet be claimed**. Separately,
+blocked in-session, so [Q224](../../STATUS.md) full-matrix green **cannot yet be claimed**. Separately,
 the `maxWorkers ≈ 4` SSD ceiling §7's honest-bounds flagged is **resolved** — not via an
 SSD-quota bump but by right-sizing the worker boot disk to `pd-standard` (off the SSD quota
-entirely), see [`dogfood-runner-rightsizing.md`](dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
+entirely), see [`dogfood-runner-rightsizing.md`](../dogfood-runner-rightsizing.md#node-pool-disk-class-the-real-maxworkers-ceiling-q248-2026-07-05).
 
 ## 9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out *dispatch* (2026-07-05)
 
-The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood.md) re-route #8,
+The clean-namespace wide-pool close-out ([`gke-dogfood.md`](../gke-dogfood.md) re-route #8,
 `agc:e2e-63cddfc`, fresh `dogfood8`/`ci8`/`gag-ci8`, `maxListeners = 48`,
 `maxWorkers = 8`, non-preemptible `pd-standard` capacity, no mid-run restart) closes out
 the seam accounting from re-route #7:
@@ -607,7 +607,7 @@ the seam accounting from re-route #7:
 - **Consequence for Q264.** This is a real throughput/assignment **wall** — distinct from
   the `completejob`-tax wall §7 ruled out (0 capacity rejections) — driven by GitHub's
   server-side fan-out assignment against GAG's many-acquirers + stable-name single-use
-  ([Q114](../STATUS.md)) topology. It **strengthens the [Option E / Q264](q264-scale-set-protocol.md)
+  ([Q114](../../STATUS.md)) topology. It **strengthens the [Option E / Q264](../q264-scale-set-protocol.md)
   case** (one acquirer, one authoritative stream, no sibling deliveries, no per-name
   recycle) — which eliminates the class by construction — though Q264 stays a deferred
   v-next decision, not force-triggered. **Q224/Q242 stay open**, now blocked on the fan-out
@@ -616,11 +616,11 @@ the seam accounting from re-route #7:
 
 - **AGC-side escape-hatch spike — none found (2026-07-05).** #8's "Option E is the
   structural fix" conclusion was stress-tested for an AGC-side lever before the Q264
-  go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md):
+  go/no-go, in [`q224-fanout-dispatch-lever-spike.md`](../q224-fanout-dispatch-lever-spike.md):
   unique/ephemeral names are a non-lever (add no distinct idle sessions; #8 orphaning is
   runner-id churn), and a warm idle **listener** baseline (≠ Q261 warm
   *worker* pods) is at best a probabilistic green-rate stopgap that converges on a dominated
-  reimplementation of the scale-set model. **Verdict: Option E ([Q264](q264-scale-set-protocol.md))
+  reimplementation of the scale-set model. **Verdict: Option E ([Q264](../q264-scale-set-protocol.md))
   is the only reliable fix — #530 stands.**
 
 ## 10. Q265 — close-out: comparison settled, ScaleSet decisively wins (2026-07-06)
@@ -630,7 +630,7 @@ benchmark at a wide worker pool. **Both sides have now been measured live on the
 dogfood cluster under the clean conditions Q265 required — the two confounders that
 previously blocked a clean "holds at `maxWorkers`" run (the Q266 loser-slot-stranding
 seam §8 and the Q267 online-session / broker-credential recycle seam §9) are fixed,
-and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../STATUS.md)).
+and the SSD `maxWorkers` cap is gone (workers on `pd-standard`, [Q248](../../STATUS.md)).
 No further turn-up is needed: the comparison is decided.**
 
 ### The measured comparison
@@ -638,7 +638,7 @@ No further turn-up is needed: the comparison is decided.**
 | Path | Config | Distinct jobs run to green | Binding limit |
 |---|---|---|---|
 | **Classic / Option A fan-out** | re-route #8: clean namespace (`dogfood8`/`ci8`/`gag-ci8`), `maxListeners = 48`, `maxWorkers = 8`, `pd-standard`, all recycle/capacity/tax seams (Q259/Q266/Q267/Q248/Q265) quiet | **2/7** — 5 jobs wedged `in_progress` indefinitely | GitHub server-side **fan-out distinct-delivery starvation** (§9): only 2 distinct planIDs ever delivered; the pool self-limited to 3 ≪ 48 sessions, so a wider pool does not help |
-| **ScaleSet** ([Q264](q264-scale-set-protocol.md) P4) | clean-green re-run: fresh scale-set label, `maxWorkers = 8`, same 7-job matrix | **7/7** — 7 distinct `JobAssigned`, 7 worker pods in ~2 s, 0 dedup / 0 wedge | none — one acquirer, one authoritative queue, no sibling deliveries |
+| **ScaleSet** ([Q264](../q264-scale-set-protocol.md) P4) | clean-green re-run: fresh scale-set label, `maxWorkers = 8`, same 7-job matrix | **7/7** — 7 distinct `JobAssigned`, 7 worker pods in ~2 s, 0 dedup / 0 wedge | none — one acquirer, one authoritative queue, no sibling deliveries |
 
 The clean wide-pool run Q265 set out to obtain **is** re-route #8: with Q266 + Q267 +
 a clean namespace + `pd-standard`, the pool *held* (Q267 done, 0 collapse markers over a
@@ -653,10 +653,10 @@ clears exactly that wall by construction.
 - **But classic cannot reliably clear a high-concurrency burst:** fan-out
   distinct-delivery starvation caps it at 2–3/7 regardless of pool width — a GitHub
   server-side limit with **no AGC-side lever**
-  ([`q224-fanout-dispatch-lever-spike.md`](q224-fanout-dispatch-lever-spike.md)).
+  ([`q224-fanout-dispatch-lever-spike.md`](../q224-fanout-dispatch-lever-spike.md)).
 - **ScaleSet clears it decisively: 7/7 vs classic 2/7**, proven live.
 
-**Strategic close.** [Q264](q264-scale-set-protocol.md) P5 has already flipped the
+**Strategic close.** [Q264](../q264-scale-set-protocol.md) P5 has already flipped the
 default acquisition protocol to ScaleSet (PR #553); classic — the Option A fan-out path
 — is **deprecated**. This benchmark therefore **closes the comparison and confirms the
 ScaleSet default decision**; it is *not* a reason to revive or further tune Option A.
@@ -667,7 +667,7 @@ why the product front door is now ScaleSet.
 A fresh confirming turn-up was **not** run: both sides are already measured under clean,
 confounder-free conditions on the shared dogfood cluster, and re-running the deprecated
 classic path would only reproduce **2/7** at cost. Evidence:
-[`gke-dogfood.md`](gke-dogfood.md) re-route #8 (classic **2/7**) + Q264 P4 clean-green
+[`gke-dogfood.md`](../gke-dogfood.md) re-route #8 (classic **2/7**) + Q264 P4 clean-green
 (ScaleSet **7/7**).
 
 ---

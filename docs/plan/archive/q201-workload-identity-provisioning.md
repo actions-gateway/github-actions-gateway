@@ -11,7 +11,7 @@ Secret mount); (2) AGC `main.go` branches on the credential type and builds the
 end); (3) an in-cluster test-Vault kind e2e exercises the live no-PEM round-trip.
 
 This is the deferred follow-up named in Q197 (PR #383) and in
-[05-security.md §5.7](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model).
+[05-security.md §5.7](../../design/05-security.md#57-workload-identity-the-no-pem-delegation-model).
 The API shape, the `githubapp.Signer` interface, the `pemSigner` refactor, and the
 `vaultsigner` implementation already shipped and are unit-tested in Q197 — this PR
 consumes them.

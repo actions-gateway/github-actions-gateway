@@ -1,12 +1,12 @@
 # Q12 — Production Helm chart (`charts/actions-gateway/`)
 
-← [Milestone 5 §1](milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../STATUS.md)
+← [Milestone 5 §1](../milestone-5.md#1-packaging-helm-chart) | [Release 1.0 §C](../release-1.0.md#c-packaging--supply-chain--gating--recommended) | [STATUS](../../STATUS.md)
 
 **Goal.** Ship a Helm chart that an operator can `helm install` to deploy
 the Gateway Manager Controller (GMC) — its CRDs, RBAC, validating webhook,
 and admission policy — with every default at the secure posture already
 encoded in the `cmd/gmc/config/` kustomize bases. Helm was decided over
-Kustomize ([D-M5-1](milestone-5.md#11-install-vehicle--decided-helm-chart)).
+Kustomize ([D-M5-1](../milestone-5.md#11-install-vehicle--decided-helm-chart)).
 
 **Scope of this PR (slice 1 — the whole GMC core install).** A
 lint-clean, offline-validated chart that renders the complete GMC control
@@ -19,9 +19,9 @@ envtest/e2e tiers).
 The GMC is the only thing installed. **AGC instances and proxy pools are
 provisioned by the GMC at runtime** from each `ActionsGateway` CR — they
 are *not* chart resources. Verified against
-[builder.go](../../cmd/gmc/internal/controller/builder.go)
+[builder.go](../../../cmd/gmc/internal/controller/builder.go)
 (`buildAGCDeployment`/`buildProxyDeployment`) and
-[main.go](../../cmd/gmc/cmd/main.go) (`AGCImage`/`ProxyImage` injected into
+[main.go](../../../cmd/gmc/cmd/main.go) (`AGCImage`/`ProxyImage` injected into
 the reconciler), and the `docs/operations/tenant-onboarding.md` flow.
 
 Resources, sourced 1:1 from the kustomize bases:
@@ -56,12 +56,12 @@ Resources, sourced 1:1 from the kustomize bases:
    pure-template (no Job/hook), which renders offline and is simpler than a
    post-install hook; the trade-off is that the cert rotates on a
    `helm upgrade` that does not reuse the existing Secret — noted in
-   [upgrade.md](../operations/upgrade.md).
+   [upgrade.md](../../operations/upgrade.md).
 2. **Helm never upgrades `crds/`.** Both CRDs ship under
    `templates/crds/` with `helm.sh/resource-policy: keep` (not the chart
    root `crds/` dir), so day-2 `helm upgrade` carries CRD field changes
    while `helm uninstall` still preserves them. Recorded in
-   [upgrade.md](../operations/upgrade.md).
+   [upgrade.md](../../operations/upgrade.md).
 
 ## Secure-by-default values
 
@@ -79,7 +79,7 @@ property is traded for convenience:
 - Leader election on, 2 replicas, HA defaults.
 - **Image digest pinning is the secure default.** The GMC rejects floating
   `AGC_IMAGE`/`PROXY_IMAGE` tags unless `--allow-floating-image-tags` is
-  set ([main.go](../../cmd/gmc/cmd/main.go) `validateImageDigest`). The
+  set ([main.go](../../../cmd/gmc/cmd/main.go) `validateImageDigest`). The
   chart does **not** pass that flag by default and leaves digests empty, so
   an unconfigured install fails closed at GMC startup until the operator
   pins `agc.image.digest`/`proxy.image.digest`. `values.yaml` documents
@@ -101,7 +101,7 @@ shape an operator can get wrong.
 The GMC's `crd/bases/…_runnergroups.yaml` (8041 lines) is **stale** vs the
 AGC authoritative `cmd/agc/config/crd/…_runnergroups.yaml` (8738 lines).
 The chart sources the **AGC** copy per the task. Reconciling the two bases
-(so `make manifests` keeps them in sync) is **[Q73](../STATUS.md)** and is
+(so `make manifests` keeps them in sync) is **[Q73](../../STATUS.md)** and is
 out of scope here — this PR only consumes the authoritative copy.
 
 ## Offline validation (no cluster)
@@ -117,7 +117,7 @@ out of scope here — this PR only consumes the authoritative copy.
 
 The chart's "working tenant from a single `helm install`" gate was
 proven live on a 3-node kind cluster with real GitHub App credentials,
-as part of the [Milestone 4 live validation session](milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)
+as part of the [Milestone 4 live validation session](../milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112)
 (full evidence there). Chart-specific observations:
 
 - `helm install actions-gateway charts/actions-gateway -n gmc-system
@@ -145,17 +145,17 @@ tracked separately as Q98.
 
 A later **production-posture re-validation** on the current chart (digest-pinned
 `v1.1.0-rc.4` images, no dev opt-outs, the clean no-workaround tenant path) ran as
-[M5 Q219](milestone-5.md#15-live-validation-q219--2026-06-28) and surfaced + fixed
+[M5 Q219](../milestone-5.md#15-live-validation-q219--2026-06-28) and surfaced + fixed
 an AGC egress-proxy trust bug that blocked runner registration on every proxied
 install.
 
 ## Out of scope (documented future slices)
 
 - CI drift check that re-renders the chart and diffs against the kustomize
-  bases (M5 §7 risk row) — folds into [Q66](../STATUS.md) install-artifact
+  bases (M5 §7 risk row) — folds into [Q66](../../STATUS.md) install-artifact
   validation.
-- `polaris` posture scan against the rendered output — **[Q14](../STATUS.md)**.
+- `polaris` posture scan against the rendered output — **[Q14](../../STATUS.md)**.
 - Publishing the chart as an OCI artifact with digest-pinned images and
-  cosign signatures — **[Q28](../STATUS.md)**.
+  cosign signatures — **[Q28](../../STATUS.md)**.
 - Reconciling the RunnerGroup CRD drift at the kustomize-base layer —
-  **[Q73](../STATUS.md)**.
+  **[Q73](../../STATUS.md)**.

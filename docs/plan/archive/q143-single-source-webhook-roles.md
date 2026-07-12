@@ -1,6 +1,6 @@
 # Plan: Single-source chart webhook + remaining roles (Q143)
 
-← [STATUS](../STATUS.md) · extends [Q142](drop-kustomize.md)
+← [STATUS](../../STATUS.md) · extends [Q142](drop-kustomize.md)
 
 ## Goal
 

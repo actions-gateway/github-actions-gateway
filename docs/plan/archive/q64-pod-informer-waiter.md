@@ -1,7 +1,7 @@
 # Q64 — Replace provisioner per-session poll with a shared Pod informer waiter
 
-Tracked as [Q64](../STATUS.md); split from the k8s-best-practices audit
-[§A4](archive/k8s-best-practices.md#a-controller-correctness-).
+Tracked as [Q64](../../STATUS.md); split from the k8s-best-practices audit
+[§A4](k8s-best-practices.md#a-controller-correctness-).
 
 ## Goal
 

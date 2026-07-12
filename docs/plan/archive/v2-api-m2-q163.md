@@ -1,8 +1,8 @@
 # v2 API M2 (Q163) — EgressProxy reconciler + RunnerTemplate webhook
 
 Session-scoped implementation plan for **Q163 — v2 API M2: data-kind ("noun")
-reconcilers**. Parent plan: [v2-api.md](v2-api.md) § "M2 — Data kinds (nouns)".
-Design source of truth: [appendix-h](../design/appendix-h-v2-api-decomposition.md)
+reconcilers**. Parent plan: [v2-api.md](../v2-api.md) § "M2 — Data kinds (nouns)".
+Design source of truth: [appendix-h](../../design/appendix-h-v2-api-decomposition.md)
 §H.4, §H.7, §H.8.
 
 **Scope:** M2 nouns only — same-namespace, no control kinds (`ActionsGateway` /
@@ -58,7 +58,7 @@ There is a documented tension the dispatcher should confirm:
 
 - **§H.4's reserved-field list omits `privileged`** (lists serviceAccountName,
   host*, automountServiceAccountToken, proxy env vars only).
-- **M1's own note** ([v2-api.md](v2-api.md) M1 task list) says the M2 webhook
+- **M1's own note** ([v2-api.md](../v2-api.md) M1 task list) says the M2 webhook
   rejects "privileged containers and proxy env vars".
 
 These conflict. Resolution chosen here, erring toward the **secure-by-default**

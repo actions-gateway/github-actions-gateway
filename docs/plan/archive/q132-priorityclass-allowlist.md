@@ -9,7 +9,7 @@ not on the allowlist. Secure-by-default: an empty/unset allowlist forbids *all*
 `priorityTiers` PriorityClass references.
 
 Tracked as STATUS Queue Q132 (`security`, `1.0-gate`). Same "platform owns it,
-not the tenant" family as [Q130](archive/platform-owned-quota.md) (platform-owned
+not the tenant" family as [Q130](platform-owned-quota.md) (platform-owned
 `ResourceQuota`) and the [Q121/Q122/Q125](q121-q122-q125-gmc-confinement.md) GMC
 write confinement.
 
@@ -17,9 +17,9 @@ write confinement.
 
 `priorityTiers[].priorityClassName` is **tenant-authored and unvalidated**. The
 GMC copies the `RunnerGroupSpec` verbatim into the namespaced `RunnerGroup`
-([builder.go:813](../../cmd/gmc/internal/controller/builder.go:813),
+([builder.go:813](../../../cmd/gmc/internal/controller/builder.go:813),
 `Spec: spec`), and the AGC provisioner stamps it onto worker pods
-([provisioner.go:809](../../cmd/agc/internal/provisioner/provisioner.go:809),
+([provisioner.go:809](../../../cmd/agc/internal/provisioner/provisioner.go:809),
 `pod.Spec.PriorityClassName = priorityClass`).
 
 `PriorityClass` is **cluster-scoped** and carries a `value` (priority) and a
@@ -40,7 +40,7 @@ arbitrary cluster-scoped class — but the allowlist fits this codebase far bett
    `PriorityClass` objects have to exist; "the GMC creates/owns them" re-expands
    the cluster-scoped write surface that
    [Q121/Q122/Q125](q121-q122-q125-gmc-confinement.md) just *confined* to tenant
-   namespaces, and contradicts [Q130](archive/platform-owned-quota.md)'s model (platform
+   namespaces, and contradicts [Q130](platform-owned-quota.md)'s model (platform
    admin owns infra/cluster resources; GAG operates *within* them). The platform
    already pre-creates these classes today — keep it that way.
 2. **The `RunnerGroupSpec` type is shared verbatim.** `ActionsGateway.spec.runnerGroups`
@@ -62,7 +62,7 @@ the allowlist lacks. Rejected for the cost above.
 
 ### API / CRD (breaking, pre-1.0)
 - **Remove the dead `PreemptionPolicy` field** from `PriorityTier`
-  ([runnergroup_types.go:19-24](../../cmd/agc/api/v1alpha1/runnergroup_types.go:19)).
+  ([runnergroup_types.go:19-24](../../../cmd/agc/api/v1alpha1/runnergroup_types.go:19)).
   It has existed since Milestone 2 but is **never consumed** — the provisioner
   only sets `PriorityClassName`, never `pod.Spec.PreemptionPolicy`. The design
   doc already calls it "informational only." Keeping a tenant-settable
@@ -72,15 +72,15 @@ the allowlist lacks. Rejected for the cost above.
   same window as Q130). Zero behavioural change (the field never reached a pod).
 - `PriorityClassName` stays required and unchanged in shape (tenant still names a
   class; the webhook gates *which* names are legal).
-- Regenerate per [code-generation.md](../development/code-generation.md):
+- Regenerate per [code-generation.md](../../development/code-generation.md):
   `make -C cmd/agc generate manifests` → `zz_generated.deepcopy.go`, both CRD YAML
-  copies ([cmd/agc/.../runnergroups.yaml](../../cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml),
-  the GMC-bundled [cmd/gmc/.../runnergroups.yaml](../../cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml)),
+  copies ([cmd/agc/.../runnergroups.yaml](../../../cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml),
+  the GMC-bundled [cmd/gmc/.../runnergroups.yaml](../../../cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml)),
   and the chart CRD template. Keep all copies in sync (Q73).
 
 ### GMC config (allowlist source)
 - New flag `--allowed-priority-classes` on the GMC
-  ([main.go](../../cmd/gmc/cmd/main.go)), comma-separated class names, matching
+  ([main.go](../../../cmd/gmc/cmd/main.go)), comma-separated class names, matching
   the existing `--allow-floating-image-tags` / `--allow-agc-extra-env` style.
   Empty (default) = no classes permitted = `priorityTiers` rejected.
 - Thread it into `SetupActionsGatewayWebhookWithManager` →
