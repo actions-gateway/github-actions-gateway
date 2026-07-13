@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q301
+**Next ID:** Q302
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -47,7 +47,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | 🔲 | M | The kindnet `e2e / e2e` leg fails on different unrelated specs run to run — webhook `context deadline exceeded`, job-delivery 0-worker stalls, egress→GitHub timeouts; 3/5 recent main runs red. GMC/AGC control-plane starvation suspected. |
+| <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | 🔲 | M | Root cause: kind's 100m CPU limit on kindnetd starves its in-band kube-network-policies enforcer — allowed traffic times out, fresh NPs unenforced. Fix shipped (limit removed at bring-up; 15%-throttled→0). Open until kindnet soaks clean on main. |
+| <a id="Q301"></a>Q301 | [e2e AfterSuite strands agentpool-cleanup finalizers on local re-runs](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `infra` | 🔲 | S | AfterSuite `make undeploy` removes GMC/AGC while tenant namespaces are still Terminating; agentpool-cleanup finalizers strand, namespaces never delete, the next local run's BeforeAll `create namespace` collides. CI unaffected (fresh cluster). |
 | <a id="Q299"></a>Q299 | [manager-metrics curl pod flake (kindnet)](../cmd/gmc/test/e2e/e2e_test.go) | `tests` `flake` | 🔲 | S | curl-metrics pod never reaches Succeeded in 5min on kindnet: each curl to metrics Service :8443 hangs ~133s (no --connect-timeout), so the 30-retry loop gets ~2 tries before the budget expires. Fix: bound connect timeout + gate on metrics endpoints. |
 | <a id="Q291"></a>Q291 | [e2e-calico egress-to-GitHub reachability flake](plan/q291-e2e-calico-egress-github-flake.md) | `tests` `flake` `infra` | 🔲 | S | Three real-GitHub egress specs red the e2e-calico leg together; recurred 07-04 + 07-11. Felix ipBlock-programming window outlasts the curl retry budget under CI load. Budget widened (150s/4m); keep open until a clean soak. |
 | <a id="Q297"></a>Q297 | [Mark the CI gate contexts required in the ruleset](plan/required-status-checks.md) | `infra` `security` | 🔲 | S | Nine CI workflows expose an always-running, uniquely-named `*-gate` job, but no ruleset requires them, so red/skipped CI still merges. A repo admin adds the nine to `default-protect` required_status_checks. List + rationale in the plan. |
