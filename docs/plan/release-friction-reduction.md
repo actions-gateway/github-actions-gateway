@@ -37,7 +37,15 @@ runbook is missing required env and ordering, and `setup.sh` has a silent footgu
 - The single `e2-standard-2` system node **can't fit the on-demand e2e AGC**
   alongside the always-on CI AGCs — needs a temporary +1 node.
 
-## Bucket 1 — make `publish.yml` own the whole Release (highest leverage)
+## Bucket 1 — make `publish.yml` own the whole Release (highest leverage) — DONE (Q293)
+
+Implemented in `publish.yml`'s `chart-publish` job: the tag-resolution step now
+emits a `prerelease` output (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒ true), both
+chart-package steps `yq`-stamp `artifacthub.io/prerelease` from it before
+`helm package`, and a new "Compose and create the GitHub Release" step writes the
+five index digests + `make verify-release` line + generated changelog and sets
+`--prerelease`, guarded to create only when the tag has no Release yet. First
+exercised on the next real `v*` tag (see Validation).
 
 The pipeline already has every piece of data; it just doesn't finish the job.
 
@@ -85,8 +93,8 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
 ## Sequencing
 
 1. **Q295** — `setup.sh` `workerImage` preserve (small, protects every re-run now).
-2. **Q293 — Bucket 1** (biggest bang, lowest risk: `yq` + a `gh release` step in an
-   existing workflow). Removes the most-repeated manual steps.
+2. **Q293 — Bucket 1** ✅ DONE — `yq` prerelease stamp + a `gh release` compose/create
+   step in `publish.yml`. Removed the flip PR and the by-hand Release fixups.
 3. **Q296** — Bucket 3 cleanups (release.md corrections + Calico filter).
 4. **Q294 — Bucket 2** wrapper script (more code; removes the scariest, prod-cluster
    friction).
