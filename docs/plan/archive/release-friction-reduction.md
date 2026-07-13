@@ -1,10 +1,12 @@
 # Release friction reduction
 
-> **Status:** Planned. Motivated by the `v1.1.0-rc.7 → v1.1.0` cut (2026-07-12),
-> which exercised the full release + pre-GA dogfood validation gate end-to-end for
-> the first time and surfaced repeated manual friction and several footguns. This
-> plan captures where the friction *structurally* comes from and the
-> highest-leverage fixes, so we stop patching individual footguns.
+> **Status:** Complete (all buckets shipped — Q293/Q294/Q295/Q296). Motivated by
+> the `v1.1.0-rc.7 → v1.1.0` cut (2026-07-12), which exercised the full release +
+> pre-GA dogfood validation gate end-to-end for the first time and surfaced
+> repeated manual friction and several footguns. This plan captures where the
+> friction *structurally* comes from and the highest-leverage fixes, so we stop
+> patching individual footguns. Bucket 2's wrapper is code-complete + gate-clean;
+> end-to-end validation against dogfood is a human pre-GA-gate step (see Validation).
 
 ## Motivation — friction observed during the v1.1.0 cut
 
@@ -21,7 +23,7 @@ human-run PR. So every cut repeats:
 - **Copying the five image digests** into the release notes by hand.
 
 **Validation orchestration.** The pre-GA dogfood gate
-([release.md § Validate the release candidate on dogfood](../operations/release.md#validate-the-release-candidate-on-dogfood))
+([release.md § Validate the release candidate on dogfood](../../operations/release.md#validate-the-release-candidate-on-dogfood))
 is correct in intent but was written from source-reading; running it revealed the
 runbook is missing required env and ordering, and `setup.sh` has a silent footgun:
 - `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, `ASSUME_YES=1` (reads the App PEM
@@ -67,11 +69,15 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
 
 ## Bucket 2 — one-command dogfood validation gate + footgun fixes
 
-1. **`scripts/dogfood/validate-release.sh <rc-tag>`** — a single wrapper that runs
-   setup → start → e2e-start → `gh run rerun` (e2e) → CRD artifact smoke → teardown,
-   with the correct env baked in (`APP_ID`/`INSTALLATION_ID` resolved, `ASSUME_YES`,
-   `DOGFOOD_RUNNER_IMAGE` preserved, node scaling for the e2e AGC), idempotent and
-   self-cleaning. Turns an hour of footguns into a walk-away command.
+1. **`scripts/dogfood/validate-release.sh <rc-tag>`** — DONE (Q294). A single wrapper
+   that runs setup → start → e2e-start → `gh run rerun` (e2e) → CRD artifact smoke →
+   teardown, with the correct env baked in (`APP_ID` defaulted / `INSTALLATION_ID`
+   auto-resolved via `gh api`, `ASSUME_YES=1` for the child scripts, `DOGFOOD_RUNNER_IMAGE`
+   left untouched so setup.sh's Q295 preserve wins, system-pool scaled 0→1 before setup
+   and +1 for the on-demand e2e AGC's contention window), idempotent and self-cleaning
+   (EXIT trap tears back down to 0 nodes on success and failure). release.md's gate
+   section now points at the one command. Turns an hour of footguns into a walk-away
+   command. End-to-end run against dogfood is a human pre-GA-gate step (see Validation).
 2. **Fix the `setup.sh` `DOGFOOD_RUNNER_IMAGE` footgun** (agreed) — DONE (Q295): when
    the env is unset, `apply_cr` now **preserves** the existing `RunnerTemplate` runner
    image (reads it back from the cluster with `kubectl get … -o jsonpath`) instead of
@@ -82,14 +88,14 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
 ## Bucket 3 — cleanups from the same session — DONE (Q296)
 
 - **Correct release.md's gate section** — DONE. The
-  [§ Validate the release candidate on dogfood](../operations/release.md#validate-the-release-candidate-on-dogfood)
+  [§ Validate the release candidate on dogfood](../../operations/release.md#validate-the-release-candidate-on-dogfood)
   steps now state the real `setup.sh` env (`APP_ID`, `INSTALLATION_ID`,
   `ASSUME_YES=1`; App PEM read from the macOS keychain), the 0-nodes→`start.sh`
   ordering (setup's GMC-rollout wait times out at rest and `start.sh` completes it),
   the `gh run rerun` e2e trigger (`e2e-start.sh` only wires routing), and the
   system-node +1-node contention note.
 - **Narrow the Calico e2e path filter** — DONE. Both the `push.paths` list and the
-  `changes` `calico` filter in [`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)
+  `changes` `calico` filter in [`e2e-calico.yml`](../../../.github/workflows/e2e-calico.yml)
   now watch `charts/actions-gateway/templates/**` instead of `charts/actions-gateway/**`,
   so a metadata-only `Chart.yaml` edit no longer fires the expensive, flaky (Q291)
   Calico lane while a NetworkPolicy-template change still does. Used a positive
@@ -107,8 +113,11 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
    step in `publish.yml`. Removed the flip PR and the by-hand Release fixups.
 3. **Q296 — Bucket 3** ✅ DONE — release.md gate-section corrections + narrowed the
    Calico path filter to `charts/actions-gateway/templates/**`.
-4. **Q294 — Bucket 2** wrapper script (more code; removes the scariest, prod-cluster
-   friction).
+4. **Q294 — Bucket 2** ✅ DONE — `scripts/dogfood/validate-release.sh <rc-tag>`: the
+   one-command, idempotent, self-cleaning wrapper for the whole pre-GA dogfood gate
+   (setup → start → e2e-start → `gh run rerun` → CRD smoke → teardown). release.md's
+   gate section points at it. End-to-end validation against dogfood is the human
+   pre-GA-gate step. Removes the scariest, prod-cluster friction.
 
 ## Validation
 
