@@ -802,7 +802,7 @@ parallel implementation behind a flag, then cutover.
   - **Verdict.** ScaleSet **eliminates the Q224 fan-out starvation by construction
     AND runs the real CI matrix pristine-green** — Option E is fully validated live.
     **Q224 is CLOSED; P5 (default flip / classic retirement) is UNBLOCKED**;
-    [Q242](../STATUS.md#Q242) concurrent-green is achieved. Evidence: AGC debug logs
+    [Q242](archive/q242-g1-proxy-destination-allowlist.md) concurrent-green is achieved. Evidence: AGC debug logs
     (`agc:e2e-2025557`, scaleSetID 5), runs `28759754797`/`28759755655` (burst
     `00:11:30Z`, sha `2025557`).
 
