@@ -114,8 +114,21 @@ only for an RC-to-RC or a patch tag that changes nothing an operator runs.
 
 The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which resolves
 both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) and as
-a git ref (for the matching CRDs) — an RC tag satisfies both by construction. From a
-detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
+a git ref (for the matching CRDs) — an RC tag satisfies both by construction.
+
+**One command runs the whole gate.** From a checkout of any post-Q74 ref with
+`PROJECT`/`CLUSTER`/`ZONE`/`REPO` exported (App IDs auto-resolved; the one-time
+`scripts/dogfood/e2e-setup.sh` must have run once):
+
+```bash
+PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX.Y.Z-rc.N
+```
+
+`validate-release.sh` bakes in all the env and ordering below — deploy → route CI →
+on-demand e2e → `gh run rerun` → CRD smoke → teardown — is idempotent, and
+self-cleans back to 0 nodes on exit (success or failure). The manual steps that
+follow document what it does (and the recovery path if a leg needs re-running by
+hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
 1. **Deploy the RC to dogfood.** `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, and
    `ASSUME_YES=1` exported alongside `GAG_IMAGE_TAG` — it reads the GitHub App private
