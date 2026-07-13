@@ -209,12 +209,33 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Eventually(verifyValidatingWebhookReady, 3*time.Minute, time.Second).Should(Succeed())
 
+			By("waiting for the metrics service endpoints to be ready")
+			// The controller pod being Ready (probes on :8081) does not imply the
+			// metrics Service (:8443) has a programmed, ready backend yet — the
+			// EndpointSlice can still be empty/not-ready when curl runs, so its
+			// connect stalls. Gate on a ready endpoint to shrink that window (Q299).
+			verifyMetricsEndpointsReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
+					"-l", "kubernetes.io/service-name="+metricsServiceName,
+					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.conditions.ready}{end}{end}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "Metrics endpoints should exist")
+				g.Expect(output).To(ContainSubstring("true"), "Metrics endpoints not yet ready")
+			}
+			Eventually(verifyMetricsEndpointsReady, 3*time.Minute, time.Second).Should(Succeed())
+
 			By("waiting additional time for webhook server to stabilize")
 			time.Sleep(5 * time.Second)
 
 			// +kubebuilder:scaffold:e2e-metrics-webhooks-readiness
 
 			By("creating the curl-metrics pod to access the metrics endpoint")
+			// The curl loop bounds each attempt with --connect-timeout/--max-time so
+			// a stalled TCP connect to the metrics Service fails fast (~5s) instead of
+			// hanging on the OS retransmit timeout (~130s) — a dropped SYN (an
+			// NP-programming race where the CNI enforces it, or an endpoint not yet
+			// ready) would otherwise let this 30-iteration loop burn the whole 5-minute
+			// budget on just two attempts (Q299).
 			cmd = exec.Command("kubectl", "run", "curl-metrics", "--restart=Never",
 				"--namespace", namespace,
 				"--image="+curlImage,
@@ -227,7 +248,7 @@ var _ = Describe("Manager", Ordered, func() {
 							"imagePullPolicy": "IfNotPresent",
 							"command": ["/bin/sh", "-c"],
 							"args": [
-								"for i in $(seq 1 30); do curl -v -k -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics && exit 0 || sleep 2; done; exit 1"
+								"for i in $(seq 1 30); do curl -v -k --connect-timeout 5 --max-time 10 -H 'Authorization: Bearer %s' https://%s.%s.svc.cluster.local:8443/metrics && exit 0 || sleep 2; done; exit 1"
 							],
 							"securityContext": {
 								"readOnlyRootFilesystem": true,
