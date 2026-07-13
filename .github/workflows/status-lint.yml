@@ -53,11 +53,11 @@ jobs:
         run: scripts/lint-backlog.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`status-lint / gate`) required in the branch ruleset — never the path-gated
+  # (`status-lint-gate`) required in the branch ruleset — never the path-gated
   # lint-status job, because a path-skip leaves it Pending and blocks the merge
   # forever. Passes only when every needed job succeeded or was legitimately
   # skipped. See docs/plan/required-status-checks.md.
-  gate:
+  status-lint-gate:
     needs: [changes, lint-status]
     if: ${{ always() }}
     runs-on: ubuntu-latest

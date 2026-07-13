@@ -59,11 +59,11 @@ jobs:
         run: scripts/check-no-plan-refs-in-code.sh
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`plan-hygiene / gate`) required in the branch ruleset — never the path-gated
+  # (`plan-hygiene-gate`) required in the branch ruleset — never the path-gated
   # plan-hygiene job, because a path-skip leaves it Pending and blocks the merge
   # forever. Passes only when every needed job succeeded or was legitimately
   # skipped. See docs/plan/required-status-checks.md.
-  gate:
+  plan-hygiene-gate:
     needs: [changes, plan-hygiene]
     if: ${{ always() }}
     runs-on: ubuntu-latest

@@ -115,11 +115,11 @@ jobs:
           make manifest-validate
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`manifest-validate / gate`) required in the branch ruleset — never the
+  # (`manifest-validate-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/plan/required-status-checks.md.
-  gate:
+  manifest-validate-gate:
     needs: [changes, validate]
     if: ${{ always() }}
     runs-on: ubuntu-latest

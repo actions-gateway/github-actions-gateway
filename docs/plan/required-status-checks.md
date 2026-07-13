@@ -50,12 +50,13 @@ Two coordinated pieces.
   workflow via the `changes` job + each real job's `if:` guard (unchanged), so
   the actual expensive jobs still don't run on unrelated PRs — only the cheap
   `changes` job does.
-- Add a summary job named **`gate`** that `needs:` every real job and runs with
-  `if: ${{ always() }}`. It passes only when every needed job concluded
-  `success` or `skipped`, and fails on anything else (`failure`, `cancelled`):
+- Add a summary job whose id is **`<workflow>-gate`** (e.g. `unit-test-gate`)
+  that `needs:` every real job and runs with `if: ${{ always() }}`. It passes
+  only when every needed job concluded `success` or `skipped`, and fails on
+  anything else (`failure`, `cancelled`):
 
   ```yaml
-  gate:
+  unit-test-gate:
     # Aggregate required-status gate. Mark THIS job's check context required in
     # the branch ruleset — never the individual path-gated jobs (a path-skip
     # leaves them Pending, which blocks the merge forever). Runs on every PR
@@ -83,43 +84,57 @@ Two coordinated pieces.
   A matrix job (e.g. `trivy`) aggregates naturally: `needs: [trivy]` waits for
   all legs and `needs.trivy.result` is `failure` if any leg failed.
 
-### 2. Mark the `gate` contexts required in the ruleset (admin)
+### 2. Mark the gate contexts required in the ruleset (admin)
 
-After this PR merges, a repo admin adds each workflow's `gate` context to the
+After this PR merges, a repo admin adds each workflow's gate context to the
 `default-protect` ruleset's `required_status_checks`. This is the only step that
 actually turns the gates merge-blocking, and it needs admin rights the CI branch
 does not have — tracked as [Q297](../STATUS.md#Q297).
 
-The required contexts (one per workflow, GitHub names them `<workflow> / gate`):
+**Each gate job must have a globally unique id** — this is why they are
+`unit-test-gate`, `security-scan-gate`, … and not all just `gate`. A normal
+job's check-run **name is its job id** (only reusable-workflow-call jobs get the
+`<caller> / <job>` form). GitHub matches a required status check by that name and
+the ruleset UI dedupes candidates by name, so nine jobs all named `gate` collapse
+to a single indistinguishable `gate` entry that cannot be required per-workflow.
+Distinct ids give nine distinct, individually-requireable contexts.
+
+The required contexts to add (each is the gate job's id, verbatim):
 
 ```
-unit-test / gate
-security-scan / gate
-integration-test / gate
-manifest-validate / gate
-license-notices / gate
-status-lint / gate
-plan-hygiene / gate
-e2e-test / gate
-e2e (calico) / gate
+unit-test-gate
+security-scan-gate
+integration-test-gate
+manifest-validate-gate
+license-notices-gate
+status-lint-gate
+plan-hygiene-gate
+e2e-gate
+e2e-calico-gate
 ```
+
+Type each into the ruleset's "Require status checks to pass" search box (they
+appear once each workflow has reported the context at least once — i.e. after
+this PR runs). Do **not** require the underlying jobs (`unit-test`, `e2e / e2e`,
+`trivy (…)`, …) directly — a path-skip leaves those Pending and wedges the merge;
+the gate is the skip-safe aggregate.
 
 ## Per-workflow edits
 
 The chosen scope is the **full quality set** (everything that asserts
 correctness / security / hygiene). Two shapes:
 
-| Workflow | Current gating | Edit |
-|---|---|---|
-| `unit-test.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over lint, shellcheck, vendor-check, tidy-check, unit-test, coverage |
-| `security-scan.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over govulncheck, trivy, polaris |
-| `integration-test.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over integration-test |
-| `manifest-validate.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over validate |
-| `license-notices.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over check |
-| `e2e-test.yml` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add `gate` over e2e |
-| `status-lint.yml` | top-level `on.paths`, no internal filter | add a `changes` job (same path list); gate `lint-status` on it; add `gate` |
-| `plan-hygiene.yml` | top-level `on.paths`, no internal filter | add a `changes` job (same path list); gate `plan-hygiene` on it; add `gate` |
-| `e2e-calico.yml` | top-level `on.paths`, no internal filter; wraps `e2e-reusable.yml` via `uses:` | add a `changes` job (same path list); gate the reusable-workflow call on it; add `gate` |
+| Workflow | Gate job id | Current gating | Edit |
+|---|---|---|---|
+| `unit-test.yml` | `unit-test-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over lint, shellcheck, vendor-check, tidy-check, unit-test, coverage |
+| `security-scan.yml` | `security-scan-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over govulncheck, trivy, polaris |
+| `integration-test.yml` | `integration-test-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over integration-test |
+| `manifest-validate.yml` | `manifest-validate-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over validate |
+| `license-notices.yml` | `license-notices-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over check |
+| `e2e-test.yml` | `e2e-gate` | internal `changes` + coarse `paths-ignore` | drop `paths-ignore`; add gate over e2e |
+| `status-lint.yml` | `status-lint-gate` | top-level `on.paths`, no internal filter | add a `changes` job (same path list); gate `lint-status` on it; add gate |
+| `plan-hygiene.yml` | `plan-hygiene-gate` | top-level `on.paths`, no internal filter | add a `changes` job (same path list); gate `plan-hygiene` on it; add gate |
+| `e2e-calico.yml` | `e2e-calico-gate` | top-level `on.paths`, no internal filter; wraps `e2e-reusable.yml` via `uses:` | add a `changes` job (same path list); gate the reusable-workflow call on it; add gate |
 
 `push: branches: [main]` triggers are unchanged; on push the real jobs still run
 unconditionally (post-merge gate), and `gate` passes when they do.
