@@ -48,7 +48,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | 🔲 | L | ScaleSet is the default acquisition protocol; Classic is deprecated. Remaining: serve the one-minor deprecation window, then remove the classic machinery and v1alpha1. |
-| <a id="Q243"></a>Q243 | [Per-tenant egress-IP reference architecture (cloud)](plan/q243-egress-ip-reference-arch.md) | `security` `infra` `docs` | 🔲 | L | Mechanism live-validated (per-range Cloud NAT → distinct, stable per-tenant IPs); scheduling blocker cleared (Q282); a teardown-safe harness is ready (scripts/validate-egress-ip.sh). Remaining: run the live GKE pinning spike. |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | 🔲 | M | Front door, deprecate-v1 banners, and the `gag-migrate` slice are in place. Remaining: full v2-only (v1 removal), gated on the Classic deprecation window (§6.2). |
 

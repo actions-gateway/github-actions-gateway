@@ -167,10 +167,22 @@ create_cluster() {
 	if ! gc container clusters describe "${CLUSTER}" --zone="${ZONE}" >/dev/null 2>&1; then
 		# --disable-default-snat makes pod IPs (from the per-tenant ranges), not the
 		# node IP, the Cloud NAT source — the load-bearing flag for per-range → per-IP
-		# mapping. Private nodes + Private Google Access so nodes bootstrap before NAT.
+		# mapping. GKE only permits it together with --enable-private-nodes, so the
+		# nodes are private and the control plane is reached over its PUBLIC endpoint
+		# from THIS operator host (the CRD + GMC install below runs kubectl locally).
+		# A private-nodes control plane drops off-cluster kubectl unless the caller's
+		# IP is an authorized network — an earlier revision without this timed out on
+		# the CRD install — so detect this host's public egress IP and authorize it.
+		local op_ip
+		op_ip="$(curl -fsS --max-time 20 "${IP_REFLECTOR}" || true)"
+		[[ "${op_ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+			{ echo "Could not determine this host's public IP from ${IP_REFLECTOR} (got '${op_ip}')." >&2; exit 1; }
+		echo "== Creating cluster; authorizing operator IP ${op_ip}/32 on the control plane =="
 		gc container clusters create "${CLUSTER}" --zone="${ZONE}" \
 			--enable-dataplane-v2 --enable-ip-alias --disable-default-snat \
 			--enable-private-nodes --master-ipv4-cidr=172.16.0.0/28 \
+			--enable-master-authorized-networks \
+			--master-authorized-networks="${op_ip}/32" \
 			--network="${NETWORK}" --subnetwork="${SUBNET}" \
 			--cluster-secondary-range-name="${SYS_RANGE}" \
 			--services-secondary-range-name="${SVC_RANGE}" \
@@ -289,7 +301,45 @@ spec:
         scopeName: PriorityClass
         values: ["system-cluster-critical"]
 QUOTA
-	kubectl -n gmc-system rollout status deploy/gag-gmc --timeout=180s
+	# The chart names the manager Deployment "<namePrefix>-controller-manager"
+	# (namePrefix defaults to "gmc"), NOT "<release>-gmc" — independent of the
+	# "gag" release name. Waiting on the wrong name fails NotFound.
+	kubectl -n gmc-system rollout status deploy/gmc-controller-manager --timeout=180s
+}
+
+# patch_crd_cabundle — wire the GMC's self-signed webhook CA into each v2 CRD's
+# spec.conversion.webhook.clientConfig.caBundle. Since Q74 the v2 kinds are stored
+# at v2beta1 and served at v2alpha1 through the GMC-hosted conversion webhook; the
+# apiserver calls that webhook over TLS on every CR apply and must trust its serving
+# cert via each CRD's caBundle. With certManager.enabled=false the CRD chart renders
+# an EMPTY caBundle, so without this the first EgressProxy apply fails the handshake
+# ("x509: certificate signed by unknown authority"). Mirrors scripts/dogfood/setup.sh
+# Part B3b (Q279). Secure by default: this RESTORES webhook TLS verification — never
+# fall back to a caBundle-less clientConfig or insecureSkipTLSVerify.
+patch_crd_cabundle() {
+	echo "== Wiring GMC webhook CA into the v2 CRD conversion caBundle =="
+	# The chart mints a self-signed CA once and stores it in webhook-server-cert;
+	# data["ca.crt"] is already base64(PEM) — the encoding a CRD caBundle wants — so
+	# pass it straight through. Read lazily so a pre-Q74 (strategy None) image is a no-op.
+	local ca_bundle="" crd strategy patched=0
+	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
+		strategy="$(kubectl get crd "${crd}.actions-gateway.com" \
+			-o jsonpath='{.spec.conversion.strategy}' 2>/dev/null || true)"
+		if [[ "${strategy}" != "Webhook" ]]; then
+			echo "  ${crd}: conversion strategy '${strategy:-None}' (not Webhook) — skipping."
+			continue
+		fi
+		if [[ -z "${ca_bundle}" ]]; then
+			ca_bundle="$(kubectl get secret webhook-server-cert -n gmc-system \
+				-o jsonpath='{.data.ca\.crt}')"
+			[[ -n "${ca_bundle}" ]] ||
+				{ echo "webhook-server-cert Secret has no ca.crt — cannot wire the CRD caBundle." >&2; exit 1; }
+		fi
+		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+			-p "{\"spec\":{\"conversion\":{\"webhook\":{\"clientConfig\":{\"caBundle\":\"${ca_bundle}\"}}}}}"
+		patched=$((patched + 1))
+	done
+	echo "Wired the GMC webhook CA into ${patched} v2 CRD conversion caBundle(s)."
 }
 
 # --- Deploy the pinned proxies ----------------------------------------------
@@ -300,6 +350,17 @@ deploy_proxies() {
 	for tenant in "${TENANTS[@]}"; do
 		read -r name pool pod_range pod_cidr ip_name rest <<<"${tenant}"
 		kubectl create namespace "tenant-${name}" --dry-run=client -o yaml | kubectl apply -f -
+		# The GMC service account is admission-gated by the ValidatingAdmissionPolicy
+		# gmc-tenant-resource-guard: it may only write tenant resources (the proxy TLS
+		# Secret, Deployment, …) in namespaces labeled actions-gateway.com/tenant=managed.
+		# Without this the reconcile fails "ensure proxy TLS cert: … is forbidden" and no
+		# proxy pods are ever created. security-profile + PSA enforce match dogfood so the
+		# proxy pods are admitted under Pod Security. (Mirrors scripts/dogfood/setup.sh.)
+		kubectl label namespace "tenant-${name}" \
+			actions-gateway.com/tenant=managed \
+			actions-gateway.com/security-profile=baseline \
+			pod-security.kubernetes.io/enforce=baseline \
+			--overwrite
 		# spec.scheduling pins the pool to the tenant node pool AND opts out of the
 		# built-in cross-node spread (podAntiAffinity: {}), so both default replicas
 		# (minReplicas=2) land on this one pool → one pod range → one NAT IP.
@@ -327,10 +388,39 @@ EOF
 	local tenant name rest
 	for tenant in "${TENANTS[@]}"; do
 		read -r name rest <<<"${tenant}"
-		echo "Waiting for tenant-${name} proxy pool (2 replicas) to be Ready..."
-		kubectl -n "tenant-${name}" wait --for=condition=Ready pod \
-			-l "app=actions-gateway-proxy" --timeout=180s
+		# EgressProxy is named "tenant-<name>-proxy"; the reconciler's Deployment is
+		# that + "-proxy" → "tenant-<name>-proxy-proxy".
+		wait_proxy_ready "tenant-${name}" "tenant-${name}-proxy-proxy"
 	done
+}
+
+# wait_proxy_ready NS — block until the GMC-provisioned proxy Deployment in NS is
+# rolled out. The reconciler creates the Deployment ASYNCHRONOUSLY after the CR
+# apply, and `kubectl wait`/`rollout status` fast-fail ("no matching resources
+# found") when the object does not exist yet — so poll for the Deployment to appear
+# (by the app label) before waiting on its rollout. On a real provisioning failure,
+# dump the EgressProxy status + namespace events so the FAIL is diagnosable, not mute.
+wait_proxy_ready() {
+	local ns="$1" dep="deployment/$2" i
+	echo "Waiting for ${dep} to be created by the GMC in ${ns}..."
+	# Poll by EXACT name (the EgressProxy reconciler names the Deployment
+	# "<ep.Name>-proxy"), not by a label selector: the Deployment's own metadata
+	# labels are the app.kubernetes.io/* recommended set, NOT the pods'
+	# app=actions-gateway-proxy — a pod-style selector matches zero Deployments even
+	# when a healthy one exists. rollout status fast-fails "not found" before the
+	# reconciler creates it, so wait for it to appear first.
+	for ((i = 0; i < 60; i++)); do
+		kubectl -n "${ns}" get "${dep}" >/dev/null 2>&1 && break
+		sleep 3
+	done
+	if ! kubectl -n "${ns}" get "${dep}" >/dev/null 2>&1; then
+		echo "   FAIL: the GMC created no ${dep} in ${ns} within 180s." >&2
+		kubectl -n "${ns}" get egressproxy -o yaml >&2 2>/dev/null || true
+		kubectl -n "${ns}" get events --sort-by=.lastTimestamp >&2 2>/dev/null || true
+		exit 1
+	fi
+	echo "Waiting for ${dep} (2 replicas) to be Ready..."
+	kubectl -n "${ns}" rollout status "${dep}" --timeout=180s
 }
 
 # --- Assertions -------------------------------------------------------------
@@ -361,10 +451,20 @@ ip_to_int() {
 # proxy and echo the source IP the reflector sees.
 observed_egress_ip() {
 	local name="$1" pool="$2"
-	kubectl -n "tenant-${name}" run "egress-probe-${name}" --rm -i --restart=Never \
-		--image=curlimages/curl:8.10.1 --command \
+	local ns="tenant-${name}" pod="egress-probe-${name}" ip
+	# Run the probe WITHOUT -i/--rm and read its logs, rather than streaming attached
+	# output. `kubectl run -i --rm` interleaves the curl body with kubectl's own
+	# "pod ... deleted" notice — and the interactive attach can echo the body twice —
+	# which pollutes a captured egress IP (observed "<ip>pod ... deleted"). A
+	# non-interactive pod + `kubectl logs` yields exactly the container's stdout (the
+	# bare reflector IP); extract the single IPv4 and hand it back clean.
+	kubectl -n "${ns}" run "${pod}" --restart=Never --image=curlimages/curl:8.10.1 \
 		--overrides="{\"spec\":{\"nodeSelector\":{\"cloud.google.com/gke-nodepool\":\"${pool}\"},\"tolerations\":[{\"key\":\"tenant\",\"operator\":\"Equal\",\"value\":\"${name}\",\"effect\":\"NoSchedule\"}]}}" \
-		-- curl -s --max-time 20 "${IP_REFLECTOR}" 2>/dev/null
+		--command -- curl -s --max-time 20 "${IP_REFLECTOR}" >/dev/null 2>&1 || true
+	kubectl -n "${ns}" wait --for=jsonpath='{.status.phase}'=Succeeded "pod/${pod}" --timeout=60s >/dev/null 2>&1 || true
+	ip="$(kubectl -n "${ns}" logs "${pod}" 2>/dev/null | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)"
+	kubectl -n "${ns}" delete pod "${pod}" --wait=false >/dev/null 2>&1 || true
+	printf '%s' "${ip}"
 }
 
 assert_pinning() {
@@ -418,8 +518,11 @@ assert_pinning() {
 	read -r a_name a_pool _ _ a_ip_name _ <<<"${TENANTS[0]}"
 	kubectl -n "tenant-${a_name}" delete pod -l "app=actions-gateway-proxy" \
 		--field-selector="status.phase=Running" --wait=false | head -1 || true
-	kubectl -n "tenant-${a_name}" wait --for=condition=Ready pod \
-		-l "app=actions-gateway-proxy" --timeout=180s
+	# rollout status (via wait_proxy_ready), not a pod-selector wait: after the delete
+	# the terminating pod still matches the selector and never reaches Ready, which
+	# hangs/errors a `kubectl wait`. The egress IP binds to the pod range + NAT, not to
+	# a specific pod, so the probe below re-measures it regardless.
+	wait_proxy_ready "tenant-${a_name}" "tenant-${a_name}-proxy-proxy"
 	local want_a after_a
 	want_a="$(reserved_ip "${a_ip_name}")"
 	after_a="$(observed_egress_ip "${a_name}" "${a_pool}" || true)"
@@ -488,6 +591,7 @@ main() {
 	create_nat
 	install_crds
 	install_gmc
+	patch_crd_cabundle
 	deploy_proxies
 	assert_pinning
 }
