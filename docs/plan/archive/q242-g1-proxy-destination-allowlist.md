@@ -8,7 +8,7 @@
 > (the mirror-first Athens cache, Q244, is the path used there). The Q259 burst
 > concurrency blocker that once held this open is resolved. The remaining
 > per-tenant egress-IP *attribution* validation is not a Q242 deliverable; it is
-> carried by [Q243](../../STATUS.md#Q243) (egress-IP reference architecture).** This
+> carried by [Q243](../q243-egress-ip-reference-arch.md) (egress-IP reference architecture).** This
 > promotes [Appendix G.1](../../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:

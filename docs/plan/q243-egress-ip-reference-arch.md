@@ -7,30 +7,33 @@ production mechanisms (Cilium Egress Gateway vs per-tenant cloud NAT),
 documents the single-tenant-direct (dogfood) vs multi-tenant (production)
 topology and its cost, and defines a live-validation plan for a follow-up.
 
-**Scope of this document: design + written reference architecture.** The live
-validation has now run ([campaign, 2026-07-07](q243-q245-q230-live-validation-campaign.md))
-on a throwaway GKE Dataplane V2 cluster and reached a **split result**, updated
-inline below:
+**Scope of this document: design + written reference architecture, now fully
+live-validated.** Two live runs on throwaway GKE Dataplane V2 clusters (torn down
+same-session) proved the claim end-to-end:
 
-- ✅ The **Cloud NAT mechanism is proven**: two tenants (distinguished by node
-  pool + pod secondary range) egress from **distinct, stable** source IPs, stable
-  across pod reschedule (see [Live-validation results](#live-validation-results-2026-07-07)).
-- ✅ **GAG can now bind to it** *(was ⚠️; resolved by [Q282](../STATUS.md), 2026-07-07)*:
-  `EgressProxy.spec.scheduling` and `ActionsGateway.spec.scheduling` carry
-  `nodeSelector`/`tolerations`/`affinity` through to the proxy pool and AGC pods, and
-  a supplied `podAntiAffinity` now **replaces** the builder's required cross-node
+- ✅ The **Cloud NAT mechanism is proven** ([campaign, 2026-07-07](q243-q245-q230-live-validation-campaign.md)):
+  two tenants (distinguished by node pool + pod secondary range) egress from
+  **distinct, stable** source IPs, stable across pod reschedule (see
+  [Live-validation results](#live-validation-results-2026-07-07)).
+- ✅ **GAG binds a real EgressProxy to its egress IP — proven live** *(2026-07-13;
+  the design was resolved by [Q282](../STATUS.md) and asserted only in envtest until
+  this run)*: a GMC-provisioned `EgressProxy` with `spec.scheduling` lands **both**
+  replicas on one tenant pool → **one** Cloud NAT IP, distinct per tenant and stable
+  across reschedule. `EgressProxy.spec.scheduling` and `ActionsGateway.spec.scheduling`
+  carry `nodeSelector`/`tolerations`/`affinity` through to the proxy pool and AGC pods,
+  and a supplied `podAntiAffinity` **replaces** the builder's required cross-node
   spread (so a single-node tenant pool no longer strands replicas in `Pending`). The
-  gap the live validation found — one tenant egressing from *two* IPs because the
-  anti-affinity spread its pool across node pools — is closed. See
-  [Placement pass-through](#placement-pass-through-q282) below.
+  2026-07-07 two-IP spread is gone. See [Result — PASS (2026-07-13)](#result--pass-2026-07-13)
+  and [Placement pass-through](#placement-pass-through-q282).
 - 📝 **GKE mechanism corrected**: Approach B's "dedicated *subnet* per tenant" is
   inaccurate for GKE (all node pools share the cluster subnet). The working
   primitive is a **dedicated pod secondary range per tenant node pool + a per-range
   Cloud NAT + `--disable-default-snat`** (so pod IPs, not the node IP, are the NAT
   source). Corrected in [Approach B](#approach-b--per-tenant-cloud-nat).
 
-Tracks [Q243](../STATUS.md#Q243). A v2beta1 (Q74) blocker
-alongside Q224 and [Q242](archive/q242-g1-proxy-destination-allowlist.md).
+Completes Q243 (the [STATUS](../STATUS.md) Queue row is removed on completion —
+this doc is the durable reference). Was a v2beta1 (Q74) blocker alongside Q224 and
+[Q242](archive/q242-g1-proxy-destination-allowlist.md).
 
 ---
 
@@ -529,6 +532,38 @@ mirror [the 2026-07-07 campaign](q243-q245-q230-live-validation-campaign.md): a 
 USD if torn down same-session; prefer a throwaway project deleted wholesale for
 atomic cost hygiene.
 
+### Result — PASS (2026-07-13)
+
+Ran end-to-end on a throwaway GKE Standard / Dataplane V2 cluster (a scratch
+project, torn down same-session). **Every assertion passed**, closing the last
+Q243 gate — the per-tenant egress-IP claim is now substantiated by a running
+system, not just design:
+
+| Property | Result |
+|---|---|
+| **Distinct egress IPs** | ✅ tenant-a `35.229.44.8` (nat-a), tenant-b `34.75.214.64` (nat-b) — disjoint |
+| **All proxy pods in-range** | ✅ both tenant-a replicas in `10.5.0.0/16`, both tenant-b replicas in `10.6.0.0/16` — no pool spill |
+| **Egress IP == reserved NAT IP** | ✅ each tenant's live probe egressed from its own reserved static IP |
+| **Stable across reschedule** | ✅ after deleting a tenant-a proxy pod, egress IP unchanged at `35.229.44.8` |
+
+This is the live proof Q282 lacked: with `spec.scheduling` (`nodeSelector` +
+tolerations + `affinity.podAntiAffinity: {}`), a real GMC-provisioned
+`EgressProxy` lands **both** replicas on the one tenant node pool, so the pool
+egresses from a **single** Cloud NAT IP — the 2026-07-07 two-IP spread is gone.
+
+**Per the repo rule ("treat ✅ findings as unverified until confirmed
+end-to-end"), the first real run mattered:** the harness ([`scripts/validate-egress-ip.sh`](../../scripts/validate-egress-ip.sh))
+had never been executed against live GKE, and seven distinct defects surfaced
+only on contact — each gating a step deeper: private-nodes control-plane access
+(authorize the operator IP), the `--disable-default-snat`/`--enable-private-nodes`
+coupling, the GMC Deployment name (`gmc-controller-manager`), the missing
+conversion-webhook caBundle wiring (Q279), the `tenant=managed` namespace label
+the `gmc-tenant-resource-guard` ValidatingAdmissionPolicy requires, a
+Deployment-vs-pod label mismatch in the readiness wait, and `kubectl run -i --rm`
+polluting the captured egress IP. All fixed; the script is now green and
+re-runnable at future egress-path changes — the regression class unit/envtest
+can't catch.
+
 ## Live-validation plan (original spec — retained for the deferred parts)
 
 **The distinct/stable/composition parts above are DONE.** The parts below that
@@ -575,13 +610,16 @@ reserved IPs + minimal NAT data processing — target **< a few USD** if torn
 down same-session. The follow-up should confirm exact figures as deliverable
 (1) above; do not commit to a number here.
 
-### Follow-up task
+### Follow-up task — DONE
 
-Tracked as the residual on [Q243](../STATUS.md#Q243), kept open (🔲) with the
-design half done and the **live-cloud egress-IP validation** deferred. That
-live validation remains the actual v2beta1 gate; this reference architecture +
-validation plan is the design half that unblocks it. It can be split into its
-own Queue row when a session picks it up and a cloud spike is scheduled.
+The live-cloud egress-IP validation that was the actual v2beta1 gate **has run
+and PASSED** (2026-07-13; see [Result — PASS](#result--pass-2026-07-13)), so the
+Q243 Queue row is removed. What remains is genuinely deferred and out of the
+critical path: Approach A's (Cilium Egress Gateway) fail-open pod-start window,
+gateway-node failover, kill-switch drain, and SNAT-port headroom under
+thousands-of-sessions fan-out — none of which apply to the validated Approach-B
+(per-tenant Cloud NAT) GKE path, and all of which only matter once a
+self-managed-Cilium deployment is in scope (see the deferred section below).
 
 ---
 
