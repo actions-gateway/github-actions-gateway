@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q297
+**Next ID:** Q298
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -48,6 +48,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q291"></a>Q291 | [e2e-calico egress-to-GitHub reachability flake](plan/q291-e2e-calico-egress-github-flake.md) | `tests` `flake` `infra` | 🔲 | S | Three real-GitHub egress specs red the e2e-calico leg together; recurred 07-04 + 07-11. Felix ipBlock-programming window outlasts the curl retry budget under CI load. Budget widened (150s/4m); keep open until a clean soak. |
+| <a id="Q297"></a>Q297 | [Mark the CI `gate` contexts required in the ruleset](plan/required-status-checks.md) | `infra` `security` | 🔲 | S | Nine CI workflows now expose an always-running `gate` job, but no ruleset requires them, so red/skipped CI still merges. A repo admin adds the `gate` contexts to `default-protect` required_status_checks. Contexts + rationale in the plan. |
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | 🔲 | L | ScaleSet is the default acquisition protocol; Classic is deprecated. Remaining: serve the one-minor deprecation window, then remove the classic machinery and v1alpha1. |
 | <a id="Q242"></a>Q242 | [Implement G.1 proxy destination allowlist](plan/q242-g1-proxy-destination-allowlist.md) | `security` `infra` | 🔲 | L | Admin-set destination allowlist on the per-tenant egress proxy. Remaining: per-tenant egress IP ([Q243](#Q243)). |
 | <a id="Q243"></a>Q243 | [Per-tenant egress-IP reference architecture (cloud)](plan/q243-egress-ip-reference-arch.md) | `security` `infra` `docs` | 🔲 | L | Reference arch and mechanism are live-validated: per-range Cloud NAT gives two tenants distinct, stable IPs. The scheduling blocker is cleared (Q282). Remaining: live-validate proxy-pool pinning end-to-end. |
