@@ -78,24 +78,31 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
    regress the runner toolchain. Independently valuable — do this first; it protects
    every dogfood re-run, not just the release gate.
 
-## Bucket 3 — cleanups from the same session
+## Bucket 3 — cleanups from the same session — DONE (Q296)
 
-- **Correct release.md's gate section** with the real `setup.sh` env, the
-  0-nodes→`start.sh` ordering, the `gh run rerun` e2e trigger, and the system-node
-  +1-node contention note. (The section as merged in #600 is idealized.)
-- **Narrow the Calico e2e path filter.** [`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)
-  watches `charts/actions-gateway/**`, so a metadata-only `Chart.yaml` edit (an
-  annotation/version bump) needlessly triggers the expensive, flaky (Q291) Calico
-  lane. The NetworkPolicy templates it cares about live under
-  `charts/actions-gateway/templates/**`; narrow the filter there (or exclude
-  `Chart.yaml`) so metadata-only edits don't fire it.
+- **Correct release.md's gate section** — DONE. The
+  [§ Validate the release candidate on dogfood](../operations/release.md#validate-the-release-candidate-on-dogfood)
+  steps now state the real `setup.sh` env (`APP_ID`, `INSTALLATION_ID`,
+  `ASSUME_YES=1`; App PEM read from the macOS keychain), the 0-nodes→`start.sh`
+  ordering (setup's GMC-rollout wait times out at rest and `start.sh` completes it),
+  the `gh run rerun` e2e trigger (`e2e-start.sh` only wires routing), and the
+  system-node +1-node contention note.
+- **Narrow the Calico e2e path filter** — DONE. Both the `push.paths` list and the
+  `changes` `calico` filter in [`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)
+  now watch `charts/actions-gateway/templates/**` instead of `charts/actions-gateway/**`,
+  so a metadata-only `Chart.yaml` edit no longer fires the expensive, flaky (Q291)
+  Calico lane while a NetworkPolicy-template change still does. Used a positive
+  `templates/**` include (which simply doesn't match `Chart.yaml`) rather than a
+  `!Chart.yaml` exclude, since dorny/paths-filter items are OR'd and a leading-`!`
+  does not subtract.
 
 ## Sequencing
 
 1. **Q295** — `setup.sh` `workerImage` preserve (small, protects every re-run now).
 2. **Q293 — Bucket 1** ✅ DONE — `yq` prerelease stamp + a `gh release` compose/create
    step in `publish.yml`. Removed the flip PR and the by-hand Release fixups.
-3. **Q296** — Bucket 3 cleanups (release.md corrections + Calico filter).
+3. **Q296 — Bucket 3** ✅ DONE — release.md gate-section corrections + narrowed the
+   Calico path filter to `charts/actions-gateway/templates/**`.
 4. **Q294 — Bucket 2** wrapper script (more code; removes the scariest, prod-cluster
    friction).
 

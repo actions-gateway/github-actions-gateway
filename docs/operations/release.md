@@ -117,14 +117,29 @@ both as an image tag (`ghcr.io/actions-gateway/{gmc,agc,proxy,wrapper}:<ref>`) a
 a git ref (for the matching CRDs) — an RC tag satisfies both by construction. From a
 detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
-1. **Deploy the RC to dogfood.** `GAG_IMAGE_TAG=vX.Y.Z-rc.N scripts/dogfood/setup.sh`,
-   then `scripts/dogfood/start.sh` (one-time `scripts/dogfood/e2e-setup.sh` first if
-   the e2e node pool / GitHub App Secret aren't set up yet). The cluster, context
-   pinning, and prod-guard cautions are in
-   [gke-dogfood.md](../plan/gke-dogfood.md).
-2. **Run the e2e job matrix on GAG runners.** `scripts/dogfood/e2e-start.sh` routes the
-   repo's own e2e CI jobs onto the RC's GAG-provisioned runners. Require the matrix
-   **green** — this is GAG running its own CI end-to-end on the RC images.
+1. **Deploy the RC to dogfood.** `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, and
+   `ASSUME_YES=1` exported alongside `GAG_IMAGE_TAG` — it reads the GitHub App private
+   key from the macOS keychain (not from an env var), so run it on a macOS host that
+   has that keychain entry. The cluster sits at **0 nodes at rest**, so `setup.sh`'s
+   GMC-rollout wait has nothing to schedule on and **times out** — that is expected;
+   `scripts/dogfood/start.sh` then scales the system pool to one node and completes the
+   rollout. So: `GAG_IMAGE_TAG=vX.Y.Z-rc.N APP_ID=… INSTALLATION_ID=… ASSUME_YES=1 scripts/dogfood/setup.sh`
+   (a timed-out rollout wait here is fine), then `scripts/dogfood/start.sh`. Run the
+   one-time `scripts/dogfood/e2e-setup.sh` first if the e2e node pool / GitHub App
+   Secret aren't set up yet. The cluster, context pinning, and prod-guard cautions are
+   in [gke-dogfood.md](../plan/gke-dogfood.md).
+2. **Run the e2e job matrix on GAG runners.** This is two moves, not one.
+   `scripts/dogfood/e2e-start.sh` only **wires routing**: it spins up the on-demand
+   e2e tenant's AGC and sets the `GAG_E2E_RUNNER` repo variable so `e2e-reusable.yml`
+   targets the GAG scale set — it does **not** start a run. Trigger the matrix by
+   **re-running an existing e2e workflow run** (`gh run rerun <run-id>` for
+   `e2e-test.yml` / `e2e-calico.yml`); the rerun's jobs pick up the new `runs-on` and
+   land on the RC's GAG-provisioned runners. **Node contention:** the on-demand e2e AGC
+   (~500m CPU) does not fit on the single `e2-standard-2` system node beside the
+   always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add
+   a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and
+   scale it back after. Require the matrix **green** — this is GAG running its own CI
+   end-to-end on the RC images.
 3. **Smoke the signed v2 CRD asset.** Download the RC release's
    `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the
    publish identity (step 3 below), `kubectl apply --server-side` it, and assert the
