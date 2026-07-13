@@ -488,10 +488,15 @@ _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) WRAPPER_IMG=$(WRAPPER_IMG) \
 	$(GINKGO) run --tags e2e --timeout 30m --github-output --poll-progress-after 30s
 
+# The JUnit report lives under the repo-local tmp/ (gitignored), not /tmp:
+# host-wide temp is shared across worktrees/sessions (concurrent runs collide)
+# and sits outside the workspace, where sandboxed tooling can't read it back
+# when diagnosing a failed run.
 .PHONY: e2e
 e2e: $(GINKGO) ## Run e2e tests; SUITE=standard|multi-node selects a subset, unset runs all specs
+	@mkdir -p $(REPO_ROOT)/tmp
 	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
-		--procs 6 --junit-report /tmp/e2e-report.xml ./test/e2e/...
+		--procs 6 --junit-report $(REPO_ROOT)/tmp/e2e-report.xml ./test/e2e/...
 
 .PHONY: e2e-clean
 e2e-clean: e2e-cluster-delete e2e-registry-delete ## Tear down the e2e cluster and registry, and delete .build/
