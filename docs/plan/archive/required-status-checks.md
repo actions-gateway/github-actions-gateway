@@ -2,7 +2,7 @@
 
 **Status:** ❌ Open — workflow-side summary gates land in this plan's PR; the
 repository-admin ruleset edit that marks them required is the residual
-([Q297](../STATUS.md#Q297)).
+([Q297](../../STATUS.md#Q297)).
 
 ## Problem
 
@@ -89,7 +89,7 @@ Two coordinated pieces.
 After this PR merges, a repo admin adds each workflow's gate context to the
 `default-protect` ruleset's `required_status_checks`. This is the only step that
 actually turns the gates merge-blocking, and it needs admin rights the CI branch
-does not have — tracked as [Q297](../STATUS.md#Q297).
+does not have — tracked as [Q297](../../STATUS.md#Q297).
 
 **Each gate job must have a globally unique id** — this is why they are
 `unit-test-gate`, `security-scan-gate`, … and not all just `gate`. A normal
