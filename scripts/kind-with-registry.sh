@@ -159,6 +159,26 @@ install_calico() {
   fi
 }
 
+# tune_kindnet_limits removes the CPU limit kind ships on the kindnetd
+# DaemonSet (100m, CFS-throttled even at bring-up idle). kindnetd is not just
+# the CNI: its embedded kube-network-policies enforcer verdicts the first
+# packet(s) of every new connection involving a policied pod in userspace
+# (nfqueue), and its NRI plugin sits in the RunPodSandbox path. At 100m, e2e
+# load starves it — allowed traffic times out (webhook calls, broker
+# long-polls, curl connects) while freshly created NetworkPolicies go
+# unenforced for minutes (Q300). Dropping the CPU limit removes the throttle;
+# the 100m CPU request is kept so scheduling is unchanged, and the memory
+# limit is kept (no OOM ever observed). Idempotent: a strategic-merge patch to
+# the same value is a no-op and triggers no rollout.
+tune_kindnet_limits() {
+  local ctx="kind-${KIND_CLUSTER}"
+  echo "==> removing kindnetd CPU limit (kube-network-policies runs in-band; Q300)"
+  kubectl --context "${ctx}" -n kube-system patch daemonset kindnet \
+    --type=strategic \
+    -p '{"spec":{"template":{"spec":{"containers":[{"name":"kindnet-cni","resources":{"limits":{"cpu":null}}}]}}}}'
+  kubectl --context "${ctx}" rollout status daemonset/kindnet -n kube-system --timeout=120s
+}
+
 # 1. Bring up the registry (idempotent). Extracted into start-registry.sh so CI
 #    can start it early and build images against it while this script goes on to
 #    create the cluster.
@@ -202,6 +222,8 @@ fi
 # this must run before anything that waits on node readiness.
 if [[ "${KIND_CNI}" == "calico" ]]; then
   install_calico
+else
+  tune_kindnet_limits
 fi
 
 # 3. Wire each node's containerd to resolve 127.0.0.1:${REGISTRY_PORT} via the

@@ -1,6 +1,8 @@
 # Q300 — systemic kindnet `e2e / e2e` leg flakiness (cross-spec, control-plane starvation suspected)
 
-**Status:** open — investigation in progress.
+**Status:** open — root cause found (kindnetd 100m CPU limit starves the
+in-band kube-network-policies enforcer) and fix shipped (limit removed at
+bring-up); keep open until the kindnet leg soaks clean on `main`.
 
 ## Symptom
 
@@ -67,8 +69,100 @@ Candidate root causes, in investigation order:
 
 ## Findings
 
-*(none verified yet — this section is filled in as the investigation lands;
-per CLAUDE.md, findings are unverified until confirmed end-to-end)*
+### Evidence from the red runs (verified in logs)
+
+- **No OOMKills, no evictions, no disk pressure** in any failing run (disk at
+  34% at dump time; all `NodeHasNoDiskPressure`). Memory/disk are not the
+  starved resource; the GMC manager pods were Running/Ready, 0 restarts, the
+  whole time — the "Killing"/"FailedMount webhook-server-cert" events are
+  normal bring-up churn (helm install + two patches = 3 back-to-back rollouts
+  before cert-manager issues the cert).
+- Run 29216254327 (`CrossTenantNetworkBlocked`): the probe pod connected
+  cross-tenant on **every** attempt for >5 min (re-run 29218283916: >15 min) —
+  a freshly created NetworkPolicy was never programmed into the dataplane.
+- Run 29218283916: the AGC's listener goroutines died on
+  `Post http://fakegithub...:8080/token: context deadline exceeded` for ~2 min
+  (7 listeners), and at the end of the run `kubectl apply` of ActionsGateways
+  failed with webhook `context deadline exceeded` three times in a row — with
+  both GMC pods Running/Ready.
+- Attempt 1 of 29218365545 (`MultipleJobsQueued`): same signature — 8 listener
+  goroutines died on token-refresh `context deadline exceeded`, one webhook
+  deadline; the job was enqueued onto a live session but no worker pod appeared
+  in 6 min. Attempt 2 passed with no code change (flake confirmed).
+- So in the same window: traffic that **should be blocked flowed** (CrossTenant)
+  while traffic that **should be allowed timed out** (token refresh, webhook,
+  EgressProxy→GitHub).
+
+### Root cause (mechanism)
+
+On the kindnet lane, NetworkPolicy is enforced by **`kube-network-policies`
+running inside the kindnetd DaemonSet** (verified in kindnetd logs:
+`Starting controller name="kube-network-policies"`), and kind ships kindnetd
+with **`limits: cpu=100m, memory=50Mi`** (verified on a live
+`make e2e-cluster` cluster, kind v0.31.0). Three consequences:
+
+1. `kube-network-policies` is nfqueue-based: the first packet(s) of every new
+   connection involving a policied pod are verdicted in **userspace, inside
+   that 100m-capped container**. The GMC chart ships NPs selecting the manager
+   (`allow-webhook-traffic`, `allow-metrics-traffic`) and every tenant
+   namespace carries per-tenant NPs — so apiserver→webhook, AGC→fakegithub,
+   proxy→GitHub, and metrics scrapes ALL go through the throttled verdict path.
+2. When the agent falls behind, new-connection verdicts stall → **allowed
+   traffic times out** (webhook 10 s deadline, token refresh, curl connects);
+   when its policy programming lags, **new NetworkPolicies are not enforced**
+   (CrossTenant) — the two contradictory-looking symptom classes are the same
+   starved component.
+3. kindnetd is also an NRI plugin handling `RunPodSandbox` — a throttled
+   kindnetd slows **pod creation** cluster-wide (worker pods appearing late).
+
+Local measurement: kindnetd is CFS-throttled ~38% of periods **at cluster
+bring-up idle** (nr_throttled 33/86, 5.2 s throttled); the e2e suite at
+`--procs 6` multiplies connection churn while the 4-vCPU CI host multiplies
+contention. The 100m limit is absolute, so throttling reproduces locally on a
+larger host as well.
+
+### Fix
+
+Remove the kindnetd **CPU limit** at cluster bring-up
+([`scripts/kind-with-registry.sh`](../../scripts/kind-with-registry.sh),
+kindnet lane only) — the 100m CPU *request* keeps scheduling unchanged and the
+memory limit stays (no OOM was ever observed). Idempotent strategic-merge
+patch; re-running bring-up against an existing cluster is a no-op.
+
+Plus diagnosability: the e2e workflow's failure dump now includes per-node
+kindnetd `cpu.stat` (CFS throttle counters) and kindnet logs, so a recurrence
+is attributable from CI artifacts alone.
+
+Deliberately **not** done (single-concern scope):
+
+- `--procs 6 → 4`: would reduce contention but costs wall-clock and papers
+  over the real bottleneck; revisit only if the fix doesn't hold.
+- GMC manager limits (500m/128Mi): never implicated — pods stayed
+  Running/Ready with 0 restarts through every failure window.
+- Webhook `timeoutSeconds` 10→30: mitigation, not fix; the 10 s deadline only
+  fired because verdicts stalled.
+
+### Local validation
+
+Full suite (`--procs 6`, 3-node kindnet cluster, 8-vCPU Docker VM), kindnetd
+CFS throttle deltas sampled every 10 s across the whole run:
+
+| Config | Result | kindnetd throttling (worst node) |
+|---|---|---|
+| baseline (100m limit) | 51/51 passed | **15.2 % of periods throttled; 16.5 s throttled vs 3.6 s used (4.6× more time throttled than running)** |
+| CPU limit removed (fresh cluster, fix applied by bring-up) | 51/51 passed | **0 throttled periods, 0 ms throttled** (~5–6 s CPU used per node — the enforcer wanted that CPU all along; with the limit it waited 4.6× longer than it ran) |
+
+A local pass is expected either way (8 local vCPUs vs CI's 4 — CI adds the
+host contention that tips budgets over); the throttle counters are the
+mechanism measurement.
+
+Side-finding from a back-to-back local re-run on the same cluster (an invalid
+comparison run, discarded): the suite's AfterSuite `make undeploy` removes the
+GMC/AGC while tenant namespaces from failed/late specs are still Terminating,
+stranding `actions-gateway.com/agentpool-cleanup` finalizers with no
+controller left to clear them — the namespaces never finish deleting and the
+next run's BeforeAll `create namespace` collides. CI is unaffected (fresh
+cluster per run); filed as its own Queue item for the local iteration loop.
 
 ## Recurrence guard
 

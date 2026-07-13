@@ -25,6 +25,8 @@ The script creates the cluster with `disableDefaultCNI: true` and `podSubnet: 19
 
 The runtime egress-negative e2e specs (`E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod`, `E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI`) detect the CNI at runtime and skip themselves on kindnet, so the standard CI flow is unaffected; they only assert enforcement on a Calico/Cilium cluster.
 
+On the kindnet lane the script also **removes the CPU limit kind ships on the kindnetd DaemonSet** (100m). kindnetd is in-band for far more than packet forwarding: its embedded `kube-network-policies` enforcer verdicts the first packet(s) of each new policied connection in userspace (nfqueue), and its NRI plugin sits in the pod-sandbox-creation path. At 100m it is CFS-throttled even at idle, and under e2e load a starved enforcer times out *allowed* traffic (webhook calls, broker long-polls) while leaving *fresh* NetworkPolicies unenforced for minutes — the Q300 cross-spec flake signature. The CPU request and memory limit are unchanged.
+
 ## Inner-loop gotchas
 
 ### Target the cluster explicitly — don't trust the active context
