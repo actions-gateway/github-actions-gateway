@@ -41,6 +41,29 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 # coverage ratchet without a second, unthrottled test pass. No-op on CI/headless.
 serialize_heavy_build "$@"
 
+# All coverage temp files live in a per-run directory under the repo-local,
+# gitignored tmp/ — never the host-wide $TMPDIR (/var/folders on macOS, /tmp
+# elsewhere). Host-wide temp is shared across worktrees and sessions, so
+# concurrent runs collide on the fixed `cover.XXXXXX.*` template; a per-run
+# directory under this worktree's tmp/ keeps every run's scratch isolated (the
+# same reason #615 moved the e2e JUnit report here). The trap removes the
+# directory on any exit — including SIGTERM/SIGINT from an interrupted `make
+# check` timeout — so a killed run can't strand `cover.XXXXXX.out` files that
+# would make the next `mktemp` fail (`File exists`) and report spurious "no
+# coverage" regressions.
+mkdir -p "$REPO_ROOT/tmp"
+# Best-effort sweep of any cover.* run directory left by a prior run that was
+# SIGKILLed or crashed before its trap could fire (SIGTERM is handled by the
+# trap below). Safe here: serialize_heavy_build has returned, so no concurrent
+# same-worktree coverage run is holding one, and each run's directory is
+# uniquely named so this can never touch a live sibling.
+rm -rf "$REPO_ROOT"/tmp/cover.* 2>/dev/null || true
+RUN_TMP="$(mktemp -d "$REPO_ROOT/tmp/cover.XXXXXX")"
+cleanup() { rm -rf "$RUN_TMP" 2>/dev/null || true; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
+
 BASELINE_FILE="${BASELINE_FILE:-coverage-baseline.txt}"
 
 # Tolerance, in percentage points, that a module may drop below its recorded
@@ -93,8 +116,8 @@ verbose_flag=""
 measure_module() {
 	local dir="$1"
 	local profile filtered total pct
-	profile="$(mktemp "${TMPDIR:-/tmp}/cover.XXXXXX.out")"
-	filtered="$(mktemp "${TMPDIR:-/tmp}/cover.XXXXXX.filtered")"
+	profile="$(mktemp "$RUN_TMP/cover.XXXXXX.out")"
+	filtered="$(mktemp "$RUN_TMP/cover.XXXXXX.filtered")"
 	# shellcheck disable=SC2064
 	trap "rm -f '$profile' '$filtered'" RETURN
 
@@ -151,7 +174,7 @@ cmd_report() {
 
 cmd_update() {
 	local tmp
-	tmp="$(mktemp "${TMPDIR:-/tmp}/cover-baseline.XXXXXX")"
+	tmp="$(mktemp "$RUN_TMP/cover-baseline.XXXXXX")"
 	{
 		echo "# Per-module unit-test coverage baseline (no-regression ratchet floor)."
 		echo "# Regenerate with: make cover-update   (or scripts/coverage.sh update)"
