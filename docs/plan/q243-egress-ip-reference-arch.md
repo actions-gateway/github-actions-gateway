@@ -490,6 +490,45 @@ tenant-created pod is selected by none of them.
 
 Operator recipe: [security-operations.md § Pinning a tenant's proxy pool to its egress IP](../operations/security-operations.md#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling).
 
+## Re-runnable live validation
+
+The one gate that Q282 left un-exercised is a **live** end-to-end run: with
+`spec.scheduling` set, does a real GMC-provisioned `EgressProxy` land *all* its
+replicas on one tenant node pool — so the whole pool egresses from a *single*
+Cloud NAT IP — rather than spreading (the 2026-07-07 two-IP result)? Q282's fix
+is only asserted in envtest; envtest has no scheduler, so it can prove the emitted
+pod spec but not the placement + the NAT source IP end-to-end. That needs a cloud
+run, and per the repo rule ("treat ✅ findings as unverified until confirmed
+end-to-end — actually exec the thing") it is the honest close for Q243.
+
+[`scripts/validate-egress-ip.sh`](../../scripts/validate-egress-ip.sh) automates it,
+teardown-safe, so the run is one authorized command rather than a bespoke sequence
+(and re-runnable at future egress-path changes — this class of regression is exactly
+what unit/envtest can miss):
+
+1. Stands up a throwaway GKE **Standard / Dataplane V2** cluster with a system pool
+   plus two tenant node pools, each pinned to its own **pod secondary range**
+   (`--pod-ipv4-range`), behind **per-range Cloud NAT** gateways + reserved static
+   IPs and `--disable-default-snat` (so pod IPs, from the tenant range, are the NAT
+   source — the mechanism already proven on 2026-07-07).
+2. Installs the GMC (from `GAG_IMAGE_TAG`, which must carry Q282), then deploys one
+   `EgressProxy` per tenant whose `spec.scheduling` pins it to the tenant pool with
+   `affinity.podAntiAffinity: {}` (opting out of the built-in spread). `minReplicas`
+   defaults to 2, so each pool has two pods to (dis)prove pinning.
+3. **Asserts** per tenant: every proxy pod's IP is inside the tenant's pod range
+   (no spill to the other pool), a probe pinned like the proxy egresses from the
+   tenant's reserved static IP, the two tenants' IPs are disjoint, and the IP is
+   unchanged after deleting a proxy pod (stability across reschedule).
+4. Tears the infra down on exit (`KEEP=1` to inspect; `--teardown-only` to clean up
+   later). The billable steps are gated behind a dogfood-project guard + confirmation.
+
+**PASS** = each tenant's pool → one distinct, stable IP. **FAIL** (a pool spanning
+ranges / >1 egress IP, colliding IPs, or an IP that moves on reschedule) is a real
+Q243 regression — record it honestly, do not paper over it. Cost/teardown/method
+mirror [the 2026-07-07 campaign](q243-q245-q230-live-validation-campaign.md): a few
+USD if torn down same-session; prefer a throwaway project deleted wholesale for
+atomic cost hygiene.
+
 ## Live-validation plan (original spec — retained for the deferred parts)
 
 **The distinct/stable/composition parts above are DONE.** The parts below that
