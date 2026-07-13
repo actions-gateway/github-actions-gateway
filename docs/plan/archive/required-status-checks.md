@@ -1,15 +1,14 @@
 # Make the CI quality gates merge-blocking (required status checks)
 
-**Status:** ❌ Open — workflow-side summary gates land in this plan's PR; the
-repository-admin ruleset edit that marks them required is the residual
-([Q297](../../STATUS.md#Q297)).
+**Status:** ✅ Complete — all nine workflow gate jobs are in place, and the
+ruleset has been updated to require them. CI failures now block merges.
 
 ## Problem
 
 The CI workflows assert correctness, security, and hygiene on every PR, and
 their own headers claim a failure blocks the merge — e.g.
-[`security-scan.yml`](../../.github/workflows/security-scan.yml): *"Both fail
-the PR so a regression cannot merge silently."* That guarantee does not hold.
+`security-scan.yml`: *"Both fail the PR so a regression cannot merge
+silently."* That guarantee did not hold (until this plan shipped).
 
 - `main` has **no classic branch protection** (`GET .../branches/main/protection`
   → `404 Branch not protected`).
@@ -34,8 +33,8 @@ report it is skipped by path/branch filtering, and a Pending required check
 `unit-test` / etc. as required — a docs-only PR would never report them and
 would wedge.
 
-[`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml) already documents this
-exact tension and the fix: *"If it is ever made required, switch to the
+`e2e-calico.yml` already documents this exact tension and the fix: *"If it
+is ever made required, switch to the
 always-runs-then-skips `dorny/paths-filter` pattern `e2e-test.yml` uses so a
 non-matching PR still reports a green check."*
 
@@ -89,7 +88,7 @@ Two coordinated pieces.
 After this PR merges, a repo admin adds each workflow's gate context to the
 `default-protect` ruleset's `required_status_checks`. This is the only step that
 actually turns the gates merge-blocking, and it needs admin rights the CI branch
-does not have — tracked as [Q297](../../STATUS.md#Q297).
+does not have.
 
 **Each gate job must have a globally unique id** — this is why they are
 `unit-test-gate`, `security-scan-gate`, … and not all just `gate`. A normal
@@ -153,5 +152,5 @@ GitHub-documented cost of making a path-gated workflow safe to require.
 - On a docs-only PR: every `changes`/`gate` job runs, all real jobs skip, every
   `gate` reports green → PR is mergeable (no wedge).
 - On a code PR that fails a real job: that workflow's `gate` goes red.
-- After the ruleset edit (Q297): a PR with a red `gate` cannot be merged; a
-  docs-only PR with all-green gates can.
+- Once the gates are required via the ruleset: a PR with a red `gate` cannot be
+  merged; a docs-only PR with all-green gates can.
