@@ -476,12 +476,40 @@ apply_athens() {
 
 apply_cr() {
 	echo "Applying v2 ActionsGateway + RunnerTemplate + RunnerSet..."
-	# When DOGFOOD_RUNNER_IMAGE is set, pin it on the runner container; otherwise
-	# leave the container image-less so the AGC gap-fills DefaultWorkerImage.
+	# Resolve the runner container image (Q239/Q295). Precedence:
+	#   1. DOGFOOD_RUNNER_IMAGE set          -> pin it (build-capable image).
+	#   2. env unset + existing runner image -> PRESERVE the cluster's current
+	#      image, so an idempotent re-run without the env can't silently reset a
+	#      toolchain-pinned worker back to the image-less upstream default and make
+	#      `make`/Go vanish (the Q295 footgun that cost a full validation cycle).
+	#   3. env unset + no existing image     -> stay image-less; the AGC gap-fills
+	#      DefaultWorkerImage + injects the Q235 wrapper (today's default).
+	local runner_image="${DOGFOOD_RUNNER_IMAGE}"
+	if [[ -z "${runner_image}" ]]; then
+		# Read back the runner container image from the live RunnerTemplate. Pin the
+		# context explicitly (--context) rather than trusting the active one — a
+		# parallel session sharing ~/.kube/config could have repointed it since
+		# get_credentials ran. This is the same gke_<project>_<zone>_<cluster> name
+		# gke_get_credentials_and_verify asserts. Absent RunnerTemplate (first run)
+		# -> empty -> falls through to the image-less default.
+		local kube_context existing_image
+		kube_context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
+		existing_image="$(kubectl --context "${kube_context}" \
+			get runnertemplate.actions-gateway.com default -n gag-dogfood \
+			-o jsonpath='{.spec.podTemplate.spec.containers[?(@.name=="runner")].image}' \
+			2>/dev/null || true)"
+		if [[ -n "${existing_image}" ]]; then
+			echo "  DOGFOOD_RUNNER_IMAGE unset — preserving existing runner image ${existing_image}"
+			runner_image="${existing_image}"
+		fi
+	fi
+
+	# A resolved image (env or preserved) is pinned on the runner container;
+	# otherwise the container stays image-less so the AGC gap-fills DefaultWorkerImage.
 	local runner_image_field=""
-	if [[ -n "${DOGFOOD_RUNNER_IMAGE}" ]]; then
-		echo "  runner container pinned to ${DOGFOOD_RUNNER_IMAGE}"
-		runner_image_field="          image: ${DOGFOOD_RUNNER_IMAGE}"
+	if [[ -n "${runner_image}" ]]; then
+		echo "  runner container pinned to ${runner_image}"
+		runner_image_field="          image: ${runner_image}"
 	fi
 	kubectl apply -f - <<EOF
 apiVersion: actions-gateway.com/v2alpha1

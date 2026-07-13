@@ -72,11 +72,12 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
    with the correct env baked in (`APP_ID`/`INSTALLATION_ID` resolved, `ASSUME_YES`,
    `DOGFOOD_RUNNER_IMAGE` preserved, node scaling for the e2e AGC), idempotent and
    self-cleaning. Turns an hour of footguns into a walk-away command.
-2. **Fix the `setup.sh` `DOGFOOD_RUNNER_IMAGE` footgun** (agreed): when the env is
-   unset, **preserve** the existing `RunnerTemplate` `workerImage` (read it back from
-   the cluster) instead of resetting it, so an idempotent re-run can't silently
-   regress the runner toolchain. Independently valuable — do this first; it protects
-   every dogfood re-run, not just the release gate.
+2. **Fix the `setup.sh` `DOGFOOD_RUNNER_IMAGE` footgun** (agreed) — DONE (Q295): when
+   the env is unset, `apply_cr` now **preserves** the existing `RunnerTemplate` runner
+   image (reads it back from the cluster with `kubectl get … -o jsonpath`) instead of
+   resetting it, so an idempotent re-run can't silently regress the runner toolchain.
+   Independently valuable — done first; it protects every dogfood re-run, not just the
+   release gate.
 
 ## Bucket 3 — cleanups from the same session — DONE (Q296)
 
@@ -98,7 +99,10 @@ After Bucket 1, Phase A collapses to: **push tag → verify.**
 
 ## Sequencing
 
-1. **Q295** — `setup.sh` `workerImage` preserve (small, protects every re-run now).
+1. **Q295** ✅ DONE — `setup.sh` `apply_cr` now preserves the live RunnerTemplate's
+   runner-container image when `DOGFOOD_RUNNER_IMAGE` is unset (reads it back with
+   `kubectl get … -o jsonpath`), instead of resetting it to the image-less default.
+   An idempotent re-run can no longer silently regress the runner toolchain.
 2. **Q293 — Bucket 1** ✅ DONE — `yq` prerelease stamp + a `gh release` compose/create
    step in `publish.yml`. Removed the flip PR and the by-hand Release fixups.
 3. **Q296 — Bucket 3** ✅ DONE — release.md gate-section corrections + narrowed the
