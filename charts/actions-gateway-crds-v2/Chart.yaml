@@ -28,9 +28,10 @@ sources:
 maintainers:
   - name: actions-gateway maintainers
 annotations:
-  # Prerelease cut: Artifact Hub must flag the listing as a prerelease while the
-  # v2 API is alpha. Flip to "false" only when v2 graduates. Mirrors the main
-  # chart's policy (see docs/operations/release.md).
+  # DEV PLACEHOLDER: publish.yml overrides this from the release tag at package
+  # time (Q293), same as the main chart — a 0.x or -rc/-alpha/-beta tag publishes
+  # "true", a stable >=1.0.0 tag "false". Not hand-flipped. See
+  # docs/operations/release.md § Chart version & metadata.
   artifacthub.io/prerelease: "true"
   # CRD-only chart — no controllers, no images.
   artifacthub.io/operator: "false"

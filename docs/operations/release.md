@@ -61,8 +61,11 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   `helm install`, so operators
   `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.
   The `chart-publish` job renders, signs, and uploads it (widening the job to
-  `contents: write`), creating a minimal Release only if the tag has none yet so the
-  maintainer's curated notes are never clobbered.
+  `contents: write`).
+- The **GitHub Release** itself (Q293), composed by `chart-publish`: the five image
+  index digests, the `make verify-release` command, a generated changelog, and a
+  tag-derived `--prerelease` flag. It is created only if the tag has no Release yet,
+  so a maintainer's pre-tag curated notes are never clobbered.
 
 Both the image and chart work are automated by the
 [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on
@@ -218,11 +221,11 @@ A provenance verification failure is the same **stop-ship** signal as a
 ### 4. Record the published digests
 
 `publish.yml` writes each image's immutable `ghcr.io/.../<name>@sha256:…` ref to
-the **run summary** (the "Record published digest" step). These are the
-**multi-arch index digests** — the single ref that serves both amd64 and arm64
-nodes. Copy those five refs (`gmc`, `agc`, `proxy`, `worker`, `wrapper`) —
-operators pin the workload to the digest, not the mutable `vX.Y.Z` tag. You can
-also resolve a digest directly:
+the **run summary** (the "Record published digest" step) **and into the GitHub
+Release notes** (step 5). These are the **multi-arch index digests** — the single
+ref that serves both amd64 and arm64 nodes. Operators pin the workload to the
+digest (`gmc`, `agc`, `proxy`, `worker`, `wrapper`), not the mutable `vX.Y.Z` tag.
+You can also resolve a digest directly:
 
 ```bash
 docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
@@ -231,9 +234,19 @@ docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z \
 
 ### 5. Cut the GitHub Release
 
-Create the GitHub Release for the tag. In the notes, include the five
-`name@sha256:…` digests from step 4 and the `cosign verify` command from step 3,
-so a consumer can verify provenance and pin digests without reading this runbook.
+**`publish.yml` creates the GitHub Release itself** (Q293) — no manual step. The
+`chart-publish` job's "Compose and create the GitHub Release" step writes the body
+with the five `name@sha256:…` **index digests**, the `make verify-release
+VERSION=vX.Y.Z` command, and a generated changelog (previous-tag compare link),
+and sets `--prerelease` from the tag (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒
+prerelease; a stable `≥1.0.0` tag ⇒ latest). So the default flow for this step is:
+**nothing — verify the auto-created Release looks right.**
+
+The step only creates a Release when the tag has **none yet**, so it never
+clobbers curated notes. If you want richer notes (highlights, upgrade caveats),
+**create the Release before pushing the tag** — e.g. `gh release create vX.Y.Z
+--draft --notes-file …` — and the pipeline will leave your body untouched while
+still attaching the signed v2 CRD manifest asset.
 
 ### 6. Chart version & metadata
 
@@ -241,16 +254,17 @@ The `chart-publish` job sets the published chart's `version` and `appVersion` to
 the release tag (with the leading `v` stripped, since chart SemVer forbids it), so
 there is **no manual Chart.yaml version bump** to remember — the in-repo
 `version`/`appVersion` are dev placeholders the pipeline overrides at package time.
-Two things still need a maintainer's eye, in a normal PR (not on the tag):
+The **prerelease annotation is likewise derived from the tag** now, so nothing here
+needs a hand-flip. The remaining items below are one-time setup or guardrails, not
+per-release steps:
 
-- **Prerelease annotation.** [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml)
-  carries `artifacthub.io/prerelease`. **`publish.yml` does not derive this from
-  the tag** — it packages the chart from `charts/actions-gateway/` as is, so the
-  committed value is baked into the published chart at tag time and is immutable
-  once tagged. Keep it `"true"` while cutting `0.x` / `-rc` tags; it was flipped
-  to `"false"` for the `v1.0.0` GA cut (Q98) so Artifact Hub no longer flags the
-  listing as a prerelease. This flip must land in a normal PR **before** the
-  stable tag is pushed.
+- **Prerelease annotation — derived, not hand-flipped (Q293).**
+  [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) carries
+  `artifacthub.io/prerelease`, but its committed value is a **dev placeholder**:
+  `publish.yml` overrides it with `yq` before `helm package`, setting `"true"` for
+  a `0.x` or `-rc`/`-alpha`/`-beta` tag and `"false"` for a stable `≥1.0.0` tag
+  (same test that sets the Release's `--prerelease` flag). There is **no flip PR**
+  to land before or after a cut. The v2 CRD chart is stamped the same way.
 - **Artifact Hub listing.** Discoverability metadata (description, keywords,
   prerelease flag) ships in the chart's own annotations. Ownership verification
   uses [`artifacthub-repo.yml`](../../artifacthub-repo.yml) at the repo root —

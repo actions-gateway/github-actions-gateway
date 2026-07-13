@@ -311,6 +311,20 @@ jobs:
             exit 1
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          # Derive whether this is a prerelease straight from the tag (Q293), so the
+          # chart's artifacthub.io/prerelease annotation and the GitHub Release's
+          # --prerelease flag both flow from one source of truth — no hand-flipped
+          # PR before/after each cut. A tag is a prerelease when its SemVer core is
+          # 0.x (major 0 is pre-1.0 by SemVer) OR it carries a prerelease suffix
+          # (any '-', e.g. -rc.1/-alpha/-beta). Everything else (>=1.0.0, no suffix)
+          # is a stable GA release.
+          version="${tag#v}"
+          if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
+            prerelease=true
+          else
+            prerelease=false
+          fi
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -346,6 +360,7 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           OWNER: ${{ github.repository_owner }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
         run: |
           set -euo pipefail
           # Chart SemVer has no leading 'v'. Derive both chart version and
@@ -353,6 +368,13 @@ jobs:
           # always matches the release — no manual Chart.yaml bump to forget.
           version="${TAG#v}"
           repo="oci://${REGISTRY}/${OWNER}/charts"
+          # Stamp the tag-derived prerelease state into the chart's Artifact Hub
+          # annotation at package time (Q293). yq (mikefarah v4, preinstalled on
+          # ubuntu-latest) writes it as a quoted string via strenv, matching the
+          # committed format. This replaces the hand-flipped prerelease PR — the
+          # in-repo value is now just a dev placeholder the pipeline overrides.
+          yq -i '.annotations["artifacthub.io/prerelease"] = strenv(PRERELEASE)' \
+            charts/actions-gateway/Chart.yaml
           helm package charts/actions-gateway \
             --version "${version}" --app-version "${version}" \
             --destination "${RUNNER_TEMP}"
@@ -377,6 +399,7 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           OWNER: ${{ github.repository_owner }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
         run: |
           set -euo pipefail
           # The opt-in actions-gateway-crds-v2 chart (v2alpha1 CRDs), published
@@ -384,6 +407,9 @@ jobs:
           # Helm release (Q149). Same versioning/sign path as the main chart.
           version="${TAG#v}"
           repo="oci://${REGISTRY}/${OWNER}/charts"
+          # Same tag-derived prerelease stamp as the main chart (Q293).
+          yq -i '.annotations["artifacthub.io/prerelease"] = strenv(PRERELEASE)' \
+            charts/actions-gateway-crds-v2/Chart.yaml
           helm package charts/actions-gateway-crds-v2 \
             --version "${version}" --app-version "${version}" \
             --destination "${RUNNER_TEMP}"
@@ -398,6 +424,65 @@ jobs:
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
           scripts/retry.sh cosign sign --yes "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+      - name: Compose and create the GitHub Release (prerelease-aware, Q293)
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Have publish.yml write the whole Release (Q293) instead of leaving a
+          # minimal, wrong-flag one for a maintainer to fix by hand. The pipeline
+          # already holds every piece of data:
+          #   - the five immutable multi-arch INDEX digests operators pin to,
+          #     resolved straight from the just-pushed tag (never the floating tag
+          #     after the fact) — same ref the "Record published digest" summary
+          #     bullets carry;
+          #   - the one-line `make verify-release` command that checks every
+          #     signature + SLSA provenance;
+          #   - a changelog, via gh's --generate-notes (auto-detects the previous
+          #     tag and appends a compare link after our curated block);
+          # and the tag-derived --prerelease flag so an RC is never mislabelled GA.
+          #
+          # Guard: create ONLY if the tag has no Release yet, so a maintainer who
+          # curated notes ahead of the tag is never clobbered. When absent, this is
+          # the authoritative create; the v2-CRD asset step below only uploads.
+          if gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
+            echo "release ${TAG} already exists; leaving its notes and flags untouched"
+            exit 0
+          fi
+          notes="${RUNNER_TEMP}/release-notes.md"
+          {
+            printf '## Container images\n\n'
+            printf 'Pin these immutable multi-arch index digests (not the floating `%s` tag):\n\n' "${TAG}"
+          } > "${notes}"
+          for name in gmc agc proxy worker wrapper; do
+            image="${REGISTRY}/${OWNER}/${name}"
+            # The index digest — the ref that serves both amd64 and arm64. For a
+            # multi-arch tag, imagetools' top-level .Manifest is the index descriptor.
+            digest="$(docker buildx imagetools inspect "${image}:${TAG}" \
+              --format '{{.Manifest.Digest}}')"
+            if [[ "${digest}" != sha256:* ]]; then
+              echo "could not resolve index digest for ${image}:${TAG}" >&2
+              exit 1
+            fi
+            printf -- '- **%s** — `%s@%s`\n' "${name}" "${image}" "${digest}" >> "${notes}"
+          done
+          {
+            printf '\n## Verify\n\n'
+            printf 'Verify every image + chart signature and the SLSA build provenance:\n\n'
+            printf '    make verify-release VERSION=%s\n' "${TAG}"
+          } >> "${notes}"
+          # --prerelease only when the tag says so; gh otherwise auto-marks a
+          # stable SemVer tag as "latest".
+          extra=()
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            extra+=(--prerelease)
+          fi
+          gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" \
+            --notes-file "${notes}" --generate-notes "${extra[@]}"
       - name: Render, sign, and attach the v2 CRD manifest to the release (keyless, Q276)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -423,9 +508,11 @@ jobs:
             --namespace gmc-system > "${out}"
           scripts/retry.sh cosign sign-blob --yes \
             --bundle "${out}.cosign.bundle" "${out}"
-          # Attach without clobbering the release manager's curated notes: create a
-          # minimal release only if the tag has none yet, then upload (replacing a
-          # prior same-named asset so a re-publish is idempotent).
+          # The preceding step already created the Release with full notes; this is
+          # a defensive fallback (create a minimal one only if the tag somehow still
+          # has none) so the asset upload can't fail on a missing Release. Uploading
+          # with --clobber replaces a prior same-named asset, keeping re-publish
+          # idempotent, and never touches curated notes.
           if ! gh release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
             gh release create "${TAG}" --repo "${REPO}" --title "${TAG}" --generate-notes
           fi

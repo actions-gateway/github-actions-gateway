@@ -25,9 +25,10 @@ sources:
 maintainers:
   - name: actions-gateway maintainers
 annotations:
-  # GA cut (v1.1.0): the 1.1.0 line is graduating to stable, so Artifact Hub must
-  # not flag the listing as a prerelease. Flip back to "true" before the next
-  # 0.x / -rc tag (see docs/operations/release.md § Chart version & metadata).
-  # publish.yml packages the chart from this dir as is, so this annotation is
-  # baked into the published chart at tag time.
+  # This committed value is a DEV PLACEHOLDER only. publish.yml derives the real
+  # prerelease state from the release tag at package time (Q293) — 0.x or a
+  # -rc/-alpha/-beta suffix ⇒ "true", a stable >=1.0.0 tag ⇒ "false" — and
+  # overrides this annotation with `yq` before `helm package`, so there is no
+  # hand-flipped prerelease PR to remember. See docs/operations/release.md
+  # § Chart version & metadata.
   artifacthub.io/prerelease: "false"
