@@ -9,10 +9,12 @@ name: license-notices
 # removed, or bumped without re-running `make third-party-notices`). Mirrors the
 # changes+validate shape of manifest-validate.yml.
 on:
+  # No pull_request path filter: this workflow must trigger on EVERY PR so its
+  # `gate` job always reports its required-status check (a path-skipped workflow
+  # leaves the required check Pending and wedges the merge). Fine-grained
+  # skipping happens inside via the `changes` job — see
+  # docs/plan/required-status-checks.md.
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   push:
     branches: [main]
     paths-ignore:
@@ -62,3 +64,27 @@ jobs:
       # awk/find/diff. The single source of truth for the gate is the make target.
       - name: verify THIRD-PARTY-NOTICES is current
         run: make third-party-notices-check
+
+  # Aggregate required-status gate. Mark THIS job's check context
+  # (`license-notices / gate`) required in the branch ruleset — never the
+  # path-gated jobs above, because a path-skip leaves them Pending and blocks the
+  # merge forever. Passes only when every needed job succeeded or was
+  # legitimately skipped. See docs/plan/required-status-checks.md.
+  gate:
+    needs: [changes, check]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: require every gating job to have succeeded or skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "needed job results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a gating job concluded '${r}'"; exit 1 ;;
+            esac
+          done

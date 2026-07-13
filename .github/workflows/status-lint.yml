@@ -1,10 +1,11 @@
 name: status-lint
 on:
+  # No pull_request path filter: this workflow must trigger on EVERY PR so its
+  # `gate` job always reports its required-status check. A workflow skipped by a
+  # top-level path filter leaves its required check Pending, which blocks the
+  # merge forever. Fine-grained skipping moved inside to the `changes` job below.
+  # See docs/plan/required-status-checks.md.
   pull_request:
-    paths:
-      - 'docs/STATUS.md'
-      - 'scripts/lint-backlog.sh'
-      - '.github/workflows/status-lint.yml'
   push:
     branches: [main]
     paths:
@@ -20,10 +21,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Fine-grained path gate. The workflow now triggers on every PR (so `gate` can
+  # be a required check), so classify the diff here and skip lint-status when
+  # nothing it covers changed. On push to main the job always runs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      status: ${{ steps.filter.outputs.status }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        id: filter
+        with:
+          filters: |
+            status:
+              - 'docs/STATUS.md'
+              - 'scripts/lint-backlog.sh'
+              - '.github/workflows/status-lint.yml'
+
   lint-status:
+    needs: [changes]
+    if: needs.changes.outputs.status == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: lint docs/STATUS.md format
         run: scripts/lint-backlog.sh
+
+  # Aggregate required-status gate. Mark THIS job's check context
+  # (`status-lint / gate`) required in the branch ruleset — never the path-gated
+  # lint-status job, because a path-skip leaves it Pending and blocks the merge
+  # forever. Passes only when every needed job succeeded or was legitimately
+  # skipped. See docs/plan/required-status-checks.md.
+  gate:
+    needs: [changes, lint-status]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: require every gating job to have succeeded or skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "needed job results: ${RESULTS}"
+          for r in ${RESULTS}; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a gating job concluded '${r}'"; exit 1 ;;
+            esac
+          done
