@@ -523,6 +523,16 @@ jobs:
           done
           echo "=== events (last 200) ==="
           kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -200
+          echo
+          echo "=== CNI dataplane health (Q300: a starved kube-network-policies enforcer"
+          echo "    times out allowed traffic and leaves fresh NetworkPolicies unenforced) ==="
+          kubectl get pods -n kube-system -l app=kindnet -o wide
+          for pod in $(kubectl get pods -n kube-system -l app=kindnet -o name); do
+            echo "--- ${pod} cpu.stat (nr_throttled/nr_periods = CFS throttle ratio) ---"
+            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/cpu.stat
+          done
+          echo "--- kindnet logs (NetworkPolicy programming/verdict lag shows here) ---"
+          kubectl logs -n kube-system -l app=kindnet --tail=100 --prefix
 
       - name: Delete kind cluster
         if: always()
