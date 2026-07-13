@@ -460,7 +460,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-junit-report-${{ inputs.kind_cni }}
-          path: /tmp/e2e-report.xml
+          # Matches the repo-local report path in the root Makefile's `e2e` target.
+          path: tmp/e2e-report.xml
 
       - name: Collect diagnostic info on failure
         # Also fire on cancellation so a manually-cancelled run still produces
