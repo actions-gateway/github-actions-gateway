@@ -164,6 +164,15 @@ controller left to clear them — the namespaces never finish deleting and the
 next run's BeforeAll `create namespace` collides. CI is unaffected (fresh
 cluster per run); filed as its own Queue item for the local iteration loop.
 
+**Resolved (Q301):** the AfterSuite now drains tenant namespaces before
+`make undeploy`. `drainTenantNamespaces` (in
+[`cmd/gmc/test/e2e/e2e_suite_test.go`](../../cmd/gmc/test/e2e/e2e_suite_test.go))
+deletes every namespace carrying the `actions-gateway.github.com/tenant` marker
+and waits (bounded, best-effort) for them to finish terminating while the
+GMC/AGC controllers are still up, so the finalizers clear before the controllers
+are torn down. A back-to-back local re-run's BeforeAll no longer collides on a
+pre-existing Terminating namespace.
+
 ## Recurrence guard
 
 Same rule as Q291: this reproduces only under CI load, so **one green run
