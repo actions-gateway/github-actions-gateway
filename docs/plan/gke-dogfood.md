@@ -1334,7 +1334,7 @@ gh api /repos/"$REPO"/actions/runners \
 > ✅ (no `timeout-minutes: 10` lapse — the 6-node headroom removed the CPU saturation),
 > `integration-test` ✅ (no envtest `context canceled`). Worker pods reaped
 > `phase: Succeeded` (runners exited 0). **Q224 is CLOSED; [Q264](../STATUS.md#Q264) P4
-> fully validated; P5 UNBLOCKED; [Q242](../STATUS.md#Q242) concurrent-green achieved.**
+> fully validated; P5 UNBLOCKED; [Q242](archive/q242-g1-proxy-destination-allowlist.md) concurrent-green achieved.**
 > Evidence: AGC debug logs (`agc:e2e-2025557`, scaleSetID 5), runs
 > `28759754797`/`28759755655` (burst `00:11:30Z`, sha `2025557`).
 >
@@ -1479,7 +1479,7 @@ gh api /repos/"$REPO"/actions/runners \
 > `destinationCIDRs` is no substitute for `proxy.golang.org`/`sum.golang.org`
 > (Google-fronted ⇒ a CIDR allowlist opens all of Google's frontend). The FQDN
 > intent/mechanism split (Q245) remains open. Detail + provider matrix:
-> [Q242 plan § Provider FQDN-egress fragmentation](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
+> [Q242 plan § Provider FQDN-egress fragmentation](archive/q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
 
 ---
 

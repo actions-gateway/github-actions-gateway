@@ -39,12 +39,12 @@ below). Guarantees previously marked **(to be validated)** are now validated,
 except the wildcard-blob 50-IP ceiling, which remains unstressed.
 
 Tracks Q245 (shipped + validated). A v2beta1 (Q74) input
-alongside [Q242](../STATUS.md#Q242) / [Q243](../STATUS.md#Q243). **Note (2026-07-06):
+alongside [Q242](archive/q242-g1-proxy-destination-allowlist.md) / [Q243](../STATUS.md#Q243). **Note (2026-07-06):
 `egressPolicyMode` has already graduated into `v2beta1` (served + storage) via
 Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs
 a compatible-superset + conversion path (see [Migration](#migration--compatibility)).**
 Promoted from the
-[Q242 plan § Provider FQDN-egress fragmentation](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
+[Q242 plan § Provider FQDN-egress fragmentation](archive/q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding).
 
 ---
 
@@ -75,7 +75,7 @@ wantCalico := managed && mode == gmcv2alpha1.EgressPolicyModeCalicoFQDN
 ```
 
 Three problems, all surfaced by the Q242 dogfood turn-on
-([Q242 finding](q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding)):
+([Q242 finding](archive/q242-g1-proxy-destination-allowlist.md#provider-fqdn-egress-fragmentation-post-implementation-finding)):
 
 1. **The per-CNI enum doesn't scale, and it leaks platform detail into the
    tenant API.** A tenant authors `EgressProxy` — a tenant should not have to

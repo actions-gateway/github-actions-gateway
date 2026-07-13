@@ -30,7 +30,7 @@ inline below:
   source). Corrected in [Approach B](#approach-b--per-tenant-cloud-nat).
 
 Tracks [Q243](../STATUS.md#Q243). A v2beta1 (Q74) blocker
-alongside Q224 and [Q242](../STATUS.md#Q242).
+alongside Q224 and [Q242](archive/q242-g1-proxy-destination-allowlist.md).
 
 ---
 
@@ -97,7 +97,7 @@ What exists in the repo today, so the delta is precise:
 |---|---|---|
 | **Per-tenant proxy pool** | GMC provisions a per-tenant `EgressProxy` (Deployment + ClusterIP Service + HPA + PDB + pod anti-affinity) in the tenant namespace. Stateless HTTPS `CONNECT` forwarders; no TLS termination. | [§2.3](../design/02-architecture.md#23-tier-3--egress-proxy-pool), `cmd/gmc/internal/controller/egressproxy_builder.go` |
 | **Choke-point enforcement** | Three per-tenant `NetworkPolicy` objects: workload pods egress only to the proxy + DNS; proxy egresses only to GitHub CIDRs + DNS; AGC-only rule for the K8s API. Worker pods cannot egress to GitHub directly. | [network-architecture.md](../design/network-architecture.md#networkpolicy-rules) |
-| **Destination allowlist** | [Q242 G.1](q242-g1-proxy-destination-allowlist.md): admin-gated `destinationFQDNs`/`destinationCIDRs` on the `EgressProxy` widen the choke point to a small non-GitHub set without forfeiting attribution. | [q242-g1](q242-g1-proxy-destination-allowlist.md) |
+| **Destination allowlist** | [Q242 G.1](archive/q242-g1-proxy-destination-allowlist.md): admin-gated `destinationFQDNs`/`destinationCIDRs` on the `EgressProxy` widen the choke point to a small non-GitHub set without forfeiting attribution. | [q242-g1](archive/q242-g1-proxy-destination-allowlist.md) |
 | **FQDN egress (opt-in)** | Q208 `egressPolicyMode: CiliumFQDN`/`CalicoFQDN` express the GitHub allowlist by hostname on DNS-aware CNIs. GKE Dataplane V2's managed Cilium lacks the `CiliumNetworkPolicy` CRD, so `CiliumFQDN` is unusable there (fail-closed). | [network-architecture.md](../design/network-architecture.md#cni-native-fqdn-egress-mode-opt-in-q208-q245) |
 | **Source-IP binding (egress IP)** | **None.** No component assigns a per-tenant source IP; proxy egress SNATs to the node's cloud egress IP, shared across tenants and unstable across reschedules. | *(this gap)* |
 | **Dogfood posture** | Single-tenant, **direct egress** — no `EgressProxy`, workers egress straight to GitHub behind the default-deny NetworkPolicy. No per-tenant egress isolation is exercised. | [gke-dogfood.md](gke-dogfood.md) |
@@ -570,7 +570,7 @@ own Queue row when a session picks it up and a cloud spike is scheduled.
 - [02-architecture.md §2.3](../design/02-architecture.md#23-tier-3--egress-proxy-pool) — Tier-3 proxy pool
 - [network-architecture.md](../design/network-architecture.md) — NetworkPolicy topology + FQDN modes
 - [worker-egress-proxy.md](worker-egress-proxy.md) — why worker traffic routes through the proxy
-- [q242-g1-proxy-destination-allowlist.md](q242-g1-proxy-destination-allowlist.md) — destination allowlist
+- [q242-g1-proxy-destination-allowlist.md](archive/q242-g1-proxy-destination-allowlist.md) — destination allowlist
 - [gke-dogfood.md](gke-dogfood.md) — single-tenant-direct dogfood posture
 - [Cilium Egress Gateway docs](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/)
 - [GCP Cloud NAT — IP addresses and ports](https://docs.cloud.google.com/nat/docs/ports-and-addresses)

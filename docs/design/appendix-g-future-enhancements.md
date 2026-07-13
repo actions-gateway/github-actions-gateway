@@ -41,7 +41,7 @@ the allowlist for what a mirror can't proxy.
   (Worker Exfiltration via an Allowlisted Non-GitHub Destination).
 - Network shape: [network-architecture.md § Worker egress to allowlisted non-GitHub destinations](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1).
 - Operator runbook: [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist).
-- Full design + deliverables: [Q242 plan](../plan/q242-g1-proxy-destination-allowlist.md).
+- Full design + deliverables: [Q242 plan](../plan/archive/q242-g1-proxy-destination-allowlist.md).
 
 **Related security finding.** [docs/plan/security.md](../plan/security.md)
 M-2.

@@ -1,13 +1,15 @@
 # Q242 — G.1 Proxy-Enforced Destination Allowlist (worker dependency egress)
 
-> **Status: APPROVED — v2beta1 blocker [Q242](../STATUS.md). Deliverables 1–6
-> shipped (#460 CRD fields, #461 proxy CONNECT check, #462 GMC injection, #463
-> platform allowlist + admission webhook, and the design/operator docs).
-> Deliverable 7 (the GKE dogfood turn-on that closes Q224) was performed 2026-07-01:
-> every CI job runs green on `gag-ci` individually and Q246/Q247 hold, but the
-> *concurrent* full CI matrix is blocked by an AGC agent-pool recycling issue under
-> burst load (Q259), so Q242 and Q224 stay open. See deliverable 7 below.** This
-> promotes [Appendix G.1](../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
+> **Status: DONE (closed 2026-07-12). All deliverables shipped: #460 CRD fields,
+> #461 proxy CONNECT check, #462 GMC injection, #463 platform allowlist + admission
+> webhook, and the design/operator docs. Deliverable 7 (dogfood turn-on) is moot —
+> Q224 was ultimately closed via the ScaleSet-default acquisition path (Q264 P4,
+> #545), and on the direct-egress dogfood the Q242 allowlist is a designed no-op
+> (the mirror-first Athens cache, Q244, is the path used there). The Q259 burst
+> concurrency blocker that once held this open is resolved. The remaining
+> per-tenant egress-IP *attribution* validation is not a Q242 deliverable; it is
+> carried by [Q243](../../STATUS.md#Q243) (egress-IP reference architecture).** This
+> promotes [Appendix G.1](../../design/appendix-g-future-enhancements.md#g1-proxy-enforced-destination-allowlist)
 > (tracked under the non-committed Q19 bundle) to committed work, because it is
 > the attribution-preserving answer to the single most common operator ask:
 > letting CI jobs reach their build dependencies (package registries, module
@@ -36,12 +38,12 @@ to demonstrate, or widening the CIDR allowlist, which erodes it).
 
 ## Background — why this isn't built yet
 
-The egress proxy ([`cmd/proxy/proxy.go`](../../cmd/proxy/proxy.go)) is a
+The egress proxy ([`cmd/proxy/proxy.go`](../../../cmd/proxy/proxy.go)) is a
 deliberately **transport-only** HTTPS `CONNECT` tunneler: `handleConnect`
 (proxy.go:309) dials `r.Host` (proxy.go:320) with no inspection. Destination
 policy lives entirely in the proxy pod's egress `NetworkPolicy`
 (`buildEgressProxyNetworkPolicy`,
-[`egressproxy_builder.go:308`](../../cmd/gmc/internal/controller/egressproxy_builder.go)),
+[`egressproxy_builder.go:308`](../../../cmd/gmc/internal/controller/egressproxy_builder.go)),
 which permits 443 only to the GitHub CIDR feed (or, under Q208, the GitHub
 FQDNs). Appendix G left a proxy-side allowlist out for two reasons: a single
 policy surface (NetworkPolicy) is simpler to reason about, and a byte-forwarding
@@ -53,7 +55,7 @@ This design keeps that spirit by deriving **both** surfaces from **one** field
 ## Approach
 
 Add one field to `EgressProxySpec`
-([`api/v2alpha1/egressproxy_types.go`](../../api/v2alpha1/egressproxy_types.go)),
+([`api/v2alpha1/egressproxy_types.go`](../../../api/v2alpha1/egressproxy_types.go)),
 alongside the existing `egressPolicyMode` / `managedNetworkPolicy` / `noProxyCIDRs`:
 
 **Two destination forms** — host suffixes (DNS names) **and** CIDR blocks — because
@@ -128,15 +130,15 @@ Two enforcement surfaces, one source of truth:
    proxy pod's egress policy:
    - **Host suffixes** → `toFQDNs` / destination-domains, which **requires** a
      CNI-native FQDN `egressPolicyMode` (`CiliumFQDN` / `CalicoFQDN`, already built
-     for Q208 — [`egressproxy_fqdn.go`](../../cmd/gmc/internal/controller/egressproxy_fqdn.go)).
+     for Q208 — [`egressproxy_fqdn.go`](../../../cmd/gmc/internal/controller/egressproxy_fqdn.go)).
    - **CIDRs** → native `ipBlock` peers on the standard NetworkPolicy
-     ([`buildEgressProxyNetworkPolicy`](../../cmd/gmc/internal/controller/egressproxy_builder.go),
+     ([`buildEgressProxyNetworkPolicy`](../../../cmd/gmc/internal/controller/egressproxy_builder.go),
      same shape as the GitHub-CIDR rule) or Cilium `toCIDR` in FQDN mode — so CIDRs
      work in **every** mode, no DNS-aware CNI needed.
    If the CNI can't enforce, egress stays denied (fail-closed, same Q208 guarantee).
 2. **Proxy CONNECT check (defense-in-depth).** The GMC passes the proxy the
    **full** permitted set via two env vars — `PROXY_ALLOWED_HOST_SUFFIXES` and
-   `PROXY_ALLOWED_CIDRS` (read in [`cmd/proxy/main.go`](../../cmd/proxy/main.go)
+   `PROXY_ALLOWED_CIDRS` (read in [`cmd/proxy/main.go`](../../../cmd/proxy/main.go)
    into `Server.AllowedHostSuffixes` / `Server.AllowedCIDRs`). The full set is the
    implicit GitHub hostnames **plus** the operator's `destinationFQDNs`
    (host-suffix env) and `destinationCIDRs` (CIDR env); GitHub is carried as host
@@ -158,7 +160,7 @@ Two enforcement surfaces, one source of truth:
 
 Worker traffic already flows through the proxy for proxied tenants — the AGC
 provisioner injects `HTTPS_PROXY` into worker containers
-([`provisioner.go:1143`](../../cmd/agc/internal/provisioner/provisioner.go)) — so
+([`provisioner.go:1143`](../../../cmd/agc/internal/provisioner/provisioner.go)) — so
 no worker-side change is needed; this only widens what that proxy will carry.
 
 ## Security posture (secure-by-default)
@@ -332,10 +334,10 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    **(Done:** `allowlist.EgressDestinationAllowlist` + `EgressDestinationAllowlistReconciler`
    + `EgressProxyCustomValidator`; chart flags/ConfigMap/Role wiring; envtest admission
    tests. Operator how-to in `security-operations.md` shipped with this deliverable.**)**
-5. Docs: [`05-security.md`](../design/05-security.md) (threat-model row + the
+5. Docs: [`05-security.md`](../../design/05-security.md) (threat-model row + the
    trade-offs above + move G.1 out of Appendix G),
-   [`network-architecture.md`](../design/network-architecture.md),
-   [`security-operations.md`](../operations/security-operations.md) (operator
+   [`network-architecture.md`](../../design/network-architecture.md),
+   [`security-operations.md`](../../operations/security-operations.md) (operator
    how-to for the allowlist flags/ConfigMap **that leads with the in-cluster-mirror
    recommendation** and presents the allowlist as the escape hatch — required, not
    a footnote; include per-ecosystem mirror pointers: Athens/Verdaccio/registry
@@ -387,7 +389,7 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    concurrency / agent-pool recycling issue under burst load** (Q247/Q249/Q254 family),
    tracked as **Q259** — **not** node capacity (Q248) and **not** a Q242/Q246 defect.
    Evidence: run 28513106734 (unit-test.yml), run 28510907609 (integration-test.yml);
-   full diagnosis in the [GKE dogfood runbook](gke-dogfood.md). Until Q259 is fixed,
+   full diagnosis in the [GKE dogfood runbook](../gke-dogfood.md). Until Q259 is fixed,
    Q224's "route production CI green" is not met, so **Q224 and this deliverable stay
    open**. First run also hit a one-off **spot-VM preemption** (transient) — the
    `workers` pool is spot.
