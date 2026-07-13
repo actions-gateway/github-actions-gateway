@@ -448,6 +448,18 @@ func applyPodSchedulingV2(pod *corev1.PodSpec, s *gmcv2alpha1.PodScheduling) {
 	if s.Affinity != nil {
 		pod.Affinity = s.Affinity.DeepCopy()
 	}
+	if len(s.TopologySpreadConstraints) > 0 {
+		pod.TopologySpreadConstraints = make([]corev1.TopologySpreadConstraint, len(s.TopologySpreadConstraints))
+		for i, c := range s.TopologySpreadConstraints {
+			c.DeepCopyInto(&pod.TopologySpreadConstraints[i])
+		}
+	}
+	// priorityClassName is a bare string; the empty default leaves the AGC pod
+	// unprioritized. The name is gated at admission against the infra-only allowlist
+	// (--allowed-infra-priority-classes, Q284).
+	if s.PriorityClassName != "" {
+		pod.PriorityClassName = s.PriorityClassName
+	}
 }
 
 // credentialEnvV2 returns the AGC environment that selects and configures the

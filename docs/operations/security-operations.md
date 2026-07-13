@@ -796,10 +796,10 @@ A per-tenant egress IP is realized *below* Kubernetes: a node pool whose egress 
 that IP. So the pod's **node** decides which IP its traffic leaves by, and pinning
 the tenant's proxy pool to the tenant's node pool is what binds the two.
 
-`EgressProxy.spec.scheduling` carries the standard `nodeSelector`, `tolerations`, and
-`affinity`; `ActionsGateway.spec.scheduling` does the same for the AGC control-plane
-pod. (Worker pods have always had the full surface via
-`RunnerTemplate.spec.podTemplate`.)
+`EgressProxy.spec.scheduling` carries the standard `nodeSelector`, `tolerations`,
+`affinity`, `topologySpreadConstraints`, and `priorityClassName`;
+`ActionsGateway.spec.scheduling` does the same for the AGC control-plane pod. (Worker
+pods have always had the full surface via `RunnerTemplate.spec.podTemplate`.)
 
 ```yaml
 apiVersion: actions-gateway.com/v2beta1
@@ -845,7 +845,32 @@ spec:
 — or set `minReplicas: 1`. A soft spread (`preferredDuringScheduling…`) is the middle
 ground: it prefers distinct nodes but still schedules on a one-node pool.
 
-> **Placement is CR-author-settable, by design.** These fields are not gated by a
+**Spreading across zones: `topologySpreadConstraints`.** For zonal (or any
+failure-domain) spread, use `spec.scheduling.topologySpreadConstraints` — the modern
+successor to the cross-node `podAntiAffinity`, able to express "spread across zones,
+tolerate a skew of 1" that anti-affinity cannot:
+
+```yaml
+spec:
+  scheduling:
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels: { app: proxy }
+```
+
+Unlike `affinity`, this field **composes** with the built-in cross-node
+anti-affinity — it never replaces it. `podAntiAffinity: {}` stays the single opt-out
+for the built-in cross-node spread; `topologySpreadConstraints` adds a second axis on
+top. **The `Pending` trap:** a *soft* zonal spread (`whenUnsatisfiable:
+ScheduleAnyway`) still inherits the *required* built-in cross-node anti-affinity, so
+replicas beyond the pinned pool's node count strand in `Pending` — the same escapes
+apply (`podAntiAffinity: {}`, or lower `minReplicas`).
+
+> **These placement fields are CR-author-settable, by design.** `nodeSelector`,
+> `tolerations`, `affinity`, and `topologySpreadConstraints` are not gated by a
 > platform allowlist. Choosing an egress path is a feature — tenants should not have
 > to share a rate limit or a block radius — and worker pods have always been able to
 > do it. The consequence: if you attribute traffic by source IP and do not fully trust
@@ -855,6 +880,20 @@ ground: it prefers distinct nodes but still schedules on a one-node pool.
 > by **mutation** is sound, because Kubernetes ANDs it with `nodeAffinity`. Ready-to-apply
 > Kyverno and Gatekeeper samples:
 > [admission-policies.md § Governing where GAG pods schedule](admission-policies.md#governing-where-gag-pods-schedule).
+>
+> **`priorityClassName` is the exception — it *is* gated** (see below). It is a
+> cluster-wide, cross-tenant preemption lever, not a choice about the tenant's own
+> traffic, so it sits behind its own allowlist.
+
+**Prioritizing infra pods: `priorityClassName` (gated).** An evicted proxy pod takes
+that tenant's *entire egress path* down; an evicted AGC pod takes that tenant's
+control plane down. `spec.scheduling.priorityClassName` raises these infra pods above
+best-effort workloads under node pressure. Because a `PriorityClass` is a cluster-wide
+preemption lever — and `system-*` classes are nameable from *any* namespace, not just
+`kube-system` — this field is gated against a **separate, infra-only** allowlist
+(`--allowed-infra-priority-classes`) that must stay **disjoint** from the worker
+allowlist. See
+[Priority classes: the two allowlists](#priority-classes-the-allowed-priority-classes-allowlist).
 
 The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives,
 cost model, and the live-validated GKE recipe — is in the
@@ -1215,6 +1254,50 @@ declare privileged containers.
 There is deliberately no tenant-settable per-tier `preemptionPolicy` field;
 preemption is governed entirely by the platform-created `PriorityClass` object.
 See [§5.2 — Cross-Tenant Pod Preemption via PriorityClass](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped).
+
+### Infra pods: the separate `allowed-infra-priority-classes` allowlist
+
+`EgressProxy.spec.scheduling.priorityClassName` and
+`ActionsGateway.spec.scheduling.priorityClassName` prioritize the **infra** pods — the
+proxy pool and the AGC control plane — and are gated by a **second, infra-only**
+allowlist, `--allowed-infra-priority-classes` (chart:
+`allowedInfraPriorityClasses`). It behaves exactly like the worker allowlist
+(comma-separated names, empty-forbids-all secure default, unset name always admitted),
+but it is a **distinct set that must never intersect the worker allowlist**.
+
+**Why not one allowlist.** Infra pods need to sit *above* workers — that is the whole
+point of prioritizing them. If you reused `--allowed-priority-classes` and added a
+high, preempting class so an `EgressProxy` could name it, that same class would become
+nameable from a **worker** pod (`RunnerTemplate.podTemplate.spec.priorityClassName`).
+Any tenant could then lift its *workers* to infra priority and **preempt other
+tenants' proxy pods** — the gate meant to protect the proxy becomes the mechanism for
+evicting it. The two allowlists exist precisely so an infra class is unreachable from
+any worker surface.
+
+**The GMC enforces disjointness at startup.** If a class appears in both
+`--allowed-priority-classes` and `--allowed-infra-priority-classes`, the GMC **refuses
+to boot** — converting a silent priority inversion into a loud configuration error.
+Keep the two sets separate; a good convention is an `infra-` name prefix.
+
+```yaml
+# GMC Deployment / Helm values — args on the controller-manager container
+args:
+  - --allowed-priority-classes=runner-standard,runner-opportunistic
+  - --allowed-infra-priority-classes=gag-infra-critical   # DISJOINT from the above
+```
+
+Create the infra class with a value **above** the worker classes so the scheduler
+keeps infra pods when a node is contended:
+
+```yaml
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: gag-infra-critical
+value: 1000000000            # well above the runner-* classes
+preemptionPolicy: Never      # order ahead without evicting others, unless you mean to
+description: "GAG per-tenant egress proxy and AGC control-plane pods."
+```
 
 ### Upgrading: previously ungated `priorityClassName` fields are now gated
 

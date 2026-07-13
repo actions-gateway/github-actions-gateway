@@ -100,7 +100,8 @@ func validateEgressDestinations(spec *agcv2alpha1.EgressProxySpec, list *allowli
 
 // EgressProxyCustomValidator validates the namespaced, tenant-authorable EgressProxy
 // data kind, gating its destinationFQDNs/destinationCIDRs against the platform-owned
-// egress allowlist (Q242 G.1).
+// egress allowlist (Q242 G.1) and its spec.scheduling.priorityClassName against the
+// infra-only PriorityClass allowlist (Q284).
 //
 // +kubebuilder:object:generate=false
 type EgressProxyCustomValidator struct {
@@ -111,6 +112,11 @@ type EgressProxyCustomValidator struct {
 	// --fqdn-policy-backend flag). The secure default (none) rejects FQDN intent at
 	// admission (Q245).
 	FQDNBackend controller.FQDNBackend
+	// InfraPriorityClasses is the infra-only PriorityClass allowlist
+	// (--allowed-infra-priority-classes, Q284), disjoint from the worker allowlist. A
+	// nil allowlist forbids every named class (the secure default), so only an
+	// empty/unset spec.scheduling.priorityClassName passes.
+	InfraPriorityClasses *allowlist.PriorityClassAllowlist
 }
 
 // validate runs the shared admission checks for both create and update: it reject an
@@ -126,6 +132,9 @@ func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, 
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
+		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+	}
+	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	return warnings, nil
@@ -149,12 +158,12 @@ func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2a
 }
 
 // SetupEgressProxyWebhookWithManager registers the validating webhook for the
-// EgressProxy data kind, wired to the shared platform egress allowlist and the cluster's
-// FQDN egress backend. The manager's scheme must already include agcv2alpha1 (the GMC
-// registers it at startup).
-func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend) error {
+// EgressProxy data kind, wired to the shared platform egress allowlist, the cluster's
+// FQDN egress backend, and the infra-only PriorityClass allowlist (Q284). The manager's
+// scheme must already include agcv2alpha1 (the GMC registers it at startup).
+func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend, infraPriorityClasses *allowlist.PriorityClassAllowlist) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.EgressProxy{}).
-		WithValidator(&EgressProxyCustomValidator{Allowlist: list, FQDNBackend: backend}).
+		WithValidator(&EgressProxyCustomValidator{Allowlist: list, FQDNBackend: backend, InfraPriorityClasses: infraPriorityClasses}).
 		Complete(); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}

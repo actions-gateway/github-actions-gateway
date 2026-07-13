@@ -62,6 +62,8 @@ func TestEgressProxyScheduling_NoneSetPreservesBuiltInAntiAffinity(t *testing.T)
 	assert.Nil(t, pod.Affinity.NodeAffinity)
 	assert.Nil(t, pod.NodeSelector)
 	assert.Nil(t, pod.Tolerations)
+	assert.Nil(t, pod.TopologySpreadConstraints)
+	assert.Empty(t, pod.PriorityClassName)
 }
 
 // TestEgressProxyScheduling_NodeSelectorAndTolerationsPassThrough is the Q243
@@ -176,6 +178,64 @@ func TestEgressProxyScheduling_DoesNotAliasSpec(t *testing.T) {
 		ep.Spec.Scheduling.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions[0].Values[0])
 }
 
+// zonalSpread is a representative soft cross-zone topologySpreadConstraint: "spread
+// replicas across zones, tolerate a skew of 1, schedule anyway if unsatisfiable".
+func zonalSpread() corev1.TopologySpreadConstraint {
+	return corev1.TopologySpreadConstraint{
+		MaxSkew:           1,
+		TopologyKey:       "topology.kubernetes.io/zone",
+		WhenUnsatisfiable: corev1.ScheduleAnyway,
+		LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{"app": proxyAppName}},
+	}
+}
+
+// TestEgressProxyScheduling_TopologySpreadComposesWithBuiltInAntiAffinity is the Q284
+// composition rule: topologySpreadConstraints lands on the pod verbatim AND the
+// built-in required cross-node anti-affinity survives — the field composes with the
+// invariant, it does not replace it (unlike a supplied podAntiAffinity).
+func TestEgressProxyScheduling_TopologySpreadComposesWithBuiltInAntiAffinity(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
+		}
+	})
+	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+
+	require.Len(t, pod.TopologySpreadConstraints, 1)
+	assert.Equal(t, "topology.kubernetes.io/zone", pod.TopologySpreadConstraints[0].TopologyKey)
+
+	// The built-in cross-node spread is NOT dropped: composition, not replacement.
+	require.NotNil(t, pod.Affinity)
+	require.NotNil(t, pod.Affinity.PodAntiAffinity)
+	assert.Len(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, 1)
+}
+
+// TestEgressProxyScheduling_PriorityClassNamePassThrough: a spec.scheduling
+// priorityClassName lands on the proxy pod verbatim (admission gates the value; the
+// builder is an unconditional pass-through).
+func TestEgressProxyScheduling_PriorityClassNamePassThrough(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{PriorityClassName: "gag-infra-critical"}
+	})
+	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+	assert.Equal(t, "gag-infra-critical", pod.PriorityClassName)
+}
+
+// TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec guards the informer-object
+// invariant for the new slice field.
+func TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
+		}
+	})
+	pod := buildEgressProxyDeployment(ep, "proxy:v1").Spec.Template.Spec
+
+	pod.TopologySpreadConstraints[0].TopologyKey = "MUTATED"
+	assert.Equal(t, "topology.kubernetes.io/zone",
+		ep.Spec.Scheduling.TopologySpreadConstraints[0].TopologyKey)
+}
+
 // TestAGCScheduling_PassThrough: the AGC pod has no built-in affinity, so the whole
 // block applies verbatim.
 func TestAGCScheduling_PassThrough(t *testing.T) {
@@ -195,6 +255,27 @@ func TestAGCScheduling_PassThrough(t *testing.T) {
 	assert.Nil(t, pod.Affinity.PodAntiAffinity, "AGC has no built-in anti-affinity to compose with")
 }
 
+// TestAGCScheduling_TopologySpreadAndPriorityClassPassThrough: the two Q284 fields land
+// on the AGC pod verbatim. The AGC has no built-in anti-affinity, so there is nothing to
+// compose with — topologySpreadConstraints applies as given.
+func TestAGCScheduling_TopologySpreadAndPriorityClassPassThrough(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+		TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
+		PriorityClassName:         "gag-infra-critical",
+	}
+	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2alpha1.SecurityProfileBaseline, nil).Spec.Template.Spec
+
+	require.Len(t, pod.TopologySpreadConstraints, 1)
+	assert.Equal(t, "topology.kubernetes.io/zone", pod.TopologySpreadConstraints[0].TopologyKey)
+	assert.Equal(t, "gag-infra-critical", pod.PriorityClassName)
+
+	// Informer-object invariant: mutating the built pod must not touch the shared spec.
+	pod.TopologySpreadConstraints[0].TopologyKey = "MUTATED"
+	assert.Equal(t, "topology.kubernetes.io/zone",
+		ag.Spec.Scheduling.TopologySpreadConstraints[0].TopologyKey)
+}
+
 // TestAGCScheduling_UnsetLeavesPodSpecUntouched: a gateway with no spec.scheduling must
 // produce a byte-for-byte unchanged AGC Deployment (no spurious rollout on upgrade).
 func TestAGCScheduling_UnsetLeavesPodSpecUntouched(t *testing.T) {
@@ -204,6 +285,8 @@ func TestAGCScheduling_UnsetLeavesPodSpecUntouched(t *testing.T) {
 	assert.Nil(t, pod.NodeSelector)
 	assert.Nil(t, pod.Tolerations)
 	assert.Nil(t, pod.Affinity)
+	assert.Nil(t, pod.TopologySpreadConstraints)
+	assert.Empty(t, pod.PriorityClassName)
 }
 
 // TestAGCScheduling_DoesNotAliasSpec — informer-object invariant, as above.

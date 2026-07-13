@@ -161,3 +161,38 @@ func TestNilAllowlist_AllowedPodPriorityClass(t *testing.T) {
 		t.Errorf("nil allowlist must permit nothing named")
 	}
 }
+
+func TestIntersection(t *testing.T) {
+	worker := New([]string{"runner-standard", "runner-burst"})
+	infra := New([]string{"gag-infra-critical"})
+	// Disjoint sets: no intersection, so the GMC boots.
+	if shared := Intersection(worker, infra); len(shared) != 0 {
+		t.Errorf("disjoint allowlists must not intersect, got %v", shared)
+	}
+
+	// A class on both surfaces is the priority-inversion trap; Intersection must
+	// surface it (sorted) so the GMC startup check can refuse to boot.
+	overlap := New([]string{"gag-infra-critical", "runner-standard"})
+	shared := Intersection(worker, overlap)
+	want := []string{"runner-standard"}
+	if !reflect.DeepEqual(shared, want) {
+		t.Errorf("Intersection = %v, want %v", shared, want)
+	}
+
+	// The dynamic set participates too: a ConfigMap-added class that collides is
+	// caught, not just the static flag values.
+	infra.SetDynamic([]string{"runner-burst"})
+	if shared := Intersection(worker, infra); !reflect.DeepEqual(shared, []string{"runner-burst"}) {
+		t.Errorf("Intersection must include dynamic-set collisions, got %v", shared)
+	}
+}
+
+func TestIntersection_NilOperand(t *testing.T) {
+	a := New([]string{"x"})
+	if shared := Intersection(a, nil); shared != nil {
+		t.Errorf("nil operand must contribute no intersection, got %v", shared)
+	}
+	if shared := Intersection(nil, a); shared != nil {
+		t.Errorf("nil operand must contribute no intersection, got %v", shared)
+	}
+}

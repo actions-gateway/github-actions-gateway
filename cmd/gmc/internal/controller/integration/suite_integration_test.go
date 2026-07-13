@@ -74,6 +74,13 @@ var egressTestAllowlist = allowlist.NewEgressDestination(
 	mustParseCIDRs("10.0.0.0/8", "199.36.153.0/24"),
 )
 
+// infraTestAllowlist is the infra-only PriorityClass allowlist (Q284) the suite wires
+// into the EgressProxy and v2 ActionsGateway webhooks. It names one class the dedicated
+// scheduling admission test may reference; off-allowlist rejection is asserted against
+// this same set. Disjoint from the worker allowlist ("high") the RunnerSet webhook uses,
+// mirroring the production disjointness invariant.
+var infraTestAllowlist = allowlist.New([]string{"gag-infra-critical"})
+
 // mustParseCIDRs parses CIDR strings for suite setup, panicking on a bad entry.
 func mustParseCIDRs(ss ...string) []*net.IPNet {
 	out := make([]*net.IPNet, 0, len(ss))
@@ -204,8 +211,19 @@ func startValidatingWebhook() error {
 	// rejection against the same set. The FQDN backend is cilium (Q245) so an FQDN-intent
 	// EgressProxy is admitted here (backend != none); the FQDN+none admission rejection is
 	// covered by the webhook unit test, which can vary the backend freely.
-	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist, controller.FQDNBackendCilium); err != nil {
+	// Q284: also gate spec.scheduling.priorityClassName against the infra-only
+	// allowlist. Wired to infraTestAllowlist so the dedicated scheduling admission test
+	// can exercise both allow and deny against a known set.
+	if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressTestAllowlist, controller.FQDNBackendCilium, infraTestAllowlist); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
+	}
+	// Q284: the new v2 ActionsGateway validating webhook. The installed
+	// ValidatingWebhookConfiguration now carries vactionsgateway-v2alpha1.kb.io
+	// (failurePolicy=Fail), so this server MUST serve its path or every v2
+	// ActionsGateway create in the suite would fail closed. Gates
+	// spec.scheduling.priorityClassName against the same infra allowlist.
+	if err := webhookv2alpha1.SetupActionsGatewayWebhookWithManager(mgr, infraTestAllowlist); err != nil {
+		return fmt.Errorf("register v2 ActionsGateway webhook: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the RunnerSet webhook
 	// (Q264 P3, failurePolicy=Fail), which enforces ScaleSet runnerLabel uniqueness
