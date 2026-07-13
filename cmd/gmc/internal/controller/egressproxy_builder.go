@@ -241,6 +241,34 @@ func egressProxyTolerations(ep *gmcv2alpha1.EgressProxy) []corev1.Toleration {
 	return out
 }
 
+// egressProxyTopologySpreadConstraints returns the pass-through
+// topologySpreadConstraints, deep-copied out of the (shared, informer-owned)
+// EgressProxy spec. It COMPOSES with the built-in cross-node anti-affinity rather
+// than replacing it (Q284): the constraints are applied verbatim alongside the
+// anti-affinity that egressProxyAffinity still stamps, so a soft zonal spread narrows
+// placement without dropping the cross-node durability invariant.
+func egressProxyTopologySpreadConstraints(ep *gmcv2alpha1.EgressProxy) []corev1.TopologySpreadConstraint {
+	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.TopologySpreadConstraints) == 0 {
+		return nil
+	}
+	out := make([]corev1.TopologySpreadConstraint, len(ep.Spec.Scheduling.TopologySpreadConstraints))
+	for i, c := range ep.Spec.Scheduling.TopologySpreadConstraints {
+		c.DeepCopyInto(&out[i])
+	}
+	return out
+}
+
+// egressProxyPriorityClassName returns the pass-through priorityClassName, or "" when
+// unset. It is a bare string, so no copy is needed; the empty default leaves the pod
+// unprioritized. The name is gated at admission against the infra-only allowlist
+// (--allowed-infra-priority-classes, Q284), not the worker allowlist.
+func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
+	if ep.Spec.Scheduling == nil {
+		return ""
+	}
+	return ep.Spec.Scheduling.PriorityClassName
+}
+
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
 // It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
 // cross-node anti-affinity, self-signed proxy TLS mount, /healthz + /readyz probes,
@@ -286,9 +314,11 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 					// egressProxyAffinity composes any supplied affinity with the
 					// built-in required cross-node anti-affinity; see its doc comment
 					// for the precedence contract.
-					Affinity:     egressProxyAffinity(ep, selector),
-					NodeSelector: egressProxyNodeSelector(ep),
-					Tolerations:  egressProxyTolerations(ep),
+					Affinity:                  egressProxyAffinity(ep, selector),
+					NodeSelector:              egressProxyNodeSelector(ep),
+					Tolerations:               egressProxyTolerations(ep),
+					TopologySpreadConstraints: egressProxyTopologySpreadConstraints(ep),
+					PriorityClassName:         egressProxyPriorityClassName(ep),
 					Volumes: []corev1.Volume{
 						{
 							Name: proxyTLSVolumeName,

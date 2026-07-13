@@ -100,6 +100,19 @@ allowFloatingImageTags: false
 # e.g. allowedPriorityClasses: ["runner-standard", "runner-opportunistic"]
 allowedPriorityClasses: []
 
+# allowedInfraPriorityClasses is the SEPARATE infra-only allowlist (Q284) gating
+# spec.scheduling.priorityClassName on the EgressProxy pool and v2 ActionsGateway
+# control-plane pods, passed to the GMC as --allowed-infra-priority-classes. These
+# infra pods sit ABOVE workers (an evicted proxy takes a tenant's whole egress path
+# down), so this list MUST be disjoint from allowedPriorityClasses — a class on both
+# would let a tenant lift its workers to infra priority and preempt other tenants'
+# proxies. The GMC refuses to start if the two intersect. Pre-create the classes with
+# a value above the worker classes. Empty (default) forbids all
+# spec.scheduling.priorityClassName references — the secure default. See
+# docs/operations/security-operations.md § Infra pods: the separate allowlist.
+# e.g. allowedInfraPriorityClasses: ["gag-infra-critical"]
+allowedInfraPriorityClasses: []
+
 # priorityClassAllowlist optionally lets the GMC ALSO source the PriorityClass
 # allowlist from a watched ConfigMap, so a platform admin can add an allowed class
 # without editing allowedPriorityClasses and rolling out the GMC (Q188). It is

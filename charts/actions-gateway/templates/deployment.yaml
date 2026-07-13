@@ -67,6 +67,13 @@ spec:
         # priorityTiers may reference. Empty/unset rejects all (secure default).
         - --allowed-priority-classes={{ join "," . }}
         {{- end }}
+        {{- with .Values.allowedInfraPriorityClasses }}
+        # Q284: separate infra-only allowlist gating spec.scheduling.priorityClassName
+        # on EgressProxy/ActionsGateway pods. MUST be disjoint from
+        # allowedPriorityClasses (the GMC refuses to start if they intersect).
+        # Empty/unset rejects all (secure default).
+        - --allowed-infra-priority-classes={{ join "," . }}
+        {{- end }}
         {{- with .Values.priorityClassAllowlist.configMapName }}
         # Q188: also source the PriorityClass allowlist from this ConfigMap in the
         # GMC namespace, watched so additions take effect without a restart.

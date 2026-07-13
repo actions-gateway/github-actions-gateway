@@ -138,6 +138,17 @@ func main() {
 			"these classes and lists them here; the admission webhook rejects any other "+
 			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
 			"forbids all priorityTiers PriorityClass references.")
+	var allowedInfraPriorityClasses string
+	flag.StringVar(&allowedInfraPriorityClasses, "allowed-infra-priority-classes", "",
+		"Comma-separated allowlist of cluster-scoped PriorityClass names a tenant "+
+			"EgressProxy or v2 ActionsGateway may reference in spec.scheduling.priorityClassName "+
+			"for its INFRA pods — the proxy pool and the AGC control plane (Q284). An evicted "+
+			"proxy takes a tenant's whole egress path down, so these pods need a priority ABOVE "+
+			"best-effort workers. MUST be disjoint from --allowed-priority-classes (the worker "+
+			"allowlist): the GMC refuses to start if they intersect, because a class nameable "+
+			"from both surfaces would let a tenant lift its WORKERS to infra priority and preempt "+
+			"other tenants' proxy pods. Empty (default) forbids all "+
+			"spec.scheduling.priorityClassName references.")
 	var priorityClassAllowlistConfigMap string
 	flag.StringVar(&priorityClassAllowlistConfigMap, "priority-class-allowlist-configmap", "",
 		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
@@ -292,6 +303,22 @@ func main() {
 	// ConfigMap is applied. Constructed here so it can be wired into both the
 	// webhook and the reconciler.
 	priorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedPriorityClasses))
+
+	// The infra PriorityClass allowlist (Q284): gates spec.scheduling.priorityClassName
+	// on the EgressProxy and v2 ActionsGateway INFRA pods, seeded from the static
+	// --allowed-infra-priority-classes flag. It is a SEPARATE instance from the worker
+	// allowlist and MUST be disjoint from it — a class nameable from both a worker pod
+	// and an infra pod would let a tenant lift its workers to infra priority and preempt
+	// other tenants' proxies (§2.1 of the Q284 plan). A boot-time intersection check
+	// converts that silent priority inversion into a hard startup failure.
+	infraPriorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(allowedInfraPriorityClasses))
+	if shared := allowlist.Intersection(priorityClassAllowlist, infraPriorityClassAllowlist); len(shared) > 0 {
+		setupLog.Error(fmt.Errorf("PriorityClass allowlists intersect: %v", shared),
+			"--allowed-priority-classes (worker) and --allowed-infra-priority-classes must be disjoint: "+
+				"a class on both would let a tenant lift its worker pods to infra priority and preempt "+
+				"other tenants' proxy pods")
+		os.Exit(1)
+	}
 
 	// The platform egress destination allowlist (Q242 G.1): the EgressProxy admission
 	// webhook reads it and the ConfigMap watch (below) augments it. Seeded from the
@@ -641,8 +668,17 @@ func main() {
 		// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs
 		// against the platform egress allowlist (deny-all-non-GitHub by default). Q245:
 		// also reject FQDN intent when the cluster declares no --fqdn-policy-backend.
-		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist, fqdnBackend); err != nil {
+		// Q284: gate spec.scheduling.priorityClassName against the infra-only allowlist.
+		if err := webhookv2alpha1.SetupEgressProxyWebhookWithManager(mgr, egressDestinationAllowlist, fqdnBackend, infraPriorityClassAllowlist); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "EgressProxy")
+			os.Exit(1)
+		}
+		// Q284: the v2 ActionsGateway kind had no validating webhook (the v1alpha1 one is
+		// a different API group and the v1 kind has no spec.scheduling). This new webhook
+		// gates spec.scheduling.priorityClassName on the AGC control-plane pod against the
+		// same infra-only allowlist.
+		if err := webhookv2alpha1.SetupActionsGatewayWebhookWithManager(mgr, infraPriorityClassAllowlist); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ActionsGateway")
 			os.Exit(1)
 		}
 		// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under

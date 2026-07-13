@@ -1,10 +1,13 @@
 # Q284: Expand `PodScheduling` to the full desirable scheduling surface
 
-**Status:** ❌ Open — design agreed, not implemented. Tracked as [Q284](../STATUS.md#Q284).
+**Status:** ✅ Done (2026-07-12). Shipped: both fields on `PodScheduling`, the infra-only
+`--allowed-infra-priority-classes` allowlist with a boot-time disjointness check, the
+extended `EgressProxy` webhook, a new v2 `ActionsGateway` validating webhook, unit +
+envtest coverage, and operator/design docs. §2's two-allowlist governance is promoted into
+[`docs/design/05-security.md` §5.2](../../design/05-security.md#the-two-priorityclass-allowlists-must-stay-disjoint-worker-vs-infra-q284).
 
-> **Sized `M`, not `S`.** The API diff is two fields, but gating one of them needs a v2
-> `ActionsGateway` validating webhook that does not exist yet (§2.3). Don't take this on
-> as a one-session task.
+> **Sized `M`, not `S`.** The API diff was two fields, but gating one of them needed a v2
+> `ActionsGateway` validating webhook that did not exist (§2.3) — the bulk of the work.
 
 **Scope:** Add `topologySpreadConstraints` and `priorityClassName` to the `PodScheduling`
 block shared by `EgressProxy` and `ActionsGateway` (`api/v2beta1/scheduling_types.go`).
@@ -132,7 +135,7 @@ The same residual G.7 recorded for the worker allowlist applies here: an operato
 grants a tenant direct RBAC on the underlying resource bypasses the webhook, and stored
 objects are never re-validated. The Q289 `ValidatingAdmissionPolicy` backstop is now
 delivered for the worker PriorityClass allowlist
-([G.7](../design/appendix-g-future-enhancements.md#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement));
+([G.7](../../design/appendix-g-future-enhancements.md#g7-validatingadmissionpolicy-for-direct-runnergroup-priorityclass-enforcement));
 a Q284 infra allowlist should get the same VAP treatment on its own pass, following that
 policy's paramKind-ConfigMap pattern.
 
@@ -194,14 +197,14 @@ CRDs already ship via `helm template | kubectl apply --server-side` rather than
 
 ## 5. Definition of done
 
-- [ ] `topologySpreadConstraints` and `priorityClassName` on `PodScheduling`, both `+optional`.
-- [ ] Godoc on each field carrying the rationale — matching the existing bar in `scheduling_types.go`.
-- [ ] `--allowed-infra-priority-classes` flag on the GMC, disjoint from `--allowed-priority-classes`, empty-by-default (forbids all).
-- [ ] GMC startup rejects an intersection between the two allowlists.
-- [ ] `EgressProxy` webhook extended to gate `spec.scheduling.priorityClassName`.
-- [ ] **A new v2 `ActionsGateway` validating webhook** (none exists — see §2.3), registered and chart-wired, gating the same field.
-- [ ] Envtest coverage for both (real apiserver — webhook semantics).
-- [ ] `topologySpreadConstraints` composes with (does not replace) the built-in anti-affinity — unit-tested, and the `Pending` trap documented on the field.
-- [ ] CRD size measured before/after; recorded here.
-- [ ] Operator docs: `docs/operations/security-operations.md` (the new allowlist, and why it must stay disjoint) and `docs/operations/tenant-onboarding.md` (the new fields).
-- [ ] **On close:** promote §2 into `docs/design/05-security.md` — the two-allowlist rule is durable API-surface governance and must outlive this plan's archival.
+- [x] `topologySpreadConstraints` and `priorityClassName` on `PodScheduling`, both `+optional`.
+- [x] Godoc on each field carrying the rationale — matching the existing bar in `scheduling_types.go`.
+- [x] `--allowed-infra-priority-classes` flag on the GMC, disjoint from `--allowed-priority-classes`, empty-by-default (forbids all). (Flag-only; a watched-ConfigMap augmentation like Q188's is deferred — filed as a Queue follow-up.)
+- [x] GMC startup rejects an intersection between the two allowlists (`allowlist.Intersection`).
+- [x] `EgressProxy` webhook extended to gate `spec.scheduling.priorityClassName`.
+- [x] **A new v2 `ActionsGateway` validating webhook** (none existed — see §2.3), registered, chart-wired (`make chart-webhook`), gating the same field.
+- [x] Envtest coverage for both (`cmd/gmc/internal/controller/integration/v2_scheduling_admission_test.go`).
+- [x] `topologySpreadConstraints` composes with (does not replace) the built-in anti-affinity — unit-tested (`egressproxy_scheduling_test.go`), and the `Pending` trap documented on the field.
+- [x] CRD size measured before/after. Each of the two CRDs grew **+34,336 bytes** (≈17 KB per served version, almost all `topologySpreadConstraints`; `priorityClassName` is a bare string): `actionsgateways` 222,037 → 256,373; `egressproxies` 178,508 → 212,844. Both stay far under the ~1.5 MiB per-object ceiling.
+- [x] Operator docs: `docs/operations/security-operations.md` (the new allowlist + disjointness, the two new fields) and `docs/operations/tenant-onboarding.md` (troubleshooting row).
+- [x] **On close:** promoted §2 into `docs/design/05-security.md` §5.2 — the two-allowlist rule is durable API-surface governance and now outlives this plan's archival.

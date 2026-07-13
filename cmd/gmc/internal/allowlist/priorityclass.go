@@ -1,10 +1,18 @@
-// Package allowlist holds the GMC's PriorityClass admission allowlist: the set of
-// cluster-scoped PriorityClass names a tenant may cause a worker pod to reference,
-// from ANY tenant-authorable surface — priorityTiers on a RunnerGroup /
-// ActionsGateway, and podTemplate.spec.priorityClassName on a RunnerTemplate or a
-// v1 runnerGroups[] entry (Q289). The allowlist is the union of a static base (the
-// --allowed-priority-classes flag) and a dynamic set sourced from a watched
-// ConfigMap (Q188), so a platform admin can grow the allowlist without editing
+// Package allowlist holds the GMC's PriorityClass admission allowlists. The
+// worker-facing allowlist is the set of cluster-scoped PriorityClass names a tenant
+// may cause a WORKER pod to reference, from ANY tenant-authorable surface —
+// priorityTiers on a RunnerGroup / ActionsGateway, and podTemplate.spec.priorityClassName
+// on a RunnerTemplate or a v1 runnerGroups[] entry (Q289). The infra-facing allowlist
+// (Q284) is a SEPARATE instance gating spec.scheduling.priorityClassName on the
+// EgressProxy and v2 ActionsGateway INFRA pods (--allowed-infra-priority-classes).
+//
+// The same PriorityClassAllowlist type backs both, but the two instances must stay
+// DISJOINT — an infra class nameable from a worker pod would let a tenant lift its
+// workers to infra priority and preempt other tenants' proxies. Intersection powers
+// the GMC startup check that enforces that disjointness.
+//
+// Each allowlist is the union of a static base (a flag) and a dynamic set sourced
+// from a watched ConfigMap (Q188), so a platform admin can grow it without editing
 // the flag and rolling out the GMC.
 package allowlist
 
@@ -122,6 +130,33 @@ func (a *PriorityClassAllowlist) DynamicNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Intersection returns the sorted set of names present in the effective sets of
+// BOTH allowlists. It powers the GMC startup disjointness check (Q284): the
+// worker allowlist (--allowed-priority-classes) and the infra allowlist
+// (--allowed-infra-priority-classes) must not share a class. If they did, a class
+// added to the infra set so an EgressProxy/ActionsGateway pod may name it would also
+// be nameable from a worker pod — and any tenant could lift its workers to infra
+// priority and preempt other tenants' proxy pods, inverting the very ordering the
+// infra gate exists to protect. A non-empty result at startup is a misconfiguration
+// the GMC refuses to boot on. A nil allowlist contributes nothing.
+func Intersection(a, b *PriorityClassAllowlist) []string {
+	if a == nil || b == nil {
+		return nil
+	}
+	other := make(map[string]bool)
+	for _, n := range b.Names() {
+		other[n] = true
+	}
+	var shared []string
+	for _, n := range a.Names() {
+		if other[n] {
+			shared = append(shared, n)
+		}
+	}
+	sort.Strings(shared)
+	return shared
 }
 
 // toSet builds a set from names, dropping empty entries. Returns a non-nil empty

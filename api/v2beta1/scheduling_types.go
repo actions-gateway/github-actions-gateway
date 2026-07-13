@@ -108,4 +108,70 @@ type PodScheduling struct {
 	//
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// TopologySpreadConstraints spreads the pods across failure domains (zones,
+	// nodes) — the modern successor to the cross-node podAntiAffinity this proxy
+	// pool already relies on. It expresses "spread across zones, tolerate a skew of
+	// 1", which anti-affinity cannot. Applied to the pod spec verbatim.
+	//
+	// Composition with the built-in anti-affinity (EgressProxy only). Unlike
+	// Affinity, this field COMPOSES with the built-in required cross-node
+	// anti-affinity — it never replaces it. `podAntiAffinity: {}` on Affinity stays
+	// the single opt-out for the built-in cross-node spread; this field does not add
+	// a second one. That asymmetry is deliberate: Affinity has to be able to displace
+	// the built-in term because podAntiAffinity occupies the same field with nowhere
+	// else to go, whereas topologySpreadConstraints is a different field with no such
+	// collision, so composing is safe (it can only NARROW the candidate node set,
+	// like nodeSelector AND-ing with nodeAffinity) and having one author silently
+	// lose cross-node spread by asking for zonal spread would be a footgun. Its
+	// labelSelector counts only pods in the constraint's own namespace, so one
+	// tenant's spread cannot be skewed by another tenant's pods.
+	//
+	// The Pending trap. An author who asks for a SOFT zonal spread
+	// (whenUnsatisfiable: ScheduleAnyway) still inherits the REQUIRED built-in
+	// cross-node anti-affinity, so replicas beyond the pinned pool's node count
+	// strand in Pending — the same behavior as any proxy pool whose minReplicas
+	// exceeds its node count. The escapes are the same: `podAntiAffinity: {}` to opt
+	// out of the built-in cross-node spread, or lower minReplicas.
+	//
+	// Unlike PriorityClassName, this needs no allowlist: it is namespace-scoped and
+	// can only narrow placement, so it carries no cross-tenant lever.
+	//
+	// +optional
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+
+	// PriorityClassName names a cluster-scoped PriorityClass for these pods, raising
+	// them above best-effort workloads under node pressure. It matters because an
+	// evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted
+	// AGC pod takes that tenant's control plane down; without a priority class both
+	// are as evictable as any best-effort pod.
+	//
+	// Gated by a SEPARATE, infra-only allowlist. This field is validated against the
+	// GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction
+	// from the worker-facing --allowed-priority-classes that gates priorityTiers and
+	// RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect,
+	// and the GMC refuses to start if they do.
+	//
+	// Why a second allowlist rather than reusing the worker one. Infra pods must sit
+	// ABOVE workers — that is the whole point of prioritizing them. If the worker
+	// allowlist were reused and a high class added so a proxy could name it, that
+	// same class would become nameable from a worker pod, and any tenant could lift
+	// its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate
+	// meant to protect the proxy would become the mechanism for evicting it.
+	//
+	// Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is
+	// a choice about the tenant's own traffic; it weakens attribution, not isolation.
+	// Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a
+	// preempting class can evict OTHER tenants' pods off a node. And `system-*`
+	// PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name
+	// system-cluster-critical (value 2000000000, PreemptLowerPriority), with no
+	// built-in admission check restricting it (verified against a real apiserver).
+	// So an ungated priorityClassName on a tenant-writable CR is a cluster-wide
+	// preemption escape, which is why it is the one PodScheduling field behind a gate.
+	//
+	// The empty string (the default) names no class and is always permitted, so an
+	// unset allowlist forbids every NAMED class without forbidding unprioritized pods.
+	//
+	// +optional
+	PriorityClassName string `json:"priorityClassName,omitempty"`
 }
