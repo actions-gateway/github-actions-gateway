@@ -166,6 +166,10 @@ var _ = SynchronizedAfterSuite(
 			_, _ = fmt.Fprintln(GinkgoWriter, "E2E_SKIP_TEARDOWN=true; leaving GMC/fakegithub/cert-manager in place for diagnostics")
 			return
 		}
+		// Drain tenant namespaces BEFORE teardownGMC(): their finalizers can only
+		// be cleared while the GMC/AGC controllers are still running (see the
+		// function doc). teardownGMC() removes those controllers.
+		drainTenantNamespaces()
 		teardownGMC()
 		teardownFakegithub()
 		teardownCertManager()
@@ -286,6 +290,79 @@ func v2CRDChartDir() string {
 	Expect(ok).To(BeTrue(), "resolve caller for v2 CRD chart path")
 	root := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
 	return filepath.Join(root, "charts", "actions-gateway-crds-v2")
+}
+
+// tenantNamespaceMarker is the label every GMC-managed tenant namespace carries
+// (see utils.CreateNamespace). drainTenantNamespaces selects on it to find the
+// namespaces whose finalizers must be cleared before the controllers go away.
+const tenantNamespaceMarker = "actions-gateway.github.com/tenant=true"
+
+// drainTenantNamespaces deletes every GMC-managed tenant namespace and blocks
+// until each has finished terminating. It MUST run before teardownGMC().
+//
+// Tenant namespaces carry RunnerGroup/RunnerSet objects whose
+// actions-gateway(.github).com/agentpool-cleanup finalizers are cleared by the
+// per-tenant AGC controllers, and an ActionsGateway whose gmc-cleanup finalizer
+// is cleared by the GMC. teardownGMC() runs `make undeploy` (helm uninstall),
+// which removes those controllers. A tenant namespace still Terminating at that
+// point strands its finalizer with nothing left to clear it: the namespace
+// never finishes deleting, and the next local back-to-back run's BeforeAll
+// `create namespace` collides on the still-Terminating namespace (Q301). CI is
+// unaffected — it deletes the whole kind cluster per run, so nothing is reused.
+//
+// A spec's own AfterAll issues DeleteNamespace with --wait=false, so most tenant
+// namespaces are already Terminating by suite end; this both deletes any a
+// failed or interrupted spec left behind and waits out the termination while the
+// controllers are still up. The wait is best-effort and bounded: on timeout it
+// logs and returns rather than failing the suite, so a genuinely stuck namespace
+// never hangs teardown or turns a green run red (this is a local-loop hygiene
+// step, not a correctness assertion).
+func drainTenantNamespaces() {
+	By("draining tenant namespaces before undeploy so agentpool-cleanup finalizers clear while the controllers are up")
+
+	listNames := func() ([]string, error) {
+		cmd := exec.Command("kubectl", "get", "namespaces",
+			"-l", tenantNamespaceMarker,
+			"-o", `jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}`,
+		)
+		out, err := utils.Run(cmd)
+		if err != nil {
+			return nil, err
+		}
+		return utils.GetNonEmptyLines(out), nil
+	}
+
+	names, err := listNames()
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "drainTenantNamespaces: listing tenant namespaces failed: %v\n", err)
+		return
+	}
+	if len(names) == 0 {
+		return
+	}
+
+	// Request deletion of the whole set (idempotent — already-Terminating
+	// namespaces are a no-op). --wait=false: the bounded poll below is our wait,
+	// so a single stuck namespace can't consume the teardown budget on the
+	// delete call itself.
+	delArgs := append([]string{"delete", "namespace", "--ignore-not-found", "--wait=false"}, names...)
+	if _, err := utils.Run(exec.Command("kubectl", delArgs...)); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "drainTenantNamespaces: delete request failed: %v\n", err)
+	}
+
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		remaining, err := listNames()
+		if err == nil && len(remaining) == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			_, _ = fmt.Fprintf(GinkgoWriter,
+				"drainTenantNamespaces: timed out waiting for tenant namespaces to terminate; still present: %v\n", remaining)
+			return
+		}
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func teardownGMC() {
