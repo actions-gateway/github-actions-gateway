@@ -85,7 +85,6 @@ markers per item.
 | [q273-v2-front-door.md](q273-v2-front-door.md) | Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the `gag-migrate` v1→v2 story exemplary — the do-now slice of the sunset review §6.2 ([Q273](../STATUS.md#Q273)) | ▶ In progress — do-now front-door/banners/migration slice landing; full v2-only (v1 removal) gated on v2beta1 (Q74) |
 | [q224-fanout-dispatch-lever-spike.md](q224-fanout-dispatch-lever-spike.md) | ⓘ AGC-side lever spike: can two proposed AGC-side levers beat GitHub's server-side fan-out distinct-delivery starvation without the Option E scale-set rewrite? Tested against the mechanism + live evidence | ⓘ Spike — no code changed; verdict: no reliable AGC-side lever, Option E ([Q264](../STATUS.md#Q264)) is the only structural fix. Referenced by [Q268](../STATUS.md#Q268) |
 | [website.md](website.md) | Public GitHub Pages site: MkDocs Material rendering of `docs/` + a custom landing page and "vs ARC" comparison; domain decision folded in (org move) | ✅ Done — scaffold, landing, comparison, and public launch shipped (was Q52/Q99/Q129, all completed) |
-| [required-status-checks.md](required-status-checks.md) | Make the CI quality gates merge-blocking: an always-running `gate` summary job per workflow (safe to require despite path-gating) + the ruleset edit that marks them required | ❌ Open — `gate` jobs shipped across nine workflows; the repo-admin ruleset edit that actually enforces them is the residual ([Q297](../STATUS.md#Q297)) |
 
 ## Archive
 
@@ -146,6 +145,7 @@ Plans whose work has fully landed and which `docs/STATUS.md` no longer reference
 | [archive/q220-service-mesh-validation.md](archive/q220-service-mesh-validation.md) | Live-cluster validation of the service-mesh coexistence guidance (Istio + Linkerd sidecar mode on kind); corrected the operator guide | 2026-07-07 — Q220 (evidence record; broadened by Q280) |
 | [archive/q260-fanout-completion-reconciliation.md](archive/q260-fanout-completion-reconciliation.md) | Reconcile GitHub's per-delivery fan-out with AGC's one-runner-per-session model — Option A winner-driven fan-out completion (`AGC_FANOUT_COMPLETION`, default on) | 2026-07-06 — Q260 |
 | [archive/q260-planid-dedup-refix.md](archive/q260-planid-dedup-refix.md) | Q260 re-fix — re-key job-acquisition dedup on `planID` to stop the burst-start Secret-collision pool collapse | 2026-07-04 — Q260 |
+| [archive/required-status-checks.md](archive/required-status-checks.md) | Make the CI quality gates merge-blocking: an always-running `gate` summary job per workflow (safe to require despite path-gating) + the ruleset edit that marks them required | 2026-07-13 — Q297 |
 
 ## Conventions
 
