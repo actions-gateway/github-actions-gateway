@@ -99,12 +99,12 @@ jobs:
       timeout_minutes: 60
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`e2e (calico) / gate`) required in the branch ruleset — never the path-gated
+  # (`e2e-calico-gate`) required in the branch ruleset — never the path-gated
   # e2e-calico job, because a path-skip leaves it Pending and blocks the merge
   # forever. `needs.e2e-calico.result` reflects the reusable workflow's
   # conclusion. Passes only when every needed job succeeded or was legitimately
   # skipped. See docs/plan/required-status-checks.md.
-  gate:
+  e2e-calico-gate:
     needs: [changes, e2e-calico]
     if: ${{ always() }}
     runs-on: ubuntu-latest

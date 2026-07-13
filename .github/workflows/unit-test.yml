@@ -286,12 +286,12 @@ jobs:
         run: make cover-check
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`unit-test / gate`) required in the branch ruleset — never the individual
+  # (`unit-test-gate`) required in the branch ruleset — never the individual
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Runs on every PR (the workflow has no top-level path filter)
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/plan/required-status-checks.md.
-  gate:
+  unit-test-gate:
     needs: [changes, lint, shellcheck, vendor-check, tidy-check, unit-test, coverage]
     if: ${{ always() }}
     runs-on: ubuntu-latest

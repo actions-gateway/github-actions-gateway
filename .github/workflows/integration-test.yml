@@ -99,11 +99,11 @@ jobs:
         working-directory: cmd/agc
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`integration-test / gate`) required in the branch ruleset — never the
+  # (`integration-test-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/plan/required-status-checks.md.
-  gate:
+  integration-test-gate:
     needs: [changes, integration-test]
     if: ${{ always() }}
     runs-on: ubuntu-latest

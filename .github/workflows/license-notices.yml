@@ -66,11 +66,11 @@ jobs:
         run: make third-party-notices-check
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`license-notices / gate`) required in the branch ruleset — never the
+  # (`license-notices-gate`) required in the branch ruleset — never the
   # path-gated jobs above, because a path-skip leaves them Pending and blocks the
   # merge forever. Passes only when every needed job succeeded or was
   # legitimately skipped. See docs/plan/required-status-checks.md.
-  gate:
+  license-notices-gate:
     needs: [changes, check]
     if: ${{ always() }}
     runs-on: ubuntu-latest

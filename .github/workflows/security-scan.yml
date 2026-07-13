@@ -254,12 +254,12 @@ jobs:
         run: make polaris-scan
 
   # Aggregate required-status gate. Mark THIS job's check context
-  # (`security-scan / gate`) required in the branch ruleset — never the
+  # (`security-scan-gate`) required in the branch ruleset — never the
   # individual path-gated jobs above, because a path-skip leaves them Pending and
   # blocks the merge forever. `needs: [trivy]` aggregates all matrix legs (its
   # result is failure if any leg failed). Passes only when every needed job
   # succeeded or was legitimately skipped. See docs/plan/required-status-checks.md.
-  gate:
+  security-scan-gate:
     needs: [changes, govulncheck, trivy, polaris]
     if: ${{ always() }}
     runs-on: ubuntu-latest
