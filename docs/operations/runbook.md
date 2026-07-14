@@ -163,6 +163,14 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Ticket.** The winner of a fanned-out job is failing to issue `completejob` on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. See [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
 
+### ActionsGatewayProxyConnectDenied
+
+**Ticket.** The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts).
+
+1. Identify the denied destinations from the proxy's `CONNECT destination not allowed` warning logs, which record the rejected `host`: `kubectl logs -n <namespace> deploy/<proxy-deployment> | grep "destination not allowed"`.
+2. If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with `proxy_dial_errors_total`.
+3. If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see [security-operations.md § Worker egress destinations](security-operations.md#worker-egress-destinations-the-egress-allowlist).
+
 ---
 
 ## SLO Breach Response

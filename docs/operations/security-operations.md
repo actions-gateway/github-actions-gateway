@@ -63,7 +63,7 @@ Two detection substrates are used:
 |---|---|---|---|
 | **Eviction-Retry API Misuse** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — compromised AGC looping `rerun-failed-jobs` | `eviction_retries_total` rate climbs without matching node pressure; `eviction_retries_exhausted_total` increments | Metric | Ticket → Page on sustained climb |
 | **Proxy Pool Exhaustion / slowloris** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-17/M-18) | `proxy_connections_active` pinned near capacity; `proxy_tunnel_duration_seconds` mass in the 6h bucket | Metric | Page |
-| **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_dial_errors_total` spike (workers repeatedly dialing blocked destinations) | Metric | Ticket |
+| **Server-Side Request Forgery (SSRF) / destination probing via proxy** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped), M-2/M-12) | `proxy_connect_denied_total` rate rising — every increment is an explicit allowlist denial (a workload reaching for an off-allowlist destination), so this is the precise signal; corroborate with a `proxy_dial_errors_total` spike | Metric | Ticket |
 | **DoS via Resource Exhaustion** ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)) — rogue workflow exhausting tenant quota | `kube_resourcequota` used/hard ratio sustained at 1.0 | Metric (kube-state-metrics) | Ticket |
 | **`ActionsGateway` CR in reserved namespace / spec probing** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | Admission webhook `403` rejection rate | Metric (controller-runtime) | Ticket |
 | **Cross-Tenant GitHub App Credential Leakage / key compromise** ([§5.1](../design/05-security.md#51-gmc-level-threats-cluster-scoped)) | `token_refresh_errors_total` spike (key revoked out-of-band, or a forged token rejected) | Metric | Page |
@@ -130,6 +130,21 @@ groups:
         annotations:
           summary: "Unusually long proxy tunnels in {{ $labels.namespace }}"
           description: ">20 tunnels lasted 30m–1h in the last hour. GitHub long-polls are sticky but minutes-long; hour-long tunnels warrant inspection."
+
+      # Ticket: allowlist-denied CONNECTs — the precise SSRF signal. Every
+      # increment is an explicit egress-allowlist denial, so this fires even
+      # when the blocked destinations are unreachable (no dial attempted).
+      # Also shipped in the reference PrometheusRule with a runbook_url.
+      - alert: ActionsGatewayProxyConnectDenied
+        expr: |
+          rate(actions_gateway_proxy_connect_denied_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied"
+          summary: "Egress proxy denying CONNECTs in {{ $labels.namespace }}"
+          description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — a workload probing blocked destinations, or a misconfigured egress target. Sharper than dial errors: every denial here is an explicit allowlist rejection."
 
       # Ticket: dial-error spike — workers repeatedly hitting blocked
       # destinations (SSRF probing, or a misconfigured workload).

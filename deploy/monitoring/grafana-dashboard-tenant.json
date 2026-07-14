@@ -508,7 +508,7 @@
       "type": "timeseries",
       "title": "Active CONNECT tunnels",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 31 },
+      "gridPos": { "h": 7, "w": 5, "x": 0, "y": 31 },
       "id": 61,
       "description": "Proxy metrics carry no intrinsic namespace label; attach one via the ServiceMonitor for per-tenant attribution.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -525,7 +525,7 @@
       "type": "timeseries",
       "title": "CONNECT tunnels opened/s",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 31 },
+      "gridPos": { "h": 7, "w": 5, "x": 5, "y": 31 },
       "id": 62,
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
@@ -541,9 +541,9 @@
       "type": "timeseries",
       "title": "Proxy dial errors/s",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 31 },
+      "gridPos": { "h": 7, "w": 5, "x": 10, "y": 31 },
       "id": 63,
-      "description": "Upstream dial failures (e.g. blocked-destination attempts).",
+      "description": "Upstream dial failures (e.g. transient network errors reaching an allowed destination).",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
@@ -556,9 +556,26 @@
     },
     {
       "type": "timeseries",
+      "title": "Denied CONNECTs/s (SSRF signal)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 5, "x": 15, "y": 31 },
+      "id": 65,
+      "description": "CONNECT requests refused because the destination is off the egress allowlist. A precise SSRF / egress-policy signal — every increment is an explicit allowlist denial, unlike dial errors, which also count transient failures to allowed hosts. A sustained rate is alert-worthy (ActionsGatewayProxyConnectDenied).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum(rate(actions_gateway_proxy_connect_denied_total[5m]))",
+          "legendFormat": "denied/s",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
       "title": "Tunnel duration p95",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 31 },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 31 },
       "id": 64,
       "description": "p95 CONNECT tunnel lifetime, observed at close. Buckets reach the 6h absolute lifetime cap.",
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
