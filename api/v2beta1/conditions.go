@@ -84,6 +84,9 @@ const (
 	ReasonReady = "Ready"
 	// ReasonAGCReady is the AGCAvailable=True reason.
 	ReasonAGCReady = "AGCReady"
+	// ReasonAGCNotReady is the AGCAvailable=False (and Ready=False) reason while the
+	// tenant's AGC Deployment has no ready replica yet.
+	ReasonAGCNotReady = "AGCNotReady"
 	// ReasonProxyReady is the EgressProxy Ready=True reason.
 	ReasonProxyReady = "ProxyReady"
 	// ReasonProxyNotReady is the EgressProxy Ready=False reason while the proxy

@@ -234,20 +234,25 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	assert.True(t, hasGatewayOwnerRef(agcNP.OwnerReferences, "gw"))
 	assert.Equal(t, gwAGC, agcNP.Spec.PodSelector.MatchLabels["app"], "AGC NP must select this gateway's AGC pods")
 
-	// Status: uniform contract. No kubelet ⇒ AGC never ready ⇒ Ready=False/AGCReady.
+	// Status: uniform contract. No kubelet ⇒ AGC never ready ⇒ Ready=False/AGCNotReady
+	// (the False reason must not be the AGCReady positive reason — Q309).
 	require.Eventually(t, func() bool {
 		var got v2alpha1.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
 		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+		agc := findCondition(got.Status.Conditions, v2alpha1.ConditionAGCAvailable)
 		degraded := findCondition(got.Status.Conditions, v2alpha1.ConditionDegraded)
 		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
 		return ready != nil && ready.Status == metav1.ConditionFalse &&
+			ready.Reason == v2alpha1.ReasonAGCNotReady &&
+			agc != nil && agc.Status == metav1.ConditionFalse &&
+			agc.Reason == v2alpha1.ReasonAGCNotReady &&
 			degraded != nil && degraded.Status == metav1.ConditionFalse &&
 			cred != nil && cred.Status == metav1.ConditionFalse &&
 			got.Status.ObservedGeneration == got.Generation
-	}, 15*time.Second, 100*time.Millisecond, "status should be Ready=False (no kubelet), Degraded=False, CredentialUnavailable=False, observedGeneration set")
+	}, 15*time.Second, 100*time.Millisecond, "status should be Ready=False/AGCNotReady (no kubelet), AGCAvailable=False/AGCNotReady, Degraded=False, CredentialUnavailable=False, observedGeneration set")
 }
 
 // TestV2_ActionsGateway_AGCResources proves the additive spec.agcResources field
