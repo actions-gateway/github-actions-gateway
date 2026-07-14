@@ -40,6 +40,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -54,10 +55,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ActionsGatewayV2Reconciler reconciles a v2alpha1 ActionsGateway into the
@@ -496,6 +500,14 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	}
 	set(gmcv2alpha1.ConditionAGCAvailable, agcReady, agcReason, agcMsg)
 
+	// RunnerSetsDegraded rolls the health of the RunnerSets bound to this gateway
+	// (spec.gatewayRef) up to the gateway's single pane (Q304), the v2 counterpart of
+	// v1's RunnerGroupsDegraded rollup. Advisory like the v1 rollup — it does NOT gate
+	// Ready, since the AGC control plane can be healthy while a tenant's RunnerSet is
+	// impaired.
+	rs := r.evalRunnerSetHealth(ctx, ag)
+	set(gmcv2alpha1.ConditionRunnerSetsDegraded, rs.degraded, rs.reason, rs.message)
+
 	readyReason := gmcv2alpha1.ReasonReady
 	readyMsg := "AGC control plane is available"
 	if !agcReady {
@@ -560,6 +572,83 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 	return ctrl.Result{}, cause
 }
 
+// runnerSetHealth carries the computed RunnerSetsDegraded rollup (Q304).
+type runnerSetHealth struct {
+	degraded bool
+	reason   string
+	message  string
+}
+
+// evalRunnerSetHealth aggregates the health of the RunnerSets bound to this
+// ActionsGateway into the RunnerSetsDegraded rollup condition (Q304), the v2
+// counterpart of v1's evalRunnerGroupHealth. The rollup is True when at least one
+// bound set is impaired, naming the impaired sets and their tripped signals in the
+// message so the operator can act from the gateway's single pane without inspecting
+// each child. A read failure or zero bound sets yields a healthy (False) rollup —
+// the absence of evidence is not an alarm, and other conditions already cover a
+// broken gateway.
+//
+// Unlike v1 (where the GMC owns the RunnerGroups and selects them by owner labels),
+// v2 RunnerSets are not owned by the gateway — they only reference it via
+// spec.gatewayRef. The binding is resolved by listing the namespace and matching
+// gatewayRef.name, the same scoping the AGC applies server-side (§H.16 #1).
+func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) runnerSetHealth {
+	var rsList gmcv2alpha1.RunnerSetList
+	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
+		return runnerSetHealth{
+			reason:  gmcv2alpha1.ReasonAllRunnerSetsHealthy,
+			message: fmt.Sprintf("could not read bound RunnerSets: %v", err),
+		}
+	}
+	var bound int
+	var impaired []string
+	for i := range rsList.Items {
+		rs := &rsList.Items[i]
+		if rs.Spec.GatewayRef.Name != ag.Name {
+			continue
+		}
+		bound++
+		if tripped := runnerSetImpairments(rs.Status.Conditions); len(tripped) > 0 {
+			impaired = append(impaired, fmt.Sprintf("%s (%s)", rs.Name, strings.Join(tripped, ", ")))
+		}
+	}
+	if len(impaired) == 0 {
+		return runnerSetHealth{
+			reason:  gmcv2alpha1.ReasonAllRunnerSetsHealthy,
+			message: fmt.Sprintf("all %d bound RunnerSet(s) healthy", bound),
+		}
+	}
+	return runnerSetHealth{
+		degraded: true,
+		reason:   gmcv2alpha1.ReasonRunnerSetsImpaired,
+		message:  fmt.Sprintf("%d of %d RunnerSet(s) impaired: %s", len(impaired), bound, strings.Join(impaired, "; ")),
+	}
+}
+
+// runnerSetImpairments returns the tripped health signals that mark a bound RunnerSet
+// as impaired for the RunnerSetsDegraded rollup (Q304): it cannot serve jobs. A set is
+// impaired when its Ready condition is present and not True for a non-transient reason
+// (a reference did not resolve or GitHub auth failed — anything but the benign startup
+// reason NoActiveSessions, which a healthy set reports before its first listener comes
+// up), and/or when the abnormal impairing WorkersUnschedulable condition is True. The
+// advisory conditions (the WorkerQuota ladder, EgressUnattributed,
+// PossibleReapBlockingSidecar) are deliberately excluded — they are trade-off or
+// throughput signals, not "the set is broken", and including them would flap the rollup
+// on normal operation. This mirrors the exclusions in v1's ImpairingConditionTypes,
+// adapted to v2's model where credential and reference failures fold into Ready=False
+// with a reason rather than standing as their own abnormal-is-True conditions.
+func runnerSetImpairments(conditions []metav1.Condition) []string {
+	var tripped []string
+	if ready := meta.FindStatusCondition(conditions, gmcv2alpha1.ConditionReady); ready != nil &&
+		ready.Status != metav1.ConditionTrue && ready.Reason != gmcv2alpha1.ReasonNoActiveSessions {
+		tripped = append(tripped, fmt.Sprintf("%s=%s", gmcv2alpha1.ConditionReady, ready.Reason))
+	}
+	if meta.IsStatusConditionTrue(conditions, gmcv2alpha1.ConditionWorkersUnschedulable) {
+		tripped = append(tripped, gmcv2alpha1.ConditionWorkersUnschedulable)
+	}
+	return tripped
+}
+
 // reconcileDelete deletes the cluster-scoped resources the apiserver cannot
 // garbage-collect via owner reference, then removes the finalizer. The namespaced
 // AGC control-plane children carry a controller owner reference, so the apiserver
@@ -599,8 +688,59 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&gmcv2alpha1.EgressProxy{},
 			handler.EnqueueRequestsFromMapFunc(r.proxyToActionsGateways),
 		).
+		// Watch bound RunnerSets so a child's health change refreshes the parent's
+		// RunnerSetsDegraded rollup (Q304). The predicate drops the high-frequency
+		// status churn (activeSessions/pendingJobs) that cannot move the rollup, so the
+		// gateway only re-reconciles when a set's impaired signature actually changes.
+		// RunnerSet status carries no secret material, so caching it is cheap.
+		Watches(
+			&gmcv2alpha1.RunnerSet{},
+			handler.EnqueueRequestsFromMapFunc(r.runnerSetToActionsGateway),
+			builder.WithPredicates(runnerSetImpairmentChanged()),
+		).
 		Named("actionsgateway-v2").
 		Complete(r)
+}
+
+// runnerSetToActionsGateway maps a RunnerSet event to the ActionsGateway it binds to
+// via spec.gatewayRef (same namespace), so a child's health change refreshes the
+// parent's RunnerSetsDegraded rollup promptly (Q304). A set with no gatewayRef.name
+// maps to no request.
+func (r *ActionsGatewayV2Reconciler) runnerSetToActionsGateway(_ context.Context, obj client.Object) []ctrl.Request {
+	rs, ok := obj.(*gmcv2alpha1.RunnerSet)
+	if !ok || rs.Spec.GatewayRef.Name == "" {
+		return nil
+	}
+	return []ctrl.Request{{NamespacedName: types.NamespacedName{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}}}
+}
+
+// runnerSetImpairmentChanged restricts the RunnerSet watch to the events that can move
+// the RunnerSetsDegraded rollup (Q304): create, delete, and updates that change a set's
+// impaired signature (its tripped health signals). RunnerSet status is written on
+// nearly every AGC reconcile (activeSessions/pendingJobs), so without this the GMC
+// would reconcile on high-frequency churn that cannot change the rollup — the v2
+// counterpart of v1's runnerGroupImpairingConditionsChanged.
+func runnerSetImpairmentChanged() predicate.Predicate {
+	signature := func(obj client.Object) (string, bool) {
+		rs, ok := obj.(*gmcv2alpha1.RunnerSet)
+		if !ok {
+			return "", false
+		}
+		return strings.Join(runnerSetImpairments(rs.Status.Conditions), "|"), true
+	}
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return true },
+		DeleteFunc:  func(event.DeleteEvent) bool { return true },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldSig, ok1 := signature(e.ObjectOld)
+			newSig, ok2 := signature(e.ObjectNew)
+			if !ok1 || !ok2 {
+				return true
+			}
+			return oldSig != newSig
+		},
+	}
 }
 
 // secretToActionsGateways enqueues any v2 ActionsGateway in the Secret's namespace

@@ -345,6 +345,21 @@ remove the files when finished.)
 > to alert on a `RunnerSet`, scrape its conditions (e.g. via kube-state-metrics
 > `CustomResourceStateMetrics`) or read them with `kubectl get runnerset`.
 
+> **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a
+> `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1
+> `RunnerGroupsDegraded` above. It is `True` when one or more of the `RunnerSet`s bound
+> to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient
+> `Ready=False` (a reference did not resolve or GitHub auth failed) or
+> `WorkersUnschedulable=True`. The advisory conditions (the `WorkerQuota` ladder,
+> `EgressUnattributed`, `PossibleReapBlockingSidecar`) are excluded so the rollup does
+> not flap on normal load. The condition message names the impaired sets and their
+> tripped signals, giving the operator a single pane without inspecting each child.
+> Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
+> AGC control plane can be healthy while a tenant's set is impaired. No Prometheus gauge
+> is emitted for it yet (a v2 `ActionsGateway`/`RunnerSet` gauge pass is tracked as a
+> separate item); read it with `kubectl get actionsgateway -o yaml` or scrape conditions
+> via kube-state-metrics.
+
 ### Scale-set acquisition tier (Q264)
 
 These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A `Classic` (deprecated) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.

@@ -185,3 +185,25 @@ const (
 	ReasonPodsUnschedulable  = "PodsUnschedulable"
 	ReasonWorkersSchedulable = "WorkersSchedulable"
 )
+
+// RunnerSetsDegraded rollup (Q304). The GMC's ActionsGateway reconciler rolls the
+// health of the RunnerSets bound to a gateway (spec.gatewayRef) up onto the gateway's
+// status, mirroring v1's RunnerGroupsDegraded (the operator's single pane — see
+// docs/development/kubernetes-conventions.md and the v1 agcv1alpha1.ImpairingConditionTypes
+// aggregation). Kept in its own const block so it stays additive alongside the sibling
+// condition-vocabulary work on this file.
+const (
+	// ConditionRunnerSetsDegraded is True when one or more RunnerSets bound to the
+	// ActionsGateway are impaired — not serving jobs (abnormal-is-True). Advisory: like
+	// v1's RunnerGroupsDegraded it does NOT gate Ready, because the gateway's own AGC
+	// control plane can be healthy while a tenant's RunnerSet is impaired. The impaired
+	// sets and their tripped signals are named in the condition message so an operator
+	// can act from the gateway without inspecting each child.
+	ConditionRunnerSetsDegraded = "RunnerSetsDegraded"
+	// ReasonRunnerSetsImpaired is the RunnerSetsDegraded=True reason (one or more bound
+	// RunnerSets are impaired; the message names them). ReasonAllRunnerSetsHealthy clears
+	// it (RunnerSetsDegraded=False), including when the gateway has no bound RunnerSets —
+	// absence of evidence is not an alarm.
+	ReasonRunnerSetsImpaired   = "RunnerSetsImpaired"
+	ReasonAllRunnerSetsHealthy = "AllRunnerSetsHealthy"
+)
