@@ -39,27 +39,37 @@ type workersUnschedulable struct {
 // A list failure yields a schedulable (False) result: the absence of evidence is
 // not an alarm, and the next reconcile retries.
 func (r *RunnerGroupReconciler) evalWorkersUnschedulable(ctx context.Context, rg *v1alpha1.RunnerGroup) workersUnschedulable {
-	st := workersUnschedulable{
-		reason:  v1alpha1.ReasonWorkersSchedulable,
-		message: "all worker pods are schedulable",
-	}
-
 	var pods corev1.PodList
 	if err := r.List(ctx, &pods,
 		client.InNamespace(rg.Namespace),
 		client.MatchingLabels{provisioner.LabelRunnerGroup: rg.Name},
 	); err != nil {
-		st.message = fmt.Sprintf("could not list worker pods: %v", err)
-		return st
+		return workersUnschedulable{
+			reason:  v1alpha1.ReasonWorkersSchedulable,
+			message: fmt.Sprintf("could not list worker pods: %v", err),
+		}
 	}
+	return evalWorkersUnschedulableForPods(pods.Items, r.nowFunc()(), unschedulableGrace(rg),
+		v1alpha1.ReasonWorkersSchedulable, v1alpha1.ReasonPodsUnschedulable)
+}
 
-	now := r.nowFunc()()
-	grace := unschedulableGrace(rg)
+// evalWorkersUnschedulableForPods is the owner-agnostic core of the
+// WorkersUnschedulable computation (Q157): given a worker-pod list, the clock, and
+// the scheduling grace, it reports whether any pod has sat Pending+Unschedulable
+// past the grace and the soonest re-check for a still-within-grace Pending pod. The
+// schedulable/unschedulable reason strings are passed in so the v1 RunnerGroup and
+// v2 RunnerSet reconcilers reuse the identical logic while stamping their own
+// package's reason constants (Q303).
+func evalWorkersUnschedulableForPods(pods []corev1.Pod, now time.Time, grace time.Duration, schedulableReason, unschedulableReason string) workersUnschedulable {
+	st := workersUnschedulable{
+		reason:  schedulableReason,
+		message: "all worker pods are schedulable",
+	}
 
 	var stuck []string
 	var next time.Duration
-	for i := range pods.Items {
-		pod := &pods.Items[i]
+	for i := range pods {
+		pod := &pods[i]
 		if !pod.DeletionTimestamp.IsZero() || pod.Status.Phase != corev1.PodPending {
 			continue
 		}
@@ -81,7 +91,7 @@ func (r *RunnerGroupReconciler) evalWorkersUnschedulable(ctx context.Context, rg
 	st.requeueAfter = next
 	if len(stuck) > 0 {
 		st.unschedulable = true
-		st.reason = v1alpha1.ReasonPodsUnschedulable
+		st.reason = unschedulableReason
 		st.message = fmt.Sprintf("%d worker pod(s) Pending and unschedulable for more than %s: %s",
 			len(stuck), grace, strings.Join(stuck, "; "))
 	}

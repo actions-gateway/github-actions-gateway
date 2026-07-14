@@ -41,6 +41,29 @@ const (
 	// a heuristic and native sidecars are the fix, not enforcement. The message names
 	// the offending containers; the SelfExitingSidecarsAnnotation opt-out clears it.
 	ConditionPossibleReapBlockingSidecar = "PossibleReapBlockingSidecar"
+	// ConditionWorkerQuotaPressure (warning) and ConditionWorkerQuotaExceeded (error)
+	// are the two-tier namespace-ResourceQuota worker-capacity ladder (Q82, ported from
+	// the v1 RunnerGroup to the v2 RunnerSet in Q303). Both are advisory (abnormal-is-True)
+	// and never gate Ready; they are mutually exclusive (exceeded supersedes pressure):
+	//   - WorkerQuotaExceeded is True when the namespace ResourceQuota cannot admit even
+	//     one more worker pod — the next acquired job's pod will be rejected at admission.
+	//   - WorkerQuotaPressure is True when the pool cannot grow from its current worker
+	//     count up to the configured ceiling (maxWorkers / max priorityTier threshold)
+	//     within current quota headroom.
+	// They surface the silent stall where a RunnerSet's pendingJobs rise while Ready
+	// stays True because the namespace quota is tighter than the set's ceiling.
+	ConditionWorkerQuotaPressure = "WorkerQuotaPressure"
+	ConditionWorkerQuotaExceeded = "WorkerQuotaExceeded"
+	// ConditionWorkersUnschedulable is True when one or more of the RunnerSet's worker
+	// pods have sat Pending past a scheduling grace because the scheduler could not
+	// place them — the pod reports PodScheduled=False/Unschedulable (no node matches its
+	// resource requests, nodeSelector, affinity, or tolerations) (Q157, ported to the v2
+	// RunnerSet in Q303, abnormal-is-True). It is distinct from the WorkerQuota ladder: a
+	// ResourceQuota rejection blocks pod *admission* so no pod is ever created, so an
+	// unschedulable Pending pod can only reflect a scheduler verdict, never quota
+	// exhaustion — the two never double-report. It does NOT gate Ready, but it is the
+	// signal that a set's pendingJobs are climbing because capacity is not materializing.
+	ConditionWorkersUnschedulable = "WorkersUnschedulable"
 )
 
 // Egress proxy mode reported in status.proxyMode (§H.10). It makes "no proxy" an
@@ -154,4 +177,11 @@ const (
 	// resolved template has no reap-blocking sidecar (or every one is acknowledged
 	// self-exiting, or converted to a native sidecar).
 	ReasonNoReapBlockingSidecar = "NoReapBlockingSidecar"
+	// ReasonPodsUnschedulable is the WorkersUnschedulable=True reason (Q303); the stuck
+	// pods and the scheduler's verdict are named in the condition message.
+	// ReasonWorkersSchedulable clears it (WorkersUnschedulable=False). The two-tier
+	// WorkerQuota ladder's reasons are contextual (they name the exhausted quota and
+	// resource) and are set inline by the reconciler, not fixed here.
+	ReasonPodsUnschedulable  = "PodsUnschedulable"
+	ReasonWorkersSchedulable = "WorkersSchedulable"
 )

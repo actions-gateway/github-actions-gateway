@@ -81,10 +81,21 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive,
 		fmt.Sprintf("references resolved (template via %s); scale-set listener active (scaleSetID %d, %d job(s) assigned)",
 			refs.templateSource, st.ScaleSetID, st.AssignedJobs))
+
+	// Worker-capacity conditions (Q303), identical to the classic path: the ScaleSet
+	// tier provisions the same worker pods (one per assigned job), so a namespace-quota
+	// or scheduling stall must surface here too rather than hiding behind rising
+	// pendingJobs with Ready=True.
+	unschedRequeue := r.applyWorkerCapacityConditions(ctx, rs, refs.template)
+
 	if err := r.Status().Update(ctx, rs); err != nil && !apierrors.IsConflict(err) {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: reapAfter}, nil
+	requeueAfter := reapAfter
+	if unschedRequeue > 0 && (requeueAfter <= 0 || unschedRequeue < requeueAfter) {
+		requeueAfter = unschedRequeue
+	}
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
 // ensureScaleSetListener returns the running listener for key, starting one if none is
