@@ -54,12 +54,13 @@ gmc:
   imagePullPolicy: IfNotPresent
 
 # -- Images the GMC injects into the gateways it provisions. --
-# These are NOT run by this chart. The GMC REQUIRES both to be pinned by
-# sha256 digest and rejects floating tags at startup (validateImageDigest in
-# cmd/gmc/cmd/main.go) unless allowFloatingImageTags=true below. That is the
-# secure default: an unconfigured install fails closed at GMC startup until you
-# pin a digest here, rather than silently running a mutable tag inside tenant
-# gateways. Set agc.image.digest and proxy.image.digest before installing.
+# These are NOT run by this chart. Like gmc.image, each REQUIRES a sha256 digest:
+# rendering fails (naming the image) when agc/proxy/wrapper.image.digest is empty,
+# unless allowFloatingImageTags=true below (Q307). That is the secure default: an
+# unconfigured install fails closed at render, rather than silently running a
+# mutable tag inside tenant gateways or only crash-looping the GMC later. The GMC
+# ALSO re-checks these at startup (validateImageDigest in cmd/gmc/cmd/main.go) as
+# a second layer. Set agc.image.digest and proxy.image.digest before installing.
 agc:
   image:
     repository: ghcr.io/actions-gateway/agc
@@ -74,18 +75,20 @@ proxy:
 # the cmd/worker wrapper binary. The GMC forwards it to every AGC, which injects
 # it into each worker pod so the runner container can be the unmodified upstream
 # actions-runner (or any tenant workerImage) instead of a baked-in wrapper image.
-# Digest-pinned like agc/proxy; floating tags need allowFloatingImageTags.
+# Digest-pinned like agc/proxy — rendering fails on an empty wrapper.image.digest
+# unless allowFloatingImageTags. On by default, so it is required like the rest.
 wrapper:
   image:
     repository: ghcr.io/actions-gateway/wrapper
     tag: ""
     digest: ""
 
-# allowFloatingImageTags=true passes --allow-floating-image-tags to the GMC
-# (disabling the AGC_IMAGE/PROXY_IMAGE digest-pinning requirement) AND lets
-# the chart render the GMC's own image from a floating tag when
-# gmc.image.digest is empty (otherwise rendering fails). DEV/TEST ONLY — do
-# not enable in production. Leaving it false keeps the secure default.
+# allowFloatingImageTags=true lets the chart render all four images
+# (gmc/agc/proxy/wrapper) from a floating tag when their digest is empty
+# (otherwise rendering fails) AND passes --allow-floating-image-tags to the GMC,
+# disabling its startup AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE digest-pin check.
+# DEV/TEST ONLY — do not enable in production. Leaving it false keeps the secure
+# default.
 allowFloatingImageTags: false
 
 # allowedPriorityClasses is the platform allowlist of cluster-scoped PriorityClass

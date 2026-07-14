@@ -27,7 +27,7 @@ render="$REPO_ROOT/.build/polaris-render.yaml"
 
 mkdir -p "$REPO_ROOT/.build"
 echo "==> helm template $chart (digest-pinned posture)"
-helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST" >"$render"
+helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" >"$render"
 echo "==> polaris audit (gate: danger findings fail; warnings reported)"
 polaris audit --merge-config --config "$config" --audit-path "$render" \
 	--format=pretty --only-show-failed-tests --set-exit-code-on-danger

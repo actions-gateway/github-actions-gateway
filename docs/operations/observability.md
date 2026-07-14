@@ -621,6 +621,61 @@ groups:
         annotations:
           summary: "Reconcile errors in {{ $labels.controller }} for {{ $labels.resource }}"
           description: "Reconcile errors at >2/minute for 10+ minutes. Resources may be stale."
+
+      # Page: worker pods can't be scheduled — capacity is not materializing (Q157)
+      - alert: ActionsGatewayWorkersUnschedulable
+        expr: |
+          actions_gateway_workers_unschedulable == 1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker pods unschedulable for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "Worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — not quota). Capacity is not materializing; acquired jobs will not start."
+
+      # Page: the GitHub egress IP-range allowlist has gone stale (Q157)
+      - alert: ActionsGatewayEgressRulesStale
+        expr: |
+          actions_gateway_egress_rules_stale == 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
+          description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges."
+
+      # Ticket: agent re-registration failing — listener capacity decays job by job (Q267)
+      - alert: ActionsGatewayAgentRecycleErrors
+        expr: |
+          rate(actions_gateway_agent_recycle_errors_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent recycle errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "Single-use JIT agent re-registration is failing. Sustained growth shrinks listener capacity and decays tenant throughput job by job."
+
+      # Ticket: fan-out losers recycling on the fallback timeout — a class of stuck winners (Q266)
+      - alert: ActionsGatewayFanoutFallbackTimeout
+        expr: |
+          rate(actions_gateway_fanout_loser_recycle_deferred_total{outcome="fallback_timeout"}[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fan-out recycle fallback timeouts for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners. Investigate long-running or wedged winning jobs."
+
+      # Ticket: fan-out completion (completejob on a deduped sibling) is failing (Q260)
+      - alert: ActionsGatewayAbandonedDeliveryErrors
+        expr: |
+          rate(actions_gateway_abandoned_delivery_completions_total{outcome="error"}[5m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
 ```
 
 ---

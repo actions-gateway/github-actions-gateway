@@ -4,13 +4,14 @@ into namespace "{{ .Release.Namespace }}" as release "{{ .Release.Name }}".
 Verify the controller is running:
   kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "actions-gateway.managerName" . }}
 
-{{ if not .Values.allowFloatingImageTags -}}
-IMPORTANT — image digests required:
-  The GMC rejects floating AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE tags and will
-  crash-loop until they are pinned by sha256 digest. Set these before/at install:
-    --set agc.image.digest=sha256:... --set proxy.image.digest=sha256:... \
-    --set wrapper.image.digest=sha256:...
-  (or allowFloatingImageTags=true for DEV/TEST ONLY).
+{{ if .Values.allowFloatingImageTags -}}
+WARNING — digest pinning disabled (allowFloatingImageTags=true):
+  Images may run from mutable :latest tags. DEV/TEST ONLY — never in production.
+{{ else -}}
+Images are digest-pinned (gmc/agc/proxy/wrapper). Rendering enforces this: an
+empty digest on any of the four fails the render up front rather than surfacing
+later as a GMC crash-loop. Confirm the four pinned digests match this release's
+notes: docs/operations/install.md ("Pin images by digest").
 {{ end -}}
 
 {{ if .Values.certManager.enabled -}}

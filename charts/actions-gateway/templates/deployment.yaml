@@ -32,7 +32,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: manager
-        image: {{ include "actions-gateway.gmcImage" . }}
+        image: {{ include "actions-gateway.image" (dict "image" .Values.gmc.image "name" "gmc" "allowFloating" .Values.allowFloatingImageTags) }}
         imagePullPolicy: {{ .Values.gmc.imagePullPolicy }}
         command:
         - /manager
@@ -121,15 +121,15 @@ spec:
         # AGC_IMAGE / PROXY_IMAGE are injected into every gateway the GMC
         # provisions. Required; digest-pinned unless allowFloatingImageTags.
         - name: AGC_IMAGE
-          value: {{ include "actions-gateway.image" .Values.agc.image | quote }}
+          value: {{ include "actions-gateway.image" (dict "image" .Values.agc.image "name" "agc" "allowFloating" .Values.allowFloatingImageTags) | quote }}
         - name: PROXY_IMAGE
-          value: {{ include "actions-gateway.image" .Values.proxy.image | quote }}
+          value: {{ include "actions-gateway.image" (dict "image" .Values.proxy.image "name" "proxy" "allowFloating" .Values.allowFloatingImageTags) | quote }}
         # WRAPPER_IMAGE enables runtime worker-wrapper injection (Q235): the GMC
         # forwards it to every AGC, which injects the wrapper into each worker pod
         # so the runner image can be the unmodified upstream actions-runner.
         # Digest-pinned like AGC_IMAGE/PROXY_IMAGE unless allowFloatingImageTags.
         - name: WRAPPER_IMAGE
-          value: {{ include "actions-gateway.image" .Values.wrapper.image | quote }}
+          value: {{ include "actions-gateway.image" (dict "image" .Values.wrapper.image "name" "wrapper" "allowFloating" .Values.allowFloatingImageTags) | quote }}
         ports:
         - containerPort: 8081
           name: health
