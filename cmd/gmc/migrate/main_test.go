@@ -28,6 +28,16 @@ func fakeClient(objs ...client.Object) client.Client {
 	return fake.NewClientBuilder().WithScheme(newScheme()).WithObjects(objs...).Build()
 }
 
+// failingReader fails the test if read from — proves the --assume-yes path never
+// touches stdin.
+type failingReader struct{ t *testing.T }
+
+func (r failingReader) Read([]byte) (int, error) {
+	r.t.Helper()
+	r.t.Fatal("confirmApply read stdin under --assume-yes; it must not")
+	return 0, nil
+}
+
 func v1Namespace(name string, labels, annotations map[string]string) *corev1.Namespace {
 	return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels, Annotations: annotations}}
 }
@@ -68,6 +78,84 @@ func TestParseOptions_NamespaceAndApply(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "team-a", opts.namespace)
 	assert.True(t, opts.apply)
+	assert.Empty(t, opts.kubeContext)
+	assert.False(t, opts.assumeYes)
+}
+
+// TestParseOptions_ContextAndAssumeYes covers the wrong-cluster guard flags: an
+// explicit --context pins the target, and --assume-yes / -y arm the automation escape.
+func TestParseOptions_ContextAndAssumeYes(t *testing.T) {
+	opts, err := parseOptions([]string{"--namespace", "team-a", "--apply", "--context", "kind-gag", "--assume-yes"}, &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.Equal(t, "kind-gag", opts.kubeContext)
+	assert.True(t, opts.assumeYes)
+
+	opts, err = parseOptions([]string{"-n", "team-a", "-y"}, &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.True(t, opts.assumeYes, "-y is shorthand for --assume-yes")
+}
+
+// TestParseOptions_AssumeYesFromEnv covers the ASSUME_YES=1 escape (parity with
+// scripts/lib/common.sh) even when the flag is absent.
+func TestParseOptions_AssumeYesFromEnv(t *testing.T) {
+	t.Setenv("ASSUME_YES", "1")
+	opts, err := parseOptions([]string{"--namespace", "team-a", "--apply"}, &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.True(t, opts.assumeYes)
+
+	t.Setenv("ASSUME_YES", "0")
+	opts, err = parseOptions([]string{"--namespace", "team-a", "--apply"}, &bytes.Buffer{})
+	require.NoError(t, err)
+	assert.False(t, opts.assumeYes, "only ASSUME_YES=1 arms the escape")
+}
+
+// TestApplyScope renders the confirmation scope: a single namespace vs the loud
+// cluster-wide banner for --all-namespaces.
+func TestApplyScope(t *testing.T) {
+	assert.Contains(t, applyScope(options{namespace: "team-a"}), `"team-a"`)
+	assert.Contains(t, applyScope(options{allNamespaces: true}), "cluster-wide")
+}
+
+// TestConfirmApply_AssumeYes skips the prompt and never touches stdin.
+func TestConfirmApply_AssumeYes(t *testing.T) {
+	var out bytes.Buffer
+	ok, err := confirmApply("kind-gag", "namespace \"team-a\"", true, failingReader{t}, &out)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Contains(t, out.String(), "skipping confirmation")
+	// The target and scope are always echoed before any write, assume-yes or not.
+	assert.Contains(t, out.String(), "kind-gag")
+}
+
+// TestConfirmApply_Prompt covers the interactive replies: only y/Y/yes proceeds;
+// everything else (and EOF on a piped stdin) declines without writing.
+func TestConfirmApply_Prompt(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"yes-short", "y\n", true},
+		{"yes-upper", "Y\n", true},
+		{"yes-word", "yes\n", true},
+		{"no", "n\n", false},
+		{"empty", "\n", false},
+		{"eof", "", false},
+		{"garbage", "maybe\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			ok, err := confirmApply("prod-cluster", "ALL namespaces (cluster-wide)", false, strings.NewReader(tc.input), &out)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, ok)
+			// The resolved target + scope are echoed so a wrong cluster is visible.
+			assert.Contains(t, out.String(), "prod-cluster")
+			assert.Contains(t, out.String(), "cluster-wide")
+			if !tc.want {
+				assert.Contains(t, out.String(), "Aborted")
+			}
+		})
+	}
 }
 
 // TestMigrateAll_DryRun prints the v2 manifests for a tenant and applies nothing.

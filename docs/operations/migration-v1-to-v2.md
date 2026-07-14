@@ -113,7 +113,33 @@ The fan-out preserves v1 behavior and weakens no security property:
   running (see [Getting Started — the v2 CRDs](../getting-started.md#1-deploy-the-gmc)).
 - `kubectl` access to the cluster with permission to read the tenant's v1 objects and
   (for `--apply`) create v2 objects and patch the namespace.
-- Build the tool: from `cmd/gmc`, `make build-migrate` (produces `.build/gag-migrate`).
+- Get the tool. Either **download the signed release binary** for your platform from
+  the [GitHub Release](https://github.com/actions-gateway/github-actions-gateway/releases)
+  (`gag-migrate-<version>-<os>-<arch>`), or **build from source**: from `cmd/gmc`,
+  `make build-migrate` (or `make build-migrate` at the repo root) — both produce
+  `.build/gag-migrate`. To verify a downloaded binary (keyless signature over the
+  checksum manifest):
+
+  ```bash
+  cosign verify-blob --bundle SHA256SUMS.cosign.bundle SHA256SUMS \
+    --certificate-identity-regexp 'https://github.com/actions-gateway/github-actions-gateway/.*' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  sha256sum -c SHA256SUMS   # then confirm your binary's checksum matches
+  ```
+
+### Pin the target cluster
+
+`gag-migrate` talks to whatever your kubeconfig resolves to. **Pass `--context` to pin
+the cluster explicitly** rather than relying on the ambient current-context (a parallel
+session can silently repoint it):
+
+```bash
+gag-migrate --namespace team-a --context my-cluster
+```
+
+Before any write, `--apply` echoes the resolved target context and scope and requires an
+explicit `yes`. In automation, pass `--assume-yes` (or set `ASSUME_YES=1`) to skip the
+prompt.
 
 ## Step 1 — dry-run and review
 
@@ -141,13 +167,22 @@ holding a v1 `ActionsGateway`).
 ## Step 2 — apply
 
 ```bash
-gag-migrate --namespace team-a --apply
+gag-migrate --namespace team-a --context my-cluster --apply
+# About to APPLY the v2 migration.
+#   Target context: my-cluster
+#   Scope:          namespace "team-a"
+# ...
+# Proceed? [y/N] y
 ```
 
-`--apply` creates the v2 objects (children before referrers) and patches the
-namespace additively. It is **idempotent**: an object that already exists is left
-untouched, so a re-run never clobbers a hand-edited v2 object. It never deletes v1
-objects.
+`--apply` first **echoes the resolved target context and scope and waits for a `yes`**
+(the wrong-cluster guard) — so `--all-namespaces --apply` can never write cluster-wide
+against an unconfirmed context. Pass `--assume-yes` (or `ASSUME_YES=1`) to skip the
+prompt in automation.
+
+It then creates the v2 objects (children before referrers) and patches the namespace
+additively. It is **idempotent**: an object that already exists is left untouched, so a
+re-run never clobbers a hand-edited v2 object. It never deletes v1 objects.
 
 Verify the v2 set reaches steady state:
 

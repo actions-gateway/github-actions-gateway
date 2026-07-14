@@ -325,6 +325,12 @@ jobs:
             prerelease=false
           fi
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          # Cross-compiles the gag-migrate release binaries (Q306). Same Go version
+          # source as the other workflows so the CLI is built with the toolchain the
+          # rest of the release is.
+          go-version-file: go.work
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -518,6 +524,29 @@ jobs:
           fi
           gh release upload "${TAG}" --repo "${REPO}" --clobber \
             "${out}" "${out}.cosign.bundle"
+      - name: Build, sign, and attach the gag-migrate CLI binaries (keyless, Q306)
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # gag-migrate (the one-shot v1->v2 migration CLI) was source-build-only
+          # (Q306). Cross-compile it for the operator platform matrix and ship the
+          # binaries as release assets so running the migration needs neither a Go
+          # toolchain nor a repo checkout. Keyless-signed over a single SHA256SUMS
+          # manifest via the SAME Fulcio/Rekor sign-blob path as the v2 CRD asset
+          # above — no key material and no stored secret (the project forbids
+          # secrets-as-config). Verify with `cosign verify-blob --bundle
+          # SHA256SUMS.cosign.bundle SHA256SUMS`, then `sha256sum -c SHA256SUMS`.
+          out="${RUNNER_TEMP}/migrate-bin"
+          scripts/build-migrate-binaries.sh "${out}" "${TAG}"
+          scripts/retry.sh cosign sign-blob --yes \
+            --bundle "${out}/SHA256SUMS.cosign.bundle" "${out}/SHA256SUMS"
+          # The Release already exists (created above); attach every binary, the
+          # checksum manifest, and its signature. --clobber keeps re-publish idempotent.
+          gh release upload "${TAG}" --repo "${REPO}" --clobber \
+            "${out}"/gag-migrate-* "${out}/SHA256SUMS" "${out}/SHA256SUMS.cosign.bundle"
       - name: Record published chart in the run summary
         env:
           REF: ${{ steps.chart.outputs.ref }}

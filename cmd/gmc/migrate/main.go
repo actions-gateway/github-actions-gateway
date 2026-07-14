@@ -13,13 +13,16 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,8 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -36,8 +40,13 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/migrate"
 )
 
+// errAborted is returned when the operator declines the --apply confirmation
+// prompt. main maps any run error to a non-zero exit, so a declined apply exits
+// non-zero (mirroring scripts/lib/common.sh's confirm_or_exit) — nothing is written.
+var errAborted = errors.New("apply aborted by operator; no changes made")
+
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
@@ -54,6 +63,13 @@ type options struct {
 	allNamespaces bool
 	apply         bool
 	outputDir     string
+	// kubeContext pins the target cluster explicitly (the repo convention:
+	// never rely on the ambient current-context, since a parallel session can
+	// silently repoint it). Empty means "use the kubeconfig current-context".
+	kubeContext string
+	// assumeYes skips the interactive --apply confirmation (automation). Set by
+	// --assume-yes or ASSUME_YES=1, mirroring scripts/lib/common.sh.
+	assumeYes bool
 }
 
 // newScheme builds the client scheme with the v1 (gmc + agc) and v2 (neutral) kinds
@@ -79,9 +95,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&opts.allNamespaces, "all-namespaces", false, "Migrate every namespace that holds a v1 ActionsGateway.")
 	fs.BoolVar(&opts.apply, "apply", false, "Apply the v2 object set and patch the namespace. Default is dry-run (print only).")
 	fs.StringVar(&opts.outputDir, "output-dir", "", "Dry-run: write per-namespace manifests here instead of stdout.")
+	fs.StringVar(&opts.kubeContext, "context", "", "kubeconfig context to target. Pins the cluster explicitly; defaults to the current-context (echoed before any --apply write).")
+	fs.BoolVar(&opts.assumeYes, "assume-yes", false, "Skip the --apply confirmation prompt (automation). Also settable via ASSUME_YES=1.")
+	fs.BoolVar(&opts.assumeYes, "y", false, "Shorthand for --assume-yes.")
 	fs.Usage = func() {
 		fprintf(stderr, "gag-migrate — fan a v1alpha1 tenant out to the v2alpha1 object set.\n\n")
-		fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--apply]\n\n")
+		fprintf(stderr, "Usage:\n  gag-migrate --namespace <ns> [--context <ctx>] [--apply] [--output-dir <dir>]\n  gag-migrate --all-namespaces [--context <ctx>] [--apply]\n\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -91,16 +110,23 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		fs.Usage()
 		return opts, fmt.Errorf("one of --namespace or --all-namespaces is required")
 	}
+	// An explicit flag OR ASSUME_YES=1 (mirrors scripts/lib/common.sh) satisfies
+	// the automation escape; neither weakens the interactive default.
+	if os.Getenv("ASSUME_YES") == "1" {
+		opts.assumeYes = true
+	}
 	return opts, nil
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	opts, err := parseOptions(args, stderr)
 	if err != nil {
 		return err
 	}
 
-	cfg, err := ctrl.GetConfig()
+	// Pin the target cluster explicitly. --context wins; otherwise this resolves
+	// to the kubeconfig current-context, exactly like `ctrl.GetConfig()`.
+	cfg, err := ctrlconfig.GetConfigWithContext(opts.kubeContext)
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)
 	}
@@ -109,7 +135,75 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("build client: %w", err)
 	}
 
+	// Wrong-cluster guard: before any write, echo the resolved target and scope
+	// and require an explicit confirmation. --all-namespaces --apply must not
+	// write cluster-wide against an unconfirmed (possibly ambient) context.
+	if opts.apply {
+		ok, err := confirmApply(resolveContextName(opts.kubeContext), applyScope(opts), opts.assumeYes, stdin, stderr)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errAborted
+		}
+	}
+
 	return migrateAll(context.Background(), c, opts, stdout, stderr)
+}
+
+// applyScope renders the write scope for the confirmation prompt: a single named
+// namespace, or a loud cluster-wide banner for --all-namespaces.
+func applyScope(opts options) string {
+	if opts.allNamespaces {
+		return "ALL namespaces holding a v1 ActionsGateway (cluster-wide)"
+	}
+	return fmt.Sprintf("namespace %q", opts.namespace)
+}
+
+// resolveContextName returns the kube context the run will target, for display in
+// the confirmation prompt. An explicit --context wins; otherwise it best-effort
+// reads the kubeconfig current-context so the operator sees the real target name
+// rather than a bare "current-context". Display-only: a resolution failure never
+// blocks the run (the confirmation itself is the guard).
+func resolveContextName(override string) string {
+	if override != "" {
+		return override
+	}
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	raw, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, &clientcmd.ConfigOverrides{}).RawConfig()
+	if err != nil || raw.CurrentContext == "" {
+		return "(kubeconfig current-context — could not resolve name)"
+	}
+	return raw.CurrentContext
+}
+
+// confirmApply gates an --apply write behind an explicit operator confirmation,
+// echoing the resolved target context and scope first (the wrong-cluster guard).
+// assumeYes (from --assume-yes or ASSUME_YES=1) skips the prompt for automation,
+// consistent with scripts/lib/common.sh's confirm_or_exit. Only a literal
+// y/Y/yes proceeds; anything else — including EOF on a non-interactive stdin —
+// declines, so a piped invocation never writes without --assume-yes.
+func confirmApply(contextName, scope string, assumeYes bool, in io.Reader, out io.Writer) (bool, error) {
+	fprintf(out, "About to APPLY the v2 migration.\n")
+	fprintf(out, "  Target context: %s\n", contextName)
+	fprintf(out, "  Scope:          %s\n", scope)
+	fprintf(out, "This creates v2 objects and patches namespace metadata. v1 keeps running; nothing is deleted.\n")
+	if assumeYes {
+		fprintf(out, "--assume-yes set — skipping confirmation.\n")
+		return true, nil
+	}
+	fprintf(out, "Proceed? [y/N] ")
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("read confirmation: %w", err)
+	}
+	switch strings.TrimSpace(line) {
+	case "y", "Y", "yes":
+		return true, nil
+	default:
+		fprintln(out, "Aborted — no changes made.")
+		return false, nil
+	}
 }
 
 // migrateAll resolves the target namespaces and migrates each. Split from run so the
