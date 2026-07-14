@@ -471,6 +471,26 @@ shared reason vocabulary; messages name the specific blocker
 (`RunnerTemplate 'dind-large' not found`), never a generic string. Pin this as the
 contract in M1 rather than letting each reconciler invent its own.
 
+**Child-health rollup onto the `ActionsGateway` (Q304).** The GMC's `ActionsGateway`
+reconciler rolls the health of the `RunnerSet`s bound to a gateway up onto a
+`RunnerSetsDegraded` condition — the v2 counterpart of v1's `RunnerGroupsDegraded`, and
+the operator's single pane. Because v2 `RunnerSet`s are not *owned* by the gateway (they
+only reference it via `spec.gatewayRef`, [§H.8](#h8-ownership-gc-and-deletion)), the
+binding is resolved by matching `gatewayRef.name` within the namespace — the same
+scoping the AGC applies server-side via its `spec.gatewayRef.name` field selector, not
+owner labels. A set is *impaired* (not serving jobs) when its `Ready` is `False` for
+a non-transient reason — a reference did not resolve or GitHub auth failed, anything but
+the benign startup `NoActiveSessions` — or when the abnormal `WorkersUnschedulable`
+condition is `True`; v2 folds the credential/reference failures that were v1's standalone
+`CredentialUnavailable`/`Degraded` conditions into `Ready=False`-with-a-reason, so the
+rollup reads `Ready` rather than a fixed list of abnormal conditions. The advisory
+conditions (the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`)
+are excluded so the rollup does not flap on normal load. Like the v1 rollup it is
+advisory — it does **not** gate `Ready`, since the gateway's own AGC control plane can be
+healthy while one tenant's set is impaired. The GMC watches bound `RunnerSet`s (predicated
+on a change to a set's impaired signature, dropping high-frequency `activeSessions`/
+`pendingJobs` churn) so a child's health change refreshes the parent promptly.
+
 ## H.8. Ownership, GC, and deletion
 
 Shared objects must not be owner-referenced by their referrers:
