@@ -311,6 +311,11 @@ This is **not** a quota problem: a `ResourceQuota` rejection blocks pod *admissi
 so the pod is never created — that path is the separate `WorkerQuotaExceeded`
 condition. The two never both fire for the same cause.
 
+> **v2 `RunnerSet`.** The same `WorkersUnschedulable` condition is set on a v2
+> `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset`
+> in the commands below. (The `actions_gateway_workers_unschedulable` gauge is still
+> emitted only for v1 `RunnerGroup`s; on a `RunnerSet`, read the condition directly.)
+
 **Diagnostics.**
 
 ```sh
@@ -1401,6 +1406,8 @@ The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the names
 |---|---|---|
 | `WorkerQuotaPressure` — `actions_gateway_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
 | `WorkerQuotaExceeded` — `actions_gateway_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
+
+> **v2 `RunnerSet`.** Both `WorkerQuotaPressure` and `WorkerQuotaExceeded` are set on a v2 `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset` in the commands below. (The `actions_gateway_worker_quota_*` gauges are still emitted only for v1 `RunnerGroup`s; on a `RunnerSet`, read the conditions directly.)
 
 ```sh
 kubectl get runnergroup -n <namespace> <name> \

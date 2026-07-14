@@ -250,6 +250,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Q249 condition and gauge rather than leave a stale True/non-zero behind (e.g.
 		// after the resolved template was deleted).
 		r.setReapBlockingSidecarStatus(&rs, nil, nil)
+		// Likewise clear the worker-capacity conditions (Q303): with no listeners running
+		// no new worker pods are provisioned, so a previously-True quota/unschedulable
+		// alarm must not linger behind the dominant Ready=False/<Ref>NotFound signal.
+		r.clearWorkerCapacityConditions(&rs)
 		rs.Status.ActiveSessions = 0
 		rs.Status.ActiveJobs = 0
 		rs.Status.PendingJobs = 0
@@ -346,11 +350,21 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.setReadyCondition(&rs, false, v2alpha1.ReasonNoActiveSessions,
 			"references resolved; no listener goroutines are running")
 	}
+
+	// Worker-capacity conditions (Q303): the two-tier WorkerQuota ladder and
+	// WorkersUnschedulable, so a stall shows as a condition rather than only rising
+	// pendingJobs with Ready=True. Advisory — neither gates Ready. unschedRequeue folds
+	// into the requeue so WorkersUnschedulable flips when a Pending pod crosses its grace.
+	unschedRequeue := r.applyWorkerCapacityConditions(ctx, &rs, refs.template)
+
 	if err := r.Status().Update(ctx, &rs); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	requeueAfter := reapAfter
+	if unschedRequeue > 0 && (requeueAfter <= 0 || unschedRequeue < requeueAfter) {
+		requeueAfter = unschedRequeue
+	}
 	if rs.Spec.MaxListeners > 0 && mux.ActiveCount() < rs.Spec.MaxListeners {
 		if interval := r.baselineRecheckInterval(); requeueAfter <= 0 || interval < requeueAfter {
 			requeueAfter = interval

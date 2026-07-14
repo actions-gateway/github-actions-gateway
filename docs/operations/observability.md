@@ -336,6 +336,15 @@ remove the files when finished.)
 | `actions_gateway_runnergroups_degraded` | Gauge | `namespace`, `name` | `1` when `RunnerGroupsDegraded=True` (Q158): one or more of the gateway's owned `RunnerGroup`s report an impairing condition (`CredentialUnavailable`/`Degraded`/`RunnerVersionTooOld`/`WorkersUnschedulable`). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate `Ready`. |
 | `actions_gateway_egress_rules_stale` | Gauge | `namespace`, `name` | `1` when `EgressRulesStale=True` (Q157): the gateway's GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy `NetworkPolicy` drift from GitHub's published ranges. Advisory — does not gate `Ready`; page if sustained, as new GitHub ranges will be silently dropped. |
 
+> **Worker-capacity conditions on v2 `RunnerSet`s.** The `WorkerQuotaPressure`,
+> `WorkerQuotaExceeded`, and `WorkersUnschedulable` conditions are also set on a v2
+> `RunnerSet` (Q303) with the same semantics as the v1 `RunnerGroup`, so a stalled
+> set surfaces the capacity blocker in `.status.conditions` instead of only a rising
+> `pendingJobs` with `Ready=True`. The three gauges above (`actions_gateway_worker_quota_*`,
+> `actions_gateway_workers_unschedulable`) are still emitted only for v1 `RunnerGroup`s;
+> to alert on a `RunnerSet`, scrape its conditions (e.g. via kube-state-metrics
+> `CustomResourceStateMetrics`) or read them with `kubectl get runnerset`.
+
 ### Scale-set acquisition tier (Q264)
 
 These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A `Classic` (deprecated) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.

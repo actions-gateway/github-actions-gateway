@@ -54,16 +54,24 @@ var workerQuotaChecks = []quotaCheck{
 	{corev1.ResourceLimitsMemory, corev1.ResourceLimitsMemory},
 }
 
-// workerFootprint returns the quota footprint of `count` worker pods: the
-// per-pod container requests/limits (summed across containers) scaled by count,
-// plus the pod count. Keys mirror ResourceQuota hard keys. Linear in count.
+// workerFootprint returns the quota footprint of `count` v1 RunnerGroup worker
+// pods. See workerFootprintForContainers.
 func workerFootprint(rg *v1alpha1.RunnerGroup, count int32) corev1.ResourceList {
+	return workerFootprintForContainers(rg.Spec.PodTemplate.Spec.Containers, count)
+}
+
+// workerFootprintForContainers returns the quota footprint of `count` worker pods
+// with the given containers: the per-pod container requests/limits (summed across
+// containers) scaled by count, plus the pod count. Keys mirror ResourceQuota hard
+// keys. Linear in count. Owner-agnostic so the v1 RunnerGroup (PodTemplate) and v2
+// RunnerSet (resolved RunnerTemplate) capacity checks share one footprint calc.
+func workerFootprintForContainers(containers []corev1.Container, count int32) corev1.ResourceList {
 	if count < 0 {
 		count = 0
 	}
 	var reqCPU, reqMem, limCPU, limMem resource.Quantity
-	for i := range rg.Spec.PodTemplate.Spec.Containers {
-		res := rg.Spec.PodTemplate.Spec.Containers[i].Resources
+	for i := range containers {
+		res := containers[i].Resources
 		reqCPU.Add(res.Requests[corev1.ResourceCPU])
 		reqMem.Add(res.Requests[corev1.ResourceMemory])
 		limCPU.Add(res.Limits[corev1.ResourceCPU])
@@ -171,14 +179,22 @@ func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha
 }
 
 // countActiveWorkerPods counts this RunnerGroup's worker pods that count toward
-// its ceiling: non-terminal (Pending/Running) and not being deleted. Terminal
-// pods awaiting reaping do not count toward the ceiling (they still consume the
-// quota's `used`, which the headroom check reads separately and conservatively).
+// its ceiling. See countActiveWorkerPodsByLabel.
 func (r *RunnerGroupReconciler) countActiveWorkerPods(ctx context.Context, rg *v1alpha1.RunnerGroup) int32 {
+	return countActiveWorkerPodsByLabel(ctx, r.Client, rg.Namespace, provisioner.LabelRunnerGroup, rg.Name)
+}
+
+// countActiveWorkerPodsByLabel counts the worker pods in namespace ns selected by
+// label==name that count toward a pool's ceiling: non-terminal (Pending/Running)
+// and not being deleted. Terminal pods awaiting reaping do not count toward the
+// ceiling (they still consume the quota's `used`, which the headroom check reads
+// separately and conservatively). Owner-agnostic (LabelRunnerGroup for v1,
+// LabelRunnerSet for v2) so both capacity checks count the same way.
+func countActiveWorkerPodsByLabel(ctx context.Context, c client.Reader, ns, label, name string) int32 {
 	var pods corev1.PodList
-	if err := r.List(ctx, &pods,
-		client.InNamespace(rg.Namespace),
-		client.MatchingLabels{provisioner.LabelRunnerGroup: rg.Name},
+	if err := c.List(ctx, &pods,
+		client.InNamespace(ns),
+		client.MatchingLabels{label: name},
 	); err != nil {
 		return 0
 	}
