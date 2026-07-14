@@ -309,6 +309,16 @@ func freeAddr(t *testing.T) string {
 	return addr
 }
 
+// bindTimeout bounds the test waits for the proxy's listeners to bind
+// (s.ready) and for ListenAndServe to drain after context cancellation. Both are
+// effectively instant locally (the full mTLS test passes in ~0.17s), so this
+// ceiling never gates the happy path — it only exists to fail a genuinely hung
+// server rather than hang the suite. It is sized well above the worst-case CI
+// CPU starvation seen under `make cover-check`, where the previous 10s ceiling
+// tripped despite the bind itself being ready (Q302, same CI-starvation timing
+// class as Q222).
+const bindTimeout = 60 * time.Second
+
 // startServer launches srv.ListenAndServe on a background context and blocks
 // until the server has bound all of its listeners — i.e. s.ready is closed.
 // Returning only after ready closes gives the caller a happens-before edge to
@@ -332,8 +342,8 @@ func startServer(t *testing.T, srv *Server) {
 	})
 	select {
 	case <-srv.ready:
-	case <-time.After(10 * time.Second):
-		t.Fatal("server did not bind its listeners (s.ready) within 10s")
+	case <-time.After(bindTimeout):
+		t.Fatalf("server did not bind its listeners (s.ready) within %s", bindTimeout)
 	}
 }
 
@@ -350,16 +360,16 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 	// Wait for both listeners to bind (s.ready) before cancelling.
 	select {
 	case <-srv.ready:
-	case <-time.After(10 * time.Second):
-		t.Fatal("server did not bind its listeners (s.ready) within 10s")
+	case <-time.After(bindTimeout):
+		t.Fatalf("server did not bind its listeners (s.ready) within %s", bindTimeout)
 	}
 
 	cancel()
 	select {
 	case err := <-done:
 		assert.NoError(t, err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("ListenAndServe did not return within 10s after context cancellation")
+	case <-time.After(bindTimeout):
+		t.Fatalf("ListenAndServe did not return within %s after context cancellation", bindTimeout)
 	}
 }
 
