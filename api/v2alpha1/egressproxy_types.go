@@ -166,7 +166,8 @@ type EgressProxySpec struct {
 // own children; deletion degrades referrers rather than blocking, so it carries no
 // finalizer (§H.8).
 type EgressProxyStatus struct {
-	// Conditions are the observed conditions of the proxy pool. Known types: Ready.
+	// Conditions are the observed conditions of the proxy pool. Known types: Ready,
+	// Degraded, ProxyQuotaPressure, ProxyQuotaExceeded, EgressRulesStale (Q320).
 	//
 	// +optional
 	// +listType=map

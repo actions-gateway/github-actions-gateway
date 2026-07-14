@@ -608,10 +608,20 @@ var proxyQuotaChecks = []quotaCheck{
 // limits.cpu, limits.memory). It is linear in replicas, so the *additional*
 // demand to grow the pool from m to n pods is proxyFootprint(ag, n-m).
 func proxyFootprint(ag *gmcv1alpha1.ActionsGateway, replicas int32) corev1.ResourceList {
+	return footprintFromResources(proxyResources(ag), replicas)
+}
+
+// footprintFromResources returns the ResourceQuota footprint of `replicas` pods with
+// per-pod requests/limits `res`: the per-replica requests/limits scaled by replicas,
+// plus the pod count. Keys mirror ResourceQuota hard keys (pods, requests.cpu,
+// requests.memory, limits.cpu, limits.memory). It is linear in replicas, so the
+// *additional* demand to grow a pool from m to n pods is
+// footprintFromResources(res, n-m). Shared by the v1 ActionsGateway proxy
+// (proxyFootprint) and the v2 EgressProxy quota eval (egressProxyFootprint).
+func footprintFromResources(res corev1.ResourceRequirements, replicas int32) corev1.ResourceList {
 	if replicas < 0 {
 		replicas = 0
 	}
-	res := proxyResources(ag)
 	out := corev1.ResourceList{
 		corev1.ResourcePods: *resource.NewQuantity(int64(replicas), resource.DecimalSI),
 	}
@@ -680,6 +690,27 @@ type proxyQuotaConditions struct {
 // not count the proxy pods); face-value hard/used is sufficient for an advisory
 // signal and avoids false precision.
 func (r *ActionsGatewayReconciler) evalProxyQuota(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, proxyDep *appsv1.Deployment) proxyQuotaConditions {
+	return evalProxyPoolQuota(ctx, r, ag.Namespace, proxyMaxReplicas(ag), proxyResources(ag), proxyDep)
+}
+
+// evalProxyPoolQuota computes the ProxyQuotaPressure (warning) and
+// ProxyQuotaExceeded (error) conditions for a namespace-ResourceQuota-bounded,
+// HPA-scaled proxy pool against the platform-owned namespace ResourceQuota (Q82).
+// Both are advisory and do NOT gate Ready — the pool keeps serving at its current
+// scale. Shared by the v1 ActionsGateway proxy (evalProxyQuota) and the v2
+// EgressProxy (evalEgressProxyQuota); the caller supplies the pool's namespace,
+// maxReplicas, per-replica resources, and current proxy Deployment.
+//
+//   - ProxyQuotaExceeded (error): the proxy Deployment is *currently* having replica
+//     creates rejected by quota — read from its ReplicaFailure condition, the
+//     authoritative runtime signal.
+//   - ProxyQuotaPressure (warning): predictive. Given the current remaining quota
+//     headroom (hard − used), the pool cannot grow from its current replica count up
+//     to maxReplicas.
+//
+// The headroom check ignores quota scopes; face-value hard/used is sufficient for an
+// advisory signal and avoids false precision.
+func evalProxyPoolQuota(ctx context.Context, reader client.Reader, namespace string, maxReplicas int32, res corev1.ResourceRequirements, proxyDep *appsv1.Deployment) proxyQuotaConditions {
 	st := proxyQuotaConditions{
 		pressureReason:  "QuotaHeadroomSufficient",
 		pressureMessage: "namespace ResourceQuota admits scaling the proxy pool to maxReplicas",
@@ -702,7 +733,7 @@ func (r *ActionsGatewayReconciler) evalProxyQuota(ctx context.Context, ag *gmcv1
 
 	// Warning tier — predictive headroom check.
 	var quotas corev1.ResourceQuotaList
-	if err := r.List(ctx, &quotas, client.InNamespace(ag.Namespace)); err != nil {
+	if err := reader.List(ctx, &quotas, client.InNamespace(namespace)); err != nil {
 		st.pressureReason = "QuotaUnknown"
 		st.pressureMessage = fmt.Sprintf("could not read namespace ResourceQuota: %v", err)
 	} else if len(quotas.Items) == 0 {
@@ -713,9 +744,9 @@ func (r *ActionsGatewayReconciler) evalProxyQuota(ctx context.Context, ag *gmcv1
 		if proxyDep != nil {
 			current = proxyDep.Status.Replicas
 		}
-		additional := proxyMaxReplicas(ag) - current
+		additional := maxReplicas - current
 		if additional > 0 {
-			demand := proxyFootprint(ag, additional)
+			demand := footprintFromResources(res, additional)
 			st.pressure, st.pressureMessage = quotaHeadroomViolations(
 				demand, quotas.Items, proxyQuotaChecks,
 				"proxy cannot scale to maxReplicas with current quota headroom: ")

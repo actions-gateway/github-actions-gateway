@@ -497,10 +497,34 @@ func main() {
 	// could stall the queue when the API was slow.
 	ipCache := &controller.IPRangeCache{}
 
-	// Register the GMC's custom metrics. The managed-gateways collector lists
-	// ActionsGateway CRs from the manager cache at scrape time, so it must be
-	// given a cached reader.
-	gmcMetrics := controller.NewMetrics(mgr.GetClient())
+	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
+	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
+	// actions-gateway-crds-v2 chart (split out so the main chart's Helm release
+	// Secret stays under 1 MiB). Detect them once at startup: on a v1-only install
+	// (the main chart alone) the kinds are absent, so registering the v2
+	// controllers unconditionally would spin a source.Kind retry loop and log "no
+	// matches for kind" on every reconcile. When absent, skip the v2 controllers
+	// and disable the v2 IPRange passes so the GMC comes up clean; v1alpha1 tenants
+	// reconcile normally either way. Installing the v2 CRDs later requires a GMC
+	// restart to enable the v2 controllers (Q228). Detected here — before NewMetrics —
+	// so the scrape-time collectors can count v2 gateways and reflect v2 EgressProxy
+	// proxy conditions without spinning a failed informer on a v1-only cluster (Q320).
+	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
+	if err != nil {
+		setupLog.Error(err, "Failed to detect actions-gateway.com/v2alpha1 CRDs")
+		os.Exit(1)
+	}
+	if v2Enabled {
+		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")
+	} else {
+		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
+			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
+	}
+
+	// Register the GMC's custom metrics. The scrape-time collectors list the
+	// relevant CRs from the manager cache, so they must be given a cached reader;
+	// v2Enabled gates the v2 ActionsGateway/EgressProxy passes (Q320).
+	gmcMetrics := controller.NewMetrics(mgr.GetClient(), v2Enabled)
 	// Emit actions_gateway_build_info{component="gmc",version=…} 1 so the running
 	// binary version is correlatable straight from metrics during an incident
 	// (Q318). Registered on the same controller-runtime registry NewMetrics uses.
@@ -532,28 +556,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
-	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
-	// actions-gateway-crds-v2 chart (split out so the main chart's Helm release
-	// Secret stays under 1 MiB). Detect them once at startup: on a v1-only install
-	// (the main chart alone) the kinds are absent, so registering the v2
-	// controllers unconditionally would spin a source.Kind retry loop and log "no
-	// matches for kind" on every reconcile. When absent, skip the v2 controllers
-	// and disable the v2 IPRange passes so the GMC comes up clean; v1alpha1 tenants
-	// reconcile normally either way. Installing the v2 CRDs later requires a GMC
-	// restart to enable the v2 controllers (Q228).
-	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
-	if err != nil {
-		setupLog.Error(err, "Failed to detect actions-gateway.com/v2alpha1 CRDs")
-		os.Exit(1)
-	}
-	if v2Enabled {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")
-	} else {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
-			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
-	}
-
 	if v2Enabled {
 		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
 		// plane (Deployment/SA/RoleBinding/Service, AGC+workload NetworkPolicies,
@@ -580,11 +582,12 @@ func main() {
 		// reconciler so the proxy NetworkPolicy's GitHub-CIDR egress allowlist stays
 		// current. Same-namespace only at this milestone.
 		if err := (&controller.EgressProxyReconciler{
-			Client:      mgr.GetClient(),
-			Scheme:      mgr.GetScheme(),
-			IPCache:     ipCache,
-			ProxyImage:  proxyImage,
-			FQDNBackend: fqdnBackend,
+			Client:               mgr.GetClient(),
+			Scheme:               mgr.GetScheme(),
+			IPCache:              ipCache,
+			ProxyImage:           proxyImage,
+			FQDNBackend:          fqdnBackend,
+			EgressStaleThreshold: 2*ipInterval + time.Hour,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
 			os.Exit(1)
