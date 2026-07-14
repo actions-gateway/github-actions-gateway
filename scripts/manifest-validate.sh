@@ -97,7 +97,7 @@ helm lint "$crds_v2_chart"
 helm template ag-crds-v2 "$crds_v2_chart" | kubeconform $kubeconform_flags
 
 echo "==> helm lint (digest-pinned: default values must not render — checked next)"
-helm lint "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST"
+helm lint "$chart" "${RENDER_DIGEST_ARGS[@]}"
 
 echo "==> helm template: default values must FAIL closed (gmc.image digest unpinned; Q96)"
 if out="$(helm template ag "$chart" 2>&1)"; then
@@ -109,9 +109,30 @@ elif ! grep -q "gmc.image must be pinned by digest" <<<"$out"; then
 	exit 1
 fi
 
+# Q307: every image (gmc/agc/proxy/wrapper) must fail closed at render, not just
+# gmc. Pin the other three and assert the fourth is rejected with its own
+# per-image message, so an unpinned agc/proxy/wrapper can never regress to
+# fail-open (crash-looping the GMC later instead of failing the render).
+echo "==> helm template: each image digest must FAIL closed when unpinned (Q307)"
+for img in gmc agc proxy wrapper; do
+	pins=()
+	for other in gmc agc proxy wrapper; do
+		[[ "$other" == "$img" ]] && continue
+		pins+=(--set-string "$other.image.digest=$POLARIS_RENDER_DIGEST")
+	done
+	if out="$(helm template ag "$chart" "${pins[@]}" 2>&1)"; then
+		echo "ERROR: chart rendered with $img.image.digest empty — $img digest pinning regressed to fail-open" >&2
+		exit 1
+	elif ! grep -q "$img.image must be pinned by digest" <<<"$out"; then
+		echo "ERROR: $img.image-unpinned render failed, but not with the digest-pinning rejection:" >&2
+		echo "$out" >&2
+		exit 1
+	fi
+done
+
 echo "==> kubeconform: Helm chart render (digest-pinned defaults)"
 # shellcheck disable=SC2086
-helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST" \
+helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" \
 	| kubeconform $kubeconform_flags
 
 echo "==> kubeconform: Helm chart render (dev/test opt-out: allowFloatingImageTags=true)"
@@ -121,13 +142,13 @@ helm template ag "$chart" --set allowFloatingImageTags=true \
 
 echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"
 # shellcheck disable=SC2086
-helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST" \
+helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" \
 	--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
 	| kubeconform $kubeconform_flags
 
 echo "==> kubeconform: Helm chart render (cert-manager-verified metrics scrape: ServiceMonitor + metrics.tls.certManager)"
 # shellcheck disable=SC2086
-helm template ag "$chart" --set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST" \
+helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" \
 	--set metrics.serviceMonitor.enabled=true \
 	| kubeconform $kubeconform_flags
 
@@ -141,7 +162,7 @@ echo "==> helm template: admission-policy matchConditions bind to the install-sp
 # referenced ServiceAccount is actually one the chart creates.
 psa_render_ns="psa-guard-render-ns"
 psa_render="$(helm template ag "$chart" --namespace "$psa_render_ns" \
-	--set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST")"
+	"${RENDER_DIGEST_ARGS[@]}")"
 if ! grep -q "system:serviceaccount:${psa_render_ns}:" <<<"$psa_render"; then
 	echo "ERROR: admission-policy matchCondition username is not bound to the install namespace ($psa_render_ns); the GMC SA identity appears hardcoded" >&2
 	exit 1

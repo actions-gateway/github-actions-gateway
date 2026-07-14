@@ -141,23 +141,24 @@ that prefix.
 
 ### Pin images by digest
 
-Digest pinning is enforced for all four images, at two layers. This is the
-secure default: a digest is immutable, so neither the controller nor a tenant
-gateway can ever run from a tag that was silently re-pointed.
+Digest pinning is enforced for all four images. This is the secure default: a
+digest is immutable, so neither the controller nor a tenant gateway can ever run
+from a tag that was silently re-pointed.
 
-- **GMC image — enforced at render time.** `helm install` / `helm upgrade` /
-  `helm template` **fail** with
-  `gmc.image must be pinned by digest: set gmc.image.digest=sha256:<64 hex digits> …`
-  when `gmc.image.digest` is empty. See the
+- **All four images — enforced at render time.** `helm install` / `helm upgrade`
+  / `helm template` **fail** with
+  `<image>.image must be pinned by digest: set <image>.image.digest=sha256:<64 hex digits> …`
+  (naming `gmc`, `agc`, `proxy`, or `wrapper`) when any of the four digests is
+  empty. Failing at render surfaces a missing digest up front, at the same clear
+  error — rather than letting an unpinned AGC/proxy/wrapper image install
+  successfully and only crash-loop the GMC later. See the
   [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest)
   if you hit this.
-- **AGC/proxy/wrapper images — enforced at GMC startup.** The GMC **rejects
-  floating `AGC_IMAGE` / `PROXY_IMAGE` / `WRAPPER_IMAGE` tags and crash-loops**
-  until the AGC, proxy, and worker-wrapper images are pinned by digest. The
-  worker-wrapper (Q235) is on by default — the chart always sets `WRAPPER_IMAGE`,
-  so leaving `wrapper.image.digest` empty falls back to the floating
-  `ghcr.io/actions-gateway/wrapper:latest` tag and the GMC fails closed at
-  startup exactly as it does for a floating AGC/proxy tag.
+- **AGC/proxy/wrapper images — re-checked at GMC startup (second layer).** Even
+  past render, the GMC **rejects floating `AGC_IMAGE` / `PROXY_IMAGE` /
+  `WRAPPER_IMAGE` tags and crash-loops** until those three images are pinned by
+  digest. The worker-wrapper (Q235) is on by default — the chart always sets
+  `WRAPPER_IMAGE`, so `wrapper.image.digest` is required like the rest.
 
 Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and
 `wrapper.image.digest` as shown above.
@@ -369,8 +370,8 @@ digests. The knobs an operator is most likely to override:
 
 | Key | Default | When you change it |
 |---|---|---|
-| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` / `wrapper.image.digest` | `""` | Always — pin all four by digest. The chart refuses to render while `gmc.image.digest` is empty, and the GMC crash-loops on a floating `agc`/`proxy`/`wrapper` tag. |
-| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time GMC check and startup-time AGC/proxy/wrapper check). |
+| `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` / `wrapper.image.digest` | `""` | Always — pin all four by digest. The chart refuses to render while any of the four is empty (the GMC additionally re-checks `agc`/`proxy`/`wrapper` at startup). |
+| `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time check on all four images and the GMC's startup-time AGC/proxy/wrapper check). |
 | `certManager.enabled` | `true` | Set `false` to use the self-signed webhook cert instead of cert-manager. |
 | `namePrefix` | `gmc` | Only when running a second GMC in the same cluster. |
 | `replicaCount` | `2` | Lower to `1` only in dev; production wants HA + leader election. |
@@ -417,15 +418,14 @@ kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resourc
 # 5. No errors in the GMC manager logs.
 kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=30
 # Look for: "Starting workers" / "successfully acquired lease"; no repeated
-# "AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest" (a floating-tag
-# crash-loop — most often a forgotten wrapper.image.digest).
+# "AGC_IMAGE/PROXY_IMAGE/WRAPPER_IMAGE must be pinned by digest".
 ```
 
-If the GMC pods are in `CrashLoopBackOff` with an image-pinning error, you
-installed with a floating AGC/proxy/wrapper tag and without
-`allowFloatingImageTags` — re-run the install with all four digests pinned (see
-[Pin images by digest](#pin-images-by-digest)). For other failure modes, see
-[troubleshooting.md](troubleshooting.md).
+A forgotten `agc`/`proxy`/`wrapper` digest now fails the **render** with a clear
+per-image message (see [Pin images by digest](#pin-images-by-digest)), so a
+digest slip is caught before install rather than as a GMC `CrashLoopBackOff`. The
+GMC's startup pin check (message above) remains a second layer for non-chart
+deployments. For other failure modes, see [troubleshooting.md](troubleshooting.md).
 
 Once the GMC is healthy, continue with [Getting Started](../getting-started.md)
 to create the GitHub App Secret and the first `ActionsGateway` CR, or follow the

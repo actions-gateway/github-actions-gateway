@@ -104,7 +104,7 @@ Expected state after a healthy deployment:
 
 ## Helm Render Fails: `gmc.image` Must Be Pinned by Digest
 
-**Symptoms.** `helm install`, `helm upgrade`, `helm lint`, or `helm template` of the `actions-gateway` chart fails immediately with:
+**Symptoms.** `helm install`, `helm upgrade`, `helm lint`, or `helm template` of the `actions-gateway` chart fails immediately with (here for `gmc`; the message names whichever image is unpinned — `gmc`, `agc`, `proxy`, or `wrapper`):
 
 ```
 Error: execution error at (actions-gateway/templates/deployment.yaml:...):
@@ -113,11 +113,11 @@ gmc.image must be pinned by digest: set gmc.image.digest=sha256:<64 hex digits>
 DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
 ```
 
-**Cause.** `gmc.image.digest` is empty in the release values. The chart enforces digest pinning of the GMC's own controller image at render time (secure by default): nothing at runtime validates the image the GMC itself runs from, so an empty digest must never silently fall back to a mutable `:latest` tag. Common ways to get here:
+**Cause.** One of the four image digests (`gmc`, `agc`, `proxy`, or `wrapper`) is empty in the release values. The chart enforces digest pinning of **all four** images at render time (secure by default): an empty digest must never silently fall back to a mutable `:latest` tag — for the GMC's own image nothing at runtime validates it, and for the AGC/proxy/wrapper images an unpinned tag would otherwise only surface later as a GMC crash-loop. Common ways to get here:
 
-- A fresh install without `--set gmc.image.digest=sha256:<gmc>`.
-- A `helm upgrade` with a values file (or `--reset-values`) that omits the digest. (`--reuse-values` carries the previously pinned digest forward.)
-- Offline rendering (`helm template` / `helm lint`) without supplying a digest.
+- A fresh install without `--set <image>.image.digest=sha256:<…>` for one of the four (a forgotten `wrapper.image.digest` is the most common).
+- A `helm upgrade` with a values file (or `--reset-values`) that omits a digest. (`--reuse-values` carries the previously pinned digests forward.)
+- Offline rendering (`helm template` / `helm lint`) without supplying all four digests.
 
 **Resolution.**
 
@@ -132,10 +132,10 @@ DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag.
     --set wrapper.image.digest=sha256:<wrapper>
   ```
 
-- **Dev/test only:** `--set allowFloatingImageTags=true` allows a floating tag for the GMC image *and* disables the GMC's startup digest check on the AGC/proxy/wrapper images. Never use it in production.
-- **Offline rendering:** any well-formed digest satisfies the check, e.g. `--set-string gmc.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111`.
+- **Dev/test only:** `--set allowFloatingImageTags=true` lets all four images render from a floating tag *and* disables the GMC's startup digest check on the AGC/proxy/wrapper images. Never use it in production.
+- **Offline rendering:** any well-formed digest satisfies the check, e.g. `--set-string gmc.image.digest=sha256:1111111111111111111111111111111111111111111111111111111111111111` (repeat for `agc`/`proxy`/`wrapper`).
 
-Note the contrast with the AGC/proxy/wrapper images: those are validated by the GMC **at startup** (a floating tag there crash-loops the GMC — see [install.md § Pin images by digest](install.md#pin-images-by-digest)), while the GMC's own image is validated by the chart **at render time**.
+All four images are validated by the chart **at render time**. The AGC/proxy/wrapper images are *additionally* re-checked by the GMC **at startup** (a floating tag there crash-loops the GMC — see [install.md § Pin images by digest](install.md#pin-images-by-digest)), a second layer that also covers non-chart deployments.
 
 ---
 
