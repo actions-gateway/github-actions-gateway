@@ -191,6 +191,27 @@ this entirely — each CI run gets its own cluster, and any number of PRs can ru
 simultaneously without coordination. For a project developed with multiple concurrent
 sessions this parallelism property is load-bearing.
 
+**Why this can't be validated locally on a Mac.** Kata boots a KVM guest per pod, so it
+needs `/dev/kvm` — i.e. nested virtualization — on the node. On a Mac, containers already
+run inside a Linux VM (Docker Desktop's LinuxKit VM, Colima, …), so Kata would need that
+outer VM to expose *nested* virt to its guest and the container tooling to pass `/dev/kvm`
+through to the kind node-container. Every link in that chain has to cooperate, and most
+Macs break it:
+
+- **Apple Silicon M1 / M2** — no nested virt at the silicon/framework level. Not possible.
+- **Apple Silicon M3+ (macOS 15 Sequoia+)** — Apple's `Virtualization.framework` added
+  nested virt here, so the host/OS link finally exists, but (a) the container tooling does
+  not generally wire `/dev/kvm` through to workloads, and (b) the whole GAG e2e stack is
+  x86_64 while the machine is arm64 (emulation, or nothing). Worth re-checking against
+  current Docker Desktop / Colima release notes before ruling out a specific M3/M4 box.
+- **Intel Macs** — macOS's `Hypervisor.framework` does not expose nested VT-x into the
+  Linux guest, so `/dev/kvm` inside the Docker VM does not function.
+
+This is why the local test tier ([`docs/development/testing.md`](../development/testing.md))
+routes the *other* sandbox runtime — gVisor — to `minikube` (its systrap platform needs no
+KVM), and keeps Kata on GKE nested-virt or bare metal. A genuinely local Kata loop needs a
+Linux host with `/dev/kvm` (bare metal, or a cloud VM with nested virt) — not a Mac.
+
 ---
 
 ## Spike acceptance criteria — results
