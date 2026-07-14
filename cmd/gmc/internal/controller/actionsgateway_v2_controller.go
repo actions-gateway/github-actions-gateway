@@ -491,7 +491,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	agcReason := gmcv2alpha1.ReasonAGCReady
 	agcMsg := "AGC Deployment has a ready replica"
 	if !agcReady {
-		agcReason = gmcv2alpha1.ReasonAGCReady
+		agcReason = gmcv2alpha1.ReasonAGCNotReady
 		agcMsg = "AGC Deployment has no ready replica yet"
 	}
 	set(gmcv2alpha1.ConditionAGCAvailable, agcReady, agcReason, agcMsg)
@@ -499,7 +499,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	readyReason := gmcv2alpha1.ReasonReady
 	readyMsg := "AGC control plane is available"
 	if !agcReady {
-		readyReason = gmcv2alpha1.ReasonAGCReady
+		readyReason = gmcv2alpha1.ReasonAGCNotReady
 		readyMsg = "waiting for the AGC Deployment to become ready"
 	}
 	set(gmcv2alpha1.ConditionReady, agcReady, readyReason, readyMsg)
