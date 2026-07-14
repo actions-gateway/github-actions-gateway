@@ -131,6 +131,10 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		Help: "CONNECT requests refused because the destination is not on the allowlist.",
 	}, nil)
 	reg.MustRegister(active, total, dialErr, tunnelDur, denied)
+	// Emit actions_gateway_build_info{component="proxy",version=…} 1 on the same
+	// registry so the running binary version is correlatable straight from
+	// metrics during an incident (Q318).
+	registerBuildInfo(reg, "proxy", version)
 
 	// Serve from the same registry the metrics were registered on. A
 	// *prometheus.Registry satisfies both Registerer and Gatherer; the default

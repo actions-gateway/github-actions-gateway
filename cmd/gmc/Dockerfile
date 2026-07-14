@@ -15,18 +15,24 @@ COPY . .
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
 # platform (the host platform for a plain single-platform build).
 ARG TARGETOS TARGETARCH
+# VERSION is the release tag (or GIT_SHA fallback) wired from docker-bake.hcl /
+# publish.yml; it is stamped into main.version via -ldflags -X so the binary
+# emits actions_gateway_build_info{version=…} (Q318). Defaults to "dev" for a
+# bare `docker build`, matching the un-stamped local-build placeholder.
+ARG VERSION="dev"
 # Cache mount holds Go's compiled-package cache (`.a` files keyed by content
 # hash). Survives across layer-cache misses so incremental source edits only
 # recompile changed packages instead of the whole dep tree.
-# -trimpath strips absolute filesystem paths; -ldflags=-buildid= clears the
-# build ID — together they make the binary bit-for-bit reproducible (a
-# reproducible-build input). At publish time publish.yml emits a signed,
-# Rekor-logged build-provenance attestation for the image (SLSA Build L2 via
-# GitHub Actions OIDC + Sigstore); reaching SLSA Build L3 would additionally
+# -trimpath strips absolute filesystem paths; -buildid= clears the build ID —
+# together they make the binary bit-for-bit reproducible (a reproducible-build
+# input); the -X main.version stamp is a deterministic function of the release
+# tag, so it preserves reproducibility. At publish time publish.yml emits a
+# signed, Rekor-logged build-provenance attestation for the image (SLSA Build L2
+# via GitHub Actions OIDC + Sigstore); reaching SLSA Build L3 would additionally
 # require an isolated reusable-workflow builder, not yet adopted.
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -C cmd/gmc -trimpath -ldflags=-buildid= -o /bin/manager ./cmd/main.go
+    go build -C cmd/gmc -trimpath -ldflags="-buildid= -X main.version=${VERSION}" -o /bin/manager ./cmd/main.go
 
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
