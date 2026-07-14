@@ -37,6 +37,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaynoactivesessions"
             summary: "No active listener sessions for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "The AGC has no open long-poll sessions. Jobs queue indefinitely until sessions are restored."
 
@@ -48,6 +49,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaytokenrefresherrors"
             summary: "GitHub App token refresh errors in {{ $labels.namespace }}"
             description: "Token refresh has been failing for 5+ minutes. Sessions will fail once the current token expires (~1 hour)."
 
@@ -59,6 +61,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayrenewjoberrors"
             summary: "RenewJob errors in {{ $labels.namespace }}"
             description: "RenewJob is failing at >0.1/s for 5+ minutes. Running jobs may be cancelled."
 
@@ -72,6 +75,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaypodcreationlatencyp99"
             summary: "Pod creation p99 latency SLO breach in {{ $labels.namespace }}"
             description: "p99 pod creation latency exceeds 60s SLO. Check quota and node capacity."
 
@@ -85,6 +89,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaypodcreationlatencyp95"
             summary: "Pod creation p95 latency degraded in {{ $labels.namespace }}"
             description: "p95 pod creation latency exceeds 15s SLO. Investigate quota and scheduling."
 
@@ -95,6 +100,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayevictionretriesexhausted"
             summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "A job's eviction retry budget has been exhausted. Manual re-run required."
 
@@ -106,6 +112,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkerquotaexceeded"
             summary: "Worker pods being rejected by ResourceQuota for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "The namespace ResourceQuota cannot admit another worker pod; acquired jobs will fail to schedule. Raise the quota or reduce maxWorkers."
 
@@ -117,6 +124,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyquotaexceeded"
             summary: "Proxy replica creation rejected by ResourceQuota for {{ $labels.name }} in {{ $labels.namespace }}"
             description: "The proxy pool is being held below the HPA's target by the namespace ResourceQuota. Raise the quota or lower proxy.maxReplicas."
 
@@ -128,6 +136,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayquotapressure"
             summary: "Quota headroom too low to reach configured ceiling in {{ $labels.namespace }}"
             description: "A proxy or worker pool cannot scale to its configured maximum within the namespace ResourceQuota headroom. Plan a quota increase or lower the ceiling before the next load spike."
 
@@ -139,6 +148,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayreconcileerrors"
             summary: "Reconcile errors in {{ $labels.controller }}"
             description: "Reconcile errors at >2/minute for 10+ minutes. Resources may be stale."
 
@@ -150,6 +160,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkersunschedulable"
             summary: "Worker pods unschedulable for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "Worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — not quota). Capacity is not materializing; acquired jobs will not start."
 
@@ -161,6 +172,7 @@ spec:
           labels:
             severity: critical
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayegressrulesstale"
             summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
             description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges."
 
@@ -172,6 +184,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayagentrecycleerrors"
             summary: "Agent recycle errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "Single-use JIT agent re-registration is failing. Sustained growth shrinks listener capacity and decays tenant throughput job by job."
 
@@ -183,6 +196,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayfanoutfallbacktimeout"
             summary: "Fan-out recycle fallback timeouts for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners. Investigate long-running or wedged winning jobs."
 
@@ -194,6 +208,7 @@ spec:
           labels:
             severity: warning
           annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayabandoneddeliveryerrors"
             summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
 

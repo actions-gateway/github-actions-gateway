@@ -95,6 +95,76 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 
 ---
 
+## Alert Rule Reference
+
+Every alert shipped in the reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml)
+(reproduced in [Recommended Alert Rules](observability.md#recommended-alert-rules)) carries a
+`runbook_url` annotation that resolves to the matching entry below, so on-call lands on a response
+procedure rather than just the alert's `summary`/`description`. Severity classes follow
+[Page-Worthy vs. Ticket-Worthy](#page-worthy-vs-ticket-worthy).
+
+### ActionsGatewayNoActiveSessions
+
+**Page.** The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely. Restore sessions with [`active_sessions` Flatlining at Zero](#active_sessions-flatlining-at-zero).
+
+### ActionsGatewayTokenRefreshErrors
+
+**Page.** GitHub App token refresh has been failing; sessions will fail once the current token expires (~1 hour). See [Token Refresh Errors Spiking](troubleshooting.md#token-refresh-errors-spiking).
+
+### ActionsGatewayRenewJobErrors
+
+**Page.** RenewJob is failing at a sustained rate, so running jobs may be cancelled by GitHub. See [RenewJob Failures Rising](troubleshooting.md#renewjob-failures-rising).
+
+### ActionsGatewayPodCreationLatencyP99
+
+**Page.** p99 pod-creation latency has breached the 60s SLO, indicating a scheduling stall or quota exhaustion. Triage with [`pod_creation_latency_seconds p95 > 15s`](#pod_creation_latency_seconds-p95--15s).
+
+### ActionsGatewayPodCreationLatencyP95
+
+**Ticket.** p95 pod-creation latency has breached the 15s SLO — degraded but jobs still complete. Triage with [`pod_creation_latency_seconds p95 > 15s`](#pod_creation_latency_seconds-p95--15s).
+
+### ActionsGatewayEvictionRetriesExhausted
+
+**Ticket.** A job's eviction-retry budget is exhausted and the job requires a manual re-run. See [Evicted Worker Pods Exhausting Retry Budget](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).
+
+### ActionsGatewayWorkerQuotaExceeded
+
+**Page.** The namespace `ResourceQuota` is rejecting worker pods, so acquired jobs cannot schedule. Raise the quota or lower `maxWorkers` — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) and [Adjusting Tenant Quota](#adjusting-tenant-quota).
+
+### ActionsGatewayProxyQuotaExceeded
+
+**Page.** The `ResourceQuota` is holding the egress proxy pool below the HPA's target. Raise the quota or lower `proxy.maxReplicas` — see [Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling).
+
+### ActionsGatewayQuotaPressure
+
+**Ticket.** A proxy or worker pool cannot reach its configured ceiling within the namespace `ResourceQuota` headroom. Plan a quota increase before the next load spike — see [Adjusting Tenant Quota](#adjusting-tenant-quota) and [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion).
+
+### ActionsGatewayReconcileErrors
+
+**Ticket.** A controller is logging sustained reconcile errors and owned resources may be stale. See [GMC Not Provisioning Tenant Resources](troubleshooting.md#gmc-not-provisioning-tenant-resources).
+
+### ActionsGatewayWorkersUnschedulable
+
+**Page.** Worker pods are stuck `Pending` past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing. See [RunnerGroup Reports WorkersUnschedulable](troubleshooting.md#runnergroup-reports-workersunschedulable) and [Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
+
+### ActionsGatewayEgressRulesStale
+
+**Page.** The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy `NetworkPolicy` may drift from GitHub's published ranges. See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-reports-egressrulesstale).
+
+### ActionsGatewayAgentRecycleErrors
+
+**Ticket.** Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job. See [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner).
+
+### ActionsGatewayFanoutFallbackTimeout
+
+**Ticket.** Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners. Investigate long-running or wedged winning jobs; see [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
+
+### ActionsGatewayAbandonedDeliveryErrors
+
+**Ticket.** The winner of a fanned-out job is failing to issue `completejob` on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. See [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
+
+---
+
 ## SLO Breach Response
 
 ### `pod_creation_latency_seconds p95 > 15s`
