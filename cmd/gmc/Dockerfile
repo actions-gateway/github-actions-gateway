@@ -32,7 +32,7 @@ ARG VERSION="dev"
 # require an isolated reusable-workflow builder, not yet adopted.
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -C cmd/gmc -trimpath -ldflags="-buildid= -X main.version=${VERSION}" -o /bin/manager ./cmd/main.go
+    go build -C cmd/gmc -trimpath -ldflags="-buildid= -X main.version=${VERSION}" -o /bin/manager ./cmd
 
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
