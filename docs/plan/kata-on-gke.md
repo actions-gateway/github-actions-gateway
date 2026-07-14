@@ -414,3 +414,78 @@ dogfood e2e pipeline is separate work, tracked on the Queue. It needs:
 
 Note that GAG's e2e today runs on GitHub-hosted runners, not the dogfood cluster, so this
 is a change of *where* e2e runs as much as *how*.
+
+---
+
+## Two variants, one base — and defaulting to Kata
+
+The dogfood e2e deployment and the reference architecture should each carry **both**
+isolation mechanisms — privileged DinD and Kata — as sibling variants over a shared base,
+not two forked stacks and not one stack with a runtime toggle. This is already the
+committed shape and it answers the "two variants vs. one configurable" question in one
+move: the variants *are* the configuration surface, selected by a single knob.
+
+### Structure — sibling overlays over a shared base
+
+The dogfood manifests already use this layout
+([`deploy/dogfood-e2e/`](../../deploy/dogfood-e2e/)):
+
+```
+deploy/dogfood-e2e/
+  base/                 # RunnerSet, namespace, egress policy — mechanism-agnostic
+  overlays/dind/        # privileged DinD — LIVE (applied by e2e-start.sh today)
+  overlays/kata/        # Kata micro-VM — README stub; to be built out
+```
+
+The Kata overlay's delta vs. `dind/` is the worker-isolation mechanism *only*
+(`runtimeClassName: kata-qemu`, unprivileged sidecar, namespace stays `baseline`, no
+privileged profile). Keeping them side by side is deliberate: `diff -r overlays/dind
+overlays/kata` is exactly the security/complexity tradeoff, reviewable in one place.
+Kustomize has no clean conditional, so two thin overlays over one base is both DRY *and*
+"configurable" — do **not** collapse them into a single overlay with in-manifest toggles.
+
+The selection knob is the overlay name. Today [`scripts/dogfood/e2e-start.sh`](../../scripts/dogfood/e2e-start.sh)
+hardcodes `overlays/dind`; the follow-up parameterises it (e.g. a `variant` arg /
+`E2E_VARIANT=kata|dind`) so the same script can stand up either. The cluster-infra half
+that kustomize can't express (nested-virt node pool, Kata DaemonSet, RuntimeClass) is
+gated on the same knob in [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh),
+which already contains the Kata install path.
+
+The reference architecture ([`docs/operations/kata-dind-workloads.md`](../operations/kata-dind-workloads.md))
+mirrors this: it already presents Kata (Tier 1 cloud, Tier 2 bare metal) as primary and
+privileged DinD (Tier 3) as the documented fallback. No restructure needed — the dogfood
+config should track that same ordering.
+
+### The default: Kata, once it reaches parity
+
+Per the project's secure-by-default rule, the more secure option is the default and a
+regression may only be an explicit opt-in. So once Kata clears validation, **Kata becomes
+the dogfood default and privileged DinD becomes the opt-in fallback** — not the reverse.
+
+This flip is *gated*, not immediate. The gate is one condition:
+
+- **AC#5 — the GAG e2e suite runs green through the Kata runner** (needs the runner image
+  and permanent nested-virt pool from the follow-up above). Until then DinD stays the live
+  default because Kata's full e2e path is unproven, not because DinD is preferred.
+
+The reasons that keep DinD *available* as a variant after the flip — and keep it the
+recommended tier for some external users — are environmental, not a knock on Kata:
+
+- **Nested virt is required.** Only `c2/c2d` (and `n2/n2d`) families on GKE, subject to
+  per-family capacity (`ZONE_RESOURCE_POOL_EXHAUSTED`) and the stockout-wedge failure mode;
+  GKE **Autopilot cannot do it at all**. Bare metal needs no nested virt but is not
+  everyone's substrate.
+- **Per-pod overhead** (RuntimeClass `overhead` 160Mi / 250m) and a small boot cost.
+- **Workload Identity is a hard prerequisite** of the secure Kata path (the micro-VM does
+  not close the node-metadata credential path — see [Motivation](#1-oss-pwn-request-threat)).
+
+For GAG's own dogfood, all three are satisfiable, so the default flips to Kata on AC#5
+green. For external users without nested-virt-capable nodes, the reference architecture
+keeps DinD (Tier 3, with its compensating controls) as the honest fallback — Kata
+recommended, DinD supported.
+
+**Follow-up work, in order:** (1) build out `overlays/kata/` from the stub; (2)
+parameterise `e2e-start.sh` / `e2e-setup.sh` on the variant knob; (3) land the runner image
++ permanent nested-virt pool (the AC#5 gate); (4) flip the dogfood default to Kata and
+demote DinD to opt-in. Steps 1–2 are independent of the gate and can land first; steps 3–4
+are the Q286 cutover.
