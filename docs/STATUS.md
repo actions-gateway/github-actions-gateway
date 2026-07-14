@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q311
+**Next ID:** Q319
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -57,6 +57,14 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q307"></a>Q307 | Fail all four image digests at helm render time | `infra` `docs` | 🔲 | S | Only `gmc.image.digest` fails at helm render; `agc`/`proxy`/`wrapper` fail later as a GMC crash-loop. Move all four to render-time validation and document where to source the digests per release. |
 | <a id="Q308"></a>Q308 | Set Ready on v2 RunnerSet's silent failure paths | `bug` `infra` | 🔲 | S | v2 RunnerSet's `EnsureAgents` and multiplexer-restart failures emit an event but write no `Ready=False`, so `kubectl get` misreports state until the next reconcile. Set `Ready=False` on both paths. |
 | <a id="Q309"></a>Q309 | Wire or prune dead v2 condition vocabulary | `bug` `docs` | 🔲 | S | Dead v2 vocabulary — `ReasonTemplateDeleted`/`ProxyDeleted`/`ProxyShareNotGranted` never set, RunnerTemplate has an unset `Ready`, RunnerSet emits undocumented v1 reasons. Wire or prune each. |
+| <a id="Q311"></a>Q311 | Scale-set tier has no monitoring surface | `infra` `docs` | 🔲 | L | The default acquisition protocol (Q264) emits `scaleset_*` metrics wired to no alert, SLO rule, dashboard, or preview series; a scale-set-only deploy fires no throughput alert. Add all four surfaces. |
+| <a id="Q312"></a>Q312 | Alert on metrics the docs call page-worthy | `infra` | 🔲 | S | Docs call these page/alert-worthy but ship no rule: egress_rules_stale, workers_unschedulable, fanout fallback_timeout, abandoned_delivery error, agent_recycle_errors. Add to prometheusrule.yaml. |
+| <a id="Q313"></a>Q313 | Add runbook_url to shipped alerts | `infra` `docs` | 🔲 | S | None of the 11 alerts in prometheusrule.yaml carry a `runbook_url`; on-call gets only summary+description though matching runbook sections exist. Wire each alert to its section. |
+| <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
+| <a id="Q315"></a>Q315 | Dashboard panels for unvisualized counters | `infra` `docs` | 🔲 | S | ~10 emitted+documented counters have no panel: acquisition/poll/renew-teardown errors, pending-reaps, propagation retries, and the fan-out safety trio. Add dashboard rows. |
+| <a id="Q316"></a>Q316 | Wire proxy_connect_denied_total (egress-denial signal) | `security` `infra` `docs` | 🔲 | S | `proxy_connect_denied_total` (allowlist-denied CONNECT) is undocumented and alerted nowhere; SSRF detection uses the coarser dial_errors. Add to the reference, a detection alert, and a panel. |
+| <a id="Q317"></a>Q317 | Document + cover quota_retries metrics | `infra` `docs` | 🔲 | S | quota_retries_total/_exhausted_total are emitted but absent from the metrics reference, alerts, and dashboards — unlike the eviction-retry twin. Add a table row, exhaustion alert, and panel. |
+| <a id="Q318"></a>Q318 | Emit build_info version metric | `infra` | 🔲 | S | No GMC/AGC/proxy metric carries the running version (`app.kubernetes.io/version` is on worker pods only), so it can't be correlated from metrics during incidents. Emit a `build_info` gauge. |
 
 ---
 
