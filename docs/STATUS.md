@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q322
+**Next ID:** Q323
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -55,6 +55,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q315"></a>Q315 | Dashboard panels for unvisualized counters | `infra` `docs` | 🔲 | S | ~10 emitted+documented counters have no panel: acquisition/poll/renew-teardown errors, pending-reaps, propagation retries, and the fan-out safety trio. Add dashboard rows. |
 | <a id="Q317"></a>Q317 | Document + cover quota_retries metrics | `infra` `docs` | 🔲 | S | quota_retries_total/_exhausted_total are emitted but absent from the metrics reference, alerts, and dashboards — unlike the eviction-retry twin. Add a table row, exhaustion alert, and panel. |
 | <a id="Q321"></a>Q321 | Export v2 ActionsGateway condition gauges (v1 parity) | `infra` | 🔲 | S | The v2 ActionsGateway emits no condition gauges. Add the twin of v1's `runnergroups_degraded` -> `runnersets_degraded` (Q304) + `AGCAvailable`/`EgressUnattributed`. Sibling of Q319. |
+| <a id="Q322"></a>Q322 | Close the v2 noProxyCIDRs GHES admission gap | `security` | 🔲 | S | The v2 EgressProxy guard protects public GitHub hosts only: no gitHubURL on the proxy, so an entry matching a referrer's GHES host passes admission. Thread referrer hosts through both webhook sides. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
