@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q303
+**Next ID:** Q311
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -50,6 +50,13 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q264"></a>Q264 | [Migrate AGC acquisition to the runner-scale-set protocol](plan/q264-scale-set-protocol.md) | `infra` | 🔲 | L | ScaleSet is the default acquisition protocol; Classic is deprecated. Remaining: serve the one-minor deprecation window, then remove the classic machinery and v1alpha1. |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | 🔲 | M | Front door, deprecate-v1 banners, and the `gag-migrate` slice are in place. Remaining: full v2-only (v1 removal), gated on the Classic deprecation window (§6.2). |
+| <a id="Q303"></a>Q303 | Restore v2 RunnerSet worker-capacity conditions | `infra` | 🔲 | M | v2 RunnerSet drops the worker-capacity conditions v1 RunnerGroup sets (quota-exceeded, unschedulable); stalls show only as rising `pendingJobs` with `Ready=True`. Port both evals from v1. |
+| <a id="Q304"></a>Q304 | v2 ActionsGateway child-health rollup condition | `infra` | 🔲 | S | v2 ActionsGateway lacks v1's child-health rollup: `reconcileReady` ignores child RunnerSets, so a gateway with every RunnerSet impaired reads `Ready=True`. Add a `RunnerSetsDegraded` condition. |
+| <a id="Q305"></a>Q305 | Emit Events from the v2 control-plane reconcilers | `infra` | 🔲 | S | v2 `ActionsGateway` wires a Recorder but emits no Events; `EgressProxy` has none. `kubectl describe` shows empty Events for provisioning/credential transitions — add emission to both. |
+| <a id="Q306"></a>Q306 | Ship gag-migrate as an artifact + wrong-cluster guards | `infra` | 🔲 | S | `gag-migrate` is source-build-only; `--all-namespaces --apply` writes cluster-wide on the ambient context with no confirm. Ship as a release artifact; add `--context` + a confirm gate. |
+| <a id="Q307"></a>Q307 | Fail all four image digests at helm render time | `infra` `docs` | 🔲 | S | Only `gmc.image.digest` fails at helm render; `agc`/`proxy`/`wrapper` fail later as a GMC crash-loop. Move all four to render-time validation and document where to source the digests per release. |
+| <a id="Q308"></a>Q308 | Set Ready on v2 RunnerSet's silent failure paths | `bug` `infra` | 🔲 | S | v2 RunnerSet's `EnsureAgents` and multiplexer-restart failures emit an event but write no `Ready=False`, so `kubectl get` misreports state until the next reconcile. Set `Ready=False` on both paths. |
+| <a id="Q309"></a>Q309 | Wire or prune dead v2 condition vocabulary | `bug` `docs` | 🔲 | S | Dead v2 vocabulary — `ReasonTemplateDeleted`/`ProxyDeleted`/`ProxyShareNotGranted` never set, RunnerTemplate has an unset `Ready`, RunnerSet emits undocumented v1 reasons. Wire or prune each. |
 
 ---
 
@@ -84,6 +91,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q272"></a>Q272 | [Scale-set upstream maturity watch](plan/v1-classic-sunset-review.md) | `infra` | S | **Event:** `actions/scaleset` reaches GA/v1.0 or the auto-assign contract (`actions/scaleset#107`) is documented. Not a graduation blocker (sunset review §6.1); it lifts the Public-Preview caveat and triggers the U6 vendor-vs-own client revisit. |
 | <a id="Q275"></a>Q275 | [Reconcile AGC capacity/density docs with the ScaleSet default](design/appendix-a-capacity-slos.md) | `docs` | S | **Decision:** classic removal proceeds on the deprecation-window schedule ([Q264](#Q264)) — reconcile alongside it. appendix-a's ≤1,000-session ceiling and README Tier 2's "thousands per AGC" are classic framing; keep the density evidence. |
 | <a id="Q274"></a>Q274 | [Live-GitHub e2e: rerun-failed-jobs on eviction](plan/archive/milestone-3-tests.md) | `tests` | S | **Event:** a live-GitHub Tier-C e2e lane/credentials exist. The eviction→rerun-failed-jobs retry logic is already envtest-covered (`failure_recovery_test.go`); this adds the live happy-path companion. |
+| <a id="Q310"></a>Q310 | Operator diagnostic aggregator (`gag status` / kubectl plugin) | `infra` | L | **Demand:** operators ask for gateway diagnostics beyond raw kubectl + the runbook. Add a `gag status <gateway>` / kubectl plugin aggregating session, pool, and runner state per gateway. |
 
 ### Flake watch
 
