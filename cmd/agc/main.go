@@ -273,6 +273,11 @@ func run() error {
 	// separate from the classic listener metrics; a Classic-only AGC simply never
 	// increments them.
 	sm := scalesetlistener.NewMetrics(ctrlmetrics.Registry)
+	// Emit actions_gateway_build_info{component="agc",version=…} 1 so the running
+	// binary version is correlatable straight from metrics during an incident
+	// (Q318). Registered on the controller-runtime registry the AGC already
+	// serves at /metrics.
+	registerBuildInfo(ctrlmetrics.Registry, "agc", version)
 
 	// ── 4. Build scheme ──────────────────────────────────────────────────────
 	scheme := runtime.NewScheme()

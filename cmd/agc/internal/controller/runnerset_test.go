@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
@@ -514,6 +515,38 @@ func TestRunnerSetLocalState_PoolLifecycle(t *testing.T) {
 	r.cleanupLocalState(key)
 	assert.Nil(t, r.getPool(key))
 	r.cleanupLocalState(key) // idempotent
+}
+
+// TestReadyConditionForListeners covers the classic-path Ready decision (Q308): a start
+// failure must surface as Ready=False/ListenerStartFailed, distinct from the benign
+// NoActiveSessions state, while a running listener still wins over any stale start error.
+func TestReadyConditionForListeners(t *testing.T) {
+	t.Run("running listener ⇒ Ready/ListenerActive", func(t *testing.T) {
+		ready, reason, msg := readyConditionForListeners(2, nil, v2alpha1.TemplateSourceRef)
+		assert.True(t, ready)
+		assert.Equal(t, v2alpha1.ReasonListenerActive, reason)
+		assert.Contains(t, msg, "TemplateRef")
+		assert.Contains(t, msg, "2 listener")
+	})
+
+	t.Run("start error, no listeners ⇒ Ready=False/ListenerStartFailed", func(t *testing.T) {
+		ready, reason, msg := readyConditionForListeners(0, errors.New("boom"), v2alpha1.TemplateSourceRef)
+		assert.False(t, ready)
+		assert.Equal(t, v2alpha1.ReasonListenerStartFailed, reason)
+		assert.Contains(t, msg, "boom")
+	})
+
+	t.Run("a running listener wins over a stale start error", func(t *testing.T) {
+		ready, reason, _ := readyConditionForListeners(1, errors.New("boom"), v2alpha1.TemplateSourceRef)
+		assert.True(t, ready)
+		assert.Equal(t, v2alpha1.ReasonListenerActive, reason)
+	})
+
+	t.Run("no listeners, no error ⇒ Ready=False/NoActiveSessions", func(t *testing.T) {
+		ready, reason, _ := readyConditionForListeners(0, nil, v2alpha1.TemplateSourceRef)
+		assert.False(t, ready)
+		assert.Equal(t, v2alpha1.ReasonNoActiveSessions, reason)
+	})
 }
 
 func TestRunnerSetBaselineRecheckInterval(t *testing.T) {

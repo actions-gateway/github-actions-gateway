@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -38,6 +39,15 @@ import (
 // shared envtest apiserver with a real Provisioner attached.
 func startRunnerSetReconciler(t *testing.T) {
 	t.Helper()
+	startRunnerSetReconcilerWithRegistrar(t, nil)
+}
+
+// startRunnerSetReconcilerWithRegistrar is startRunnerSetReconciler with an optional
+// Registrar override (nil selects the default brokerRegistrar). A failing registrar
+// drives agentpool.EnsureAgents to error so the reconciler's Ready=False provisioning
+// path can be asserted against the real apiserver (Q308).
+func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar) {
+	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
 	skipNameValidation := true
@@ -64,10 +74,14 @@ func startRunnerSetReconciler(t *testing.T) {
 	p.HTTPClient = brokerStub.HTTPClient()
 	p.TokenFunc = stubProvider{}.Token
 
+	var reg agentpool.Registrar = &brokerRegistrar{stub: brokerStub}
+	if registrar != nil {
+		reg = registrar
+	}
 	r := &controller.RunnerSetReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tm,
-		Registrar:    &brokerRegistrar{stub: brokerStub},
+		Registrar:    reg,
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
 		BrokerConfig: controller.BrokerConfig{
@@ -413,4 +427,42 @@ func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 		}
 	}
 	assert.True(t, foundProxyCA, "worker pod must project the resolved EgressProxy's CA cert")
+}
+
+// failingRegistrar makes agentpool.EnsureAgents fail by rejecting every Register call —
+// the AGC can never provision a listener agent's Secret for the set.
+type failingRegistrar struct{}
+
+func (failingRegistrar) Register(_ context.Context, _ string, _ agentpool.RegisterParams) (*agentpool.AgentCredentials, error) {
+	return nil, errAgentRegisterRejected
+}
+func (failingRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
+func (failingRegistrar) ResolveAgentID(_ context.Context, _, _ string) (int64, error) {
+	return 0, nil
+}
+
+var errAgentRegisterRejected = errors.New("registration API rejected the agent")
+
+// TestV2_RunnerSet_AgentProvisioningFailure_SetsReadyFalse: when every reference
+// resolves but agentpool.EnsureAgents fails (the registration API rejects the agent),
+// the RunnerSet must report Ready=False/AgentProvisioningFailed rather than silently
+// staying healthy until the next reconcile (Q308). Direct egress keeps the fixture to
+// a gateway + template.
+func TestV2_RunnerSet_AgentProvisioningFailure_SetsReadyFalse(t *testing.T) {
+	const ns = "v2-rs-agentfail"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithRegistrar(t, failingRegistrar{})
+
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonAgentProvisioningFailed)
 }

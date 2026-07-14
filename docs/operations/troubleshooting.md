@@ -1741,6 +1741,19 @@ A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolv
 
 **Resolution.** Apply the missing object (`ActionsGateway`, `RunnerTemplate`/`ClusterRunnerTemplate`, or `EgressProxy`) named in the message; the set self-heals on the next watch event. Confirm the referent's name and namespace match the `*Ref` exactly (references resolve in the `RunnerSet`'s own namespace).
 
+**Runtime-failure reasons (not by design).** Unlike the `*NotFound` reasons above — which are the expected fail-closed state while a reference is still syncing — a `RunnerSet` whose references have all resolved can still report `Ready=False` for a genuine post-resolution failure. These name the failing step in the message and clear on the next successful reconcile:
+
+```
+Reason: TokenUnavailable         Message: failed to obtain GitHub App installation token: ...
+Reason: AgentProvisioningFailed  Message: failed to provision agent Secrets: ...
+Reason: ListenerStartFailed      Message: listener goroutines failed to start: ...
+```
+
+- `TokenUnavailable` / `AgentProvisioningFailed` — the AGC could not fetch a GitHub App installation token, or could not register the listener agents' Secrets. Check the gateway's credential Secret and the AGC logs (see ["GitHub App Secret Misconfiguration"](#github-app-secret-misconfiguration)); the AGC also emits a matching Warning event (`TokenUnavailable` / `AgentPoolError`).
+- `ListenerStartFailed` — the listener goroutines could not be (re)started; the AGC emits a `ListenerStartFailed` Warning event with the underlying error.
+
+A running listener always wins: once at least one session is polling, the set reports `Ready=True` / `ListenerActive` even if a prior start attempt logged an error.
+
 ---
 
 ## v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)
