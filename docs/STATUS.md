@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q323
+**Next ID:** Q330
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -48,14 +48,21 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q322"></a>Q322 | Close the v2 noProxyCIDRs GHES admission gap | `security` | 🔲 | S | The v2 EgressProxy guard protects public GitHub hosts only: no gitHubURL on the proxy, so an entry matching a referrer's GHES host passes admission. Thread referrer hosts through both webhook sides. |
+| <a id="Q323"></a>Q323 | v2 admission hardening parity (three dropped v1 guards) | `security` | 🔲 | M | Three v1 guards with no v2 counterpart: gitHubURL host/org-segment structural check, reserved-namespace create rejection, PriorityClass VAP backstop for runnersets/runnertemplates. [Analysis](plan/v2-api-gap-analysis.md#admission). |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q309"></a>Q309 | Wire or prune dead v2 condition vocabulary | `bug` `docs` | 🔲 | S | Dead v2 vocabulary — `ReasonTemplateDeleted`/`ProxyDeleted`/`ProxyShareNotGranted` never set, RunnerTemplate has an unset `Ready`, RunnerSet emits undocumented v1 reasons. Wire or prune each. |
+| <a id="Q325"></a>Q325 | ScaleSet listener surfaces no failure conditions/events | `bug` `infra` | 🔲 | M | The default (ScaleSet) path never sets Degraded/RateLimited/RunnerVersionTooOld or emits their events — classic-only plumbing. A ScaleSet set fails silently while Ready. [Analysis](plan/v2-api-gap-analysis.md#agc). |
 | <a id="Q311"></a>Q311 | Scale-set tier has no monitoring surface | `infra` `docs` | 🔲 | L | The default acquisition protocol (Q264) emits `scaleset_*` metrics wired to no alert, SLO rule, dashboard, or preview series; a scale-set-only deploy fires no throughput alert. Add all four surfaces. |
+| <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
 | <a id="Q315"></a>Q315 | Dashboard panels for unvisualized counters | `infra` `docs` | 🔲 | S | ~10 emitted+documented counters have no panel: acquisition/poll/renew-teardown errors, pending-reaps, propagation retries, and the fan-out safety trio. Add dashboard rows. |
 | <a id="Q317"></a>Q317 | Document + cover quota_retries metrics | `infra` `docs` | 🔲 | S | quota_retries_total/_exhausted_total are emitted but absent from the metrics reference, alerts, and dashboards — unlike the eviction-retry twin. Add a table row, exhaustion alert, and panel. |
 | <a id="Q321"></a>Q321 | Export v2 ActionsGateway condition gauges (v1 parity) | `infra` | 🔲 | S | The v2 ActionsGateway emits no condition gauges. Add the twin of v1's `runnergroups_degraded` -> `runnersets_degraded` (Q304) + `AGCAvailable`/`EgressUnattributed`. Sibling of Q319. |
-| <a id="Q322"></a>Q322 | Close the v2 noProxyCIDRs GHES admission gap | `security` | 🔲 | S | The v2 EgressProxy guard protects public GitHub hosts only: no gitHubURL on the proxy, so an entry matching a referrer's GHES host passes admission. Thread referrer hosts through both webhook sides. |
+| <a id="Q326"></a>Q326 | v2 reconcilers: ResourceQuota watch + FQDN-mode requeue | `bug` | 🔲 | S | Neither the v2 EgressProxy nor RunnerSet reconciler watches ResourceQuota (v1 does), so quota conditions lag admin edits; a Ready FQDN-mode proxy never requeues at all. [Analysis](plan/v2-api-gap-analysis.md#proxy). |
+| <a id="Q327"></a>Q327 | EgressProxy logLevel knob (v1 parity) | `infra` | 🔲 | S | v1 threads spec.logLevel to the proxy as LOG_LEVEL; the EgressProxy API has no logLevel field and the v2 proxy container gets none — no per-proxy debug knob. [Analysis](plan/v2-api-gap-analysis.md#proxy). |
+| <a id="Q328"></a>Q328 | v2 gateway teardown + reconcile-serialization parity | `infra` | 🔲 | S | v2 removes its finalizer before child GC is confirmed (no Q125 fail-closed teardown or TeardownIncomplete event) and doesn't serialize reconciles like v1 (MaxConcurrentReconciles=1). [Analysis](plan/v2-api-gap-analysis.md#gmc-gateway). |
+| <a id="Q329"></a>Q329 | Gap-analysis minor cleanups (stale docs, RBAC markers) | `docs` | 🔲 | S | Stale claims (v1 non-ascending-tier Degraded never implemented; v2 status Known-types comments outdated) + v2 AGC RBAC only in chart files, no kubebuilder markers. [Analysis](plan/v2-api-gap-analysis.md#minor). |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
