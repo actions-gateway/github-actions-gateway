@@ -184,4 +184,19 @@ const (
 	// resource) and are set inline by the reconciler, not fixed here.
 	ReasonPodsUnschedulable  = "PodsUnschedulable"
 	ReasonWorkersSchedulable = "WorkersSchedulable"
+	// Ready=False reasons for classic-path runtime provisioning failures (Q308). Unlike
+	// the reference-resolution reasons above (a missing referent), these are transient
+	// failures *after* resolution: the set holds Ready=False with the failing step named
+	// in the message and flips back to Ready on the next successful reconcile.
+	//
+	// ReasonAgentProvisioningFailed — agentpool.EnsureAgents could not provision the
+	// listener agents' Secrets (e.g. the registration API rejected the agent). No
+	// listener goroutine can run until the Secrets exist, so the set is Ready=False
+	// (fail-closed) rather than silently reporting healthy until the next reconcile.
+	ReasonAgentProvisioningFailed = "AgentProvisioningFailed"
+	// ReasonListenerStartFailed — the classic multiplexer could not (re)start its
+	// listener goroutines, so no session is polling for work. Distinct from
+	// NoActiveSessions (the benign not-started-yet state): a start error, not merely an
+	// as-yet-empty pool.
+	ReasonListenerStartFailed = "ListenerStartFailed"
 )
