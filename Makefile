@@ -60,7 +60,7 @@ WRAPPER_IMG    ?= $(IMAGE_REGISTRY)/wrapper:e2e-$(GIT_SHA)
 
 .DEFAULT_GOAL := help
 
-.PHONY: all check hooks generate build build-agc build-gmc build-probe build-proxy test test-race test-integration \
+.PHONY: all check hooks generate build build-agc build-gmc build-migrate build-probe build-proxy test test-race test-integration \
         cover cover-update cover-check tools setup-envtest \
         e2e-registry e2e-cluster e2e-cluster-delete e2e-images e2e e2e-clean \
         docker-build-gmc docker-build-agc docker-build-proxy docker-build-fakegithub \
@@ -158,6 +158,10 @@ build-agc: ## Build the AGC binary
 .PHONY: build-gmc
 build-gmc: ## Build the GMC binary
 	go build -C cmd/gmc/cmd -o ../../../.build/gmc .
+
+.PHONY: build-migrate
+build-migrate: ## Build the gag-migrate one-shot v1->v2 migration CLI into .build/
+	go build -C cmd/gmc -o ../../.build/gag-migrate ./migrate
 
 .PHONY: build-probe
 build-probe: ## Build the probe binary

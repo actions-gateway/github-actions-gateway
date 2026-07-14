@@ -62,6 +62,15 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.
   The `chart-publish` job renders, signs, and uploads it (widening the job to
   `contents: write`).
+- The **`gag-migrate` CLI binaries** (Q306), cross-compiled by `chart-publish` for
+  the operator platform matrix (`linux/amd64`, `linux/arm64`, `darwin/amd64`,
+  `darwin/arm64`, `windows/amd64`) via `scripts/build-migrate-binaries.sh` and
+  attached to the **GitHub Release** as `gag-migrate-<tag>-<os>-<arch>` assets. A
+  single `SHA256SUMS` manifest is keyless **cosign `sign-blob`**-signed
+  (`SHA256SUMS.cosign.bundle`) — the same no-secret Fulcio/Rekor path as the v2 CRD
+  manifest — so one signature covers the whole set (verify the manifest signature,
+  then `sha256sum -c`). This is the one-shot v1→v2 migration tool, previously
+  source-build-only.
 - The **GitHub Release** itself (Q293), composed by `chart-publish`: the five image
   index digests, the `make verify-release` command, a generated changelog, and a
   tag-derived `--prerelease` flag. It is created only if the tag has no Release yet,
