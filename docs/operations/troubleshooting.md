@@ -1779,6 +1779,23 @@ Ready=False  Reason: ProxyNotFound
 
 Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preconditions; once the Secret or `EgressProxy` appears the gateway reconciles and the AGC Deployment is created (the gateway watches both). Note that the proxy **pool** is reconciled separately by the `EgressProxy` reconciler — the gateway only references it; and the namespace Pod Security Admission labels are stamped by the namespace PSA reconciler from the `actions-gateway.com/security-profile` label, which the gateway *reads* (to thread `SECURITY_PROFILE` to the AGC) but never stamps.
 
+**Events in `kubectl describe` (Q305).** The v2 `ActionsGateway` and `EgressProxy` reconcilers emit Kubernetes Events on their meaningful transitions, so `kubectl describe actionsgateway <name>` / `kubectl describe egressproxy <name>` no longer shows an empty Events list while a tenant is coming up. Events are emitted only on a genuine state change (never on every reconcile):
+
+| Object | Reason | Type | Meaning |
+| --- | --- | --- | --- |
+| `ActionsGateway` | `Provisioning` | Normal | Provisioning of the AGC control plane started (once per object). |
+| `ActionsGateway` | `SecretNotFound` / `ProxyNotFound` | Warning | A precondition failed closed — the credential Secret or `defaultProxyRef`'d `EgressProxy` is missing (see above). |
+| `ActionsGateway` | `MetricsCertificateIssued` | Normal | The per-tenant metrics mTLS certificate was issued or rotated (near expiry). |
+| `ActionsGateway` | `ProvisioningFailed` | Warning | A reconcile failed partway through provisioning; the message names the failing step (mirrors the `Degraded` condition). |
+| `ActionsGateway` | `Ready` | Normal | The AGC control plane became available. |
+| `ActionsGateway` | `AGCNotReady` | Warning | The AGC Deployment has no ready replica yet (or lost it). |
+| `ActionsGateway` | `RunnerSetsImpaired` / `AllRunnerSetsHealthy` | Warning / Normal | A bound `RunnerSet` became impaired, or the last impaired set recovered (the `RunnerSetsDegraded` rollup, Q304). |
+| `ActionsGateway` | `ReconcileSucceeded` | Normal | Provisioning recovered after a prior `ProvisioningFailed`. |
+| `EgressProxy` | `ProxyCertificateIssued` | Normal | The self-signed proxy TLS certificate was issued or rotated (near expiry). |
+| `EgressProxy` | `ProvisioningFailed` | Warning | A reconcile failed partway through provisioning the proxy pool; the message names the failing step. |
+| `EgressProxy` | `ProxyReady` / `ProxyNotReady` | Normal / Warning | The proxy pool reached / lost its `minReplicas` ready pods. |
+| `EgressProxy` | `ReconcileSucceeded` | Normal | Proxy-pool provisioning recovered after a prior `ProvisioningFailed`. |
+
 ---
 
 ## `RunnerSet` or gateway reports `EgressUnattributed` (direct egress) (`v2alpha1`)
