@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -500,6 +501,10 @@ func main() {
 	// ActionsGateway CRs from the manager cache at scrape time, so it must be
 	// given a cached reader.
 	gmcMetrics := controller.NewMetrics(mgr.GetClient())
+	// Emit actions_gateway_build_info{component="gmc",version=…} 1 so the running
+	// binary version is correlatable straight from metrics during an incident
+	// (Q318). Registered on the same controller-runtime registry NewMetrics uses.
+	registerBuildInfo(ctrlmetrics.Registry, "gmc", version)
 
 	parsedAPIServerCIDRs, err := parseAPIServerCIDRs(apiServerCIDRs)
 	if err != nil {
