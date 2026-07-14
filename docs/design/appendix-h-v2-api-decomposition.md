@@ -471,6 +471,16 @@ shared reason vocabulary; messages name the specific blocker
 (`RunnerTemplate 'dind-large' not found`), never a generic string. Pin this as the
 contract in M1 rather than letting each reconciler invent its own.
 
+Alongside the persisted conditions, each reconciler emits Kubernetes **Events** on the
+object for the meaningful transitions — provisioning start, success, and failure;
+credential (mTLS/TLS cert) issuance and rotation; and degraded/recovered — so
+`kubectl describe` reflects what happened, not just the current condition set (Q305).
+Events are transition-gated (emitted only when a condition's status actually changes, or
+once per object for a lifecycle-unique step like the provisioning-start signal), never on
+every reconcile, mirroring the v1 controllers' Event discipline. The operator-facing Event
+reason vocabulary is tabulated in
+[troubleshooting.md](../operations/troubleshooting.md).
+
 **Child-health rollup onto the `ActionsGateway` (Q304).** The GMC's `ActionsGateway`
 reconciler rolls the health of the `RunnerSet`s bound to a gateway up onto a
 `RunnerSetsDegraded` condition — the v2 counterpart of v1's `RunnerGroupsDegraded`, and

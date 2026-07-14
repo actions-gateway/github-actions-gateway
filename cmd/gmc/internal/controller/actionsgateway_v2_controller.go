@@ -148,6 +148,11 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if err := r.Update(ctx, &ag); err != nil {
 			return ctrl.Result{}, err
 		}
+		// Provisioning-start signal, emitted once per object lifecycle (the finalizer
+		// is added exactly once) so `kubectl describe` shows when the AGC control plane
+		// began provisioning.
+		r.recordEvent(&ag, corev1.EventTypeNormal, "Provisioning", "Reconcile",
+			"started provisioning the AGC control plane")
 		return ctrl.Result{Requeue: true}, nil
 	}
 
@@ -304,7 +309,10 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 
 // ensureMetricsCerts ensures the per-tenant metrics mTLS bundle exists and is not
 // near expiry, writing the server Secret (mounted into the AGC) and the scraper
-// client Secret (published for monitoring). Mirrors v1's ensureMetricsCerts.
+// client Secret (published for monitoring). Mirrors v1's ensureMetricsCerts. A fresh
+// issuance or a near-expiry rotation emits a Normal Event so the credential
+// transition is visible in `kubectl describe`; the steady-state path (cert valid)
+// returns early and emits nothing.
 func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
 	var serverSec corev1.Secret
 	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsTLSSecretNameV2(ag)}, &serverSec)
@@ -317,7 +325,9 @@ func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag 
 		return clientErr
 	}
 
+	transition := "issued"
 	if !apierrors.IsNotFound(serverErr) && !apierrors.IsNotFound(clientErr) {
+		transition = "rotated (near expiry)"
 		if cert, err := parseCertPEM(serverSec.Data[corev1.TLSCertKey]); err == nil {
 			if time.Until(cert.NotAfter) > metricsCertRenewBefore {
 				return nil
@@ -335,7 +345,38 @@ func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag 
 	if err := r.applyOwnedSecret(ctx, ag, buildMetricsClientSecretV2(ag, bundle)); err != nil {
 		return fmt.Errorf("metrics client Secret: %w", err)
 	}
+	r.recordEvent(ag, corev1.EventTypeNormal, "MetricsCertificateIssued", "EnsureMetricsCerts",
+		"%s per-tenant metrics mTLS certificate", transition)
 	return nil
+}
+
+// recordEvent emits a Kubernetes Event on the ActionsGateway when a Recorder is
+// wired. The Recorder may be nil in unit tests, so callers go through here rather
+// than dereferencing it directly (mirrors the AGC reconcilers' recordEvent).
+func (r *ActionsGatewayV2Reconciler) recordEvent(ag *gmcv2alpha1.ActionsGateway, eventtype, reason, action, note string, args ...any) {
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(ag, nil, eventtype, reason, action, note, args...)
+}
+
+// conditionStatusValue returns the current status of the named condition, or the
+// empty string when it is absent. It reads the value before a SetStatusCondition
+// mutation so callers can detect a genuine status transition and emit an Event only
+// on change rather than on every reconcile.
+func conditionStatusValue(conds []metav1.Condition, condType string) metav1.ConditionStatus {
+	if c := meta.FindStatusCondition(conds, condType); c != nil {
+		return c.Status
+	}
+	return ""
+}
+
+// boolConditionStatus maps a boolean to the corresponding metav1.ConditionStatus.
+func boolConditionStatus(b bool) metav1.ConditionStatus {
+	if b {
+		return metav1.ConditionTrue
+	}
+	return metav1.ConditionFalse
 }
 
 // --- apply helpers (CreateOrPatch + controller owner reference) ---
@@ -461,6 +502,13 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	}
 	now := metav1.Now()
 	gen := ag.Generation
+
+	// Snapshot the pre-reconcile status of the conditions whose transitions we surface
+	// as Events, before the set() closure mutates them in place. Emitting only on a
+	// genuine change keeps `kubectl describe` free of per-reconcile churn.
+	prevReady := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionReady)
+	prevRunnerSets := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded)
+	prevDegraded := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded)
 	set := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
 		if status {
@@ -523,6 +571,35 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 		}
 		return ctrl.Result{}, err
 	}
+
+	// Events for the meaningful transitions, emitted only after the status write lands
+	// so a conflict-requeue does not double-fire (the next reconcile re-detects the
+	// change against the freshly persisted status).
+	if newReady := boolConditionStatus(agcReady); prevReady != newReady {
+		if agcReady {
+			r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonReady, "Reconcile",
+				"AGC control plane is available")
+		} else {
+			r.recordEvent(ag, corev1.EventTypeWarning, gmcv2alpha1.ReasonAGCNotReady, "Reconcile",
+				"%s", readyMsg)
+		}
+	}
+	// RunnerSetsDegraded rollup transition (Q304): a bound RunnerSet became impaired, or
+	// the last impaired set recovered, on the gateway's single pane.
+	if newRS := boolConditionStatus(rs.degraded); prevRunnerSets != newRS {
+		etype := corev1.EventTypeNormal
+		if rs.degraded {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ag, etype, rs.reason, "Reconcile", "%s", rs.message)
+	}
+	// Degraded → recovered: provisioning failed on a prior reconcile and has now
+	// succeeded (updateStatus is only reached when reconcileResources returned no error).
+	if prevDegraded == metav1.ConditionTrue {
+		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonReconcileSucceeded, "Reconcile",
+			"AGC control-plane provisioning recovered")
+	}
+
 	if !agcReady {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
@@ -532,6 +609,11 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 // setNotReady records a fail-closed condition (CredentialUnavailable / ProxyNotFound)
 // plus Ready=False with the same reason, before provisioning any children.
 func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, condType, reason, msg string) (ctrl.Result, error) {
+	// Warn once per transition into the fail-closed state (credential Secret missing or
+	// defaultProxyRef'd proxy absent), read before SetStatusCondition mutates the slice.
+	if conditionStatusValue(ag.Status.Conditions, condType) != metav1.ConditionTrue {
+		r.recordEvent(ag, corev1.EventTypeWarning, reason, "Reconcile", "%s", msg)
+	}
 	now := metav1.Now()
 	gen := ag.Generation
 	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
@@ -550,6 +632,10 @@ func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2a
 // setDegraded records Degraded=True naming the failing step and returns the cause
 // so the work item is retried with backoff (mirrors the EgressProxy reconciler).
 func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, cause error) (ctrl.Result, error) {
+	// Warn once per transition into Degraded, naming the failing provisioning step.
+	if !meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded) {
+		r.recordEvent(ag, corev1.EventTypeWarning, gmcv2alpha1.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
+	}
 	now := metav1.Now()
 	gen := ag.Generation
 	for _, t := range []string{gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ConditionReady} {

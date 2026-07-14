@@ -588,6 +588,7 @@ func main() {
 			ProxyImage:           proxyImage,
 			FQDNBackend:          fqdnBackend,
 			EgressStaleThreshold: 2*ipInterval + time.Hour,
+			Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "egressproxy")
 			os.Exit(1)

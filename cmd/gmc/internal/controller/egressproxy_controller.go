@@ -53,6 +53,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -81,6 +82,10 @@ type EgressProxyReconciler struct {
 	// DefaultEgressStaleThreshold. Shares the value the ActionsGatewayReconciler is
 	// given so v1 and v2 proxies report staleness on the same window.
 	EgressStaleThreshold time.Duration
+	// Recorder emits Kubernetes Events on the EgressProxy (provisioning failure/recovery,
+	// proxy-pool readiness transitions, and TLS-cert issuance/rotation) so they surface in
+	// `kubectl describe`. May be nil in unit tests; callers go through recordEvent.
+	Recorder events.EventRecorder
 	// FQDNBackend is the operator-selected CNI/platform mechanism used to enforce an
 	// FQDN egressPolicyMode intent (the GMC --fqdn-policy-backend flag). The zero value
 	// is treated as FQDNBackendNone: FQDN intent emits no CNI-native policy (and is
@@ -256,7 +261,24 @@ func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2al
 	if err != nil {
 		return fmt.Errorf("generate EgressProxy cert: %w", err)
 	}
-	return r.applyOwnedSecret(ctx, ep, buildEgressProxyCertSecret(ep, certPEM, keyPEM))
+	if err := r.applyOwnedSecret(ctx, ep, buildEgressProxyCertSecret(ep, certPEM, keyPEM)); err != nil {
+		return err
+	}
+	// The steady-state path returns early above, so this Event fires only on an actual
+	// issuance or rotation, not on every reconcile.
+	r.recordEvent(ep, corev1.EventTypeNormal, "ProxyCertificateIssued", "EnsureProxyCert",
+		"issued proxy TLS certificate (%s)", reason)
+	return nil
+}
+
+// recordEvent emits a Kubernetes Event on the EgressProxy when a Recorder is wired.
+// The Recorder may be nil in unit tests, so callers go through here rather than
+// dereferencing it directly (mirrors the AGC reconcilers' recordEvent).
+func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventtype, reason, action, note string, args ...any) {
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(ep, nil, eventtype, reason, action, note, args...)
 }
 
 // The apply* helpers mirror the ActionsGatewayReconciler pattern: CreateOrPatch
@@ -353,6 +375,11 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	now := metav1.Now()
 	gen := ep.Generation
 
+	// Snapshot the pre-reconcile status of the conditions whose transitions we surface
+	// as Events, before setCondition mutates them, so we emit only on a genuine change.
+	prevReady := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionReady)
+	prevDegraded := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+
 	setCondition := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
 		if status {
@@ -395,6 +422,22 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 		return ctrl.Result{}, err
 	}
 
+	// Events for the meaningful transitions, emitted only after the status write lands
+	// so a conflict-requeue does not double-fire.
+	if newReady := boolConditionStatus(ready); prevReady != newReady {
+		etype := corev1.EventTypeNormal
+		if !ready {
+			etype = corev1.EventTypeWarning
+		}
+		r.recordEvent(ep, etype, readyReason, "Reconcile", "%d/%d proxy pods ready", readyReplicas, minReplicas)
+	}
+	// Degraded → recovered: a prior reconcile failed to provision and this one succeeded
+	// (updateStatus is only reached when reconcileResources returned no error).
+	if prevDegraded == metav1.ConditionTrue {
+		r.recordEvent(ep, corev1.EventTypeNormal, gmcv2alpha1.ReasonReconcileSucceeded, "Reconcile",
+			"proxy pool provisioning recovered")
+	}
+
 	// The Owns(&appsv1.Deployment{}) watch refreshes status when pods become ready,
 	// but a bounded requeue guards against a missed event while the pool scales up.
 	if !ready {
@@ -413,6 +456,10 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 // step and returns the underlying error so the work item is retried with backoff.
 // Mirrors the ActionsGatewayReconciler's Q156 behavior on the v2 contract.
 func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1.EgressProxy, cause error) (ctrl.Result, error) {
+	// Warn once per transition into Degraded, naming the failing provisioning step.
+	if !meta.IsStatusConditionTrue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded) {
+		r.recordEvent(ep, corev1.EventTypeWarning, gmcv2alpha1.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
+	}
 	now := metav1.Now()
 	gen := ep.Generation
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{

@@ -464,6 +464,7 @@ func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPR
 		IPCache:     ipCache,
 		ProxyImage:  "proxy:test",
 		FQDNBackend: backend,
+		Recorder:    mgr.GetEventRecorder("egressproxy-controller"),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 

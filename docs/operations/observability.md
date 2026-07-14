@@ -397,7 +397,8 @@ via the `ServiceMonitor`/scrape config if you need per-tenant attribution.
 | --- | --- | --- | --- |
 | `actions_gateway_proxy_connections_active` | Gauge | — | Currently open CONNECT tunnels. |
 | `actions_gateway_proxy_connections_total` | Counter | — | Total CONNECT tunnels opened. |
-| `actions_gateway_proxy_dial_errors_total` | Counter | — | Upstream dial failures (e.g. blocked-destination attempts). |
+| `actions_gateway_proxy_dial_errors_total` | Counter | — | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
+| `actions_gateway_proxy_connect_denied_total` | Counter | — | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
 | `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | — | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
 
 For abuse/compromise detection built on these metrics (slowloris,
@@ -726,6 +727,19 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayabandoneddeliveryerrors"
           summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
           description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
+
+      # Ticket: egress proxy denying CONNECTs to off-allowlist destinations —
+      # an SSRF / egress-policy signal, sharper than dial_errors (Q316)
+      - alert: ActionsGatewayProxyConnectDenied
+        expr: |
+          rate(actions_gateway_proxy_connect_denied_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied"
+          summary: "Egress proxy denying CONNECTs in {{ $labels.namespace }}"
+          description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — an SSRF / egress-policy signal (a workload probing blocked destinations, or a misconfigured egress target). Unlike dial errors, every denial here is an explicit allowlist rejection."
 ```
 
 ---
@@ -866,6 +880,7 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Active CONNECT tunnels | `actions_gateway_proxy_connections_active` | Time series |
 | CONNECT tunnels opened/s | `rate(actions_gateway_proxy_connections_total[5m])` | Time series |
 | Proxy dial errors/s | `rate(actions_gateway_proxy_dial_errors_total[5m])` | Time series |
+| Denied CONNECTs/s (SSRF signal) | `rate(actions_gateway_proxy_connect_denied_total[5m])` | Time series |
 | Tunnel duration p95 | `histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))` | Time series |
 
 **Row 6 — Proxy & Quota (kube-state-metrics)**
