@@ -212,6 +212,19 @@ spec:
             summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
 
+        # Ticket: egress proxy denying CONNECTs to off-allowlist destinations —
+        # an SSRF / egress-policy signal, sharper than dial_errors (Q316)
+        - alert: ActionsGatewayProxyConnectDenied
+          expr: |
+            rate(actions_gateway_proxy_connect_denied_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied"
+            summary: "Egress proxy denying CONNECTs in {{ $labels.namespace }}"
+            description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — an SSRF / egress-policy signal (a workload probing blocked destinations, or a misconfigured egress target). Unlike dial errors, every denial here is an explicit allowlist rejection."
+
     - name: actions-gateway-slos
       interval: 30s
       rules:
