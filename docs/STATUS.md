@@ -38,6 +38,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [Per-module coverage ≥75%](plan/coverage-to-75-per-module.md) | `tests` | ✅ |
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
+| [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ⚠️ |
 
 ---
 
@@ -48,7 +49,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
-| <a id="Q273"></a>Q273 | [Make v2 the front door + exemplary v1→v2 migration](plan/q273-v2-front-door.md) | `docs` `infra` | 🔲 | M | Front door, deprecate-v1 banners, and the `gag-migrate` slice are in place. Remaining: full v2-only (v1 removal), gated on the Classic deprecation window (§6.2); completing it unblocks [Q264](#Q264) classic-machinery removal. |
 | <a id="Q303"></a>Q303 | Restore v2 RunnerSet worker-capacity conditions | `infra` | 🔲 | M | v2 RunnerSet drops the worker-capacity conditions v1 RunnerGroup sets (quota-exceeded, unschedulable); stalls show only as rising `pendingJobs` with `Ready=True`. Port both evals from v1. |
 | <a id="Q304"></a>Q304 | v2 ActionsGateway child-health rollup condition | `infra` | 🔲 | S | v2 ActionsGateway lacks v1's child-health rollup: `reconcileReady` ignores child RunnerSets, so a gateway with every RunnerSet impaired reads `Ready=True`. Add a `RunnerSetsDegraded` condition. |
 | <a id="Q305"></a>Q305 | Emit Events from the v2 control-plane reconcilers | `infra` | 🔲 | S | v2 `ActionsGateway` wires a Recorder but emits no Events; `EgressProxy` has none. `kubectl describe` shows empty Events for provisioning/credential transitions — add emission to both. |
@@ -64,6 +64,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q316"></a>Q316 | Wire proxy_connect_denied_total (egress-denial signal) | `security` `infra` `docs` | 🔲 | S | `proxy_connect_denied_total` (allowlist-denied CONNECT) is undocumented and alerted nowhere; SSRF detection uses the coarser dial_errors. Add to the reference, a detection alert, and a panel. |
 | <a id="Q317"></a>Q317 | Document + cover quota_retries metrics | `infra` `docs` | 🔲 | S | quota_retries_total/_exhausted_total are emitted but absent from the metrics reference, alerts, and dashboards — unlike the eviction-retry twin. Add a table row, exhaustion alert, and panel. |
 | <a id="Q318"></a>Q318 | Emit build_info version metric | `infra` | 🔲 | S | No GMC/AGC/proxy metric carries the running version (`app.kubernetes.io/version` is on worker pods only), so it can't be correlated from metrics during incidents. Emit a `build_info` gauge. |
+| <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
 
