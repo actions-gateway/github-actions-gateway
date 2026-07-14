@@ -651,10 +651,25 @@ v1alpha1's ability to acquire jobs — the classic deprecation window **is** the
 v1alpha1 migration window. The removal PR must therefore be sequenced after
 v1alpha1 is itself deprecated (tenants moved via `gag-migrate`); announcing
 the two deprecations together is honest and turns the fan-out-free model into
-the concrete incentive to complete the v1→v2 migration. With the v2beta1
-alignment above, the full ladder is: P5 default flip → one-minor classic
-deprecation (= v1alpha1 deprecation) → v2beta1 graduation ships ScaleSet-only
-kinds + the classic-machinery removal.
+the concrete incentive to complete the v1→v2 migration.
+
+**Ladder (updated 2026-07-13).** P5 default flip **shipped in v1.1.0** (Classic
+deprecated in the release notes — the one-minor deprecation window starts here).
+v2beta1 graduation has **also shipped** (v2beta1 is the served+storage/hub
+version) — but it graduated **without** carrying the classic-machinery removal
+the §5a alignment above anticipated. So the removal is no longer bundled into
+the graduation hop; it is now the terminal step, gated on two independent
+conditions:
+
+1. the one-minor classic deprecation window from v1.1.0 elapses (i.e. v1.2.0
+   ships), and
+2. v1alpha1 tenants have migrated off via `gag-migrate` (Q273) — since Classic
+   is v1alpha1's only acquisition path, its removal ends v1alpha1's ability to
+   acquire.
+
+When both hold, one isolated PR removes the classic machinery (agent pool +
+Q114 recycle, multiplexer, Q260 dedup, classic broker client) and the
+transitional `acquisitionProtocol` / `maxListeners` fields.
 
 ## 6. Phased execution path (no big-bang rewrite)
 
