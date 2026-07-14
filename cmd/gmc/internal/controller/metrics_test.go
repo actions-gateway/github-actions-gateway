@@ -13,11 +13,46 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
+
+// newV2MetricsScheme returns the v1 IPRange scheme with the v2alpha1 kinds also
+// registered, so the fake client can serve the v2 ActionsGateway/EgressProxy lists
+// the v2-aware collectors read (Q320).
+func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := newIPRangeScheme(t)
+	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	return s
+}
+
+// v2ManagedGateway builds a v2alpha1 ActionsGateway for the managed-gateways
+// collector's v2 count.
+func v2ManagedGateway(name string, deleting bool) *gmcv2alpha1.ActionsGateway {
+	ag := &gmcv2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
+	if deleting {
+		now := metav1.Now()
+		ag.DeletionTimestamp = &now
+		// A deletion timestamp only persists in the fake client with a finalizer.
+		ag.Finalizers = []string{"actions-gateway/test"}
+	}
+	return ag
+}
+
+// v2EgressProxyWithCondition builds a v2alpha1 EgressProxy carrying a single status
+// condition, for driving the v2 arm of the proxy-quota and egress-stale collectors.
+func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2alpha1.EgressProxy {
+	ep := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
+	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
+		Type: condType, Status: status, Reason: "Test", Message: "test",
+	})
+	return ep
+}
 
 // testIPRangeUpdates returns an unregistered Metrics with just the counter, so
 // tests do not touch the global controller-runtime registry.
@@ -111,7 +146,7 @@ func TestManagedGatewaysCollector(t *testing.T) {
 
 	t.Run("none", func(t *testing.T) {
 		fc := fake.NewClientBuilder().WithScheme(scheme).Build()
-		c := newManagedGatewaysCollector(fc)
+		c := newManagedGatewaysCollector(fc, false)
 		assert.Equal(t, 0.0, testutil.ToFloat64(c))
 	})
 
@@ -122,7 +157,7 @@ func TestManagedGatewaysCollector(t *testing.T) {
 				managedGateway("b", false),
 				managedGateway("c", true),
 			).Build()
-		c := newManagedGatewaysCollector(fc)
+		c := newManagedGatewaysCollector(fc, false)
 		assert.Equal(t, 2.0, testutil.ToFloat64(c),
 			"two active gateways; the deleting one is excluded")
 	})
@@ -181,13 +216,13 @@ func TestProxyQuotaCollector_MirrorsBothConditions(t *testing.T) {
 	})
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag).Build()
-	c := newProxyQuotaCollector(fc)
+	c := newProxyQuotaCollector(fc, false)
 
 	const expected = `
-# HELP actions_gateway_proxy_quota_exceeded 1 when the ActionsGateway ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0.
+# HELP actions_gateway_proxy_quota_exceeded 1 when the ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
 # TYPE actions_gateway_proxy_quota_exceeded gauge
 actions_gateway_proxy_quota_exceeded{name="gw",namespace="gw"} 0
-# HELP actions_gateway_proxy_quota_pressure 1 when the ActionsGateway ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0.
+# HELP actions_gateway_proxy_quota_pressure 1 when the ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
 # TYPE actions_gateway_proxy_quota_pressure gauge
 actions_gateway_proxy_quota_pressure{name="gw",namespace="gw"} 1
 `
@@ -199,7 +234,7 @@ actions_gateway_proxy_quota_pressure{name="gw",namespace="gw"} 1
 func TestProxyQuotaCollector_NoGateways(t *testing.T) {
 	scheme := newIPRangeScheme(t)
 	fc := fake.NewClientBuilder().WithScheme(scheme).Build()
-	c := newProxyQuotaCollector(fc)
+	c := newProxyQuotaCollector(fc, false)
 	assert.Equal(t, 0, testutil.CollectAndCount(c))
 }
 
@@ -214,10 +249,10 @@ func TestEgressRulesStaleCollector_MirrorsCondition(t *testing.T) {
 	deleting := managedGateway("deleting", true)
 
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale, fresh, deleting).Build()
-	c := newEgressRulesStaleCollector(fc)
+	c := newEgressRulesStaleCollector(fc, false)
 
 	const expected = `
-# HELP actions_gateway_egress_rules_stale 1 when the ActionsGateway EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0.
+# HELP actions_gateway_egress_rules_stale 1 when the EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy carrying the condition.
 # TYPE actions_gateway_egress_rules_stale gauge
 actions_gateway_egress_rules_stale{name="fresh",namespace="fresh"} 0
 actions_gateway_egress_rules_stale{name="stale",namespace="stale"} 1
@@ -236,7 +271,7 @@ func TestNewMetrics_RegistersCounterAndCollectors(t *testing.T) {
 	scheme := newIPRangeScheme(t)
 	fc := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	m := NewMetrics(fc)
+	m := NewMetrics(fc, false)
 	require.NotNil(t, m)
 	require.NotNil(t, m.IPRangeUpdates)
 
@@ -256,4 +291,82 @@ func TestNewMetrics_RegistersCounterAndCollectors(t *testing.T) {
 		}
 	}
 	assert.True(t, found, "NewMetrics must register actions_gateway_ip_range_updates_total with the controller-runtime registry")
+}
+
+// TestManagedGatewaysCollector_CountsV1AndV2 asserts the managed-gateways gauge sums
+// non-deleting v1 and v2 ActionsGateways when v2 is enabled, and counts v1 only when
+// v2 is disabled (a v1-only cluster never lists the absent v2 kind).
+func TestManagedGatewaysCollector_CountsV1AndV2(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		managedGateway("v1a", false),
+		managedGateway("v1b", false),
+		managedGateway("v1del", true),
+		v2ManagedGateway("v2a", false),
+		v2ManagedGateway("v2del", true),
+	).Build()
+
+	t.Run("v2 enabled sums both versions", func(t *testing.T) {
+		c := newManagedGatewaysCollector(fc, true)
+		assert.Equal(t, 3.0, testutil.ToFloat64(c),
+			"2 active v1 + 1 active v2; the deleting ones are excluded")
+	})
+	t.Run("v2 disabled counts v1 only", func(t *testing.T) {
+		c := newManagedGatewaysCollector(fc, false)
+		assert.Equal(t, 2.0, testutil.ToFloat64(c),
+			"v2 gateways are not counted when v2 is disabled")
+	})
+}
+
+// TestProxyQuotaCollector_ReflectsV2EgressProxy asserts the proxy-quota collector
+// exports both gauges per v2 EgressProxy, mirroring each condition, when v2 is
+// enabled — and emits nothing for v2 when it is disabled.
+func TestProxyQuotaCollector_ReflectsV2EgressProxy(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+
+	ep := v2EgressProxyWithCondition("proxy", gmcv2alpha1.ConditionProxyQuotaExceeded, metav1.ConditionTrue)
+	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionProxyQuotaPressure, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep).Build()
+
+	t.Run("v2 enabled reflects the EgressProxy conditions", func(t *testing.T) {
+		c := newProxyQuotaCollector(fc, true)
+		const expected = `
+# HELP actions_gateway_proxy_quota_exceeded 1 when the ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
+# TYPE actions_gateway_proxy_quota_exceeded gauge
+actions_gateway_proxy_quota_exceeded{name="proxy",namespace="proxy"} 1
+# HELP actions_gateway_proxy_quota_pressure 1 when the ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.
+# TYPE actions_gateway_proxy_quota_pressure gauge
+actions_gateway_proxy_quota_pressure{name="proxy",namespace="proxy"} 0
+`
+		assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+	})
+	t.Run("v2 disabled ignores the EgressProxy", func(t *testing.T) {
+		c := newProxyQuotaCollector(fc, false)
+		assert.Equal(t, 0, testutil.CollectAndCount(c),
+			"an EgressProxy contributes no series when v2 is disabled")
+	})
+}
+
+// TestEgressRulesStaleCollector_ReflectsV2EgressProxy asserts the egress-stale
+// collector exports a 1/0 gauge per v2 EgressProxy alongside the v1 ActionsGateway
+// series, sharing one metric family across both versions.
+func TestEgressRulesStaleCollector_ReflectsV2EgressProxy(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+
+	stale := v2EgressProxyWithCondition("v2stale", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	fresh := v2EgressProxyWithCondition("v2fresh", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionFalse)
+	v1 := gatewayWithCondition("v1stale", gmcv1alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale, fresh, v1).Build()
+	c := newEgressRulesStaleCollector(fc, true)
+
+	const expected = `
+# HELP actions_gateway_egress_rules_stale 1 when the EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy carrying the condition.
+# TYPE actions_gateway_egress_rules_stale gauge
+actions_gateway_egress_rules_stale{name="v1stale",namespace="v1stale"} 1
+actions_gateway_egress_rules_stale{name="v2fresh",namespace="v2fresh"} 0
+actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
+`
+	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
 }

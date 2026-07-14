@@ -222,3 +222,37 @@ const (
 	ReasonRunnerSetsImpaired   = "RunnerSetsImpaired"
 	ReasonAllRunnerSetsHealthy = "AllRunnerSetsHealthy"
 )
+
+// Proxy-pool quota and egress-allowlist-staleness conditions (Q320). The GMC's
+// EgressProxy reconciler sets these on an EgressProxy, porting v1's ActionsGateway
+// ProxyQuota (Q82) and EgressRulesStale (Q157) conditions onto the v2 standalone
+// proxy pool: the pool is a namespace-ResourceQuota-bounded, HPA-scaled Deployment
+// whose default CIDR-mode NetworkPolicy is refreshed from the shared GitHub IP-range
+// cache, so the same capacity and staleness signals apply. All three are advisory
+// (abnormal-is-True) and do NOT gate the proxy's Ready — the pool keeps serving at
+// its current scale. Kept in their own const block so they stay additive alongside
+// sibling condition-vocabulary work on this file.
+const (
+	// ConditionProxyQuotaPressure (warning) is True when the proxy pool cannot grow to
+	// maxReplicas within the namespace ResourceQuota headroom (predictive). It is
+	// mutually exclusive with ConditionProxyQuotaExceeded — the error supersedes it.
+	ConditionProxyQuotaPressure = "ProxyQuotaPressure"
+	// ConditionProxyQuotaExceeded (error) is True when proxy replica creation is being
+	// rejected by the namespace ResourceQuota now (observed, from the Deployment's
+	// ReplicaFailure condition).
+	ConditionProxyQuotaExceeded = "ProxyQuotaExceeded"
+	// ConditionEgressRulesStale is True when the shared GitHub IP-range refresh loop's
+	// last success is older than the staleness window, so a CIDR-mode proxy's egress
+	// NetworkPolicy allowlist may have drifted from GitHub's published ranges. False in
+	// the no-evidence cases: an unmanaged NetworkPolicy, a non-CIDR (FQDN) egress mode,
+	// or before the first refresh completes.
+	ConditionEgressRulesStale = "EgressRulesStale"
+
+	// ReasonRefreshStalled is the EgressRulesStale=True reason (the last successful
+	// GitHub IP-range refresh is older than the staleness window). ReasonRefreshCurrent
+	// clears it (EgressRulesStale=False after a fresh refresh); ReasonRefreshPending is
+	// the False reason in the no-evidence cases (unmanaged/FQDN/first-refresh-pending).
+	ReasonRefreshStalled = "RefreshStalled"
+	ReasonRefreshCurrent = "RefreshCurrent"
+	ReasonRefreshPending = "RefreshPending"
+)

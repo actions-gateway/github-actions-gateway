@@ -77,6 +77,11 @@ type EgressProxyReconciler struct {
 	// first fetch lands (mirrors the ActionsGatewayReconciler contract).
 	IPCache    *IPRangeCache
 	ProxyImage string
+	// EgressStaleThreshold is the age past which the shared GitHub IP-range refresh
+	// loop's last success trips the EgressRulesStale condition (Q157). Zero uses
+	// DefaultEgressStaleThreshold. Shares the value the ActionsGatewayReconciler is
+	// given so v1 and v2 proxies report staleness on the same window.
+	EgressStaleThreshold time.Duration
 	// Recorder emits Kubernetes Events on the EgressProxy (provisioning failure/recovery,
 	// proxy-pool readiness transitions, and TLS-cert issuance/rotation) so they surface in
 	// `kubectl describe`. May be nil in unit tests; callers go through recordEvent.
@@ -397,6 +402,16 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	}
 	setCondition(gmcv2alpha1.ConditionReady, ready, readyReason, fmt.Sprintf("%d/%d proxy pods ready", readyReplicas, minReplicas))
 
+	// ProxyQuota{Pressure,Exceeded} (Q82) and EgressRulesStale (Q157), ported from the
+	// v1 ActionsGateway onto the v2 standalone proxy pool. All advisory — they do NOT
+	// gate Ready; the pool keeps serving at its current scale. Pressure/Exceeded are
+	// mutually exclusive (error supersedes warning).
+	qc := r.evalEgressProxyQuota(ctx, ep, &dep)
+	setCondition(gmcv2alpha1.ConditionProxyQuotaPressure, qc.pressure, qc.pressureReason, qc.pressureMessage)
+	setCondition(gmcv2alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
+	es := r.evalEgressProxyEgressRulesStale(ep, now.Time)
+	setCondition(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
+
 	ep.Status.ReadyReplicas = readyReplicas
 	ep.Status.ObservedGeneration = gen
 
@@ -427,6 +442,12 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	// but a bounded requeue guards against a missed event while the pool scales up.
 	if !ready {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+	// Re-check EgressRulesStale on a bounded cadence: nothing watches the IP-range
+	// refresh loop, so when it stalls no event reaches this controller and the
+	// condition would never flip without a periodic requeue (Q157).
+	if d := r.egressProxyEgressRecheckRequeue(ep); d > 0 {
+		return ctrl.Result{RequeueAfter: d}, nil
 	}
 	return ctrl.Result{}, nil
 }

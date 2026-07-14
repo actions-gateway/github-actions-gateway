@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,18 +26,24 @@ type Metrics struct {
 // NewMetrics constructs the GMC metrics and registers them with the
 // controller-runtime metrics registry, so they are served on the same /metrics
 // endpoint as the built-in controller-runtime metrics. reader should be the
-// manager's cached client; it backs the managed-gateways collector, which lists
-// ActionsGateway CRs at scrape time (no staleness, no reconcile-path cost).
-func NewMetrics(reader client.Reader) *Metrics {
+// manager's cached client; it backs the scrape-time collectors, which list the
+// relevant CRs on each scrape (no staleness, no reconcile-path cost).
+//
+// v2Enabled reflects whether the opt-in actions-gateway.com/v2alpha1 CRDs are
+// installed (the same startup detection that gates the v2 controllers). When true,
+// the collectors also count v2 ActionsGateways and reflect v2 EgressProxy proxy
+// conditions; when false they stay v1-only, so a v1-only cluster never spins a
+// failed informer for absent v2 kinds.
+func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 	m := &Metrics{
 		IPRangeUpdates: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_ip_range_updates_total",
 			Help: "NetworkPolicy egress-rule refreshes applied from the GitHub meta API, per tenant namespace.",
 		}, []string{"namespace"}),
 	}
-	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader),
-		newProxyQuotaCollector(reader), newRunnerGroupsDegradedCollector(reader),
-		newEgressRulesStaleCollector(reader))
+	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader, v2Enabled),
+		newProxyQuotaCollector(reader, v2Enabled), newRunnerGroupsDegradedCollector(reader),
+		newEgressRulesStaleCollector(reader, v2Enabled))
 	return m
 }
 
@@ -47,16 +54,18 @@ func NewMetrics(reader client.Reader) *Metrics {
 // mirrors the condition the reconciler wrote to .status.conditions (1 when True,
 // 0 otherwise).
 type egressRulesStaleCollector struct {
-	reader client.Reader
-	stale  *prometheus.Desc
+	reader    client.Reader
+	v2Enabled bool
+	stale     *prometheus.Desc
 }
 
-func newEgressRulesStaleCollector(reader client.Reader) *egressRulesStaleCollector {
+func newEgressRulesStaleCollector(reader client.Reader, v2Enabled bool) *egressRulesStaleCollector {
 	return &egressRulesStaleCollector{
-		reader: reader,
+		reader:    reader,
+		v2Enabled: v2Enabled,
 		stale: prometheus.NewDesc(
 			"actions_gateway_egress_rules_stale",
-			"1 when the ActionsGateway EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0.",
+			"1 when the EgressRulesStale condition is True (the GitHub egress IP-range allowlist has not been refreshed within the staleness window), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy carrying the condition.",
 			[]string{"namespace", "name"}, nil,
 		),
 	}
@@ -67,23 +76,38 @@ func (c *egressRulesStaleCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.stale
 }
 
-// Collect implements prometheus.Collector. On a read failure it emits nothing
-// rather than a misleading value.
+// Collect implements prometheus.Collector. Each list is independent: a read failure
+// for one API version skips only that version's series rather than emitting a
+// misleading value.
 func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err != nil {
+	if err := c.reader.List(ctx, &list); err == nil {
+		for i := range list.Items {
+			ag := &list.Items[i]
+			if !ag.DeletionTimestamp.IsZero() {
+				continue
+			}
+			ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
+				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
+		}
+	}
+
+	if !c.v2Enabled {
 		return
 	}
-	for i := range list.Items {
-		ag := &list.Items[i]
-		if !ag.DeletionTimestamp.IsZero() {
-			continue
+	var epList gmcv2alpha1.EgressProxyList
+	if err := c.reader.List(ctx, &epList); err == nil {
+		for i := range epList.Items {
+			ep := &epList.Items[i]
+			if !ep.DeletionTimestamp.IsZero() {
+				continue
+			}
+			ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
+				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale), ep.Namespace, ep.Name)
 		}
-		ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
 	}
 }
 
@@ -142,22 +166,24 @@ func (c *runnerGroupsDegradedCollector) Collect(ch chan<- prometheus.Metric) {
 // The gauge value mirrors the condition the reconciler already wrote to
 // .status.conditions (1 when True, 0 otherwise).
 type proxyQuotaCollector struct {
-	reader   client.Reader
-	pressure *prometheus.Desc
-	exceeded *prometheus.Desc
+	reader    client.Reader
+	v2Enabled bool
+	pressure  *prometheus.Desc
+	exceeded  *prometheus.Desc
 }
 
-func newProxyQuotaCollector(reader client.Reader) *proxyQuotaCollector {
+func newProxyQuotaCollector(reader client.Reader, v2Enabled bool) *proxyQuotaCollector {
 	return &proxyQuotaCollector{
-		reader: reader,
+		reader:    reader,
+		v2Enabled: v2Enabled,
 		pressure: prometheus.NewDesc(
 			"actions_gateway_proxy_quota_pressure",
-			"1 when the ActionsGateway ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0.",
+			"1 when the ProxyQuotaPressure condition is True (the proxy pool cannot scale to maxReplicas within the namespace ResourceQuota headroom), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.",
 			[]string{"namespace", "name"}, nil,
 		),
 		exceeded: prometheus.NewDesc(
 			"actions_gateway_proxy_quota_exceeded",
-			"1 when the ActionsGateway ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0.",
+			"1 when the ProxyQuotaExceeded condition is True (proxy replica creation is being rejected by the namespace ResourceQuota), else 0. The name label is the v1 ActionsGateway or the v2 EgressProxy owning the pool.",
 			[]string{"namespace", "name"}, nil,
 		),
 	}
@@ -169,25 +195,42 @@ func (c *proxyQuotaCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.exceeded
 }
 
-// Collect implements prometheus.Collector. On a read failure it emits nothing
-// rather than a misleading value.
+// Collect implements prometheus.Collector. Each list is independent: a read failure
+// for one API version skips only that version's series rather than emitting a
+// misleading value.
 func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err != nil {
+	if err := c.reader.List(ctx, &list); err == nil {
+		for i := range list.Items {
+			ag := &list.Items[i]
+			if !ag.DeletionTimestamp.IsZero() {
+				continue
+			}
+			ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
+				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaPressure), ag.Namespace, ag.Name)
+			ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
+				conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaExceeded), ag.Namespace, ag.Name)
+		}
+	}
+
+	if !c.v2Enabled {
 		return
 	}
-	for i := range list.Items {
-		ag := &list.Items[i]
-		if !ag.DeletionTimestamp.IsZero() {
-			continue
+	var epList gmcv2alpha1.EgressProxyList
+	if err := c.reader.List(ctx, &epList); err == nil {
+		for i := range epList.Items {
+			ep := &epList.Items[i]
+			if !ep.DeletionTimestamp.IsZero() {
+				continue
+			}
+			ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
+				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionProxyQuotaPressure), ep.Namespace, ep.Name)
+			ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
+				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionProxyQuotaExceeded), ep.Namespace, ep.Name)
 		}
-		ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaPressure), ag.Namespace, ag.Name)
-		ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionProxyQuotaExceeded), ag.Namespace, ag.Name)
 	}
 }
 
@@ -207,16 +250,18 @@ func conditionGaugeValue(conds []metav1.Condition, condType string) float64 {
 // periodic IP-range refresh is 24h, far too coarse — and per-reconcile List
 // overhead, while always reflecting the current cluster state.
 type managedGatewaysCollector struct {
-	reader client.Reader
-	desc   *prometheus.Desc
+	reader    client.Reader
+	v2Enabled bool
+	desc      *prometheus.Desc
 }
 
-func newManagedGatewaysCollector(reader client.Reader) *managedGatewaysCollector {
+func newManagedGatewaysCollector(reader client.Reader, v2Enabled bool) *managedGatewaysCollector {
 	return &managedGatewaysCollector{
-		reader: reader,
+		reader:    reader,
+		v2Enabled: v2Enabled,
 		desc: prometheus.NewDesc(
 			"actions_gateway_managed_gateways",
-			"Number of ActionsGateway custom resources currently managed by the GMC (excludes those being deleted).",
+			"Number of ActionsGateway custom resources (v1 and v2) currently managed by the GMC (excludes those being deleted).",
 			nil, nil,
 		),
 	}
@@ -227,22 +272,41 @@ func (c *managedGatewaysCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.desc
 }
 
-// Collect implements prometheus.Collector. On a read failure it emits no metric
-// rather than a misleading value; the gauge is simply absent until the cache is
-// readable.
+// Collect implements prometheus.Collector. It sums the non-deleting v1 and (when v2
+// is enabled) v2 ActionsGateways. Each list is independent: it emits the count from
+// whichever lists succeed, and only stays silent when every attempted list fails —
+// so the gauge is absent rather than misleading until the cache is readable.
 func (c *managedGatewaysCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var list gmcv1alpha1.ActionsGatewayList
-	if err := c.reader.List(ctx, &list); err != nil {
-		return
-	}
 	var managed float64
-	for i := range list.Items {
-		if list.Items[i].DeletionTimestamp.IsZero() {
-			managed++
+	var read bool
+
+	var v1List gmcv1alpha1.ActionsGatewayList
+	if err := c.reader.List(ctx, &v1List); err == nil {
+		read = true
+		for i := range v1List.Items {
+			if v1List.Items[i].DeletionTimestamp.IsZero() {
+				managed++
+			}
 		}
+	}
+
+	if c.v2Enabled {
+		var v2List gmcv2alpha1.ActionsGatewayList
+		if err := c.reader.List(ctx, &v2List); err == nil {
+			read = true
+			for i := range v2List.Items {
+				if v2List.Items[i].DeletionTimestamp.IsZero() {
+					managed++
+				}
+			}
+		}
+	}
+
+	if !read {
+		return
 	}
 	ch <- prometheus.MustNewConstMetric(c.desc, prometheus.GaugeValue, managed)
 }
