@@ -52,41 +52,32 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end -}}
 
 {{/*
-Resolve a container image reference from a {repository, tag, digest} dict.
-When .digest is set the ref is `repository@sha256:…` and the tag is ignored.
-Used for the AGC/proxy references the GMC injects — the GMC binary enforces
-digest pinning on those at startup (validateImageDigest in cmd/gmc/cmd/main.go),
-so an unpinned ref here fails closed at runtime. The GMC's OWN image has no
-such runtime guard; it must go through "actions-gateway.gmcImage" below, which
-enforces pinning at render time instead. Pass the sub-map:
-  {{ include "actions-gateway.image" .Values.agc.image }}
+Resolve a container image reference from a {repository, tag, digest} dict, with
+digest pinning enforced at RENDER time (Q307). When .digest is set the ref is
+`repository@sha256:…` and the tag is ignored. When it is empty, rendering FAILS
+with a per-image message naming which value to set, rather than silently falling
+back to a mutable :latest tag (secure by default).
+
+Every image the chart resolves — gmc, agc, proxy, wrapper — goes through here.
+The GMC binary does re-check the AGC_IMAGE/PROXY_IMAGE refs it injects at startup
+(validateImageDigest in cmd/gmc/cmd/main.go), but an unpinned WRAPPER_IMAGE — or
+the GMC's own image, which has no runtime guard at all — would otherwise only
+surface later as a GMC crash-loop, a poor operator experience. Failing closed at
+render catches all four up front. The one escape hatch is the explicit
+allowFloatingImageTags=true dev/test opt-out — the same knob that relaxes the
+GMC's runtime AGC/proxy/wrapper check. `make manifest-validate` asserts each
+image fails closed. Pass a dict of the image sub-map, its values-path prefix
+(for the error message), and the flag:
+  {{ include "actions-gateway.image" (dict "image" .Values.agc.image "name" "agc" "allowFloating" .Values.allowFloatingImageTags) }}
 */}}
 {{- define "actions-gateway.image" -}}
-{{- if .digest -}}
-{{- printf "%s@%s" .repository .digest -}}
+{{- $img := .image -}}
+{{- if $img.digest -}}
+{{- printf "%s@%s" $img.repository $img.digest -}}
+{{- else if .allowFloating -}}
+{{- printf "%s:%s" $img.repository ($img.tag | default "latest") -}}
 {{- else -}}
-{{- printf "%s:%s" .repository (.tag | default "latest") -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-GMC controller-manager image reference — digest pinning enforced at RENDER
-time. Nothing at runtime validates the image the GMC itself runs from (the GMC
-binary only checks the AGC_IMAGE/PROXY_IMAGE refs it injects), so the chart is
-the last line of defence: rendering fails when gmc.image.digest is empty
-rather than silently falling back to a mutable :latest tag (secure by
-default). The one escape hatch is the explicit allowFloatingImageTags=true
-dev/test opt-out — the same knob that relaxes the runtime AGC/proxy check.
-`make manifest-validate` asserts the default-values render fails closed.
-Takes the root context.
-*/}}
-{{- define "actions-gateway.gmcImage" -}}
-{{- if .Values.gmc.image.digest -}}
-{{- printf "%s@%s" .Values.gmc.image.repository .Values.gmc.image.digest -}}
-{{- else if .Values.allowFloatingImageTags -}}
-{{- printf "%s:%s" .Values.gmc.image.repository (.Values.gmc.image.tag | default "latest") -}}
-{{- else -}}
-{{- fail "gmc.image must be pinned by digest: set gmc.image.digest=sha256:<64 hex digits> (see docs/operations/install.md, \"Pin images by digest\"). DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag." -}}
+{{- fail (printf "%s.image must be pinned by digest: set %s.image.digest=sha256:<64 hex digits> (see docs/operations/install.md, \"Pin images by digest\"). DEV/TEST ONLY: set allowFloatingImageTags=true to allow a floating tag." .name .name) -}}
 {{- end -}}
 {{- end -}}
 

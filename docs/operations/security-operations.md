@@ -487,13 +487,14 @@ every push to `main`.
 - **Run it yourself.** `make polaris-scan` (needs `helm` and `polaris` on
   `PATH`) runs the exact CI gate locally. It renders with a placeholder image
   digest so the audit reflects the production, digest-pinned posture — a digest
-  is also required for the chart to render at all (an empty `gmc.image.digest`
-  fails the render; `make manifest-validate` asserts that rejection), so the
-  placeholder cannot mask a fail-open default.
+  is also required for the chart to render at all (an empty digest on any of the
+  four images — `gmc`/`agc`/`proxy`/`wrapper` — fails the render; `make
+  manifest-validate` asserts each rejection), so the placeholder cannot mask a
+  fail-open default.
 
 > The scan audits *workload posture in the generated manifests*. It does not
-> replace pinning real image digests (`gmc.image.digest`,
-> `agc.image.digest`, `proxy.image.digest` in `values.yaml`) at install time —
+> replace pinning real image digests (`gmc.image.digest`, `agc.image.digest`,
+> `proxy.image.digest`, `wrapper.image.digest` in `values.yaml`) at install time —
 > see [tenant-onboarding.md](tenant-onboarding.md) and the chart README.
 
 ### CIS-benchmark posture — kube-bench (manual, pre-production)

@@ -63,17 +63,15 @@ helm install gag charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Digest pinning is enforced for all four images — this is the secure default:
-
-- **GMC (render time):** the chart **fails to render** with
-  `gmc.image must be pinned by digest …` when `gmc.image.digest` is empty, so
-  the controller image can never silently fall back to a mutable `:latest` tag.
-- **AGC/proxy/wrapper (startup time):** the GMC **rejects floating
-  `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` tags** and crash-loops until they are
-  pinned. The worker-wrapper (Q235) is on by default — the chart always sets
-  `WRAPPER_IMAGE`, so an empty `wrapper.image.digest` falls back to the floating
-  `ghcr.io/actions-gateway/wrapper:latest` tag and the GMC fails closed at
-  startup, exactly like a floating AGC/proxy tag.
+Digest pinning is enforced for all four images at **render time** — this is the
+secure default. The chart **fails to render** with
+`<image>.image must be pinned by digest …` (naming `gmc`, `agc`, `proxy`, or
+`wrapper`) when any of the four digests is empty, so no image can silently fall
+back to a mutable `:latest` tag. Failing at render catches all four up front
+rather than letting an unpinned `AGC_IMAGE`/`PROXY_IMAGE`/`WRAPPER_IMAGE` surface
+later as a GMC crash-loop (the GMC does *also* re-check those three at startup as
+a second layer). The worker-wrapper (Q235) is on by default — the chart always
+sets `WRAPPER_IMAGE`, so `wrapper.image.digest` is required like the rest.
 
 Pin `gmc.image.digest`, `agc.image.digest`, `proxy.image.digest`, and
 `wrapper.image.digest` before installing, or pass
@@ -119,10 +117,10 @@ both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
 | `gmc.image.tag` | `""` | GMC tag (used only when digest is empty **and** `allowFloatingImageTags=true`). |
 | `gmc.image.digest` | `""` | GMC image digest (`sha256:…`). **Required** — rendering fails when empty unless `allowFloatingImageTags=true`. |
 | `gmc.imagePullPolicy` | `IfNotPresent` | GMC image pull policy. |
-| `agc.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/agc`, `""`, `""` | Image the GMC **injects** into provisioned AGCs. Digest required by default. |
-| `proxy.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/proxy`, `""`, `""` | Image the GMC **injects** into provisioned proxy pools. Digest required by default. |
-| `wrapper.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/wrapper`, `""`, `""` | Worker-wrapper image (Q235) the GMC forwards to every AGC, which injects it into each worker pod. On by default — the chart always sets `WRAPPER_IMAGE`, so the GMC crash-loops on an empty (→ floating) digest. Digest required by default. |
-| `allowFloatingImageTags` | `false` | Dev/test opt-out of digest pinning: lets the chart render `gmc.image` from a floating tag and disables the GMC's AGC/proxy/wrapper pin check. **Do not enable in production.** |
+| `agc.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/agc`, `""`, `""` | Image the GMC **injects** into provisioned AGCs. **Required** — rendering fails when the digest is empty (unless `allowFloatingImageTags=true`). |
+| `proxy.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/proxy`, `""`, `""` | Image the GMC **injects** into provisioned proxy pools. **Required** — rendering fails when the digest is empty (unless `allowFloatingImageTags=true`). |
+| `wrapper.image.{repository,tag,digest}` | `ghcr.io/actions-gateway/wrapper`, `""`, `""` | Worker-wrapper image (Q235) the GMC forwards to every AGC, which injects it into each worker pod. On by default — the chart always sets `WRAPPER_IMAGE`. **Required** — rendering fails when the digest is empty (unless `allowFloatingImageTags=true`). |
+| `allowFloatingImageTags` | `false` | Dev/test opt-out of digest pinning: lets the chart render all four images (`gmc`/`agc`/`proxy`/`wrapper`) from floating tags and disables the GMC's AGC/proxy/wrapper startup pin check. **Do not enable in production.** |
 | `leaderElection.enabled` | `true` | Pass `--leader-elect`. Keep on when `replicaCount > 1`. |
 | `metrics.enabled` | `true` | Expose the HTTPS `:8443` metrics endpoint + Service. |
 | `metrics.serviceMonitor.enabled` | `false` | Emit a Prometheus-Operator ServiceMonitor (needs its CRD). |
@@ -149,14 +147,15 @@ format, security-profile enum, pull-policy enum, etc.).
 
 ## Offline validation
 
-Rendering requires `gmc.image.digest` (see above); any well-formed digest works
-for offline validation:
+Rendering requires all four image digests (`gmc`/`agc`/`proxy`/`wrapper`, see
+above); any well-formed digest works for offline validation:
 
 ```sh
 DIGEST=sha256:1111111111111111111111111111111111111111111111111111111111111111
-helm lint charts/actions-gateway --set-string gmc.image.digest="$DIGEST"
-helm template gag charts/actions-gateway --namespace gmc-system \
-  --set-string gmc.image.digest="$DIGEST" | \
+PINS="--set-string gmc.image.digest=$DIGEST --set-string agc.image.digest=$DIGEST"
+PINS="$PINS --set-string proxy.image.digest=$DIGEST --set-string wrapper.image.digest=$DIGEST"
+helm lint charts/actions-gateway $PINS
+helm template gag charts/actions-gateway --namespace gmc-system $PINS | \
   kubeconform -strict -summary -kubernetes-version 1.30.0 \
     -skip CustomResourceDefinition,ActionsGateway,RunnerGroup,Certificate,Issuer,ServiceMonitor
 ```

@@ -143,11 +143,23 @@ release_identity_regexp() {
 }
 
 # Placeholder sha256 digest used only to render the Helm chart for scanning
-# and validation: production installs pin gmc.image.digest, so auditing the
+# and validation: production installs pin the image digests, so auditing the
 # digest-pinned form reflects the SHIPPED posture. A digest is also REQUIRED
-# to render at all — the chart fails closed when gmc.image.digest is empty
-# (Q96), and scripts/manifest-validate.sh asserts that rejection. The value
-# must satisfy values.schema.json's sha256:[a-f0-9]{64} pattern. Shared by
-# polaris-scan.sh and manifest-validate.sh.
+# to render at all — the chart fails closed when any of the four image digests
+# (gmc/agc/proxy/wrapper) is empty (Q96, Q307), and scripts/manifest-validate.sh
+# asserts each rejection. The value must satisfy values.schema.json's
+# sha256:[a-f0-9]{64} pattern. Shared by polaris-scan.sh and manifest-validate.sh.
 # shellcheck disable=SC2034  # consumed by the sourcing scripts
 POLARIS_RENDER_DIGEST="${POLARIS_RENDER_DIGEST:-sha256:1111111111111111111111111111111111111111111111111111111111111111}"
+
+# --set-string flags pinning ALL FOUR image digests, the minimum required to
+# render the chart since Q307 (agc/proxy/wrapper now fail closed at render like
+# gmc did). Use in place of a single --set-string gmc.image.digest=… whenever a
+# render must succeed. shellcheck disable=SC2034 — consumed by sourcing scripts.
+# shellcheck disable=SC2034
+RENDER_DIGEST_ARGS=(
+	--set-string "gmc.image.digest=$POLARIS_RENDER_DIGEST"
+	--set-string "agc.image.digest=$POLARIS_RENDER_DIGEST"
+	--set-string "proxy.image.digest=$POLARIS_RENDER_DIGEST"
+	--set-string "wrapper.image.digest=$POLARIS_RENDER_DIGEST"
+)

@@ -9,9 +9,10 @@ name: manifest-validate
 #   - kubeconform: schema-validates the controller-gen manifests (the codegen +
 #     envtest substrate) and `helm template` output in digest-pinned, dev/test
 #     opt-out, and all-features form against the Kubernetes API, plus `helm lint`
-#     on the chart itself and a fail-closed check that a default-values render
-#     (no gmc.image.digest) is REJECTED, so GMC image digest pinning cannot
-#     regress to fail-open (Q96). The chart CRD/RBAC/webhook drift gates
+#     on the chart itself and a fail-closed check that a render with any of the
+#     four image digests (gmc/agc/proxy/wrapper) empty is REJECTED, so image
+#     digest pinning cannot regress to fail-open (Q96, Q307). The chart
+#     CRD/RBAC/webhook drift gates
 #     (sync-chart-{crds,rbac,webhook}.sh --check) run first inside
 #     `make manifest-validate`.
 on:
