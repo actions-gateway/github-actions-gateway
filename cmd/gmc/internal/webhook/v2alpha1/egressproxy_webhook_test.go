@@ -171,6 +171,63 @@ func TestEgressProxyCustomValidator_ValidateDelete(t *testing.T) {
 	require.NoError(t, err, "delete is a no-op regardless of allowlist state")
 }
 
+// epWithNoProxy builds a minimal EgressProxy carrying only noProxyCIDRs, for the
+// GitHub proxy-bypass admission cases.
+func epWithNoProxy(entries ...string) *agcv2alpha1.EgressProxy {
+	return &agcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
+		Spec:       agcv2alpha1.EgressProxySpec{NoProxyCIDRs: entries},
+	}
+}
+
+// TestEgressProxyCustomValidator_RejectsGitHubHostInNoProxyCIDRs is the v2 port of
+// the v1 ActionsGateway guard: a spec.noProxyCIDRs entry that NO_PROXY-matches a
+// public GitHub host would route GitHub traffic around the per-tenant egress proxy
+// and must be rejected. (The EgressProxy has no gitHubURL, so a referrer's GHES host
+// is not covered — Q322.)
+func TestEgressProxyCustomValidator_RejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
+	v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
+	for _, entry := range []string{"github.com", ".github.com", "api.github.com", "githubusercontent.com", "ghcr.io", ".com"} {
+		_, err := v.ValidateCreate(context.Background(), epWithNoProxy(entry))
+		require.Errorf(t, err, "entry %q should be rejected", entry)
+		assert.Contains(t, err.Error(), "spec.noProxyCIDRs[0]")
+		assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+	}
+}
+
+// TestEgressProxyCustomValidator_AllowsNonGitHubNoProxyEntries asserts the guard is
+// surgical: CIDRs, bare IPs, and non-GitHub domain suffixes (the supported
+// internal-destination pattern) are all admitted, as is an empty list.
+func TestEgressProxyCustomValidator_AllowsNonGitHubNoProxyEntries(t *testing.T) {
+	v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
+
+	_, err := v.ValidateCreate(context.Background(), epWithNoProxy(
+		"10.0.0.0/8", "203.0.113.5/32", "fd00::/8", // CIDRs
+		"10.0.0.5",                       // bare IP
+		"svc.cluster.local", "localhost", // cluster-internal domain suffixes
+		"internal.example.com", // a non-GitHub internal domain
+	))
+	require.NoError(t, err)
+
+	_, err = v.ValidateCreate(context.Background(), epWithNoProxy())
+	require.NoError(t, err)
+}
+
+// TestEgressProxyCustomValidator_UpdateRejectsGitHubHostInNoProxyCIDRs asserts the
+// guard also gates updates (adding a bypass to an existing proxy) and audits the
+// rejection.
+func TestEgressProxyCustomValidator_UpdateRejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
+	v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
+	ctx, lines := ctxWithCapture()
+	_, err := v.ValidateUpdate(ctx, epWithNoProxy(), epWithNoProxy("10.0.0.0/8", "api.github.com"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "spec.noProxyCIDRs[1]")
+
+	joined := strings.Join(*lines, "\n")
+	assert.Contains(t, joined, "admission denied")
+	assert.Contains(t, joined, "update")
+}
+
 // epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the
 // Q245 intent/backend admission cases.
 func epWithMode(mode agcv2alpha1.EgressPolicyMode) *agcv2alpha1.EgressProxy {

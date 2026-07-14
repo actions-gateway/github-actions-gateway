@@ -24,6 +24,7 @@ import (
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -96,12 +97,24 @@ func validateEgressDestinations(spec *agcv2alpha1.EgressProxySpec, list *allowli
 	return nil
 }
 
+// validateNoProxyCIDRs rejects any spec.noProxyCIDRs entry that would route GitHub
+// traffic around the per-tenant egress proxy, defeating egress-IP attribution — the
+// v2 port of the v1 ActionsGateway webhook's proxy.noProxyCIDRs guard (mechanism and
+// rationale live in the shared noproxy package). Unlike v1, the EgressProxy carries
+// no gitHubURL of its own — referring gateways bind the GitHub host — so only the
+// static public GitHub host set is protected here; an entry matching a referrer's
+// GitHub Enterprise Server host is not yet detected (Q322).
+func validateNoProxyCIDRs(spec *agcv2alpha1.EgressProxySpec) error {
+	return noproxy.ValidateEntries("spec.noProxyCIDRs", spec.NoProxyCIDRs, noproxy.GitHubHosts)
+}
+
 // +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-egressproxy,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=egressproxies,verbs=create;update,versions=v2alpha1,name=vegressproxy-v2alpha1.kb.io,admissionReviewVersions=v1
 
 // EgressProxyCustomValidator validates the namespaced, tenant-authorable EgressProxy
 // data kind, gating its destinationFQDNs/destinationCIDRs against the platform-owned
-// egress allowlist (Q242 G.1) and its spec.scheduling.priorityClassName against the
-// infra-only PriorityClass allowlist (Q284).
+// egress allowlist (Q242 G.1), its noProxyCIDRs against the GitHub proxy-bypass
+// footgun, and its spec.scheduling.priorityClassName against the infra-only
+// PriorityClass allowlist (Q284).
 //
 // +kubebuilder:object:generate=false
 type EgressProxyCustomValidator struct {
@@ -119,9 +132,10 @@ type EgressProxyCustomValidator struct {
 	InfraPriorityClasses *allowlist.PriorityClassAllowlist
 }
 
-// validate runs the shared admission checks for both create and update: it reject an
+// validate runs the shared admission checks for both create and update: it rejects an
 // FQDN intent with no operator backend, gates any extra destinations against the
-// platform allowlist, and attaches a non-blocking deprecation warning for the legacy
+// platform allowlist, rejects noProxyCIDRs entries that would bypass the proxy for
+// GitHub, and attaches a non-blocking deprecation warning for the legacy
 // CiliumFQDN/CalicoFQDN modes.
 func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
 	var warnings admission.Warnings
@@ -132,6 +146,9 @@ func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, 
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
+		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+	}
+	if err := validateNoProxyCIDRs(&obj.Spec); err != nil {
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
