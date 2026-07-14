@@ -60,7 +60,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q315"></a>Q315 | Dashboard panels for unvisualized counters | `infra` `docs` | 🔲 | S | ~10 emitted+documented counters have no panel: acquisition/poll/renew-teardown errors, pending-reaps, propagation retries, and the fan-out safety trio. Add dashboard rows. |
 | <a id="Q316"></a>Q316 | Wire proxy_connect_denied_total (egress-denial signal) | `security` `infra` `docs` | 🔲 | S | `proxy_connect_denied_total` (allowlist-denied CONNECT) is undocumented and alerted nowhere; SSRF detection uses the coarser dial_errors. Add to the reference, a detection alert, and a panel. |
 | <a id="Q317"></a>Q317 | Document + cover quota_retries metrics | `infra` `docs` | 🔲 | S | quota_retries_total/_exhausted_total are emitted but absent from the metrics reference, alerts, and dashboards — unlike the eviction-retry twin. Add a table row, exhaustion alert, and panel. |
-| <a id="Q318"></a>Q318 | Emit build_info version metric | `infra` | 🔲 | S | No GMC/AGC/proxy metric carries the running version (`app.kubernetes.io/version` is on worker pods only), so it can't be correlated from metrics during incidents. Emit a `build_info` gauge. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
