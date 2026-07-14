@@ -323,14 +323,23 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.Error("EnsureAgents failed", "error", err)
 		r.recordEvent(&rs, corev1.EventTypeWarning, "AgentPoolError", "EnsureAgents",
 			"failed to provision agent Secrets: %v", err)
+		// Reflect the failure in status: no listener can run without the agent Secrets, so
+		// the set is Ready=False. Without this write the early return would leave a stale
+		// Ready=True until the next reconcile, misreporting the set as healthy (Q308).
+		r.setReadyCondition(&rs, false, v2alpha1.ReasonAgentProvisioningFailed,
+			fmt.Sprintf("failed to provision agent Secrets: %v", err))
+		if uerr := r.Status().Update(ctx, &rs); uerr != nil && !apierrors.IsConflict(uerr) {
+			log.Error("failed to write Ready condition", "error", uerr)
+		}
 		return ctrl.Result{}, err
 	}
 
 	// 5. Start or update the multiplexer.
 	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rs.DeepCopy(), pool)
 	mux.SetMaxListeners(rs.Spec.MaxListeners)
+	var startErr error
 	if mux.ActiveCount() == 0 && rs.Spec.MaxListeners > 0 {
-		if startErr := mux.Start(ctx); startErr != nil {
+		if startErr = mux.Start(ctx); startErr != nil {
 			log.Warn("multiplexer restart failed", "error", startErr)
 			r.recordEvent(&rs, corev1.EventTypeWarning, "ListenerStartFailed", "StartMultiplexer",
 				"failed to restart listener goroutines: %v", startErr)
@@ -343,13 +352,10 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	rs.Status.ActiveJobs = podCounts.active
 	rs.Status.PendingJobs = podCounts.pending
 	rs.Status.ObservedGeneration = rs.Generation
-	if active > 0 {
-		r.setReadyCondition(&rs, true, v2alpha1.ReasonListenerActive,
-			fmt.Sprintf("references resolved (template via %s); %d listener goroutine(s) running", refs.templateSource, active))
-	} else {
-		r.setReadyCondition(&rs, false, v2alpha1.ReasonNoActiveSessions,
-			"references resolved; no listener goroutines are running")
-	}
+	// A listener-start failure surfaces as Ready=False/ListenerStartFailed rather than
+	// slipping through as the benign NoActiveSessions state (Q308).
+	ready, reason, msg := readyConditionForListeners(active, startErr, refs.templateSource)
+	r.setReadyCondition(&rs, ready, reason, msg)
 
 	// Worker-capacity conditions (Q303): the two-tier WorkerQuota ladder and
 	// WorkersUnschedulable, so a stall shows as a condition rather than only rising
@@ -567,6 +573,26 @@ done:
 		case r.eventCh <- ev:
 		default:
 		}
+	}
+}
+
+// readyConditionForListeners computes the classic-path Ready condition from the number
+// of running listener goroutines and any error returned when (re)starting them.
+// Precedence: a running listener ⇒ Ready; otherwise a start failure ⇒
+// Ready=False/ListenerStartFailed — a distinct, actionable reason rather than the benign
+// NoActiveSessions state (Q308); otherwise Ready=False/NoActiveSessions. templateSource
+// names the resolution rung in the healthy message (auditable in status).
+func readyConditionForListeners(active int32, startErr error, templateSource string) (ready bool, reason, msg string) {
+	switch {
+	case active > 0:
+		return true, v2alpha1.ReasonListenerActive,
+			fmt.Sprintf("references resolved (template via %s); %d listener goroutine(s) running", templateSource, active)
+	case startErr != nil:
+		return false, v2alpha1.ReasonListenerStartFailed,
+			fmt.Sprintf("listener goroutines failed to start: %v", startErr)
+	default:
+		return false, v2alpha1.ReasonNoActiveSessions,
+			"references resolved; no listener goroutines are running"
 	}
 }
 
