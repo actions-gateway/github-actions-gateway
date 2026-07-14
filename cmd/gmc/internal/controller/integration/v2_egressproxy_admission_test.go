@@ -83,6 +83,36 @@ func TestV2_EgressProxy_Admission_RejectsTooBroadCIDR(t *testing.T) {
 	require.Error(t, err, "a CIDR broader than the allowlisted range must be rejected")
 }
 
+// TestV2_EgressProxy_Admission_NoProxyCIDRs verifies the apiserver rejects a
+// spec.noProxyCIDRs entry that NO_PROXY-matches a public GitHub host (which would
+// route GitHub traffic around the per-tenant egress proxy) and admits CIDRs and
+// non-GitHub domain suffixes — the v2 twin of TestWebhookAdmission_NoProxyCIDRs.
+func TestV2_EgressProxy_Admission_NoProxyCIDRs(t *testing.T) {
+	const ns = "v2-ep-adm-noproxy"
+	createNamespace(t, ns)
+
+	bad := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "noproxy-github", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			NoProxyCIDRs: []string{"github.com"},
+		},
+	}
+	err := k8sClient.Create(ctx, bad)
+	require.Error(t, err, "a GitHub host in noProxyCIDRs must be rejected by the webhook through the apiserver")
+	assert.Contains(t, err.Error(), "around the per-tenant egress proxy",
+		"rejection must come from the GMC validating webhook")
+
+	good := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "noproxy-ok", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			NoProxyCIDRs: []string{"10.0.0.0/8", "203.0.113.5/32", "svc.cluster.local"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, good),
+		"CIDRs and non-GitHub domain suffixes in noProxyCIDRs must be admitted")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, good) })
+}
+
 func TestV2_EgressProxy_Admission_NoDestinationsAlwaysAllowed(t *testing.T) {
 	const ns = "v2-ep-adm-empty"
 	createNamespace(t, ns)
