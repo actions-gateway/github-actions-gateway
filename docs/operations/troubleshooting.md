@@ -505,12 +505,23 @@ event with reason `TeardownIncomplete`. Some tenant resources (e.g. the AGC
 Deployment, RoleBinding, or a ServiceAccount) are still present in the namespace.
 
 **Cause.** Teardown is **fail-closed by design** (Q125): the GMC keeps the
-`actions-gateway.github.com/gmc-cleanup` finalizer on the CR and requeues until it
-can confirm *every* owned resource is deleted (or already gone). If a delete keeps
-failing — most often an API-server error, or a `Forbidden` from an admission policy
-or revoked RBAC — the finalizer is retained on purpose so a live, credentialed AGC
-Deployment is never orphaned by a half-finished teardown. A NotFound is treated as
-success, so an already-deleted resource never blocks convergence.
+cleanup finalizer on the CR and requeues until it can confirm *every* owned
+resource is deleted (or already gone). If a delete keeps failing — most often an
+API-server error, or a `Forbidden` from an admission policy or revoked RBAC — the
+finalizer is retained on purpose so a live, credentialed AGC Deployment is never
+orphaned by a half-finished teardown. A NotFound is treated as success, so an
+already-deleted resource never blocks convergence.
+
+This applies to both API versions (Q328): the v1 (`actions-gateway.github.com`)
+gateway holds the `actions-gateway.github.com/gmc-cleanup` finalizer; the v2
+(`actions-gateway.com`) gateway holds its own cleanup finalizer and additionally
+**verifies each child is actually gone** after its delete is accepted — a child
+held by another controller's finalizer (its `deletionTimestamp` is set but the
+object lingers) also keeps the teardown open, with the lingering child named in
+the `TeardownIncomplete` event message. The v2 per-tenant metrics Secrets are the
+one exception: they are removed by owner-reference garbage collection (the GMC
+deliberately holds no delete permission on Secrets), so they never appear in the
+event.
 
 **Diagnostics.**
 
@@ -1812,6 +1823,7 @@ Unlike a `RunnerSet`'s reference resolution, these are the *gateway's own* preco
 | `ActionsGateway` | `AGCNotReady` | Warning | The AGC Deployment has no ready replica yet (or lost it). |
 | `ActionsGateway` | `RunnerSetsImpaired` / `AllRunnerSetsHealthy` | Warning / Normal | A bound `RunnerSet` became impaired, or the last impaired set recovered (the `RunnerSetsDegraded` rollup, Q304). |
 | `ActionsGateway` | `ReconcileSucceeded` | Normal | Provisioning recovered after a prior `ProvisioningFailed`. |
+| `ActionsGateway` | `TeardownIncomplete` | Warning | Teardown could not confirm every child deleted (a delete failed, or a child lingers under another controller's finalizer); the cleanup finalizer is retained and teardown retries (Q328 — see [ActionsGateway Stuck Deleting](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)). |
 | `EgressProxy` | `ProxyCertificateIssued` | Normal | The self-signed proxy TLS certificate was issued or rotated (near expiry). |
 | `EgressProxy` | `ProvisioningFailed` | Warning | A reconcile failed partway through provisioning the proxy pool; the message names the failing step. |
 | `EgressProxy` | `ProxyReady` / `ProxyNotReady` | Normal / Warning | The proxy pool reached / lost its `minReplicas` ready pods. |

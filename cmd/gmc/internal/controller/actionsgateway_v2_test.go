@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
@@ -33,8 +34,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func actionsGatewayV2TestScheme(t *testing.T) *runtime.Scheme {
@@ -303,6 +307,112 @@ func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 	var gotCRB rbacv1.ClusterRoleBinding
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Name: clusterRunnerTemplateReaderBindingName(ag)}, &gotCRB),
 		"reconcileDelete must delete the cluster-scoped ClusterRoleBinding")
+}
+
+// deletingV2Gateway returns a v2 ActionsGateway that is mid-deletion: it carries
+// the cleanup finalizer and a deletion timestamp, the precondition for
+// reconcileDelete (mirrors v1's deletingAG).
+func deletingV2Gateway() *gmcv2alpha1.ActionsGateway {
+	now := metav1.Now()
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	ag.Finalizers = []string{gmcv2alpha1.ActionsGatewayFinalizer}
+	ag.DeletionTimestamp = &now
+	return ag
+}
+
+// TestActionsGatewayV2ReconcileDelete_FailClosedOnDeleteError verifies the Q125
+// fail-closed teardown ported to v2 (Q328): when a teardown delete returns a
+// non-NotFound error, reconcileDelete must return an error (so the work requeues),
+// must NOT remove the finalizer, and must emit a TeardownIncomplete event —
+// otherwise a transient API failure would orphan a live, credentialed AGC
+// Deployment.
+func TestActionsGatewayV2ReconcileDelete_FailClosedOnDeleteError(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ag := deletingV2Gateway()
+	agcDep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: agcNameV2(ag), Namespace: ag.Namespace}}
+
+	deleteErr := errors.New("apiserver unavailable")
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, agcDep).WithStatusSubresource(ag).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+				// Fail only the AGC Deployment delete; everything else passes through
+				// so the test exercises the "some deletes succeed, one fails" path.
+				if dep, ok := obj.(*appsv1.Deployment); ok && dep.GetName() == agcNameV2(ag) {
+					return deleteErr
+				}
+				return cl.Delete(ctx, obj, opts...)
+			},
+		}).Build()
+	rec := events.NewFakeRecorder(8)
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", Recorder: rec}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.Error(t, err, "a failed teardown delete must surface an error to requeue")
+
+	var fetched gmcv2alpha1.ActionsGateway
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
+	assert.Contains(t, fetched.Finalizers, gmcv2alpha1.ActionsGatewayFinalizer,
+		"finalizer must be retained while a delete is unconfirmed")
+
+	// The orphan-prevention invariant: the AGC Deployment that failed to delete is
+	// still present (not abandoned silently).
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep),
+		"the AGC Deployment must still exist after a failed delete")
+
+	select {
+	case msg := <-rec.Events:
+		assert.Contains(t, msg, "TeardownIncomplete", "the event must carry the TeardownIncomplete reason")
+	default:
+		t.Fatal("expected a TeardownIncomplete Warning event on the ActionsGateway")
+	}
+}
+
+// TestActionsGatewayV2ReconcileDelete_RetainsFinalizerWhileChildLingers verifies
+// the verify-gone half of the Q328 teardown: a child whose delete was accepted but
+// that lingers (held by a foreign finalizer) keeps the gateway's finalizer in place
+// with a TeardownIncomplete event and a poll requeue; once the child drains, the
+// next pass removes the finalizer.
+func TestActionsGatewayV2ReconcileDelete_RetainsFinalizerWhileChildLingers(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ag := deletingV2Gateway()
+	held := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+		Name:       agcNameV2(ag),
+		Namespace:  ag.Namespace,
+		Finalizers: []string{"example.com/hold"},
+	}}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, held).WithStatusSubresource(ag).Build()
+	rec := events.NewFakeRecorder(8)
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test", Recorder: rec}
+
+	res, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err, "a lingering child is a wait, not an error")
+	assert.Positive(t, res.RequeueAfter, "teardown must poll until the lingering child is gone")
+
+	var fetched gmcv2alpha1.ActionsGateway
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
+	assert.Contains(t, fetched.Finalizers, gmcv2alpha1.ActionsGatewayFinalizer,
+		"finalizer must be retained while a child lingers")
+
+	select {
+	case msg := <-rec.Events:
+		assert.Contains(t, msg, "TeardownIncomplete")
+		assert.Contains(t, msg, "Deployment "+agcNameV2(ag), "the event must name the lingering child")
+	default:
+		t.Fatal("expected a TeardownIncomplete Warning event naming the lingering child")
+	}
+
+	// The child drains (its holder removes the finalizer) → the next pass confirms
+	// every child gone and removes the gateway's finalizer.
+	var dep appsv1.Deployment
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep))
+	dep.Finalizers = nil
+	require.NoError(t, c.Update(context.Background(), &dep))
+
+	_, err = r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	getErr := c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched)
+	assert.Error(t, getErr, "the gateway must finalize away once every child is verifiably gone")
 }
 
 // TestActionsGatewayV2_PerGatewayNaming proves two gateways in one namespace
