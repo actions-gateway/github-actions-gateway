@@ -197,3 +197,59 @@ func TestV2_RunnerSet_WorkerQuotaPressure_Tripped(t *testing.T) {
 	}, 20*time.Second, 100*time.Millisecond,
 		"a quota that admits one worker but not the ceiling must trip WorkerQuotaPressure, not Exceeded")
 }
+
+// TestV2_RunnerSet_QuotaEditRetriggersReconcile proves the RunnerSet reconciler's
+// ResourceQuota watch (Q326) against real apiserver watch semantics: once the set is
+// Ready with its listeners at the desired count, no timer requeues it — so a quota
+// created out-of-band tripping WorkerQuotaExceeded, and a raised .spec.hard clearing
+// it, can only have arrived through the watch + hard-changed predicate.
+func TestV2_RunnerSet_QuotaEditRetriggersReconcile(t *testing.T) {
+	const ns = "v2-rs-quota-watch"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplateWithCPURequest("tmpl", ns, "500m")))
+	rs := newRunnerSet("watch-set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+
+	// ListenerActive means active listeners reached maxListeners: the baseline
+	// recheck timer no longer arms, so the set goes dormant between watch events.
+	waitForSetReadyReason(t, ns, "watch-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		return c != nil && c.Status == metav1.ConditionFalse
+	}, 20*time.Second, 100*time.Millisecond, "steady state before the quota exists: Exceeded=False")
+
+	// Headroom below one 500m worker: the quota's creation alone must re-reconcile
+	// the set and trip the error tier.
+	quota := &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{Name: "tight", Namespace: ns},
+		Spec:       corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("100m")}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, quota))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), quota) })
+
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
+	}, 10*time.Second, 100*time.Millisecond,
+		"creating a tight ResourceQuota must promptly trip WorkerQuotaExceeded via the quota watch (Q326)")
+
+	// Raising .spec.hard passes the hard-changed predicate and must clear it.
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "tight"}, quota))
+	quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse("100")
+	require.NoError(t, k8sClient.Update(ctx, quota))
+
+	require.Eventually(t, func() bool {
+		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == "NoRejection"
+	}, 10*time.Second, 100*time.Millisecond,
+		"raising the quota's .spec.hard must promptly clear WorkerQuotaExceeded via the watch predicate (Q326)")
+}

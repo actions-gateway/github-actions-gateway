@@ -1127,12 +1127,12 @@ func runnerGroupImpairingConditionsChanged() predicate.Predicate {
 	}
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard, but
-	// not on the high-frequency .status.used churn as pods come and go — only the
-	// hard cap feeds ProxyQuotaPressure (Q82).
-	quotaHardChanged := predicate.Funcs{
+// quotaHardChangedPredicate enqueues ResourceQuota create/delete and only those
+// updates that change .spec.hard, ignoring the high-frequency .status.used churn
+// as pods come and go — only the hard cap feeds the ProxyQuota conditions (Q82).
+// Shared by the v1 ActionsGateway and v2 EgressProxy quota watches (Q326).
+func quotaHardChangedPredicate() predicate.Predicate {
+	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			oldQ, ok1 := e.ObjectOld.(*corev1.ResourceQuota)
 			newQ, ok2 := e.ObjectNew.(*corev1.ResourceQuota)
@@ -1142,6 +1142,10 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return !resourceListEqual(oldQ.Spec.Hard, newQ.Spec.Hard)
 		},
 	}
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv1alpha1.ActionsGateway{}).
 		// The reconciler mutates per-tenant in-memory state and assumes a single
@@ -1163,7 +1167,7 @@ func (r *ActionsGatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&corev1.ResourceQuota{},
 			handler.EnqueueRequestsFromMapFunc(r.quotaToActionsGateways),
-			builder.WithPredicates(quotaHardChanged),
+			builder.WithPredicates(quotaHardChangedPredicate()),
 		).
 		// Watch owned RunnerGroups so a child's impairing-condition change refreshes
 		// the parent's RunnerGroupsDegraded rollup (Q158). The predicate drops the

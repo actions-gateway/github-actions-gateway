@@ -439,18 +439,34 @@ func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) 
 // chosen mechanism (cilium/calico/gke).
 func startEgressProxyReconcilerWithBackend(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend) {
 	t.Helper()
+	syncPeriod := 2 * time.Second
+	startEgressProxyReconcilerOpts(t, ipCache, backend, &syncPeriod)
+}
+
+// startEgressProxyReconcilerNoResync is startEgressProxyReconciler with the manager's
+// default (effectively infinite) cache sync period instead of the suite's 2s resync,
+// so a test can prove a reconcile was triggered by a watch event rather than by the
+// periodic resync re-enqueueing every EgressProxy (Q326).
+func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRangeCache) {
+	t.Helper()
+	startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendNone, nil)
+}
+
+// startEgressProxyReconcilerOpts is the shared core: a nil syncPeriod keeps the
+// manager's default resync behavior.
+func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration) {
+	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
 
 	skipNameValidation := true
-	syncPeriod := 2 * time.Second
 	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
 		Scheme:                 testScheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 		LeaderElection:         false,
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
-		Cache:                  cache.Options{SyncPeriod: &syncPeriod},
+		Cache:                  cache.Options{SyncPeriod: syncPeriod},
 	})
 	require.NoError(t, err)
 

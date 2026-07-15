@@ -146,6 +146,15 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&v2alpha1.RunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.templateToRunnerSets),
+		).
+		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so
+		// the WorkerQuota{Pressure,Exceeded} conditions refresh promptly (Q82/Q326)
+		// — mirrors the v1 RunnerGroup watch. The predicate ignores .status.used
+		// churn; transient used drift is picked up by the worker-pod watch.
+		Watches(
+			&corev1.ResourceQuota{},
+			handler.EnqueueRequestsFromMapFunc(r.quotaToRunnerSets),
+			builder.WithPredicates(quotaHardChangedPredicate()),
 		)
 
 	// ClusterRunnerTemplate (cluster-scoped) is watched ONLY by a v2 AGC, gated on

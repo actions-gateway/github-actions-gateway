@@ -23,6 +23,9 @@ import (
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // evalEgressProxyQuota computes the ProxyQuotaPressure (warning) and
@@ -92,19 +95,47 @@ func (r *EgressProxyReconciler) egressStaleThreshold() time.Duration {
 	return DefaultEgressStaleThreshold
 }
 
-// egressProxyEgressRecheckRequeue returns the cadence at which the EgressProxy should
-// be re-reconciled purely to keep EgressRulesStale fresh, or 0 when staleness is not
-// evaluated (non-CIDR egress mode, or no IP cache). A stalled refresh loop produces no
-// event for this controller, so without a periodic requeue the condition would never
-// flip. A fraction of the staleness window bounds detection and recovery latency
-// (Q157) — the v2 analogue of the v1 egressRecheckRequeue.
+// egressProxyEgressRecheckRequeue returns the cadence at which a Ready EgressProxy
+// should be re-reconciled to keep its egress posture fresh, or 0 when there is
+// nothing to re-check (an unmanaged NetworkPolicy, or CIDR mode without an IP cache
+// — v1 parity). A fraction of the staleness window bounds detection and recovery
+// latency (Q157) — the v2 analogue of the v1 egressRecheckRequeue.
+//
+// In CIDR mode the recheck keeps EgressRulesStale fresh: a stalled IP-range refresh
+// loop produces no event for this controller, so without a periodic requeue the
+// condition would never flip. In the FQDN modes it re-checks the CNI-native FQDN
+// policy for out-of-band drift: the unstructured Cilium/Calico/GKE policy has no
+// Owns() watch, so once Ready a deleted or edited policy would otherwise never be
+// restored (Q326).
 func (r *EgressProxyReconciler) egressProxyEgressRecheckRequeue(ep *gmcv2alpha1.EgressProxy) time.Duration {
-	if !egressUsesCIDRMode(ep) || r.IPCache == nil {
-		return 0
+	if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
+		return 0 // operator-maintained egress policy: nothing of ours to re-check
+	}
+	if egressUsesCIDR(ep.Spec) && r.IPCache == nil {
+		return 0 // CIDR staleness is not evaluated without the shared cache
 	}
 	d := r.egressStaleThreshold() / 8
 	if d < time.Minute {
 		d = time.Minute
 	}
 	return d
+}
+
+// quotaToEgressProxies maps a ResourceQuota event to every EgressProxy in the same
+// namespace, so a platform admin changing the namespace quota's .spec.hard refreshes
+// the ProxyQuota{Pressure,Exceeded} conditions promptly (Q82/Q326) instead of lagging
+// until an unrelated child event. Mirrors the v1 quotaToActionsGateways.
+func (r *EgressProxyReconciler) quotaToEgressProxies(ctx context.Context, obj client.Object) []ctrl.Request {
+	var list gmcv2alpha1.EgressProxyList
+	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+		return nil
+	}
+	reqs := make([]ctrl.Request, 0, len(list.Items))
+	for i := range list.Items {
+		reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
+			Namespace: list.Items[i].Namespace,
+			Name:      list.Items[i].Name,
+		}})
+	}
+	return reqs
 }

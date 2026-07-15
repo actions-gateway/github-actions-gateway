@@ -142,6 +142,24 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 	})
 }
 
+// quotaToEgressProxies fans a ResourceQuota event out to every EgressProxy in the
+// quota's namespace and none elsewhere (Q326).
+func TestQuotaToEgressProxies(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		egressProxy("team-a"),
+		&gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "second", Namespace: "team-a"}},
+		&gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "team-b"}},
+	).Build()
+	r := &EgressProxyReconciler{Client: fc}
+
+	quota := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Name: "rq", Namespace: "team-a"}}
+	reqs := r.quotaToEgressProxies(context.Background(), quota)
+	require.Len(t, reqs, 2, "both proxies in the quota's namespace map; the foreign-namespace one does not")
+	names := []string{reqs[0].Name, reqs[1].Name}
+	assert.ElementsMatch(t, []string{"team-a", "second"}, names)
+}
+
 // egressStaleThreshold falls back to the shared default when unset.
 func TestEgressProxyEgressStaleThreshold_Default(t *testing.T) {
 	r := &EgressProxyReconciler{}
@@ -150,13 +168,27 @@ func TestEgressProxyEgressStaleThreshold_Default(t *testing.T) {
 	require.Equal(t, time.Hour, r.egressStaleThreshold())
 }
 
-// egressProxyEgressRecheckRequeue returns a bounded cadence in CIDR mode and 0 when
-// staleness is not evaluated.
+// egressProxyEgressRecheckRequeue returns a bounded cadence whenever the GMC manages
+// the egress policy (CIDR staleness recheck, or FQDN CNI-policy drift recheck — Q326)
+// and 0 when there is nothing to re-check.
 func TestEgressProxyEgressRecheckRequeue(t *testing.T) {
 	cidr := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 48 * time.Hour}
 	assert.Equal(t, 6*time.Hour, cidr.egressProxyEgressRecheckRequeue(egressProxy("team-a")),
 		"threshold/8 bounds the recheck cadence")
 
 	noCache := &EgressProxyReconciler{EgressStaleThreshold: 48 * time.Hour}
-	assert.Equal(t, time.Duration(0), noCache.egressProxyEgressRecheckRequeue(egressProxy("team-a")))
+	assert.Equal(t, time.Duration(0), noCache.egressProxyEgressRecheckRequeue(egressProxy("team-a")),
+		"CIDR staleness is not evaluated without the shared IP cache")
+
+	fqdn := egressProxy("team-a")
+	fqdn.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	assert.Equal(t, 6*time.Hour, noCache.egressProxyEgressRecheckRequeue(fqdn),
+		"an FQDN-mode proxy re-checks CNI-policy drift on the same cadence, IP cache or not (Q326)")
+
+	unmanaged := egressProxy("team-a")
+	unmanaged.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	f := false
+	unmanaged.Spec.ManagedNetworkPolicy = &f
+	assert.Equal(t, time.Duration(0), cidr.egressProxyEgressRecheckRequeue(unmanaged),
+		"an unmanaged egress policy is operator-maintained; nothing of ours to re-check")
 }

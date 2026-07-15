@@ -26,7 +26,8 @@ limitations under the License.
 // +kubebuilder:rbac:groups=networking.gke.io,resources=fqdnnetworkpolicies,verbs=get;list;watch;create;update;patch;delete
 // EgressProxy owns its proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
 // self-signed proxy TLS Secret via controller owner references (§H.8); the
-// deployments/services/hpa/pdb/networkpolicies/secrets write verbs are already
+// deployments/services/hpa/pdb/networkpolicies/secrets write verbs — and the
+// resourcequotas get;list;watch the quota watch needs (Q82/Q326) — are already
 // granted to the GMC ClusterRole by the ActionsGateway reconciler markers, which
 // controller-gen aggregates into the same manager-role. EgressProxy carries NO
 // finalizer: deletion degrades referrers rather than blocking, and owner-ref GC
@@ -55,8 +56,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -443,9 +446,10 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	if !ready {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
-	// Re-check EgressRulesStale on a bounded cadence: nothing watches the IP-range
-	// refresh loop, so when it stalls no event reaches this controller and the
-	// condition would never flip without a periodic requeue (Q157).
+	// Re-check the egress posture on a bounded cadence: in CIDR mode nothing watches
+	// the IP-range refresh loop, so a stall would never flip EgressRulesStale (Q157);
+	// in the FQDN modes the CNI-native policy has no Owns() watch, so out-of-band
+	// drift would never be repaired once the pool is Ready (Q326).
 	if d := r.egressProxyEgressRecheckRequeue(ep); d > 0 {
 		return ctrl.Result{RequeueAfter: d}, nil
 	}
@@ -506,6 +510,15 @@ func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&networkingv1.NetworkPolicy{}).
+		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so
+		// the ProxyQuota{Pressure,Exceeded} conditions refresh promptly (Q82/Q326)
+		// — mirrors the v1 ActionsGateway watch. Full (not metadata-only): the
+		// predicate needs .spec.hard; quotas are small and carry no secret material.
+		Watches(
+			&corev1.ResourceQuota{},
+			handler.EnqueueRequestsFromMapFunc(r.quotaToEgressProxies),
+			builder.WithPredicates(quotaHardChangedPredicate()),
+		).
 		Named("egressproxy").
 		Complete(r)
 }
