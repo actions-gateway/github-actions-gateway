@@ -113,6 +113,113 @@ func TestV2_EgressProxy_Admission_NoProxyCIDRs(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, good) })
 }
 
+// ghesAdmissionGateway builds a v2 ActionsGateway bound to the given (GHES) GitHub
+// URL for the Q322 admission cases. The credentials Secret need not exist: admission
+// never resolves it (the reconciler surfaces a missing Secret as a runtime condition).
+func ghesAdmissionGateway(name, ns, gitHubURL, proxyRef string) *gmcv2alpha1.ActionsGateway {
+	gw := &gmcv2alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: gmcv2alpha1.ActionsGatewaySpec{
+			Credentials: gmcv2alpha1.GitHubCredentials{
+				Type:      gmcv2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &gmcv2alpha1.LocalSecretReference{Name: "github-app"},
+			},
+			GitHubURL: gitHubURL,
+		},
+	}
+	if proxyRef != "" {
+		gw.Spec.DefaultProxyRef = &gmcv2alpha1.LocalObjectRef{Name: proxyRef}
+	}
+	return gw
+}
+
+// TestV2_EgressProxy_Admission_ReferrerGHESHost is the proxy side of the Q322 guard
+// end-to-end: with a gateway bound to a GitHub Enterprise Server host referencing the
+// proxy, a spec.noProxyCIDRs entry covering that GHES host is rejected through the
+// real apiserver, while internal entries stay admitted.
+func TestV2_EgressProxy_Admission_ReferrerGHESHost(t *testing.T) {
+	const ns = "v2-ep-adm-ghes"
+	createNamespace(t, ns)
+
+	gw := ghesAdmissionGateway("ghes-gw", ns, "https://ghes.corp.example/my-org", "ghes-proxy")
+	require.NoError(t, k8sClient.Create(ctx, gw), "a gateway referencing a not-yet-applied proxy is well-formed (§H.7)")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	bad := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "ghes-proxy", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			NoProxyCIDRs: []string{"ghes.corp.example"},
+		},
+	}
+	err := k8sClient.Create(ctx, bad)
+	require.Error(t, err, "a noProxyCIDRs entry covering the referring gateway's GHES host must be rejected (Q322)")
+	assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+	assert.Contains(t, err.Error(), "ghes-gw", "the rejection must name the referrer that binds the GHES host")
+
+	good := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "ghes-proxy", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			NoProxyCIDRs: []string{"10.0.0.0/8", "svc.cluster.local", "internal.example.com"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, good),
+		"internal noProxyCIDRs entries must stay admitted with a GHES referrer present")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, good) })
+}
+
+// TestV2_Referrer_Admission_GHESHostInExistingProxy is the referrer side of the Q322
+// guard end-to-end: a proxy whose noProxyCIDRs would exclude a GHES host is admitted
+// while nothing binds that host, but the gateway (defaultProxyRef) or RunnerSet
+// (proxyRef) write that assembles the bypass pair afterwards is rejected.
+func TestV2_Referrer_Admission_GHESHostInExistingProxy(t *testing.T) {
+	const ns = "v2-ref-adm-ghes"
+	createNamespace(t, ns)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "corp-proxy", Namespace: ns},
+		Spec: gmcv2alpha1.EgressProxySpec{
+			NoProxyCIDRs: []string{".corp.example"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep),
+		"a non-GitHub suffix is admitted while no referrer binds a host under it")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	badGw := ghesAdmissionGateway("ghes-gw", ns, "https://ghes.corp.example/my-org", "corp-proxy")
+	err := k8sClient.Create(ctx, badGw)
+	require.Error(t, err, "binding a GHES host to a proxy that excludes it must be rejected (Q322)")
+	assert.Contains(t, err.Error(), "spec.defaultProxyRef")
+	assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+
+	// The same gateway with no proxy bound is fine — direct egress excludes nothing.
+	gw := ghesAdmissionGateway("ghes-gw", ns, "https://ghes.corp.example/my-org", "")
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	badRS := &gmcv2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "ghes-set", Namespace: ns},
+		Spec: gmcv2alpha1.RunnerSetSpec{
+			GatewayRef:   gmcv2alpha1.ObjectRef{Name: "ghes-gw"},
+			RunnerLabels: []string{"ghes-test"},
+			ProxyRef:     &gmcv2alpha1.ObjectRef{Name: "corp-proxy"},
+		},
+	}
+	err = k8sClient.Create(ctx, badRS)
+	require.Error(t, err, "a RunnerSet binding the gateway's GHES host to the excluding proxy must be rejected (Q322)")
+	assert.Contains(t, err.Error(), "spec.proxyRef")
+
+	goodRS := &gmcv2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "ghes-set", Namespace: ns},
+		Spec: gmcv2alpha1.RunnerSetSpec{
+			GatewayRef:   gmcv2alpha1.ObjectRef{Name: "ghes-gw"},
+			RunnerLabels: []string{"ghes-test"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, goodRS),
+		"a set with no proxyRef inherits nothing conflicting here and must be admitted")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, goodRS) })
+}
+
 func TestV2_EgressProxy_Admission_NoDestinationsAlwaysAllowed(t *testing.T) {
 	const ns = "v2-ep-adm-empty"
 	createNamespace(t, ns)

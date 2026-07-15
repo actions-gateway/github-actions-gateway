@@ -228,6 +228,86 @@ func TestEgressProxyCustomValidator_UpdateRejectsGitHubHostInNoProxyCIDRs(t *tes
 	assert.Contains(t, joined, "update")
 }
 
+// TestEgressProxyCustomValidator_RejectsReferrerGHESHostInNoProxyCIDRs is the proxy
+// side of the Q322 guard: the EgressProxy carries no gitHubURL, so the validator
+// resolves its referrers and protects THEIR GitHub hosts — a noProxyCIDRs entry
+// matching a referring gateway's GitHub Enterprise Server host must be rejected,
+// whether the gateway refers via defaultProxyRef or a RunnerSet binds it via proxyRef.
+func TestEgressProxyCustomValidator_RejectsReferrerGHESHostInNoProxyCIDRs(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("gateway defaultProxyRef referrer", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		for _, entry := range []string{"ghes.corp.example", ".corp.example", "corp.example"} {
+			_, err := v.ValidateCreate(ctx, epWithNoProxy(entry))
+			require.Errorf(t, err, "entry %q should be rejected against the referrer's GHES host", entry)
+			assert.Contains(t, err.Error(), "ghes.corp.example")
+			assert.Contains(t, err.Error(), `ActionsGateway "gw"`)
+		}
+	})
+
+	t.Run("RunnerSet proxyRef referrer", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
+		rs := classicRS("rs", "team-a", "gw", "linux")
+		rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: "ep"}
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw, rs)}
+		_, err := v.ValidateCreate(ctx, epWithNoProxy("ghes.corp.example"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `RunnerSet "rs"`)
+	})
+
+	t.Run("update is gated too", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		_, err := v.ValidateUpdate(ctx, epWithNoProxy(), epWithNoProxy("10.0.0.0/8", "ghes.corp.example"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.noProxyCIDRs[1]")
+	})
+}
+
+// TestEgressProxyCustomValidator_ReferrerCheckIsSurgical asserts the referrer half
+// admits everything it should: a GHES-looking entry with no referrer binding that
+// host, internal entries alongside a real referrer, and a gateway that references a
+// different proxy.
+func TestEgressProxyCustomValidator_ReferrerCheckIsSurgical(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no referrer binds the host", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t)}
+		_, err := v.ValidateCreate(ctx, epWithNoProxy("ghes.corp.example"))
+		require.NoError(t, err)
+	})
+
+	t.Run("gateway referencing a different proxy does not protect its host here", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "other-ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		_, err := v.ValidateCreate(ctx, epWithNoProxy("ghes.corp.example"))
+		require.NoError(t, err)
+	})
+
+	t.Run("internal entries admit alongside a live referrer", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		_, err := v.ValidateCreate(ctx, epWithNoProxy("10.0.0.0/8", "svc.cluster.local", "internal.example.com"))
+		require.NoError(t, err)
+	})
+}
+
+// TestEgressProxyCustomValidator_ReferrerCheckFailsClosed asserts an unverifiable
+// hostname entry is rejected (fail closed) — while an all-CIDR/IP list never reads
+// the API at all, so it is admitted even when the reader is down.
+func TestEgressProxyCustomValidator_ReferrerCheckFailsClosed(t *testing.T) {
+	v := &EgressProxyCustomValidator{reader: failingReader{}}
+
+	_, err := v.ValidateCreate(context.Background(), epWithNoProxy("internal.example.com"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot verify")
+
+	_, err = v.ValidateCreate(context.Background(), epWithNoProxy("10.0.0.0/8", "203.0.113.5"))
+	require.NoError(t, err, "CIDR/IP-only entries cannot suffix-match a host, so no referrer read is needed")
+}
+
 // epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the
 // Q245 intent/backend admission cases.
 func epWithMode(mode agcv2alpha1.EgressPolicyMode) *agcv2alpha1.EgressProxy {

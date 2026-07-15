@@ -71,6 +71,74 @@ func classicRS(name, namespace, gateway string, labels ...string) *agcv2alpha1.R
 	}
 }
 
+// TestRunnerSetWebhook_ProxyGitHubBypass covers the RunnerSet corner of the Q322
+// guard: a proxyRef naming an EgressProxy whose noProxyCIDRs exclude the gateway's
+// GitHub host (a GHES host in particular) is rejected; missing referents admit
+// (§H.7 — the arriving object's own admission closes the pair); a set with no
+// proxyRef is never checked (the inherited defaultProxyRef pair is the gateway's own
+// admission's job); and read errors fail closed.
+func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
+	ctx := context.Background()
+	newRS := func(proxy string) *agcv2alpha1.RunnerSet {
+		rs := classicRS("rs", "team-a", "gw", "linux")
+		if proxy != "" {
+			rs.Spec.ProxyRef = &agcv2alpha1.ObjectRef{Name: proxy}
+		}
+		return rs
+	}
+
+	t.Run("excluded gateway host rejected", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
+		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, ep)}
+		_, err := v.ValidateCreate(ctx, newRS("ep"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.proxyRef")
+		assert.Contains(t, err.Error(), "ghes.corp.example")
+		assert.Contains(t, err.Error(), "around the per-tenant egress proxy")
+
+		_, err = v.ValidateUpdate(ctx, newRS(""), newRS("ep"))
+		require.Error(t, err, "adding the proxyRef on update assembles the same pair")
+	})
+
+	t.Run("internal-only proxy admits", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
+		ep := proxyWithNoProxy("team-a", "ep", "10.0.0.0/8", "svc.cluster.local")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, ep)}
+		_, err := v.ValidateCreate(ctx, newRS("ep"))
+		require.NoError(t, err)
+	})
+
+	t.Run("missing gateway admits", func(t *testing.T) {
+		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, ep)}
+		_, err := v.ValidateCreate(ctx, newRS("ep"))
+		require.NoError(t, err)
+	})
+
+	t.Run("missing proxy admits", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw)}
+		_, err := v.ValidateCreate(ctx, newRS("ep"))
+		require.NoError(t, err)
+	})
+
+	t.Run("no proxyRef is never checked", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep")
+		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, ep)}
+		_, err := v.ValidateCreate(ctx, newRS(""))
+		require.NoError(t, err, "the inherited defaultProxyRef pair is validated on the gateway, not the set")
+	})
+
+	t.Run("read error fails closed", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: failingReader{}}
+		_, err := v.ValidateCreate(ctx, newRS("ep"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot verify")
+	})
+}
+
 func TestRunnerSetWebhook_ClassicIsNeverChecked(t *testing.T) {
 	// Two Classic sets sharing a label under one gateway are fine: no scale-set
 	// object exists, so there is no name collision at GitHub. Even with a colliding

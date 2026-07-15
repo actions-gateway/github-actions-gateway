@@ -107,9 +107,9 @@ type EgressProxySpec struct {
 	// domain suffixes for internal destinations. Never list GitHub here — an entry
 	// that routes GitHub traffic around the proxy defeats per-tenant egress-IP
 	// attribution and is rejected by the GMC admission path. The admission check
-	// covers the public GitHub hosts only: an entry matching a referring gateway's
-	// GitHub Enterprise Server host is not yet detected (Q322) — never list that
-	// either.
+	// covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise
+	// Server host included — of every ActionsGateway or RunnerSet that references
+	// this proxy, on both the proxy write and the referrer write.
 	//
 	// +optional
 	NoProxyCIDRs []string `json:"noProxyCIDRs,omitempty"`

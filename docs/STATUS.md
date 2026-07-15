@@ -48,7 +48,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q322"></a>Q322 | Close the v2 noProxyCIDRs GHES admission gap | `security` | 🔲 | S | The v2 EgressProxy guard protects public GitHub hosts only: no gitHubURL on the proxy, so an entry matching a referrer's GHES host passes admission. Thread referrer hosts through both webhook sides. |
 | <a id="Q323"></a>Q323 | v2 admission hardening parity (three dropped v1 guards) | `security` | 🔲 | M | Three v1 guards with no v2 counterpart: gitHubURL host/org-segment structural check, reserved-namespace create rejection, PriorityClass VAP backstop for runnersets/runnertemplates. [Analysis](plan/v2-api-gap-analysis.md#admission). |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q309"></a>Q309 | Wire or prune dead v2 condition vocabulary | `bug` `docs` | 🔲 | S | Dead v2 vocabulary — `ReasonTemplateDeleted`/`ProxyDeleted`/`ProxyShareNotGranted` never set, RunnerTemplate has an unset `Ready`, RunnerSet emits undocumented v1 reasons. Wire or prune each. |

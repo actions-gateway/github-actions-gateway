@@ -1608,13 +1608,20 @@ around the per-tenant egress proxy, defeating egress-IP attribution; remove it
 destinations (CIDRs or domain suffixes), never GitHub
 ```
 
-The v2 `EgressProxy`'s `spec.noProxyCIDRs` is gated by the same guard (webhook `vegressproxy-v2alpha1.kb.io`, field path `spec.noProxyCIDRs[N]`).
+The v2 `EgressProxy`'s `spec.noProxyCIDRs` is gated by the same guard (webhook `vegressproxy-v2alpha1.kb.io`, field path `spec.noProxyCIDRs[N]`). Because the v2 proxy carries no `gitHubURL` of its own, the v2 guard also runs from the *referrer* side: a v2 `ActionsGateway` (`spec.defaultProxyRef`) or `RunnerSet` (`spec.proxyRef`) write that binds a GitHub host to a proxy whose `noProxyCIDRs` exclude it is rejected too, e.g.:
 
-**Likely cause.** A `spec.proxy.noProxyCIDRs` (v1 `ActionsGateway`) or `spec.noProxyCIDRs` (v2 `EgressProxy`) entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `gitHubURL` host (including a GitHub Enterprise Server host; v1 only — see below), or an over-broad suffix like `.com` that covers them.
+```
+admission webhook "vactionsgateway-v2alpha1.kb.io" denied the request:
+spec.defaultProxyRef: EgressProxy "corp-proxy" spec.noProxyCIDRs[0]:
+".corp.example" would route GitHub traffic (ghes.corp.example) around the
+per-tenant egress proxy, ...
+```
 
-**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match. If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
+**Likely cause.** A `spec.proxy.noProxyCIDRs` (v1 `ActionsGateway`) or `spec.noProxyCIDRs` (v2 `EgressProxy`) entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `gitHubURL` host (including a GitHub Enterprise Server host — on v2 that is the `gitHubURL` of every gateway that references the proxy, directly or via a `RunnerSet`), or an over-broad suffix like `.com` that covers them.
 
-**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy. `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`). Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility. On the v2 `EgressProxy` the guard covers the **public** GitHub hosts only: the proxy carries no `gitHubURL` of its own, so an entry matching a referring gateway's GitHub Enterprise Server host is not detected — never add that either.
+**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match. If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants. On v2 the check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
+
+**Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy. `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`). Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.
 
 ---
 
