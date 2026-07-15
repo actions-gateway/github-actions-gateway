@@ -48,6 +48,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q302"></a>Q302 | Fix `s.ready` bind-wait starvation in the proxy mTLS tests | `tests` `flake` | 🔲 | S | [proxy_mtls_test.go](../cmd/proxy/proxy_mtls_test.go) bind-wait starves under coverage-job CPU; recurs 07-15 on PR #647 (NotOnHealthPort, PR branch) after #623's 10s→60s raise. Ceiling raises exhausted — serialize binds or drop wall-clock waits. |
 | <a id="Q323"></a>Q323 | v2 admission hardening parity (three dropped v1 guards) | `security` | 🔲 | M | Three v1 guards with no v2 counterpart: gitHubURL host/org-segment structural check, reserved-namespace create rejection, PriorityClass VAP backstop for runnersets/runnertemplates. [Analysis](plan/v2-api-gap-analysis.md#admission). |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
 | <a id="Q325"></a>Q325 | ScaleSet listener surfaces no failure conditions/events | `bug` `infra` | 🔲 | M | The default (ScaleSet) path never sets Degraded/RateLimited/RunnerVersionTooOld or emits their events — classic-only plumbing. A ScaleSet set fails silently while Ready. [Analysis](plan/v2-api-gap-analysis.md#agc). |
@@ -106,7 +107,6 @@ Flakes whose mitigation has shipped and that have **not recurred since**, plus r
 
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
-| <a id="Q302"></a>Q302 | [TestProxy_MetricsMTLS_AcceptsValidClientCert](../cmd/proxy/proxy_mtls_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #623 (raised the `s.ready` bind/drain ceiling 10s→60s; `make cover-check` CPU starvation tripped the 10s wait though the bind was ready). → top of Queue, escalated. |
 | <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | M | **Event:** recurs on `main` after PR #612 (removed kind's 100m kindnetd CPU limit that starved the in-band kube-network-policies enforcer; 15%-throttled→0 on the fix run). → top of Queue, escalated. |
 | <a id="Q299"></a>Q299 | [manager-metrics curl pod flake (kindnet)](../cmd/gmc/test/e2e/e2e_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #608 (bound curl connect-timeout + gate on metrics endpoints; unbounded curls hung ~133s, so the retry loop got ~2 tries before the 5min budget). → top of Queue, escalated. |
 | <a id="Q291"></a>Q291 | [e2e-calico egress-to-GitHub reachability flake](plan/q291-e2e-calico-egress-github-flake.md) | `tests` `flake` `infra` | S | **Event:** recurs on `main` after PR #593 (egress retry budget widened to 150s/4m; Felix ipBlock-programming window outlasted the curl budget under CI load). Recurred 07-04 + 07-11 pre-fix. → top of Queue, escalated. |
