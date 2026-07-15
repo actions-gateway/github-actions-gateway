@@ -133,6 +133,29 @@ func TestBuildEgressProxyDeployment(t *testing.T) {
 	assert.Contains(t, envNames, "PROXY_TLS_CERT_FILE")
 	assert.Contains(t, envNames, "PROXY_TLS_KEY_FILE")
 	assert.NotContains(t, envNames, "PROXY_METRICS_TLS_CERT_FILE")
+
+	// LOG_LEVEL defaults to info when spec.logLevel is unset (a hand-built object
+	// that skipped apiserver defaulting) — never an empty value the proxy would
+	// have to interpret (Q327).
+	assert.Equal(t, "info", envNames["LOG_LEVEL"])
+}
+
+// TestBuildEgressProxyDeployment_LogLevelOverride asserts spec.logLevel lands on
+// the proxy container as LOG_LEVEL — the per-pool debug knob, v1 parity (Q327).
+func TestBuildEgressProxyDeployment_LogLevelOverride(t *testing.T) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.LogLevel = "debug"
+	})
+	dep := buildEgressProxyDeployment(ep, "proxy:test")
+
+	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "LOG_LEVEL" {
+			assert.Equal(t, "debug", e.Value)
+			return
+		}
+	}
+	t.Fatal("LOG_LEVEL env var not found on the proxy container")
 }
 
 func TestBuildEgressProxyServiceHPAPDB(t *testing.T) {

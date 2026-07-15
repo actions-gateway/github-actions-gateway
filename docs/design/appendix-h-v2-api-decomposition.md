@@ -189,6 +189,15 @@ type EgressProxySpec struct {
     NoProxyCIDRs                   []string
     ManagedNetworkPolicy           *bool
 
+    // LogLevel is the per-pool verbosity knob (info|debug, default info) — v1
+    // parity (Q327). Threaded to the proxy container as LOG_LEVEL; changing it
+    // rolls the pool. In v1 the single ActionsGateway.spec.logLevel covered both
+    // the AGC and its inline proxy; in v2 the decomposed kinds each carry their
+    // own (ActionsGateway.spec.logLevel for the AGC, this field for the pool).
+    // +kubebuilder:validation:Enum=info;debug
+    // +kubebuilder:default=info
+    LogLevel string `json:"logLevel,omitempty"`
+
     // EgressPolicyMode is TENANT INTENT for how the GMC expresses the GitHub egress
     // allowlist: CIDR (default; standard NetworkPolicy + 24h IPRangeReconcile, works on
     // every CNI) or FQDN (by hostname, via a CNI-native DNS-aware policy). For FQDN

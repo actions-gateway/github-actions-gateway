@@ -21,6 +21,7 @@ metadata:
   name: team-a-egress
   namespace: team-a
 spec:
+  logLevel: info
   maxReplicas: 8
   minReplicas: 2
   noProxyCIDRs:

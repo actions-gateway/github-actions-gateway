@@ -42,7 +42,7 @@ The controllers (GMC, AGC) take controller-runtime's standard `zap` flags. For l
 
 The egress proxy and the worker wrapper are not controllers; they read their level from the `LOG_LEVEL` environment variable (`info` | `debug`, default `info`).
 
-**Per-tenant log level (GMC-managed AGCs).** For a tenant the GMC provisions, you do not set `--zap-log-level` or `LOG_LEVEL` by hand. Set `spec.logLevel` (`info` | `debug`, default `info`) on the `ActionsGateway` CR and the GMC threads it to **both** the AGC and that tenant's egress proxy as `LOG_LEVEL` (the AGC honors `LOG_LEVEL` unless an explicit `--zap-log-level` flag is passed; the GMC never stamps one). Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not a hot reload. See [tenant onboarding — per-tenant log level](tenant-onboarding.md#per-tenant-log-level).
+**Per-tenant log level (GMC-managed AGCs).** For a tenant the GMC provisions, you do not set `--zap-log-level` or `LOG_LEVEL` by hand. Set `spec.logLevel` (`info` | `debug`, default `info`) on the `ActionsGateway` CR and the GMC threads it to **both** the AGC and that tenant's egress proxy as `LOG_LEVEL` (the AGC honors `LOG_LEVEL` unless an explicit `--zap-log-level` flag is passed; the GMC never stamps one). Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not a hot reload. On the v2 (`actions-gateway.com`) API the knob is split per kind: `ActionsGateway.spec.logLevel` covers the AGC, and each proxy pool carries its own `EgressProxy.spec.logLevel` (same values, default, and rolling-restart semantics). See [tenant onboarding — per-tenant log level](tenant-onboarding.md#per-tenant-log-level).
 
 ### Debug diagnostics for otherwise-silent paths
 

@@ -110,7 +110,7 @@ func FanOut(in Input) (*Result, error) {
 		res.Warnings = append(res.Warnings, fmt.Sprintf(
 			"EgressProxy name derived from gateway %q exceeds the v2 52-char cap; emitted as %q", gw.Name, proxyName))
 	}
-	res.Proxy = buildEgressProxy(ns, proxyName, gw.Spec.Proxy)
+	res.Proxy = buildEgressProxy(ns, proxyName, gw.Spec.Proxy, gw.Spec.LogLevel)
 
 	// 2. v2 ActionsGateway (identity only). defaultProxyRef points at the emitted
 	// proxy so every RunnerSet that leaves proxyRef unset inherits it.
@@ -328,8 +328,11 @@ func buildGateway(ns, name, proxyName string, spec gmcv1alpha1.ActionsGatewaySpe
 
 // buildEgressProxy assembles the standalone EgressProxy from the v1 inline proxy
 // config. Every tunable carries across unchanged in meaning (§H.4); the sharing
-// field stays nil (same-namespace only, the v1 behavior).
-func buildEgressProxy(ns, name string, p gmcv1alpha1.ProxyConfig) *v2alpha1.EgressProxy {
+// field stays nil (same-namespace only, the v1 behavior). logLevel is the v1
+// gateway-level knob: in v1 it governed both the AGC and the inline proxy, so the
+// emitted pool inherits it (Q327) — otherwise a tenant migrated mid-repro would
+// silently drop from debug back to info on the proxy side.
+func buildEgressProxy(ns, name string, p gmcv1alpha1.ProxyConfig, logLevel string) *v2alpha1.EgressProxy {
 	return &v2alpha1.EgressProxy{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: v2alpha1.GroupVersion.String(),
@@ -343,6 +346,7 @@ func buildEgressProxy(ns, name string, p gmcv1alpha1.ProxyConfig) *v2alpha1.Egre
 			Resources:                      p.Resources,
 			NoProxyCIDRs:                   p.NoProxyCIDRs,
 			ManagedNetworkPolicy:           p.ManagedNetworkPolicy,
+			LogLevel:                       logLevel,
 		},
 	}
 }

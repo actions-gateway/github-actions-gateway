@@ -67,6 +67,7 @@ func newGateway(name, ns string) *gmcv1alpha1.ActionsGateway {
 func TestFanOut_RepresentativeTenant(t *testing.T) {
 	gw := newGateway("team-a", "team-a")
 	gw.Spec.SecurityProfile = "restricted"
+	gw.Spec.LogLevel = "debug"
 
 	in := Input{
 		Namespace:       "team-a",
@@ -93,6 +94,11 @@ func TestFanOut_RepresentativeTenant(t *testing.T) {
 	// No silent direct egress: defaultProxyRef wired to the emitted proxy.
 	require.NotNil(t, res.Gateway.Spec.DefaultProxyRef)
 	assert.Equal(t, "team-a-egress", res.Gateway.Spec.DefaultProxyRef.Name)
+
+	// The v1 gateway-level logLevel governed both workloads, so it lands on both
+	// v2 kinds (Q327) — a tenant migrated mid-repro keeps its proxy at debug.
+	assert.Equal(t, "debug", res.Gateway.Spec.LogLevel, "v1 logLevel carries to the v2 gateway (AGC)")
+	assert.Equal(t, "debug", res.Proxy.Spec.LogLevel, "v1 logLevel carries to the emitted EgressProxy (proxy pool)")
 
 	// securityProfile relocated to the v2 namespace label.
 	require.NotNil(t, res.NamespacePatch)

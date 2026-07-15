@@ -440,6 +440,12 @@ kubectl patch actionsgateway -n <tenant-namespace> <name> \
 - **Changing it is a rolling restart, not a hot reload.** The new level takes effect once the AGC and proxy pods roll (the value is part of their pod templates). Expect the AGC's listener pool to drain and re-establish; in-flight jobs finish on the old pod within its termination grace period.
 - `debug` surfaces the AGC's per-session → per-job → per-pod lifecycle lines (the listener/multiplexer/provisioner traces, each carrying `namespace`/`group`/`sessionId`/`podName` correlation fields) and the proxy's per-CONNECT detail. The grep anchors are in [observability — debug diagnostics](observability.md#debug-diagnostics-for-otherwise-silent-paths).
 - Only `info` and `debug` are accepted; admission rejects any other value.
+- **v2 splits the knob per kind.** On the v2 (`actions-gateway.com`) API, `ActionsGateway.spec.logLevel` covers the AGC only; a proxy pool carries its own `EgressProxy.spec.logLevel` (same `info` | `debug` values and default, same rolling-restart semantics), so a shared pool can be flipped to `debug` without touching any gateway:
+
+  ```sh
+  kubectl patch egressproxy -n <tenant-namespace> <name> \
+    --type merge -p '{"spec":{"logLevel":"debug"}}'
+  ```
 
 ---
 
