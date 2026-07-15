@@ -245,7 +245,13 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// defensively; only the one this set actually runs is present.
 		r.stopMultiplexer(req.NamespacedName)
 		r.stopScaleSetListener(req.NamespacedName)
-		r.setReadyCondition(&rs, false, res.reason, res.message)
+		// Distinguish a referent deleted out from under a previously-resolved set
+		// (TemplateDeleted/ProxyDeleted, §H.8 degrade-not-block) from one that never
+		// existed, then drop any status marker a plain NotFound invalidates so later
+		// reconciles cannot upgrade from stale evidence.
+		reason, message := vanishedReferentReason(&rs, res)
+		clearStaleResolutionMarkers(&rs, reason)
+		r.setReadyCondition(&rs, false, reason, message)
 		// No template resolved, so there is no known reap-blocking sidecar: clear the
 		// Q249 condition and gauge rather than leave a stale True/non-zero behind (e.g.
 		// after the resolved template was deleted).

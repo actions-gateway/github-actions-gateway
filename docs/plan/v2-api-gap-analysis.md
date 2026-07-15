@@ -72,7 +72,7 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 
 **Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either. Already tracked; the analysis confirms both.
 
-**Minor (Q329):** v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status (fits Q309's wire-or-prune scope); v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role.
+**Minor (Q329):** ~~v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status~~ — resolved with Q309, which declared the classic-listener vocabulary in both v2 packages (value-parity + mirror-sync tests) and documented it; v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role.
 
 <a id="observability"></a>
 ## Observability roll-up

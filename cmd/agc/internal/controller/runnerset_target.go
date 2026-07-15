@@ -276,6 +276,54 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, rs *v2alpha1.Run
 	return refs, refResolution{}
 }
 
+// vanishedReferentReason upgrades a *NotFound resolution outcome to the matching
+// *Deleted reason when the referent stopped resolving out from under a
+// previously-resolved RunnerSet (degrade-not-block, §H.8): deleting a shared
+// referent is allowed and degrades referrers rather than blocking, and the
+// distinct reason tells the operator the referent existed and vanished rather
+// than never having been applied. Prior resolution is read from the set's own
+// status markers (templateSource; proxyMode Proxied), trusted only while the spec
+// generation is unchanged — after a spec edit the markers may describe the
+// pre-edit references, so the plain NotFound reason stands and the caller clears
+// the stale marker (clearStaleResolutionMarkers) so later reconciles do not
+// upgrade from it. Best-effort: a referent-side edit to a dangling name (e.g. the
+// gateway's defaultTemplateRef renamed to a missing template) is indistinguishable
+// from deletion without tracking resolved UIDs; the message names the missing
+// referent either way.
+func vanishedReferentReason(rs *v2alpha1.RunnerSet, res refResolution) (string, string) {
+	if rs.Generation != rs.Status.ObservedGeneration {
+		return res.reason, res.message
+	}
+	switch res.reason {
+	case v2alpha1.ReasonTemplateNotFound:
+		if rs.Status.TemplateSource != "" {
+			return v2alpha1.ReasonTemplateDeleted,
+				res.message + "; the previously-resolved template was deleted — no new worker pods until it is restored"
+		}
+	case v2alpha1.ReasonProxyNotFound:
+		if rs.Status.ProxyMode == v2alpha1.ProxyModeProxied {
+			return v2alpha1.ReasonProxyDeleted,
+				res.message + "; the previously-resolved proxy was deleted — no new worker pods until it is restored"
+		}
+	}
+	return res.reason, res.message
+}
+
+// clearStaleResolutionMarkers drops the status markers a plain *NotFound outcome
+// invalidates: a set reporting TemplateNotFound resolved no template, so
+// status.templateSource must not keep naming a rung; likewise ProxyNotFound
+// invalidates proxyMode. The *Deleted reasons deliberately keep their marker —
+// it is the evidence of the prior resolution that distinguishes them, and keeping
+// it makes the reason stable across reconciles.
+func clearStaleResolutionMarkers(rs *v2alpha1.RunnerSet, reason string) {
+	switch reason {
+	case v2alpha1.ReasonTemplateNotFound:
+		rs.Status.TemplateSource = ""
+	case v2alpha1.ReasonProxyNotFound:
+		rs.Status.ProxyMode = ""
+	}
+}
+
 // resolveTemplateChain resolves a RunnerSet's worker pod shape through the optional-
 // templateRef fallback chain (Q172, §H.4): rs.spec.templateRef → gateway.spec.
 // defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed

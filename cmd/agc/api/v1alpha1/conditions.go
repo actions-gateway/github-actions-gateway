@@ -56,6 +56,19 @@ const (
 	// ReasonWorkersSchedulable clears it (WorkersUnschedulable=False).
 	ReasonPodsUnschedulable  = "PodsUnschedulable"
 	ReasonWorkersSchedulable = "WorkersSchedulable"
+	// Reasons pushed by the listener goroutines (Q309). The classic acquisition
+	// machinery is shared with the v2 RunnerSet, so these also land on v2 objects;
+	// the v2 packages declare same-value constants (a value-parity test pins them).
+	//
+	// ReasonSustainedRateLimit is the RateLimited=True reason (message polling has
+	// been answered 429 for over ten minutes).
+	ReasonSustainedRateLimit = "SustainedRateLimit"
+	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason.
+	ReasonVersionTooOld = "VersionTooOld"
+	// ReasonSessionUnauthorized is the Degraded=True reason pushed when session
+	// creation is rejected as unauthorized — the agent credentials are invalid or
+	// revoked.
+	ReasonSessionUnauthorized = "Unauthorized"
 )
 
 // ImpairingConditionTypes returns the RunnerGroup condition types that, when
