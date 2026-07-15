@@ -67,10 +67,7 @@ func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 	for i, entry := range entries {
 		// CIDR / bare-IP entries cannot be a hostname-suffix bypass; the
 		// IP-range residual is accepted and documented.
-		if _, err := netip.ParsePrefix(entry); err == nil {
-			continue
-		}
-		if _, err := netip.ParseAddr(entry); err == nil {
+		if !IsHostnameEntry(entry) {
 			continue
 		}
 		for _, host := range protectedHosts {
@@ -84,6 +81,20 @@ func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 		}
 	}
 	return nil
+}
+
+// IsHostnameEntry reports whether a NO_PROXY entry is a hostname (domain-suffix)
+// entry rather than a CIDR prefix or bare IP. Only hostname entries can suffix-match
+// a protected GitHub host, so callers use this to skip the (API-reading) referrer
+// resolution when every entry is an address.
+func IsHostnameEntry(entry string) bool {
+	if _, err := netip.ParsePrefix(entry); err == nil {
+		return false
+	}
+	if _, err := netip.ParseAddr(entry); err == nil {
+		return false
+	}
+	return true
 }
 
 // hostnameMatches reports whether a NO_PROXY hostname entry would match the given

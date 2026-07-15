@@ -26,6 +26,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -101,11 +102,39 @@ func validateEgressDestinations(spec *agcv2alpha1.EgressProxySpec, list *allowli
 // traffic around the per-tenant egress proxy, defeating egress-IP attribution — the
 // v2 port of the v1 ActionsGateway webhook's proxy.noProxyCIDRs guard (mechanism and
 // rationale live in the shared noproxy package). Unlike v1, the EgressProxy carries
-// no gitHubURL of its own — referring gateways bind the GitHub host — so only the
-// static public GitHub host set is protected here; an entry matching a referrer's
-// GitHub Enterprise Server host is not yet detected (Q322).
-func validateNoProxyCIDRs(spec *agcv2alpha1.EgressProxySpec) error {
-	return noproxy.ValidateEntries("spec.noProxyCIDRs", spec.NoProxyCIDRs, noproxy.GitHubHosts)
+// no gitHubURL of its own — referring gateways bind the GitHub host — so beyond the
+// static public GitHub host set, the guard resolves every referrer's gitHubURL host
+// (including a GitHub Enterprise Server host) through the uncached API reader and
+// protects those too (Q322; see noproxy_referrers.go). The referrer resolution runs
+// only when a hostname entry is present — CIDR/IP entries cannot suffix-match a
+// host — and fails closed on read errors. A nil reader skips only the referrer half
+// (direct-construction unit tests); production and envtest always wire one.
+func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, ep *agcv2alpha1.EgressProxy) error {
+	if err := noproxy.ValidateEntries("spec.noProxyCIDRs", ep.Spec.NoProxyCIDRs, noproxy.GitHubHosts); err != nil {
+		return err
+	}
+	hasHostnameEntry := false
+	for _, entry := range ep.Spec.NoProxyCIDRs {
+		if noproxy.IsHostnameEntry(entry) {
+			hasHostnameEntry = true
+			break
+		}
+	}
+	if !hasHostnameEntry || v.reader == nil {
+		return nil
+	}
+	hosts, err := referrerGitHubHosts(ctx, v.reader, ep.Namespace, ep.Name)
+	if err != nil {
+		// Fail closed: admitting an unverifiable hostname entry is the bypass this
+		// guard exists to prevent.
+		return fmt.Errorf("cannot verify spec.noProxyCIDRs against referring gateways' GitHub hosts: %w", err)
+	}
+	for _, rh := range hosts {
+		if err := noproxy.ValidateEntries("spec.noProxyCIDRs", ep.Spec.NoProxyCIDRs, []string{rh.host}); err != nil {
+			return fmt.Errorf("%w (GitHub host bound by referring %s)", err, rh.boundBy)
+		}
+	}
+	return nil
 }
 
 // +kubebuilder:webhook:path=/validate-actions-gateway-com-v2alpha1-egressproxy,mutating=false,failurePolicy=fail,sideEffects=None,groups=actions-gateway.com,resources=egressproxies,verbs=create;update,versions=v2alpha1,name=vegressproxy-v2alpha1.kb.io,admissionReviewVersions=v1
@@ -130,6 +159,16 @@ type EgressProxyCustomValidator struct {
 	// nil allowlist forbids every named class (the secure default), so only an
 	// empty/unset spec.scheduling.priorityClassName passes.
 	InfraPriorityClasses *allowlist.PriorityClassAllowlist
+
+	// reader resolves the proxy's referrers (ActionsGateways/RunnerSets) so their
+	// gitHubURL hosts — a GitHub Enterprise Server host in particular — join the
+	// noProxyCIDRs protected set (Q322). It is the manager's uncached API reader in
+	// production (wired by SetupEgressProxyWebhookWithManager): admitting a bypass
+	// through a stale cache is the failure mode the guard prevents, mirroring the
+	// RunnerSet uniqueness guard. A nil reader skips only the referrer half of the
+	// check (direct-construction unit tests); the public GitHub host set is always
+	// enforced.
+	reader client.Reader
 }
 
 // validate runs the shared admission checks for both create and update: it rejects an
@@ -148,7 +187,7 @@ func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, 
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
-	if err := validateNoProxyCIDRs(&obj.Spec); err != nil {
+	if err := v.validateNoProxyCIDRs(ctx, obj); err != nil {
 		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
@@ -176,11 +215,19 @@ func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2a
 
 // SetupEgressProxyWebhookWithManager registers the validating webhook for the
 // EgressProxy data kind, wired to the shared platform egress allowlist, the cluster's
-// FQDN egress backend, and the infra-only PriorityClass allowlist (Q284). The manager's
-// scheme must already include agcv2alpha1 (the GMC registers it at startup).
+// FQDN egress backend, the infra-only PriorityClass allowlist (Q284), and the
+// manager's uncached API reader for the referrer-aware noProxyCIDRs guard (Q322).
+// The manager's scheme must already include agcv2alpha1 (the GMC registers it at
+// startup).
 func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend, infraPriorityClasses *allowlist.PriorityClassAllowlist) error {
+	v := &EgressProxyCustomValidator{
+		Allowlist:            list,
+		FQDNBackend:          backend,
+		InfraPriorityClasses: infraPriorityClasses,
+		reader:               mgr.GetAPIReader(),
+	}
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.EgressProxy{}).
-		WithValidator(&EgressProxyCustomValidator{Allowlist: list, FQDNBackend: backend, InfraPriorityClasses: infraPriorityClasses}).
+		WithValidator(v).
 		Complete(); err != nil {
 		return fmt.Errorf("register EgressProxy webhook: %w", err)
 	}

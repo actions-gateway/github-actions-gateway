@@ -22,6 +22,7 @@ import (
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -54,7 +55,9 @@ type RunnerSetCustomValidator struct {
 	// class (the secure default), matching the v1 ActionsGateway validator.
 	PriorityClasses *allowlist.PriorityClassAllowlist
 
-	// reader lists sibling RunnerSets for the label-uniqueness guard. It is the
+	// reader lists sibling RunnerSets for the label-uniqueness guard and resolves
+	// the gatewayRef/proxyRef pair for the noProxyCIDRs GitHub-bypass guard
+	// (Q322, validateProxyGitHubBypass). It is the
 	// manager's uncached API reader in production (wired by
 	// SetupRunnerSetWebhookWithManager): a just-created sibling may not be in the
 	// informer cache yet, and admitting a colliding scale-set label through a stale
@@ -66,8 +69,9 @@ type RunnerSetCustomValidator struct {
 }
 
 // ValidateCreate rejects a RunnerSet naming an off-allowlist PriorityClass in
-// priorityTiers, or a ScaleSet RunnerSet whose single runnerLabel collides with an
-// existing ScaleSet sibling under the same gateway.
+// priorityTiers, a ScaleSet RunnerSet whose single runnerLabel collides with an
+// existing ScaleSet sibling under the same gateway, or a proxyRef naming an
+// EgressProxy whose noProxyCIDRs would route the gateway's GitHub host around it.
 func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
 	if err := v.validatePriorityTiers(obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
@@ -75,18 +79,25 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
+	if err := v.validateProxyGitHubBypass(ctx, obj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
+	}
 	return nil, nil
 }
 
 // ValidateUpdate applies the same checks on update: an existing RunnerSet cannot be
 // edited to smuggle in an off-allowlist PriorityClass, and — acquisitionProtocol
-// itself being immutable (CRD CEL) — runnerLabels and gatewayRef can still change,
-// so an update can still move a ScaleSet set onto a colliding label.
+// itself being immutable (CRD CEL) — runnerLabels, gatewayRef, and proxyRef can
+// still change, so an update can still move a ScaleSet set onto a colliding label
+// or bind the gateway's GitHub host to a proxy that excludes it.
 func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2alpha1.RunnerSet) (admission.Warnings, error) {
 	if err := v.validatePriorityTiers(newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
+		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
+	}
+	if err := v.validateProxyGitHubBypass(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
@@ -173,6 +184,30 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		}
 	}
 	return nil
+}
+
+// validateProxyGitHubBypass rejects a RunnerSet whose proxyRef names an EgressProxy
+// whose noProxyCIDRs would route the set's GitHub host — its gateway's gitHubURL
+// host, a GitHub Enterprise Server host in particular — around that proxy (Q322,
+// noproxy_referrers.go). A set with no proxyRef inherits the gateway's
+// defaultProxyRef, a pair the gateway's own admission already validates, so only an
+// explicit proxyRef is checked here. A missing gateway or proxy admits the write
+// (§H.7): the pair is re-checked from the arriving object's side when it is created.
+// Read errors other than NotFound fail closed, like the label-uniqueness guard.
+func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context, rs *agcv2alpha1.RunnerSet) error {
+	if v.reader == nil || rs.Spec.ProxyRef == nil {
+		return nil
+	}
+	var gw agcv2alpha1.ActionsGateway
+	if err := v.reader.Get(ctx, client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}, &gw); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("cannot verify proxyRef %q against gateway %q's GitHub host: %w",
+			rs.Spec.ProxyRef.Name, rs.Spec.GatewayRef.Name, err)
+	}
+	return validateGitHubHostAgainstProxy(ctx, v.reader, rs.Namespace, rs.Spec.ProxyRef.Name,
+		"spec.proxyRef", gitHubURLHost(gw.Spec.GitHubURL))
 }
 
 // SetupRunnerSetWebhookWithManager registers the validating webhook for the

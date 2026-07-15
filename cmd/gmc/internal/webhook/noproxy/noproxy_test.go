@@ -80,3 +80,22 @@ func TestValidateEntries_EmptyAndIndex(t *testing.T) {
 func TestValidateEntries_BlankEntryAllowed(t *testing.T) {
 	require.NoError(t, ValidateEntries("spec.noProxyCIDRs", []string{"", " ", "."}, GitHubHosts))
 }
+
+// TestIsHostnameEntry pins the hostname-vs-address split callers rely on to skip
+// the API-reading referrer resolution: only hostname entries can suffix-match a
+// protected host.
+func TestIsHostnameEntry(t *testing.T) {
+	cases := map[string]bool{
+		"10.0.0.0/8":        false,
+		"203.0.113.5":       false,
+		"fd00::/8":          false,
+		"2001:db8::1":       false,
+		"github.com":        true,
+		".corp.example":     true,
+		"svc.cluster.local": true,
+		"localhost":         true,
+	}
+	for entry, want := range cases {
+		assert.Equalf(t, want, IsHostnameEntry(entry), "IsHostnameEntry(%q)", entry)
+	}
+}
