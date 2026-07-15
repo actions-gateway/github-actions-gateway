@@ -15,8 +15,9 @@ package v2beta1
 const (
 	// ConditionReady is True when every component of the object is available — for an
 	// ActionsGateway, the AGC control plane; for an EgressProxy, the proxy pool; for a
-	// RunnerSet, that its references resolved and at least one listener is running; for
-	// the data kinds it is reserved for a future validating reconciler.
+	// RunnerSet, that its references resolved and at least one listener is running. The
+	// data kinds (RunnerTemplate/ClusterRunnerTemplate) are pure data with no reconciler
+	// and report no conditions (§H.7's contract fields are present for uniformity only).
 	ConditionReady = "Ready"
 	// ConditionAGCAvailable is True when the tenant's AGC Deployment is ready.
 	ConditionAGCAvailable = "AGCAvailable"
@@ -25,6 +26,9 @@ const (
 	ConditionCredentialUnavailable = "CredentialUnavailable" //nolint:gosec // G101: a condition type name, not a credential
 	// ConditionDegraded is True when a reconcile could not provision or update the
 	// object's children; the failing step is named in the message (abnormal-is-True).
+	// On a classic-protocol RunnerSet it is also pushed by the shared listener
+	// goroutines when session creation is rejected as unauthorized
+	// (ReasonSessionUnauthorized) — see the classic-listener vocabulary block below.
 	ConditionDegraded = "Degraded"
 	// ConditionEgressUnattributed is an advisory condition (abnormal-is-True) set True
 	// on a proxy-less object: its egress reaches GitHub directly, so it has no
@@ -145,15 +149,20 @@ const (
 	// At-most-one is enforced here, at runtime, not at admission (cross-object, GitOps-
 	// safe; §H.7) — see docs/design/appendix-h-v2-api-decomposition.md §H.4.
 	ReasonAmbiguousDefault = "AmbiguousDefault"
-	// ReasonTemplateDeleted — a previously-resolved template was deleted (degrade-not-block, §H.8).
+	// ReasonTemplateDeleted — a previously-resolved template was deleted (degrade-not-block,
+	// §H.8): the RunnerSet's own status shows a prior successful resolution
+	// (status.templateSource) under an unchanged spec generation, yet the template no
+	// longer resolves. Distinct from TemplateNotFound (never applied) so the operator
+	// sees the referent vanished out from under a working set.
 	ReasonTemplateDeleted = "TemplateDeleted"
 	// ReasonProxyNotFound — the referenced EgressProxy does not exist.
 	ReasonProxyNotFound = "ProxyNotFound"
-	// ReasonProxyDeleted — a previously-resolved proxy was deleted.
+	// ReasonProxyDeleted — a previously-resolved proxy was deleted (degrade-not-block,
+	// §H.8): the set previously reported proxyMode Proxied under an unchanged spec
+	// generation, yet the proxy no longer resolves. Distinct from ProxyNotFound (never
+	// applied). A ProxyShareNotGranted reason for the cross-namespace consent handshake
+	// (§H.9) arrives with cross-namespace sharing (M4) — not declared until then.
 	ReasonProxyDeleted = "ProxyDeleted"
-	// ReasonProxyShareNotGranted — a cross-namespace EgressProxy has not granted
-	// this namespace (the provider-side consent handshake, §H.9).
-	ReasonProxyShareNotGranted = "ProxyShareNotGranted"
 	// ReasonNoActiveSessions — a RunnerSet's references all resolved but no
 	// listener goroutine is running yet (Ready=False until one comes up).
 	ReasonNoActiveSessions = "NoActiveSessions"
@@ -255,4 +264,31 @@ const (
 	ReasonRefreshStalled = "RefreshStalled"
 	ReasonRefreshCurrent = "RefreshCurrent"
 	ReasonRefreshPending = "RefreshPending"
+)
+
+// Classic-listener condition vocabulary (Q309). The classic acquisition machinery
+// is shared between the v1 RunnerGroup and the v2 RunnerSet, and its listener
+// goroutines (cmd/agc/internal/listener) push these session-failure conditions
+// onto whichever kind owns the session — referencing the agcv1alpha1 constants of
+// the same values. Declared here so the v2 vocabulary is complete; a value-parity
+// test in cmd/agc pins the packages together. All are advisory (abnormal-is-True)
+// and do not gate Ready. The ScaleSet acquisition path does not surface these
+// failure classes yet (Q325).
+const (
+	// ConditionRateLimited is True when GitHub has been rate-limiting the set's
+	// sessions for a sustained period (abnormal-is-True).
+	ConditionRateLimited = "RateLimited"
+	// ConditionRunnerVersionTooOld is True when GitHub rejects the configured
+	// runner version as too old for session creation (abnormal-is-True).
+	ConditionRunnerVersionTooOld = "RunnerVersionTooOld"
+
+	// ReasonSustainedRateLimit is the RateLimited=True reason (message polling has
+	// been answered 429 for over ten minutes).
+	ReasonSustainedRateLimit = "SustainedRateLimit"
+	// ReasonVersionTooOld is the RunnerVersionTooOld=True reason.
+	ReasonVersionTooOld = "VersionTooOld"
+	// ReasonSessionUnauthorized is the Degraded=True reason pushed when session
+	// creation is rejected as unauthorized — the agent credentials are invalid or
+	// revoked.
+	ReasonSessionUnauthorized = "Unauthorized"
 )

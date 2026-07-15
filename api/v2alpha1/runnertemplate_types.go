@@ -44,12 +44,13 @@ type RunnerTemplateSpec struct {
 }
 
 // RunnerTemplateStatus is the observed state of a (Cluster)RunnerTemplate. The
-// templates are pure data with no reconciler in M1/M2, so the contract fields are
-// present for uniformity across all five v2 kinds (§H.7) and forward-compatibility
-// (a future validating reconciler could surface a Ready condition) rather than
-// being populated today.
+// templates are pure data with no reconciler, so the contract fields are present
+// for uniformity across all five v2 kinds (§H.7) rather than being populated —
+// no condition type is set on a template today (Q309).
 type RunnerTemplateStatus struct {
-	// Conditions are the observed conditions of the template. Known types: Ready.
+	// Conditions are the observed conditions of the template. No condition types
+	// are populated today: the templates are pure data with no reconciler; the
+	// field exists for the uniform v2 status contract.
 	//
 	// +optional
 	// +listType=map

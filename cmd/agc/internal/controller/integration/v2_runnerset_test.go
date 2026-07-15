@@ -198,6 +198,67 @@ func TestV2_RunnerSet_FailsClosedUntilRefsResolve(t *testing.T) {
 	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 }
 
+// TestV2_RunnerSet_TemplateDeleted_DegradesNotBlocks: deleting a previously-resolved
+// RunnerTemplate out from under a Ready RunnerSet degrades it to
+// Ready=False/TemplateDeleted — not the generic TemplateNotFound — and restoring the
+// template flips it back to Ready with no re-apply of the set (§H.8
+// degrade-not-block, Q309).
+func TestV2_RunnerSet_TemplateDeleted_DegradesNotBlocks(t *testing.T) {
+	const ns = "v2-rs-tmpl-deleted"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	// Direct egress (no proxy) keeps the referent under test to the template alone.
+	gw := newGatewayForSet("gw", ns, "")
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), gw) })
+	tmpl := newRunnerTemplate("tmpl", ns)
+	require.NoError(t, k8sClient.Create(ctx, tmpl))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	// Delete the resolved template: the referent watch re-reconciles the set, which
+	// degrades with the deletion-specific reason (its status.templateSource is the
+	// evidence of the prior resolution).
+	require.NoError(t, k8sClient.Delete(ctx, tmpl))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateDeleted)
+
+	// Restore the template: the set self-heals to Ready the moment it syncs.
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+}
+
+// TestV2_RunnerSet_ProxyDeleted_DegradesNotBlocks: deleting a previously-resolved
+// EgressProxy degrades the set to Ready=False/ProxyDeleted (its status.proxyMode
+// Proxied is the evidence of the prior resolution), and restoring the proxy heals it
+// (§H.8, Q309).
+func TestV2_RunnerSet_ProxyDeleted_DegradesNotBlocks(t *testing.T) {
+	const ns = "v2-rs-proxy-deleted"
+	createNSForAGC(t, ns)
+	startRunnerSetReconciler(t)
+
+	gw := newGatewayForSet("gw", ns, "shared")
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), gw) })
+	tmpl := newRunnerTemplate("tmpl", ns)
+	require.NoError(t, k8sClient.Create(ctx, tmpl))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), tmpl) })
+	ep := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	rs := newRunnerSet("set", ns, "gw")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	require.NoError(t, k8sClient.Delete(ctx, ep))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyDeleted)
+
+	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+}
+
 // TestV2_RunnerSet_DirectEgress_ReadyAndUnattributed: a RunnerSet under a gateway
 // with no defaultProxyRef and with no proxyRef of its own resolves to direct egress
 // (Q168, §H.10) — it reaches Ready/ListenerActive (not ProxyNotFound) and reports

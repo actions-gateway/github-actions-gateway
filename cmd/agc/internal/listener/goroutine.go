@@ -432,7 +432,7 @@ func Run(ctx context.Context, cfg Config) error {
 					firstRateLimitAt = cfg.Clock.Now()
 				} else if cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
 					setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionTrue,
-						"SustainedRateLimit", "GetMessage returning 429 for >10 minutes")
+						v1alpha1.ReasonSustainedRateLimit, "GetMessage returning 429 for >10 minutes")
 				}
 				wait := rlErr.RetryAfter
 				if wait < 0 {
@@ -677,14 +677,14 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 		var vtooOld *broker.VersionTooOldError
 		if errors.As(err, &vtooOld) {
 			setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
-				"VersionTooOld", vtooOld.Message)
+				v1alpha1.ReasonVersionTooOld, vtooOld.Message)
 			recordEvent(cfg, corev1.EventTypeWarning, "RunnerVersionTooOld", "CreateSession",
 				fmt.Sprintf("session creation failed permanently — the runner version is too old for GitHub: %s", vtooOld.Message))
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
 			setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionTrue,
-				"Unauthorized", err.Error())
+				v1alpha1.ReasonSessionUnauthorized, err.Error())
 			recordEvent(cfg, corev1.EventTypeWarning, "SessionUnauthorized", "CreateSession",
 				fmt.Sprintf("session creation rejected as unauthorized; the agent credentials are invalid or revoked: %v", err))
 			return sessionState{}, &NonRetriableError{Cause: err}

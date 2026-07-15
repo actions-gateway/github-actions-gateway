@@ -1743,6 +1743,8 @@ A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolv
 
 **Resolution.** Apply the missing object (`ActionsGateway`, `RunnerTemplate`/`ClusterRunnerTemplate`, or `EgressProxy`) named in the message; the set self-heals on the next watch event. Confirm the referent's name and namespace match the `*Ref` exactly (references resolve in the `RunnerSet`'s own namespace).
 
+**`TemplateDeleted` / `ProxyDeleted` — the referent existed and vanished.** A set whose references *had* resolved reports these deletion-specific reasons instead of the generic `*NotFound` when its previously-resolved `RunnerTemplate`/`ClusterRunnerTemplate` or `EgressProxy` is deleted out from under it (the set's own `status.templateSource` / `status.proxyMode: Proxied` is the evidence of the prior resolution). Deleting a shared referent is allowed by design — deletion **degrades referrers rather than blocking** (no finalizer holds the referent), and the set fails closed exactly like `*NotFound`: no new worker pods until the referent is restored. Re-apply the deleted object (or point the set at another) and the set self-heals on the watch event. If the set's spec was *edited* to a dangling name rather than the referent being deleted, the plain `*NotFound` reason is reported instead.
+
 **Runtime-failure reasons (not by design).** Unlike the `*NotFound` reasons above — which are the expected fail-closed state while a reference is still syncing — a `RunnerSet` whose references have all resolved can still report `Ready=False` for a genuine post-resolution failure. These name the failing step in the message and clear on the next successful reconcile:
 
 ```
@@ -1755,6 +1757,16 @@ Reason: ListenerStartFailed      Message: listener goroutines failed to start: .
 - `ListenerStartFailed` — the listener goroutines could not be (re)started; the AGC emits a `ListenerStartFailed` Warning event with the underlying error.
 
 A running listener always wins: once at least one session is polling, the set reports `Ready=True` / `ListenerActive` even if a prior start attempt logged an error.
+
+**Session-failure conditions pushed by the classic listener.** On a `Classic`-protocol set, the listener goroutines additionally push the same session-failure conditions they set on a v1 `RunnerGroup` (the classic acquisition machinery is shared between the two kinds):
+
+| Condition | Reason | Meaning |
+| --- | --- | --- |
+| `RateLimited=True` | `SustainedRateLimit` | GitHub has answered message polling with 429 for over ten minutes. |
+| `RunnerVersionTooOld=True` | `VersionTooOld` | GitHub rejected the configured runner version at session creation — see the v1 guidance under [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs); the fix (update `workerImage`) is the same. |
+| `Degraded=True` | `Unauthorized` | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. |
+
+All three are advisory (abnormal-is-`True`) and do not gate `Ready`. The `ScaleSet` acquisition path (the default) does not surface these failure classes yet — that gap is tracked separately.
 
 ---
 

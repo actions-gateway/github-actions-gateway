@@ -439,7 +439,7 @@ failed sync. So responsibilities split by what admission is actually good at:
   ```
   RunnerSet status:
     Ready: False
-    Reason: TemplateNotFound        # or ProxyNotFound / ProxyShareNotGranted
+    Reason: TemplateNotFound        # or ProxyNotFound; ProxyShareNotGranted arrives with M4 (§H.9)
     Message: "RunnerTemplate 'dind-large' not found in namespace 'team-a'"
   ```
 
@@ -522,8 +522,11 @@ Shared objects must not be owner-referenced by their referrers:
   fight GitOps prune the same way an ordering webhook does; Kubernetes' own
   finalizer guidance also warns that finalizers on shared/referenced objects are
   a common cause of stuck-`Terminating` resources. So allow the delete and flip
-  referrers to `Ready=False, Reason=TemplateDeleted` (same fail-closed behavior —
-  no template ⇒ no new pods) via the referent→referrer watch. Do **not** keep a
+  referrers to `Ready=False, Reason=TemplateDeleted` (`ProxyDeleted` for a deleted
+  `EgressProxy`; same fail-closed behavior — no template ⇒ no new pods) via the
+  referent→referrer watch. The deletion-specific reason is distinguished from
+  `*NotFound` by the referrer's own status markers (`templateSource` /
+  `proxyMode: Proxied`) under an unchanged spec generation. Do **not** keep a
   finalizer even for bookkeeping: `.status.referencedBy` is computable from the
   same informer/watch without taking on a finalizer that can block deletion.
 
