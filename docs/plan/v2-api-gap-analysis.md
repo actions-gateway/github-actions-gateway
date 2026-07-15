@@ -16,7 +16,7 @@
 | [Q324](../STATUS.md#Q324) | v2 proxy metrics-mTLS stack + per-tenant ServiceMonitors never landed (M2→M3a deferral fell through) | Observability |
 | [Q325](../STATUS.md#Q325) | ScaleSet acquisition path (the default) surfaces no failure conditions/events | Operability (bug class) |
 | [Q326](../STATUS.md#Q326) | No ResourceQuota watch on the v2 `EgressProxy`/`RunnerSet` reconcilers; Ready FQDN-mode proxy never requeues | Staleness bug |
-| [Q327](../STATUS.md#Q327) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
+| Q327 (fixed) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
 | [Q328](../STATUS.md#Q328) | v2 gateway teardown not fail-closed (Q125 parity); `MaxConcurrentReconciles=1` not set | Robustness |
 | [Q329](../STATUS.md#Q329) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
 | [Q321](../STATUS.md#Q321) (pre-existing) | v2 ActionsGateway condition gauges (`runnersets_degraded` twin) | Observability |
@@ -57,7 +57,7 @@ Parity confirmed on: Deployment/HPA/PDB with byte-identical resource defaults, s
 
 **Gap — metrics-mTLS stack (Q324).** v1 wires the proxy metrics listener end to end: `PROXY_METRICS_*` env + TLS volume + `metrics` container/Service port + metrics-scrape NP ingress rule + ServiceMonitor (`builder.go:672-718,759-763,307/442`). The v2 builder omits all of it, documented as "lands in M3a" (`egressproxy_builder.go:280-283`) — but M3a and M3b shipped without it, so a v2 proxy pool's own Prometheus series are unscrapable. Fell through the milestone deferral chain (plan `v2-api.md` M2 note → M3a checklist → M3b), never filed as a Queue item until now.
 
-**Gap — `logLevel` (Q327).** v1 threads `spec.logLevel` to the proxy container as `LOG_LEVEL` (`builder.go:693-699`); the `EgressProxy` API has no logLevel field and the v2 container gets no LOG_LEVEL env — there is no per-proxy debug knob on v2. Dropped by API design without a documented decision.
+**Gap — `logLevel` (Q327, FIXED).** v1 threads `spec.logLevel` to the proxy container as `LOG_LEVEL` (`builder.go:693-699`); as found, the `EgressProxy` API had no logLevel field and the v2 container got no LOG_LEVEL env — no per-proxy debug knob on v2. Dropped by API design without a documented decision. Fixed by adding `spec.logLevel` to the `EgressProxy` CRD (both v2 versions, identity-converted) with the v1 enum/default (`info`|`debug`, default `info`) and threading it into the v2 deployment builder; the migration tool now also stamps the v1 gateway-level `logLevel` onto the emitted `EgressProxy` so a migrated tenant keeps its proxy verbosity.
 
 **Gap — quota-watch staleness (Q326, shared with the AGC below).** v1 watches ResourceQuota with a `.spec.hard`-changed predicate so quota conditions refresh promptly. The `EgressProxyReconciler` has no ResourceQuota watch (`egressproxy_controller.go:501-511`), and a Ready FQDN-mode proxy gets `ctrl.Result{}` with a zero recheck interval (`:443-452`) — its `ProxyQuota*` conditions can stay stale until an unrelated child event.
 

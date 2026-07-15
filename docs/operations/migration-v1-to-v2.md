@@ -76,7 +76,7 @@ metadata patch:
 | v1 source | v2 result |
 |---|---|
 | `ActionsGateway` identity (`gitHubAppRef.name`, `gitHubURL`, `logLevel`, `tracing`) | v2 `ActionsGateway` (same name) |
-| `ActionsGateway.spec.proxy` (inline) | a standalone `EgressProxy` (`<gateway>-egress`), wired as the gateway's `defaultProxyRef` |
+| `ActionsGateway.spec.proxy` (inline) | a standalone `EgressProxy` (`<gateway>-egress`), wired as the gateway's `defaultProxyRef`; inherits the v1 gateway-level `logLevel` (which governed both workloads) as its own `spec.logLevel` |
 | each `RunnerGroup.spec.podTemplate` + `workerImage` | a `RunnerTemplate` — **identical templates collapse to one** |
 | each `RunnerGroup` | a `RunnerSet` (`gatewayRef` + `templateRef`; `proxyRef` left unset so it inherits the gateway's `defaultProxyRef`) |
 | `ActionsGateway.spec.securityProfile` | the namespace label `actions-gateway.com/security-profile` |

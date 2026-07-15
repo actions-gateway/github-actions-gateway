@@ -324,6 +324,52 @@ func TestV2_EgressProxy_NoDestinationsTransportOnly(t *testing.T) {
 	assert.NotContains(t, env, "PROXY_ALLOWED_CIDRS", "no destinations ⇒ no CIDR allowlist (transport-only)")
 }
 
+// TestV2_EgressProxy_LogLevelChange_RollsProxy verifies the per-pool verbosity
+// knob (Q327, v1 parity): an EgressProxy with no spec.logLevel lands LOG_LEVEL=info
+// on the proxy container (the apiserver applies the CRD default), and flipping it
+// to debug updates the pod template — the rolling-restart path that makes the new
+// level take effect. Mirrors the v1 TestGMC_LogLevelChange_RollsAGCAndProxy.
+func TestV2_EgressProxy_LogLevelChange_RollsProxy(t *testing.T) {
+	const ns = "v2-ep-loglevel"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	name := proxyChildName(egressProxyName)
+	var dep appsv1.Deployment
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy Deployment should be created")
+	assert.Equal(t, "info", containerEnv(t, dep)["LOG_LEVEL"],
+		"proxy container must start with LOG_LEVEL=info by default")
+
+	// Flip spec.logLevel to debug (retry on conflict — the reconciler may still be
+	// writing status on first reconcile).
+	require.Eventually(t, func() bool {
+		var fetched gmcv2alpha1.EgressProxy
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &fetched); err != nil {
+			return false
+		}
+		fetched.Spec.LogLevel = "debug"
+		return k8sClient.Update(ctx, &fetched) == nil
+	}, 5*time.Second, 25*time.Millisecond, "update EgressProxy spec.logLevel to debug")
+
+	require.Eventually(t, func() bool {
+		var got appsv1.Deployment
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &got); err != nil {
+			return false
+		}
+		return containerEnv(t, got)["LOG_LEVEL"] == "debug"
+	}, 10*time.Second, 100*time.Millisecond,
+		"proxy Deployment must roll to LOG_LEVEL=debug after spec.logLevel=debug")
+}
+
 // findCondition returns the named condition or nil.
 func findCondition(conds []metav1.Condition, condType string) *metav1.Condition {
 	for i := range conds {

@@ -112,6 +112,19 @@ spec:
                 - CiliumFQDN
                 - CalicoFQDN
                 type: string
+              logLevel:
+                default: info
+                description: |-
+                  LogLevel controls the log verbosity of this proxy pool. Allowed values: info
+                  (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL
+                  environment variable; changing it is a rolling restart of the proxy pool (not
+                  a hot reload), so the new level takes effect once the pods roll. Use debug
+                  only for a bug repro — per-CONNECT debug lines dominate log volume under
+                  load. The default is info so a pool never silently runs at debug verbosity.
+                enum:
+                - info
+                - debug
+                type: string
               managedNetworkPolicy:
                 default: true
                 description: |-
@@ -1650,6 +1663,19 @@ spec:
                 - FQDN
                 - CiliumFQDN
                 - CalicoFQDN
+                type: string
+              logLevel:
+                default: info
+                description: |-
+                  LogLevel controls the log verbosity of this proxy pool. Allowed values: info
+                  (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL
+                  environment variable; changing it is a rolling restart of the proxy pool (not
+                  a hot reload), so the new level takes effect once the pods roll. Use debug
+                  only for a bug repro — per-CONNECT debug lines dominate log volume under
+                  load. The default is info so a pool never silently runs at debug verbosity.
+                enum:
+                - info
+                - debug
                 type: string
               managedNetworkPolicy:
                 default: true

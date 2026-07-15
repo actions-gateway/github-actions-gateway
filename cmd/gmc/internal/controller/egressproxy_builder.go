@@ -341,6 +341,11 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 						Env: append([]corev1.EnvVar{
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
 							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+							// LOG_LEVEL mirrors spec.logLevel (info|debug, default
+							// info) — the per-pool debug knob, v1 parity (Q327). A
+							// change here reaches the pod template, which is what
+							// rolls the pool so the new level takes effect.
+							{Name: "LOG_LEVEL", Value: logLevelOrDefault(ep.Spec.LogLevel)},
 						}, proxyAllowlistEnv(ep)...),
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      proxyTLSVolumeName,

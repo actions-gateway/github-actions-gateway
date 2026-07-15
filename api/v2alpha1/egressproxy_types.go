@@ -90,6 +90,18 @@ type EgressProxySpec struct {
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
+	// LogLevel controls the log verbosity of this proxy pool. Allowed values: info
+	// (default), debug. The GMC threads it to the proxy container as the LOG_LEVEL
+	// environment variable; changing it is a rolling restart of the proxy pool (not
+	// a hot reload), so the new level takes effect once the pods roll. Use debug
+	// only for a bug repro — per-CONNECT debug lines dominate log volume under
+	// load. The default is info so a pool never silently runs at debug verbosity.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=info;debug
+	// +kubebuilder:default=info
+	LogLevel string `json:"logLevel,omitempty"`
+
 	// NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy
 	// (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY
 	// domain suffixes for internal destinations. Never list GitHub here — an entry

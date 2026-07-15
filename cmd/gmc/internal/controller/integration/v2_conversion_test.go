@@ -125,3 +125,29 @@ func TestV2Conversion_ActionsGateway_Identity(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "acme"}, &back))
 	assert.Equal(t, "info", back.Spec.LogLevel)
 }
+
+// TestV2Conversion_EgressProxy_LogLevelRoundTrip proves spec.logLevel (Q327)
+// survives the identity conversion through the real apiserver: a v2alpha1 create
+// with logLevel=debug is served as the v2beta1 hub with the field intact, and a
+// hub-side flip back to info is served on the v2alpha1 spoke.
+func TestV2Conversion_EgressProxy_LogLevelRoundTrip(t *testing.T) {
+	const ns = "v2-conv-ep-loglevel"
+	createNamespace(t, ns)
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "proxy", Namespace: ns},
+		Spec:       v2alpha1.EgressProxySpec{LogLevel: "debug"},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	var hub v2beta1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy"}, &hub))
+	assert.Equal(t, "debug", hub.Spec.LogLevel, "logLevel must survive the v2alpha1→v2beta1 conversion")
+
+	hub.Spec.LogLevel = "info"
+	require.NoError(t, k8sClient.Update(ctx, &hub))
+	var back v2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy"}, &back))
+	assert.Equal(t, "info", back.Spec.LogLevel, "logLevel must survive the v2beta1→v2alpha1 conversion")
+}
