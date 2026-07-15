@@ -10,6 +10,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -151,6 +153,26 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 		st.pressureMessage = "superseded by WorkerQuotaExceeded"
 	}
 	return st
+}
+
+// quotaToRunnerSets maps a ResourceQuota event to every RunnerSet in the same
+// namespace, so an admin changing the namespace quota refreshes the WorkerQuota
+// conditions promptly (Q82/Q326) — mirrors the v1 quotaToRunnerGroups. The cache
+// list is already gatewayRef-scoped on a GMC-provisioned AGC, and the Reconcile
+// scoping guard drops any foreign set as defense-in-depth.
+func (r *RunnerSetReconciler) quotaToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
+	var list v2alpha1.RunnerSetList
+	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+		return nil
+	}
+	reqs := make([]ctrl.Request, 0, len(list.Items))
+	for i := range list.Items {
+		reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
+			Namespace: list.Items[i].Namespace,
+			Name:      list.Items[i].Name,
+		}})
+	}
+	return reqs
 }
 
 // evalRunnerSetWorkersUnschedulable computes the WorkersUnschedulable condition for a

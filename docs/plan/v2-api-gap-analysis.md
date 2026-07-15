@@ -15,7 +15,7 @@
 | [Q323](../STATUS.md#Q323) | v2 admission drops three v1 guards: `gitHubURL` structural check, reserved-namespace rejection, PriorityClass VAP backstop | Security (defense-in-depth) |
 | [Q324](../STATUS.md#Q324) | v2 proxy metrics-mTLS stack + per-tenant ServiceMonitors never landed (M2→M3a deferral fell through) | Observability |
 | [Q325](../STATUS.md#Q325) | ScaleSet acquisition path (the default) surfaces no failure conditions/events | Operability (bug class) |
-| [Q326](../STATUS.md#Q326) | No ResourceQuota watch on the v2 `EgressProxy`/`RunnerSet` reconcilers; Ready FQDN-mode proxy never requeues | Staleness bug |
+| Q326 (fixed) | No ResourceQuota watch on the v2 `EgressProxy`/`RunnerSet` reconcilers; Ready FQDN-mode proxy never requeues | Staleness bug |
 | Q327 (fixed) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
 | Q328 (fixed) | v2 gateway teardown not fail-closed (Q125 parity); `MaxConcurrentReconciles=1` not set | Robustness |
 | [Q329](../STATUS.md#Q329) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
@@ -59,7 +59,7 @@ Parity confirmed on: Deployment/HPA/PDB with byte-identical resource defaults, s
 
 **Gap — `logLevel` (Q327, FIXED).** v1 threads `spec.logLevel` to the proxy container as `LOG_LEVEL` (`builder.go:693-699`); as found, the `EgressProxy` API had no logLevel field and the v2 container got no LOG_LEVEL env — no per-proxy debug knob on v2. Dropped by API design without a documented decision. Fixed by adding `spec.logLevel` to the `EgressProxy` CRD (both v2 versions, identity-converted) with the v1 enum/default (`info`|`debug`, default `info`) and threading it into the v2 deployment builder; the migration tool now also stamps the v1 gateway-level `logLevel` onto the emitted `EgressProxy` so a migrated tenant keeps its proxy verbosity.
 
-**Gap — quota-watch staleness (Q326, shared with the AGC below).** v1 watches ResourceQuota with a `.spec.hard`-changed predicate so quota conditions refresh promptly. The `EgressProxyReconciler` has no ResourceQuota watch (`egressproxy_controller.go:501-511`), and a Ready FQDN-mode proxy gets `ctrl.Result{}` with a zero recheck interval (`:443-452`) — its `ProxyQuota*` conditions can stay stale until an unrelated child event.
+**Gap — quota-watch staleness (Q326, shared with the AGC below; FIXED).** v1 watches ResourceQuota with a `.spec.hard`-changed predicate so quota conditions refresh promptly. As found, the `EgressProxyReconciler` had no ResourceQuota watch, and a Ready FQDN-mode proxy got `ctrl.Result{}` with a zero recheck interval — its `ProxyQuota*` conditions could stay stale until an unrelated child event. The Q326 fix mirrors the v1 watch (shared `quotaHardChangedPredicate` + `quotaToEgressProxies` fan-out) and extends the Ready-state recheck requeue to the managed FQDN modes (same `threshold/8` cadence), which also gives the unwatched CNI-native FQDN policy a periodic drift re-check.
 
 <a id="agc"></a>
 ## AGC controller (v1 `RunnerGroup` vs v2 `RunnerSet`)
@@ -68,7 +68,7 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 
 **Gap — ScaleSet path surfaces no failures (Q325).** `Degraded`, `RateLimited`, and `RunnerVersionTooOld` conditions (and the `RunnerVersionTooOld`/`SessionUnauthorized` events) are produced inside the *classic* listener goroutine (`listener/goroutine.go:434,679-688`) and reach the RunnerSet only on the classic path. `scalesetlistener/listener.go` never calls `SetCondition` — so on the **default** acquisition protocol these failure classes are invisible: the set stays Ready while e.g. GitHub rate-limits or rejects the runner version. Adjacent to (not covered by) Q311's metrics/alerting scope and Q309's vocabulary cleanup.
 
-**Gap — ResourceQuota watch (Q326).** v1 `RunnerGroupReconciler` watches ResourceQuota (`runnergroup_controller.go:169-173`); the `RunnerSetReconciler` does not, so the Q303 quota conditions lag an admin's quota edit until an unrelated event.
+**Gap — ResourceQuota watch (Q326; FIXED).** v1 `RunnerGroupReconciler` watches ResourceQuota (`runnergroup_controller.go:169-173`); as found, the `RunnerSetReconciler` did not, so the Q303 quota conditions lagged an admin's quota edit until an unrelated event. The Q326 fix adds the same watch (`quotaToRunnerSets` + the shared `quotaHardChangedPredicate`), proven in envtest.
 
 **Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either. Already tracked; the analysis confirms both.
 

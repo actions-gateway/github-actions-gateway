@@ -132,7 +132,7 @@ func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 	ctx := context.Background()
 	res, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}})
 	require.NoError(t, err)
-	assert.Zero(t, res.RequeueAfter, "a ready pool does not requeue on a timer")
+	assert.Zero(t, res.RequeueAfter, "a ready CIDR-mode pool without an IP cache has nothing to re-check on a timer")
 
 	var got gmcv2alpha1.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))
@@ -141,6 +141,39 @@ func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 	assert.Equal(t, metav1.ConditionTrue, ready.Status)
 	assert.Equal(t, gmcv2alpha1.ReasonProxyReady, ready.Reason)
 	assert.Equal(t, int32(1), got.Status.ReadyReplicas)
+}
+
+// TestEgressProxyReconcile_ReadyFQDNModeRequeues proves a Ready FQDN-mode proxy
+// still returns a periodic RequeueAfter (Q326): the CNI-native FQDN policy has no
+// Owns() watch, so without the timer a Ready pool would go dormant and out-of-band
+// policy drift would never be repaired.
+func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
+	scheme := egressProxyTestScheme(t)
+	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+		ep.Spec.MinReplicas = ptr(int32(1))
+		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	})
+	dep := buildEgressProxyDeployment(ep, "proxy:test")
+	dep.Status.ReadyReplicas = 1
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(ep, dep).
+		WithStatusSubresource(ep).
+		Build()
+
+	// No IP cache: FQDN mode carries no CIDR staleness to track, yet must still requeue.
+	r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test"}
+	ctx := context.Background()
+	res, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}})
+	require.NoError(t, err)
+	assert.Positive(t, res.RequeueAfter, "a ready FQDN-mode pool must keep a periodic drift re-check (Q326)")
+
+	var got gmcv2alpha1.EgressProxy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	require.NotNil(t, ready)
+	assert.Equal(t, metav1.ConditionTrue, ready.Status, "the requeue must come from the Ready path, not the not-ready backoff")
 }
 
 // TestEgressProxyReconcile_DeletingIsNoOp verifies a delete-in-flight object is not

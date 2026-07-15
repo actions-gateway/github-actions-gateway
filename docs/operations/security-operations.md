@@ -755,7 +755,10 @@ The emitted object is named `<proxy>-proxy-fqdn`, owned by the `EgressProxy`
 `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`,
 `*.actions.githubusercontent.com`, and `*.blob.core.windows.net`. In an FQDN mode the
 standard `NetworkPolicy` drops its GitHub-CIDR rule (DNS + ingress are unchanged) and
-the 24h IP-range reconcile skips this proxy.
+the 24h IP-range reconcile skips this proxy. The GMC also re-checks the emitted policy
+on a bounded cadence (a fraction of the egress-staleness window, ~6h at the default;
+Q326), so an out-of-band edit or delete is repaired within that window even when
+nothing else touches the `EgressProxy`.
 
 > **The default `none` denies FQDN intent — loudly, at apply time.** A tenant that sets
 > `egressPolicyMode: FQDN` on a cluster with `--fqdn-policy-backend=none` is **rejected
