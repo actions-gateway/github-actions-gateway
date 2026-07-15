@@ -526,6 +526,20 @@ Shared objects must not be owner-referenced by their referrers:
   (M2's free observability win). Same-namespace only at M2; cross-namespace sharing
   is M4.
 - **`RunnerTemplate`** is pure data — no children, nothing owns it.
+- **`ActionsGateway` teardown is fail-closed, not GC-trusting (Q328, ports v1's
+  Q125).** The gateway's namespaced children all carry a controller owner
+  reference, so cascade GC *would* eventually remove them — but a transient GC
+  failure is silent and unretried, and the ClusterRunnerTemplate
+  ClusterRoleBinding (cluster-scoped, cannot be owned by a namespaced CR) has no
+  GC at all. So the gateway holds a cleanup finalizer and its delete path deletes
+  every child explicitly, then **verifies each one is gone**: a delete error or a
+  child lingering under a foreign finalizer retains the gateway's finalizer,
+  emits a `TeardownIncomplete` Warning event naming the blocker, and requeues
+  until teardown is verifiably clean. The metrics mTLS Secrets are the one
+  GC-delegated exception (the GMC holds no delete verb on Secrets by design).
+  Bound `RunnerSet`s are referrers, not children — they degrade per the next
+  bullet. The gateway reconciler is also serialized
+  (`MaxConcurrentReconciles: 1`), matching v1's single-writer assumption.
 - **Deletion degrades, it does not block — and uses no finalizer at all.**
   Hard-blocking deletion of a still-referenced shared object via finalizer would
   fight GitOps prune the same way an ordering webhook does; Kubernetes' own

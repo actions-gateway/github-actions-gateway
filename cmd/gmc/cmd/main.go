@@ -571,6 +571,7 @@ func main() {
 			APIServerCIDRs: parsedAPIServerCIDRs,
 			IPCache:        ipCache,
 			Recorder:       mgr.GetEventRecorder("actionsgateway-v2-controller"),
+			Reader:         mgr.GetAPIReader(),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create controller", "controller", "actionsgateway-v2")
 			os.Exit(1)

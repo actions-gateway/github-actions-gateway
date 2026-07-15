@@ -58,6 +58,7 @@ func startActionsGatewayV2Reconciler(t *testing.T) {
 		Scheme:   mgr.GetScheme(),
 		AGCImage: "agc:test",
 		Recorder: mgr.GetEventRecorder("actionsgateway-v2-controller"),
+		Reader:   mgr.GetAPIReader(),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 

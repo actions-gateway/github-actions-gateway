@@ -57,6 +57,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -102,6 +103,20 @@ type ActionsGatewayV2Reconciler struct {
 	IPCache *IPRangeCache
 	// Recorder emits Kubernetes Events on the ActionsGateway. May be nil in tests.
 	Recorder events.EventRecorder
+	// Reader is an uncached apiserver reader (mgr.GetAPIReader()) used by teardown
+	// to verify a child is actually gone right after its delete — the cached client
+	// would still return the just-deleted object and make every clean teardown look
+	// incomplete. nil (unit tests) falls back to the cached Client.
+	Reader client.Reader
+}
+
+// teardownReader returns the uncached reader for teardown verification, falling
+// back to the cached client when none is wired (unit tests use an uncached fake).
+func (r *ActionsGatewayV2Reconciler) teardownReader() client.Reader {
+	if r.Reader != nil {
+		return r.Reader
+	}
+	return r.Client
 }
 
 // githubCIDRs returns the current GitHub IP CIDRs from the shared cache, or nil when
@@ -735,26 +750,85 @@ func runnerSetImpairments(conditions []metav1.Condition) []string {
 	return tripped
 }
 
-// reconcileDelete deletes the cluster-scoped resources the apiserver cannot
-// garbage-collect via owner reference, then removes the finalizer. The namespaced
-// AGC control-plane children carry a controller owner reference, so the apiserver
-// GCs them once the CR is gone — and because every name is per-gateway (§H.16 #1),
-// deleting one gateway GCs only its own children, never a neighbor's. The
-// ClusterRunnerTemplate ClusterRoleBinding is cluster-scoped and cannot carry an
-// owner ref to a namespaced object, so it is deleted explicitly here. RunnerSets
-// reference the gateway but are not owned by it, so they are not deleted — they
-// degrade to Ready=False/GatewayNotFound via their own watch.
+// reconcileDelete tears down the per-gateway control plane fail-closed (Q125,
+// ported from v1's reconcileDelete via Q328): every child is deleted explicitly
+// and the finalizer is NOT removed until each one is verifiably gone. The
+// namespaced children carry a controller owner reference, so cascade GC would
+// eventually remove them too — but a transient GC failure would never be retried
+// or surfaced, so teardown does not trust it: a delete error or a lingering child
+// (e.g. one held by another controller's finalizer) retains the finalizer, emits a
+// TeardownIncomplete event, and requeues, so a live, credentialed AGC Deployment
+// is never orphaned by a half-finished teardown. A NotFound is success (the
+// desired end state) and every pass is idempotent, so already-deleted resources
+// converge to clean. Because every child name is per-gateway (§H.16 #1), deleting
+// one gateway touches only its own children, never a neighbor's.
+//
+// The ClusterRunnerTemplate ClusterRoleBinding is cluster-scoped and cannot carry
+// an owner ref to a namespaced object, so this explicit delete is its ONLY
+// cleanup. The metrics mTLS Secrets are left to owner-ref GC — the GMC
+// deliberately holds no delete verb on secrets (mirrors v1's proxy TLS Secret).
+// RunnerSets reference the gateway but are not owned by it, so they are not
+// deleted — they degrade to Ready=False/GatewayNotFound via their own watch.
 func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
-	crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: clusterRunnerTemplateReaderBindingName(ag)}}
-	if err := r.Delete(ctx, crb); err != nil && !apierrors.IsNotFound(err) {
-		return ctrl.Result{}, fmt.Errorf("delete ClusterRunnerTemplate ClusterRoleBinding: %w", err)
+	log := logf.FromContext(ctx)
+	var errs []error
+	var lingering []string
+	// del deletes one child and verifies it is gone. A delete error is collected;
+	// a child that survives its (accepted) delete — held by a foreign finalizer —
+	// is recorded as lingering so the finalizer is retained until it drains.
+	del := func(obj client.Object, kind, ns, name string) {
+		obj.SetNamespace(ns)
+		obj.SetName(name)
+		if err := r.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
+			log.Error(err, "failed to delete resource during teardown", "kind", kind, "namespace", ns, "name", name)
+			errs = append(errs, fmt.Errorf("%s %s: %w", kind, name, err))
+			return
+		}
+		if err := r.teardownReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, obj); err == nil {
+			lingering = append(lingering, fmt.Sprintf("%s %s", kind, name))
+		} else if client.IgnoreNotFound(err) != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", kind, name, err))
+		}
 	}
 
-	controllerutil.RemoveFinalizer(ag, gmcv2alpha1.ActionsGatewayFinalizer)
-	if err := r.Update(ctx, ag); err != nil {
-		return ctrl.Result{}, err
+	ns := ag.Namespace
+	del(&rbacv1.ClusterRoleBinding{}, "ClusterRoleBinding", "", clusterRunnerTemplateReaderBindingName(ag))
+	del(&appsv1.Deployment{}, "Deployment", ns, agcNameV2(ag))
+	del(&corev1.Service{}, "Service", ns, agcNameV2(ag))
+	del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, agcNameV2(ag))
+	del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, workloadNPNameV2(ag))
+	del(&rbacv1.RoleBinding{}, "RoleBinding", ns, agcNameV2(ag))
+	del(&corev1.ServiceAccount{}, "ServiceAccount", ns, agcNameV2(ag))
+	del(&corev1.ServiceAccount{}, "ServiceAccount", ns, workerSANameV2(ag))
+
+	if len(errs) > 0 || len(lingering) > 0 {
+		var detail []string
+		if err := errors.Join(errs...); err != nil {
+			detail = append(detail, err.Error())
+		}
+		if len(lingering) > 0 {
+			detail = append(detail, "still present: "+strings.Join(lingering, ", "))
+		}
+		r.recordEvent(ag, corev1.EventTypeWarning, "TeardownIncomplete", "ReconcileDelete",
+			"Gateway teardown could not confirm deletion of all owned resources in namespace %q; retaining the cleanup finalizer and requeuing until teardown is clean: %s",
+			ns, strings.Join(detail, "; "))
+		if len(errs) > 0 {
+			// Returning the error requeues with backoff; the finalizer stays in place.
+			return ctrl.Result{}, errors.Join(errs...)
+		}
+		// Every delete was accepted but a child is still draining (a foreign
+		// finalizer holds it): poll until it is verifiably gone, like v1's
+		// wait-for-RunnerGroups pass.
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
-	return ctrl.Result{}, nil
+
+	// All owned resources are confirmed gone — remove the finalizer so the CR can
+	// be garbage-collected. Re-read first so the Update targets the current version.
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, ag); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	controllerutil.RemoveFinalizer(ag, gmcv2alpha1.ActionsGatewayFinalizer)
+	return ctrl.Result{}, r.Update(ctx, ag)
 }
 
 // SetupWithManager wires the v2 ActionsGateway reconciler: it owns the AGC
@@ -765,6 +839,11 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv2alpha1.ActionsGateway{}).
+		// Serialise reconciles explicitly, matching the v1 gateway reconciler
+		// (Q328): the shared apply/cert helpers assume a single writer per
+		// controller. Raising this requires auditing them for safety under
+		// concurrent reconciles of distinct ActionsGateways first.
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Owns(&appsv1.Deployment{}).
 		WatchesMetadata(
 			&corev1.Secret{},
