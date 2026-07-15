@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q330
+**Next ID:** Q331
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -51,8 +51,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q322"></a>Q322 | Close the v2 noProxyCIDRs GHES admission gap | `security` | 🔲 | S | The v2 EgressProxy guard protects public GitHub hosts only: no gitHubURL on the proxy, so an entry matching a referrer's GHES host passes admission. Thread referrer hosts through both webhook sides. |
 | <a id="Q323"></a>Q323 | v2 admission hardening parity (three dropped v1 guards) | `security` | 🔲 | M | Three v1 guards with no v2 counterpart: gitHubURL host/org-segment structural check, reserved-namespace create rejection, PriorityClass VAP backstop for runnersets/runnertemplates. [Analysis](plan/v2-api-gap-analysis.md#admission). |
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Reference arch is delivered (unprivileged kind-in-Kata; Workload Identity required). Remaining: a GAG e2e runner image (dockerd+kind+toolchain), a permanent nested-virt pool, then move e2e onto it. |
-| <a id="Q309"></a>Q309 | Wire or prune dead v2 condition vocabulary | `bug` `docs` | 🔲 | S | Dead v2 vocabulary — `ReasonTemplateDeleted`/`ProxyDeleted`/`ProxyShareNotGranted` never set, RunnerTemplate has an unset `Ready`, RunnerSet emits undocumented v1 reasons. Wire or prune each. |
 | <a id="Q325"></a>Q325 | ScaleSet listener surfaces no failure conditions/events | `bug` `infra` | 🔲 | M | The default (ScaleSet) path never sets Degraded/RateLimited/RunnerVersionTooOld or emits their events — classic-only plumbing. A ScaleSet set fails silently while Ready. [Analysis](plan/v2-api-gap-analysis.md#agc). |
+| <a id="Q330"></a>Q330 | v2 RunnerSetsDegraded rollup misses listener-pushed conditions | `bug` | 🔲 | S | runnerSetImpairments reads only Ready+WorkersUnschedulable; a classic set with revoked creds converges to benign NoActiveSessions while Degraded sits unrolled (v1 rolls it up). Extend the signature. |
 | <a id="Q311"></a>Q311 | Scale-set tier has no monitoring surface | `infra` `docs` | 🔲 | L | The default acquisition protocol (Q264) emits `scaleset_*` metrics wired to no alert, SLO rule, dashboard, or preview series; a scale-set-only deploy fires no throughput alert. Add all four surfaces. |
 | <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
