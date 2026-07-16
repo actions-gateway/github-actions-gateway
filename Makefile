@@ -383,7 +383,7 @@ chart-webhook-check: ## Fail if the chart webhook template drifted from cmd/gmc/
 	scripts/sync-chart-webhook.sh --check
 
 .PHONY: manifest-validate
-manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, kustomize, helm on PATH; matches the CI manifest-validate gate)
+manifest-validate: ## Validate the static install manifests + Helm chart (yamllint + kubeconform + helm lint; requires yamllint, kubeconform, helm on PATH; matches the CI manifest-validate gate)
 	scripts/sync-chart-crds.sh --check
 	scripts/sync-chart-rbac.sh --check
 	scripts/sync-chart-webhook.sh --check
