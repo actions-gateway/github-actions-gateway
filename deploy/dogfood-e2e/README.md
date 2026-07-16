@@ -72,6 +72,29 @@ tenant AGC up/down (Q231); `E2E_VARIANT=dind|kata` selects the overlay (default
 `dind` until the Q286 flip). This is a dogfood/dev config, not a shipped product
 install.
 
+### Why `kubectl apply -k`, not a standalone kustomize binary
+
+These overlays (and [`deploy/athens/`](../athens/kustomization.yaml)) are rendered
+by kubectl's **embedded** kustomize; the repo deliberately carries no standalone
+`kustomize` binary (the product install path is Helm-only —
+[drop-kustomize](../../docs/plan/archive/drop-kustomize.md), Q142). Deliberate
+because:
+
+- Every kustomization here uses only `resources` lists + inline strategic-merge
+  `patches` — semantics frozen since kustomize v3. The embedded copy's lag behind
+  standalone releases (a few months per kubectl minor since 1.21 — the
+  years-stale reputation dates from the ≤1.20 era's frozen v2.0.3) can't bite
+  features we don't use.
+- The embedded version is pinned by the kubectl version, which is already a
+  managed, registered dependency. An unpinned standalone binary would *add*
+  version skew across contributor machines and CI, not remove it.
+- One less host dependency to install, register in `scripts/check-tools.sh`,
+  and supply-chain-audit.
+
+**Revisit trigger:** an overlay needs a kustomize feature or bugfix the embedded
+copy doesn't have. Then re-add the binary via the `scripts/check-tools.sh`
+registry — version-pinned this time — rather than working around it.
+
 ## Load-bearing caveats (learned the hard way, 2026-06-30)
 
 - **The DinD sidecar MUST be a native sidecar** (`restartPolicy: Always` init
