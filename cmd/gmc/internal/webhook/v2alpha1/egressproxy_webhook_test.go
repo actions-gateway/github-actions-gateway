@@ -25,6 +25,7 @@ import (
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,6 +141,29 @@ func TestEgressProxyCustomValidator_ValidateCreate(t *testing.T) {
 		assert.Contains(t, joined, "team-a")
 		assert.Contains(t, joined, "ep")
 	})
+}
+
+// TestEgressProxyCustomValidator_RejectsReservedNamespaces is the EgressProxy half
+// of the Q323 reserved-namespace guard: the CR makes the GMC provision a proxy
+// Deployment and NetworkPolicies into its namespace, so creation in
+// kube-system/kube-public, the default install namespace, or the
+// POD_NAMESPACE-derived install namespace must be denied. Create-only: updates to a
+// (hypothetical) pre-existing object are not bricked, matching the v1 gateway guard.
+func TestEgressProxyCustomValidator_RejectsReservedNamespaces(t *testing.T) {
+	ctx := context.Background()
+	v := &EgressProxyCustomValidator{reservedNamespaces: validation.ReservedNamespaces("gag-operator")}
+
+	for _, ns := range []string{"kube-system", "kube-public", "gmc-system", "gag-operator"} {
+		_, err := v.ValidateCreate(ctx, newEgressProxy(ns, "ep", nil, nil))
+		require.Error(t, err, "namespace %q must be reserved", ns)
+		assert.Contains(t, err.Error(), "reserved namespace")
+	}
+
+	// A tenant namespace is unaffected, and update never applies the guard.
+	_, err := v.ValidateCreate(ctx, newEgressProxy("team-a", "ep", nil, nil))
+	require.NoError(t, err)
+	_, err = v.ValidateUpdate(ctx, newEgressProxy("kube-system", "ep", nil, nil), newEgressProxy("kube-system", "ep", nil, nil))
+	require.NoError(t, err)
 }
 
 func TestEgressProxyCustomValidator_ValidateUpdate(t *testing.T) {

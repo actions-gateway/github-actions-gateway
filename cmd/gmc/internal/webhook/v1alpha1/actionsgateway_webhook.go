@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,32 +16,8 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 )
-
-// defaultReservedNamespaces are namespaces in which an ActionsGateway CR is
-// forbidden regardless of where the GMC is installed. `kube-system` and
-// `kube-public` are universal; `gmc-system` is the default install namespace
-// shipped by the project. Custom installs add their own namespace at setup
-// time via the downward API (see SetupActionsGatewayWebhookWithManager).
-var defaultReservedNamespaces = []string{
-	"kube-system",
-	"kube-public",
-	"gmc-system",
-}
-
-// newReservedNamespaces returns the full set of forbidden namespaces. The
-// defaults always apply; podNamespace is added when non-empty so that a
-// non-default install (e.g. `actions-gateway-operator`) is also protected.
-func newReservedNamespaces(podNamespace string) map[string]bool {
-	s := make(map[string]bool, len(defaultReservedNamespaces)+1)
-	for _, ns := range defaultReservedNamespaces {
-		s[ns] = true
-	}
-	if podNamespace != "" {
-		s[podNamespace] = true
-	}
-	return s
-}
 
 // SetupActionsGatewayWebhookWithManager registers the webhook for
 // ActionsGateway in the manager. The GMC's own install namespace is read
@@ -91,7 +66,7 @@ func NewActionsGatewayCustomValidatorWithAllowlist(podNamespace string, priority
 		priorityClasses = allowlist.New(nil)
 	}
 	return &ActionsGatewayCustomValidator{
-		reservedNamespaces: newReservedNamespaces(podNamespace),
+		reservedNamespaces: validation.ReservedNamespaces(podNamespace),
 		priorityClasses:    priorityClasses,
 	}
 }
@@ -326,34 +301,10 @@ func validateGitHubAppRef(ag *gmcv1alpha1.ActionsGateway) error {
 }
 
 // validateGitHubURL rejects a spec.gitHubURL that is not a well-formed GitHub
-// org/enterprise/repo URL: it must parse, use the https scheme, name a host, and
-// carry at least one path segment (the organization, enterprise, or owner). The
-// AGC's GithubRegistrar derives its REST endpoints by string-splitting this URL
-// (see cmd/agc/internal/agentpool/github_registrar.go), so a malformed value
-// would silently produce broken registration calls rather than a clear failure.
-// The check lives in the webhook (not a CRD CEL rule) so the error can name the
-// offending component; the CRD Pattern is only a cheap https scheme guard.
+// org/enterprise/repo URL. The check itself lives in the shared validation
+// package so the v1 and v2 webhooks enforce a single definition (Q323).
 func validateGitHubURL(ag *gmcv1alpha1.ActionsGateway) error {
-	raw := ag.Spec.GitHubURL
-	if raw == "" {
-		// The CRD marks gitHubURL required (MinLength=1); a hand-built object that
-		// reaches the validator directly without it is still rejected here.
-		return fmt.Errorf("gitHubURL is required: set the GitHub organization, enterprise, or repository URL the runners register against")
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("gitHubURL %q is not a valid URL: %w", raw, err)
-	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("gitHubURL must use the https scheme (got %q)", raw)
-	}
-	if u.Host == "" {
-		return fmt.Errorf("gitHubURL must include a host (got %q)", raw)
-	}
-	if strings.Trim(u.Path, "/") == "" {
-		return fmt.Errorf("gitHubURL must include an organization, enterprise, or owner/repo path segment (got %q)", raw)
-	}
-	return nil
+	return validation.GitHubURL(ag.Spec.GitHubURL)
 }
 
 // validateRunnerGroups rejects privileged containers in any RunnerGroup's PodTemplate,

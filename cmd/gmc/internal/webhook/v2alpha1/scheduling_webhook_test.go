@@ -63,6 +63,9 @@ func TestValidateSchedulingPriorityClass(t *testing.T) {
 func newV2Gateway(ns, name, priorityClass string) *agcv2alpha1.ActionsGateway {
 	ag := &agcv2alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		// gitHubURL is required (CRD MinLength=1) and the webhook now validates it
+		// structurally (Q323), so the helper carries a well-formed value.
+		Spec: agcv2alpha1.ActionsGatewaySpec{GitHubURL: "https://github.com/example-org"},
 	}
 	if priorityClass != "" {
 		ag.Spec.Scheduling = &agcv2alpha1.PodScheduling{PriorityClassName: priorityClass}
