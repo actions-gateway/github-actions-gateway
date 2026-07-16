@@ -9,8 +9,9 @@ GAG's own e2e CI suite uses `kind create cluster` inside a runner pod (Docker-in
 | Spike artifacts — node-pool config, Kata install values, unprivileged runner pod | ✅ Live-validated and corrected against real behaviour |
 | Spike — live go/no-go | ✅ **GO** — 5 of 6 acceptance criteria proven end-to-end on a throwaway GKE cluster |
 | Reference architecture — [`docs/operations/kata-dind-workloads.md`](../operations/kata-dind-workloads.md) | ✅ Updated with the validated config + constraints |
-| AC#5 — `make e2e` inside the runner | ⏸ Deferred: needs a GAG e2e runner image that does not exist yet |
-| CI integration — replace privileged DinD in `e2e-reusable.yml` | 🔲 Follow-up (see Queue) — deliberately out of scope here |
+| Q286 wiring — `overlays/kata` worker shape, `E2E_VARIANT` knob, `/dev/kmsg` kind config | ✅ Landed — see [CI integration](#ci-integration--the-follow-up). No bundled runner image needed after all: the daemon is a stock `docker:28-dind` native sidecar. |
+| AC#5 — `make e2e` green through the Kata runner on dogfood | 🔲 The remaining Q286 gate — [live-validation checklist](#live-validation-checklist-the-remaining-q286-gate) |
+| Default flip — `E2E_VARIANT=kata` becomes the dogfood default | 🔲 Gated on AC#5 (secure-by-default rule) |
 
 **The core claim holds.** On a throwaway GKE cluster (`gag-kata-spike-c2`,
 GKE `1.35.5-gke.1241004`, Ubuntu 24.04 / containerd 2.1.5, `c2-standard-4` with
@@ -393,27 +394,79 @@ and CI timeout guidance.
 
 ## CI integration — the follow-up
 
-The spike deliberately stops at the reference architecture. Wiring Kata into the real
-dogfood e2e pipeline is separate work, tracked on the Queue. It needs:
+The spike deliberately stopped at the reference architecture. The Q286 wiring has since
+landed in-repo; what follows records what shipped, the one design correction it forced,
+and the remaining live gate.
 
-1. A **GAG e2e runner image** bundling `dockerd`, `kind`, the Go/test toolchain and the
-   repo checkout. This does not exist today and is what blocked AC#5. Its entrypoint must
-   perform the six setup steps above (block-device format/mount, `/dev/kmsg`, the two
-   remounts, cgroup v2 nesting, the IPv4-only `kind` network) — the spike's
-   [`runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml) `args:` block is the
-   reference implementation.
-2. A kind cluster config passing `/dev/kmsg` into the node via `extraMounts`.
-3. A permanent nested-virt node pool in the CI project (provisioned once, not per-run) to
-   avoid the ~5–10 min pool create/delete overhead — and to dodge the stockout-wedge
-   failure mode above.
-4. **Workload Identity on that pool** (`--workload-metadata=GKE_METADATA`). This is a
-   security prerequisite, not a nicety: without it the runner reaches the node's service
-   account token regardless of Kata.
-5. Updating [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) and
-   `docs/development/testing.md` for the new runner requirements.
+### What landed (Q286 wiring)
 
-Note that GAG's e2e today runs on GitHub-hosted runners, not the dogfood cluster, so this
-is a change of *where* e2e runs as much as *how*.
+1. **No bundled runner image after all.** The spike's item "a GAG e2e runner image
+   bundling `dockerd`, `kind`, the Go/test toolchain and the repo checkout" predated the
+   Q231 sidecar split. In the dogfood e2e shape the *daemon* is a native-sidecar
+   `docker:28-dind` and the *toolchain* rides the existing
+   `dogfood-e2e-runner` client image (docker CLI + buildx + helm + kubectl + jq); the
+   workflow installs `kind` and Go itself. The six Kata setup steps live in the sidecar's
+   entrypoint (`args:` block of
+   [`overlays/kata/resources.yaml`](../../deploy/dogfood-e2e/overlays/kata/resources.yaml),
+   adapted from the spike's [`runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml)),
+   with two sidecar-specific deltas: `dockerd` listens on tcp for the runner container,
+   and the per-worker block device is a **generic ephemeral volume** (PVC created and
+   deleted with the pod — no orphaned Persistent Disks).
+2. **kind config passes `/dev/kmsg`** into every node via `extraMounts`
+   (`test/kind-config-{1,2}worker.yaml`) — harmless where the device already exists,
+   required in the Kata guest.
+3. **The variant knob**: `E2E_VARIANT=kata scripts/dogfood/e2e-start.sh` applies
+   `overlays/kata`; `dind` stays the default until the flip.
+   [`e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) now owns only cluster infra
+   (pool, Kata install, RuntimeClass, namespace, Secret) — the tenant objects it used to
+   apply directly (an outdated pre-spike Kata RunnerTemplate) are overlay-owned.
+
+### The design correction: the namespace cannot stay PSA-baseline
+
+Earlier revisions of this plan (and the overlay stub) claimed the Kata variant keeps the
+namespace at `baseline` with no privileged profile. That is wrong: the unprivileged
+`dockerd`'s validated capability set (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`,
+`SYS_PTRACE`, `NET_RAW`) exceeds PSS baseline's fixed `capabilities.add` allowlist, and
+PSA is not Kata-aware — it cannot credit the VM boundary. **Verified against a real
+apiserver** (envtest, 2026-07-16): a namespace with `enforce=baseline` rejects the Kata
+worker pod as Forbidden; `enforce=privileged` admits it. So the kata overlay carries the
+same four privileged-namespace gates as dind, and the "no privileged container" property
+is enforced by the worker shape being a **platform-owned `ClusterRunnerTemplate`** (v2
+refuses tenant-authored privileged shapes; tenants cannot edit cluster-scoped templates),
+not by the PSA level. A second Kata-specific delta: **CPU limits are load-bearing** in the
+kata overlay — Kata sizes the guest VM's vCPUs from them — so the dind overlay's
+"requests-only CPU" idiom does not port.
+
+### Live-validation checklist (the remaining Q286 gate)
+
+AC#5 — a full `make e2e` green through the Kata runner — needs a dogfood session:
+
+1. **Verify the live e2e pool** actually matches what
+   [`e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) now creates
+   (`c2-standard-8`, `UBUNTU_CONTAINERD`, `--enable-nested-virtualization`,
+   `--workload-metadata=GKE_METADATA`, label `gag.dev/kata-ci=true`). History says it
+   won't: Q231 provisioned `n2-standard-4`, docs elsewhere say the live dind pool is
+   `e2-standard-8`, and the script skips creation when a pool named `e2e` exists. Expect
+   to delete + recreate the pool (fine for dind too — it doesn't care about nested virt).
+   Confirm `/dev/kvm` on a node and that kata-deploy labels it
+   `katacontainers.io/kata-runtime=true`.
+2. **Delete the stale namespaced RunnerTemplate `kata`** in `gag-dogfood-e2e` if present
+   (applied by the old `e2e-setup.sh apply_cr`; superseded by the ClusterRunnerTemplate).
+3. `E2E_VARIANT=kata scripts/dogfood/e2e-start.sh`, then dispatch an e2e run
+   (`gh workflow run e2e-calico.yml` or re-run a PR's e2e) and watch the worker pod:
+   dind sidecar must log `dockerd up on overlay2`, the suite must go green end-to-end.
+   Also confirm `automountServiceAccountToken: false` held and the ephemeral PVC is
+   deleted with the pod (`kubectl get pvc -n gag-dogfood-e2e`, then
+   `gcloud compute disks list` after teardown).
+4. **Flip the default** on green: `E2E_VARIANT` default `dind` → `kata` in
+   `e2e-start.sh`, demote dind to explicit opt-in in the docs
+   (secure-by-default rule), update
+   [`deploy/dogfood-e2e/README.md`](../../deploy/dogfood-e2e/README.md) status and this
+   table, and close Q286.
+
+Note that GAG's per-PR e2e still runs on GitHub-hosted runners unless
+`GAG_E2E_RUNNER` routes it to GAG, so this is a change of *where* e2e runs as much as
+*how*.
 
 ---
 
@@ -433,23 +486,26 @@ The dogfood manifests already use this layout
 ```
 deploy/dogfood-e2e/
   base/                 # RunnerSet, namespace, egress policy — mechanism-agnostic
-  overlays/dind/        # privileged DinD — LIVE (applied by e2e-start.sh today)
-  overlays/kata/        # Kata micro-VM — README stub; to be built out
+  overlays/dind/        # privileged DinD — LIVE (the e2e-start.sh default today)
+  overlays/kata/        # Kata micro-VM — built; awaiting the live AC#5 run
 ```
 
 The Kata overlay's delta vs. `dind/` is the worker-isolation mechanism *only*
-(`runtimeClassName: kata-qemu`, unprivileged sidecar, namespace stays `baseline`, no
-privileged profile). Keeping them side by side is deliberate: `diff -r overlays/dind
-overlays/kata` is exactly the security/complexity tradeoff, reviewable in one place.
+(`runtimeClassName: kata`, unprivileged sidecar with the six-step entrypoint, ephemeral
+block volume). The namespace gates are identical — see
+[the design correction](#the-design-correction-the-namespace-cannot-stay-psa-baseline)
+for why Kata cannot keep the namespace at PSA `baseline`. Keeping the overlays side by
+side is deliberate: `diff -r overlays/dind overlays/kata` is exactly the
+security/complexity tradeoff, reviewable in one place.
 Kustomize has no clean conditional, so two thin overlays over one base is both DRY *and*
 "configurable" — do **not** collapse them into a single overlay with in-manifest toggles.
 
-The selection knob is the overlay name. Today [`scripts/dogfood/e2e-start.sh`](../../scripts/dogfood/e2e-start.sh)
-hardcodes `overlays/dind`; the follow-up parameterises it (e.g. a `variant` arg /
-`E2E_VARIANT=kata|dind`) so the same script can stand up either. The cluster-infra half
-that kustomize can't express (nested-virt node pool, Kata DaemonSet, RuntimeClass) is
-gated on the same knob in [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh),
-which already contains the Kata install path.
+The selection knob is the overlay name:
+`E2E_VARIANT=kata|dind` on [`scripts/dogfood/e2e-start.sh`](../../scripts/dogfood/e2e-start.sh)
+(default `dind` until the flip). The cluster-infra half that kustomize can't express
+(nested-virt node pool, Kata DaemonSet, RuntimeClass) is unconditional in
+[`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) — the dind variant
+simply ignores it.
 
 The reference architecture ([`docs/operations/kata-dind-workloads.md`](../operations/kata-dind-workloads.md))
 mirrors this: it already presents Kata (Tier 1 cloud, Tier 2 bare metal) as primary and
@@ -464,9 +520,10 @@ the dogfood default and privileged DinD becomes the opt-in fallback** — not th
 
 This flip is *gated*, not immediate. The gate is one condition:
 
-- **AC#5 — the GAG e2e suite runs green through the Kata runner** (needs the runner image
-  and permanent nested-virt pool from the follow-up above). Until then DinD stays the live
-  default because Kata's full e2e path is unproven, not because DinD is preferred.
+- **AC#5 — the GAG e2e suite runs green through the Kata runner** (the
+  [live-validation checklist](#live-validation-checklist-the-remaining-q286-gate) above).
+  Until then DinD stays the live default because Kata's full e2e path is unproven, not
+  because DinD is preferred.
 
 The reasons that keep DinD *available* as a variant after the flip — and keep it the
 recommended tier for some external users — are environmental, not a knock on Kata:
@@ -484,8 +541,9 @@ green. For external users without nested-virt-capable nodes, the reference archi
 keeps DinD (Tier 3, with its compensating controls) as the honest fallback — Kata
 recommended, DinD supported.
 
-**Follow-up work, in order:** (1) build out `overlays/kata/` from the stub; (2)
-parameterise `e2e-start.sh` / `e2e-setup.sh` on the variant knob; (3) land the runner image
-+ permanent nested-virt pool (the AC#5 gate); (4) flip the dogfood default to Kata and
-demote DinD to opt-in. Steps 1–2 are independent of the gate and can land first; steps 3–4
-are the Q286 cutover.
+**Follow-up work, in order:** (1) ✅ build out `overlays/kata/`; (2) ✅ parameterise
+`e2e-start.sh` on the variant knob (`E2E_VARIANT`); (3) 🔲 run the
+[live-validation checklist](#live-validation-checklist-the-remaining-q286-gate) — verify
+or recreate the nested-virt pool, then a green `make e2e` through the Kata runner (AC#5);
+(4) 🔲 flip the dogfood default to Kata and demote DinD to opt-in. Steps 3–4 are the
+remaining Q286 cutover.

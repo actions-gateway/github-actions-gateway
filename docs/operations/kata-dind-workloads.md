@@ -3,9 +3,8 @@
 **Audience:** Platform engineers running a GitHub Actions Gateway (GAG)
 cluster. **Goal:** run a Docker-in-Docker (DinD) or in-runner image-build
 job under [Kata Containers](https://katacontainers.io/) — a Kernel-based
-Virtual Machine (KVM) micro-VM runtime — so the worker pod gets hypervisor
-isolation while staying at `securityProfile: baseline` with **no**
-`privileged: true` container.
+Virtual Machine (KVM) micro-VM runtime — with **no** `privileged: true`
+container anywhere in the worker pod.
 
 Kata is the only approach in
 [In-runner image builds](in-runner-image-builds.md) that gives a real
@@ -52,11 +51,24 @@ boundary the right tool:
   DinD would contradict the model. Kata lets that CI runner stay
   unprivileged.
 
-Because the isolation is enforced at the hypervisor, the pod keeps a
-`baseline` posture: no `privileged: true`, no host namespaces, no relaxed
-Pod Security Admission (PSA) level. The
+Because the isolation is enforced at the hypervisor, the pod itself needs
+no `privileged: true` container and no host namespaces. One PSA nuance is
+easy to get wrong, though: the unprivileged `dockerd` still needs a
+capability set (`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`,
+`NET_RAW` — [see below](#what-an-unprivileged-dockerd-actually-needs-inside-the-guest))
+that exceeds the PSS **baseline** `capabilities.add` allowlist, and Pod
+Security Admission (PSA) is not Kata-aware — it cannot see that these
+capabilities act on a guest kernel. Verified against a real apiserver:
+`enforce=baseline` rejects this pod shape as Forbidden. So the worker
+namespace still needs the
 [`privileged` profile](in-runner-image-builds.md#how-the-security-profiles-constrain-a-build)
-and its platform-granted namespace label are never needed.
+(platform-granted label) — or, on a self-managed control plane, a
+[PodSecurity admission exemption](https://kubernetes.io/docs/concepts/security/pod-security-admission/#exemptions)
+for the Kata `runtimeClass` (managed offerings like GKE do not expose
+that config). What keeps the pod unprivileged is therefore **not** the PSA
+level but the worker template being platform-owned: author the Kata shape
+as a cluster-scoped `ClusterRunnerTemplate`, which tenants cannot edit,
+exactly as for privileged DinD.
 
 ## How it fits together
 
@@ -68,7 +80,7 @@ managed cloud the node is itself a VM, so the node pool must enable
 Node (cloud VM, nested-virt enabled)  ── needs /dev/kvm
   └── kubelet hands the pod to the Kata containerd shim (runtimeClassName)
        └── Kata micro-VM (QEMU)        ── the isolation boundary
-            └── runner container        ── securityProfile: baseline, NOT privileged
+            └── runner container        ── unprivileged (privileged: false)
                  └── dockerd            ── a normal daemon, no special flags
                       └── docker build / kind / nested containers
 ```
@@ -187,35 +199,53 @@ kubectl get nodes -l katacontainers.io/kata-runtime=true   # kata-deploy labelle
 ## Configure the worker podTemplate
 
 Point the worker pods at the runtime by setting `runtimeClassName` on the
-runner group's worker `podTemplate` (`spec.runnerGroups[].podTemplate`). No
-privileged context, no host namespaces, and no profile escalation are involved:
+worker `podTemplate`. Author it as a platform-owned, cluster-scoped
+`ClusterRunnerTemplate`: the capability set below exceeds what a tenant
+should be able to self-author, and platform ownership is what enforces the
+"no privileged container" property (the namespace PSA level cannot — see
+[Why this matters for GAG](#why-this-matters-for-gag)).
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
-kind: ActionsGateway
+apiVersion: actions-gateway.com/v2beta1
+kind: ClusterRunnerTemplate            # platform-owned golden template
 metadata:
-  name: build-gateway
+  name: kata-dind
 spec:
-  securityProfile: baseline            # the default — Kata needs no escalation
-  runnerGroups:
-    - runnerLabels: ["kata", "self-hosted"]   # first label → derived RunnerGroup name
-      podTemplate:                     # worker pod config lives per runner group
-        spec:
-          runtimeClassName: kata-qemu
-          # The runtime label is enforced by the RuntimeClass scheduling
-          # rule above; add a matching nodeSelector only if you also want it
-          # explicit on the pod.
-          containers:
-            - name: runner
-              # A normal runner image with dockerd inside — no privileged
-              # flag, no /var/run/docker.sock host mount.
-              securityContext:
-                privileged: false
+  podTemplate:
+    spec:
+      runtimeClassName: kata           # the alias RuntimeClass above
+      automountServiceAccountToken: false
+      # dockerd as a NATIVE sidecar (restartPolicy: Always init container);
+      # the runner container reaches it via DOCKER_HOST=tcp://localhost:2375.
+      initContainers:
+        - name: dind
+          image: docker:28-dind
+          restartPolicy: Always
+          # Replace the image entrypoint with the six Kata setup steps —
+          # see the next section and the reference implementation below.
+          securityContext:
+            privileged: false          # THE point of this architecture
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+              add: [ ... ]             # the validated set — next section
+      containers:
+        - name: runner
+          env:
+            - name: DOCKER_HOST
+              value: "tcp://localhost:2375"
 ```
 
-The AGC honours a tenant-set `runtimeClassName` and applies no override
-that strips it. If `dockerd` fails to start inside the guest, add one
-Linux capability at a time to the container's
+The complete, production-shaped example — including the raw block volume
+for `/var/lib/docker`, the six-step entrypoint, and measured resource
+sizing — is GAG's own e2e worker template:
+[`deploy/dogfood-e2e/overlays/kata/resources.yaml`](../../deploy/dogfood-e2e/overlays/kata/resources.yaml).
+The single-pod (non-GAG) reference the spike validated is
+[`deploy/kata-ci/runner-pod.yaml`](../../deploy/kata-ci/runner-pod.yaml).
+
+The AGC honours a template-set `runtimeClassName` and applies no override
+that strips it. If `dockerd` still fails inside the guest, add one Linux
+capability at a time to the container's
 `securityContext.capabilities.add` and re-test — **never** reach for
 `privileged: true`. Record the final minimal capability set for your
 runbook.
@@ -271,7 +301,7 @@ namespace).
 
 | Property | Privileged DinD | DinD under Kata |
 |---|---|---|
-| `securityProfile` required | `privileged` (platform-granted namespace label) | `baseline` (the default) |
+| `securityProfile` required | `privileged` (platform-granted namespace label) | `privileged` label still (PSS baseline forbids the capability adds; PSA is not Kata-aware) — but **no privileged container** behind it |
 | `privileged: true` container | Yes | No |
 | Escape blast radius | The host node and, from there, other tenants | A throwaway guest VM kernel |
 | Node `/proc`, `/sys`, devices, kernel | Exposed | Behind the VM boundary |
@@ -303,12 +333,17 @@ namespace).
 > a restrictive instance profile (AWS), or Azure AD Workload Identity with the
 > IMDS endpoint blocked.
 
-Kata satisfies GAG's
-[secure-by-default principle](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in):
-the workload that historically demanded the least-restrictive profile now
-runs at the default profile. Privileged DinD remains documented as a last
-resort — and even then it should be *paired* with a sandbox runtime, which
-is the same mechanism described here applied on top of `privileged`; see
+Kata advances GAG's
+[secure-by-default principle](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)
+on the axis that matters: the workload that historically demanded a
+`privileged: true` container now runs without one, converting a kernel
+escape from node compromise into a discarded guest. The namespace's PSA
+*label* stays `privileged` (the capability set exceeds PSS baseline and PSA
+cannot see the VM boundary), so the platform-owned `ClusterRunnerTemplate`
+— not the PSA level — is what pins the pod shape. Privileged DinD remains
+documented as a last resort — and even then it should be *paired* with a
+sandbox runtime, which is the same mechanism described here applied on top
+of `privileged`; see
 [In-runner image builds — privileged DinD](in-runner-image-builds.md#approach-4--plain-privileged-dind-avoid-where-possible).
 
 ### What Kata does not buy you
@@ -382,13 +417,18 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   forever and keeps the worker pod from reaping, stranding the runner slot.
   See [In-runner image builds § Sidecar containers must be native
   sidecars](in-runner-image-builds.md#sidecar-containers-must-be-native-sidecars-q249).
-- **Validated, but not yet wired into GAG's own CI.** The unprivileged
-  `dockerd` + `kind` path was proven end-to-end on GKE (`1.35.5-gke.1241004`,
-  Ubuntu 24.04, `c2-standard-4` nested-virt, Kata 3.32.0/QEMU) — see
-  [Kata Containers on GKE](../plan/kata-on-gke.md) for the evidence. Running
-  GAG's full `make e2e` inside the runner is still outstanding: it needs a
-  runner image bundling `dockerd`, `kind` and the test toolchain, which does
-  not exist yet. Confirm the steps on your own cluster before cutting over
+- **Validated as an architecture; GAG's own CI cutover is in flight.** The
+  unprivileged `dockerd` + `kind` path was proven end-to-end on GKE
+  (`1.35.5-gke.1241004`, Ubuntu 24.04, `c2-standard-4` nested-virt, Kata
+  3.32.0/QEMU) — see [Kata Containers on GKE](../plan/kata-on-gke.md) for the
+  evidence. GAG's dogfood e2e ships the Kata worker shape as
+  [`deploy/dogfood-e2e/overlays/kata`](../../deploy/dogfood-e2e/overlays/kata)
+  (selected with `E2E_VARIANT=kata scripts/dogfood/e2e-start.sh`); no bundled
+  all-in-one runner image is needed — the daemon is a stock `docker:28-dind`
+  native sidecar with a six-step entrypoint, and the toolchain rides the
+  regular runner container. A full `make e2e` run green through that overlay
+  (and the subsequent default flip from `dind` to `kata`) is the remaining
+  Q286 gate. Confirm the steps on your own cluster before cutting over
   privileged workloads.
 
 ## Related

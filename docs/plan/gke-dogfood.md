@@ -1664,34 +1664,44 @@ node.
 the node. Kata uses `/dev/kvm` to spin up microVMs.
 [Official GKE docs.](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nested-virtualization)
 
-**Machine type note:** nested virtualization on GCP requires N1, N2, or C2
-instance families. E2 (used in Parts A–B) does **not** support it. The e2e
-pool uses `n2-standard-4`.
+**Machine type note:** nested virtualization on GCP requires the N1, N2/N2D, or
+C2/C2D instance families. E2 (used in Parts A–B) does **not** support it. The e2e
+pool uses `c2-standard-8` (grown from the original `n2-standard-4`: the measured
+runner peak is ~5 vCPU — Q248).
 
 ### F1. Run the one-time setup script
 
 ```bash
-export CLUSTER ZONE REPO APP_ID INSTALLATION_ID   # from the Variables section
+export CLUSTER ZONE APP_ID INSTALLATION_ID   # from the Variables section
 scripts/dogfood/e2e-setup.sh
 ```
 
-This script:
-1. Creates the `e2e` node pool (n2-standard-4 spot, nested virt, autoscaling 0→2, taint `dedicated=e2e:NoSchedule`)
+This script owns the **cluster infra** the kustomize overlays can't express:
+1. Creates the `e2e` node pool (c2-standard-8 spot, nested virt, `--workload-metadata=GKE_METADATA`, autoscaling 0→2, taint `dedicated=e2e:NoSchedule`)
 2. Installs the Kata DaemonSet, scoped to e2e pool nodes only (the system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install)
-3. Creates the `kata-qemu` RuntimeClass with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
-4. Creates the `gag-dogfood-e2e` namespace (v2 labels `actions-gateway.com/tenant=managed` + `security-profile=baseline`), GitHub App Secret, ResourceQuota, and the **v2beta1** tenant CRs — `ActionsGateway` + `RunnerTemplate` (a `docker:dind` native sidecar under `runtimeClassName: kata-qemu`) + `RunnerSet` (ScaleSet, single `runnerLabel: gag-ci-e2e`)
+3. Creates the `kata` RuntimeClass alias (over the chart-owned `kata-qemu` handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
+4. Creates the `gag-dogfood-e2e` namespace (v2 marker `actions-gateway.com/tenant=managed`) and the GitHub App Secret
 
-The tenant is authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage front-door shape (Q273), deliberately unlike `scripts/dogfood/setup.sh` (main dogfood), which authors at v2alpha1 to exercise the conversion webhook. v2beta1 is ScaleSet-only, so `acquisitionProtocol`/`maxListeners` are gone and the set declares exactly one `runnerLabel`.
+The **tenant objects** (ResourceQuota, `ActionsGateway`, `ClusterRunnerTemplate`,
+`RunnerSet`, egress policy, and the namespace's security-profile gates) are owned by
+the worker-isolation overlays under
+[`deploy/dogfood-e2e/`](../../deploy/dogfood-e2e/README.md) and applied on demand by
+`e2e-start.sh` (`E2E_VARIANT=dind|kata`, default `dind`). They are authored
+**directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage
+front-door shape (Q273), deliberately unlike `scripts/dogfood/setup.sh` (main
+dogfood), which authors at v2alpha1 to exercise the conversion webhook.
 
-The DinD sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only). The `runner` container sets `DOCKER_HOST=tcp://localhost:2375`. Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
+In both variants the DinD native sidecar runs `dockerd` on `tcp://localhost:2375`
+(no TLS — pod-internal only) and the `runner` container sets
+`DOCKER_HOST=tcp://localhost:2375`. Because all containers in a pod share a network
+namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the
+runner.
 
-> **This is the Kata isolation path, and it is NOT the live/validated one.** The
-> actually-live and validated e2e isolation is the **privileged-DinD** kustomize
-> overlay ([`deploy/dogfood-e2e/overlays/dind`](../../deploy/dogfood-e2e/README.md),
-> `e2-standard-8` pool), which `e2e-start.sh` applies on demand — validated
-> clean-green on GAG (2026-07-07). The Kata path here is sized/validated under
-> [Q286](../STATUS.md#Q286): the measured runner peak (~5 vCPU) exceeds a whole
-> `n2-standard-4`, so the pool must grow (e.g. `n2-standard-8`) before Kata runs.
+> **The live/validated variant is `dind`** (privileged DinD) — clean-green on GAG
+> since 2026-07-07. The `kata` overlay (unprivileged kind-in-Kata) is built; its
+> live `make e2e` run and the subsequent default flip are the remaining
+> [Q286](../STATUS.md#Q286) gate — checklist in
+> [kata-on-gke.md](kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate).
 
 ### F2. Workflow change — already wired
 

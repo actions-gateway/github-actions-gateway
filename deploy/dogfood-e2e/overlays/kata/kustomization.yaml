@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Kata micro-VM isolation variant — kind-in-Docker inside a KVM guest, with NO
+# privileged container anywhere (Q226 spike / Q286 rollout).
+#
+# The worker's dockerd runs UNPRIVILEGED: `runtimeClassName: kata` gives the pod
+# its own guest kernel, so the capabilities it does hold (SYS_ADMIN, NET_ADMIN,
+# SYS_RESOURCE, SYS_PTRACE — see resources.yaml) are scoped to that guest, not
+# the node. Cluster prerequisites (nested-virt node pool, Kata DaemonSet, the
+# `kata` RuntimeClass, Workload Identity) are set up by
+# scripts/dogfood/e2e-setup.sh, not kustomize.
+#
+# The delta vs ../dind is exactly: the worker-isolation mechanism in the
+# ClusterRunnerTemplate. The namespace gates are IDENTICAL — see resources.yaml
+# for why Kata still needs the privileged PSA level despite the unprivileged pod.
+resources:
+  - ../../base
+  - resources.yaml
+patches:
+  # Namespace -> privileged PSA, same four gates as ../dind. NOT because the pod
+  # is privileged (it is not — that is the point of this variant) but because
+  # PSS *baseline* forbids adding the guest-scoped capabilities the unprivileged
+  # dockerd needs, and PSA has no Kata-aware level between baseline and
+  # privileged. Rationale + envtest verification: resources.yaml.
+  - patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: gag-dogfood-e2e
+        labels:
+          actions-gateway.com/security-profile: privileged
+          pod-security.kubernetes.io/enforce: privileged
+          actions-gateway.com/privileged-profile: allowed
+        annotations:
+          actions-gateway.com/allow-profile-downgrade: allowed
+  # Point the RunnerSet at the Kata ClusterRunnerTemplate. The apiVersion must
+  # match the base RunnerSet (v2beta1) for the strategic-merge patch to target it.
+  - patch: |
+      apiVersion: actions-gateway.com/v2beta1
+      kind: RunnerSet
+      metadata:
+        name: ci-e2e
+        namespace: gag-dogfood-e2e
+      spec:
+        templateRef:
+          name: dogfood-e2e-kata
+          kind: ClusterRunnerTemplate

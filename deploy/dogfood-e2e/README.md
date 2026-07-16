@@ -9,21 +9,28 @@ deploy/dogfood-e2e/
   base/                 # isolation-agnostic: namespace, quota, ActionsGateway, RunnerSet
   overlays/
     dind/               # privileged DinD  — simple, NO isolation (trusted CI only)   ← validated
-    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← arch validated (Q286)
+    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← built (Q286); live AC#5 run pending
 ```
 
 ## The two variants
 
-| | **dind** (privileged) | **kata** (planned) |
+| | **dind** (privileged) | **kata** |
 |---|---|---|
-| Isolation | none — host kernel exposure | KVM micro-VM (`kata-qemu`) |
-| Security profile | `privileged` (+ eligibility label + downgrade annotation) | `baseline` |
-| Nodes | any (`e2-standard-8` spot) | nested-virt only (`n2-standard-4` + `--enable-nested-virtualization`) |
-| Extra cluster setup | none | Kata DaemonSet + `kata-qemu` RuntimeClass |
-| DinD sidecar | `privileged: true` | unprivileged (micro-VM is the boundary) |
-| Egress | broad (open) — trusted only | can pair with a tighter policy + in-cluster mirror |
-| Cost | lower | higher (N2 + nested virt) |
-| Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** |
+| Isolation | none — host kernel exposure | KVM micro-VM (`kata` RuntimeClass) |
+| Security profile | `privileged` (+ eligibility label + downgrade annotation) | same labels¹ — but **no privileged container** behind them |
+| Nodes | any | nested-virt only (`c2-standard-8` + `--enable-nested-virtualization` + Workload Identity) |
+| Extra cluster setup | none | Kata DaemonSet + `kata`/`kata-qemu` RuntimeClasses (`e2e-setup.sh`) |
+| DinD sidecar | `privileged: true` | unprivileged (micro-VM is the boundary); six-step entrypoint; ephemeral Block PVC |
+| CPU sizing | requests-only (bursts) | explicit CPU **limits** — Kata sizes the guest's vCPUs from them |
+| Egress | broad (open) — trusted only | same for now; the untrusted-PR posture needs a tighter policy + in-cluster mirror (future) |
+| Cost | lower | higher (C2 + nested virt + 100Gi ephemeral PD per worker) |
+| Use for | **trusted CI / dogfood only** | **untrusted / OSS PRs** (once egress is tightened) |
+
+¹ PSS **baseline** forbids the capability adds the unprivileged dockerd needs
+(`SYS_ADMIN`, `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) and PSA is not
+Kata-aware, so the namespace still needs the privileged PSA level (envtest-verified —
+see [overlays/kata/resources.yaml](overlays/kata/resources.yaml)). What pins the pod
+unprivileged is the platform-owned `ClusterRunnerTemplate`, not the PSA label.
 
 Both use one build-capable runner image
 (`scripts/dogfood/e2e-runner/Dockerfile` —
@@ -37,9 +44,11 @@ output (`kubectl kustomize overlays/dind` vs `overlays/kata`).
 
 Prerequisites not expressed in kustomize (they're cluster infra / credentials):
 
-1. **Node pool** — `dind`: a normal spot pool tainted `dedicated=e2e` (e.g.
-   `e2-standard-8`, **no** nested virt). `kata`: `n2-standard-4` with
-   `--enable-nested-virtualization` + the Kata DaemonSet + `kata-qemu` RuntimeClass.
+1. **Node pool** — `scripts/dogfood/e2e-setup.sh` provisions one pool that serves
+   both variants: `c2-standard-8` spot, tainted `dedicated=e2e`, with
+   `--enable-nested-virtualization` + `--workload-metadata=GKE_METADATA` (hard
+   prerequisites for `kata`; inert for `dind`), plus the Kata DaemonSet and the
+   `kata`/`kata-qemu` RuntimeClasses.
 2. **App credential Secret** (not in git):
    ```bash
    kubectl create secret generic github-app-v1 -n gag-dogfood-e2e \
@@ -51,7 +60,7 @@ Prerequisites not expressed in kustomize (they're cluster infra / credentials):
 Then apply the variant:
 
 ```bash
-kubectl apply -k deploy/dogfood-e2e/overlays/dind   # or .../overlays/kata (planned)
+kubectl apply -k deploy/dogfood-e2e/overlays/dind   # or .../overlays/kata
 ```
 
 Route e2e to it: `gh variable set GAG_E2E_RUNNER --body '"gag-ci-e2e"'` (unset ⇒
@@ -59,7 +68,8 @@ github-hosted). The RunnerSet is authored at **v2beta1** — ScaleSet-only, so i
 declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that
 single JSON string, not a Classic multi-label array. Prefer the on-demand
 `scripts/dogfood/e2e-start.sh` / `e2e-stop.sh`, which set this **and** spin the
-tenant AGC up/down (Q231). This is a dogfood/dev config, not a shipped product
+tenant AGC up/down (Q231); `E2E_VARIANT=dind|kata` selects the overlay (default
+`dind` until the Q286 flip). This is a dogfood/dev config, not a shipped product
 install.
 
 ## Load-bearing caveats (learned the hard way, 2026-06-30)
@@ -101,11 +111,12 @@ install.
   `maxWorkers` pods land on two nodes and concurrent e2e legs don't CPU-throttle each
   other. Full rationale + the measured table:
   [dogfood-runner-rightsizing.md § e2e worker sizing](../../docs/plan/dogfood-runner-rightsizing.md#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
-- **kata:** planned ([Q286](../../docs/STATUS.md#Q286)). Note the measured runner
-  peak (~5 vCPU) exceeds a whole `n2-standard-4`, so the Kata node in
-  [`scripts/dogfood/e2e-setup.sh`](../../scripts/dogfood/e2e-setup.sh) needs to grow
-  (e.g. `n2-standard-8`) before that path is sized — the DinD pod requests do not
-  port 1:1 to the smaller Kata node.
+- **kata:** overlay built ([Q286](../../docs/STATUS.md#Q286)); the remaining gate is
+  a live green `make e2e` through it, then the default flip
+  (checklist: [kata-on-gke.md](../../docs/plan/kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate)).
+  Sizing ports the Q248 measurements onto `c2-standard-8` with explicit CPU limits
+  (runner 5 / dind 3) because Kata turns CPU limits into guest vCPUs — the dind
+  overlay's requests-only idiom would cap the whole guest at the default vCPU count.
 
 The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
 is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and

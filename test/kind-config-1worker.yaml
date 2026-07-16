@@ -1,5 +1,18 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+# Every node binds /dev/kmsg from the Docker host into the node container. On a
+# normal host (GitHub-hosted runner, Docker Desktop VM, privileged DinD) the
+# device already exists and the bind changes nothing. Inside a Kata micro-VM
+# (the Q286 dogfood e2e runner) the guest has no /dev/kmsg until the dind
+# sidecar mknods it, and the inner kubelet hard-requires the device — without
+# this bind it dies with "open /dev/kmsg: no such file or directory". See
+# deploy/dogfood-e2e/overlays/kata/resources.yaml.
 nodes:
   - role: control-plane
+    extraMounts:
+      - hostPath: /dev/kmsg
+        containerPath: /dev/kmsg
   - role: worker
+    extraMounts:
+      - hostPath: /dev/kmsg
+        containerPath: /dev/kmsg
