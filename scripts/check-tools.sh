@@ -58,7 +58,6 @@ kubectl|e2e|kubernetes-cli||https://kubernetes.io/docs/tasks/tools/|
 helm|e2e|helm||https://helm.sh/docs/intro/install/|
 yamllint|extended|yamllint|yamllint|https://yamllint.readthedocs.io/en/stable/quickstart.html|
 kubeconform|extended|kubeconform||https://github.com/yannh/kubeconform#installation|
-kustomize|extended|kustomize||https://kubectl.docs.kubernetes.io/installation/kustomize/|
 trivy|extended|trivy||https://trivy.dev/latest/getting-started/installation/|
 polaris|extended|FairwindsOps/tap/polaris||https://polaris.docs.fairwinds.com/infrastructure-as-code/#installation|
 python3|extended|python|python3|https://www.python.org/downloads/|
