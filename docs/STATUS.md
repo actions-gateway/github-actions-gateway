@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q332
+**Next ID:** Q334
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,8 +49,9 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Wiring landed (overlays/kata, E2E_VARIANT, /dev/kmsg kind config; no runner image needed). Remaining: live AC#5 `make e2e` green via Kata + default flip — [checklist](plan/kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate). |
-| <a id="Q325"></a>Q325 | ScaleSet listener surfaces no failure conditions/events | `bug` `infra` | 🔲 | M | The default (ScaleSet) path never sets Degraded/RateLimited/RunnerVersionTooOld or emits their events — classic-only plumbing. A ScaleSet set fails silently while Ready. [Analysis](plan/v2-api-gap-analysis.md#agc). |
 | <a id="Q330"></a>Q330 | v2 RunnerSetsDegraded rollup misses listener-pushed conditions | `bug` | 🔲 | S | runnerSetImpairments reads only Ready+WorkersUnschedulable; a classic set with revoked creds converges to benign NoActiveSessions while Degraded sits unrolled (v1 rolls it up). Extend the signature. |
+| <a id="Q332"></a>Q332 | Classic listener never clears its failure conditions | `bug` | 🔲 | S | The classic path only sets abnormal (True) states; recovered RateLimited/Degraded sit stale until restart. Port the ScaleSet clear-on-recovery pattern, incl. v1alpha1 False-reasons. [Analysis](plan/v2-api-gap-analysis.md#agc). |
+| <a id="Q333"></a>Q333 | Listener-pushed conditions/events lag until next reconcile | `infra` | 🔲 | S | conditionCh/eventCh drain only when a reconcile runs; an idle set can lag up to the 10h resync. Wire a channel GenericEvent source so pushes wake the reconciler. v1+v2. |
 | <a id="Q311"></a>Q311 | Scale-set tier has no monitoring surface | `infra` `docs` | 🔲 | L | The default acquisition protocol (Q264) emits `scaleset_*` metrics wired to no alert, SLO rule, dashboard, or preview series; a scale-set-only deploy fires no throughput alert. Add all four surfaces. |
 | <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
