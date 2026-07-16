@@ -108,8 +108,8 @@ func startMetricsProxy(t *testing.T, ca *testCA) *Server {
 	certFile, keyFile, caFile := writeServerBundle(t, ca, server)
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
-	srv.MetricsAddr = freeAddr(t)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
+	srv.MetricsAddr = testListenAddr
 	srv.MetricsTLSCertFile = certFile
 	srv.MetricsTLSKeyFile = keyFile
 	srv.MetricsClientCAFile = caFile

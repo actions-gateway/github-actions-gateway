@@ -299,25 +299,16 @@ func metricsHandler(reg *prometheus.Registry) http.Handler {
 
 // §6 — ListenAndServe lifecycle
 
-// freeAddr returns an available 127.0.0.1 address by briefly binding then releasing it.
-func freeAddr(t *testing.T) string {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	addr := ln.Addr().String()
-	_ = ln.Close()
-	return addr
-}
-
-// bindTimeout bounds the test waits for the proxy's listeners to bind
-// (s.ready) and for ListenAndServe to drain after context cancellation. Both are
-// effectively instant locally (the full mTLS test passes in ~0.17s), so this
-// ceiling never gates the happy path — it only exists to fail a genuinely hung
-// server rather than hang the suite. It is sized well above the worst-case CI
-// CPU starvation seen under `make cover-check`, where the previous 10s ceiling
-// tripped despite the bind itself being ready (Q302, same CI-starvation timing
-// class as Q222).
-const bindTimeout = 60 * time.Second
+// testListenAddr asks the kernel for a free port at bind time. ListenAndServe
+// rewrites s.Addr / s.HealthAddr / s.MetricsAddr to the concrete bound address,
+// and startServer returns only after those writes land, so tests read the
+// resolved address afterwards. Binding ":0" directly — instead of pre-probing a
+// free port and re-binding it — leaves no window for another process to steal
+// the port between probe and re-bind: the probe pattern intermittently handed
+// ListenAndServe an already-taken port under the CI coverage job's parallel
+// port churn, and the resulting EADDRINUSE was misreported as a bind hang
+// (Q302).
+const testListenAddr = "127.0.0.1:0"
 
 // startServer launches srv.ListenAndServe on a background context and blocks
 // until the server has bound all of its listeners — i.e. s.ready is closed.
@@ -329,21 +320,35 @@ const bindTimeout = 60 * time.Second
 // same gate production consumers key off (the /readyz probe), so waiting on it
 // is both correct and faithful — and since the listeners are in LISTEN state by
 // the time it closes, a dial or request issued afterwards is accepted from the
-// kernel backlog even before the Serve loop calls Accept. Cancelling the
-// context and draining the serve goroutine are registered as a t.Cleanup.
+// kernel backlog even before the Serve loop calls Accept.
+//
+// The wait watches the serve goroutine itself rather than a wall clock: if
+// ListenAndServe returns before ready closes (e.g. a bind failure), the test
+// fails immediately with the real error instead of burning a timeout that
+// misreports the failure as a hang — Q302 was exactly that, a masked
+// EADDRINUSE reported as a 60s bind starvation. There is deliberately no
+// wall-clock ceiling here: a genuinely hung server is caught by `go test
+// -timeout`, whose panic carries a full goroutine dump — strictly better
+// diagnostics than a bare Fatalf. Cancelling the context and draining the
+// serve goroutine are registered as a t.Cleanup.
 func startServer(t *testing.T, srv *Server) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- srv.ListenAndServe(ctx) }()
+	var srvErr error
+	done := make(chan struct{})
+	go func() {
+		srvErr = srv.ListenAndServe(ctx)
+		close(done)
+	}()
 	t.Cleanup(func() {
 		cancel()
 		<-done
 	})
 	select {
 	case <-srv.ready:
-	case <-time.After(bindTimeout):
-		t.Fatalf("server did not bind its listeners (s.ready) within %s", bindTimeout)
+	case <-done:
+		// close(done) happens-after the srvErr write, so this read is safe.
+		t.Fatalf("ListenAndServe returned before binding its listeners: %v", srvErr)
 	}
 }
 
@@ -351,25 +356,49 @@ func TestServer_ListenAndServeShutdown(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.ListenAndServe(ctx) }()
 
-	// Wait for both listeners to bind (s.ready) before cancelling.
+	// Wait for both listeners to bind (s.ready) before cancelling. A bind
+	// failure surfaces via done instead of hanging the wait; a genuine hang is
+	// caught by `go test -timeout` (see startServer for the rationale).
 	select {
 	case <-srv.ready:
-	case <-time.After(bindTimeout):
-		t.Fatalf("server did not bind its listeners (s.ready) within %s", bindTimeout)
+	case err := <-done:
+		t.Fatalf("ListenAndServe returned before binding its listeners: %v", err)
 	}
 
 	cancel()
+	assert.NoError(t, <-done, "ListenAndServe must return cleanly after context cancellation")
+}
+
+// TestServer_ListenAndServeBindFailure verifies a bind conflict surfaces as an
+// immediate error return with s.ready left open — the Q302 failure mode, where
+// a pre-probed "free" port stolen before re-bind made ListenAndServe return
+// EADDRINUSE that the old wall-clock bind wait silently swallowed for its full
+// ceiling before misreporting a hang.
+func TestServer_ListenAndServeBindFailure(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	// Occupy a port for the whole test so the server's CONNECT bind must fail.
+	ln, err := net.Listen("tcp", testListenAddr)
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+
+	reg := prometheus.NewRegistry()
+	srv := NewServer(ln.Addr().String(), testListenAddr, 5*time.Second, nil, reg)
+
+	err = srv.ListenAndServe(context.Background())
+	require.Error(t, err, "binding an occupied port must fail immediately")
+	assert.Contains(t, err.Error(), "bind connect listener")
+
 	select {
-	case err := <-done:
-		assert.NoError(t, err)
-	case <-time.After(bindTimeout):
-		t.Fatalf("ListenAndServe did not return within %s after context cancellation", bindTimeout)
+	case <-srv.ready:
+		t.Fatal("s.ready must not close when a listener failed to bind")
+	default:
 	}
 }
 
@@ -423,7 +452,7 @@ func TestProxy_TLS_RejectsHTTP2_ALPN(t *testing.T) {
 	certPath, keyPath := writeTestTLSCert(t)
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.TLSCertFile = certPath
 	srv.TLSKeyFile = keyPath
 
@@ -462,7 +491,7 @@ func TestProxy_TLS_RejectsBelowTLS12(t *testing.T) {
 	certPath, keyPath := writeTestTLSCert(t)
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.TLSCertFile = certPath
 	srv.TLSKeyFile = keyPath
 
@@ -516,7 +545,7 @@ func TestProxy_HealthPortReadHeaderTimeout(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.ReadHeaderTimeout = 200 * time.Millisecond
 
 	startServer(t, srv)
@@ -547,7 +576,7 @@ func TestProxy_ConnectPortReadHeaderTimeout(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.ReadHeaderTimeout = 200 * time.Millisecond
 
 	startServer(t, srv)
@@ -578,7 +607,7 @@ func TestProxy_TunnelIdleTimeout(t *testing.T) {
 
 	echoAddr := startEchoServer(t)
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.TunnelIdleTimeout = 100 * time.Millisecond
 
 	startServer(t, srv)
@@ -614,7 +643,7 @@ func TestProxy_TunnelLifetimeCap(t *testing.T) {
 
 	echoAddr := startEchoServer(t)
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.MaxTunnelLifetime = 200 * time.Millisecond
 	srv.TunnelIdleTimeout = 10 * time.Second // long enough that idle won't fire first
 
@@ -650,7 +679,7 @@ func TestProxy_TunnelDurationHistogram(t *testing.T) {
 
 	echoAddr := startEchoServer(t)
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 	srv.TunnelIdleTimeout = 100 * time.Millisecond
 
 	startServer(t, srv)
@@ -679,7 +708,7 @@ func TestServer_ListenAndServeBothServersReachable(t *testing.T) {
 
 	echoAddr := startEchoServer(t)
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 
 	// startServer's cancel/drain cleanup is registered after goleak's and the
 	// echo server's, so by LIFO it runs first — server stops before the echo
@@ -730,7 +759,7 @@ func TestServer_ReadyzImpliesConnectBound(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
 	reg := prometheus.NewRegistry()
-	srv := NewServer(freeAddr(t), freeAddr(t), 5*time.Second, nil, reg)
+	srv := NewServer(testListenAddr, testListenAddr, 5*time.Second, nil, reg)
 
 	startServer(t, srv)
 
