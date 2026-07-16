@@ -13,7 +13,9 @@ webhook flag and this policy stay in lockstep from one values entry.
 # tenant granted direct `runnergroups` write RBAC would bypass the allowlist
 # entirely. This policy closes that path for ANY writer, and re-validates every
 # write to existing objects (narrowing the stored-object residual a webhook cannot
-# reach). Requires Kubernetes >= 1.30. See
+# reach). The v2 runnersets/runnertemplates rules (Q323) are the same
+# defense-in-depth for the webhook-gated v2 kinds: webhook-outage/bypass coverage
+# plus stored-object re-validation. Requires Kubernetes >= 1.30. See
 # docs/operations/security-operations.md § Priority classes.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -32,6 +34,14 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnergroups"]
+      # Q323: the v2 carriers of the same two PriorityClass routes (runnersets:
+      # priorityTiers; runnertemplates: podTemplate.spec.priorityClassName). Both
+      # versions share identical field paths. ClusterRunnerTemplate is exempt —
+      # cluster-scoped and platform-authored, matching its webhook exemptions.
+      - apiGroups: ["actions-gateway.com"]
+        apiVersions: ["v2alpha1", "v2beta1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["runnersets", "runnertemplates"]
   variables:
     # The allowlist: the param ConfigMap's allowedPriorityClasses value, split on
     # the same separators the GMC's ConfigMap watcher accepts. A missing key or
@@ -69,7 +79,7 @@ metadata:
 spec:
   policyName: {{ include "actions-gateway.namePrefix" . }}-priorityclass-allowlist-guard
   # Deny is the secure default. The apiserver resolves params before any
-  # per-object filtering, so a missing param ConfigMap denies EVERY runnergroups
+  # per-object filtering, so a missing param ConfigMap denies EVERY matched
   # write until it is recreated — fail closed, never silently off. The ConfigMap
   # ships below (or is the admin-owned watched one), so that state is an
   # explicit deletion.

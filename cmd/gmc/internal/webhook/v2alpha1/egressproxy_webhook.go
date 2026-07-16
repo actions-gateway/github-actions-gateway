@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -169,6 +171,14 @@ type EgressProxyCustomValidator struct {
 	// check (direct-construction unit tests); the public GitHub host set is always
 	// enforced.
 	reader client.Reader
+
+	// reservedNamespaces is the set of namespaces where an EgressProxy may not be
+	// created (Q323): the CR makes the GMC provision a proxy Deployment/HPA/PDB and
+	// NetworkPolicies into its namespace, which must never land in
+	// kube-system/kube-public or the GMC's own install namespace. Built by
+	// SetupEgressProxyWebhookWithManager from validation.ReservedNamespaces; a nil
+	// set disables the guard (direct-construction unit tests not exercising it).
+	reservedNamespaces map[string]bool
 }
 
 // validate runs the shared admission checks for both create and update: it rejects an
@@ -196,9 +206,15 @@ func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, 
 	return warnings, nil
 }
 
-// ValidateCreate rejects an EgressProxy requesting an off-allowlist destination or an
-// FQDN intent with no operator backend, warning on a deprecated CNI-specific mode.
+// ValidateCreate rejects an EgressProxy created in a reserved namespace (Q323),
+// requesting an off-allowlist destination, or an FQDN intent with no operator
+// backend, warning on a deprecated CNI-specific mode. The reserved-namespace guard
+// is create-only, matching the v1 gateway webhook (namespace is immutable).
 func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2alpha1.EgressProxy) (admission.Warnings, error) {
+	if v.reservedNamespaces[obj.Namespace] {
+		return nil, logRejection(ctx, "EgressProxy", "create", obj.Namespace, obj.Name,
+			fmt.Errorf("EgressProxy may not be created in reserved namespace %q", obj.Namespace))
+	}
 	return v.validate(ctx, "create", obj)
 }
 
@@ -215,8 +231,9 @@ func (v *EgressProxyCustomValidator) ValidateDelete(_ context.Context, _ *agcv2a
 
 // SetupEgressProxyWebhookWithManager registers the validating webhook for the
 // EgressProxy data kind, wired to the shared platform egress allowlist, the cluster's
-// FQDN egress backend, the infra-only PriorityClass allowlist (Q284), and the
-// manager's uncached API reader for the referrer-aware noProxyCIDRs guard (Q322).
+// FQDN egress backend, the infra-only PriorityClass allowlist (Q284), the manager's
+// uncached API reader for the referrer-aware noProxyCIDRs guard (Q322), and the
+// reserved-namespace set (Q323).
 // The manager's scheme must already include agcv2alpha1 (the GMC registers it at
 // startup).
 func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.EgressDestinationAllowlist, backend controller.FQDNBackend, infraPriorityClasses *allowlist.PriorityClassAllowlist) error {
@@ -225,6 +242,10 @@ func SetupEgressProxyWebhookWithManager(mgr ctrl.Manager, list *allowlist.Egress
 		FQDNBackend:          backend,
 		InfraPriorityClasses: infraPriorityClasses,
 		reader:               mgr.GetAPIReader(),
+		// Q323: the GMC's own install namespace comes from the POD_NAMESPACE env
+		// var (populated by the Deployment via the downward API), matching the v1
+		// gateway webhook.
+		reservedNamespaces: validation.ReservedNamespaces(os.Getenv("POD_NAMESPACE")),
 	}
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2alpha1.EgressProxy{}).
 		WithValidator(v).

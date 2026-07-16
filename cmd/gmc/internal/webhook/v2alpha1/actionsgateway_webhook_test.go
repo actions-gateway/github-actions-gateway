@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -162,4 +163,63 @@ func TestV2ActionsGatewayWebhook_FailsClosedOnReadError(t *testing.T) {
 	_, err := v.ValidateCreate(context.Background(), v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot verify")
+}
+
+// TestV2ActionsGatewayWebhook_RejectsReservedNamespaces is the v2 half of the v1
+// reserved-namespace guard (Q323): a gateway makes the GMC provision an AGC control
+// plane into its namespace, so creation in kube-system/kube-public, the default
+// install namespace, or the POD_NAMESPACE-derived install namespace must be denied.
+func TestV2ActionsGatewayWebhook_RejectsReservedNamespaces(t *testing.T) {
+	ctx := context.Background()
+	v := &ActionsGatewayCustomValidator{reservedNamespaces: validation.ReservedNamespaces("gag-operator")}
+
+	for _, ns := range []string{"kube-system", "kube-public", "gmc-system", "gag-operator"} {
+		_, err := v.ValidateCreate(ctx, v2Gateway(ns, "gw", "https://github.com/example-org", ""))
+		require.Error(t, err, "namespace %q must be reserved", ns)
+		assert.Contains(t, err.Error(), "reserved namespace")
+	}
+
+	// A tenant namespace is unaffected.
+	_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", "https://github.com/example-org", ""))
+	require.NoError(t, err)
+}
+
+// TestV2ActionsGatewayWebhook_RejectsMalformedGitHubURL is the v2 half of the v1
+// structural gitHubURL check (Q323): the CRD Pattern only guards the https scheme,
+// so the webhook must reject a URL with no host or no org/enterprise/owner path
+// segment — on update too (version-agnostic defense; the CRD immutability CEL
+// normally makes the update path unreachable).
+func TestV2ActionsGatewayWebhook_RejectsMalformedGitHubURL(t *testing.T) {
+	ctx := context.Background()
+	v := &ActionsGatewayCustomValidator{}
+
+	cases := []struct {
+		name, url, wantErr string
+	}{
+		{"empty", "", "gitHubURL is required"},
+		{"http scheme", "http://github.com/example-org", "https scheme"},
+		{"no host", "https:///example-org", "must include a host"},
+		{"no org segment", "https://github.com", "path segment"},
+		{"slash-only path", "https://github.com/", "path segment"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gw := v2Gateway("team-a", "gw", tc.url, "")
+			_, err := v.ValidateCreate(ctx, gw)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantErr)
+
+			_, err = v.ValidateUpdate(ctx, v2Gateway("team-a", "gw", "https://github.com/example-org", ""), gw)
+			require.Error(t, err, "update must apply the same structural check")
+		})
+	}
+
+	// Well-formed org and owner/repo URLs are admitted on both verbs.
+	for _, u := range []string{"https://github.com/example-org", "https://ghes.corp.example/owner/repo"} {
+		gw := v2Gateway("team-a", "gw", u, "")
+		_, err := v.ValidateCreate(ctx, gw)
+		require.NoError(t, err)
+		_, err = v.ValidateUpdate(ctx, gw, gw)
+		require.NoError(t, err)
+	}
 }

@@ -16,14 +16,24 @@
 # also re-validates on EVERY write to an existing object, narrowing the
 # stored-object residual (objects admitted before the gate shipped).
 #
+# The v2 kinds (Q323): runnersets carry priorityTiers and runnertemplates carry
+# podTemplate.spec.priorityClassName — both tenant-authored, both gated by
+# failurePolicy=fail GMC webhooks. For them this policy is the same
+# defense-in-depth backstop the v1 rule provides: webhook-outage/bypass coverage
+# plus stored-object re-validation. The has() guards below make the shared
+# variables total across all three resources (runnersets have no podTemplate;
+# runnertemplates have no priorityTiers). ClusterRunnerTemplate is deliberately
+# exempt, matching its webhook exemptions: it is cluster-scoped and
+# platform-authored, and its writers can create PriorityClasses anyway.
+#
 # The param ConfigMap is the policy's single allowlist source — the apiserver
 # cannot read the GMC's --allowed-priority-classes flag. Keep the ConfigMap a
 # superset of the flag (the Helm chart renders both from the same values), or
 # GMC-authored RunnerGroups naming flag-only classes will be denied here.
 # parameterNotFoundAction: Deny fails closed if the ConfigMap is missing — and
 # because the apiserver resolves binding params BEFORE any per-object filtering,
-# a missing ConfigMap denies EVERY runnergroups create/update, not just
-# class-naming ones. The ConfigMap ships with this policy (below) and with the
+# a missing ConfigMap denies EVERY matched write (runnergroups, runnersets, and
+# runnertemplates alike), not just class-naming ones. The ConfigMap ships with this policy (below) and with the
 # chart, so that state is an explicit deletion; recreate the ConfigMap to
 # recover. Fail-open (Allow) is not an option: deleting one ConfigMap would
 # silently disable the guard.
@@ -50,6 +60,13 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnergroups"]
+      # Q323: the v2 carriers of the same two PriorityClass routes. Both versions
+      # are listed explicitly (they share identical field paths), so the rule does
+      # not depend on matchPolicy version equivalence.
+      - apiGroups: ["actions-gateway.com"]
+        apiVersions: ["v2alpha1", "v2beta1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["runnersets", "runnertemplates"]
   variables:
     # The allowlist: the param ConfigMap's allowedPriorityClasses value, split on
     # the same separators the GMC's ConfigMap watcher accepts (commas, newlines,
@@ -85,8 +102,8 @@ metadata:
   name: gag-priorityclass-allowlist-guard-binding
 spec:
   policyName: gag-priorityclass-allowlist-guard
-  # Deny is the secure default; a missing param ConfigMap denies every
-  # runnergroups write until it is recreated (see the header comment).
+  # Deny is the secure default; a missing param ConfigMap denies every matched
+  # write until it is recreated (see the header comment).
   validationActions: [Deny]
   paramRef:
     name: gag-priorityclass-allowlist

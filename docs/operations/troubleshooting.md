@@ -1979,6 +1979,8 @@ admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
 gitHubURL must include an organization, enterprise, or owner/repo path segment (got "https://github.com")
 ```
 
+The v2 `ActionsGateway` (`actions-gateway.com`) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names `vactionsgateway-v2alpha1.kb.io` (v2beta1 writes route through the same validator).
+
 **Likely cause.** `spec.gitHubURL` is a **required** field — the GitHub org, enterprise, or repository URL the gateway's runners register against. There is no default: a gateway with no URL has nothing to register against. The CRD enforces a non-empty `https://` value; the GMC validating webhook additionally requires a parseable URL with the https scheme, a host, and at least one path segment (the org/enterprise/owner). Common misses: the field omitted entirely, an `http://` (non-TLS) URL, or a bare host (`https://github.com`) with no org.
 
 **Resolution.**

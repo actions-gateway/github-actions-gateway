@@ -1432,6 +1432,15 @@ off the allowlist. Unlike a webhook, the policy also **re-validates every write
 to an existing object**, so a pre-gate stored RunnerGroup naming an
 off-allowlist class is caught on its next update, not just its next re-create.
 
+The policy matches the v2 kinds too (Q323): `runnersets`
+(`priorityTiers[].priorityClassName`) and `runnertemplates`
+(`podTemplate.spec.priorityClassName`), across v2alpha1 and v2beta1. Those kinds
+are already gated by `failurePolicy: Fail` GMC webhooks, so for them the policy
+is defense-in-depth — coverage while the webhook is unavailable or bypassed,
+plus the stored-object re-validation a webhook cannot provide.
+`ClusterRunnerTemplate` is exempt (cluster-scoped, platform-authored — its
+writers can create `PriorityClass` objects anyway).
+
 The policy reads its allowlist from a **parameter ConfigMap** (the apiserver
 cannot read the GMC flag):
 
@@ -1446,7 +1455,8 @@ cannot read the GMC flag):
   fail-closed skew, but a confusing one.
 
 **Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the
-parameter ConfigMap is **deleted**, every `runnergroups` create/update is denied
+parameter ConfigMap is **deleted**, every matched write — `runnergroups`,
+`runnersets`, and `runnertemplates` alike — is denied
 (`no params found for policy binding`) until it is recreated — loud and
 fail-closed rather than silently off. The GMC surfaces this as provisioning
 errors on affected gateways; recreate the ConfigMap (or `helm upgrade`) to
