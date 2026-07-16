@@ -173,21 +173,26 @@ host-kernel access.
   and the runtime trade-offs in
   [Appendix B](../design/appendix-b-worker-isolation.md).
 
-## Approach 5 — Kata Containers (micro-VM DinD at `baseline`)
+## Approach 5 — Kata Containers (micro-VM DinD, no privileged container)
 
 When a workload genuinely needs an inner Docker daemon (`docker:dind`,
 nested containers, `kind`) and you want a real machine boundary around it,
 [Kata Containers](https://katacontainers.io/) runs the whole pod inside a
 per-pod Kernel-based Virtual Machine (KVM) micro-VM, selected with a
-`RuntimeClass`. Like Sysbox it needs **no** `privileged: true` container,
-so it stays at `baseline` — but the isolation is a guest kernel, not a
-shared one, which is why it is the right fit for GAG's untrusted-PR threat
-model.
+`RuntimeClass`. Like Sysbox it needs **no** `privileged: true` container —
+and the isolation is a guest kernel, not a shared one, which is why it is
+the right fit for GAG's untrusted-PR threat model.
 
-- **Recommended profile:** `baseline`. The pod sets
-  `runtimeClassName: kata-qemu` and runs `dockerd` as a normal daemon
-  inside the guest VM — no privileged flag, no host socket mount. A
-  container escape lands in a throwaway guest kernel, not on the node.
+- **Recommended profile:** `privileged` namespace label, unprivileged pod.
+  The pod sets `runtimeClassName: kata-qemu` and runs `dockerd` as a
+  normal daemon inside the guest VM — no privileged flag, no host socket
+  mount; a container escape lands in a throwaway guest kernel, not on the
+  node. The daemon does still need capability adds (`SYS_ADMIN`,
+  `NET_ADMIN`, `SYS_RESOURCE`, `SYS_PTRACE`, `NET_RAW`) that exceed the PSS
+  **baseline** allowlist, and PSA cannot see the VM boundary — so the
+  namespace needs the platform-granted `privileged` profile, with the pod
+  shape pinned by a platform-owned `ClusterRunnerTemplate` (details in
+  [Kata DinD / image-build workloads](kata-dind-workloads.md#why-this-matters-for-gag)).
 - **Node prerequisite:** the runtime needs `/dev/kvm`, which on a managed
   cloud means a **nested-virtualization** node pool on a supporting machine
   family (on Google Cloud: N1/N2/N2D/C2/C2D, **not** E2 or the GPU
@@ -271,7 +276,7 @@ Pick the topmost row that matches your build need.
 | `Dockerfile` build, no daemon wanted, registry-side cache | **Kaniko** | `baseline` (set `runAsNonRoot: false`) | No | Not a sandbox — PSA is the boundary; plan a cache repo + auth. |
 | Compliance mandate forces `restricted`, you control the `Dockerfile` | **Kaniko (non-root)** *or* **BuildKit-rootless (validated)** | `restricted` | No | Kernel/ownership-sensitive; verify end to end first. |
 | "Real" inner Docker daemon / `systemd` (compose, nested containers) without `privileged` | **Sysbox** (`runtimeClassName`) | `baseline` | No | Platform admin installs the Sysbox runtime + `RuntimeClass`. |
-| Inner daemon for **untrusted code** (public PRs), or a VM-strength boundary wanted | **Kata Containers** (`runtimeClassName: kata-qemu`) | `baseline` | No | Needs nested-virt nodes (`/dev/kvm`) + Kata DaemonSet/`RuntimeClass`. See [Kata DinD workloads](kata-dind-workloads.md). |
+| Inner daemon for **untrusted code** (public PRs), or a VM-strength boundary wanted | **Kata Containers** (`runtimeClassName: kata-qemu`) | `privileged` label (capability adds exceed PSS baseline) — pod stays unprivileged | No | Needs nested-virt nodes (`/dev/kvm`) + Kata DaemonSet/`RuntimeClass`. See [Kata DinD workloads](kata-dind-workloads.md). |
 | Workload genuinely requires a privileged Docker daemon and Sysbox/Kata are unavailable | **Privileged DinD** (last resort) | `privileged` | Yes | Needs the platform `privileged-profile: allowed` namespace label; pair with `kata`/`gvisor`. |
 | Kernel modules / host capabilities beyond DinD | **Privileged** + sandbox runtime | `privileged` | Yes | Same gating; sandbox runtime strongly recommended. |
 
@@ -309,7 +314,7 @@ gateway for tests and a separate build gateway — and routes jobs with
 ## Related
 
 - [Security § 5.3 — Security profiles and the privileged opt-in](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) — the authoritative profile model.
-- [Kata DinD / image-build workloads](kata-dind-workloads.md) — run an inner Docker daemon under a KVM micro-VM at `baseline`; node prerequisites and `RuntimeClass` setup.
+- [Kata DinD / image-build workloads](kata-dind-workloads.md) — run an inner Docker daemon under a KVM micro-VM with no privileged container; node prerequisites and `RuntimeClass` setup.
 - [Appendix B — Worker isolation](../design/appendix-b-worker-isolation.md) — `runc` vs gVisor vs Kata sandbox runtimes.
 - [Tenant onboarding](tenant-onboarding.md) — granting privileged eligibility to a namespace.
 - [Admission policies](admission-policies.md) — Kyverno/Gatekeeper compatibility for GAG worker pods.

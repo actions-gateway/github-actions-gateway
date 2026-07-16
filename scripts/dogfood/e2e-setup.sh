@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# One-time setup: e2e node pool with nested virtualization, Kata Containers
-# runtime, and the gag-dogfood-e2e tenant — namespace + GitHub App Secret +
-# ResourceQuota + the v2beta1 tenant CRs (ActionsGateway + RunnerTemplate +
-# RunnerSet, ScaleSet single-label). See docs/plan/gke-dogfood.md Part F.
+# One-time setup for the dogfood e2e tenant's CLUSTER INFRA — the pieces the
+# kustomize overlays can't express: the e2e node pool (nested virtualization +
+# Workload Identity), the Kata Containers runtime + `kata` RuntimeClass alias,
+# the gag-dogfood-e2e namespace, and the GitHub App Secret.
+# See docs/plan/gke-dogfood.md Part F.
 #
-# NOTE: this is the Kata isolation path. It is NOT the live/validated e2e path —
-# that is the privileged-DinD kustomize overlay (deploy/dogfood-e2e/overlays/dind,
-# e2-standard-8 pool), which e2e-start.sh applies on demand.
+# The tenant OBJECTS (ResourceQuota + ActionsGateway + ClusterRunnerTemplate +
+# RunnerSet + egress policy, and the namespace's security-profile gates) are
+# owned by the worker-isolation overlays under deploy/dogfood-e2e/overlays/
+# (dind = privileged DinD, kata = unprivileged kind-in-Kata) and applied
+# on demand by e2e-start.sh (E2E_VARIANT selects the overlay) — not here.
 #
 # Q226 validated unprivileged dockerd + kind inside a Kata microVM on GKE and
 # corrected this script's Kata install (the old release-asset URLs 404; the
 # RuntimeClass used an invalid scheduling.nodeClassification field; the pool did
-# not pin --image-type so it got COS). Running GAG's e2e suite through this path
-# is still a follow-up — see docs/plan/kata-on-gke.md.
+# not pin --image-type so it got COS). Q286 wires GAG's e2e suite through it —
+# see docs/plan/kata-on-gke.md.
 #
 # Run once after the main cluster setup (Parts A–B of the runbook).
 # Idempotent and safe to re-run: the e2e node-pool create is skipped if the
@@ -22,7 +25,6 @@
 #   PROJECT          GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER          GKE cluster name (e.g. gag-dogfood)
 #   ZONE             GCP zone (e.g. us-east1-b)
-#   REPO             GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 #   APP_ID           GitHub App numeric ID (3752347)
 #   INSTALLATION_ID  GitHub App installation ID for this repo
 #
@@ -139,15 +141,14 @@ create_namespace() {
 	echo "Creating gag-dogfood-e2e namespace..."
 	kubectl create namespace gag-dogfood-e2e --dry-run=client -o yaml \
 		| kubectl apply -f -
-	# v2 markers (actions-gateway.com/*): tenant=managed authorizes the GMC to
-	# operate in the namespace; security-profile=baseline drives the Pod Security
-	# level the GMC stamps. The Kata microVM is the isolation boundary, so the pod
-	# stays baseline (no privileged needed). (v1 used the actions-gateway.github.com
-	# group with tenant=true + an inline spec.securityProfile.)
+	# Only the v2 tenant marker here (authorizes the GMC to operate in the
+	# namespace). The security-profile / PSA gates are isolation-specific and
+	# owned by the overlay e2e-start.sh applies. Both current variants need the
+	# privileged profile — dind because its sidecar IS privileged, kata because
+	# PSS baseline forbids the guest-scoped capability adds its UNPRIVILEGED
+	# dockerd needs (see deploy/dogfood-e2e/overlays/kata/resources.yaml).
 	kubectl label namespace gag-dogfood-e2e \
 		actions-gateway.com/tenant=managed \
-		actions-gateway.com/security-profile=baseline \
-		pod-security.kubernetes.io/enforce=baseline \
 		--overwrite
 }
 
@@ -183,111 +184,10 @@ create_secret() {
 	trap - EXIT
 }
 
-apply_quota() {
-	kubectl apply -f - <<'EOF'
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: dogfood-e2e-quota
-  namespace: gag-dogfood-e2e
-spec:
-  hard:
-    pods: "6"
-EOF
-}
-
-apply_cr() {
-	echo "Applying v2beta1 ActionsGateway + RunnerTemplate + RunnerSet (Kata)..."
-	# Authored directly at v2beta1 (Q231) — the graduated served+storage front-door
-	# shape (Q273), deliberately UNLIKE scripts/dogfood/setup.sh (main dogfood) which
-	# authors at v2alpha1 to exercise the conversion webhook. The v1 monolith
-	# (ActionsGateway.runnerGroups + inline securityProfile/proxy) is decomposed into
-	# ActionsGateway (gateway + credentials) + RunnerTemplate (worker pod shape) +
-	# RunnerSet (runner group). v2beta1 is ScaleSet-only and strips
-	# acquisitionProtocol + maxListeners: the set declares exactly ONE runnerLabel
-	# (gag-ci-e2e), which is both its runs-on target and the scale-set name at GitHub,
-	# matched by GAG_E2E_RUNNER (e2e-start.sh).
-	#
-	# ISOLATION: this is the Kata path (baseline PSA; the kata-qemu microVM is the
-	# boundary, so the dind sidecar is unprivileged). The live/validated e2e isolation
-	# is the privileged-DinD kustomize overlay (deploy/dogfood-e2e/overlays/dind on the
-	# e2-standard-8 pool); the Kata path is NOT live-validated yet — the measured runner
-	# peak (~5 vCPU) exceeds a whole n2-standard-4, so the node pool must grow (e.g.
-	# n2-standard-8) before Kata is sized. Tracked under Q226; the worker resources
-	# below are provisional pending that sizing.
-	kubectl apply -f - <<EOF
-apiVersion: actions-gateway.com/v2beta1
-kind: ActionsGateway
-metadata:
-  name: dogfood-e2e
-  namespace: gag-dogfood-e2e
-spec:
-  credentials:
-    type: GitHubApp
-    githubApp:
-      name: github-app-v1
-  githubURL: https://github.com/${REPO}
----
-apiVersion: actions-gateway.com/v2beta1
-kind: RunnerTemplate
-metadata:
-  name: kata
-  namespace: gag-dogfood-e2e
-spec:
-  podTemplate:
-    spec:
-      runtimeClassName: kata-qemu
-      nodeSelector:
-        cloud.google.com/gke-nodepool: e2e
-      tolerations:
-        - key: dedicated
-          value: e2e
-          effect: NoSchedule
-      # dind as a NATIVE sidecar (restartPolicy: Always init container, K8s >=1.29).
-      # Load-bearing: a regular sidecar's dockerd never exits, so the pod never
-      # completes, the AGC keeps the session active, and maxWorkers strands (Q249).
-      # Unprivileged — the Kata microVM, not privileged:true, is the isolation
-      # boundary, so this stays within the baseline PSA profile.
-      initContainers:
-        - name: dind
-          image: docker:27-dind
-          restartPolicy: Always
-          args: ["--host=tcp://0.0.0.0:2375", "--tls=false"]
-          env:
-            - name: DOCKER_TLS_CERTDIR
-              value: ""
-          resources:
-            requests: { cpu: "1", memory: "2Gi" }
-            limits: { memory: "4Gi" }
-      containers:
-        - name: runner
-          env:
-            - name: DOCKER_HOST
-              value: tcp://localhost:2375
-          resources:
-            requests: { cpu: "2", memory: "1Gi" }
-            limits: { memory: "3Gi" }
----
-apiVersion: actions-gateway.com/v2beta1
-kind: RunnerSet
-metadata:
-  name: ci-e2e
-  namespace: gag-dogfood-e2e
-spec:
-  gatewayRef:
-    name: dogfood-e2e
-  templateRef:
-    name: kata
-  runnerLabels: ["gag-ci-e2e"]
-  maxWorkers: 2
-EOF
-}
-
 main() {
 	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
 	: "${ZONE:?ZONE must be set}"
-	: "${REPO:?REPO must be set}"
 	: "${APP_ID:?APP_ID must be set}"
 	: "${INSTALLATION_ID:?INSTALLATION_ID must be set}"
 
@@ -310,8 +210,6 @@ main() {
 	apply_runtimeclass
 	create_namespace
 	create_secret
-	apply_quota
-	apply_cr
 
 	echo ""
 	echo "Setup complete."
@@ -319,8 +217,9 @@ main() {
 	echo "Next steps:"
 	echo "  The e2e-reusable.yml runs-on is already wired to fromJSON(vars.GAG_E2E_RUNNER)"
 	echo "  (default ubuntu-latest), so CI is unaffected until you route e2e onto GAG."
-	echo "  Enable e2e on GAG (on-demand — spins up the tenant AGC): scripts/dogfood/e2e-start.sh"
-	echo "  Disable + tear the AGC back down:                          scripts/dogfood/e2e-stop.sh"
+	echo "  Enable e2e on GAG (on-demand — applies the E2E_VARIANT overlay [dind|kata]"
+	echo "  and spins up the tenant AGC):     scripts/dogfood/e2e-start.sh"
+	echo "  Disable + tear the AGC back down: scripts/dogfood/e2e-stop.sh"
 }
 
 main "$@"
