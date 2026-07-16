@@ -51,7 +51,10 @@ import (
 	"sync"
 	"time"
 
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Label type for the scale set's single System label (its runs-on match target).
@@ -79,6 +82,12 @@ const minPollInterval = 100 * time.Millisecond
 // defaultWorkFolder is the runner work directory baked into a JIT config when Config
 // leaves it empty (the actions-runner convention).
 const defaultWorkFolder = "_work"
+
+// defaultRateLimitConditionAfter is how long GetMessage must have been answered 429
+// before the Listener surfaces RateLimited=True on the owning RunnerSet — the same
+// ten-minute window the classic listener uses, so a transient burst does not flap
+// the condition (Q325).
+const defaultRateLimitConditionAfter = 10 * time.Minute
 
 // maxJITNameConflictRetries bounds how many times provisioning re-mints a JIT config
 // under a fresh runner name after a RunnerNameConflictError. Past it, the assignment is
@@ -116,6 +125,22 @@ type ProvisionFunc func(ctx context.Context, job Job) error
 // Listener still polls (to drain JobStarted/JobCompleted and keep the session alive)
 // but GitHub assigns nothing.
 type CapacityFunc func(ctx context.Context) int
+
+// ConditionSetter publishes one status condition onto the owning RunnerSet. Like
+// MetricsRecorder, the implementation is owner-bound — the reconciler closes over
+// the RunnerSet identity when wiring it — and must be non-blocking (the reconciler
+// adapts its buffered condition channel, dropping on backpressure), so the poll
+// loop never stalls on status delivery (Q325).
+type ConditionSetter interface {
+	SetCondition(cond metav1.Condition)
+}
+
+// EventSink records one owner-scoped Kubernetes Event for a session failure the
+// Listener detects, complementing the condition that tracks the same state. Like
+// ConditionSetter it is owner-bound and must be non-blocking.
+type EventSink interface {
+	Event(eventtype, reason, action, note string)
+}
 
 // MetricsRecorder records Listener-level statistics. Nil is safe. It is separate from
 // scaleset.MetricsRecorder (poll-error/token-refresh on the client); this records the
@@ -156,6 +181,23 @@ type Config struct {
 	Capacity CapacityFunc
 	// Metrics records job accounting. Nil is safe.
 	Metrics MetricsRecorder
+	// Conditions publishes the Listener's session-failure conditions onto the owning
+	// RunnerSet (Q325): Degraded=True/Unauthorized when a session call is rejected as
+	// unauthorized, and RateLimited=True/SustainedRateLimit when message polling has
+	// been answered 429 past RateLimitConditionAfter — the classic listener's failure
+	// vocabulary. Unlike the classic path, the Listener also publishes the healthy
+	// (False) states on start and clears an abnormal state when the session recovers.
+	// Nil disables condition reporting.
+	Conditions ConditionSetter
+	// Events records an owner-scoped Warning event (SessionUnauthorized) when the
+	// Degraded condition trips, so the incident surfaces in `kubectl describe`.
+	// Emitted once per episode, on the transition into the state. Nil disables.
+	Events EventSink
+	// RateLimitConditionAfter is how long message polling must have been answered 429
+	// before RateLimited=True is surfaced. Non-positive selects
+	// defaultRateLimitConditionAfter (ten minutes, classic parity). Overridable in
+	// tests to drive the condition deterministically.
+	RateLimitConditionAfter time.Duration
 	// Log is the structured logger. Nil selects slog.Default().
 	Log *slog.Logger
 	// PollBackoff paces the transient-error retry path. Non-positive selects
@@ -166,10 +208,19 @@ type Config struct {
 // Listener owns one scale set's acquisition session and provisions workers for its
 // assigned jobs. Construct it with New; drive it with Start.
 type Listener struct {
-	cfg         Config
-	log         *slog.Logger
-	workFolder  string
-	pollBackoff time.Duration
+	cfg            Config
+	log            *slog.Logger
+	workFolder     string
+	pollBackoff    time.Duration
+	rateLimitAfter time.Duration
+
+	// Session-failure condition state (Q325), owned by Start and then the run
+	// goroutine — the goroutine-creation happens-before makes the handoff safe
+	// without mu. Each abnormal condition is pushed once per episode (on the
+	// transition into the state) and cleared on recovery.
+	rateLimitedSince time.Time // first 429 of the current episode; zero while polling is healthy
+	rateLimitedCond  bool      // RateLimited=True has been pushed for the current episode
+	unauthorizedCond bool      // Degraded=True/Unauthorized has been pushed
 
 	mu            sync.Mutex
 	scaleSetID    int
@@ -194,12 +245,13 @@ func New(cfg Config) (*Listener, error) {
 		return nil, errors.New("scalesetlistener: Config.Capacity is required")
 	}
 	l := &Listener{
-		cfg:         cfg,
-		log:         cfg.Log,
-		workFolder:  cfg.WorkFolder,
-		pollBackoff: cfg.PollBackoff,
-		provisioned: make(map[string]bool),
-		completed:   make(map[string]bool),
+		cfg:            cfg,
+		log:            cfg.Log,
+		workFolder:     cfg.WorkFolder,
+		pollBackoff:    cfg.PollBackoff,
+		rateLimitAfter: cfg.RateLimitConditionAfter,
+		provisioned:    make(map[string]bool),
+		completed:      make(map[string]bool),
 	}
 	if l.log == nil {
 		l.log = slog.Default()
@@ -209,6 +261,9 @@ func New(cfg Config) (*Listener, error) {
 	}
 	if l.pollBackoff <= 0 {
 		l.pollBackoff = defaultPollBackoff
+	}
+	if l.rateLimitAfter <= 0 {
+		l.rateLimitAfter = defaultRateLimitConditionAfter
 	}
 	return l, nil
 }
@@ -247,6 +302,9 @@ func (l *Listener) Status() Status {
 func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 	ssID, err := l.ensureScaleSet(ctx)
 	if err != nil {
+		if isUnauthorized(err) {
+			l.surfaceUnauthorized("EnsureScaleSet", err)
+		}
 		return nil, fmt.Errorf("scalesetlistener: ensure scale set %q: %w", l.cfg.ScaleSetName, err)
 	}
 	l.mu.Lock()
@@ -255,8 +313,22 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 
 	sess, err := l.createSession(ctx, ssID)
 	if err != nil {
+		if isUnauthorized(err) {
+			l.surfaceUnauthorized("CreateSession", err)
+		}
 		return nil, fmt.Errorf("scalesetlistener: open session for %q: %w", l.cfg.ScaleSetName, err)
 	}
+
+	// Session open — publish the healthy baseline for the conditions this Listener
+	// owns. Unconditional (not transition-guarded) because an unauthorized episode
+	// may have been surfaced by a PREVIOUS Listener instance that failed Start and
+	// was discarded: this fresh instance carries no flag for it, and without the
+	// baseline the abnormal condition would sit stale on the RunnerSet forever
+	// after the credentials were fixed (Q325).
+	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionFalse,
+		v2alpha1.ReasonSessionAuthorized, "scale-set session established")
+	l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
+		v2alpha1.ReasonPollingHealthy, "message polling healthy")
 
 	done := make(chan struct{})
 	go func() {
@@ -336,6 +408,7 @@ func (l *Listener) run(ctx context.Context, ssID int, sess *scaleset.RunnerScale
 			}
 			continue
 		}
+		l.pollHealthy()
 		if msg == nil { // 202 — nothing to deliver
 			// Pace the empty path: a server that did not actually hold the poll must not
 			// spin the loop (minPollInterval). A real long-poll already outlasts the floor.
@@ -369,7 +442,10 @@ func (l *Listener) paceEmptyPoll(ctx context.Context, elapsed time.Duration) boo
 
 // handlePollError reacts to a GetMessage error, returning true to continue the loop
 // and false to stop. A 401/403 refreshes the queue token; a 404/410 re-creates the
-// session; anything else backs off (unless ctx is cancelled).
+// session; a 429 tracks the sustained-rate-limit condition and waits out any
+// Retry-After; anything else backs off (unless ctx is cancelled). Session calls
+// rejected as unauthorized surface the Degraded condition (Q325); a successful
+// refresh or re-create clears it.
 func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset.RunnerScaleSetSession, err error) bool {
 	switch {
 	case ctx.Err() != nil:
@@ -377,8 +453,15 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 	case isUnauthorized(err):
 		if rerr := l.cfg.Client.RefreshSession(ctx, ssID, sess); rerr != nil {
 			l.log.Warn("scaleset: refresh session token failed", "scaleSet", l.cfg.ScaleSetName, "err", rerr)
+			if isUnauthorized(rerr) {
+				// The refresh itself was rejected: not an expired queue token but
+				// invalid/revoked credentials — the failure class the classic path
+				// reports as Degraded/Unauthorized.
+				l.surfaceUnauthorized("RefreshSession", rerr)
+			}
 			return l.backoff(ctx)
 		}
+		l.clearUnauthorized()
 		return true
 	case isNotFound(err):
 		// The session is gone; re-create it and replay from the queue head. A fresh
@@ -388,13 +471,39 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 		fresh, cerr := l.createSession(ctx, ssID)
 		if cerr != nil {
 			l.log.Warn("scaleset: re-create session failed", "scaleSet", l.cfg.ScaleSetName, "err", cerr)
+			if isUnauthorized(cerr) {
+				l.surfaceUnauthorized("CreateSession", cerr)
+			}
 			return l.backoff(ctx)
 		}
+		l.clearUnauthorized()
 		*sess = *fresh
 		l.mu.Lock()
 		l.lastMessageID = 0
 		l.mu.Unlock()
 		return true
+	case isRateLimited(err):
+		// Track sustained rate limiting; surface the condition once the episode
+		// outlasts rateLimitAfter (classic parity: ten minutes by default). The
+		// next successful poll clears it (pollHealthy).
+		now := time.Now()
+		if l.rateLimitedSince.IsZero() {
+			l.rateLimitedSince = now
+		} else if !l.rateLimitedCond && now.Sub(l.rateLimitedSince) >= l.rateLimitAfter {
+			l.rateLimitedCond = true
+			l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionTrue,
+				v2alpha1.ReasonSustainedRateLimit,
+				fmt.Sprintf("GetMessage returning 429 for over %s", l.rateLimitAfter))
+		}
+		l.log.Warn("scaleset: rate limited", "scaleSet", l.cfg.ScaleSetName, "err", err)
+		// Honor a server-provided Retry-After; the queue rarely sends one (§2a-5),
+		// so the usual wait is the plain pollBackoff.
+		wait := l.pollBackoff
+		var rl *scaleset.RateLimitError
+		if errors.As(err, &rl) && rl.RetryAfter > 0 {
+			wait = rl.RetryAfter
+		}
+		return l.backoffFor(ctx, wait)
 	default:
 		l.log.Warn("scaleset: poll error", "scaleSet", l.cfg.ScaleSetName, "err", err)
 		return l.backoff(ctx)
@@ -404,7 +513,13 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 // backoff waits pollBackoff or until ctx is cancelled, returning true to continue and
 // false if ctx was cancelled.
 func (l *Listener) backoff(ctx context.Context) bool {
-	t := time.NewTimer(l.pollBackoff)
+	return l.backoffFor(ctx, l.pollBackoff)
+}
+
+// backoffFor waits d or until ctx is cancelled, returning true to continue and false
+// if ctx was cancelled.
+func (l *Listener) backoffFor(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
 	case <-ctx.Done():
@@ -412,6 +527,70 @@ func (l *Listener) backoff(ctx context.Context) bool {
 	case <-t.C:
 		return true
 	}
+}
+
+// pollHealthy resets the failure tracking after a successful poll, clearing any
+// condition pushed for the now-recovered episode (Q325).
+func (l *Listener) pollHealthy() {
+	l.rateLimitedSince = time.Time{}
+	if l.rateLimitedCond {
+		l.rateLimitedCond = false
+		l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
+			v2alpha1.ReasonPollingHealthy, "message polling recovered")
+	}
+	l.clearUnauthorized()
+}
+
+// surfaceUnauthorized publishes Degraded=True/Unauthorized and a SessionUnauthorized
+// Warning event for a session call rejected as unauthorized — invalid or revoked
+// GitHub App credentials (Q325). Pushed once per episode (on the transition into the
+// state), so the retrying poll loop does not spam the event stream; action names the
+// rejected call. clearUnauthorized ends the episode.
+func (l *Listener) surfaceUnauthorized(action string, err error) {
+	if l.unauthorizedCond {
+		return
+	}
+	l.unauthorizedCond = true
+	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionTrue,
+		v2alpha1.ReasonSessionUnauthorized, err.Error())
+	l.recordEvent(corev1.EventTypeWarning, "SessionUnauthorized", action,
+		fmt.Sprintf("scale-set %s rejected as unauthorized; the gateway's GitHub App credentials are invalid or revoked: %v", action, err))
+}
+
+// clearUnauthorized ends an unauthorized episode after a session call succeeds,
+// clearing the Degraded condition surfaceUnauthorized pushed. A no-op outside an
+// episode.
+func (l *Listener) clearUnauthorized() {
+	if !l.unauthorizedCond {
+		return
+	}
+	l.unauthorizedCond = false
+	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionFalse,
+		v2alpha1.ReasonSessionAuthorized, "scale-set session calls authorized again")
+}
+
+// setCondition publishes one condition via the owner-bound sink. A no-op when no
+// sink is wired.
+func (l *Listener) setCondition(condType string, status metav1.ConditionStatus, reason, msg string) {
+	if l.cfg.Conditions == nil {
+		return
+	}
+	l.cfg.Conditions.SetCondition(metav1.Condition{
+		Type:               condType,
+		Status:             status,
+		Reason:             reason,
+		Message:            msg,
+		LastTransitionTime: metav1.Now(),
+	})
+}
+
+// recordEvent records one owner-scoped Event via the owner-bound sink. A no-op when
+// no sink is wired.
+func (l *Listener) recordEvent(eventtype, reason, action, note string) {
+	if l.cfg.Events == nil {
+		return
+	}
+	l.cfg.Events.Event(eventtype, reason, action, note)
 }
 
 // handleMessage processes one queue envelope: claim any GHES-offered jobs, provision a
@@ -639,6 +818,12 @@ func isUnauthorized(err error) bool {
 func isNotFound(err error) bool {
 	var ne *scaleset.NotFoundError
 	return errors.As(err, &ne)
+}
+
+// isRateLimited reports whether err is (or wraps) a scaleset.RateLimitError.
+func isRateLimited(err error) bool {
+	var rl *scaleset.RateLimitError
+	return errors.As(err, &rl)
 }
 
 // isRunnerNameConflict reports whether err is (or wraps) a scaleset.RunnerNameConflictError.

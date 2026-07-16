@@ -236,8 +236,8 @@ metric name so the two correlate:
 | Reason | Type | Mirrors metric | Trigger |
 |---|---|---|---|
 | `JobAcquisitionFailed` | Warning | `actions_gateway_job_acquisition_errors_total` | `acquirejob` failed for a delivered job; it stays queued for redelivery |
-| `RunnerVersionTooOld` | Warning | — (also the `RunnerVersionTooOld` condition) | `POST /sessions` rejected: runner version too old |
-| `SessionUnauthorized` | Warning | — (also the `Degraded` condition) | `POST /sessions` rejected as unauthorized (invalid/revoked agent credentials) |
+| `RunnerVersionTooOld` | Warning | — (also the `RunnerVersionTooOld` condition) | `POST /sessions` rejected: runner version too old (classic protocol only — the scale-set protocol carries no runner version) |
+| `SessionUnauthorized` | Warning | — (also the `Degraded` condition) | A session call rejected as unauthorized (invalid/revoked credentials) — classic `POST /sessions`, or a ScaleSet-path session create/refresh (Q325) |
 | `QuotaRetriesExhausted` | Warning | `actions_gateway_quota_retries_exhausted_total` | Pod creation abandoned after the `ResourceQuota` retry budget exhausted |
 | `EvictionRetriesExhausted` | Warning | `actions_gateway_eviction_retries_exhausted_total` | Evicted job's auto-retry budget exhausted; manual re-run required |
 
