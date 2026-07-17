@@ -1776,15 +1776,15 @@ Reason: ListenerStartFailed      Message: listener goroutines failed to start: .
 
 A running listener always wins: once at least one session is polling, the set reports `Ready=True` / `ListenerActive` even if a prior start attempt logged an error.
 
-**Session-failure conditions pushed by the classic listener.** On a `Classic`-protocol set, the listener goroutines additionally push the same session-failure conditions they set on a v1 `RunnerGroup` (the classic acquisition machinery is shared between the two kinds):
+**Session-failure conditions pushed by the listener.** Both acquisition protocols push session-failure conditions onto the `RunnerSet`. On a `Classic`-protocol set the listener goroutines push the same conditions they set on a v1 `RunnerGroup` (the classic acquisition machinery is shared between the two kinds); on a `ScaleSet` set (the default) the scale-set listener pushes the same vocabulary:
 
 | Condition | Reason | Meaning |
 | --- | --- | --- |
 | `RateLimited=True` | `SustainedRateLimit` | GitHub has answered message polling with 429 for over ten minutes. |
-| `RunnerVersionTooOld=True` | `VersionTooOld` | GitHub rejected the configured runner version at session creation — see the v1 guidance under [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs); the fix (update `workerImage`) is the same. |
-| `Degraded=True` | `Unauthorized` | Session creation was rejected as unauthorized — the agent credentials are invalid or revoked. |
+| `RunnerVersionTooOld=True` | `VersionTooOld` | *(Classic only)* GitHub rejected the configured runner version at session creation — see the v1 guidance under [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs); the fix (update `workerImage`) is the same. This class cannot occur on a `ScaleSet` set: the scale-set protocol carries no runner version at session creation (the per-job JIT config is minted server-side). |
+| `Degraded=True` | `Unauthorized` | A session call was rejected as unauthorized — the GitHub App / agent credentials are invalid or revoked. On a `ScaleSet` set this covers session create *and* the queue-token refresh, and a `SessionUnauthorized` Warning event names the rejected call. |
 
-All three are advisory (abnormal-is-`True`) and do not gate `Ready`. The `ScaleSet` acquisition path (the default) does not surface these failure classes yet — that gap is tracked separately.
+All are advisory (abnormal-is-`True`) and do not gate `Ready`. The two protocols differ in recovery behaviour: the **classic** listener only sets the abnormal state (a stale `True` can outlive the episode until the goroutine restarts), while the **`ScaleSet`** listener also publishes the healthy state — `Degraded=False/SessionAuthorized` and `RateLimited=False/PollingHealthy` appear on every healthy `ScaleSet` set once its listener starts — and clears an abnormal condition as soon as the session recovers (a successful poll, token refresh, or session re-create). Listener-pushed conditions and events are recorded on the `RunnerSet` on its next reconcile, so they can lag the incident by up to one reconcile interval.
 
 ---
 

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -250,6 +251,91 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "ss-set"}, &got)
 		return apierrors.IsNotFound(err)
 	}, 20*time.Second, 100*time.Millisecond, "the RunnerSet finalizer must be removed after teardown")
+}
+
+// TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus proves the Q325
+// wiring end-to-end against the real apiserver: a session failure the scale-set
+// listener detects (an unauthorized queue-token refresh — revoked credentials)
+// lands on the RunnerSet's .status.conditions as Degraded=True/Unauthorized via the
+// reconciler's condition channel, and recovery clears it back to
+// Degraded=False/SessionAuthorized. Listener-pushed conditions drain on the next
+// reconcile, so the polling loops poke the set to trigger one.
+func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T) {
+	const ns = "v2-rs-scaleset-conds"
+	const label = "linux-conds"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("cond-set", ns, "gw", label, 3)
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv)
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register the scale set")
+	waitForSetReadyReason(t, ns, "cond-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	key := types.NamespacedName{Namespace: ns, Name: "cond-set"}
+	// pokeSet touches an annotation so the reconciler runs and drains the condition
+	// channel (conditions are recorded on the next reconcile).
+	pokeSet := func() {
+		var got v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, key, &got); err != nil {
+			return
+		}
+		if got.Annotations == nil {
+			got.Annotations = map[string]string{}
+		}
+		got.Annotations["test.poke"] = time.Now().Format(time.RFC3339Nano)
+		_ = k8sClient.Update(ctx, &got)
+	}
+	setCondition := func(condType string) *metav1.Condition {
+		var got v2alpha1.RunnerSet
+		if err := k8sClient.Get(ctx, key, &got); err != nil {
+			return nil
+		}
+		return apimeta.FindStatusCondition(got.Status.Conditions, condType)
+	}
+
+	// 1. Healthy baseline: the started listener publishes Degraded=False/SessionAuthorized.
+	require.Eventually(t, func() bool {
+		pokeSet()
+		c := setCondition(v2alpha1.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2alpha1.ReasonSessionAuthorized
+	}, 20*time.Second, 200*time.Millisecond, "a healthy ScaleSet set must report Degraded=False/SessionAuthorized")
+
+	// 2. Revoke the credentials: the cached queue token 401s the poll and the refresh
+	//    that should recover it is itself rejected — Degraded=True/Unauthorized must
+	//    reach status.
+	srv.FailSessionRefresh(true)
+	srv.ExpireQueueToken(ssID)
+	require.Eventually(t, func() bool {
+		pokeSet()
+		c := setCondition(v2alpha1.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2alpha1.ReasonSessionUnauthorized
+	}, 20*time.Second, 200*time.Millisecond, "an unauthorized session refresh must surface Degraded=True on status")
+
+	// 3. Restore the credentials: the next refresh succeeds and the listener clears
+	//    the condition.
+	srv.FailSessionRefresh(false)
+	require.Eventually(t, func() bool {
+		pokeSet()
+		c := setCondition(v2alpha1.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2alpha1.ReasonSessionAuthorized
+	}, 20*time.Second, 200*time.Millisecond, "recovery must clear Degraded back to False/SessionAuthorized")
 }
 
 // TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet proves the default path is

@@ -12,6 +12,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -34,6 +35,25 @@ import (
 // advertised capacity is then the tier ceiling, so GitHub caps totalAssignedJobs there
 // and the provisioner backstops per pod (§3 Reworked).
 const defaultScaleSetMaxCapacity = 10
+
+// scaleSetStatusSink adapts the reconciler's condition/event channels to the
+// scalesetlistener's owner-bound sinks (Q325): the RunnerSet identity is closed over
+// here, mirroring how ScaleSetMetrics.RecorderFor binds the metrics recorder. The
+// underlying channel sends are non-blocking (channelConditionUpdater /
+// channelEventRecorder drop on a full channel), as the listener requires.
+type scaleSetStatusSink struct {
+	key  types.NamespacedName
+	cond *channelConditionUpdater
+	ev   *channelEventRecorder
+}
+
+func (s *scaleSetStatusSink) SetCondition(cond metav1.Condition) {
+	s.cond.SetCondition(s.key.Namespace, s.key.Name, cond)
+}
+
+func (s *scaleSetStatusSink) Event(eventtype, reason, action, note string) {
+	s.ev.Event(s.key.Namespace, s.key.Name, eventtype, reason, action, note)
+}
 
 // scaleSetListenerHandle owns a running scale-set listener and the means to stop it:
 // cancel tears down the poll loop (which deletes the session on the way out), and done
@@ -134,6 +154,14 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		scaleSetName = rs.Spec.RunnerLabels[0]
 	}
 
+	// Owner-bound sink for the listener's session-failure conditions and events
+	// (Q325); the reconciler drains both channels on its next reconcile.
+	sink := &scaleSetStatusSink{
+		key:  key,
+		cond: &channelConditionUpdater{ch: r.conditionCh},
+		ev:   &channelEventRecorder{ch: r.eventCh},
+	}
+
 	l, err := scalesetlistener.New(scalesetlistener.Config{
 		Client:       client,
 		ScaleSetName: scaleSetName,
@@ -145,8 +173,10 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		// Per-RunnerSet Prometheus recorder over the scale-set tier's counters
 		// (Q264 P4 observability). Nil ScaleSetMetrics yields a nil recorder, which
 		// the listener treats as metrics-disabled.
-		Metrics: r.ScaleSetMetrics.RecorderFor(key.Namespace, key.Name),
-		Log:     log,
+		Metrics:    r.ScaleSetMetrics.RecorderFor(key.Namespace, key.Name),
+		Conditions: sink,
+		Events:     sink,
+		Log:        log,
 	})
 	if err != nil {
 		return nil, err

@@ -266,14 +266,18 @@ const (
 	ReasonRefreshPending = "RefreshPending"
 )
 
-// Classic-listener condition vocabulary (Q309). The classic acquisition machinery
-// is shared between the v1 RunnerGroup and the v2 RunnerSet, and its listener
-// goroutines (cmd/agc/internal/listener) push these session-failure conditions
-// onto whichever kind owns the session — referencing the agcv1alpha1 constants of
-// the same values. Declared here so the v2 vocabulary is complete; a value-parity
-// test in cmd/agc pins the packages together. All are advisory (abnormal-is-True)
-// and do not gate Ready. The ScaleSet acquisition path does not surface these
-// failure classes yet (Q325).
+// Listener session-failure condition vocabulary (Q309, Q325). Both acquisition
+// tiers push these conditions onto the RunnerSet that owns the session: the
+// classic listener goroutines (cmd/agc/internal/listener, shared with the v1
+// RunnerGroup — referencing the agcv1alpha1 constants of the same values, pinned
+// by a value-parity test in cmd/agc) and the ScaleSet listener
+// (cmd/agc/internal/scalesetlistener, Q325). All are advisory (abnormal-is-True)
+// and do not gate Ready. RunnerVersionTooOld is classic-only: the scale-set
+// protocol carries no runner version at session creation (the per-job JIT config
+// is minted server-side), so that failure class cannot occur on the ScaleSet
+// path. The classic listener sets only the abnormal (True) states; the ScaleSet
+// listener also publishes the healthy (False) states and clears an abnormal
+// state when the session recovers.
 const (
 	// ConditionRateLimited is True when GitHub has been rate-limiting the set's
 	// sessions for a sustained period (abnormal-is-True).
@@ -291,4 +295,12 @@ const (
 	// creation is rejected as unauthorized — the agent credentials are invalid or
 	// revoked.
 	ReasonSessionUnauthorized = "Unauthorized"
+	// ReasonPollingHealthy is the RateLimited=False reason on the ScaleSet path:
+	// message polling is healthy — either never rate-limited (published when the
+	// listener starts) or recovered from a sustained-429 episode.
+	ReasonPollingHealthy = "PollingHealthy"
+	// ReasonSessionAuthorized is the Degraded=False reason on the ScaleSet path:
+	// the session calls are authorized — either never rejected (published when the
+	// listener starts) or recovered after the credentials were fixed.
+	ReasonSessionAuthorized = "SessionAuthorized"
 )

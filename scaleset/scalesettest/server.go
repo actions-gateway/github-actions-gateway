@@ -104,6 +104,16 @@ type Server struct {
 	conflictJITNames    map[string]bool
 	conflictJITPrefixes []string
 
+	// rateLimitPolls makes every message poll answer 429 (no Retry-After) while set —
+	// the lever for the sustained-rate-limit condition path (Q325).
+	rateLimitPolls bool
+	// failSessionRefresh makes session refresh (PATCH) answer 401 while set, and
+	// failSessionCreate does the same for session create (POST) — modelling revoked
+	// credentials at each call site, the levers for the Degraded/Unauthorized
+	// condition paths (Q325).
+	failSessionRefresh bool
+	failSessionCreate  bool
+
 	adminToken    string
 	adminTokenTTL time.Duration
 
@@ -240,6 +250,36 @@ func (s *Server) jitConfigConflicts(name string) bool {
 		}
 	}
 	return false
+}
+
+// SetRateLimitPolls makes every message poll answer 429 Too Many Requests (no
+// Retry-After header — the common case, §2a-5) while on, modelling a sustained rate
+// limit — the lever for the RateLimited condition path (Q325). Parked polls wake and
+// 429 immediately.
+func (s *Server) SetRateLimitPolls(on bool) {
+	s.mu.Lock()
+	s.rateLimitPolls = on
+	s.notifyLocked()
+	s.mu.Unlock()
+}
+
+// FailSessionRefresh makes session refresh (PATCH sessions/{sid}) answer 401
+// Unauthorized while on, modelling credentials revoked after the session opened —
+// combined with ExpireQueueToken it drives the poll-401 → refresh-401 path that must
+// surface Degraded/Unauthorized (Q325).
+func (s *Server) FailSessionRefresh(on bool) {
+	s.mu.Lock()
+	s.failSessionRefresh = on
+	s.mu.Unlock()
+}
+
+// FailSessionCreate makes session create (POST sessions) answer 401 Unauthorized
+// while on, modelling revoked credentials at session creation — the lever for the
+// Start-path and session-re-create Degraded/Unauthorized paths (Q325).
+func (s *Server) FailSessionCreate(on bool) {
+	s.mu.Lock()
+	s.failSessionCreate = on
+	s.mu.Unlock()
 }
 
 // SetAdminTokenTTL controls the TTL of the admin JWT minted by the
@@ -577,6 +617,10 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
+	if s.failSessionCreate {
+		http.Error(w, `{"message":"credentials revoked"}`, http.StatusUnauthorized)
+		return
+	}
 	ss := s.scaleSets[id]
 	if ss == nil {
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
@@ -613,6 +657,10 @@ func (s *Server) handleRefreshSession(w http.ResponseWriter, r *http.Request) {
 	s.record("refresh-session id=%d", id)
 	s.refreshSessionCalls++
 	if !s.requireAdmin(w, r) {
+		return
+	}
+	if s.failSessionRefresh {
+		http.Error(w, `{"message":"credentials revoked"}`, http.StatusUnauthorized)
 		return
 	}
 	ss := s.scaleSets[id]
@@ -748,6 +796,11 @@ func (s *Server) handlePoll(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		s.mu.Lock()
+		if s.rateLimitPolls {
+			s.mu.Unlock()
+			http.Error(w, `{"message":"rate limited"}`, http.StatusTooManyRequests)
+			return
+		}
 		ss := s.scaleSets[id]
 		if ss == nil || ss.session == nil {
 			s.mu.Unlock()
