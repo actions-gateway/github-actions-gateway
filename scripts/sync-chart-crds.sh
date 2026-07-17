@@ -205,7 +205,10 @@ check() {
 	if ! diff -u "$GMC_BUNDLED_RUNNERGROUP" "$SRC_RUNNERGROUP"; then
 		echo "ERROR: the GMC-bundled RunnerGroup CRD ($GMC_BUNDLED_RUNNERGROUP) has drifted" >&2
 		echo "from the AGC authoritative copy ($SRC_RUNNERGROUP) — likely a k8s.io/api skew (Q73)." >&2
-		echo "Align the k8s.io/api versions (see Q68) and re-run 'make -C cmd/gmc manifests'." >&2
+		echo "Fix: regenerate the AGC copy (make -C cmd/agc manifests), cp it over the bundled" >&2
+		echo "path, then re-run 'make chart-crds'. ('make -C cmd/gmc manifests' cannot refresh" >&2
+		echo "the bundled copy — the type lives in cmd/agc/api/. For a k8s.io/api skew, align" >&2
+		echo "the module versions first — see Q68.)" >&2
 		rc=1
 	fi
 	if [[ "$rc" -ne 0 ]]; then

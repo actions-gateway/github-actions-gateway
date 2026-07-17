@@ -21,6 +21,37 @@ together via [`docker-bake.hcl`](../../docker-bake.hcl) (`docker buildx bake`);
 the e2e/CI image pipeline is described in
 [docker-image-speed.md](../plan/docker-image-speed.md).
 
+### Go version bumps (the `GOTOOLCHAIN=local` coupling)
+
+The official `golang` base image sets `GOTOOLCHAIN=local`, so `go build` inside
+an image build will **not** auto-download a newer toolchain. Bumping the `go`
+directive (e.g. for a stdlib CVE) is therefore a **three-part coupled change**:
+
+1. **The `go` directive** — `go.work`, every `go.mod` (including `tools/`), and
+   the three `go.work.gen` files; `make go-version-check` (part of `make check`)
+   enforces they match.
+2. **The `golang` builder digest in six Dockerfiles** —
+   `cmd/{agc,gmc,proxy,worker}/Dockerfile`, `cmd/worker/Dockerfile.wrapper`
+   (easy to miss — it has no `golang` comment header), and
+   `test/fakegithub/Dockerfile`. The pinned digest must already ship ≥ the new
+   patch, or every image build fails with
+   `go: /src/go.work requires go >= X (running Y; GOTOOLCHAIN=local)`.
+   Dependabot bumps these digests weekly (see
+   [dependency-updates.md](dependency-updates.md)), but a CVE-driven bump can't
+   wait for it: resolve the current digest with
+   `docker buildx imagetools inspect golang:1.NN` (top-level `Digest:` line) and
+   verify the patch with `docker run --rm golang:1.NN@sha256:<digest> go version`.
+3. **`vendor/modules.txt`** — it records the `go` directive of the
+   workspace-replaced modules, so the bump drifts the committed vendor tree. Run
+   `make vendor-sync` and **commit** the result: CI's `vendor-check` diffs
+   against git HEAD, so a dirty-but-correct working tree still fails.
+
+A green `make check` does **not** cover parts 2–3 — the vendor/tidy/notices
+gates are CI-only (see [testing.md](testing.md#the-make-check-pre-review-gate)). Local
+`make vulncheck` genuinely re-verifies a stdlib fix: outside the image,
+`GOTOOLCHAIN=auto` fetches the newer toolchain, and govulncheck reads that
+version — confirm you see `No vulnerabilities found.`
+
 ### Multi-arch (linux/amd64 + linux/arm64)
 
 Published images are **multi-arch** (Q97): the release pipeline

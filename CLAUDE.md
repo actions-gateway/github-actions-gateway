@@ -112,8 +112,10 @@ Human-facing docs must never link to `CLAUDE.md` (or its `AGENTS.md` symlink). T
 
 - Commit after each task is complete and validated — without asking; committing is automatic in this repo. Small, focused commits; Conventional Commits standard; never commit broken code or failing tests.
 - **`docs/STATUS.md` changes always get their own isolated commit**, separate from code and plan-doc changes — it is high-contention across concurrent branches, and isolation keeps rebase conflicts trivial to resolve.
-- Amending an unpushed commit is fine — fix up the message or staged changes without asking. Once pushed, prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
-- After pushing, check for a PR (`gh pr view`): update an existing PR's description with `gh pr edit` to reflect new commits; if none exists and the task is finished, open one per Workflow step 5.
+- Amending an unpushed commit is fine — fix up the message or staged changes without asking. Once pushed (but before a PR exists), prefer a follow-up commit; only amend + force-push (always `--force-with-lease`, never on `main`/`master`) when the user asks for it.
+- **Never push follow-up commits to a branch whose PR is already open** — PRs here squash-merge fast, and commits pushed after `gh pr create` race the merge and get stranded (they never reach `main`; it has happened). Put everything in the first push; for work requested after the PR is open, branch off `origin/main` and open a new PR. Verify what landed by content (`git show origin/main:<path>`), never by SHA — a squash orphans your SHAs.
+- After pushing, check for a PR (`gh pr view`); if none exists and the task is finished, open one per Workflow step 5.
+- No AI/Claude attribution anywhere in commits or PRs — no `Co-Authored-By`, no "Generated with" lines.
 - If a change doesn't belong in the current PR, open a separate PR for it — parallel PRs beat bundling unrelated concerns.
 - Act only on your own branch and PR. Never re-run, edit, or push to a PR or branch owned by another session; when CI fails on another session's PR, reproduce the failure locally instead.
 

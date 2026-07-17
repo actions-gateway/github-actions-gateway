@@ -43,7 +43,7 @@ The Helm charts ship the CRDs under `templates/crds/`, but the **authoritative**
 make chart-crds   # scripts/sync-chart-crds.sh — regenerates the chart CRD templates from the sources
 ```
 
-`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, controller-gen's copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)). If that check fails, align the k8s.io/api versions ([Q68](../STATUS.md)) and re-run `make -C cmd/gmc manifests`.
+`make chart-crds-check` (run by `make check`, `make manifest-validate`, and CI's `manifest-validate.yml`) fails if a chart copy drifted from its source, or if the **GMC-bundled** RunnerGroup CRD (`cmd/gmc/config/crd/bases/…runnergroups.yaml`, a bundled copy of the *imported* type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy ([Q73](../STATUS.md)). **`make -C cmd/gmc manifests` cannot refresh the bundled copy** — controller-gen walks only the GMC module's own packages (`paths="./..."`), and the `RunnerGroup` type lives in `cmd/agc/api/`. The remedy after any RunnerGroup type change: regenerate the AGC copy (`make -C cmd/agc manifests`), `cp` it over the GMC-bundled path, then `make chart-crds`. For a k8s.io/api skew, align the module versions ([Q68](../STATUS.md)) first, then do the same.
 
 ## Sync the Helm chart RBAC (after any RBAC marker change)
 
@@ -89,3 +89,11 @@ type MyReconciler struct { ... }
 ```
 
 The markers live at the top of `cmd/gmc/internal/controller/actionsgateway_controller.go`. Non-standard verbs (`bind`, `escalate`) are supported in `verbs=` and appear in the generated role.
+
+## CRD marker and API-file gotchas
+
+Hard-won, easy-to-reintroduce mistakes when editing the API types:
+
+- **gofmt corrupts `''` inside CEL markers.** A doubled single-quote in a `+kubebuilder:validation:XValidation` marker comment gets rewritten by gofmt into a single curly quote, silently breaking the CEL rule (and `''` is not a CEL quote escape anyway — that's SQL). Never use empty-string literals in XValidation: write `size(x) == 0`, not `x == ''`.
+- **`selectableFields` on one served version only.** On a multi-version CRD, declaring `+kubebuilder:selectablefield` markers on more than one version makes controller-gen hoist them in a way the apiserver rejects at CRD apply time. Declare them on a single version.
+- **v2 condition constants live in TWO manually synced files.** `api/v2alpha1/conditions.go` and `api/v2beta1/conditions.go` are byte-identical except the `package` line; a new condition type or reason must be added to **both**. There is no generator or sync check yet ([Q345](../STATUS.md) tracks adding one). The AGC reconcilers compile against the `v2alpha1` constants even though v2beta1 is the storage/hub version. A new condition needs **no** `make manifests`/`make generate` — condition types are runtime `.status.conditions[]` values, not schema.
