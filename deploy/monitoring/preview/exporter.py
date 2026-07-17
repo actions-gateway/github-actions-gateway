@@ -41,6 +41,21 @@ def jitter(seed, amp):
     return amp * math.sin(seed + time.time() / 37.0)
 
 
+def wavy_total(base_rate, elapsed, seed=0.0, amp=0.4, period=300.0):
+    """Monotonic counter total whose *rate* gently undulates over time.
+
+    A plain int(base_rate * elapsed) yields a dead-straight rate() line. This
+    integrates a slow sinusoid into the total so the derived rate()/increase()
+    panels read like a live system with ebbing and flowing load. Stays
+    monotonically non-decreasing (a counter must never go backwards): the
+    instantaneous rate is base_rate * (1 + amp*cos(...)), which is > 0 for any
+    amp < 1.
+    """
+    w = (2.0 * math.pi) / period
+    total = base_rate * (elapsed + (amp / w) * (math.sin(w * elapsed + seed) - math.sin(seed)))
+    return int(max(0.0, total))
+
+
 def hist_lines(name, labels_prefix, buckets, total_rate, center_idx, elapsed):
     """Emit cumulative *_bucket/_sum/_count for a histogram.
 
@@ -75,7 +90,8 @@ def render():
 
     for ns, rg in TENANTS:
         rate = {"gpu-a100": 0.12, "cpu-standard": 0.7, "gpu-2x": 0.05}.get(rg, 0.2)
-        L.append(f'actions_gateway_jobs_acquired_total{{namespace="{ns}",runner_group="{rg}"}} {int(rate * elapsed)}')
+        acquired = wavy_total(rate, elapsed, seed=hash((ns, rg)) % 7)
+        L.append(f'actions_gateway_jobs_acquired_total{{namespace="{ns}",runner_group="{rg}"}} {acquired}')
 
     for ns in NAMESPACES:
         L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {int(0.01 * elapsed)}')
@@ -122,7 +138,7 @@ def render():
     # split mostly-succeeded by result.
     for ns, rs in SCALESETS:
         rate = {"gpu-a100": 0.12, "cpu-standard": 0.7}.get(rs, 0.2)
-        assigned = int(rate * elapsed)
+        assigned = wavy_total(rate, elapsed, seed=hash((ns, rs)) % 7)
         provisioned = int(assigned * 0.98)
         completed = int(provisioned * 0.95)
         L.append(f'actions_gateway_scaleset_jobs_assigned_total{{namespace="{ns}",runner_set="{rs}"}} {assigned}')
