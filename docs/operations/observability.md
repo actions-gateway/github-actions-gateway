@@ -968,6 +968,24 @@ The default acquisition protocol (Q264). These panels are the scale-set analog o
 | HPA desired vs. current | `kube_horizontalpodautoscaler_status_*_replicas` | Time series |
 | ResourceQuota usage | `kube_resourcequota{type="used"}` filtered by namespace | Bar gauge |
 
+**Row 7 — Reliability Signals (Q315)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Job acquisition errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_job_acquisition_errors_total[5m]))` | Time series |
+| Message poll errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total[5m]))` | Time series |
+| RenewJob teardowns/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_renew_job_teardowns_total[5m]))` | Time series |
+| Worker pods reaped/s (by reason) | `sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
+| Broker token propagation retries/s | `sum by (runner_group) (rate(actions_gateway_broker_token_propagation_retries_total[5m]))` | Time series |
+
+**Row 8 — Fan-out Safety (Q260 / Q266)**
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Duplicate job deliveries/s | `sum by (runner_group) (rate(actions_gateway_jobs_duplicate_delivery_total[5m]))` | Time series |
+| Abandoned-delivery completions/s (by outcome) | `sum by (runner_group, outcome) (rate(actions_gateway_abandoned_delivery_completions_total[5m]))` | Time series |
+| Fan-out loser recycle deferred/s (by outcome) | `sum by (runner_group, outcome) (rate(actions_gateway_fanout_loser_recycle_deferred_total[5m]))` | Time series |
+
 ### Platform dashboard
 
 ![The platform/fleet Grafana dashboard rendered against a live Prometheus: fleet-overview stats, GMC control-plane reconcile health, a per-gateway condition state-timeline, and cross-tenant throughput rows.](../assets/grafana-dashboard-platform.png)
