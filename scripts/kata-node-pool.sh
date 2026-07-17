@@ -2,7 +2,7 @@
 #
 # Provision (or print) a GKE Standard node pool with nested virtualization
 # enabled on a nested-virt-capable machine family — the node-level prerequisite
-# for Kata Containers (see docs/plan/kata-on-gke.md and
+# for Kata Containers (see docs/plan/archive/kata-on-gke.md and
 # docs/operations/kata-ci-spike-runbook.md). Kata runs each pod inside a
 # lightweight VM via QEMU/KVM; GKE nodes are themselves GCE VMs, so KVM must be
 # exposed to the node guest. This is a node-pool property — the runner pod that
@@ -101,7 +101,11 @@ main() {
 		# katacontainers.io/kata-runtime: kata-deploy SETS that label itself once
 		# the runtime is installed, and the RuntimeClass schedules pods on it.
 		# Pre-applying it here would let a Kata pod land on a node before the
-		# runtime exists.
+		# runtime exists. This pool is fixed-size, so the separation is free; a
+		# pool that AUTOSCALES FROM ZERO must additionally bake the runtime label
+		# into --node-labels or the autoscaler can never simulate a match and
+		# Kata pods stay Pending forever (found live under Q286 — see
+		# scripts/dogfood/e2e-setup.sh and docs/operations/kata-dind-workloads.md).
 		--node-labels "${pool_label}"
 	)
 

@@ -7,7 +7,7 @@ runner pod.
 **This was run live and passed** (GKE `1.35.5-gke.1241004`, Ubuntu 24.04 /
 containerd 2.1.5, `c2-standard-4` nested-virt, Kata 3.32.0 / QEMU). Results and
 the full constraint list are in
-[Kata Containers on GKE](../plan/kata-on-gke.md); the cluster-side how-to for
+[Kata Containers on GKE](../plan/archive/kata-on-gke.md); the cluster-side how-to for
 operators is [Running DinD workloads under Kata](kata-dind-workloads.md).
 
 Steps below mutate cloud resources. Use a **throwaway project or cluster** — never
@@ -219,4 +219,4 @@ Delete any survivor with `gcloud compute disks delete <name> --zone="$ZONE"`.
 needs a GAG e2e runner image bundling `dockerd`, `kind` and the Go/test toolchain,
 which does not exist yet. Everything beneath it — Docker, `kind`, image loading,
 pod scheduling in the inner cluster — is proven above. See
-[CI integration](../plan/kata-on-gke.md#ci-integration--the-follow-up).
+[CI integration](../plan/archive/kata-on-gke.md#ci-integration--the-follow-up).

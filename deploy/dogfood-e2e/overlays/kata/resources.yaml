@@ -4,7 +4,7 @@
 # kata`) with NO `privileged: true` anywhere — the hypervisor, not host
 # privilege, is the isolation boundary. Every non-obvious line below was
 # live-validated in the Q226 spike (deploy/kata-ci/runner-pod.yaml is the
-# single-pod reference; docs/plan/kata-on-gke.md has the evidence).
+# single-pod reference; docs/plan/archive/kata-on-gke.md has the evidence).
 #
 # SECURITY INVARIANT — nothing here may be relaxed to `privileged: true`. If a
 # step proves too tight, add a single guest-scoped capability and record why.
@@ -75,10 +75,21 @@ spec:
               #    declares VOLUME /var/lib/docker and Kata pre-mounts virtiofs
               #    there, so test for OUR device — not merely the mountpoint —
               #    and mount ext4 over the virtiofs entry.
-              blkid /dev/dockerblk >/dev/null 2>&1 || mkfs.ext4 -F /dev/dockerblk >/dev/null
+              #    (Q286, root-caused live) Do NOT gate mkfs on blkid:
+              #    docker:dind's blkid is BUSYBOX blkid, which exits 0 on a
+              #    blank device, so `blkid || mkfs` skips the mkfs on every
+              #    fresh PVC and the mount fails EINVAL (no filesystem). The
+              #    Q226 spike never hit this because its static PVC had been
+              #    formatted once by hand. Mount-first, mkfs on failure: the
+              #    device is a per-pod disposable cache, so reformat-on-any-
+              #    mount-failure is always safe.
+              [ -b /dev/dockerblk ] || { echo "FATAL: /dev/dockerblk is not a block device"; ls -la /dev/dockerblk 2>&1 || true; exit 1; }
               mkdir -p /var/lib/docker
               grep -q "^/dev/dockerblk /var/lib/docker " /proc/mounts \
-                || mount -t ext4 /dev/dockerblk /var/lib/docker
+                || mount -t ext4 /dev/dockerblk /var/lib/docker 2>/dev/null \
+                || { mkfs.ext4 -F /dev/dockerblk >/dev/null \
+                     && mount -t ext4 /dev/dockerblk /var/lib/docker; } \
+                || { echo "FATAL: ext4 mkfs+mount of /dev/dockerblk failed:"; dmesg 2>/dev/null | tail -5 || true; exit 1; }
 
               # 2. The Kata guest's /dev has no kernel-log device, and the inner
               #    kubelet hard-requires one (needs CAP_MKNOD; it is the GUEST's
@@ -128,6 +139,17 @@ spec:
               echo "dockerd up on overlay2 (tcp://0.0.0.0:2375); kind network ready"
               trap 'kill "$pid" 2>/dev/null' TERM INT
               wait "$pid"
+          # Native-sidecar startup gate (Q286, found live): without it the
+          # kubelet starts the runner as soon as the sidecar process has
+          # STARTED once — if dockerd is still coming up (or crash-looping),
+          # the runner registers, takes a job, and fails it with "Cannot
+          # connect to the Docker daemon". Gate main-container start on
+          # dockerd actually listening.
+          startupProbe:
+            tcpSocket:
+              port: 2375
+            periodSeconds: 5
+            failureThreshold: 36
           securityContext:
             # THE headline property of this variant: no privileged container.
             privileged: false
@@ -155,16 +177,28 @@ spec:
                 - NET_ADMIN         # docker bridge + iptables NAT
                 - SYS_RESOURCE      # raise file-descriptor / process rlimits
                 - SYS_PTRACE        # runc nsenter / process inspection
-          # Same measured baseline as ../dind (Q248: dind peaked 1308m /
-          # 2343Mi — the in-DinD kind+CNI cluster is the memory-heavy half),
-          # with one Kata-specific difference: CPU LIMITS ARE LOAD-BEARING
-          # here. Kata sizes the guest VM's vCPUs from the pod's CPU limits, so
-          # the dind overlay's "requests-only, let it burst" idiom would cap
-          # the whole guest at the default vCPU count. Add the RuntimeClass
-          # overhead (250m/160Mi) when sizing nodes.
+                # NOTE (Q286): a nested workload can only gain caps present in
+                # THIS bounding set, so a pod inside the in-dind kind cluster
+                # that requests a cap absent here fails with "unable to apply
+                # caps: operation not permitted". The fix is to tighten the
+                # nested workload (drop the cap request), NOT to widen this
+                # set — the e2e Vault's IPC_LOCK was dropped in #658. Only add
+                # a cap here if a workload genuinely cannot drop it.
+          # Sized from the Q248 dind measurements, then CORRECTED live under
+          # Q286: under Kata the limits are the GUEST's whole world — vCPUs
+          # come from CPU limits and guest RAM (incl. page cache for image
+          # pulls and the kind cluster) from memory limits, with none of the
+          # burst-to-node headroom the dind overlay's requests-only idiom
+          # enjoys. The first live run with the dind-derived split (dind
+          # 3cpu/4Gi, runner 5cpu/3Gi) starved the kind side: calico-node
+          # exec probes timed out and two specs failed on enforcement/rollout
+          # deadlines. The kind cluster lives INSIDE this container, so it
+          # gets the even CPU split and the larger memory share. Add the
+          # RuntimeClass overhead (250m/160Mi) when sizing nodes; guest total
+          # (4+4 cpu, 12Gi+overhead) fits one worker per c2-standard-8.
           resources:
-            requests: { cpu: "1", memory: "3Gi" }
-            limits: { cpu: "3", memory: "4Gi" }
+            requests: { cpu: "2", memory: "6Gi" }
+            limits: { cpu: "4", memory: "8Gi" }
           volumeDevices:
             - name: docker-blk
               devicePath: /dev/dockerblk
@@ -179,20 +213,21 @@ spec:
           env:
             - name: DOCKER_HOST
               value: "tcp://localhost:2375"
-          # Q248 measured the runner at ~4940m / 1034Mi peak (it drives the e2e
-          # specs + kubectl/helm/kind CLI). CPU limit 5 ≈ that peak — explicit
-          # here (unlike ../dind) because Kata turns CPU limits into guest
-          # vCPUs; memory as in ../dind. requests runner(3)+dind(1)+overhead
-          # (0.25) still packs one worker per c2-standard-8 e2e node.
+          # Q248 measured the runner at ~4940m / 1034Mi peak (compile-heavy;
+          # test execution mostly waits on the cluster). CPU limit 4 splits
+          # the guest evenly with the dind side (see above — the first live
+          # run's 5/3 split starved the kind cluster); memory bumped for
+          # guest page cache. requests runner(2)+dind(2)+overhead(0.25)
+          # still packs one worker per c2-standard-8 e2e node.
           resources:
-            requests: { cpu: "3", memory: "1Gi" }
-            limits: { cpu: "5", memory: "3Gi" }
+            requests: { cpu: "2", memory: "2Gi" }
+            limits: { cpu: "4", memory: "4Gi" }
       volumes:
         # Per-worker raw block device for /var/lib/docker (step 1 above). A
         # generic ephemeral volume so each ephemeral worker pod gets its own
         # PVC, created and DELETED with the pod — no orphaned Persistent Disks
         # (the Q226 spike's static PVC outlived its cluster; see
-        # docs/plan/kata-on-gke.md gotchas).
+        # docs/plan/archive/kata-on-gke.md gotchas).
         - name: docker-blk
           ephemeral:
             volumeClaimTemplate:
@@ -209,7 +244,7 @@ spec:
 # CDN-fronted (a CIDR allowlist would rot; an FQDN allowlist isn't enforceable
 # on GKE DPv2 — Q245). The durable hardening that would let this variant carry
 # untrusted-PR CI is an in-cluster pull-through mirror + tight egress — future
-# work, tracked in docs/plan/kata-on-gke.md. Until then Kata hardens the
+# work, tracked in docs/plan/archive/kata-on-gke.md. Until then Kata hardens the
 # kernel-escape axis while egress stays trusted-CI-shaped.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

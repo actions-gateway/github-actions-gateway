@@ -18,10 +18,11 @@
 #   REPO         GitHub repo slug (e.g. actions-gateway/github-actions-gateway)
 #
 # Optional:
-#   E2E_VARIANT  Worker-isolation overlay: "dind" (privileged DinD — the
-#                live-validated default) or "kata" (unprivileged kind in a Kata
-#                micro-VM — Q286; flips to the default once AC#5 runs green,
-#                per the secure-by-default rule). Selects
+#   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
+#                micro-VM — the default, live-validated green under Q286) or
+#                "dind" (privileged DinD — explicit opt-in fallback for
+#                environments without nested virtualization, per the
+#                secure-by-default rule). Selects
 #                deploy/dogfood-e2e/overlays/<variant>; the two share one base,
 #                so switching variants is re-running this script.
 set -euo pipefail
@@ -30,7 +31,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
 
-E2E_VARIANT="${E2E_VARIANT:-dind}"
+E2E_VARIANT="${E2E_VARIANT:-kata}"
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"

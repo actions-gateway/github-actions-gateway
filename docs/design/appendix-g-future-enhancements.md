@@ -699,4 +699,24 @@ paying for itself.
 
 ---
 
+## G.14. Kata e2e untrusted-PR posture — tight egress + in-cluster pull-through mirror
+
+The Kata worker variant (the dogfood e2e default since Q286) hardens the
+kernel-escape axis, but its egress stays trusted-CI-shaped: the e2e tenant runs an
+additive open-egress NetworkPolicy because the suite pulls from Docker Hub / quay /
+registry.k8s.io / get.helm.sh — all CDN-fronted, so a CIDR allowlist would rot, and
+an FQDN allowlist is not enforceable on GKE Dataplane V2 (Q245). Until that changes,
+Kata-isolated runners are still only suitable for *trusted* CI.
+
+**The durable answer** that would let the variant carry untrusted / OSS-PR CI: an
+in-cluster pull-through registry mirror (so workers need no direct registry egress)
+plus a tight egress policy scoped to the mirror, GitHub, and DNS. Operator-facing
+context: [kata-dind-workloads.md](../operations/kata-dind-workloads.md).
+
+**Status — parked, no Queue row.** Trigger: GAG starts running CI for untrusted /
+external-contributor PRs on its own runners, or a user asks for the hardened
+posture as a supported configuration.
+
+---
+
 ← [Cost Model](appendix-f-cost-model.md) | [Back to index](README.md)

@@ -18,7 +18,7 @@ install, and the worker `podTemplate` field that selects it.
 
 It is operator-focused. For *why* GAG chose Kata over Sysbox/rootless and
 the provider-agnostic design, see
-[Kata Containers on GKE](../plan/kata-on-gke.md); for the executable
+[Kata Containers on GKE](../plan/archive/kata-on-gke.md); for the executable
 go/no-go validation steps, see the
 [Kata-on-GKE spike runbook](kata-ci-spike-runbook.md).
 
@@ -108,7 +108,9 @@ restricted by machine family:
 | Node image | **`UBUNTU_CONTAINERD`**, or `COS_CONTAINERD` at `1.28.4-gke.1083000`+. |
 | Flag | `--enable-nested-virtualization` (GA). Accepted by *both* `gcloud container node-pools create` and `gcloud container clusters create` — prefer the cluster form so a capacity stockout fails fast instead of wedging the cluster. |
 | Workload Identity | `--workload-pool` + `--workload-metadata=GKE_METADATA`. **Required**, not optional — Kata does not block the metadata server. See [the security rationale](#the-security-rationale). |
-| Node label | Label the pool with your **own** label (e.g. `gag.dev/kata-ci=true`) and use it to scope the Kata installer. Do **not** reuse `katacontainers.io/kata-runtime` — `kata-deploy` sets that itself once the runtime is installed, and the `RuntimeClass` schedules on it. |
+| Node label | Label the pool with your **own** label (e.g. `gag.dev/kata-ci=true`) and use it to scope the Kata installer. Do **not** reuse `katacontainers.io/kata-runtime` as the *installer* scope — `kata-deploy` sets that itself once the runtime is installed, and the `RuntimeClass` schedules on it. |
+| Autoscaling from zero | If the pool autoscales 0→N, **also bake `katacontainers.io/kata-runtime=true` into the pool's `--node-labels`** (found live under Q286): the cluster autoscaler simulates scheduling against the pool's *configured* labels only, so a label that kata-deploy applies post-install can never trigger the scale-up and Kata pods stay Pending forever. The window where a pod binds before kata-deploy finishes resolves via kubelet sandbox-create retries. Fixed-size pools should keep the two labels separate. |
+| Taints | If the pool is tainted, give the kata-deploy chart a matching `tolerations:` value (the chart ships none) — otherwise the installer can never reach the only nodes it targets (found live under Q286). |
 
 The repo ships a parameterized provisioning script —
 [`scripts/kata-node-pool.sh`](../../scripts/kata-node-pool.sh) — that wraps
@@ -265,7 +267,12 @@ reference implementation is the `args:` block of
    `volumeMode: Block` + `volumeDevices`, then `mkfs.ext4` it inside the
    guest. Beware: the `docker:dind` image declares `VOLUME /var/lib/docker`
    and Kata pre-mounts virtiofs there, so a "is it mounted?" check passes and
-   silently skips your ext4 mount — test for the **device**.
+   silently skips your ext4 mount — test for the **device**. Also do **not**
+   gate the `mkfs` on `blkid` (root-caused live under Q286): `docker:dind`'s
+   `blkid` is **busybox** blkid, which exits 0 even on a blank device, so
+   `blkid || mkfs` skips the format on every fresh volume and the mount fails
+   `EINVAL`. Mount-first and `mkfs` on failure instead — the device is a
+   disposable per-pod cache, so reformatting on any mount failure is safe.
 2. **`/dev/kmsg` does not exist in the Kata guest**, and a nested kubelet
    requires it. `mknod /dev/kmsg c 1 11` (needs `CAP_MKNOD`).
 3. **`/sys/fs/cgroup` is read-only** for a non-privileged container, so `runc`
@@ -292,6 +299,16 @@ CHOWN DAC_OVERRIDE FSETID FOWNER MKNOD NET_RAW SETGID SETUID
 SETFCAP SETPCAP NET_BIND_SERVICE SYS_CHROOT KILL AUDIT_WRITE   # Docker's defaults
 SYS_ADMIN NET_ADMIN SYS_RESOURCE SYS_PTRACE                    # rootful dockerd + runc
 ```
+
+One more rule, found live under Q286: a container **inside** the nested kind
+cluster can only gain capabilities present in this bounding set — nested `runc`
+fails with `unable to apply caps: operation not permitted` otherwise. When a
+CI workload trips this, prefer **tightening the workload** (drop the cap it
+requests) over widening the set above, so the worker's capability floor stays
+as small as possible. GAG's e2e suite hit it once: a dev-mode test Vault
+requested `IPC_LOCK`, which was dropped from the Vault pod (with
+`SKIP_SETCAP=true`) rather than added here — a dev-mode Vault never mlocks.
+Only widen the bounding set for a workload that genuinely cannot drop the cap.
 
 Two are easy to miss: **`FOWNER`** (image layer unpack `chmod`s files it does
 not own) and **`SYS_CHROOT`** (`runc` `setns()` into the container mount
@@ -420,7 +437,7 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
 - **Validated as an architecture; GAG's own CI cutover is in flight.** The
   unprivileged `dockerd` + `kind` path was proven end-to-end on GKE
   (`1.35.5-gke.1241004`, Ubuntu 24.04, `c2-standard-4` nested-virt, Kata
-  3.32.0/QEMU) — see [Kata Containers on GKE](../plan/kata-on-gke.md) for the
+  3.32.0/QEMU) — see [Kata Containers on GKE](../plan/archive/kata-on-gke.md) for the
   evidence. GAG's dogfood e2e ships the Kata worker shape as
   [`deploy/dogfood-e2e/overlays/kata`](../../deploy/dogfood-e2e/overlays/kata)
   (selected with `E2E_VARIANT=kata scripts/dogfood/e2e-start.sh`); no bundled
@@ -438,7 +455,7 @@ egress to `169.254.169.254/32`. Kata alone is not the control.
   the `securityProfile` each needs.
 - [Kata-on-GKE spike runbook](kata-ci-spike-runbook.md) — executable
   go/no-go steps for the unprivileged `dockerd` + `kind` runner.
-- [Kata Containers on GKE](../plan/kata-on-gke.md) — design rationale, the
+- [Kata Containers on GKE](../plan/archive/kata-on-gke.md) — design rationale, the
   options rejected (Sysbox, rootless, kindbox), and the provider-agnostic
   reference architecture.
 - [Appendix B — Worker isolation](../design/appendix-b-worker-isolation.md)

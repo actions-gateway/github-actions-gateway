@@ -8,8 +8,8 @@ one or the other; the overlay directory *is* the architectural diff.
 deploy/dogfood-e2e/
   base/                 # isolation-agnostic: namespace, quota, ActionsGateway, RunnerSet
   overlays/
-    dind/               # privileged DinD  — simple, NO isolation (trusted CI only)   ← validated
-    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← built (Q286); live AC#5 run pending
+    dind/               # privileged DinD  — simple, NO isolation (trusted CI only)   ← opt-in fallback
+    kata/               # Kata micro-VM    — strong isolation (untrusted PRs)          ← the default (live-validated, Q286)
 ```
 
 ## The two variants
@@ -68,9 +68,10 @@ github-hosted). The RunnerSet is authored at **v2beta1** — ScaleSet-only, so i
 declares exactly one `runnerLabel` (`gag-ci-e2e`), and `GAG_E2E_RUNNER` is that
 single JSON string, not a Classic multi-label array. Prefer the on-demand
 `scripts/dogfood/e2e-start.sh` / `e2e-stop.sh`, which set this **and** spin the
-tenant AGC up/down (Q231); `E2E_VARIANT=dind|kata` selects the overlay (default
-`dind` until the Q286 flip). This is a dogfood/dev config, not a shipped product
-install.
+tenant AGC up/down (Q231); `E2E_VARIANT=kata|dind` selects the overlay (default
+`kata` since the Q286 flip; `dind` is the explicit opt-in fallback for
+environments without nested virtualization). This is a dogfood/dev config, not a
+shipped product install.
 
 ### Why `kubectl apply -k`, not a standalone kustomize binary
 
@@ -134,14 +135,23 @@ registry — version-pinned this time — rather than working around it.
   `maxWorkers` pods land on two nodes and concurrent e2e legs don't CPU-throttle each
   other. Full rationale + the measured table:
   [dogfood-runner-rightsizing.md § e2e worker sizing](../../docs/plan/dogfood-runner-rightsizing.md#e2e-worker-sizing--measured-then-derived-dind-2026-07-07).
-- **kata:** overlay built ([Q286](../../docs/STATUS.md#Q286)); the remaining gate is
-  a live green `make e2e` through it, then the default flip
-  (checklist: [kata-on-gke.md](../../docs/plan/kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate)).
-  Sizing ports the Q248 measurements onto `c2-standard-8` with explicit CPU limits
-  (runner 5 / dind 3) because Kata turns CPU limits into guest vCPUs — the dind
-  overlay's requests-only idiom would cap the whole guest at the default vCPU count.
+- **kata:** live-validated green end-to-end on GAG (2026-07-16, Q286) and now the
+  default variant. The live session root-caused and fixed five wiring defects
+  (Workload Identity prerequisite, helm label typing, kata-deploy tolerations,
+  autoscale-from-zero labeling, busybox-blkid skipping the mkfs) and added a
+  dockerd `startupProbe` so the runner cannot take jobs before the daemon is up —
+  the findings are recorded in
+  [kata-on-gke.md](../../docs/plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16).
+  Sizing is Kata-specific, not a straight port of the Q248 dind measurements:
+  Kata turns CPU limits into guest vCPUs and memory limits into the guest's whole
+  RAM (page cache included), with none of the dind overlay's burst-to-node
+  headroom — the first live run with the dind-derived split starved the in-dind
+  kind cluster (calico-node probe timeouts). The overlay splits the guest evenly
+  (dind 4 cpu / 8Gi, runner 4 cpu / 4Gi); rationale inline in
+  [`overlays/kata/resources.yaml`](overlays/kata/resources.yaml).
 
 The dogfood e2e path (this tree + `scripts/dogfood/e2e-{setup,start,stop}.sh`)
 is authored at `actions-gateway.com/v2beta1` (ScaleSet, single `runnerLabel`) and
 was live-validated green on GAG on 2026-07-07 (Q231, done). The Kata isolation
-variant remains open under [Q286](../../docs/STATUS.md#Q286).
+variant was live-validated green and made the default on 2026-07-17
+([Q286 — archive/kata-on-gke.md](../../docs/plan/archive/kata-on-gke.md)).
