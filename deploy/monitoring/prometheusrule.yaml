@@ -223,6 +223,44 @@ spec:
             summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
 
+        # Page: scale-set tier wedged — jobs are being assigned but none are
+        # getting provisioned (Q311). This is the scale-set analog of
+        # ActionsGatewayNoActiveSessions: a ScaleSet-protocol RunnerSet never
+        # emits actions_gateway_active_sessions, so throughput stalls are only
+        # visible as demand (assigned) flowing while supply (provisioned) is flat.
+        - alert: ActionsGatewayScaleSetProvisioningStalled
+          expr: |
+            (
+              sum by (namespace, runner_set) (
+                rate(actions_gateway_scaleset_jobs_assigned_total[15m])
+              ) > 0
+            )
+            unless
+            (
+              sum by (namespace, runner_set) (
+                rate(actions_gateway_scaleset_jobs_provisioned_total[15m])
+              ) > 0
+            )
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetprovisioningstalled"
+            summary: "Scale-set provisioning stalled for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "The scale-set acquisition tier is receiving JobAssigned messages but has provisioned no worker pods for 10+ minutes — the tier is wedged. Acquired jobs will not start. Check actions_gateway_scaleset_provision_errors_total, the worker-pod ResourceQuota, and the listener session health."
+
+        # Ticket: scale-set provision attempts failing at a sustained rate (Q311)
+        - alert: ActionsGatewayScaleSetProvisionErrors
+          expr: |
+            rate(actions_gateway_scaleset_provision_errors_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetprovisionerrors"
+            summary: "Scale-set provision errors for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "The scale-set acquisition tier is failing to provision worker pods (JIT-config mint or pod create) at >0.1/s for 10m. A transient failure retries on a later poll, but a sustained rate means provisioning is degraded — check the run service's generate-jitconfig responses and namespace quota headroom."
+
         # Ticket: egress proxy denying CONNECTs to off-allowlist destinations —
         # an SSRF / egress-policy signal, sharper than dial_errors (Q316)
         - alert: ActionsGatewayProxyConnectDenied
@@ -299,5 +337,27 @@ spec:
               +
               sum by (namespace) (
                 rate(actions_gateway_job_acquisition_errors_total[5m])
+              )
+            )
+
+        # Scale-set provision success rate — fraction of provision attempts that
+        # succeeded, per namespace. The scale-set analog of
+        # job_acquisition_success_rate: a provision attempt either succeeds
+        # (…_jobs_provisioned_total) or fails (…_provision_errors_total). Both
+        # series carry namespace+runner_set; grouping by namespace only keeps
+        # this comparable to the classic acquisition rate above.
+        - record: actions_gateway:scaleset_provision_success_rate:rate5m
+          expr: |
+            sum by (namespace) (
+              rate(actions_gateway_scaleset_jobs_provisioned_total[5m])
+            )
+            /
+            (
+              sum by (namespace) (
+                rate(actions_gateway_scaleset_jobs_provisioned_total[5m])
+              )
+              +
+              sum by (namespace) (
+                rate(actions_gateway_scaleset_provision_errors_total[5m])
               )
             )

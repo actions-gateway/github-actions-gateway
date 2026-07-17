@@ -365,7 +365,8 @@ func (s *ActionsGatewaySpec) GitHubAppSecretName() string {
 // uniform v2 status/condition contract (§H.7).
 type ActionsGatewayStatus struct {
 	// Conditions are the observed conditions of the gateway. Known types: Ready,
-	// AGCAvailable, CredentialUnavailable, Degraded.
+	// AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed,
+	// RunnerSetsDegraded.
 	//
 	// +optional
 	// +listType=map

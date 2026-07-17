@@ -834,27 +834,44 @@ func buildMetricsServiceMonitor(ag *gmcv1alpha1.ActionsGateway, smName, appName,
 	sm.SetNamespace(ag.Namespace)
 	sm.SetLabels(metricsServiceLabels(ag, appName))
 
+	endpoint := map[string]interface{}{
+		"port":   "metrics",
+		"path":   "/metrics",
+		"scheme": "https",
+		"tlsConfig": map[string]interface{}{
+			"serverName": metricsServiceDNSName(ag, svcName),
+			"ca":         secretRef(metricsCACertKey),
+			"cert":       secretRef(corev1.TLSCertKey),
+			// keySecret is a bare SecretKeySelector (no enclosing "secret").
+			"keySecret": map[string]interface{}{
+				"name": metricsClientSecretName,
+				"key":  corev1.TLSPrivateKeyKey,
+			},
+		},
+	}
+
+	// The proxy exposes no intrinsic `namespace` label on its metrics (it does not
+	// know its tenant), so the tenant Grafana dashboard's proxy panels have nothing
+	// to select on and would show fleet-wide totals (Q314). Stamp `namespace` from
+	// the scrape target's namespace — which, since the proxy runs in the tenant
+	// namespace, is exactly the tenant — so those panels can filter by $namespace.
+	// The AGC's metrics already carry an app-set `namespace` label, so its
+	// ServiceMonitor needs no such relabeling.
+	if appName == proxyAppName {
+		endpoint["relabelings"] = []interface{}{
+			map[string]interface{}{
+				"action":       "replace",
+				"sourceLabels": []interface{}{"__meta_kubernetes_namespace"},
+				"targetLabel":  "namespace",
+			},
+		}
+	}
+
 	spec := map[string]interface{}{
 		"selector": map[string]interface{}{
 			"matchLabels": toStringMapIface(metricsServiceLabels(ag, appName)),
 		},
-		"endpoints": []interface{}{
-			map[string]interface{}{
-				"port":   "metrics",
-				"path":   "/metrics",
-				"scheme": "https",
-				"tlsConfig": map[string]interface{}{
-					"serverName": metricsServiceDNSName(ag, svcName),
-					"ca":         secretRef(metricsCACertKey),
-					"cert":       secretRef(corev1.TLSCertKey),
-					// keySecret is a bare SecretKeySelector (no enclosing "secret").
-					"keySecret": map[string]interface{}{
-						"name": metricsClientSecretName,
-						"key":  corev1.TLSPrivateKeyKey,
-					},
-				},
-			},
-		},
+		"endpoints": []interface{}{endpoint},
 	}
 	// unstructured.SetNestedMap deep-copies spec into sm.Object; it only errors on
 	// non-JSON value types, and every value above is a JSON-compatible type.

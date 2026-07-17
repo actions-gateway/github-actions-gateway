@@ -15,7 +15,7 @@
 # see runner-pod.yaml. That asymmetry IS the Kata model.
 #
 # Validated live on GKE 1.35.5-gke.1241004, Ubuntu 24.04 / containerd 2.1.5,
-# c2-standard-4 with nested virtualization. See docs/plan/kata-on-gke.md.
+# c2-standard-4 with nested virtualization. See docs/plan/archive/kata-on-gke.md.
 
 # Install ONLY on the nested-virt CI pool.
 #

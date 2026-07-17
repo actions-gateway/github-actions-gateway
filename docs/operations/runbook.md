@@ -167,6 +167,14 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Ticket.** The winner of a fanned-out job is failing to issue `completejob` on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. See [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
 
+### ActionsGatewayScaleSetProvisioningStalled
+
+**Page.** The scale-set acquisition tier (the default protocol) is receiving `JobAssigned` messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start. A ScaleSet-protocol RunnerSet emits no `actions_gateway_active_sessions`, so this demand-vs-supply signal is the scale-set analog of [`active_sessions` Flatlining at Zero](#active_sessions-flatlining-at-zero). Respond with [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
+
+### ActionsGatewayScaleSetProvisionErrors
+
+**Ticket.** The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate. A transient failure retries on a later poll; a sustained rate means provisioning is degraded. Check the run service's `generate-jitconfig` responses and namespace quota headroom, then triage as for [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
+
 ### ActionsGatewayProxyConnectDenied
 
 **Ticket.** The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal. Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts).
@@ -203,6 +211,16 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 3. Check `RateLimited` condition — if true, reduce session load or wait for the burst to subside.
 4. Check `message_poll_errors_total` — persistent poll errors indicate a broken GitHub connection.
 5. If sessions are active and no errors, the queue may simply be empty.
+
+### Scale-set provisioning stalled
+
+The scale-set tier is the default protocol; it emits no `active_sessions` gauge, so a wedge shows up as `scaleset_jobs_assigned_total` climbing while `scaleset_jobs_provisioned_total` stays flat.
+
+1. Confirm the wedge: `scaleset_jobs_assigned_total` is rising but `scaleset_jobs_provisioned_total` is not, for the affected `namespace`/`runner_set`.
+2. Check the provision-error rate: `rate(actions_gateway_scaleset_provision_errors_total[5m])`. A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs (`kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100`) for `generate-jitconfig` errors and worker-pod create rejections.
+3. Check the worker-pod `ResourceQuota` (see [Adjusting Tenant Quota](#adjusting-tenant-quota)) and the `WorkerQuotaExceeded` / `WorkersUnschedulable` conditions — a full quota or an unschedulable pod stalls provisioning with no provision *error*.
+4. If provision errors are zero and quota is healthy, check the listener session itself: the RunnerSet's `Ready`/`RateLimited`/`Degraded` conditions (`kubectl get runnerset -n <namespace> -o yaml`) surface a rate-limited or unauthorized scale-set session (Q325).
+5. If the queue is genuinely empty, `scaleset_jobs_assigned_total` will also be flat — the alert only fires when assignment is *active*, so a flat-both state is benign.
 
 ---
 

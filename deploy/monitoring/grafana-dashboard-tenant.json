@@ -38,14 +38,14 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values(actions_gateway_active_sessions, namespace)",
+        "definition": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "namespace",
         "query": {
-          "query": "label_values(actions_gateway_active_sessions, namespace)",
+          "query": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
           "refId": "namespace"
         },
         "refresh": 2,
@@ -441,9 +441,115 @@
     },
     {
       "type": "row",
-      "title": "Tenant Health Conditions",
+      "title": "Scale-set Acquisition Tier (per runner_set)",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "id": 40,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Jobs assigned vs provisioned/min",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 31 },
+      "id": 41,
+      "description": "The default acquisition protocol (Q264). A ScaleSet-protocol RunnerSet emits no actions_gateway_active_sessions or jobs_acquired_total, so its throughput is only visible here. A persistent gap (assigned above provisioned) means provisioning is lagging — correlate with the provision-errors panel.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_assigned_total{namespace=~\"$namespace\"}[5m])) * 60",
+          "legendFormat": "assigned {{namespace}}/{{runner_set}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_provisioned_total{namespace=~\"$namespace\"}[5m])) * 60",
+          "legendFormat": "provisioned {{namespace}}/{{runner_set}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Provision success rate",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 31 },
+      "id": 42,
+      "description": "provisioned / (provisioned + provision errors), from the actions_gateway:scaleset_provision_success_rate:rate5m recording rule. The scale-set analog of the classic job-acquisition success rate.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.9 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "actions_gateway:scaleset_provision_success_rate:rate5m{namespace=~\"$namespace\"}",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Provision errors/s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 31 },
+      "id": 43,
+      "description": "Failed provision attempts (JIT-config mint or worker pod create). A transient failure retries on a later poll; a sustained rate is alert-worthy (ActionsGatewayScaleSetProvisionErrors).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 0.0001 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{runner_set}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "barchart",
+      "title": "Jobs completed by result (1h)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 31 },
+      "id": 44,
+      "description": "Terminal JobCompleted messages by GitHub-reported result — the completion signal the classic many-acquirers protocol never delivered, unique to the scale-set tier.",
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total{namespace=~\"$namespace\"}[1h]))",
+          "legendFormat": "{{result}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Tenant Health Conditions",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
       "id": 50,
       "panels": []
     },
@@ -451,7 +557,7 @@
       "type": "stat",
       "title": "Worker quota exceeded",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 31 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 39 },
       "id": 51,
       "description": "1 when WorkerQuotaExceeded=True: the namespace ResourceQuota cannot admit another worker pod.",
       "fieldConfig": {
@@ -479,7 +585,7 @@
       "type": "stat",
       "title": "Workers unschedulable",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 31 },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 39 },
       "id": 52,
       "description": "1 when WorkersUnschedulable=True: worker pods are stuck Pending because the scheduler cannot place them.",
       "fieldConfig": {
@@ -507,7 +613,7 @@
       "type": "stat",
       "title": "Worker quota pressure",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 31 },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 39 },
       "id": 53,
       "description": "1 when WorkerQuotaPressure=True: workers cannot scale to the configured ceiling within the ResourceQuota headroom.",
       "fieldConfig": {
@@ -535,7 +641,7 @@
       "type": "timeseries",
       "title": "Agent recycle errors",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 31 },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 39 },
       "id": 54,
       "description": "Failed single-use JIT agent re-registrations. Sustained growth shrinks listener capacity.",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -552,7 +658,7 @@
       "type": "row",
       "title": "Egress Proxy (per tenant)",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
       "id": 60,
       "panels": []
     },
@@ -560,14 +666,14 @@
       "type": "timeseries",
       "title": "Active CONNECT tunnels",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 5, "x": 0, "y": 38 },
+      "gridPos": { "h": 7, "w": 5, "x": 0, "y": 46 },
       "id": 61,
-      "description": "Proxy metrics carry no intrinsic namespace label; attach one via the ServiceMonitor for per-tenant attribution.",
+      "description": "Proxy metrics carry no intrinsic namespace label; the per-tenant ServiceMonitor stamps one (from the scrape target's namespace) so these panels filter by $namespace.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(actions_gateway_proxy_connections_active)",
+          "expr": "sum(actions_gateway_proxy_connections_active{namespace=~\"$namespace\"})",
           "legendFormat": "active tunnels",
           "refId": "A"
         }
@@ -577,13 +683,13 @@
       "type": "timeseries",
       "title": "CONNECT tunnels opened/s",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 5, "x": 5, "y": 38 },
+      "gridPos": { "h": 7, "w": 5, "x": 5, "y": 46 },
       "id": 62,
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_connections_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_connections_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "opened/s",
           "refId": "A"
         }
@@ -593,14 +699,14 @@
       "type": "timeseries",
       "title": "Proxy dial errors/s",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 5, "x": 10, "y": 38 },
+      "gridPos": { "h": 7, "w": 5, "x": 10, "y": 46 },
       "id": 63,
       "description": "Upstream dial failures (e.g. transient network errors reaching an allowed destination).",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_dial_errors_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_dial_errors_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "dial errors/s",
           "refId": "A"
         }
@@ -610,14 +716,14 @@
       "type": "timeseries",
       "title": "Denied CONNECTs/s (SSRF signal)",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 5, "x": 15, "y": 38 },
+      "gridPos": { "h": 7, "w": 5, "x": 15, "y": 46 },
       "id": 65,
       "description": "CONNECT requests refused because the destination is off the egress allowlist. A precise SSRF / egress-policy signal — every increment is an explicit allowlist denial, unlike dial errors, which also count transient failures to allowed hosts. A sustained rate is alert-worthy (ActionsGatewayProxyConnectDenied).",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_connect_denied_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_connect_denied_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "denied/s",
           "refId": "A"
         }
@@ -627,7 +733,7 @@
       "type": "timeseries",
       "title": "Tunnel duration p95",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 38 },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 46 },
       "id": 64,
       "description": "p95 CONNECT tunnel lifetime, observed at close. Buckets reach the 6h absolute lifetime cap.",
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -644,7 +750,7 @@
       "type": "row",
       "title": "Proxy & Quota (kube-state-metrics)",
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 53 },
       "id": 30,
       "panels": []
     },
@@ -652,7 +758,7 @@
       "type": "timeseries",
       "title": "Proxy replicas ready",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 46 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 54 },
       "id": 31,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -669,7 +775,7 @@
       "type": "timeseries",
       "title": "Proxy HPA desired vs current",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 46 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 54 },
       "id": 32,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -692,7 +798,7 @@
       "type": "bargauge",
       "title": "ResourceQuota usage",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 46 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 54 },
       "id": 33,
       "description": "Requires kube-state-metrics.",
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },

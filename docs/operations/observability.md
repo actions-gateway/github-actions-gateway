@@ -391,17 +391,24 @@ TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy
 metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls) above), and
 restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
 The proxy's `:8081` port serves only the plaintext health probes (`/healthz`,
-`/readyz`), not metrics. Each proxy is a separate scrape
-target; these metrics carry no intrinsic `namespace` label, so attach one
-via the `ServiceMonitor`/scrape config if you need per-tenant attribution.
+`/readyz`), not metrics. Each proxy is a separate scrape target; these metrics
+carry no intrinsic `namespace` label. The GMC-generated per-tenant proxy
+`ServiceMonitor` stamps one via a relabeling (`namespace` ← the scrape target's
+namespace, which is the tenant's namespace), so the tenant Grafana dashboard's
+proxy panels filter by `$namespace` for per-tenant attribution. If you scrape the
+proxy with a hand-written scrape config instead of the generated `ServiceMonitor`,
+add the equivalent relabeling to get the `namespace` label.
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
-| `actions_gateway_proxy_connections_active` | Gauge | — | Currently open CONNECT tunnels. |
-| `actions_gateway_proxy_connections_total` | Counter | — | Total CONNECT tunnels opened. |
-| `actions_gateway_proxy_dial_errors_total` | Counter | — | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
-| `actions_gateway_proxy_connect_denied_total` | Counter | — | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
-| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | — | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+| `actions_gateway_proxy_connections_active` | Gauge | `namespace`¹ | Currently open CONNECT tunnels. |
+| `actions_gateway_proxy_connections_total` | Counter | `namespace`¹ | Total CONNECT tunnels opened. |
+| `actions_gateway_proxy_dial_errors_total` | Counter | `namespace`¹ | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
+| `actions_gateway_proxy_connect_denied_total` | Counter | `namespace`¹ | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
+| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | `namespace`¹ | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+
+¹ Not exposed by the proxy itself — added by the per-tenant `ServiceMonitor`
+relabeling described above. Absent if you scrape without that relabeling.
 
 For abuse/compromise detection built on these metrics (slowloris,
 eviction-retry loops, credential-harvesting), see
@@ -526,6 +533,7 @@ These markers ride on the worker pod itself, so they are removed the moment the 
 | Jobs are randomly cancelled | `renew_job_errors_total` | Each sustained error risks a job cancellation |
 | Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
 | Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
+| Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota (scale-set has no `active_sessions` gauge) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
@@ -754,6 +762,44 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyconnectdenied"
           summary: "Egress proxy denying CONNECTs in {{ $labels.namespace }}"
           description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — an SSRF / egress-policy signal (a workload probing blocked destinations, or a misconfigured egress target). Unlike dial errors, every denial here is an explicit allowlist rejection."
+
+      # Page: scale-set tier wedged — jobs are being assigned but none are
+      # getting provisioned (Q311). This is the scale-set analog of
+      # ActionsGatewayNoActiveSessions: a ScaleSet-protocol RunnerSet never
+      # emits actions_gateway_active_sessions, so throughput stalls are only
+      # visible as demand (assigned) flowing while supply (provisioned) is flat.
+      - alert: ActionsGatewayScaleSetProvisioningStalled
+        expr: |
+          (
+            sum by (namespace, runner_set) (
+              rate(actions_gateway_scaleset_jobs_assigned_total[15m])
+            ) > 0
+          )
+          unless
+          (
+            sum by (namespace, runner_set) (
+              rate(actions_gateway_scaleset_jobs_provisioned_total[15m])
+            ) > 0
+          )
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetprovisioningstalled"
+          summary: "Scale-set provisioning stalled for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+          description: "The scale-set acquisition tier is receiving JobAssigned messages but has provisioned no worker pods for 10+ minutes — the tier is wedged. Acquired jobs will not start. Check actions_gateway_scaleset_provision_errors_total, the worker-pod ResourceQuota, and the listener session health."
+
+      # Ticket: scale-set provision attempts failing at a sustained rate (Q311)
+      - alert: ActionsGatewayScaleSetProvisionErrors
+        expr: |
+          rate(actions_gateway_scaleset_provision_errors_total[5m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetprovisionerrors"
+          summary: "Scale-set provision errors for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+          description: "The scale-set acquisition tier is failing to provision worker pods (JIT-config mint or pod create) at >0.1/s for 10m. A transient failure retries on a later poll, but a sustained rate means provisioning is degraded — check the run service's generate-jitconfig responses and namespace quota headroom."
 ```
 
 ---
@@ -829,6 +875,26 @@ groups:
               rate(actions_gateway_job_acquisition_errors_total[5m])
             )
           )
+
+      # Scale-set provision success rate — fraction of provision attempts that
+      # succeeded, per namespace. The scale-set analog of
+      # job_acquisition_success_rate: a provision attempt either succeeds
+      # (…_jobs_provisioned_total) or fails (…_provision_errors_total).
+      - record: actions_gateway:scaleset_provision_success_rate:rate5m
+        expr: |
+          sum by (namespace) (
+            rate(actions_gateway_scaleset_jobs_provisioned_total[5m])
+          )
+          /
+          (
+            sum by (namespace) (
+              rate(actions_gateway_scaleset_jobs_provisioned_total[5m])
+            )
+            +
+            sum by (namespace) (
+              rate(actions_gateway_scaleset_provision_errors_total[5m])
+            )
+          )
 ```
 
 ---
@@ -848,7 +914,7 @@ The split mirrors how the metrics are exposed (see [How to Access Metrics](#how-
 
 ### Tenant dashboard
 
-![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
+![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
 
 Filtered by the `$namespace` and `$runner_group` template variables. Uses the SLO recording rules above as data sources where applicable.
 
@@ -880,7 +946,18 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
 | Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 
-**Row 4 — Tenant Health Conditions**
+**Row 4 — Scale-set Acquisition Tier (per runner_set)**
+
+The default acquisition protocol (Q264). These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here. Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these.
+
+| Panel | Query | Visualization |
+|-------|-------|---------------|
+| Jobs assigned vs. provisioned/min | `sum by (namespace, runner_set) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` and the `…_provisioned_total` counterpart | Time series (a persistent gap = provisioning lagging) |
+| Provision success rate | `actions_gateway:scaleset_provision_success_rate:rate5m` | Gauge (green >0.99, yellow <0.99, red <0.9) |
+| Provision errors/s | `sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total[5m]))` | Stat (threshold: >0 = yellow) |
+| Jobs completed by result (1h) | `sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total[1h]))` | Bar chart by result |
+
+**Row 5 — Tenant Health Conditions**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -889,7 +966,7 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Worker quota pressure | `max(actions_gateway_worker_quota_pressure)` | Stat (1 = yellow) |
 | Agent recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
 
-**Row 5 — Egress Proxy (per tenant)**
+**Row 6 — Egress Proxy (per tenant)**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -899,7 +976,7 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Denied CONNECTs/s (SSRF signal) | `rate(actions_gateway_proxy_connect_denied_total[5m])` | Time series |
 | Tunnel duration p95 | `histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))` | Time series |
 
-**Row 6 — Proxy & Quota (kube-state-metrics)**
+**Row 7 — Proxy & Quota (kube-state-metrics)**
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -941,15 +1018,16 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
-| Jobs acquired/min by namespace | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
+| Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
+| Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
 | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series |
 
 ### Dashboard Variables
 
 The dashboards ship with these template variables already wired:
 
-- `$namespace` — `label_values(actions_gateway_active_sessions, namespace)` — filters to a single tenant (both dashboards)
-- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup (tenant dashboard)
+- `$namespace` — `label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)` — filters to a single tenant (both dashboards). The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
+- `$runner_group` — `label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)` — filters to a specific RunnerGroup on the classic-tier panels (tenant dashboard). The scale-set panels are labelled `runner_set` and are not filtered by it.
 
 ---
 
