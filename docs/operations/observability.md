@@ -333,8 +333,11 @@ remove the files when finished.)
 | `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs (v1 **and** v2) currently managed by the GMC (Q320). |
 | `actions_gateway_proxy_quota_pressure` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaPressure=True` (Q82): the proxy pool can't scale to `maxReplicas` within the namespace `ResourceQuota` headroom. Warning — alert with `for:`, don't page. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the `EgressProxy` owning the pool (Q320). |
 | `actions_gateway_proxy_quota_exceeded` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaExceeded=True` (Q82): proxy replica creates are being rejected by the `ResourceQuota` now. Error — page. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the `EgressProxy` owning the pool (Q320). |
-| `actions_gateway_runnergroups_degraded` | Gauge | `namespace`, `name` | `1` when `RunnerGroupsDegraded=True` (Q158): one or more of the gateway's owned `RunnerGroup`s report an impairing condition (`CredentialUnavailable`/`Degraded`/`RunnerVersionTooOld`/`WorkersUnschedulable`). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate `Ready`. v1 only — the v2 `RunnerSetsDegraded` rollup has no gauge yet (see the note below). |
+| `actions_gateway_runnergroups_degraded` | Gauge | `namespace`, `name` | `1` when `RunnerGroupsDegraded=True` (Q158): one or more of the gateway's owned `RunnerGroup`s report an impairing condition (`CredentialUnavailable`/`Degraded`/`RunnerVersionTooOld`/`WorkersUnschedulable`). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate `Ready`. v1 only — the v2 twin is `actions_gateway_runnersets_degraded` below. |
 | `actions_gateway_egress_rules_stale` | Gauge | `namespace`, `name` | `1` when `EgressRulesStale=True` (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy `NetworkPolicy` drift from GitHub's published ranges. Advisory — does not gate `Ready`; page if sustained, as new GitHub ranges will be silently dropped. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the CIDR-mode `EgressProxy` carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320). |
+| `actions_gateway_runnersets_degraded` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `RunnerSetsDegraded=True` (Q304): one or more of the `RunnerSet`s bound to the gateway (`spec.gatewayRef`) report an impairing condition. The v2 twin of `actions_gateway_runnergroups_degraded`; rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate `Ready`. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_agc_available` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAvailable=True`: the tenant's AGC `Deployment` has a ready replica (the gateway's control plane is up). Drops to `0` while the AGC is rolling out or unavailable — correlate with `Ready`. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_egress_unattributed` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `EgressUnattributed=True` (§H.10): the gateway runs in **direct** egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and `0` on a proxied deploy; a `1` on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321). |
 | `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
 
 > **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
@@ -366,10 +369,12 @@ remove the files when finished.)
 > not flap on normal load. The condition message names the impaired sets and their
 > tripped signals, giving the operator a single pane without inspecting each child.
 > Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
-> AGC control plane can be healthy while a tenant's set is impaired. No Prometheus gauge
-> is emitted for it yet (a v2 `ActionsGateway`/`RunnerSet` gauge pass is tracked as a
-> separate item); read it with `kubectl get actionsgateway -o yaml` or scrape conditions
-> via kube-state-metrics.
+> AGC control plane can be healthy while a tenant's set is impaired. It is exported as the `actions_gateway_runnersets_degraded`
+> gauge (Q321), alongside `actions_gateway_agc_available` and
+> `actions_gateway_egress_unattributed` for the gateway's `AGCAvailable` and
+> `EgressUnattributed` conditions — the v2 twins of the v1 `ActionsGateway`
+> condition gauges. All three are emitted only on a v2 install and labelled per
+> gateway (`namespace`, `name`).
 
 ### Scale-set acquisition tier (Q264)
 
@@ -997,7 +1002,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Managed gateways | `actions_gateway_managed_gateways` | Stat |
-| Degraded gateways | `sum(actions_gateway_runnergroups_degraded)` | Stat (>0 = red) |
+| Degraded gateways | `sum(actions_gateway_runnergroups_degraded)` (v1) / `sum(actions_gateway_runnersets_degraded)` (v2) | Stat (>0 = red) |
 | Egress allowlist stale | `sum(actions_gateway_egress_rules_stale)` | Stat (>0 = red) |
 | Proxy quota exceeded | `sum(actions_gateway_proxy_quota_exceeded)` | Stat (>0 = red) |
 
@@ -1013,7 +1018,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Gateway condition rollups | `actions_gateway_runnergroups_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` | State timeline (1 = firing) |
+| Gateway condition rollups | `actions_gateway_runnergroups_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` (v1); `_runnersets_degraded` / `_agc_available` / `_egress_unattributed` (v2) | State timeline (1 = firing) |
 
 **Row 4 — Cross-tenant Throughput** (requires the per-tenant AGC scrapes)
 
