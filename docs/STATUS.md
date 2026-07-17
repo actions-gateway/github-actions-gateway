@@ -61,7 +61,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q340"></a>Q340 | Trim CLAUDE.md per its own context-budget rule | `docs` | 🔲 | S | 22.7KB loads into every session turn. Compress the hooks and testing sections into pointers at their docs/ pages; keep only must-act-on rules inline. |
 | <a id="Q341"></a>Q341 | Split AGC listener goroutine.go and provisioner.go | `infra` | 🔲 | M | 66KB and 70KB files defeat selective reading (read whole by 7+ sessions each in 2 weeks) and are outsized for review. Mechanical split into focused files, no behavior change. |
 | <a id="Q342"></a>Q342 | Script recurring dogfood e2e ops under scripts/dogfood/ | `infra` | 🔲 | S | Pool config, kata-deploy install, AGC bounce, and debug-pod loops get re-typed ad hoc with per-command PROD_GUARD_OVERRIDEs. Fold them into the lifecycle scripts (hook-exempt, reviewed once). |
-| <a id="Q343"></a>Q343 | Share lint/build caches across session worktrees | `speed` `infra` | 🔲 | S | `make check` ran 461× in 2 weeks, each worktree cold-caching golangci-lint and go builds. Point GOLANGCI_LINT_CACHE/GOCACHE at shared per-repo dirs and measure the speedup. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
