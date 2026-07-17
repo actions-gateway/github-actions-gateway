@@ -530,9 +530,9 @@ defects in the worker shape itself:
    was the sole nested-cap conflict.
 
 Two operational findings, not blocking: reaped never-started workers leave offline
-runner records at GitHub that 409-collide re-provisions of the same jobID (Q332), and
+runner records at GitHub that 409-collide re-provisions of the same jobID (Q334), and
 the single e2-standard-2 system node no longer fits the on-demand e2e AGC alongside the
-CI AGC + GMC + Athens (Q333; the session ran with the system pool at 2 nodes).
+CI AGC + GMC + Athens (Q335; the session ran with the system pool at 2 nodes).
 
 ---
 
