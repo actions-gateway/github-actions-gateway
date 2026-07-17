@@ -56,8 +56,11 @@ type RunnerGroupSpec struct {
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds.
-	// Tiers must be in strictly ascending threshold order; the controller sets a Degraded
-	// condition if they are not.
+	// List tiers in strictly ascending threshold order: the AGC walks them in list order
+	// and assigns the first tier whose threshold the current pod count has not yet reached,
+	// so an out-of-order tier is simply unreachable. This ordering is a caller contract, not
+	// enforced by admission or a status condition — only the last threshold is CEL-validated
+	// to equal maxWorkers when both are set.
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`

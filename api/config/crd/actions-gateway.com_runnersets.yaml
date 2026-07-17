@@ -408,8 +408,10 @@ spec:
                 format: int32
                 type: integer
               conditions:
-                description: 'Conditions are the observed conditions of the runner
-                  set. Known types: Ready.'
+                description: |-
+                  Conditions are the observed conditions of the runner set. Known types: Ready,
+                  Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
+                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -878,8 +880,10 @@ spec:
                 format: int32
                 type: integer
               conditions:
-                description: 'Conditions are the observed conditions of the runner
-                  set. Known types: Ready.'
+                description: |-
+                  Conditions are the observed conditions of the runner set. Known types: Ready,
+                  Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure,
+                  WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

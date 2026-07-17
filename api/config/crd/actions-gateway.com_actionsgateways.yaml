@@ -1796,7 +1796,8 @@ spec:
               conditions:
                 description: |-
                   Conditions are the observed conditions of the gateway. Known types: Ready,
-                  AGCAvailable, CredentialUnavailable, Degraded.
+                  AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed,
+                  RunnerSetsDegraded.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -3660,7 +3661,8 @@ spec:
               conditions:
                 description: |-
                   Conditions are the observed conditions of the gateway. Known types: Ready,
-                  AGCAvailable, CredentialUnavailable, Degraded.
+                  AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed,
+                  RunnerSetsDegraded.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
