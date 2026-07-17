@@ -3,6 +3,8 @@ package scaleset_test
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -467,6 +469,96 @@ func TestClient_GenerateJITConfigRunnerNameConflict(t *testing.T) {
 	var sessConflict *scaleset.SessionConflictError
 	if errors.As(err, &sessConflict) {
 		t.Fatalf("GenerateJITConfig err = %v, must not be *SessionConflictError", err)
+	}
+}
+
+// TestClient_DeregisterRunnerByName covers the Q334 REST deregister path: a stale record
+// is resolved by name and deleted (clearing the generatejitconfig conflict), a missing
+// name is a no-op, and a busy record surfaces *RunnerBusyError without being deleted.
+func TestClient_DeregisterRunnerByName(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx := testContext(t)
+	c := newClient(t, srv, nil)
+	ss, _ := setupScaleSet(t, ctx, c)
+
+	// No record under this name — a no-op, not an error.
+	if deleted, err := c.DeregisterRunnerByName(ctx, "absent"); err != nil || deleted {
+		t.Fatalf("DeregisterRunnerByName(absent) = (%v, %v); want (false, nil)", deleted, err)
+	}
+
+	// A stale record that also blocks generatejitconfig: deleting it clears the conflict,
+	// so a re-register under the same name then succeeds.
+	srv.FailJITConfigName("stale")
+	if _, err := c.GenerateJITConfig(ctx, ss.ID, "stale", ""); err == nil {
+		t.Fatalf("GenerateJITConfig(stale) before delete: want RunnerNameConflictError, got nil")
+	}
+	deleted, err := c.DeregisterRunnerByName(ctx, "stale")
+	if err != nil || !deleted {
+		t.Fatalf("DeregisterRunnerByName(stale) = (%v, %v); want (true, nil)", deleted, err)
+	}
+	if srv.DeleteRunnerCalls() != 1 {
+		t.Fatalf("DeleteRunnerCalls = %d; want 1", srv.DeleteRunnerCalls())
+	}
+	if _, err := c.GenerateJITConfig(ctx, ss.ID, "stale", ""); err != nil {
+		t.Fatalf("GenerateJITConfig(stale) after delete: want success, got %v", err)
+	}
+
+	// A busy record cannot be deleted — surfaced as *RunnerBusyError, left in place.
+	srv.FailJITConfigName("busy")
+	srv.SetRunnerBusy("busy")
+	deleted, err = c.DeregisterRunnerByName(ctx, "busy")
+	var busyErr *scaleset.RunnerBusyError
+	if deleted || !errors.As(err, &busyErr) {
+		t.Fatalf("DeregisterRunnerByName(busy) = (%v, %v); want (false, *RunnerBusyError)", deleted, err)
+	}
+}
+
+// TestClient_DeregisterRunnerByNameErrors covers the REST error branches: a malformed
+// ConfigURL, a non-200 list response, and a non-2xx (non-422) delete response. Since
+// DeregisterRunnerByName authorizes with the installation token directly, no admin
+// bootstrap is needed — the client talks straight to a raw REST stub.
+func TestClient_DeregisterRunnerByNameErrors(t *testing.T) {
+	ctx := testContext(t)
+
+	newRESTClient := func(configURL, apiBase string) *scaleset.Client {
+		c, err := scaleset.New(scaleset.Config{
+			TokenProvider: fakeProvider{},
+			ConfigURL:     configURL,
+			APIBase:       apiBase,
+			HTTPClient:    http.DefaultClient,
+		})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		return c
+	}
+
+	// Malformed ConfigURL: no org or owner/repo path to derive the runners prefix from.
+	if _, err := newRESTClient("https://github.com/", "https://api.github.com").DeregisterRunnerByName(ctx, "x"); err == nil {
+		t.Fatal("DeregisterRunnerByName with a path-less ConfigURL: want error, got nil")
+	}
+
+	// List returns non-200.
+	listErr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
+	}))
+	defer listErr.Close()
+	if _, err := newRESTClient("https://github.com/org", listErr.URL).DeregisterRunnerByName(ctx, "x"); err == nil {
+		t.Fatal("DeregisterRunnerByName with a 500 list response: want error, got nil")
+	}
+
+	// List resolves an id, but the DELETE fails with a non-busy status.
+	delErr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"total_count":1,"runners":[{"id":42,"name":"x"}]}`))
+			return
+		}
+		http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
+	}))
+	defer delErr.Close()
+	if _, err := newRESTClient("https://github.com/org", delErr.URL).DeregisterRunnerByName(ctx, "x"); err == nil {
+		t.Fatal("DeregisterRunnerByName with a 500 delete response: want error, got nil")
 	}
 }
 

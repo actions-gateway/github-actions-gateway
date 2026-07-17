@@ -104,6 +104,15 @@ type Server struct {
 	conflictJITNames    map[string]bool
 	conflictJITPrefixes []string
 
+	// runnerIDs maps a registered runner name to its REST id, and busyRunners marks
+	// names whose REST DELETE answers 422 "still running a job" — the levers for the
+	// Q334 deregister-on-conflict path. FailJITConfigName registers a stale runner here
+	// so the client can resolve and delete it; a successful delete clears the matching
+	// conflictJITNames entry so the re-registration under the base name then succeeds.
+	runnerIDs    map[string]int64
+	busyRunners  map[string]bool
+	nextRunnerID int64
+
 	// rateLimitPolls makes every message poll answer 429 (no Retry-After) while set —
 	// the lever for the sustained-rate-limit condition path (Q325).
 	rateLimitPolls bool
@@ -140,6 +149,7 @@ type Server struct {
 	acquireJobsCalls        int
 	refreshSessionCalls     int
 	generateJITCalls        int
+	deleteRunnerCalls       int
 }
 
 // New creates and starts a stub in the default dotcom auto-assign mode.
@@ -152,10 +162,17 @@ func New() *Server {
 		scaleSets:        make(map[int]*scaleSet),
 		nextReqID:        1000,
 		conflictJITNames: make(map[string]bool),
+		runnerIDs:        make(map[string]int64),
+		busyRunners:      make(map[string]bool),
+		nextRunnerID:     5000,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orgs/{org}/actions/runners/registration-token", s.handleRegistrationToken)
 	mux.HandleFunc("POST /repos/{owner}/{repo}/actions/runners/registration-token", s.handleRegistrationToken)
+	mux.HandleFunc("GET /orgs/{org}/actions/runners", s.handleListRunners)
+	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runners", s.handleListRunners)
+	mux.HandleFunc("DELETE /orgs/{org}/actions/runners/{rid}", s.handleDeleteRunner)
+	mux.HandleFunc("DELETE /repos/{owner}/{repo}/actions/runners/{rid}", s.handleDeleteRunner)
 	mux.HandleFunc("POST /actions/runner-registration", s.handleRunnerRegistration)
 	mux.HandleFunc("GET /_apis/runtime/runnergroups/", s.handleRunnerGroups)
 	mux.HandleFunc("POST /_apis/runtime/runnerscalesets", s.handleCreateScaleSet)
@@ -218,12 +235,28 @@ func (s *Server) EnableGHESAcquireFlow() {
 }
 
 // FailJITConfigName makes generatejitconfig reject the exact runner name with 409
-// Conflict, modelling a stale registered runner name. Failing only the base name (and
-// not its suffixed retries) models a *transient* conflict the listener clears by
-// retrying under a fresh (numeric-suffixed) name (Q270).
+// Conflict, modelling a stale registered runner name. It also registers a REST runner
+// record under that name (a resolvable id) so the listener's Q334 recovery can delete
+// it: a successful DELETE clears this conflict, so the re-registration under the same
+// base name then succeeds. Failing only the base name (and not its suffixed retries)
+// models a conflict the listener clears — by deleting the stale record and reusing the
+// base name (Q334), or by retrying under a fresh suffixed name (Q270) if it cannot.
 func (s *Server) FailJITConfigName(name string) {
 	s.mu.Lock()
 	s.conflictJITNames[name] = true
+	if _, ok := s.runnerIDs[name]; !ok {
+		s.nextRunnerID++
+		s.runnerIDs[name] = s.nextRunnerID
+	}
+	s.mu.Unlock()
+}
+
+// SetRunnerBusy makes the REST DELETE for the runner registered under name answer 422
+// "is still running a job" (surfaced as *scaleset.RunnerBusyError) while set, modelling
+// a live runner that must not be deleted — the lever for the Q334 busy-record path.
+func (s *Server) SetRunnerBusy(name string) {
+	s.mu.Lock()
+	s.busyRunners[name] = true
 	s.mu.Unlock()
 }
 
@@ -418,6 +451,14 @@ func (s *Server) GenerateJITCalls() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.generateJITCalls
+}
+
+// DeleteRunnerCalls returns how many REST delete-runner calls the stub served — the
+// Q334 deregister-on-conflict recovery drives one per reclaimed stale record.
+func (s *Server) DeleteRunnerCalls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deleteRunnerCalls
 }
 
 // ScaleSetIDByName returns the id of the scale set registered under name and whether
@@ -718,6 +759,55 @@ func (s *Server) handleGenerateJIT(w http.ResponseWriter, r *http.Request) {
 	out.Runner.ID = 77
 	out.Runner.Name = in.Name
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// handleListRunners serves the REST list-runners name filter used by
+// Client.DeregisterRunnerByName to resolve a stale record's id (Q334). It returns the
+// registered runner for an exact name match, or an empty list otherwise.
+func (s *Server) handleListRunners(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	name := r.URL.Query().Get("name")
+	s.record("list-runners name=%s", name)
+	type restRunner struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	var runners []restRunner
+	if id, ok := s.runnerIDs[name]; ok {
+		runners = append(runners, restRunner{ID: id, Name: name})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(runners), "runners": runners})
+}
+
+// handleDeleteRunner serves the REST DELETE used by Client.DeregisterRunnerByName. A
+// runner marked busy answers 422 (a live runner that must not be deleted); otherwise the
+// record is removed and any matching generatejitconfig conflict is cleared, so a
+// re-registration under the same base name then succeeds (Q334).
+func (s *Server) handleDeleteRunner(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rid, _ := strconv.ParseInt(r.PathValue("rid"), 10, 64)
+	s.record("delete-runner id=%d", rid)
+	s.deleteRunnerCalls++
+	name := ""
+	for n, id := range s.runnerIDs {
+		if id == rid {
+			name = n
+			break
+		}
+	}
+	if name == "" {
+		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		return
+	}
+	if s.busyRunners[name] {
+		http.Error(w, `{"message":"This runner is still running a job and cannot be deleted"}`, http.StatusUnprocessableEntity)
+		return
+	}
+	delete(s.runnerIDs, name)
+	delete(s.conflictJITNames, name)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAcquireJobs(w http.ResponseWriter, r *http.Request) {

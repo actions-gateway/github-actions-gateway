@@ -51,6 +51,18 @@ func (p *recordingProvisioner) count() int {
 	return len(p.provisioned)
 }
 
+// runnerNames returns the RunnerName the listener registered for each provisioned job,
+// in order — the base {scaleSet}-{jobID} name, or a suffixed fresh name on fallback.
+func (p *recordingProvisioner) runnerNames() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	names := make([]string, 0, len(p.provisioned))
+	for _, j := range p.provisioned {
+		names = append(names, j.RunnerName)
+	}
+	return names
+}
+
 // gateProvisioner blocks in Provision until unblocked, so a test can observe the
 // Listener's Status while the first worker is still mid-provision.
 type gateProvisioner struct {
@@ -378,11 +390,12 @@ func TestListener_GHESAcquireFlow(t *testing.T) {
 	assert.GreaterOrEqual(t, srv.AcquireJobsCalls(), 1, "the GHES path must claim via acquirejobs")
 }
 
-// TestListener_TransientRunnerNameConflictResolvesWithFreshName proves the Q270 fresh-name
-// recovery: the base runner name 409s once (a stale registration), and the listener retries
-// under a fresh suffixed name, which succeeds — the job provisions exactly once, with no
-// permanent error.
-func TestListener_TransientRunnerNameConflictResolvesWithFreshName(t *testing.T) {
+// TestListener_RunnerNameConflictReclaimsBaseNameByDeregister is the Q334 fix: the base
+// runner name 409s because a reaped never-started worker left an offline record under it,
+// and the listener recovers by deleting that stale record and re-registering under the
+// SAME base name — so the job provisions once, under the base name (not a suffixed one),
+// with no permanent error and no orphaned suffix records.
+func TestListener_RunnerNameConflictReclaimsBaseNameByDeregister(t *testing.T) {
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
 
@@ -391,17 +404,49 @@ func TestListener_TransientRunnerNameConflictResolvesWithFreshName(t *testing.T)
 	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
 
 	_, jobID := srv.EnqueueJob(ssID)
-	// Fail only the exact base runner name; the first fresh-name retry (…-1) clears it.
+	// A stale record holds the base name (a reaped never-started worker's) — deletable
+	// via the REST API, so the listener reclaims the base name.
 	srv.FailJITConfigName("linux-" + jobID)
 
 	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
-		"a transient runner-name conflict must resolve under a fresh name and provision the job")
+		"the stale record must be deleted and the base name reclaimed so the job provisions")
 	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the job provisions exactly once")
-	assert.GreaterOrEqual(t, srv.GenerateJITCalls(), 2, "the base-name 409 forces at least one fresh-name retry")
+	assert.Equal(t, []string{"linux-" + jobID}, prov.runnerNames(),
+		"the job provisions under the reclaimed base name, not a suffixed fresh name")
+	assert.Equal(t, 1, srv.DeleteRunnerCalls(), "the stale record is deregistered exactly once")
 
 	_, provisioned, errs := m.snapshot()
 	assert.Equal(t, 1, provisioned, "one worker provisioned")
-	assert.Zero(t, errs, "a self-healed transient conflict is not counted as a provision error")
+	assert.Zero(t, errs, "a self-healed conflict is not counted as a provision error")
+}
+
+// TestListener_RunnerNameConflictBusyRecordFallsBackToFreshName covers the Q334 busy path:
+// the base name's record cannot be deleted because a live runner is still using it (422),
+// so the listener falls back to the bounded Q270 fresh-name retry — provisioning once under
+// a suffixed name rather than deleting a record that is legitimately in use.
+func TestListener_RunnerNameConflictBusyRecordFallsBackToFreshName(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	prov := &recordingProvisioner{srv: srv}
+	m := newCountingMetrics()
+	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+
+	_, jobID := srv.EnqueueJob(ssID)
+	// The base name conflicts AND its record is busy — the delete 422s, so only a fresh
+	// suffixed name clears it.
+	srv.FailJITConfigName("linux-" + jobID)
+	srv.SetRunnerBusy("linux-" + jobID)
+
+	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
+		"a busy stale record must not block the job — the fresh-name fallback provisions it")
+	assert.Equal(t, []string{jobID}, prov.jobIDs(), "the job provisions exactly once")
+	assert.Equal(t, []string{"linux-" + jobID + "-1"}, prov.runnerNames(),
+		"a busy record is left in place; the job provisions under a fresh suffixed name")
+
+	_, provisioned, errs := m.snapshot()
+	assert.Equal(t, 1, provisioned, "one worker provisioned")
+	assert.Zero(t, errs, "the fresh-name fallback is not counted as a provision error")
 }
 
 // TestListener_PersistentRunnerNameConflictDoesNotWedgeBatch is the core Q270 fix: a job

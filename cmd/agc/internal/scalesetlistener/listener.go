@@ -687,15 +687,47 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	return provisionAcked
 }
 
-// generateJITConfig mints a JIT config for a job, recovering from a runner-name conflict
-// by retrying under a fresh name with backoff, bounded by maxJITNameConflictRetries. It
-// returns the config and the runner name actually registered on success (provisionAcked);
-// provisionSkip when the name conflict persists past the bound (fail this one job rather
-// than replay the same request forever — Q270); and provisionRetry on any other error, so
-// the message redelivers. Replaying the same colliding name would 409 indefinitely and
-// wedge the queue cursor, so a fresh name — not a bare replay — is the correct recovery.
+// generateJITConfig mints a JIT config for a job, returning the config and the runner
+// name actually registered on success (provisionAcked); provisionSkip when a runner-name
+// conflict persists past the bound (fail this one job rather than replay the same request
+// forever — Q270); and provisionRetry on any other error, so the message redelivers.
+//
+// The deterministic base name ({scaleSet}-{jobID}) collides when a reaped never-started
+// worker left an offline record under it (Q334). The first recovery is to delete that
+// stale record and re-register under the SAME base name — clearing the collision at its
+// source so the offline records stop accumulating. Only if the record cannot be reclaimed
+// (a live runner holds it, or a transient delete error) does it fall back to the bounded
+// fresh-name retry (Q270): replaying the same colliding name would 409 indefinitely and
+// wedge the queue cursor, so a suffixed fresh name is the safe last resort — the worker
+// pod's own jobID-deterministic name keeps a fresh-name re-register from double-executing.
 func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string) (*scaleset.JITRunnerConfig, string, provisionOutcome) {
-	for attempt := 0; ; attempt++ {
+	base := l.runnerName(jobID, 0)
+	jit, err := l.cfg.Client.GenerateJITConfig(ctx, ssID, base, l.workFolder)
+	if err == nil {
+		return jit, base, provisionAcked
+	}
+	if !isRunnerNameConflict(err) {
+		l.log.Warn("scaleset: generate JIT config", "scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "err", err)
+		l.metricsIncProvisionError()
+		return nil, "", provisionRetry
+	}
+
+	// Base name conflict: try to reclaim it by deleting the stale record (Q334), then
+	// re-register under the same base name. A self-healed reclaim is not a provision error.
+	if deleted, derr := l.cfg.Client.DeregisterRunnerByName(ctx, base); derr != nil {
+		l.log.Debug("scaleset: deregister stale runner on name conflict failed; falling back to a fresh name",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "err", derr)
+	} else if deleted {
+		if jit, err := l.cfg.Client.GenerateJITConfig(ctx, ssID, base, l.workFolder); err == nil {
+			l.log.Info("scaleset: reclaimed stale runner name after deregister",
+				"scaleSet", l.cfg.ScaleSetName, "jobID", jobID)
+			return jit, base, provisionAcked
+		}
+		// Base still unusable (re-created record, or a transient error) — fall through.
+	}
+
+	// Bounded fresh-name retry: the base name could not be reclaimed.
+	for attempt := 1; ; attempt++ {
 		name := l.runnerName(jobID, attempt)
 		jit, err := l.cfg.Client.GenerateJITConfig(ctx, ssID, name, l.workFolder)
 		if err == nil {

@@ -26,6 +26,7 @@ Each section below covers a specific failure mode: symptoms, likely cause, diagn
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
+- [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
 - [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
@@ -770,6 +771,29 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 - Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
 - If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
 - Re-run the cancelled workflow from the GitHub UI once the cause is fixed.
+
+---
+
+## Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)
+
+**Symptoms.** On the scale-set path (`acquisitionProtocol: ScaleSet`), one job is never picked up while others in the same `RunnerSet` run fine. The AGC logs repeat `scaleset: runner name conflict` for a single `jobID`, and — on versions before the fix — end in `scaleset: runner name conflict persists, skipping job`. Restarting the AGC clears it. In the repo/org runner list, offline records named `<scaleSet>-<jobID>` (and `<scaleSet>-<jobID>-1`, `-2`, `-3`) accumulate over time.
+
+**What happened.** The scale-set listener pre-registers each worker's runner under a deterministic `<scaleSet>-<jobID>` name via `generatejitconfig`. When a worker pod is reaped while still `Pending` (see [above](#worker-pod-reaped-while-pending-workerpodstuckpending)), it never came online, so GitHub does **not** auto-remove its runner record — the record lingers offline holding that name. Every later re-provision of the same `jobID` derives the same name and `409`s, so the job is stranded until the AGC restarts.
+
+**Fix.** Current versions self-heal: on the base-name `409` the listener deletes the stale record (REST `DELETE .../actions/runners/{id}`) and re-registers under the same name, so the job provisions and the offline records stop piling up. A record still running a job (`422`) is left in place and the job takes a fresh suffixed name instead. No operator action is needed on a fixed version.
+
+**Manual cleanup (older versions, or to clear an existing backlog).** Delete the offline records — they re-register on the next run:
+
+```sh
+# List self-hosted runner records (repo-scoped shown; use /orgs/<org>/... for org scope)
+gh api /repos/<owner>/<repo>/actions/runners --paginate \
+  | jq -r '.runners[] | select(.status=="offline") | "\(.id)\t\(.name)"'
+
+# Delete each offline record by id (skip any that are online or busy)
+gh api -X DELETE /repos/<owner>/<repo>/actions/runners/<id>
+```
+
+Only delete records that are `offline` and not `busy`; an `online` record is a live listener or a running worker.
 
 ---
 
