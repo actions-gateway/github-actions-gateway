@@ -32,7 +32,8 @@ type Metrics struct {
 // v2Enabled reflects whether the opt-in actions-gateway.com/v2alpha1 CRDs are
 // installed (the same startup detection that gates the v2 controllers). When true,
 // the collectors also count v2 ActionsGateways and reflect v2 EgressProxy proxy
-// conditions; when false they stay v1-only, so a v1-only cluster never spins a
+// conditions, and a v2-only collector exports the v2 ActionsGateway condition
+// gauges (Q321); when false they stay v1-only, so a v1-only cluster never spins a
 // failed informer for absent v2 kinds.
 func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 	m := &Metrics{
@@ -44,6 +45,14 @@ func NewMetrics(reader client.Reader, v2Enabled bool) *Metrics {
 	metrics.Registry.MustRegister(m.IPRangeUpdates, newManagedGatewaysCollector(reader, v2Enabled),
 		newProxyQuotaCollector(reader, v2Enabled), newRunnerGroupsDegradedCollector(reader),
 		newEgressRulesStaleCollector(reader, v2Enabled))
+	// The v2 ActionsGateway condition gauges (Q321) are v2-only — no v1 series
+	// shares their metric families — so unlike the collectors above they are
+	// registered only when the v2 CRDs are installed. Registering them on a v1-only
+	// cluster would spin a failed informer for the absent v2 ActionsGateway kind on
+	// every scrape.
+	if v2Enabled {
+		metrics.Registry.MustRegister(newActionsGatewayV2ConditionsCollector(reader))
+	}
 	return m
 }
 
@@ -155,6 +164,73 @@ func (c *runnerGroupsDegradedCollector) Collect(ch chan<- prometheus.Metric) {
 		}
 		ch <- prometheus.MustNewConstMetric(c.degraded, prometheus.GaugeValue,
 			conditionGaugeValue(ag.Status.Conditions, gmcv1alpha1.ConditionRunnerGroupsDegraded), ag.Namespace, ag.Name)
+	}
+}
+
+// actionsGatewayV2ConditionsCollector exports the v2 ActionsGateway rollup and
+// availability conditions (Q321) as gauges so operators can alert on v2 gateway
+// state without kube-state-metrics — the v2 twin of the v1 ActionsGateway
+// condition gauges above. It reads at scrape time from the cached reader: a deleted
+// ActionsGateway simply stops being listed. Each gauge mirrors the condition the v2
+// reconciler already wrote to .status.conditions (1 when True, 0 otherwise). It is
+// registered only when the v2 CRDs are installed (see [NewMetrics]), so a v1-only
+// cluster never lists the absent v2 ActionsGateway kind.
+type actionsGatewayV2ConditionsCollector struct {
+	reader             client.Reader
+	runnerSetsDegraded *prometheus.Desc
+	agcAvailable       *prometheus.Desc
+	egressUnattributed *prometheus.Desc
+}
+
+func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewayV2ConditionsCollector {
+	return &actionsGatewayV2ConditionsCollector{
+		reader: reader,
+		runnerSetsDegraded: prometheus.NewDesc(
+			"actions_gateway_runnersets_degraded",
+			"1 when the v2 ActionsGateway RunnerSetsDegraded condition is True (one or more RunnerSets bound to the gateway report an impairing condition), else 0. The v2 twin of actions_gateway_runnergroups_degraded.",
+			[]string{"namespace", "name"}, nil,
+		),
+		agcAvailable: prometheus.NewDesc(
+			"actions_gateway_agc_available",
+			"1 when the v2 ActionsGateway AGCAvailable condition is True (the tenant's AGC Deployment has a ready replica), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+		egressUnattributed: prometheus.NewDesc(
+			"actions_gateway_egress_unattributed",
+			"1 when the v2 ActionsGateway EgressUnattributed condition is True (the gateway runs in direct egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy), else 0.",
+			[]string{"namespace", "name"}, nil,
+		),
+	}
+}
+
+// Describe implements prometheus.Collector.
+func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.runnerSetsDegraded
+	ch <- c.agcAvailable
+	ch <- c.egressUnattributed
+}
+
+// Collect implements prometheus.Collector. On a read failure it emits nothing
+// rather than a misleading value.
+func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metric) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var list gmcv2alpha1.ActionsGatewayList
+	if err := c.reader.List(ctx, &list); err != nil {
+		return
+	}
+	for i := range list.Items {
+		ag := &list.Items[i]
+		if !ag.DeletionTimestamp.IsZero() {
+			continue
+		}
+		ch <- prometheus.MustNewConstMetric(c.runnerSetsDegraded, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.agcAvailable, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAvailable), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.egressUnattributed, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed), ag.Namespace, ag.Name)
 	}
 }
 
