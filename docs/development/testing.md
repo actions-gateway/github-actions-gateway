@@ -55,6 +55,18 @@ The throttle addresses one specific cause of `WindowServer … userspace_watchdo
 
   To tell them apart, read the spin file in `/Library/Logs/DiagnosticReports/WindowServer_*.spin`: a *build* stall shows WindowServer hot or its work blocked behind heavy I/O; a *GPU* stall shows the `Display … not ready` reason and the Intel/GPU driver threads above. Mitigate the GPU case by reducing concurrent GPU clients (close unused Electron apps, shut down the VM if headless, let Spotlight finish or exclude worktrees/module caches/Docker data from indexing); a reboot resets the accumulated `N induced crashes` counter.
 
+#### Build and lint caches across worktrees
+
+Parallel sessions each run `make check` from their own `.claude/worktrees/*` clone, which raised the question of whether every fresh worktree pays a cold cache (Q343). Measured (2026-07): **the two big caches are already machine-shared and path-independent at their defaults — do not repoint them.** Setting `GOCACHE`/`GOLANGCI_LINT_CACHE` to per-repo or per-worktree dirs was the proposed remedy and is a measured no-op (per-worktree dirs would actively *lose* sharing).
+
+- **Go build cache** (`GOCACHE`, default `~/Library/Caches/go-build` on macOS, `~/.cache/go-build` on Linux). Compile artifacts are content-keyed and hit across worktree paths: compiling the `broker` module against an empty cache took ~12 s in one worktree and ~0.6 s in a second worktree sharing that same cache.
+- **golangci-lint analysis cache** (`GOLANGCI_LINT_CACHE`, default `~/Library/Caches/golangci-lint` / `~/.cache/golangci-lint`). Also shared and path-independent for the expensive analysis: after a content change, linting `cmd/agc` costs ~2 min *once machine-wide*; the next worktree at the same content pays only ~9 s of per-path overhead (`go list`/export-data regeneration), and an in-place rerun ~2 s. Entries are even shared between `.build/golangci-lint` binaries built with different Go patch versions — there is no per-binary cache salt.
+
+What a fresh worktree still pays, and why it stays:
+
+- **One unit-test re-run.** `go test`'s *result* cache is path-keyed: a result cached in one worktree does not hit from another worktree even at an identical commit (verified — same package shows `(cached)` in place but re-runs in a sibling). Each new worktree therefore executes the unit suite once; compilation still hits the shared build cache, and there is no supported knob to share test *results* across paths.
+- **Tool builds.** Each worktree builds its own `.build/golangci-lint` (~16 s with a warm build cache). Sharing tool binaries across worktrees would need version-keyed storage to avoid silently running a stale binary after a `tools/` dependency bump — complexity that isn't worth ~16 s per worktree.
+
 ### The race-detector unit gate
 
 The CI `unit-test` job runs the per-module unit tests under Go's race detector (`go test -race`), not plain `go test`. The multiplexing core — agentpool, listener/mux, broker, token — is where data races hide, and plain `go test` never flags them; `-race` is pass/fail (a detected race fails the job). This is the only `unit-test.yml` step `make check` does not mirror, because `-race` instruments every memory access and roughly doubles unit runtime.
