@@ -226,25 +226,33 @@ func (c *Client) registrationToken(ctx context.Context, installToken string) (st
 	return out.Token, nil
 }
 
-// registrationTokenPath maps an org or owner/repo config URL to its
-// registration-token REST path.
-func registrationTokenPath(configURL string) (string, error) {
+// runnerRESTPrefix maps an org or owner/repo config URL to the REST runners API
+// path prefix — "/orgs/{org}" or "/repos/{owner}/{repo}" — the base for the
+// registration-token, list-runners, and delete-runner endpoints.
+func runnerRESTPrefix(configURL string) (string, error) {
 	u, err := url.Parse(configURL)
 	if err != nil {
 		return "", fmt.Errorf("parse ConfigURL: %w", err)
 	}
 	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
-	switch len(segs) {
-	case 1:
-		if segs[0] == "" {
-			return "", fmt.Errorf("ConfigURL must be an org or owner/repo URL, got path %q", u.Path)
-		}
-		return "/orgs/" + segs[0] + "/actions/runners/registration-token", nil
-	case 2:
-		return "/repos/" + segs[0] + "/" + segs[1] + "/actions/runners/registration-token", nil
+	switch {
+	case len(segs) == 1 && segs[0] != "":
+		return "/orgs/" + segs[0], nil
+	case len(segs) == 2:
+		return "/repos/" + segs[0] + "/" + segs[1], nil
 	default:
 		return "", fmt.Errorf("ConfigURL must be an org or owner/repo URL, got path %q", u.Path)
 	}
+}
+
+// registrationTokenPath maps an org or owner/repo config URL to its
+// registration-token REST path.
+func registrationTokenPath(configURL string) (string, error) {
+	prefix, err := runnerRESTPrefix(configURL)
+	if err != nil {
+		return "", err
+	}
+	return prefix + "/actions/runners/registration-token", nil
 }
 
 // runnerRegistration performs the RemoteAuth hop that discovers the Actions
@@ -451,6 +459,106 @@ func (c *Client) GenerateJITConfig(ctx context.Context, scaleSetID int, name, wo
 		return nil, err
 	}
 	return &out, nil
+}
+
+// DeregisterRunnerByName deletes the GitHub runner record registered under name via
+// the REST runners API, returning (true, nil) when a record was found and removed and
+// (false, nil) when none matched. It clears a stale registration a reaped
+// never-started worker left behind: that record is offline but keeps the deterministic
+// {scaleSet}-{jobID} runner name taken, so every re-provision of the same job 409s at
+// generatejitconfig and the job is stranded until the AGC restarts (Q334). Deleting it
+// lets the job re-register under the same name — and stops the offline records from
+// piling up. A record still running a job cannot be deleted (422) and surfaces as
+// *RunnerBusyError so the caller keeps it. The records generatejitconfig pre-registers
+// are visible and deletable through this REST API — the same endpoint operators use to
+// prune offline runners.
+//
+// Unlike the Actions Service calls this authorizes with the GitHub App installation
+// token (as the registration-token bootstrap hop does), not the admin JWT.
+func (c *Client) DeregisterRunnerByName(ctx context.Context, name string) (bool, error) {
+	installToken, err := c.provider.Token(ctx)
+	if err != nil {
+		return false, fmt.Errorf("scaleset: installation token: %w", err)
+	}
+	prefix, err := runnerRESTPrefix(c.configURL)
+	if err != nil {
+		return false, err
+	}
+	id, err := c.resolveRunnerID(ctx, installToken, prefix, name)
+	if err != nil {
+		return false, err
+	}
+	if id == 0 {
+		return false, nil
+	}
+	if err := c.deleteRunner(ctx, installToken, prefix, id, name); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// resolveRunnerID looks up a registered runner's id by exact name via the REST
+// list-runners name filter, returning 0 when none matches.
+func (c *Client) resolveRunnerID(ctx context.Context, installToken, prefix, name string) (int64, error) {
+	u := c.apiBase + prefix + "/actions/runners?name=" + url.QueryEscape(name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+installToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("scaleset: list runners: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("scaleset: list runners: status %d: %s", resp.StatusCode, githubapp.SanitizeBody(body, 256))
+	}
+	var out struct {
+		Runners []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		} `json:"runners"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return 0, fmt.Errorf("scaleset: decode list runners: %w", err)
+	}
+	for _, rn := range out.Runners {
+		// name is a server-side filter, not an exact-match guarantee — compare.
+		if rn.Name == name {
+			return rn.ID, nil
+		}
+	}
+	return 0, nil
+}
+
+// deleteRunner issues the REST DELETE for a runner id. A 422 whose body mentions the
+// runner is still running surfaces as *RunnerBusyError; other non-2xx are fatal.
+func (c *Client) deleteRunner(ctx context.Context, installToken, prefix string, id int64, name string) error {
+	u := fmt.Sprintf("%s%s/actions/runners/%d", c.apiBase, prefix, id)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+installToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("scaleset: delete runner: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusUnprocessableEntity && bytes.Contains(bytes.ToLower(body), []byte("running")) {
+		return &RunnerBusyError{Name: name}
+	}
+	return fmt.Errorf("scaleset: delete runner %d: status %d: %s", id, resp.StatusCode, githubapp.SanitizeBody(body, 256))
 }
 
 // CreateSession opens the scale set's message-queue session (one active per scale

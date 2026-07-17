@@ -59,6 +59,19 @@ func (e *RunnerNameConflictError) Error() string {
 	return fmt.Sprintf("scaleset: runner name already registered (HTTP %d)", e.StatusCode)
 }
 
+// RunnerBusyError is returned by DeregisterRunnerByName when the runner record it
+// tried to delete is currently running a job (422 Unprocessable Entity, "is still
+// running a job"). The record is held by a live runner, so deleting it would be
+// wrong — the caller must leave it in place (a reaped never-started worker's record
+// is instead offline, so this never blocks the Q334 cleanup path).
+type RunnerBusyError struct {
+	Name string
+}
+
+func (e *RunnerBusyError) Error() string {
+	return fmt.Sprintf("scaleset: runner %q is currently running a job and cannot be deleted", e.Name)
+}
+
 // NotFoundError is returned when a scale set, session, or message no longer exists
 // server-side (404 Not Found or 410 Gone). For a session it signals recovery by
 // re-create (the queue replays unacked messages to a fresh session — §2b-3).
