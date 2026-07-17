@@ -468,6 +468,15 @@ Note that GAG's per-PR e2e still runs on GitHub-hosted runners unless
 `GAG_E2E_RUNNER` routes it to GAG, so this is a change of *where* e2e runs as much as
 *how*.
 
+**Kata-incompatibility found live (2026-07-16, fixed):** with `GAG_E2E_RUNNER`
+routed to the Kata runner, the `vault-workload-identity` suite failed its
+`BeforeAll` deterministically — the dev-mode Vault pod requested the `IPC_LOCK`
+capability, and the unprivileged nested runc cannot grant it
+(`unable to apply caps: operation not permitted`, crashloop). Fixed by dropping the
+capability and setting `SKIP_SETCAP=true` on the pod (dev-mode Vault holds
+everything in memory and never mlocks); the rest of the suite adds no capabilities
+anywhere (only `drop: ALL`), so no other Kata cap conflicts exist in e2e.
+
 ---
 
 ## Two variants, one base — and defaulting to Kata

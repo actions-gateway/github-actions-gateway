@@ -191,6 +191,14 @@ vault write auth/kubernetes/role/%[2]s \
 // testVaultManifest renders a dev-mode Vault Deployment + Service + ServiceAccount,
 // with a ClusterRoleBinding granting the Vault SA system:auth-delegator so Vault can
 // review the AGC's projected token via the TokenReview API.
+//
+// The pod deliberately requests NO IPC_LOCK capability and sets SKIP_SETCAP=true: a
+// dev-mode Vault keeps everything in memory and does not mlock, and on the
+// unprivileged Kata e2e runner (Q286) the nested runc cannot grant IPC_LOCK at all —
+// `unable to apply caps: operation not permitted` crashlooped the pod and failed the
+// suite's BeforeAll deterministically. SKIP_SETCAP stops the image entrypoint from
+// running setcap on the vault binary (which would fail the same way for the non-root
+// container user).
 func testVaultManifest(image, ns string) string {
 	return fmt.Sprintf(`apiVersion: v1
 kind: ServiceAccount
@@ -237,12 +245,11 @@ spec:
           value: root
         - name: VAULT_ADDR
           value: http://127.0.0.1:8200
+        - name: SKIP_SETCAP
+          value: "true"
         ports:
         - containerPort: 8200
           name: http
-        securityContext:
-          capabilities:
-            add: ["IPC_LOCK"]
         readinessProbe:
           httpGet:
             path: /v1/sys/health?standbyok=true
