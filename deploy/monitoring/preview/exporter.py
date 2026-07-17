@@ -90,12 +90,16 @@ def render():
         L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
         L.append(f'actions_gateway_workers_unschedulable{{namespace="{ns}",runner_group="{rg}"}} 0')
 
-    # Per-tenant egress proxy (no intrinsic namespace label — one target/tenant).
-    L.append(f'actions_gateway_proxy_connections_active {max(0, int(8 + jitter(3, 4)))}')
-    L.append(f'actions_gateway_proxy_connections_total {int(0.5 * elapsed)}')
-    L.append(f'actions_gateway_proxy_dial_errors_total {int(0.001 * elapsed)}')
-    # tunnel duration: center idx 5 (~60s)
-    L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", "", PROXY_BUCKETS, 0.5, 5, elapsed)
+    # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
+    # the per-tenant ServiceMonitor stamps one from the scrape target's namespace
+    # (Q314) so the tenant dashboard's proxy panels can filter by $namespace. Mirror
+    # that here: emit one proxy series per namespace, labelled with it.
+    for ns in NAMESPACES:
+        L.append(f'actions_gateway_proxy_connections_active{{namespace="{ns}"}} {max(0, int(8 + jitter(3, 4)))}')
+        L.append(f'actions_gateway_proxy_connections_total{{namespace="{ns}"}} {int(0.5 * elapsed)}')
+        L.append(f'actions_gateway_proxy_dial_errors_total{{namespace="{ns}"}} {int(0.001 * elapsed)}')
+        # tunnel duration: center idx 5 (~60s)
+        L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", f'namespace="{ns}"', PROXY_BUCKETS, 0.5, 5, elapsed)
 
     # GMC fleet rollups.
     L.append("actions_gateway_managed_gateways 4")
