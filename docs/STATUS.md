@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q336
+**Next ID:** Q344
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -55,6 +55,14 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
 | <a id="Q331"></a>Q331 | Remove Apache per-file license headers, gate against return | `infra` | 🔲 | S | Strip the scaffolded Apache boilerplate from Go file headers (repo-level LICENSE is canonical; coverage today is inconsistent) and add a make-check lint so new files can't reintroduce them. |
+| <a id="Q336"></a>Q336 | [Split gke-dogfood.md into lean runbook + archived findings](plan/gke-dogfood.md) | `docs` | 🔲 | S | At 112KB the completed "living runbook" gets read whole by sessions (~28k tokens each, repeatedly in a 2-week sample). Keep the operational runbook small; move turn-up history and findings to plan/archive. |
+| <a id="Q337"></a>Q337 | [Trim q264-scale-set-protocol.md to the open residual](plan/q264-scale-set-protocol.md) | `docs` | 🔲 | S | P1–P5 shipped but the 71KB phase narrative is still read whole (9+ sessions in 2 weeks). Move shipped-phase detail to plan/archive; keep only the classic-removal residual context for [Q264](#Q264). |
+| <a id="Q338"></a>Q338 | [Restructure observability.md for selective reading](operations/observability.md) | `docs` | 🔲 | S | 82KB single page; sessions read it whole. Split per surface (metrics reference vs dashboards vs alerting how-to) or add a top index so a single-section read suffices. |
+| <a id="Q339"></a>Q339 | [Codify no-foreground-poll + slow-tier timeouts in CLAUDE.md/testing.md](development/testing.md) | `docs` `infra` | 🔲 | S | ~130 blocked CI/log poll attempts plus 36 default-timeout Bash kills in 2 weeks. Add one line each: never foreground-poll CI/logs/files; envtest/e2e/`-race` runs get an explicit timeout or run in background. |
+| <a id="Q340"></a>Q340 | Trim CLAUDE.md per its own context-budget rule | `docs` | 🔲 | S | 22.7KB loads into every session turn. Compress the hooks and testing sections into pointers at their docs/ pages; keep only must-act-on rules inline. |
+| <a id="Q341"></a>Q341 | Split AGC listener goroutine.go and provisioner.go | `infra` | 🔲 | M | 66KB and 70KB files defeat selective reading (read whole by 7+ sessions each in 2 weeks) and are outsized for review. Mechanical split into focused files, no behavior change. |
+| <a id="Q342"></a>Q342 | Script recurring dogfood e2e ops under scripts/dogfood/ | `infra` | 🔲 | S | Pool config, kata-deploy install, AGC bounce, and debug-pod loops get re-typed ad hoc with per-command PROD_GUARD_OVERRIDEs. Fold them into the lifecycle scripts (hook-exempt, reviewed once). |
+| <a id="Q343"></a>Q343 | Share lint/build caches across session worktrees | `speed` `infra` | 🔲 | S | `make check` ran 461× in 2 weeks, each worktree cold-caching golangci-lint and go builds. Point GOLANGCI_LINT_CACHE/GOCACHE at shared per-repo dirs and measure the speedup. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
