@@ -20,6 +20,15 @@ TENANTS = [
 ]
 NAMESPACES = ["team-a", "team-b"]
 
+# (namespace, runner_set) for the scale-set acquisition tier (Q264 default
+# protocol). Labelled by runner_set (not runner_group); a ScaleSet-protocol
+# RunnerSet emits none of the classic series above.
+SCALESETS = [
+    ("team-a", "gpu-a100"),
+    ("team-a", "cpu-standard"),
+    ("team-b", "cpu-standard"),
+]
+
 POD_BUCKETS = [0.5, 1, 2.5, 5, 10, 15, 30, 60, 120, 300]   # +Inf appended
 JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
@@ -89,6 +98,22 @@ def render():
         L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="{rg}"}} 0')
         L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
         L.append(f'actions_gateway_workers_unschedulable{{namespace="{ns}",runner_group="{rg}"}} 0')
+
+    # Scale-set acquisition tier (Q264/Q311): one Listener per ScaleSet-protocol
+    # RunnerSet. Assigned drives demand 1:1 (no sibling fan-out); provisioned
+    # tracks just below it; a trickle of retried provision errors; completions
+    # split mostly-succeeded by result.
+    for ns, rs in SCALESETS:
+        rate = {"gpu-a100": 0.12, "cpu-standard": 0.7}.get(rs, 0.2)
+        assigned = int(rate * elapsed)
+        provisioned = int(assigned * 0.98)
+        completed = int(provisioned * 0.95)
+        L.append(f'actions_gateway_scaleset_jobs_assigned_total{{namespace="{ns}",runner_set="{rs}"}} {assigned}')
+        L.append(f'actions_gateway_scaleset_jobs_provisioned_total{{namespace="{ns}",runner_set="{rs}"}} {provisioned}')
+        L.append(f'actions_gateway_scaleset_provision_errors_total{{namespace="{ns}",runner_set="{rs}"}} {int(0.002 * elapsed)}')
+        L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="succeeded"}} {int(completed * 0.9)}')
+        L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="failed"}} {int(completed * 0.08)}')
+        L.append(f'actions_gateway_scaleset_jobs_completed_total{{namespace="{ns}",runner_set="{rs}",result="canceled"}} {int(completed * 0.02)}')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace

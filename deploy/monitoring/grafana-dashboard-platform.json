@@ -38,14 +38,14 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values(actions_gateway_active_sessions, namespace)",
+        "definition": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "namespace",
         "query": {
-          "query": "label_values(actions_gateway_active_sessions, namespace)",
+          "query": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
           "refId": "namespace"
         },
         "refresh": 2,
@@ -329,6 +329,23 @@
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "expr": "actions_gateway:pod_creation_latency_seconds:p99{namespace=~\"$namespace\"}",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Jobs assigned/min by namespace (scale-set)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 32 },
+      "id": 34,
+      "description": "The default acquisition protocol (Q264). A scale-set-only fleet emits no jobs_acquired_total, so cross-tenant throughput is only visible here. Requires the per-tenant AGC scrapes.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total{namespace=~\"$namespace\"}[5m])) * 60",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
