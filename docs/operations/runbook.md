@@ -127,6 +127,10 @@ procedure rather than just the alert's `summary`/`description`. Severity classes
 
 **Ticket.** A job's eviction-retry budget is exhausted and the job requires a manual re-run. See [Evicted Worker Pods Exhausting Retry Budget](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).
 
+### ActionsGatewayQuotaRetriesExhausted
+
+**Ticket.** A job's quota-retry budget is exhausted — worker pod creation kept being rejected by the namespace `ResourceQuota` — and the job was abandoned and requires a manual re-run. Raise the quota or lower `maxWorkers` — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) and [Adjusting Tenant Quota](#adjusting-tenant-quota).
+
 ### ActionsGatewayWorkerQuotaExceeded
 
 **Page.** The namespace `ResourceQuota` is rejecting worker pods, so acquired jobs cannot schedule. Raise the quota or lower `maxWorkers` — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) and [Adjusting Tenant Quota](#adjusting-tenant-quota).

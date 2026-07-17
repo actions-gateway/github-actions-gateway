@@ -318,6 +318,8 @@ remove the files when finished.)
 | `actions_gateway_renew_job_teardowns_total` | Counter | `namespace`, `reason` | Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. `reason="job_not_found"` is a definitive 404/410 from the run service (job recycled/reassigned); `reason="consecutive_failures"` is 5 consecutive renewal failures (~5 min). See the [runbook](troubleshooting.md#renewjob-failures-rising). |
 | `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction. |
 | `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). |
+| `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried after the namespace `ResourceQuota` rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower `maxWorkers`. |
+| `actions_gateway_quota_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Quota retries exhausted; the job was abandoned after the quota retry budget ran out and requires a manual re-run. |
 | `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. |
 | `actions_gateway_worker_scaleup_throttled_total` | Counter | `namespace`, `runner_group` | Worker-pod creations delayed by the opt-in per-RunnerGroup scale-up rate limit (`spec.scaleUp`): the token bucket was empty so the acquired job waited for a token before its pod was created (Q223). **Zero unless a group sets `scaleUp`** — it is default-off. A sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path (NAT/firewall/VPN); that is the knob doing its job, not an error. If it is *persistently* high, the ramp may be holding already-claimed jobs too long — raise `maxPerSecond`/`burst`, or confirm a rate limit is the right tool for the burst (see [tenant-onboarding: worker scale-up rate limit](tenant-onboarding.md#step-2-create-the-actionsgateway-resource)). |
 | `actions_gateway_message_poll_errors_total` | Counter | `namespace`, `reason` | `GetMessage` errors (excludes empty polls and session expiry — those are normal). `reason="rate_limited"` is a 429; `reason="timeout"` is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see [Listener Stalls After a Black-Holed Broker Connection](troubleshooting.md#listener-stalls-for-minutes-after-a-black-holed-broker-connection)); `reason="other"` is any remaining transport/decode error. |
@@ -541,6 +543,7 @@ These markers ride on the worker pod itself, so they are removed the moment the 
 | Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota (scale-set has no `active_sessions` gauge) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
+| Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
 | Throughput decaying job by job | `agent_recycle_errors_total` rising, `active_sessions` shrinking | Agent re-registration failing; see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero) |
 | Jobs cancelled without ever starting | `worker_pods_reaped_total{reason="pending_deadline"}` | Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) |
 | Jobs running but `ACTIVEJOBS` shows 0 | Check pod phase with `kubectl get pods -l actions-gateway/runner-group=<name>` (v1) or `-l actions-gateway.com/runner-set=<name>` (v2) | `ACTIVEJOBS` is updated on pod phase-change events; the column reflects the last reconcile snapshot — not a real-time gauge. A pod that changed phase after the last reconcile will show up after the next event fires. |
@@ -634,6 +637,17 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayevictionretriesexhausted"
           summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
           description: "A job's eviction retry budget has been exhausted. Manual re-run required."
+
+      # Ticket: quota retry budget exhausted — manual re-run required
+      - alert: ActionsGatewayQuotaRetriesExhausted
+        expr: |
+          increase(actions_gateway_quota_retries_exhausted_total[5m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayquotaretriesexhausted"
+          summary: "Quota retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+          description: "A job was abandoned after its namespace ResourceQuota retry budget was exhausted. Raise the quota or lower maxWorkers, then re-run."
 
       # Page: the namespace ResourceQuota is rejecting worker pods now (Q82)
       - alert: ActionsGatewayWorkerQuotaExceeded
@@ -936,6 +950,8 @@ Filtered by the `$namespace` and `$runner_group` template variables. Uses the SL
 | Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series |
 | Eviction retries | `increase(actions_gateway_eviction_retries_total[1h])` | Bar chart |
 | Eviction budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
+| Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
+| Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 
 **Row 4 — Scale-set Acquisition Tier (per runner_set)**
 

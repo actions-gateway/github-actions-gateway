@@ -104,6 +104,17 @@ spec:
             summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "A job's eviction retry budget has been exhausted. Manual re-run required."
 
+        # Ticket: quota retry budget exhausted — manual re-run required
+        - alert: ActionsGatewayQuotaRetriesExhausted
+          expr: |
+            increase(actions_gateway_quota_retries_exhausted_total[5m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayquotaretriesexhausted"
+            summary: "Quota retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "A job was abandoned after its namespace ResourceQuota retry budget was exhausted. Raise the quota or lower maxWorkers, then re-run."
+
         # Page: the namespace ResourceQuota is rejecting worker pods now (Q82)
         - alert: ActionsGatewayWorkerQuotaExceeded
           expr: |
