@@ -19,7 +19,7 @@
 | Q327 (fixed) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
 | Q328 (fixed) | v2 gateway teardown not fail-closed (Q125 parity); `MaxConcurrentReconciles=1` not set | Robustness |
 | [Q329](../STATUS.md#Q329) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
-| [Q321](../STATUS.md#Q321) (pre-existing) | v2 ActionsGateway condition gauges (`runnersets_degraded` twin) | Observability |
+| Q321 (fixed) | v2 ActionsGateway condition gauges (`runnersets_degraded` twin + `agc_available`/`egress_unattributed`) | Observability |
 
 <a id="admission"></a>
 ## Admission surface
@@ -77,7 +77,7 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 <a id="observability"></a>
 ## Observability roll-up
 
-Cross-cutting view of the gaps above plus what's already on the Queue: v2 proxy binary metrics unscrapable + no ServiceMonitors (Q324); no v2 condition gauges — RunnerSet capacity (Q319), gateway conditions incl. `runnersets_degraded` (Q321); ScaleSet tier has metrics but no alerts/dashboards (Q311) — its missing failure conditions/events (Q325) are now fixed; dead/undocumented v2 condition vocabulary (Q309). An operator running pure-v2 today has status conditions and scale-set counters, but almost no alertable Prometheus surface for them.
+Cross-cutting view of the gaps above plus what's already on the Queue: v2 proxy binary metrics unscrapable + no ServiceMonitors (Q324); remaining v2 condition-gauge gap is RunnerSet worker-capacity (Q319) — the gateway-level condition gauges (`runnersets_degraded`/`agc_available`/`egress_unattributed`) are now fixed (Q321); ScaleSet tier has metrics but no alerts/dashboards (Q311) — its missing failure conditions/events (Q325) are now fixed; dead/undocumented v2 condition vocabulary (Q309). An operator running pure-v2 today has status conditions and scale-set counters, but almost no alertable Prometheus surface for them.
 
 <a id="minor"></a>
 ## Minor / stale-doc findings (Q329)

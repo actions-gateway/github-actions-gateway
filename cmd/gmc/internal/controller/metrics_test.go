@@ -54,6 +54,16 @@ func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionSt
 	return ep
 }
 
+// v2GatewayWithCondition builds a v2alpha1 ActionsGateway carrying a single status
+// condition, for driving the v2 ActionsGateway condition collector (Q321).
+func v2GatewayWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2alpha1.ActionsGateway {
+	ag := v2ManagedGateway(name, false)
+	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
+		Type: condType, Status: status, Reason: "Test", Message: "test",
+	})
+	return ag
+}
+
 // testIPRangeUpdates returns an unregistered Metrics with just the counter, so
 // tests do not touch the global controller-runtime registry.
 func testIPRangeUpdates() *Metrics {
@@ -202,6 +212,65 @@ actions_gateway_runnergroups_degraded{name="healthy",namespace="healthy"} 0
 	// The deleting gateway must not appear as a series at all — CollectAndCompare
 	// fails if the collected exposition contains anything beyond the two lines above.
 	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestActionsGatewayV2ConditionsCollector_MirrorsConditions asserts the v2
+// ActionsGateway condition collector (Q321) exports the runnersets_degraded,
+// agc_available, and egress_unattributed gauges per non-deleting v2 gateway, each
+// mirroring its condition's True/False (set/clear) state, and skips a deleting
+// gateway entirely.
+func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+
+	// "degraded": RunnerSetsDegraded=True, AGCAvailable=False, EgressUnattributed=True.
+	degraded := v2GatewayWithCondition("degraded", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionTrue)
+	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
+	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+	})
+
+	// "healthy": RunnerSetsDegraded=False, AGCAvailable=True, EgressUnattributed=False.
+	healthy := v2GatewayWithCondition("healthy", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionFalse)
+	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+	})
+	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
+
+	deleting := v2ManagedGateway("deleting", true)
+
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(degraded, healthy, deleting).Build()
+	c := newActionsGatewayV2ConditionsCollector(fc)
+
+	const expected = `
+# HELP actions_gateway_agc_available 1 when the v2 ActionsGateway AGCAvailable condition is True (the tenant's AGC Deployment has a ready replica), else 0.
+# TYPE actions_gateway_agc_available gauge
+actions_gateway_agc_available{name="degraded",namespace="degraded"} 0
+actions_gateway_agc_available{name="healthy",namespace="healthy"} 1
+# HELP actions_gateway_egress_unattributed 1 when the v2 ActionsGateway EgressUnattributed condition is True (the gateway runs in direct egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy), else 0.
+# TYPE actions_gateway_egress_unattributed gauge
+actions_gateway_egress_unattributed{name="degraded",namespace="degraded"} 1
+actions_gateway_egress_unattributed{name="healthy",namespace="healthy"} 0
+# HELP actions_gateway_runnersets_degraded 1 when the v2 ActionsGateway RunnerSetsDegraded condition is True (one or more RunnerSets bound to the gateway report an impairing condition), else 0. The v2 twin of actions_gateway_runnergroups_degraded.
+# TYPE actions_gateway_runnersets_degraded gauge
+actions_gateway_runnersets_degraded{name="degraded",namespace="degraded"} 1
+actions_gateway_runnersets_degraded{name="healthy",namespace="healthy"} 0
+`
+	// The deleting gateway must not appear as any series — CollectAndCompare fails
+	// if the collected exposition contains anything beyond the lines above.
+	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestActionsGatewayV2ConditionsCollector_NoGateways asserts the collector emits
+// nothing when there are no v2 ActionsGateways — no phantom zero-value series.
+func TestActionsGatewayV2ConditionsCollector_NoGateways(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+	fc := fake.NewClientBuilder().WithScheme(scheme).Build()
+	c := newActionsGatewayV2ConditionsCollector(fc)
+	assert.Equal(t, 0, testutil.CollectAndCount(c))
 }
 
 // TestProxyQuotaCollector_MirrorsBothConditions asserts the collector exports
