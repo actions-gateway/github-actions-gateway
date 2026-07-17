@@ -653,6 +653,158 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "type": "row",
+      "title": "Reliability Signals (Q315)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 },
+      "id": 70,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Job acquisition errors/s (by reason)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 5, "x": 0, "y": 47 },
+      "id": 71,
+      "description": "acquirejob failures by reason: already_claimed (benign race), delivery_window_expired (job redelivered), version_too_old, other. Each also emits a JobAcquisitionFailed Warning Event on the owning RunnerGroup/RunnerSet.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, reason) (rate(actions_gateway_job_acquisition_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}} {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Message poll errors/s (by reason)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 5, "x": 5, "y": 47 },
+      "id": 72,
+      "description": "GetMessage errors (excludes empty polls and session expiry — those are normal). reason=rate_limited (429), timeout (a black-holed long-poll bounded by the response-header deadline and retried), other (remaining transport/decode error).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}} {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "RenewJob teardowns/s (by reason)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 5, "x": 10, "y": 47 },
+      "id": 73,
+      "description": "Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. reason=job_not_found (definitive 404/410 from the run service) or consecutive_failures (5 consecutive renewal failures, ~5 min).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, reason) (rate(actions_gateway_renew_job_teardowns_total{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{namespace}} {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Worker pods reaped/s (by reason)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 5, "x": 15, "y": 47 },
+      "id": 74,
+      "description": "Worker pods deleted by the lifecycle reaper. reason=completed_ttl is routine cleanup after completedPodTTL; reason=pending_deadline means a pod stuck Pending past pendingPodDeadline was reaped and its job cancelled (also emits a WorkerPodStuckPending Warning Event).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}} {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Broker token propagation retries/s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 4, "x": 20, "y": 47 },
+      "id": 75,
+      "description": "Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient 400 during the generate-jitconfig → OAuth-service propagation window (Q267). A brief burst blip is normal; a sustained rate means wide-pool recycle churn is hitting the propagation seam.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group) (rate(actions_gateway_broker_token_propagation_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Fan-out Safety (Q260 / Q266)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 54 },
+      "id": 80,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Duplicate job deliveries/s",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 55 },
+      "id": 81,
+      "description": "Duplicate job deliveries deduplicated (Q260): the broker delivered the same planID to more than one sibling session and this one skipped provisioning, recycling its runner instead. A steady low rate during bursts is normal and benign; a spike proportional to a stalled matrix indicates heavy fan-out — correlate with Jobs acquired.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group) (rate(actions_gateway_jobs_duplicate_delivery_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Abandoned-delivery completions/s (by outcome)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 55 },
+      "id": 82,
+      "description": "The winner of a fanned-out job issuing completejob on a deduped sibling delivery so GitHub does not cancel the whole job at its ~15-min unstarted-job timeout (Q260 Option A, on by default). outcome=completed resolved the assignment; a rising error rate warrants investigating the run service's completejob responses (ActionsGatewayAbandonedDeliveryErrors).",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group, outcome) (rate(actions_gateway_abandoned_delivery_completions_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}} {{outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Fan-out loser recycle deferred/s (by outcome)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 55 },
+      "id": 83,
+      "description": "A deduped fan-out loser deferring its slot recycle until its winner concluded (Q266), so recycling eagerly does not collapse the pool. outcome=winner_concluded is the normal path; a sustained fallback_timeout is alert-worthy (a class of stuck winners, ActionsGatewayFanoutFallbackTimeout); context_cancelled is AGC shutdown.",
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (runner_group, outcome) (rate(actions_gateway_fanout_loser_recycle_deferred_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{runner_group}} {{outcome}}",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }
