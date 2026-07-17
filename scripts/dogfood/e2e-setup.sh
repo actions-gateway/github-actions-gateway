@@ -15,7 +15,7 @@
 # corrected this script's Kata install (the old release-asset URLs 404; the
 # RuntimeClass used an invalid scheduling.nodeClassification field; the pool did
 # not pin --image-type so it got COS). Q286 wires GAG's e2e suite through it —
-# see docs/plan/kata-on-gke.md.
+# see docs/plan/archive/kata-on-gke.md.
 #
 # Run once after the main cluster setup (Parts A–B of the runbook).
 # Idempotent and safe to re-run: the e2e node-pool create is skipped if the
@@ -42,11 +42,19 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 # version: https://github.com/kata-containers/kata-containers/releases
 KATA_VERSION="${KATA_VERSION:-3.32.0}"
 KATA_CHART="oci://quay.io/kata-containers/kata-deploy-charts/kata-deploy"
-# Label that scopes the kata-deploy installer to the e2e pool. Deliberately NOT
-# katacontainers.io/kata-runtime: kata-deploy SETS that label once the runtime is
-# installed, and the RuntimeClass schedules on it. Conflating the two lets a Kata
-# pod land on a node whose runtime does not exist yet.
+# Label that scopes the kata-deploy installer to the e2e pool. Distinct from
+# katacontainers.io/kata-runtime (which kata-deploy sets once the runtime is
+# installed, and the RuntimeClass schedules on): kata-deploy must target nodes
+# where the runtime does NOT exist yet.
 KATA_POOL_LABEL_KEY="gag.dev/kata-ci"
+# The runtime-ready label is ALSO baked into the pool config (create_node_pool),
+# not because the runtime exists at boot — it doesn't — but because cluster-
+# autoscaler scale-from-zero simulates against the pool's configured labels
+# only; without it no Kata pod can ever trigger the 0→N scale-up (found live
+# under Q286). Same pattern GKE uses for its gVisor sandbox pools. The window
+# where a pod binds before kata-deploy finishes installing resolves itself:
+# sandbox creation fails and the kubelet retries until the handler appears.
+KATA_RUNTIME_LABEL_KEY="katacontainers.io/kata-runtime"
 
 create_node_pool() {
 	if gcloud container node-pools describe e2e \
@@ -78,7 +86,7 @@ create_node_pool() {
 		--min-nodes=0 \
 		--max-nodes=2 \
 		--enable-autoscaling \
-		--node-labels="${KATA_POOL_LABEL_KEY}=true" \
+		--node-labels="${KATA_POOL_LABEL_KEY}=true,${KATA_RUNTIME_LABEL_KEY}=true" \
 		--node-taints=dedicated=e2e:NoSchedule \
 		--disk-size=100GB
 }
@@ -90,10 +98,18 @@ install_kata() {
 	# creates the kata-qemu RuntimeClass (with the correct pod overhead); we add
 	# the `kata` alias separately in apply_runtimeclass.
 	echo "Installing kata-deploy ${KATA_VERSION} via Helm (scoped to the e2e pool)..."
+	# The tolerations are load-bearing: the e2e pool is tainted
+	# dedicated=e2e:NoSchedule and the chart ships none by default, so without
+	# them the installer can never reach the only nodes it targets (found live
+	# under Q286).
 	helm upgrade --install kata-deploy "${KATA_CHART}" \
 		--version "${KATA_VERSION}" \
 		--namespace kube-system \
-		--set "nodeSelector.${KATA_POOL_LABEL_KEY//./\\.}=true" \
+		--set-string "nodeSelector.${KATA_POOL_LABEL_KEY//./\\.}=true" \
+		--set-string "tolerations[0].key=dedicated" \
+		--set-string "tolerations[0].value=e2e" \
+		--set-string "tolerations[0].effect=NoSchedule" \
+		--set-string "tolerations[0].operator=Equal" \
 		--set shims.disableAll=true \
 		--set shims.qemu.enabled=true \
 		--set defaultShim.amd64=qemu \

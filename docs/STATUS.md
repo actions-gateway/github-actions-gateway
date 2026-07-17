@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q334
+**Next ID:** Q336
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -48,7 +48,8 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q286"></a>Q286 | [Move GAG e2e CI onto the Kata runner (unprivileged kind)](plan/kata-on-gke.md) | `security` `infra` | 🔲 | M | Wiring landed (overlays/kata, E2E_VARIANT, /dev/kmsg kind config; no runner image needed). Remaining: live AC#5 `make e2e` green via Kata + default flip — [checklist](plan/kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate). |
+| <a id="Q334"></a>Q334 | [Reaped never-started workers strand jobs on runner-name 409s](plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) | `bug` `infra` | 🔲 | M | A reaped Pending worker leaves its runner record; re-provisions of the same jobID derive the same names, 409 up to -3, then the listener skips the job until an AGC restart. Unregister on reap, or add a nonce. |
+| <a id="Q335"></a>Q335 | [On-demand e2e AGC no longer fits the 1-node system pool](plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) | `infra` | 🔲 | S | DaemonSet/kube-dns growth leaves <500m free on the single e2-standard-2, so `e2e-start.sh` times out Pending. Scale the system pool for the e2e window (start/stop scripts) or document 2 nodes in the runbook. |
 | <a id="Q330"></a>Q330 | v2 RunnerSetsDegraded rollup misses listener-pushed conditions | `bug` | 🔲 | S | runnerSetImpairments reads only Ready+WorkersUnschedulable; a classic set with revoked creds converges to benign NoActiveSessions while Degraded sits unrolled (v1 rolls it up). Extend the signature. |
 | <a id="Q332"></a>Q332 | Classic listener never clears its failure conditions | `bug` | 🔲 | S | The classic path only sets abnormal (True) states; recovered RateLimited/Degraded sit stale until restart. Port the ScaleSet clear-on-recovery pattern, incl. v1alpha1 False-reasons. [Analysis](plan/v2-api-gap-analysis.md#agc). |
 | <a id="Q333"></a>Q333 | Listener-pushed conditions/events lag until next reconcile | `infra` | 🔲 | S | conditionCh/eventCh drain only when a reconcile runs; an idle set can lag up to the 10h resync. Wire a channel GenericEvent source so pushes wake the reconciler. v1+v2. |
