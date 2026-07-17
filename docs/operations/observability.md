@@ -363,10 +363,12 @@ remove the files when finished.)
 > `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1
 > `RunnerGroupsDegraded` above. It is `True` when one or more of the `RunnerSet`s bound
 > to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient
-> `Ready=False` (a reference did not resolve or GitHub auth failed) or
-> `WorkersUnschedulable=True`. The advisory conditions (the `WorkerQuota` ladder,
-> `EgressUnattributed`, `PossibleReapBlockingSidecar`) are excluded so the rollup does
-> not flap on normal load. The condition message names the impaired sets and their
+> `Ready=False` (a reference did not resolve or a provisioning step failed) **or** any
+> abnormal-is-True impairing condition — `Degraded` (revoked/invalid credentials, pushed
+> by the listener independently of `Ready`, Q330), `CredentialUnavailable`,
+> `RunnerVersionTooOld`, or `WorkersUnschedulable`. The advisory conditions (`RateLimited`,
+> the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`) are
+> excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
 > tripped signals, giving the operator a single pane without inspecting each child.
 > Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
 > AGC control plane can be healthy while a tenant's set is impaired. It is exported as the `actions_gateway_runnersets_degraded`

@@ -256,14 +256,20 @@ automatically on the next reconcile (the GMC watches the owned RunnerGroups):
 
 > **v2 `ActionsGateway`: `RunnerSetsDegraded`.** The v2 `ActionsGateway` reports the
 > same rollup as `RunnerSetsDegraded` (Q304), rolling **child `RunnerSet`** health up to
-> the gateway. Because a v2 `RunnerSet` folds its credential/reference failures into
-> `Ready=False` with a reason (rather than standing `CredentialUnavailable`/`Degraded`
-> conditions), a set counts as impaired when it is not `Ready` for a non-transient
-> reason (anything but the benign startup `NoActiveSessions`) **or** reports
-> `WorkersUnschedulable=True`. The message names the impaired sets and their tripped
-> signals; a set targeting a *different* gateway is never counted. It is advisory (does
-> **not** gate `Ready`) and clears automatically once the children recover (the GMC
-> watches bound `RunnerSet`s). Read it with:
+> the gateway. A set counts as impaired on either of two axes: it is not `Ready` for a
+> non-transient reason — a reference or provisioning failure, which a v2 `RunnerSet`
+> folds into `Ready=False` (anything but the benign startup `NoActiveSessions`) — **or**
+> any of its abnormal-is-True impairing conditions is `True`: `Degraded` (revoked or
+> invalid credentials), `CredentialUnavailable`, `RunnerVersionTooOld`, or
+> `WorkersUnschedulable`. The second axis matters because the shared listener pushes
+> `Degraded`/`RunnerVersionTooOld` independently of `Ready` (Q330): a classic set whose
+> sessions are all rejected as unauthorized converges to the benign
+> `Ready=NoActiveSessions` while `Degraded=True` sits on its own condition. Advisory
+> throughput signals (`RateLimited`, the `WorkerQuota` ladder) are deliberately excluded
+> so the rollup does not flap on normal load. The message names the impaired sets and
+> their tripped signals; a set targeting a *different* gateway is never counted. It is
+> advisory (does **not** gate `Ready`) and clears automatically once the children
+> recover (the GMC watches bound `RunnerSet`s). Read it with:
 >
 > ```sh
 > kubectl get actionsgateway -n <namespace> <name> \

@@ -304,3 +304,29 @@ const (
 	// listener starts) or recovered after the credentials were fixed.
 	ReasonSessionAuthorized = "SessionAuthorized"
 )
+
+// ImpairingConditionTypes returns the abnormal-is-True RunnerSet condition types
+// that, when True, mean the set cannot serve jobs: a listener that could register no
+// session (ConditionDegraded from revoked/invalid credentials, ConditionRunnerVersionTooOld
+// from a too-old runner — both pushed by the shared listener goroutines), a missing
+// credential (ConditionCredentialUnavailable), or worker pods the scheduler cannot place
+// (ConditionWorkersUnschedulable). The GMC's ActionsGateway RunnerSetsDegraded rollup
+// (Q304) rolls a bound set up as impaired when any of these is True — in addition to a
+// non-benign Ready=False (Q330), which is how v2's reference-resolution and runtime
+// provisioning failures surface. Iterating this set rather than hard-coding the list
+// means extending it here automatically widens the rollup; it is the v2 counterpart of
+// v1's agcv1alpha1.ImpairingConditionTypes.
+//
+// The advisory/transient conditions are deliberately excluded — ConditionRateLimited (a
+// throughput signal with its own gauge that recovers on its own), the two-tier WorkerQuota
+// ladder, ConditionEgressUnattributed, and ConditionPossibleReapBlockingSidecar — because
+// they are trade-off/throughput signals, not "the set is broken", and rolling them up would
+// flap the summary on normal operation.
+func ImpairingConditionTypes() []string {
+	return []string{
+		ConditionDegraded,
+		ConditionCredentialUnavailable,
+		ConditionRunnerVersionTooOld,
+		ConditionWorkersUnschedulable,
+	}
+}

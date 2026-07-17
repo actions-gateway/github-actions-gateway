@@ -728,24 +728,37 @@ func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag
 
 // runnerSetImpairments returns the tripped health signals that mark a bound RunnerSet
 // as impaired for the RunnerSetsDegraded rollup (Q304): it cannot serve jobs. A set is
-// impaired when its Ready condition is present and not True for a non-transient reason
-// (a reference did not resolve or GitHub auth failed — anything but the benign startup
-// reason NoActiveSessions, which a healthy set reports before its first listener comes
-// up), and/or when the abnormal impairing WorkersUnschedulable condition is True. The
-// advisory conditions (the WorkerQuota ladder, EgressUnattributed,
-// PossibleReapBlockingSidecar) are deliberately excluded — they are trade-off or
-// throughput signals, not "the set is broken", and including them would flap the rollup
-// on normal operation. This mirrors the exclusions in v1's ImpairingConditionTypes,
-// adapted to v2's model where credential and reference failures fold into Ready=False
-// with a reason rather than standing as their own abnormal-is-True conditions.
+// impaired on either of two independent axes:
+//
+//  1. Its Ready condition is present and not True for a non-transient reason — a
+//     reference did not resolve, a runtime provisioning step failed, or a token could
+//     not be obtained, which in v2's model all fold into Ready=False with a reason
+//     (unlike v1, where these stand as their own abnormal-is-True conditions). The
+//     benign startup reason NoActiveSessions (a healthy set before its first listener
+//     comes up) is excluded.
+//  2. Any of the abnormal-is-True impairing conditions is True (Q330). The shared
+//     listener goroutines push Degraded (revoked/invalid credentials) and
+//     RunnerVersionTooOld onto the RunnerSet independently of Ready, so a classic set
+//     whose sessions are all rejected as unauthorized converges to the benign
+//     Ready=NoActiveSessions while Degraded=True sits on its own condition — axis (1)
+//     alone would miss it. gmcv2alpha1.ImpairingConditionTypes is the single source of
+//     truth for this set (the v2 counterpart of v1's ImpairingConditionTypes), so it
+//     stays in sync with WorkersUnschedulable and any future impairing condition.
+//
+// The advisory conditions (RateLimited, the WorkerQuota ladder, EgressUnattributed,
+// PossibleReapBlockingSidecar) are deliberately excluded from that set — they are
+// trade-off or throughput signals, not "the set is broken", and including them would
+// flap the rollup on normal operation.
 func runnerSetImpairments(conditions []metav1.Condition) []string {
 	var tripped []string
 	if ready := meta.FindStatusCondition(conditions, gmcv2alpha1.ConditionReady); ready != nil &&
 		ready.Status != metav1.ConditionTrue && ready.Reason != gmcv2alpha1.ReasonNoActiveSessions {
 		tripped = append(tripped, fmt.Sprintf("%s=%s", gmcv2alpha1.ConditionReady, ready.Reason))
 	}
-	if meta.IsStatusConditionTrue(conditions, gmcv2alpha1.ConditionWorkersUnschedulable) {
-		tripped = append(tripped, gmcv2alpha1.ConditionWorkersUnschedulable)
+	for _, t := range gmcv2alpha1.ImpairingConditionTypes() {
+		if meta.IsStatusConditionTrue(conditions, t) {
+			tripped = append(tripped, t)
+		}
 	}
 	return tripped
 }

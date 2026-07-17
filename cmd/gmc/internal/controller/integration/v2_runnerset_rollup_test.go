@@ -121,6 +121,22 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 		Reason: v2alpha1.ReasonWorkersSchedulable, Message: "recovered",
 	})
 	requireRollup(metav1.ConditionFalse, v2alpha1.ReasonAllRunnerSetsHealthy, "all 2 bound RunnerSet(s) healthy")
+
+	// Q330: a listener-pushed abnormal-is-True condition must roll up even when Ready has
+	// converged to the benign NoActiveSessions — the classic-set-with-revoked-credentials
+	// shape, where the shared listener pushes Degraded=Unauthorized while no session is
+	// active. This exercises the watch predicate's independent Degraded axis end-to-end:
+	// without the fix Ready reads healthy and the impairment is silently dropped.
+	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
+		Type: v2alpha1.ConditionReady, Status: metav1.ConditionFalse,
+		Reason: v2alpha1.ReasonNoActiveSessions, Message: "no session could be created",
+	})
+	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
+		Type: v2alpha1.ConditionDegraded, Status: metav1.ConditionTrue,
+		Reason: v2alpha1.ReasonSessionUnauthorized, Message: "test-induced revoked credentials",
+	})
+	requireRollup(metav1.ConditionTrue, v2alpha1.ReasonRunnerSetsImpaired,
+		"1 of 2 RunnerSet(s) impaired", "bound-a", v2alpha1.ConditionDegraded)
 }
 
 // setRunnerSetCondition upserts a status condition on a RunnerSet, retrying on the
