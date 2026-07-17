@@ -18,7 +18,7 @@
 | Q326 (fixed) | No ResourceQuota watch on the v2 `EgressProxy`/`RunnerSet` reconcilers; Ready FQDN-mode proxy never requeues | Staleness bug |
 | Q327 (fixed) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
 | Q328 (fixed) | v2 gateway teardown not fail-closed (Q125 parity); `MaxConcurrentReconciles=1` not set | Robustness |
-| [Q329](../STATUS.md#Q329) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
+| Q329 (fixed) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
 | [Q321](../STATUS.md#Q321) (pre-existing) | v2 ActionsGateway condition gauges (`runnersets_degraded` twin) | Observability |
 
 <a id="admission"></a>
