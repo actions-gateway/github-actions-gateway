@@ -75,10 +75,17 @@ spec:
       #    VOLUME /var/lib/docker and Kata honours it by pre-mounting virtiofs
       #    there, so test for OUR device — not merely the mountpoint — and mount
       #    ext4 over the virtiofs entry.
-      blkid /dev/dockerblk >/dev/null 2>&1 || mkfs.ext4 -F /dev/dockerblk >/dev/null
+      #    Do NOT gate mkfs on blkid (Q286, root-caused live): docker:dind's
+      #    blkid is BUSYBOX blkid, which exits 0 on a blank device, so
+      #    `blkid || mkfs` skips the mkfs on a fresh volume and the mount
+      #    fails EINVAL. Mount-first, mkfs on failure — the device is a
+      #    disposable per-pod cache, so reformatting on any mount failure is
+      #    always safe.
       mkdir -p /var/lib/docker
       grep -q "^/dev/dockerblk /var/lib/docker " /proc/mounts \
-        || mount -t ext4 /dev/dockerblk /var/lib/docker
+        || mount -t ext4 /dev/dockerblk /var/lib/docker 2>/dev/null \
+        || { mkfs.ext4 -F /dev/dockerblk >/dev/null \
+             && mount -t ext4 /dev/dockerblk /var/lib/docker; }
 
       # 2. The Kata guest's /dev has no kernel-log device, and the inner kubelet
       #    hard-requires one. Needs CAP_MKNOD; it is the guest's kernel log.
@@ -148,6 +155,12 @@ spec:
         - NET_ADMIN         # docker bridge + iptables NAT
         - SYS_RESOURCE      # raise file-descriptor / process rlimits
         - SYS_PTRACE        # runc nsenter / process inspection
+        # NOTE (Q286): a nested workload can only gain caps present in this
+        # bounding set, so a pod inside the in-dind kind cluster that requests
+        # a cap absent here fails with "unable to apply caps: operation not
+        # permitted". Tighten the nested workload (drop the cap request)
+        # rather than widen this set — GAG's e2e Vault dropped IPC_LOCK in
+        # #658. Only add a cap here if a workload genuinely cannot drop it.
     resources:
       # The micro-VM is sized from these. kind's control plane needs real memory.
       # Add the RuntimeClass overhead (160Mi / 250m) on top when sizing nodes.

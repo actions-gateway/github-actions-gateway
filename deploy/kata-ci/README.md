@@ -4,7 +4,7 @@ Manifests and config for running GitHub Actions self-hosted runners that need
 Docker-in-runner (for `kind`) **without** `privileged: true`, by isolating each
 runner pod in a Kata Containers micro-VM. Motivation, the options analysis, and
 the measured results live in
-[docs/plan/kata-on-gke.md](../../docs/plan/kata-on-gke.md).
+[docs/plan/archive/kata-on-gke.md](../../docs/plan/archive/kata-on-gke.md).
 
 > **Status: live-validated.** `kind create cluster` was proven to run inside a
 > non-privileged pod with `runtimeClassName: kata` on GKE
