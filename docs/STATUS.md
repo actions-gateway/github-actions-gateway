@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q345
+**Next ID:** Q346
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -54,6 +54,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q314"></a>Q314 | Tenant dashboard misattributes proxy metrics | `infra` `bug` | 🔲 | S | The tenant dashboard's 4 proxy panels use bare `sum()` with no `$namespace` selector, so they show fleet-wide totals. Add the selector + a namespace targetLabel in buildMetricsServiceMonitor. |
 | <a id="Q331"></a>Q331 | Remove Apache per-file license headers, gate against return | `infra` | 🔲 | S | Strip the scaffolded Apache boilerplate from Go file headers (repo-level LICENSE is canonical; coverage today is inconsistent) and add a make-check lint so new files can't reintroduce them. |
+| <a id="Q345"></a>Q345 | [Enforce v2alpha1/v2beta1 conditions.go sync](development/code-generation.md#crd-marker-and-api-file-gotchas) | `tests` `infra` | 🔲 | S | The two conditions.go files must stay byte-identical except the package line; today the sync is manual discipline. Add a make-check lint (or unit test) diffing them so a one-sided condition/reason addition fails fast. |
 | <a id="Q336"></a>Q336 | [Split gke-dogfood.md into lean runbook + archived findings](plan/gke-dogfood.md) | `docs` | 🔲 | S | At 112KB the completed "living runbook" gets read whole by sessions (~28k tokens each, repeatedly in a 2-week sample). Keep the operational runbook small; move turn-up history and findings to plan/archive. |
 | <a id="Q337"></a>Q337 | [Trim q264-scale-set-protocol.md to the open residual](plan/q264-scale-set-protocol.md) | `docs` | 🔲 | S | P1–P5 shipped but the 71KB phase narrative is still read whole (9+ sessions in 2 weeks). Move shipped-phase detail to plan/archive; keep only the classic-removal residual context for [Q264](#Q264). |
 | <a id="Q338"></a>Q338 | [Restructure observability.md for selective reading](operations/observability.md) | `docs` | 🔲 | S | 82KB single page; sessions read it whole. Split per surface (metrics reference vs dashboards vs alerting how-to) or add a top index so a single-section read suffices. |
