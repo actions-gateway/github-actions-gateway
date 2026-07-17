@@ -18,7 +18,7 @@
 | Q326 (fixed) | No ResourceQuota watch on the v2 `EgressProxy`/`RunnerSet` reconcilers; Ready FQDN-mode proxy never requeues | Staleness bug |
 | Q327 (fixed) | Per-proxy `logLevel` knob dropped from the v2 API | API parity |
 | Q328 (fixed) | v2 gateway teardown not fail-closed (Q125 parity); `MaxConcurrentReconciles=1` not set | Robustness |
-| [Q329](../STATUS.md#Q329) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
+| Q329 (fixed) | Stale doc claims + chart-only v2 RBAC (no kubebuilder markers) | Docs / hygiene |
 | Q321 (fixed) | v2 ActionsGateway condition gauges (`runnersets_degraded` twin + `agc_available`/`egress_unattributed`) | Observability |
 
 <a id="admission"></a>
@@ -72,7 +72,7 @@ The runtime machinery is shared through owner-agnostic seams (provisioner `Targe
 
 **Gap — condition gauges (pre-existing Q319/Q321).** The `worker_quota_pressure`/`worker_quota_exceeded`/`workers_unschedulable` collectors List only `RunnerGroupList` and register only in the v1 reconciler (`runnergroup_controller.go:160-161`); no `RunnerSetsDegraded` gauge exists either. Already tracked; the analysis confirms both.
 
-**Minor (Q329):** ~~v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status~~ — resolved with Q309, which declared the classic-listener vocabulary in both v2 packages (value-parity + mirror-sync tests) and documented it; v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role.
+**Minor (Q329):** ~~v2alpha1 lacks `ConditionRateLimited`/`ConditionRunnerVersionTooOld` constants — the classic path writes raw v1 strings onto RunnerSet status~~ — resolved with Q309, which declared the classic-listener vocabulary in both v2 packages (value-parity + mirror-sync tests) and documented it; ~~v2 AGC RBAC lives only in chart files (`charts/actions-gateway/files/agc-*-rules.yaml`) with no `+kubebuilder:rbac` markers, a drift risk relative to v1's generated role~~ — closed with Q329 (see the Minor section below).
 
 <a id="observability"></a>
 ## Observability roll-up
@@ -82,9 +82,10 @@ Cross-cutting view of the gaps above plus what's already on the Queue: v2 proxy 
 <a id="minor"></a>
 ## Minor / stale-doc findings (Q329)
 
-- `cmd/agc/api/v1alpha1/runnergroup_types.go:59-60` claims "the controller sets a Degraded condition if [tiers] are not [ascending]" — never implemented in either version (only the CEL last-threshold==maxWorkers rule exists). Fix the doc (or implement, in both).
+- ~~`cmd/agc/api/v1alpha1/runnergroup_types.go:59-60` claims "the controller sets a Degraded condition if [tiers] are not [ascending]"~~ — resolved with Q329: the doc (and the `07-test-plan.md` CEL-rejection claim) now state that strictly-ascending tier order is a caller contract, not enforced by admission or a status condition (only the CEL last-threshold==maxWorkers rule exists).
 - ~~`api/v2beta1/egressproxy_types.go:93-100` noProxyCIDRs doc/code contradiction~~ — resolved by [#641](https://github.com/actions-gateway/github-actions-gateway/pull/641), which implemented the check and re-scoped the doc to name the GHES residual (Q322).
-- v2 status godocs list stale "Known types" sets (e.g. `RunnerSetStatus` says "Known types: Ready" while Q303/Q308/Q249 set six more; `ActionsGatewayStatus` omits `RunnerSetsDegraded`/`EgressUnattributed`).
+- ~~v2 status godocs list stale "Known types" sets~~ — resolved with Q329: `RunnerSetStatus` now lists all nine condition types set on it and `ActionsGatewayStatus` adds `EgressUnattributed`/`RunnerSetsDegraded`, in both v2alpha1 and v2beta1.
+- ~~v2 AGC RBAC lives only in the chart files with no `+kubebuilder:rbac` markers~~ — resolved with Q329: markers on `cmd/agc/internal/controller/doc.go` now mirror the chart's `agc-tenant-role`/`agc-clusterrunnertemplate-reader` v2 grants so the generated `agc-role` no longer drifts (the chart's deliberate v1 withholds — runnergroup create/delete, secret patch — are unchanged).
 
 ## Intentional differences — verified, no action
 

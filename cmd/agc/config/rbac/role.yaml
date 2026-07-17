@@ -7,13 +7,6 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - create
@@ -21,6 +14,12 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
 - apiGroups:
   - ""
   resources:
@@ -38,6 +37,44 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
+- apiGroups:
+  - ""
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - actions-gateway.com
+  resources:
+  - actionsgateways
+  - clusterrunnertemplates
+  - egressproxies
+  - runnertemplates
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - actions-gateway.com
+  resources:
+  - runnersets
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions-gateway.com
+  resources:
+  - runnersets/finalizers
+  - runnersets/status
+  verbs:
+  - get
   - patch
   - update
 - apiGroups:

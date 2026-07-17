@@ -89,18 +89,28 @@ gcloud services enable container.googleapis.com compute.googleapis.com
 ```bash
 # Standard zonal cluster — one free per billing account, no cluster fee.
 # --enable-dataplane-v2: Cilium-based CNI that enforces NetworkPolicy (required by GAG).
+# --workload-pool: Workload Identity, a hard prerequisite of the Part F e2e
+#   node pool (its --workload-metadata=GKE_METADATA is rejected with a 400
+#   otherwise — found live under Q286). Control-plane-only here; node pools
+#   opt in per-pool via --workload-metadata.
 # No autoscaling on the default pool — it's manually scaled to 0/1 to start/stop.
 gcloud container clusters create "$CLUSTER" \
   --zone="$ZONE" \
   --release-channel=regular \
   --enable-ip-alias \
   --enable-dataplane-v2 \
+  --workload-pool="${PROJECT}.svc.id.goog" \
   --machine-type=e2-standard-2 \
   --num-nodes=1 \
   --disk-size=50GB \
   --no-enable-basic-auth \
   --no-issue-client-certificate
 ```
+
+An existing cluster created without Workload Identity gets it retrofitted with
+`gcloud container clusters update "$CLUSTER" --zone="$ZONE"
+--workload-pool="${PROJECT}.svc.id.goog"` (control-plane update; existing node
+pools keep `GCE_METADATA` until updated, so running workloads are unaffected).
 
 ### A4. Add spot worker node pool
 
@@ -1677,8 +1687,8 @@ scripts/dogfood/e2e-setup.sh
 ```
 
 This script owns the **cluster infra** the kustomize overlays can't express:
-1. Creates the `e2e` node pool (c2-standard-8 spot, nested virt, `--workload-metadata=GKE_METADATA`, autoscaling 0→2, taint `dedicated=e2e:NoSchedule`)
-2. Installs the Kata DaemonSet, scoped to e2e pool nodes only (the system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install)
+1. Creates the `e2e` node pool (c2-standard-8 spot, nested virt, `--workload-metadata=GKE_METADATA` — requires cluster-level `--workload-pool`, see Part A — autoscaling 0→2, taint `dedicated=e2e:NoSchedule`). The pool's node labels carry **both** `gag.dev/kata-ci=true` (installer scope) and `katacontainers.io/kata-runtime=true` — the latter pre-baked because the cluster autoscaler simulates scale-from-zero against configured labels only (Q286)
+2. Installs the Kata DaemonSet, scoped to e2e pool nodes only via `gag.dev/kata-ci` and tolerating the pool taint (the chart ships no tolerations — Q286). The system and workers pools use COS; Kata requires Ubuntu or COS 1.28.4+, and the DaemonSet labels nodes `katacontainers.io/kata-runtime=true` after install
 3. Creates the `kata` RuntimeClass alias (over the chart-owned `kata-qemu` handler) with a node scheduling rule that prevents Kata pods from scheduling before the DaemonSet has finished installing
 4. Creates the `gag-dogfood-e2e` namespace (v2 marker `actions-gateway.com/tenant=managed`) and the GitHub App Secret
 
@@ -1686,7 +1696,8 @@ The **tenant objects** (ResourceQuota, `ActionsGateway`, `ClusterRunnerTemplate`
 `RunnerSet`, egress policy, and the namespace's security-profile gates) are owned by
 the worker-isolation overlays under
 [`deploy/dogfood-e2e/`](../../deploy/dogfood-e2e/README.md) and applied on demand by
-`e2e-start.sh` (`E2E_VARIANT=dind|kata`, default `dind`). They are authored
+`e2e-start.sh` (`E2E_VARIANT=kata|dind`, default `kata` since the Q286 flip;
+`dind` is the explicit opt-in fallback). They are authored
 **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage
 front-door shape (Q273), deliberately unlike `scripts/dogfood/setup.sh` (main
 dogfood), which authors at v2alpha1 to exercise the conversion webhook.
@@ -1697,11 +1708,12 @@ In both variants the DinD native sidecar runs `dockerd` on `tcp://localhost:2375
 namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the
 runner.
 
-> **The live/validated variant is `dind`** (privileged DinD) — clean-green on GAG
-> since 2026-07-07. The `kata` overlay (unprivileged kind-in-Kata) is built; its
-> live `make e2e` run and the subsequent default flip are the remaining
-> [Q286](../STATUS.md#Q286) gate — checklist in
-> [kata-on-gke.md](kata-on-gke.md#live-validation-checklist-the-remaining-q286-gate).
+> **The default variant is `kata`** (unprivileged kind-in-Kata) — live-validated
+> green on GAG 2026-07-17 ([Q286](archive/kata-on-gke.md); the AC#5 run plus the
+> seven live-found fixes are in
+> [what the live session found](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16)).
+> `dind` (privileged DinD, clean-green since 2026-07-07) stays available as the
+> explicit opt-in fallback for environments without nested virtualization.
 
 ### F2. Workflow change — already wired
 
