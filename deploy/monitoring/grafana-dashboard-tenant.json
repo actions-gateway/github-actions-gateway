@@ -510,12 +510,12 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 5, "x": 0, "y": 31 },
       "id": 61,
-      "description": "Proxy metrics carry no intrinsic namespace label; attach one via the ServiceMonitor for per-tenant attribution.",
+      "description": "Proxy metrics carry no intrinsic namespace label; the per-tenant ServiceMonitor stamps one (from the scrape target's namespace) so these panels filter by $namespace.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(actions_gateway_proxy_connections_active)",
+          "expr": "sum(actions_gateway_proxy_connections_active{namespace=~\"$namespace\"})",
           "legendFormat": "active tunnels",
           "refId": "A"
         }
@@ -531,7 +531,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_connections_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_connections_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "opened/s",
           "refId": "A"
         }
@@ -548,7 +548,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_dial_errors_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_dial_errors_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "dial errors/s",
           "refId": "A"
         }
@@ -565,7 +565,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(rate(actions_gateway_proxy_connect_denied_total[5m]))",
+          "expr": "sum(rate(actions_gateway_proxy_connect_denied_total{namespace=~\"$namespace\"}[5m]))",
           "legendFormat": "denied/s",
           "refId": "A"
         }

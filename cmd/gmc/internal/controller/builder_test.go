@@ -914,9 +914,13 @@ func TestBuildMetricsServiceMonitor(t *testing.T) {
 		appName    string
 		svcName    string
 		wantServer string
+		// wantNSRelabel is true when the endpoint must stamp a `namespace` label
+		// from the scrape target's namespace. Only the proxy needs it (Q314): its
+		// metrics carry no intrinsic namespace label, whereas the AGC's do.
+		wantNSRelabel bool
 	}{
-		{"proxy", proxyServiceMonitorName, proxyAppName, proxyServiceName, "actions-gateway-proxy.team-a.svc"},
-		{"agc", agcServiceMonitorName, agcAppName, agcAppName, "actions-gateway-controller.team-a.svc"},
+		{"proxy", proxyServiceMonitorName, proxyAppName, proxyServiceName, "actions-gateway-proxy.team-a.svc", true},
+		{"agc", agcServiceMonitorName, agcAppName, agcAppName, "actions-gateway-controller.team-a.svc", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -964,6 +968,23 @@ func TestBuildMetricsServiceMonitor(t *testing.T) {
 			keySecret := tlsConfig["keySecret"].(map[string]interface{})
 			assert.Equal(t, metricsClientSecretName, keySecret["name"])
 			assert.Equal(t, corev1.TLSPrivateKeyKey, keySecret["key"])
+
+			// Namespace relabeling (Q314): the proxy endpoint stamps a `namespace`
+			// label from the scrape target's namespace so the tenant dashboard's
+			// proxy panels can filter by $namespace; the AGC endpoint omits it
+			// because AGC metrics already carry an app-set `namespace` label.
+			relabelings, hasRelabel := ep["relabelings"]
+			if !tc.wantNSRelabel {
+				assert.False(t, hasRelabel, "AGC endpoint must not carry a namespace relabeling")
+				return
+			}
+			require.True(t, hasRelabel, "proxy endpoint must carry a namespace relabeling")
+			rules := relabelings.([]interface{})
+			require.Len(t, rules, 1)
+			rule := rules[0].(map[string]interface{})
+			assert.Equal(t, "replace", rule["action"])
+			assert.Equal(t, "namespace", rule["targetLabel"])
+			assert.Equal(t, []interface{}{"__meta_kubernetes_namespace"}, rule["sourceLabels"])
 		})
 	}
 }

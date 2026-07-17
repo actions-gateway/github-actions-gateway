@@ -389,17 +389,24 @@ TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy
 metrics (mTLS)](#scraping-per-tenant-agc-and-proxy-metrics-mtls) above), and
 restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
 The proxy's `:8081` port serves only the plaintext health probes (`/healthz`,
-`/readyz`), not metrics. Each proxy is a separate scrape
-target; these metrics carry no intrinsic `namespace` label, so attach one
-via the `ServiceMonitor`/scrape config if you need per-tenant attribution.
+`/readyz`), not metrics. Each proxy is a separate scrape target; these metrics
+carry no intrinsic `namespace` label. The GMC-generated per-tenant proxy
+`ServiceMonitor` stamps one via a relabeling (`namespace` ← the scrape target's
+namespace, which is the tenant's namespace), so the tenant Grafana dashboard's
+proxy panels filter by `$namespace` for per-tenant attribution. If you scrape the
+proxy with a hand-written scrape config instead of the generated `ServiceMonitor`,
+add the equivalent relabeling to get the `namespace` label.
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
-| `actions_gateway_proxy_connections_active` | Gauge | — | Currently open CONNECT tunnels. |
-| `actions_gateway_proxy_connections_total` | Counter | — | Total CONNECT tunnels opened. |
-| `actions_gateway_proxy_dial_errors_total` | Counter | — | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
-| `actions_gateway_proxy_connect_denied_total` | Counter | — | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
-| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | — | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+| `actions_gateway_proxy_connections_active` | Gauge | `namespace`¹ | Currently open CONNECT tunnels. |
+| `actions_gateway_proxy_connections_total` | Counter | `namespace`¹ | Total CONNECT tunnels opened. |
+| `actions_gateway_proxy_dial_errors_total` | Counter | `namespace`¹ | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
+| `actions_gateway_proxy_connect_denied_total` | Counter | `namespace`¹ | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
+| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | `namespace`¹ | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+
+¹ Not exposed by the proxy itself — added by the per-tenant `ServiceMonitor`
+relabeling described above. Absent if you scrape without that relabeling.
 
 For abuse/compromise detection built on these metrics (slowloris,
 eviction-retry loops, credential-harvesting), see
