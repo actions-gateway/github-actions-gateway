@@ -104,6 +104,69 @@ func TestEvalRunnerSetHealth_AdvisoryExcluded(t *testing.T) {
 	assert.False(t, h.degraded, "advisory conditions must not trip the rollup")
 }
 
+// TestEvalRunnerSetHealth_ListenerPushedImpairment: a listener-pushed abnormal-is-True
+// condition (Q330) trips the rollup even when Ready has converged to the benign
+// NoActiveSessions — the exact classic-set-with-revoked-credentials shape, where the
+// listener pushes Degraded=Unauthorized while no session is active. RunnerVersionTooOld
+// trips it the same way; the advisory RateLimited does not.
+func TestEvalRunnerSetHealth_ListenerPushedImpairment(t *testing.T) {
+	ag := v2Gateway("gw", "ns", "github-app", "shared")
+	// Revoked credentials: the shared listener pushes Degraded=Unauthorized while Ready
+	// sits at the benign NoActiveSessions (no session could be created). Axis (1) alone
+	// would read this set as healthy — the bug Q330 fixes.
+	revoked := boundRunnerSet("rs-revoked", "ns", "gw",
+		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonNoActiveSessions},
+		metav1.Condition{Type: gmcv2alpha1.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSessionUnauthorized},
+	)
+	// A too-old runner: RunnerVersionTooOld while Ready=True.
+	tooOld := boundRunnerSet("rs-old", "ns", "gw",
+		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2alpha1.ConditionRunnerVersionTooOld, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonVersionTooOld},
+	)
+	// Rate-limited but otherwise healthy: advisory, excluded.
+	limited := boundRunnerSet("rs-limited", "ns", "gw",
+		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2alpha1.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSustainedRateLimit},
+	)
+	r := v2RollupReconciler(t, revoked, tooOld, limited)
+
+	h := r.evalRunnerSetHealth(context.Background(), ag)
+	assert.True(t, h.degraded)
+	assert.Equal(t, gmcv2alpha1.ReasonRunnerSetsImpaired, h.reason)
+	assert.Contains(t, h.message, "2 of 3 RunnerSet(s) impaired")
+	assert.Contains(t, h.message, "rs-revoked")
+	assert.Contains(t, h.message, gmcv2alpha1.ConditionDegraded)
+	assert.Contains(t, h.message, "rs-old")
+	assert.Contains(t, h.message, gmcv2alpha1.ConditionRunnerVersionTooOld)
+	assert.NotContains(t, h.message, "rs-limited", "RateLimited is advisory and must not trip the rollup")
+}
+
+// TestRunnerSetPredicate_WakesOnListenerImpairment verifies the watch predicate fires when
+// a listener-pushed impairing condition flips (Q330) so the rollup refreshes promptly, but
+// still ignores the advisory RateLimited flip.
+func TestRunnerSetPredicate_WakesOnListenerImpairment(t *testing.T) {
+	p := runnerSetImpairmentChanged()
+
+	// Ready stays benign; Degraded flips True — the signature changes, so it must enqueue.
+	base := boundRunnerSet("rs", "ns", "gw", metav1.Condition{
+		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonNoActiveSessions,
+	})
+	degraded := base.DeepCopy()
+	degraded.Status.Conditions = append(degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSessionUnauthorized,
+	})
+	assert.True(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: degraded}),
+		"a listener-pushed Degraded flip must enqueue")
+
+	// RateLimited flips True: advisory, signature unchanged.
+	limited := base.DeepCopy()
+	limited.Status.Conditions = append(limited.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSustainedRateLimit,
+	})
+	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: limited}),
+		"an advisory RateLimited flip must not enqueue")
+}
+
 // TestRunnerSetPredicate_OnlyImpairmentChanges verifies the watch predicate fires on
 // create/delete and when a set's impaired signature flips, but not on unrelated status
 // churn (an advisory condition or a benign Ready reason).
