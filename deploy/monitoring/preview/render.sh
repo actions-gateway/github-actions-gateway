@@ -20,8 +20,11 @@
 # Knobs (environment variables, with defaults):
 #   CLUSTER=gag-obs  RELEASE=kps  MON_NS=monitoring
 #   OUT_DIR=.        # directory the per-dashboard PNGs are written to
-#   WAIT=180         # seconds to let counters/histograms accumulate before render
-#   WIDTH=1500  HEIGHT=2300  FROM=now-20m  TO=now
+#   WAIT=660         # seconds to let counters/histograms accumulate before render
+#   WIDTH=1500  HEIGHT=2300  FROM=now-10m  TO=now
+# WAIT and FROM are matched on purpose: the render window (FROM..TO) must fit
+# inside the accumulated data or the time-series panels render mostly empty with
+# a spike at the right edge. Keep WAIT >= the FROM window when changing either.
 #
 # Prerequisites: docker, kind, helm, kubectl, curl on PATH.
 
@@ -35,10 +38,10 @@ CLUSTER="${CLUSTER:-gag-obs}"
 RELEASE="${RELEASE:-kps}"
 MON_NS="${MON_NS:-monitoring}"
 OUT_DIR="${OUT_DIR:-.}"
-WAIT="${WAIT:-180}"
+WAIT="${WAIT:-660}"
 WIDTH="${WIDTH:-1500}"
 HEIGHT="${HEIGHT:-2300}"
-FROM="${FROM:-now-20m}"
+FROM="${FROM:-now-10m}"
 TO="${TO:-now}"
 readonly CHART="prometheus-community/kube-prometheus-stack"
 # Dashboard uid -> output PNG basename. Keep in sync with the uids in the
