@@ -44,6 +44,21 @@ The repo scripts already do this — `scripts/kind-with-registry.sh` threads `ku
 
 The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too. Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
 
+### Verify the resolved target before any mutating command
+
+An explicit `--context` still points *somewhere*. Before a destructive verb (`apply`/`delete`/`scale`/`patch`/`rollout` on kubectl, `upgrade`/`uninstall` on helm, `delete`/`destroy` on gcloud/terraform), confirm the effective target isn't a live/prod environment — echo it and stop if it looks like prod (the shared GKE dogfood cluster counts):
+
+```bash
+kubectl config current-context
+gcloud config get-value project
+```
+
+Never run a destructive verb against a prod-looking target without explicit user confirmation.
+
+The dogfood cluster (`gag-dogfood` / project `actions-gateway-dogfood`) is hard-classified prod via the checked-in [`.claude/prod-guard.json`](../../.claude/prod-guard.json), so the prod-guard hook denies ad-hoc destructive commands against it — prefix an intentional one with `PROD_GUARD_OVERRIDE=<reason>`. Lifecycle scripts (`scripts/dogfood/*`) run as `bash …`, which the hook doesn't parse, so they're unaffected. The echo-and-confirm convention still applies to every other prod-looking target, and for contributors who don't have the hook installed.
+
+If a legitimate non-prod target keeps prompting because prod-guard can't classify it, add it to `.claude/prod-guard.json` under `nonprod` rather than approving repeatedly — and never `use-context`/`config set` to dodge the prompt, since that repoints every parallel session (see above).
+
 ### Image tag caching
 
 Kind nodes use `imagePullPolicy: IfNotPresent` and will keep serving the cached layer when you re-push the same tag. **Pushing to `127.0.0.1:5000/foo:e2e-abc123` a second time does not refresh what kubelet runs.**
