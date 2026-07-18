@@ -389,11 +389,27 @@ func Run(ctx context.Context, cfg Config) error {
 	// down log volume at thousands of concurrent sessions (Q87, Theme D).
 	log.Debug("listener goroutine started")
 
+	// Publish the healthy baseline for the session-failure conditions this goroutine
+	// owns (Q332), mirroring the ScaleSet listener. Unconditional (not transition-
+	// guarded): an abnormal episode may have been surfaced by a PREVIOUS goroutine
+	// instance that then exited — createSession pushes Degraded=True/Unauthorized and
+	// returns a NonRetriableError, and the Multiplexer restarts a fresh goroutine that
+	// carries no in-memory flag for it. Without the baseline that Degraded=True would
+	// sit stale on the owner forever after the credentials were fixed.
+	setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionFalse,
+		v1alpha1.ReasonSessionAuthorized, "listener session established")
+	setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionFalse,
+		v1alpha1.ReasonPollingHealthy, "message polling healthy")
+
 	// 3. Poll loop.
 	consecutiveEmpty := 0
 	pollErrors := 0
 	staleEOFs := 0
 	var firstRateLimitAt time.Time
+	// rateLimitedActive tracks whether RateLimited=True has been published for the
+	// current sustained-429 episode, so it is pushed once per episode and cleared on
+	// recovery (Q332) rather than left stale until the process restarts.
+	rateLimitedActive := false
 
 	for {
 		if ctx.Err() != nil {
@@ -427,10 +443,12 @@ func Run(ctx context.Context, cfg Config) error {
 				if cfg.Metrics != nil {
 					cfg.Metrics.MessagePollErrorsTotal.WithLabelValues(cfg.Namespace, "rate_limited").Inc()
 				}
-				// Track sustained rate limiting; surface condition after 10 min.
+				// Track sustained rate limiting; surface condition after 10 min, once
+				// per episode (Q332 — the next successful poll clears it).
 				if firstRateLimitAt.IsZero() {
 					firstRateLimitAt = cfg.Clock.Now()
-				} else if cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
+				} else if !rateLimitedActive && cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
+					rateLimitedActive = true
 					setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionTrue,
 						v1alpha1.ReasonSustainedRateLimit, "GetMessage returning 429 for >10 minutes")
 				}
@@ -504,10 +522,18 @@ func Run(ctx context.Context, cfg Config) error {
 			continue
 		}
 
-		// Successful poll — reset rate-limit tracking and error counters.
+		// Successful poll — reset rate-limit tracking and error counters. Clear a
+		// RateLimited=True published for the now-recovered episode (Q332), mirroring
+		// the ScaleSet listener's clear-on-recovery so the condition does not sit
+		// stale until the process restarts.
 		pollErrors = 0
 		staleEOFs = 0
 		firstRateLimitAt = time.Time{}
+		if rateLimitedActive {
+			rateLimitedActive = false
+			setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionFalse,
+				v1alpha1.ReasonPollingHealthy, "message polling recovered")
+		}
 
 		if msg == nil {
 			// 202 — no job queued.
