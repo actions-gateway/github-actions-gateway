@@ -91,7 +91,7 @@ all: generate build test ## Generate, build, and test all modules
 # security gates (vulncheck, trivy-scan) and the integration/e2e tiers stay
 # separate too.
 .PHONY: check
-check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
+check: lint lint-backlog plan-index-check no-plan-refs-check go-version-check license-header-check shellcheck chart-crds-check chart-rbac-check chart-webhook-check scripts-test doc-links cover-check ## Fast pre-review gate: gofmt + golangci-lint + STATUS.md lint + plan-index/no-plan-refs drift + single-Go-version + no per-file license headers + shellcheck + chart-CRD/RBAC/webhook drift + scripts-test + doc link/anchor check + unit tests with the coverage ratchet (cover-check supersets `make test`; CI also runs tests under -race, see `make test-race`)
 	@# Advisory, not a gate: the fast check deliberately omits the dependency-drift
 	@# gates (vendor-check/tidy-check/license-notices run in CI). This reminds you to
 	@# run `make vendor-sync` when a change touches dep files. Never fails the build.
@@ -113,6 +113,13 @@ doc-links: ## Fail on broken relative links / heading anchors in tracked Markdow
 .PHONY: go-version-check
 go-version-check: ## Assert a single `go` directive across go.work / go.mod / go.work.gen
 	scripts/check-go-version.sh
+
+# Forbid the scaffolded per-file Apache license header in first-party Go source
+# (Q331). The root LICENSE is canonical; the codegen boilerplate.go.txt sources
+# are empty so regeneration adds none. Vendored trees keep their headers.
+.PHONY: license-header-check
+license-header-check: ## Fail if any first-party .go file carries a per-file Apache license header
+	scripts/check-no-license-headers.sh
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
 # express — the tags-only release signing-identity regexp (Q124) and the
