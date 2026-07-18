@@ -85,6 +85,7 @@ markers per item.
 | [q273-v2-front-door.md](q273-v2-front-door.md) | Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the `gag-migrate` v1→v2 story exemplary — the do-now slice of the sunset review §6.2 ([Q273](../STATUS.md#Q273)) | ▶ In progress — do-now front-door/banners/migration slice landing; full v2-only (v1 removal) gated on v2beta1 (Q74) |
 | [q224-fanout-dispatch-lever-spike.md](q224-fanout-dispatch-lever-spike.md) | ⓘ AGC-side lever spike: can two proposed AGC-side levers beat GitHub's server-side fan-out distinct-delivery starvation without the Option E scale-set rewrite? Tested against the mechanism + live evidence | ⓘ Spike — no code changed; verdict: no reliable AGC-side lever, Option E ([Q264](../STATUS.md#Q264)) is the only structural fix. Referenced by [Q268](../STATUS.md#Q268) |
 | [website.md](website.md) | Public GitHub Pages site: MkDocs Material rendering of `docs/` + a custom landing page and "vs ARC" comparison; domain decision folded in (org move) | ✅ Done — scaffold, landing, comparison, and public launch shipped (was Q52/Q99/Q129, all completed) |
+| [claude-md-hook-rule-retirement.md](claude-md-hook-rule-retirement.md) | Map of `CLAUDE.md` hook-workaround rules → the upstream guard-plugin fix that retires each (filed 2026-07-18), with verify-before-delete ground rules | 💤 Deferred — waiting on plugin releases; revive trigger in [Q348](../STATUS.md#Q348) |
 
 ## Archive
 
