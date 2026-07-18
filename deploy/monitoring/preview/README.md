@@ -67,6 +67,6 @@ Common knobs (environment variables):
   rolls the exporter and re-renders.
 
 The synthetic metric names and labels are kept in lockstep with the real
-registrations (see the [Full Metrics Reference](../../../docs/operations/observability.md#full-metrics-reference));
+registrations (see the [Full Metrics Reference](../../../docs/operations/observability-metrics.md#full-metrics-reference));
 if a metric's name or labels change in the controllers, update `exporter.py` to
 match so the preview stays faithful.

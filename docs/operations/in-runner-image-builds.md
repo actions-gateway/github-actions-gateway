@@ -248,7 +248,7 @@ it never blocks:
 - **On the `RunnerSet`** the advisory `PossibleReapBlockingSidecar=True`
   condition is set (it does **not** gate `Ready`), and the
   `actions_gateway_reap_blocking_sidecar_templates` gauge rises — see
-  [observability](observability.md#full-metrics-reference).
+  [observability](observability-metrics.md#full-metrics-reference).
 
 **Opt-out for sidecars you know exit cleanly.** If a sidecar genuinely
 terminates on its own when the job ends (so it never blocks reaping), silence

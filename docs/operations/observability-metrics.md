@@ -1,0 +1,287 @@
+# Metrics Reference
+
+> **Audience:** SRE, Platform engineer
+
+Part of the [Observability](observability.md) guide. To scrape these metrics, see [Accessing metrics (scraping setup)](observability-metrics-access.md); to alert on them, see [Alerting & SLOs](observability-alerting.md). For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md).
+
+## Full Metrics Reference
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_active_sessions` | Gauge | `namespace`, `runner_group` | Currently open long-poll sessions. One per RunnerGroup at steady state; rises toward `maxListeners` during bursts. |
+| `actions_gateway_jobs_acquired_total` | Counter | `namespace`, `runner_group` | Jobs successfully acquired from the broker. |
+| `actions_gateway_jobs_admission_rejected_total` | Counter | `namespace`, `runner_group` | Delivered jobs the pre-acquisition capacity gate left queued at GitHub (acquire skipped because the group is at its worker ceiling). Expected to rise under sustained saturation; a persistent gap vs. `jobs_acquired_total` means demand exceeds the group's `maxWorkers` / `priorityTiers` ceiling — raise the ceiling or namespace `ResourceQuota`. |
+| `actions_gateway_jobs_duplicate_delivery_total` | Counter | `namespace`, `runner_group` | Duplicate job deliveries deduplicated (Q260): the broker delivered the same job (same `planID`, distinct `RunnerRequestID`) to more than one sibling session and this one skipped provisioning — recycling its runner instead — because the `planID` was already claimed in this AGC. The dedup keys on `planID` (only known post-`acquirejob`), so a deduplicated delivery still ran `acquirejob`; the win is that it does not collide on the shared `job-<planID>` worker Secret or the winner's `runner-…-<planID>` pod. Two cases both count here: a **concurrent burst** (a sibling is provisioning the `planID` right now) and a **late redelivery** (the winner already completed, but its terminal worker pod has not yet been reaped, so the claim is retained for `completedPodTTL` past completion to keep deduping — otherwise the redelivery would re-provision and hit `create Pod … already exists`). A steady low rate during bursts is normal and benign — the gate is protecting runner slots. A sudden spike proportional to a stalled matrix indicates heavy fan-out; correlate with `jobs_acquired_total` (which should keep climbing) to confirm work is still being provisioned. |
+| `actions_gateway_abandoned_delivery_completions_total` | Counter | `namespace`, `runner_group`, `outcome` | The winner of a fanned-out job issuing a `completejob` on a deduped sibling delivery — on completion, or on a late redelivery within the linger window — so GitHub does not cancel the whole job at its ~15-minute unstarted-job timeout even after the winner ran it (Q260 Option A). `outcome="completed"` resolved the assignment (or found it already gone server-side); `outcome="error"` failed and the job may still be cancelled. Fan-out completion is **on by default** (opt out with `AGC_FANOUT_COMPLETION=false`), so a steady `completed` rate under concurrent bursts is normal. A rising `error` rate warrants investigating the run service's `completejob` responses. |
+| `actions_gateway_fanout_loser_recycle_deferred_total` | Counter | `namespace`, `runner_group`, `outcome` | A deduped fan-out loser **deferring its slot recycle until its winner concluded** (Q266). A loser ran `acquirejob`, so GitHub holds its runner as assigned to the job; its recycle would `422` ("runner is currently running a job and cannot be deleted") for the winner's whole runtime — past the bounded recycle backoff — so recycling eagerly would exit the listener and, under sustained burst, collapse the pool. Instead the loser holds its slot until the winner concludes (fanning `completejob` out to this delivery clears the `422`), then recycles in place. `outcome="winner_concluded"` is the normal path; `outcome="fallback_timeout"` means the winner never concluded within the bound and the loser recycled anyway (GitHub's unstarted-job timeout should have released the assignment by then) — a sustained rate here is **alert-worthy** (a class of stuck winners); `outcome="context_cancelled"` is AGC shutdown. Only emitted when fan-out completion (Q260 Option A) is enabled. |
+| `actions_gateway_job_acquisition_errors_total` | Counter | `namespace`, `reason` | Acquisition failures. Reason values: `already_claimed` (benign race), `delivery_window_expired` (job redelivered), `version_too_old`, `other`. An `acquirejob` failure also emits a `JobAcquisitionFailed` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). |
+| `actions_gateway_job_duration_seconds` | Histogram | `namespace`, `runner_group` | Wall time from `acquirejob` success to worker pod terminal phase. |
+| `actions_gateway_pod_creation_latency_seconds` | Histogram | `namespace` | Time from worker pod creation to the runner container starting (scheduling + image pull). Key SLO metric — see [Appendix A](../design/appendix-a-capacity-slos.md). |
+| `actions_gateway_token_refreshes_total` | Counter | `namespace` | Successful GitHub App installation token refreshes. |
+| `actions_gateway_token_refresh_errors_total` | Counter | `namespace` | Failed token refresh attempts. See SLO threshold below. |
+| `actions_gateway_renew_job_errors_total` | Counter | `namespace` | Failed `renewjob` calls. Leading indicator for cancelled jobs. (Renamed from `…_renewjob_errors_total` in Q205 — see [Breaking observability changes](#breaking-observability-changes-q205).) |
+| `actions_gateway_renew_job_teardowns_total` | Counter | `namespace`, `reason` | Workers self-cancelled because the job's lock was definitively lost (Q254), avoiding an orphan pod. `reason="job_not_found"` is a definitive 404/410 from the run service (job recycled/reassigned); `reason="consecutive_failures"` is 5 consecutive renewal failures (~5 min). See the [runbook](troubleshooting.md#renewjob-failures-rising). |
+| `actions_gateway_eviction_retries_total` | Counter | `namespace`, `runner_group` | Jobs automatically re-queued after worker pod eviction. |
+| `actions_gateway_eviction_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Eviction retries exhausted; job requires manual re-run. Each occurrence also emits an `EvictionRetriesExhausted` Warning Event on the owning `RunnerGroup`/`RunnerSet` (Q170). |
+| `actions_gateway_quota_retries_total` | Counter | `namespace`, `runner_group` | Pod creation attempts retried after the namespace `ResourceQuota` rejected the worker pod. A brief non-zero rate under burst is normal (the listener backs off and retries); a sustained rate means quota headroom is tight — raise the quota or lower `maxWorkers`. |
+| `actions_gateway_quota_retries_exhausted_total` | Counter | `namespace`, `runner_group` | Quota retries exhausted; the job was abandoned after the quota retry budget ran out and requires a manual re-run. |
+| `actions_gateway_worker_pods_reaped_total` | Counter | `namespace`, `runner_group`, `reason` | Worker pods deleted by the lifecycle reaper. `reason="completed_ttl"` is routine cleanup after `completedPodTTL`; `reason="pending_deadline"` means a pod was stuck Pending past `pendingPodDeadline` and its job was cancelled — each such reap also emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup. |
+| `actions_gateway_worker_scaleup_throttled_total` | Counter | `namespace`, `runner_group` | Worker-pod creations delayed by the opt-in per-RunnerGroup scale-up rate limit (`spec.scaleUp`): the token bucket was empty so the acquired job waited for a token before its pod was created (Q223). **Zero unless a group sets `scaleUp`** — it is default-off. A sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path (NAT/firewall/VPN); that is the knob doing its job, not an error. If it is *persistently* high, the ramp may be holding already-claimed jobs too long — raise `maxPerSecond`/`burst`, or confirm a rate limit is the right tool for the burst (see [tenant-onboarding: worker scale-up rate limit](tenant-onboarding.md#step-2-create-the-actionsgateway-resource)). |
+| `actions_gateway_message_poll_errors_total` | Counter | `namespace`, `reason` | `GetMessage` errors (excludes empty polls and session expiry — those are normal). `reason="rate_limited"` is a 429; `reason="timeout"` is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see [Listener Stalls After a Black-Holed Broker Connection](troubleshooting.md#listener-stalls-for-minutes-after-a-black-holed-broker-connection)); `reason="other"` is any remaining transport/decode error. |
+| `actions_gateway_agent_recycles_total` | Counter | `namespace`, `runner_group`, `trigger` | Single-use JIT agents re-registered. `trigger="post_job"` is routine (one per completed job); `stale_session`/`startup` mean a dead agent was detected and healed after the fact; `reconcile_repair` means a parked agent was repaired by the reconciler. |
+| `actions_gateway_agent_recycle_errors_total` | Counter | `namespace`, `runner_group` | Failed agent re-registration attempts. Sustained growth shrinks listener capacity — see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero). |
+| `actions_gateway_broker_token_propagation_retries_total` | Counter | `namespace`, `runner_group` | Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient `400 "Registration … was not found"` for its just-created runner record (the `generate-jitconfig` → OAuth-service propagation window, Q267). The listener rides these out with a bounded, jittered backoff instead of exiting and churning a new record. A brief non-zero blip during a burst is normal; a **sustained** rate means wide-pool recycle churn is repeatedly hitting the propagation seam — see the [runbook](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner). |
+| `actions_gateway_worker_quota_pressure` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaPressure=True` (Q82): workers can't scale to the configured ceiling within the namespace `ResourceQuota` headroom. Warning — load-dependent; alert with `for:`, don't page. |
+| `actions_gateway_worker_quota_exceeded` | Gauge | `namespace`, `runner_group` | `1` when `WorkerQuotaExceeded=True` (Q82): the `ResourceQuota` can't admit another worker pod — the next acquired job's pod will be rejected. Error — page. |
+| `actions_gateway_workers_unschedulable` | Gauge | `namespace`, `runner_group` | `1` when `WorkersUnschedulable=True` (Q157): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — **not** quota, which `WorkerQuotaExceeded` covers). Capacity is not materializing — page if sustained. The stuck pods and the scheduler verdict are named in the condition message. |
+| `actions_gateway_reap_blocking_sidecar_templates` | Gauge | `namespace`, `runner_set` | Number of regular (non-native) sidecar containers in a `RunnerSet`'s resolved worker template that may keep the worker pod alive after the runner container exits, stranding the runner slot against `maxWorkers` (Q249). `> 0` also sets the advisory `PossibleReapBlockingSidecar=True` condition on the `RunnerSet` naming the offending containers. Config warning, not load — fix the template: declare the sidecar as a native sidecar (`restartPolicy: Always` init container, Kubernetes ≥ 1.29) so the pod terminates when the runner exits, or, if it exits cleanly on its own, acknowledge it in the `actions-gateway.com/self-exiting-sidecars` annotation. Advisory — does not gate `Ready`. |
+| `controller_runtime_reconcile_errors_total` | Counter | `controller` | GMC/AGC reconcile errors. Emitted by controller-runtime (no `actions_gateway_` prefix); the `controller` label distinguishes `actionsgateway`, `runnergroup`, etc. Non-zero values deserve investigation. |
+| `actions_gateway_ip_range_updates_total` | Counter | `namespace` | `NetworkPolicy` egress rule refreshes from GitHub meta API. |
+| `actions_gateway_managed_gateways` | Gauge | — | Total `ActionsGateway` CRs (v1 **and** v2) currently managed by the GMC (Q320). |
+| `actions_gateway_proxy_quota_pressure` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaPressure=True` (Q82): the proxy pool can't scale to `maxReplicas` within the namespace `ResourceQuota` headroom. Warning — alert with `for:`, don't page. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the `EgressProxy` owning the pool (Q320). |
+| `actions_gateway_proxy_quota_exceeded` | Gauge | `namespace`, `name` | `1` when `ProxyQuotaExceeded=True` (Q82): proxy replica creates are being rejected by the `ResourceQuota` now. Error — page. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the `EgressProxy` owning the pool (Q320). |
+| `actions_gateway_runnergroups_degraded` | Gauge | `namespace`, `name` | `1` when `RunnerGroupsDegraded=True` (Q158): one or more of the gateway's owned `RunnerGroup`s report an impairing condition (`CredentialUnavailable`/`Degraded`/`RunnerVersionTooOld`/`WorkersUnschedulable`). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate `Ready`. v1 only — the v2 twin is `actions_gateway_runnersets_degraded` below. |
+| `actions_gateway_egress_rules_stale` | Gauge | `namespace`, `name` | `1` when `EgressRulesStale=True` (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy `NetworkPolicy` drift from GitHub's published ranges. Advisory — does not gate `Ready`; page if sustained, as new GitHub ranges will be silently dropped. `name` is the v1 `ActionsGateway` or, on a v2 deploy, the CIDR-mode `EgressProxy` carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320). |
+| `actions_gateway_runnersets_degraded` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `RunnerSetsDegraded=True` (Q304): one or more of the `RunnerSet`s bound to the gateway (`spec.gatewayRef`) report an impairing condition. The v2 twin of `actions_gateway_runnergroups_degraded`; rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate `Ready`. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_agc_available` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `AGCAvailable=True`: the tenant's AGC `Deployment` has a ready replica (the gateway's control plane is up). Drops to `0` while the AGC is rolling out or unavailable — correlate with `Ready`. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_egress_unattributed` | Gauge | `namespace`, `name` | `1` when a v2 `ActionsGateway`'s `EgressUnattributed=True` (§H.10): the gateway runs in **direct** egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and `0` on a proxied deploy; a `1` on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321). |
+| `actions_gateway_build_info` | Gauge | `component`, `version` | Constant `1` per running control-plane binary, following the Prometheus `*_build_info` convention (Q318). Emitted by the GMC, AGC, and proxy — `component` is `gmc`/`agc`/`proxy` and `version` is the build tag stamped into the binary (`dev` for un-stamped local builds). Not load-bearing for alerting; join it into other series to correlate the running version during an incident (worker pods carry `app.kubernetes.io/version`, but the control plane otherwise does not expose its version in metrics). |
+
+> **Proxy conditions on a v2 deploy.** On a v2 install (the opt-in
+> `actions-gateway-crds-v2` CRDs), the GMC also counts v2 `ActionsGateway`s in
+> `managed_gateways` and reflects each `EgressProxy`'s proxy conditions in
+> `proxy_quota_pressure`, `proxy_quota_exceeded`, and `egress_rules_stale` — the
+> EgressProxy reconciler sets those conditions with the same semantics as the v1
+> `ActionsGateway` (a namespace-`ResourceQuota`-bounded, HPA-scaled pool whose default
+> CIDR-mode `NetworkPolicy` is refreshed from the shared GitHub IP-range cache) (Q320).
+> The v1 and v2 series share one metric family; the `name` label distinguishes them by
+> object. Unlike these, the worker-capacity gauges below stay v1-only.
+>
+> **Worker-capacity conditions on v2 `RunnerSet`s.** The `WorkerQuotaPressure`,
+> `WorkerQuotaExceeded`, and `WorkersUnschedulable` conditions are also set on a v2
+> `RunnerSet` (Q303) with the same semantics as the v1 `RunnerGroup`, so a stalled
+> set surfaces the capacity blocker in `.status.conditions` instead of only a rising
+> `pendingJobs` with `Ready=True`. The three gauges above (`actions_gateway_worker_quota_*`,
+> `actions_gateway_workers_unschedulable`) are still emitted only for v1 `RunnerGroup`s;
+> to alert on a `RunnerSet`, scrape its conditions (e.g. via kube-state-metrics
+> `CustomResourceStateMetrics`) or read them with `kubectl get runnerset`.
+
+> **`RunnerSetsDegraded` on a v2 `ActionsGateway`.** The v2 `ActionsGateway` carries a
+> `RunnerSetsDegraded` condition (Q304) — the child-health rollup counterpart of the v1
+> `RunnerGroupsDegraded` above. It is `True` when one or more of the `RunnerSet`s bound
+> to the gateway (`spec.gatewayRef`) are impaired — not serving jobs: a non-transient
+> `Ready=False` (a reference did not resolve or a provisioning step failed) **or** any
+> abnormal-is-True impairing condition — `Degraded` (revoked/invalid credentials, pushed
+> by the listener independently of `Ready`, Q330), `CredentialUnavailable`,
+> `RunnerVersionTooOld`, or `WorkersUnschedulable`. The advisory conditions (`RateLimited`,
+> the `WorkerQuota` ladder, `EgressUnattributed`, `PossibleReapBlockingSidecar`) are
+> excluded so the rollup does not flap on normal load. The condition message names the impaired sets and their
+> tripped signals, giving the operator a single pane without inspecting each child.
+> Advisory — like the v1 rollup it does **not** gate `Ready`, since the gateway's own
+> AGC control plane can be healthy while a tenant's set is impaired. It is exported as the `actions_gateway_runnersets_degraded`
+> gauge (Q321), alongside `actions_gateway_agc_available` and
+> `actions_gateway_egress_unattributed` for the gateway's `AGCAvailable` and
+> `EgressUnattributed` conditions — the v2 twins of the v1 `ActionsGateway`
+> condition gauges. All three are emitted only on a v2 install and labelled per
+> gateway (`namespace`, `name`).
+
+### Scale-set acquisition tier (Q264)
+
+These counters are emitted **only** by a `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` (Q264 Option E, the default since P5), which drives one runner-scale-set session per set — one job : one queue entry : one acquirer : one runner — instead of the classic many-acquirers pool. A `Classic` (deprecated) `RunnerSet` never increments them, so they read zero on a Classic-only deployment; the classic `actions_gateway_jobs_*` series above are what a Classic set emits. All four are labelled per `RunnerSet` (`namespace`, `runner_set`). During the P4 dogfood validation (the Q224 fan-out acceptance gate) these are the primary signal that a scale-set set is assigning and provisioning jobs 1:1 with no fan-out.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_scaleset_jobs_assigned_total` | Counter | `namespace`, `runner_set` | Jobs the scale set's queue delivered as `JobAssigned` to the listener. Because the scale-set protocol assigns each job exactly once (no sibling fan-out), this tracks demand 1:1 — unlike the classic `jobs_acquired_total`, there is no duplicate-delivery series to correlate against. |
+| `actions_gateway_scaleset_jobs_provisioned_total` | Counter | `namespace`, `runner_set` | Worker pods successfully provisioned, one per assigned job. A steady gap below `…_jobs_assigned_total` means provisioning is lagging or failing — correlate with `…_provision_errors_total` and the worker-pod `ResourceQuota` gauges. |
+| `actions_gateway_scaleset_provision_errors_total` | Counter | `namespace`, `runner_set` | Failed provision attempts (JIT-config mint or worker pod create). A transient failure leaves the job un-provisioned to retry on a later poll. A `generate-jitconfig` **runner-name conflict** (HTTP 409) instead retries under a fresh runner name; if it still conflicts after a bounded number of tries the job is **skipped** (counted here once) so it cannot wedge the queue cursor behind it — it is re-assigned or timed out server-side (Q270). A sustained rate warrants checking the run service's `generate-jitconfig` responses and namespace quota headroom. |
+| `actions_gateway_scaleset_jobs_completed_total` | Counter | `namespace`, `runner_set`, `result` | Terminal `JobCompleted` messages the queue delivered, by GitHub-reported `result` (e.g. `succeeded`, `failed`, `canceled`). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message. |
+
+### Proxy metrics
+
+The per-tenant egress proxy exposes its own metrics on `:8443` over **mutual
+TLS** — the same posture as the AGC (see [Scraping per-tenant AGC and proxy
+metrics (mTLS)](observability-metrics-access.md#scraping-per-tenant-agc-and-proxy-metrics-mtls)), and
+restricted by the L-8 NetworkPolicy (see [security.md L-8](../plan/security.md)).
+The proxy's `:8081` port serves only the plaintext health probes (`/healthz`,
+`/readyz`), not metrics. Each proxy is a separate scrape target; these metrics
+carry no intrinsic `namespace` label. The GMC-generated per-tenant proxy
+`ServiceMonitor` stamps one via a relabeling (`namespace` ← the scrape target's
+namespace, which is the tenant's namespace), so the tenant Grafana dashboard's
+proxy panels filter by `$namespace` for per-tenant attribution. If you scrape the
+proxy with a hand-written scrape config instead of the generated `ServiceMonitor`,
+add the equivalent relabeling to get the `namespace` label.
+
+| Metric | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `actions_gateway_proxy_connections_active` | Gauge | `namespace`¹ | Currently open CONNECT tunnels. |
+| `actions_gateway_proxy_connections_total` | Counter | `namespace`¹ | Total CONNECT tunnels opened. |
+| `actions_gateway_proxy_dial_errors_total` | Counter | `namespace`¹ | Upstream dial failures (e.g. transient network errors reaching an allowed destination). |
+| `actions_gateway_proxy_connect_denied_total` | Counter | `namespace`¹ | CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike `…_dial_errors_total` (which also counts transient dial failures to *allowed* hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see [security-operations.md § Threat → signal map](security-operations.md#threat--signal-map). |
+| `actions_gateway_proxy_tunnel_duration_seconds` | Histogram | `namespace`¹ | Tunnel lifetime, observed at close. Buckets reach 21600s (the 6h absolute lifetime cap). |
+
+¹ Not exposed by the proxy itself — added by the per-tenant `ServiceMonitor`
+relabeling described above. Absent if you scrape without that relabeling.
+
+For abuse/compromise detection built on these metrics (slowloris,
+eviction-retry loops, credential-harvesting), see
+[security-operations.md](security-operations.md).
+
+---
+
+## CRD Status Fields (kubectl columns)
+
+`kubectl get runnergroup` and `kubectl get runnerset` print a subset of each CR's
+`.status` as additional columns. These give an at-a-glance view of live job state
+without opening Grafana:
+
+| Column | Field | RunnerGroup | RunnerSet | Description |
+| --- | --- | --- | --- | --- |
+| `ACTIVESESSIONS` | `.status.activeSessions` | ✓ | ✓ | Currently open long-poll sessions. Rises toward `maxListeners` during bursts; `0` means the group is not polling for work. |
+| `ACTIVEJOBS` | `.status.activeJobs` | ✓ | ✓ | Worker pods in Running phase — jobs actively executing. Updated each reconcile (driven by pod phase-change events). |
+| `PENDINGJOBS` | `.status.pendingJobs` | ✓ | ✓ | Worker pods in Pending phase — jobs acquired, pod spawned but not yet running. A sustained non-zero value signals scheduling pressure; check `WorkersUnschedulable`, `kubectl describe pod`, and node capacity. Pods past `pendingPodDeadline` are automatically reaped (and counted in `worker_pods_reaped_total{reason="pending_deadline"}`). |
+| `READY` | `.status.conditions[Ready].status` | ✓ | ✓ | `True` when at least one listener goroutine is running. |
+| `EGRESS` | `.status.proxyMode` | — | ✓ | `Proxied` or `Direct`. |
+
+> **Note:** `ACTIVEJOBS` and `PENDINGJOBS` are pod-phase counts derived at reconcile
+> time. They reflect a snapshot of the last reconcile cycle (re-triggered on every
+> pod phase-change event) — not a real-time counter. A pod that was just reaped in
+> the same reconcile cycle appears in `PENDINGJOBS` until the pod-deletion event
+> triggers the next reconcile (typically sub-second).
+
+### Drilling down to individual runner pods
+
+The count columns tell you *how many* jobs are running; to see *which* pods back them, filter by the owner label:
+
+```bash
+# RunnerGroup (v1alpha1)
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<name>
+
+# RunnerSet (v2alpha1)
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<name>
+```
+
+Add `-o wide` for node placement or `-w` to watch phase transitions live.
+
+**Correlating a pod with its GitHub Actions job:** the AGC stamps four
+annotations on every worker pod at creation time from the AcquireJob payload:
+
+| Annotation | Example | Notes |
+| --- | --- | --- |
+| `actions-gateway.com/run-id` | `12345678` | GitHub workflow run ID |
+| `actions-gateway.com/repository` | `myorg/myrepo` | Repository the job belongs to |
+| `actions-gateway.com/job-name` | `build` | Job name as defined in the workflow YAML |
+| `actions-gateway.com/workflow` | `CI` | Workflow name |
+
+To see them in a table:
+
+```bash
+kubectl get pods -n <namespace> -l actions-gateway/runner-group=<name> \
+  -o custom-columns='NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow'
+```
+
+Or inspect a single pod in full:
+
+```bash
+kubectl describe pod <pod-name> -n <namespace>
+```
+
+The annotations are absent if the AcquireJob payload did not include the corresponding `system.github.*` variables (older GitHub runners or stub/test jobs).
+
+### Selecting GAG objects with the recommended labels
+
+Every object GAG creates — AGC/proxy/worker pods, Deployments, Services,
+NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs
+— carries the Kubernetes [recommended (`app.kubernetes.io/*`) labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/),
+so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost
+cost attribution work without learning the project-specific keys. They are
+**additive metadata** — the functional selectors the controllers rely on (`app:`,
+`actions-gateway/component: workload`, the per-gateway/runner-set identity labels)
+are untouched, so never build a controller's pod selector on the `app.kubernetes.io/*`
+labels.
+
+> For live per-tenant **cost** attribution with OpenCost/Kubecost — mapping these
+> labels and the per-tenant namespaces to allocation queries — see
+> [Live per-tenant cost attribution](cost-attribution.md).
+
+| Label | Values |
+| --- | --- |
+| `app.kubernetes.io/name` | `actions-gateway-controller` · `actions-gateway-proxy` · `actions-runner` |
+| `app.kubernetes.io/instance` | the owning `ActionsGateway` / `EgressProxy` / `RunnerGroup` / `RunnerSet` name |
+| `app.kubernetes.io/component` | `controller` · `proxy` · `runner` |
+| `app.kubernetes.io/part-of` | `actions-gateway` (every GAG object) |
+| `app.kubernetes.io/managed-by` | `actions-gateway-gmc` (control-plane children) · `actions-gateway-controller` (worker pods + job Secrets, created by the AGC) |
+| `app.kubernetes.io/version` | the runner version on worker pods and their job Secrets; omitted on versionless infra (RBAC, NetworkPolicies, Services, TLS Secrets) and control-plane objects |
+
+```bash
+# Everything GAG owns, across tenants:
+kubectl get all,networkpolicy,secret -A -l app.kubernetes.io/part-of=actions-gateway
+
+# One tenant's proxy pool:
+kubectl get all -n <namespace> \
+  -l app.kubernetes.io/instance=<gateway>,app.kubernetes.io/component=proxy
+```
+
+### Node-disruption-safety annotations
+
+A worker pod runs exactly one CI job and has no replica or controller behind it: evict it mid-job and the job is stranded with no replacement. So the AGC also stamps every worker pod with the markers the common node autoscalers and the descheduler honor to leave a running pod alone:
+
+| Annotation | Value | Honored by |
+| --- | --- | --- |
+| `karpenter.sh/do-not-disrupt` | `true` | Karpenter — skips the pod's node for consolidation/drift disruption |
+| `cluster-autoscaler.kubernetes.io/safe-to-evict` | `false` | Cluster Autoscaler — won't scale down a node running the pod |
+| `descheduler.alpha.kubernetes.io/prefer-no-eviction` | `true` | Descheduler — skips the pod (current well-known key; the older `descheduler.alpha.kubernetes.io/evict` is opt-*in* only and its value is ignored) |
+
+These markers ride on the worker pod itself, so they are removed the moment the pod is torn down on job completion (immediately when `completedPodTTL: 0s`, otherwise by the reaper once the TTL elapses) — they never pin a node for a pod that is no longer running.
+
+**Overriding.** The markers are gap-fill defaults: set any of these keys in the runner's `podTemplate.metadata.annotations` and your explicit value wins. For example, a job you know is safe to interrupt can opt back into eviction with `cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`. Only these three keys are honored from the template; other `podTemplate` annotations are not copied onto worker pods. Prefer a [PodDisruptionBudget](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) if you need finer voluntary-disruption control.
+
+---
+
+## Label Cardinality Warning
+
+Metric labels are scoped to `namespace` and `runner_group`. To avoid label cardinality explosion:
+
+- **Do not use dynamically generated `runner_group` names** (e.g. names incorporating PR numbers or commit SHAs). Each unique combination of `namespace` + `runner_group` creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.
+- **Stable, human-meaningful names** like `gpu-2x`, `cpu-standard`, `gpu-a100` are correct. These are configured in the `ActionsGateway` spec and should not change after initial setup.
+- If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.
+
+## Breaking observability changes (Q205)
+
+The Q205 naming audit aligned metric and span/attribute names to the Prometheus and
+OpenTelemetry conventions before the v2beta1 freeze. These are **breaking** for any
+dashboard, alert, recording rule, or trace query that references the old names —
+update them when you adopt a release that includes Q205.
+
+**Metric renames**
+
+| Old | New |
+| --- | --- |
+| `actions_gateway_renewjob_errors_total` | `actions_gateway_renew_job_errors_total` |
+
+All other metric names were audited and kept: every counter already ends in `_total`,
+every histogram already carries the `_seconds` base unit, and the gauge names are
+already conventional. (`pod_creation_latency_seconds` was considered for a
+`…_duration_seconds` rename but kept — `latency` is a recognised Prometheus term and
+the rename's blast radius across dashboards and recording-rule names outweighed the
+stylistic gain.)
+
+**Span attribute renames** (the span names themselves — `RunnerGroup.Reconcile`,
+`Provisioner.provision`, and the child spans — are unchanged):
+
+| Old | New |
+| --- | --- |
+| `owner.namespace`, `runnergroup.namespace` | `k8s.namespace.name` |
+| `pod.name` | `k8s.pod.name` |
+| `owner.name` | `gateway.owner.name` |
+| `runnergroup.name` | `gateway.runnergroup.name` |
+| `plan.id` | `gateway.plan.id` |
+| `active_pods` | `gateway.active_pods` |
+| `ceiling.held` | `gateway.ceiling_held` |
+| `priority_class` | `gateway.priority_class` |
+| `pod.phase` | `gateway.pod.phase` |
+| `pod.reason` | `gateway.pod.reason` |
+| `duration_seconds` | `gateway.provision.duration_seconds` |
+
+---
+
+← Back to [Observability](observability.md)

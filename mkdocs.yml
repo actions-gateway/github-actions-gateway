@@ -152,7 +152,13 @@ nav:
       - "Kata DinD / image-build workloads": operations/kata-dind-workloads.md
       - "P2P image distribution": operations/p2p-image-distribution.md
       - Service mesh coexistence: operations/service-mesh-coexistence.md
-      - Observability: operations/observability.md
+      - Observability:
+          - Overview: operations/observability.md
+          - "Metrics reference": operations/observability-metrics.md
+          - "Accessing metrics (scraping)": operations/observability-metrics-access.md
+          - "Alerting & SLOs": operations/observability-alerting.md
+          - "Grafana dashboards": operations/observability-dashboards.md
+          - "Logging & tracing": operations/observability-logging.md
       - "Cost attribution": operations/cost-attribution.md
       - Runbook: operations/runbook.md
       - Backup & restore: operations/backup-restore.md

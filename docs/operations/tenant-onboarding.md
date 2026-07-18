@@ -423,7 +423,7 @@ spec:
     # insecure: true   # only for a plaintext in-cluster collector; TLS is the default
 ```
 
-There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector, mutual TLS, or a service mesh), not a CR secret. See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs).
+There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector, mutual TLS, or a service mesh), not a CR secret. See [observability — enabling tracing on GMC-managed AGCs](observability-logging.md#enabling-tracing-on-gmc-managed-agcs).
 
 <a id="per-tenant-log-level"></a>
 **Optional — per-tenant log level.** `spec.logLevel` sets the log verbosity of this tenant's AGC and egress proxy: `info` (the default) or `debug`. The GMC threads it to both workloads as the `LOG_LEVEL` environment variable, so you can crank one gateway to `debug` for a bug repro without redeploying the GMC or touching any other tenant:
@@ -438,7 +438,7 @@ kubectl patch actionsgateway -n <tenant-namespace> <name> \
 
 - **The default is `info`, never `debug`.** A CR that omits the field — or sets it back to `info` — runs at `info`. At thousands of concurrent sessions the per-session/per-job `debug` lines dominate log volume, so `debug` is a deliberate, temporary opt-in, not a steady state.
 - **Changing it is a rolling restart, not a hot reload.** The new level takes effect once the AGC and proxy pods roll (the value is part of their pod templates). Expect the AGC's listener pool to drain and re-establish; in-flight jobs finish on the old pod within its termination grace period.
-- `debug` surfaces the AGC's per-session → per-job → per-pod lifecycle lines (the listener/multiplexer/provisioner traces, each carrying `namespace`/`group`/`sessionId`/`podName` correlation fields) and the proxy's per-CONNECT detail. The grep anchors are in [observability — debug diagnostics](observability.md#debug-diagnostics-for-otherwise-silent-paths).
+- `debug` surfaces the AGC's per-session → per-job → per-pod lifecycle lines (the listener/multiplexer/provisioner traces, each carrying `namespace`/`group`/`sessionId`/`podName` correlation fields) and the proxy's per-CONNECT detail. The grep anchors are in [observability — debug diagnostics](observability-logging.md#debug-diagnostics-for-otherwise-silent-paths).
 - Only `info` and `debug` are accepted; admission rejects any other value.
 - **v2 splits the knob per kind.** On the v2 (`actions-gateway.com`) API, `ActionsGateway.spec.logLevel` covers the AGC only; a proxy pool carries its own `EgressProxy.spec.logLevel` (same `info` | `debug` values and default, same rolling-restart semantics), so a shared pool can be flipped to `debug` without touching any gateway:
 

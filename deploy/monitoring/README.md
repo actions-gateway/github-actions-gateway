@@ -11,7 +11,7 @@ from the prose in [`docs/operations/observability.md`](../../docs/operations/obs
 | [`grafana-dashboard-platform.json`](grafana-dashboard-platform.json) | Grafana dashboard | **Platform/fleet** view (from the GMC manager scrape): managed gateways, GMC reconcile health, and the cross-tenant condition rollups (RunnerGroupsDegraded, EgressRulesStale, proxy quota). |
 
 All PromQL references metrics the controllers actually emit — see the [Full
-Metrics Reference](../../docs/operations/observability.md#full-metrics-reference).
+Metrics Reference](../../docs/operations/observability-metrics.md#full-metrics-reference).
 The recording rules in `prometheusrule.yaml` back several dashboard panels
 (`actions_gateway:pod_creation_latency_seconds:p95` / `:p99`,
 `actions_gateway:job_duration_seconds:p50` / `:p95`,
