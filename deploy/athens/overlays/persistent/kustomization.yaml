@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Opt-in persistence overlay for Athens — see ../../README.md.
+#
+# The base (../../base) mounts an ephemeral emptyDir: $0 at rest, but a cold Go module
+# cache on the first vendor-check/tidy-check after every scale-to-zero wake. This
+# overlay swaps that for a PVC-backed Balanced PD so the cache survives idle cycles.
+# The disk bills continuously while the PVC exists, so delete the PVC during long
+# idle stretches to stop paying.
+resources:
+  - ../../base
+  - pvc.yaml
+patches:
+  # Swap the `storage` volume's source from emptyDir to the PVC. Strategic merge
+  # matches the list element by its `name` key; `emptyDir: null` deletes the base's
+  # source so no leftover survives the merge (a volume must declare exactly one
+  # source), and persistentVolumeClaim takes its place.
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: athens
+        namespace: gag-dogfood
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: storage
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: athens-storage

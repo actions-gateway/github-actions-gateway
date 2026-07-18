@@ -456,7 +456,13 @@ kubectl logs -n gag-dogfood -l app=athens --tail=20
 ```
 
 Athens pre-warms lazily — the first `vendor-check`/`tidy-check` run is slower
-while modules download; subsequent runs are cache hits from the PVC.
+while modules download; subsequent runs are cache hits from the storage volume.
+
+The default render above uses an **ephemeral** `emptyDir` cache ($0 at rest); the
+cache goes cold on every scale-to-zero idle cycle. For a cache that survives idle
+cycles, render `deploy/athens/overlays/persistent` (or set `ATHENS_PERSISTENT=1`
+for `scripts/dogfood/setup.sh`) — a PVC-backed disk that bills continuously while
+it exists. Trade-off and tear-down: [`deploy/athens/README.md`](../../deploy/athens/README.md).
 
 > **Why plain HTTP (no TLS)?** Athens serves public Go module zips; there is
 > nothing confidential in transit. Integrity is upheld by the Go toolchain's
