@@ -376,7 +376,7 @@ digests. The knobs an operator is most likely to override:
 | `namePrefix` | `gmc` | Only when running a second GMC in the same cluster. |
 | `replicaCount` | `2` | Lower to `1` only in dev; production wants HA + leader election. |
 | `metrics.serviceMonitor.enabled` | `false` | Set `true` if you run Prometheus Operator and want a `ServiceMonitor`. |
-| `metrics.tls.certManager.enabled` | `true` | Leave on for a cert-manager-issued metrics cert that the `ServiceMonitor` verifies. Set `false` (or `certManager.enabled=false`) to scrape the self-signed metrics cert with `insecureSkipVerify` — a documented MITM trade-off, see [observability.md](observability.md#verifying-the-metrics-scrape-tls-gmc-manager). |
+| `metrics.tls.certManager.enabled` | `true` | Leave on for a cert-manager-issued metrics cert that the `ServiceMonitor` verifies. Set `false` (or `certManager.enabled=false`) to scrape the self-signed metrics cert with `insecureSkipVerify` — a documented MITM trade-off, see [observability.md](observability-metrics-access.md#verifying-the-metrics-scrape-tls-gmc-manager). |
 | `networkPolicy.enabled` | `true` | Leave on; needs an enforcing CNI (see prerequisites). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Leave on; ships the scoped `ResourceQuota` that lets the GMC's `system-cluster-critical` pods schedule under GKE's restricted PriorityClass admission (see [GKE and other restricted-PriorityClass clusters](#gke-and-other-restricted-priorityclass-clusters)). Set `false` only if you provision that quota out-of-band. |
 

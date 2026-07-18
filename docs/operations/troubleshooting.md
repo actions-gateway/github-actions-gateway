@@ -1984,7 +1984,7 @@ spec.tracing.sampler: Unsupported value: "ratio": supported values:
 - Leave `sampler` unset to use the SDK default (`parentbased_always_on`).
 - To *disable* tracing entirely, remove `spec.tracing.endpoint` (an empty endpoint emits no `OTEL_*` env and the AGC keeps its no-op tracer) — the sampler value is irrelevant when no endpoint is set.
 
-See [observability — enabling tracing on GMC-managed AGCs](observability.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
+See [observability — enabling tracing on GMC-managed AGCs](observability-logging.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
 
 ---
 
