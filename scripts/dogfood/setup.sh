@@ -459,8 +459,19 @@ EOF
 # ---------------------------------------------------------------------------
 
 apply_athens() {
-	echo "Applying Athens in-cluster Go module cache..."
-	kubectl apply -k "${REPO_ROOT}/deploy/athens"
+	# Ephemeral cache by default (emptyDir — $0 at rest, but a cold cache on the
+	# first vendor-check/tidy-check after each scale-to-zero wake). Set
+	# ATHENS_PERSISTENT=1 to render the PVC-backed overlay, which keeps the Go
+	# module cache warm across idle cycles at the cost of a continuously-billed
+	# disk. See deploy/athens/README.md.
+	local overlay="${REPO_ROOT}/deploy/athens"
+	if [[ "${ATHENS_PERSISTENT:-0}" == "1" || "${ATHENS_PERSISTENT:-0}" == "true" ]]; then
+		overlay="${REPO_ROOT}/deploy/athens/overlays/persistent"
+		echo "Applying Athens in-cluster Go module cache (persistent PVC)..."
+	else
+		echo "Applying Athens in-cluster Go module cache (ephemeral)..."
+	fi
+	kubectl apply -k "${overlay}"
 	echo "  Waiting for Athens to be ready..."
 	kubectl rollout status deployment/athens -n gag-dogfood --timeout=120s
 }

@@ -64,8 +64,9 @@ spec:
             requests:
               # Kept small so Athens reliably co-schedules with the AGC on the single
               # system node, whose CPU-request budget is tight during CI worker bursts.
-              # Athens is I/O-bound (serving cached zips from the PVC); the generous
-              # limits still allow bursting for cold-cache `go mod download` fetches.
+              # Athens is I/O-bound (serving cached zips from its storage volume); the
+              # generous limits still allow bursting for cold-cache `go mod download`
+              # fetches.
               cpu: "100m"
               memory: "192Mi"
             limits:
@@ -84,6 +85,14 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
       volumes:
+        # Ephemeral by default: the cache lives on node-local ephemeral storage and
+        # is discarded when the pod is removed — including on every scale-to-zero
+        # idle cycle. Athens just re-fetches missed modules from proxy.golang.org, so
+        # this costs nothing at rest at the price of a cold cache on the first
+        # vendor-check/tidy-check after a wake. To keep the cache warm across idle
+        # cycles, render the persistent overlay instead (a PVC-backed disk that bills
+        # continuously while it exists): `kubectl apply -k deploy/athens/overlays/persistent`.
+        # See deploy/athens/README.md.
         - name: storage
-          persistentVolumeClaim:
-            claimName: athens-storage
+          emptyDir:
+            sizeLimit: 20Gi
