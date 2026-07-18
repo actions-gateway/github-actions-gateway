@@ -25,6 +25,8 @@ func TestListenerVocabularyParityWithV2(t *testing.T) {
 		{"ReasonSustainedRateLimit", ReasonSustainedRateLimit, v2alpha1.ReasonSustainedRateLimit, v2beta1.ReasonSustainedRateLimit},
 		{"ReasonVersionTooOld", ReasonVersionTooOld, v2alpha1.ReasonVersionTooOld, v2beta1.ReasonVersionTooOld},
 		{"ReasonSessionUnauthorized", ReasonSessionUnauthorized, v2alpha1.ReasonSessionUnauthorized, v2beta1.ReasonSessionUnauthorized},
+		{"ReasonPollingHealthy", ReasonPollingHealthy, v2alpha1.ReasonPollingHealthy, v2beta1.ReasonPollingHealthy},
+		{"ReasonSessionAuthorized", ReasonSessionAuthorized, v2alpha1.ReasonSessionAuthorized, v2beta1.ReasonSessionAuthorized},
 	}
 	for _, p := range pairs {
 		if p.v1 != p.alpha || p.v1 != p.beta {

@@ -69,6 +69,18 @@ const (
 	// creation is rejected as unauthorized — the agent credentials are invalid or
 	// revoked.
 	ReasonSessionUnauthorized = "Unauthorized"
+	// ReasonPollingHealthy is the RateLimited=False reason: message polling is
+	// healthy at session start or recovered after a sustained-429 episode. The
+	// classic listener publishes it as the start baseline and on the first
+	// successful poll after RateLimited=True, so a recovered rate-limit state does
+	// not sit stale until the process restarts (Q332) — parity with the ScaleSet
+	// listener's clear-on-recovery.
+	ReasonPollingHealthy = "PollingHealthy"
+	// ReasonSessionAuthorized is the Degraded=False reason: the listener's session
+	// is authorized. The classic listener publishes it as the healthy baseline on
+	// session start so a Degraded=True surfaced by a prior failed instance clears
+	// once the credentials are fixed (Q332) — parity with the ScaleSet listener.
+	ReasonSessionAuthorized = "SessionAuthorized"
 )
 
 // ImpairingConditionTypes returns the RunnerGroup condition types that, when

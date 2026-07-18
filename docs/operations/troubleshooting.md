@@ -1028,7 +1028,7 @@ kubectl get runnergroup -n <namespace> -o jsonpath='{.items[*].spec.maxListeners
 ```
 
 **Resolution.**
-- If a burst is temporary and below 10 minutes: no action required, the condition will clear as the burst subsides.
+- If a burst is temporary and below 10 minutes: no action required, the condition will clear as the burst subsides. `RateLimited=True` (reason `SustainedRateLimit`) is set only after `GET /message` has been answered `429` for over 10 minutes, and clears to `RateLimited=False` (reason `PollingHealthy`) on the first successful poll once the budget recovers — you do not need to restart the AGC to clear a stale condition.
 - If `maxListeners` values are set higher than needed, reduce them.
 - If the tenant's RunnerGroup count × `maxListeners` sustainably exceeds the installation budget, shard to a second `ActionsGateway` CR with a new GitHub App installation. See [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations).
 
