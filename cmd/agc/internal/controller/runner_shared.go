@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
@@ -11,6 +12,9 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -42,9 +46,12 @@ type eventRecord struct {
 // drops the event rather than stalling the listener/provisioner goroutine, matching
 // channelConditionUpdater. Events are an incident-visibility complement to the
 // always-present metrics/conditions, so a dropped event under extreme backpressure
-// is acceptable.
+// is acceptable. After enqueuing, it wakes the reconciler (wake) so the pushed event
+// is drained promptly rather than waiting for the next worker-Pod event or the resync
+// period (Q333).
 type channelEventRecorder struct {
-	ch chan<- eventRecord
+	ch   chan<- eventRecord
+	wake chan<- event.GenericEvent
 }
 
 func (e *channelEventRecorder) Event(namespace, name, eventtype, reason, action, note string) {
@@ -60,6 +67,94 @@ func (e *channelEventRecorder) Event(namespace, name, eventtype, reason, action,
 	default:
 		// Drop if the channel is full to avoid blocking the caller.
 	}
+	wakeReconciler(e.wake, namespace, name)
+}
+
+// wakeReconciler performs a best-effort, non-blocking send of an owner-scoped
+// GenericEvent on wake so that a listener/provisioner-pushed condition or event wakes
+// its reconciler promptly — instead of the pushed update sitting in conditionCh/eventCh
+// until the next worker-Pod event or the resync drains it (Q333). A nil or full channel
+// is a no-op: like the conditionCh/eventCh sends it mirrors, the wake is best-effort,
+// and the update is still drained by the next natural reconcile. The GenericEvent
+// carries only the owner's namespace/name (as PartialObjectMetadata), which the
+// source.Channel handler (handler.EnqueueRequestForObject) maps straight to a
+// reconcile.Request for that owner.
+func wakeReconciler(wake chan<- event.GenericEvent, namespace, name string) {
+	if wake == nil {
+		return
+	}
+	select {
+	case wake <- event.GenericEvent{Object: &metav1.PartialObjectMetadata{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
+	}}:
+	default:
+		// Drop if the wake channel is full; the update is drained by the next reconcile.
+	}
+}
+
+// pendingConditions makes a drained listener-pushed condition durable until the live
+// owner object is observed to reflect it. A reconcile drains a condition from the
+// channel (consuming it) and merges it into the object's status, but the subsequent
+// status write can lose that merge: an IsConflict with a racing update is swallowed,
+// and an early return may skip the write entirely. Because a listener-only condition
+// (e.g. the ScaleSet Degraded/RateLimited signals, which the reconciler never
+// re-derives) is pushed once, a lost drain would leave it missing until the next
+// transition. This became easy to hit once a push wakes the reconciler promptly (Q333),
+// landing the drain in a reconcile more likely to race a concurrent write.
+//
+// Entries are keyed by owner then condition type, so only the LATEST push per type is
+// retained — preserving last-writer-wins and preventing a stale condition from
+// resurrecting over a newer one. drainConditions re-applies each retained condition
+// every reconcile and drops it once the live status reflects it. The reconciler is the
+// sole writer of these listener conditions, so re-applying an unpersisted one never
+// fights another writer.
+type pendingConditions struct {
+	mu sync.Mutex
+	m  map[types.NamespacedName]map[string]metav1.Condition
+}
+
+// retain records cond as the latest unpersisted push for its owner and type.
+func (p *pendingConditions) retain(key types.NamespacedName, cond metav1.Condition) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.m == nil {
+		p.m = make(map[types.NamespacedName]map[string]metav1.Condition)
+	}
+	byType := p.m[key]
+	if byType == nil {
+		byType = make(map[string]metav1.Condition)
+		p.m[key] = byType
+	}
+	byType[cond.Type] = cond
+}
+
+// apply re-merges any still-unpersisted retained conditions for key into conds and drops
+// those the live conds already reflect (matched on Status+Reason+Message — the fields a
+// status write persists). Call it against the freshly-fetched status at the start of a
+// drain so a condition an earlier reconcile failed to persist is retried here.
+func (p *pendingConditions) apply(key types.NamespacedName, conds *[]metav1.Condition) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	byType := p.m[key]
+	for t, cond := range byType {
+		if cur := meta.FindStatusCondition(*conds, t); cur != nil &&
+			cur.Status == cond.Status && cur.Reason == cond.Reason && cur.Message == cond.Message {
+			delete(byType, t) // live status reflects it: persisted, stop retrying
+			continue
+		}
+		meta.SetStatusCondition(conds, cond) // not yet persisted: re-apply for this reconcile
+	}
+	if len(byType) == 0 {
+		delete(p.m, key)
+	}
+}
+
+// forget drops all retained conditions for key. Call it when the owner is deleted or
+// falls out of scope so no entry leaks after its last reconcile.
+func (p *pendingConditions) forget(key types.NamespacedName) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.m, key)
 }
 
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's

@@ -31,8 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const finalizerName = "actions-gateway.github.com/agentpool-cleanup"
@@ -50,9 +52,12 @@ type conditionUpdate struct {
 	condition metav1.Condition
 }
 
-// channelConditionUpdater implements listener.ConditionUpdater.
+// channelConditionUpdater implements listener.ConditionUpdater. After enqueuing, it
+// wakes the reconciler (wake) so the pushed condition is drained promptly rather than
+// waiting for the next worker-Pod event or the resync period (Q333).
 type channelConditionUpdater struct {
-	ch chan<- conditionUpdate
+	ch   chan<- conditionUpdate
+	wake chan<- event.GenericEvent
 }
 
 func (u *channelConditionUpdater) SetCondition(namespace, name string, cond metav1.Condition) {
@@ -61,6 +66,7 @@ func (u *channelConditionUpdater) SetCondition(namespace, name string, cond meta
 	default:
 		// Drop if channel is full to avoid blocking listener goroutines.
 	}
+	wakeReconciler(u.wake, namespace, name)
 }
 
 // RunnerGroupReconciler reconciles RunnerGroup objects.
@@ -101,6 +107,18 @@ type RunnerGroupReconciler struct {
 	// goroutines; drainEvents records them on the live RunnerGroup each reconcile.
 	eventCh chan eventRecord
 
+	// wakeCh delivers owner-scoped GenericEvents to the source.Channel registered in
+	// SetupWithManager, so a listener/provisioner-pushed condition or event (drained
+	// in Reconcile by drainConditions/drainEvents) wakes the reconciler immediately
+	// rather than waiting for the next worker-Pod event or the resync period (Q333).
+	// Best-effort and never closed: senders use a non-blocking send (wakeReconciler),
+	// and the source's reader goroutine stops when the manager's context is cancelled.
+	wakeCh chan event.GenericEvent
+
+	// pendingConds retains listener-pushed conditions drained but not yet persisted, so a
+	// status-write conflict does not lose a one-shot listener condition (Q333).
+	pendingConds pendingConditions
+
 	// reconcileCount counts Reconcile invocations. Test-only observability (see
 	// ReconcileCountForTest) — it lets integration tests assert that an external
 	// event such as a worker Pod lifecycle event actually triggered a reconcile.
@@ -130,6 +148,18 @@ type BrokerConfig struct {
 	FanoutCompletion bool
 }
 
+// condUpdater returns a ConditionUpdater that enqueues onto conditionCh and wakes the
+// reconciler (wakeCh) so the pushed condition is drained promptly (Q333).
+func (r *RunnerGroupReconciler) condUpdater() *channelConditionUpdater {
+	return &channelConditionUpdater{ch: r.conditionCh, wake: r.wakeCh}
+}
+
+// eventRecorder returns an EventRecorder that enqueues onto eventCh and wakes the
+// reconciler (wakeCh) so the pushed event is drained promptly (Q333).
+func (r *RunnerGroupReconciler) eventRecorder() *channelEventRecorder {
+	return &channelEventRecorder{ch: r.eventCh, wake: r.wakeCh}
+}
+
 // SetupWithManager registers the reconciler with the controller-runtime manager.
 func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Log == nil {
@@ -147,11 +177,14 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.eventCh == nil {
 		r.eventCh = make(chan eventRecord, 256)
 	}
+	if r.wakeCh == nil {
+		r.wakeCh = make(chan event.GenericEvent, 256)
+	}
 	// Route provisioner-side quota/eviction-retry-exhaustion Events for this v1 path
 	// through the same channel the listener path uses (runnerGroupTarget is the only
 	// Target the shared Provisioner constructs, and it is v1-only).
 	if r.Provisioner != nil && r.Provisioner.Events == nil {
-		r.Provisioner.Events = &channelEventRecorder{ch: r.eventCh}
+		r.Provisioner.Events = r.eventRecorder()
 	}
 
 	// Export the worker ResourceQuota conditions (Q82) and the WorkersUnschedulable
@@ -194,6 +227,13 @@ func (r *RunnerGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.podToRunnerGroup),
 			builder.WithPredicates(workerPodPredicate()),
 		).
+		// Wake the reconciler when a listener/provisioner goroutine pushes a condition
+		// or event onto conditionCh/eventCh (Q333). Without this the pushed update sits
+		// in the channel until the next worker-Pod event or the resync period drains it,
+		// so an otherwise-idle RunnerGroup could lag a status condition up to 10h. The
+		// GenericEvents carry the owning RunnerGroup's namespace/name, which
+		// EnqueueRequestForObject maps straight to its reconcile.Request.
+		WatchesRawSource(source.Channel(r.wakeCh, &handler.EnqueueRequestForObject{})).
 		Complete(r)
 }
 
@@ -253,6 +293,9 @@ func (r *RunnerGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	if r.eventCh == nil {
 		r.eventCh = make(chan eventRecord, 256)
+	}
+	if r.wakeCh == nil {
+		r.wakeCh = make(chan event.GenericEvent, 256)
 	}
 	log := r.Log.With("namespace", req.Namespace, "name", req.Name)
 
@@ -484,6 +527,8 @@ func (r *RunnerGroupReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.poolsMu.Lock()
 	delete(r.pools, key)
 	r.poolsMu.Unlock()
+
+	r.pendingConds.forget(key)
 }
 
 // recordEvent emits a Kubernetes Event on the RunnerGroup when a Recorder is
@@ -526,8 +571,7 @@ func (r *RunnerGroupReconciler) getOrCreateMultiplexer(ctx context.Context, key 
 		return mux
 	}
 
-	condCh := r.conditionCh
-	condUpdater := &channelConditionUpdater{ch: condCh}
+	condUpdater := r.condUpdater()
 	brokerCfg := r.BrokerConfig
 
 	factory := func(index int) listener.Config {
@@ -573,19 +617,25 @@ func (r *RunnerGroupReconciler) newListenerConfig(rg *v1alpha1.RunnerGroup, pool
 		// redelivery instead of acquired-then-dropped.
 		admit = r.Provisioner.AdmitFor(rg)
 	}
-	return assembleListenerConfig(rg.Name, rg.Namespace, brokerCfg, condUpdater, &channelEventRecorder{ch: r.eventCh}, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
+	return assembleListenerConfig(rg.Name, rg.Namespace, brokerCfg, condUpdater, r.eventRecorder(), r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending condition updates and merges them into rg.Status.
 // Updates for other RunnerGroups are collected and re-enqueued after the loop
 // to avoid re-processing them in the current iteration.
 func (r *RunnerGroupReconciler) drainConditions(_ context.Context, rg *v1alpha1.RunnerGroup) {
+	key := types.NamespacedName{Namespace: rg.Namespace, Name: rg.Name}
+	// Re-apply any conditions a prior reconcile drained but did not persist (dropping
+	// those the live status now reflects), then drain fresh pushes over the top so the
+	// latest push per type wins (Q333).
+	r.pendingConds.apply(key, &rg.Status.Conditions)
 	var skipped []conditionUpdate
 	for {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rg.Namespace && upd.name == rg.Name {
 				r.mergeCondition(rg, upd.condition)
+				r.pendingConds.retain(key, upd.condition)
 			} else {
 				skipped = append(skipped, upd)
 			}
@@ -691,15 +741,14 @@ func (r *RunnerGroupReconciler) setCredentialUnavailable(ctx context.Context, rg
 }
 
 // SetConditionForTest enqueues a condition update as if it came from a listener
-// goroutine. Intended for use in unit tests only.
+// goroutine, exercising the same push path (including the Q333 reconciler wake) so
+// integration tests can prove a pushed condition wakes an idle reconciler. Intended
+// for use in tests only.
 func (r *RunnerGroupReconciler) SetConditionForTest(ns, name string, cond metav1.Condition) {
 	if r.conditionCh == nil {
 		return
 	}
-	select {
-	case r.conditionCh <- conditionUpdate{namespace: ns, name: name, condition: cond}:
-	default:
-	}
+	r.condUpdater().SetCondition(ns, name, cond)
 }
 
 // ReconcileCountForTest returns the number of times Reconcile has been invoked.

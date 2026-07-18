@@ -144,7 +144,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		prov:   r.Provisioner,
 		key:    key,
 		uid:    rs.UID,
-		events: &channelEventRecorder{ch: r.eventCh},
+		events: r.eventRecorder(),
 	}
 
 	// The scale set's single runs-on label is its name (CEL guarantees exactly one
@@ -158,8 +158,8 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	// (Q325); the reconciler drains both channels on its next reconcile.
 	sink := &scaleSetStatusSink{
 		key:  key,
-		cond: &channelConditionUpdater{ch: r.conditionCh},
-		ev:   &channelEventRecorder{ch: r.eventCh},
+		cond: r.condUpdater(),
+		ev:   r.eventRecorder(),
 	}
 
 	l, err := scalesetlistener.New(scalesetlistener.Config{
