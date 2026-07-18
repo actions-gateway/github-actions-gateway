@@ -2,7 +2,7 @@
 
 **Strategic context:** [v2beta1.md](../v2beta1.md) (the graduation plan; this is its
 §6 "graduation cut" in mechanical detail), [v2-api.md § API maturity & graduation](../v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2)
-(the ladder), and [q264-scale-set-protocol.md §5a-U7/U8](../q264-scale-set-protocol.md#u8--support-matrix-policy)
+(the ladder), and [q264-scale-set-protocol.md §5a-U7/U8](q264-scale-set-protocol-phases.md#u8--support-matrix-policy)
 (the protocol-field strip + the P5-first sequencing). This doc is the implementation
 blueprint for the conversion-webhook step, to execute once its dependency clears.
 
@@ -16,7 +16,7 @@ part of this change (§Scope "Machinery + coexist").
 
 ## Blocked on Q264 P5 (the load-bearing finding)
 
-Q74 is the **last rung** of the [U8 ladder](../q264-scale-set-protocol.md#u8--support-matrix-policy),
+Q74 is the **last rung** of the [U8 ladder](q264-scale-set-protocol-phases.md#u8--support-matrix-policy),
 not an independent task:
 
 > P5 default flip → one-minor Classic deprecation (= v1alpha1 deprecation) →
@@ -37,7 +37,7 @@ Classic deprecation window. Two reasons it is ordered this way:
 
 **Backlog-drift note (why this wasn't obvious).** [v2beta1.md §6](../v2beta1.md) predates
 the `acquisitionProtocol` field (added later by Q264 P3a, #534) and describes Q74 as a
-near-identity graduation; [Q264 §5a-U7/U8](../q264-scale-set-protocol.md#u7--where-the-protocol-selector-lives)
+near-identity graduation; [Q264 §5a-U7/U8](q264-scale-set-protocol-phases.md#u7--where-the-protocol-selector-lives)
 then assigned Q74 the "strip the field + follow P5" requirement, but neither v2beta1.md
 §6 nor the Q74 Queue note tracked it. Reconciled 2026-07-06 (this doc + the v2beta1.md §6
 cross-ref + the Q74 STATUS note).
@@ -48,7 +48,7 @@ Everything **except** the RunnerSet protocol fields is a clean **identity**
 conversion: every shape/quality blocker the beta shape needed — Q191 broker-compat,
 Q196 credentials discriminated union, Q197 workload identity, Q205 well-known labels,
 Q218 disruption-safety — already shipped into `v2alpha1` (Q15 gVisor is demoted, not a
-hard gate). The two exceptions, per [U7](../q264-scale-set-protocol.md#u7--where-the-protocol-selector-lives):
+hard gate). The two exceptions, per [U7](q264-scale-set-protocol-phases.md#u7--where-the-protocol-selector-lives):
 
 - **`RunnerSet.spec.acquisitionProtocol`** — v2alpha1-only; `v2beta1` never serves
   `Classic`, so the field is **dropped** at the graduation.
