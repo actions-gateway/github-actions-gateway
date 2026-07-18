@@ -389,7 +389,7 @@ egress authority is out of band and routes to a mirror, a mesh, or its own desig
    concurrency / agent-pool recycling issue under burst load** (Q247/Q249/Q254 family),
    tracked as **Q259** — **not** node capacity (Q248) and **not** a Q242/Q246 defect.
    Evidence: run 28513106734 (unit-test.yml), run 28510907609 (integration-test.yml);
-   full diagnosis in the [GKE dogfood runbook](../gke-dogfood.md). Until Q259 is fixed,
+   full diagnosis in the [GKE dogfood runbook](gke-dogfood-turnup-findings.md). Until Q259 is fixed,
    Q224's "route production CI green" is not met, so **Q224 and this deliverable stay
    open**. First run also hit a one-off **spot-VM preemption** (transient) — the
    `workers` pool is spot.

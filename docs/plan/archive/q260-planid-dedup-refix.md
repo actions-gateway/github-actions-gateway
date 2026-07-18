@@ -7,7 +7,7 @@ nodes; **0 Secret/Pod `already exists` in two bursts**). But the concurrent matr
 **not fully green**: the remaining blocker has shifted to GitHub's broker **fan-out
 completion/assignment accounting**, which is distinct from and beyond this dedup, and which the
 #513 completejob-abandon flag does **not** resolve (it makes the end-state worse — keep it OFF).
-Full evidence in [`gke-dogfood.md`](../gke-dogfood.md) re-route #4 (and the re-route #4 update
+Full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 (and the re-route #4 update
 block below). **Q224/Q260/Q242 stay open.**
 
 > **Update (redelivery residual code-complete).** Residual (2) — the late-redelivery
@@ -22,7 +22,7 @@ block below). **Q224/Q260/Q242 stay open.**
 >
 > **Update (re-route #4, 2026-07-04 — live-tested; #513 flag does NOT resolve, keep OFF).**
 > The combined capacity + flag-on/flag-off turn-up ran on stable non-preemptible capacity
-> (full evidence in [`gke-dogfood.md`](../gke-dogfood.md) re-route #4). Findings: **capacity
+> (full evidence in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4). Findings: **capacity
 > (Q248) and collisions (#512) are both FIXED** — 3 non-preempted nodes, and **0 Secret/Pod
 > `already exists` collisions in both bursts** (10 dedup events each). But **neither flag state
 > reaches green**: the blocker is now GitHub's broker **fan-out completion/assignment
@@ -103,7 +103,7 @@ block below). **Q224/Q260/Q242 stay open.**
 
 The first Q260 fix (commit `c850764`, #503) deduped job acquisition by claiming the
 per-delivery `RunnerRequestID` **before** `AcquireJob`. Live turn-up #2 (2026-07-03,
-recorded in [`gke-dogfood.md`](../gke-dogfood.md)) proved it **ineffective**: GitHub's
+recorded in [`gke-dogfood.md`](gke-dogfood-turnup-findings.md)) proved it **ineffective**: GitHub's
 broker fan-out delivers one job to N sibling listener sessions as messages with
 **distinct** `RunnerRequestID`s. Each sibling's `claimJob(distinctReqID)` succeeds, all
 pass the gate, all acquire, and all collide on the **shared** per-job worker Secret

@@ -21,7 +21,7 @@ gate) passes; the companion `…AccountingGap` (flag off) still asserts the pre-
 This closed the last blocker for Q224 "route production CI green," after the earlier
 Q260 work closed capacity (Q248), Secret/Pod collisions (#512), and the planID
 dedup key ([`q260-planid-dedup-refix.md`](q260-planid-dedup-refix.md)). Full live
-evidence: [`gke-dogfood.md`](../gke-dogfood.md) re-route #4 (fails-today control) +
+evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 (fails-today control) +
 re-route #5 (Option A confirmed).
 
 ---
@@ -347,7 +347,7 @@ Option E (Q264) is **not needed** — the many-acquirers topology is reconcilabl
 Confound handled: a Dependabot rebase merge-train briefly polluted the shared runner pool
 with pull_request runs that concurrency-cancelled on each force-push (cancels in ~4 min,
 distinct from the 15-min accounting timeout). The clean signal came from the **push**-event
-238b8df reruns, which are concurrency-immune. Full evidence: [`gke-dogfood.md`](../gke-dogfood.md)
+238b8df reruns, which are concurrency-immune. Full evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md)
 re-route #5.
 
 The alternative outcomes the experiment was designed to distinguish, for the record:
@@ -362,7 +362,7 @@ The alternative outcomes the experiment was designed to distinguish, for the rec
 Also fix the orthogonal Q239 regression before #5 (the dogfood `RunnerTemplate`
 reverted to the toolchain-less upstream image — `make: command not found`), so a
 non-green result is attributable to accounting, not the runner image
-([`gke-dogfood.md`](../gke-dogfood.md) re-route #4 secondary observation).
+([`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #4 secondary observation).
 
 ---
 
@@ -401,7 +401,7 @@ non-green result is attributable to accounting, not the runner image
 
 
 Q260 proved Option A's *accounting* is correct (§5, re-route #5). Q265 asks the
-*throughput* question that gates [Q224](../gke-dogfood.md) and the Option A-vs-Option E
+*throughput* question that gates [Q224](gke-dogfood-turnup-findings.md) and the Option A-vs-Option E
 ([Q264](../q264-scale-set-protocol.md)) fork: on a warm, right-sized pool with
 `maxListeners ≫ maxWorkers × fan-out-width` (so listener supply is not the bottleneck),
 does the busy-worker pool **hold near `maxWorkers`** under sustained fan-out burst
@@ -510,7 +510,7 @@ A clean "pool holds at maxWorkers" measurement was **not** achieved:
 - **Q224's throughput residual** stays open, now attributed to (a) the recycle seam above
   and (b) worker capacity ([Q248](../../STATUS.md)) — both tuning/fix, not architectural.
 
-Full live evidence: [`gke-dogfood.md`](../gke-dogfood.md) re-route #6.
+Full live evidence: [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #6.
 
 ## 8. Q266 — the slot-stranding recycle fix (2026-07-04)
 
@@ -557,7 +557,7 @@ no loser strands+exits while the winner runs, and each loser recycles in place o
 winner's conclusion. It FAILS against pre-Q266 behaviour (the eager losers exit) and needs
 no GKE turn-up.
 
-**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](../gke-dogfood.md) re-route #7).** Q266's
+**Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #7).** Q266's
 targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal
 `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38)
 were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A
@@ -577,7 +577,7 @@ entirely), see [`dogfood-runner-rightsizing.md`](../dogfood-runner-rightsizing.m
 
 ## 9. Re-route #8 — Q267 confirmed, and the residual isolated to fan-out *dispatch* (2026-07-05)
 
-The clean-namespace wide-pool close-out ([`gke-dogfood.md`](../gke-dogfood.md) re-route #8,
+The clean-namespace wide-pool close-out ([`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #8,
 `agc:e2e-63cddfc`, fresh `dogfood8`/`ci8`/`gag-ci8`, `maxListeners = 48`,
 `maxWorkers = 8`, non-preemptible `pd-standard` capacity, no mid-run restart) closes out
 the seam accounting from re-route #7:
@@ -667,7 +667,7 @@ why the product front door is now ScaleSet.
 A fresh confirming turn-up was **not** run: both sides are already measured under clean,
 confounder-free conditions on the shared dogfood cluster, and re-running the deprecated
 classic path would only reproduce **2/7** at cost. Evidence:
-[`gke-dogfood.md`](../gke-dogfood.md) re-route #8 (classic **2/7**) + Q264 P4 clean-green
+[`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #8 (classic **2/7**) + Q264 P4 clean-green
 (ScaleSet **7/7**).
 
 ---
