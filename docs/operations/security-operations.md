@@ -76,7 +76,7 @@ Two detection substrates are used:
 ## Prometheus abuse alerts
 
 These rules reference metrics that are emitted today
-([observability.md § Full Metrics Reference](observability.md#full-metrics-reference)).
+([observability.md § Full Metrics Reference](observability-metrics.md#full-metrics-reference)).
 Drop them into the same `PrometheusRule` group as the SLO alerts, or a
 dedicated `actions-gateway-security` group. Tune thresholds to your fleet.
 

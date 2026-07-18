@@ -98,7 +98,7 @@ The alerts below cover availability and SLO breaches. For **abuse and compromise
 ## Alert Rule Reference
 
 Every alert shipped in the reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml)
-(reproduced in [Recommended Alert Rules](observability.md#recommended-alert-rules)) carries a
+(reproduced in [Recommended Alert Rules](observability-alerting.md#recommended-alert-rules)) carries a
 `runbook_url` annotation that resolves to the matching entry below, so on-call lands on a response
 procedure rather than just the alert's `summary`/`description`. Severity classes follow
 [Page-Worthy vs. Ticket-Worthy](#page-worthy-vs-ticket-worthy).
@@ -307,7 +307,7 @@ Before handing off to the next on-call:
 - [Backup, Restore, and Disaster Recovery](backup-restore.md) — backup posture and recovery procedures for a deleted or corrupted CR
 - [Troubleshooting Guide](troubleshooting.md) — symptom → diagnosis → resolution for each failure mode
 - [Security Operations](security-operations.md) — abuse-detection alerts and compromise-response playbooks
-- [Observability](observability.md) — full metrics reference
+- [Observability: metrics reference](observability-metrics.md) — full metrics reference
 - [Getting Started](../getting-started.md) — initial setup and credential rotation
 - [Appendix A — Capacity Targets & SLOs](../design/appendix-a-capacity-slos.md)
 - [Appendix E — Capacity Planning](../design/appendix-e-capacity-planning.md)

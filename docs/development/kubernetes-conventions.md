@@ -123,7 +123,7 @@ them *alongside* the functional selector labels above, never in place of them, a
 never build a controller's pod/Service selector on them (an operator may relabel
 them). `apilabels.Merge` preserves any existing key, so it cannot clobber a
 selector label. The canonical per-component values and operator `kubectl -l`
-recipes live in [observability.md](../operations/observability.md#selecting-gag-objects-with-the-recommended-labels).
+recipes live in [observability.md](../operations/observability-metrics.md#selecting-gag-objects-with-the-recommended-labels).
 
 Controller-set annotations on worker pods (both v1 and v2, stamped by the
 provisioner at pod creation time from the AcquireJob payload):
@@ -151,7 +151,7 @@ Gap-fill only: a value for any of these keys set in the runner's
 Only these three keys are honored from the template; arbitrary `podTemplate`
 annotations are not copied onto worker pods. The markers live on the pod, so they
 release automatically when the pod is torn down on job completion. Operator-facing
-detail in [observability.md](../operations/observability.md#node-disruption-safety-annotations).
+detail in [observability.md](../operations/observability-metrics.md#node-disruption-safety-annotations).
 
 ## Status conditions & alertable condition metrics
 

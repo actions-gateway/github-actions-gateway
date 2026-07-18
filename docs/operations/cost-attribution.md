@@ -53,9 +53,9 @@ These are the labels GAG actually stamps (verified against the code in [`api/api
 
 **Namespace = tenant.** GAG places a tenant's worker pods, proxy pool, and AGC all in that tenant's namespace (the `ActionsGateway` CR's namespace). The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant. There is no separate proxy or worker namespace to reconcile.
 
-**Per-RunnerGroup / per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g. `gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name. (GAG also sets project-specific `actions-gateway/runner-group` and `actions-gateway.com/runner-set` labels for `kubectl` selection — see [observability.md](observability.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
+**Per-RunnerGroup / per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g. `gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name. (GAG also sets project-specific `actions-gateway/runner-group` and `actions-gateway.com/runner-set` labels for `kubectl` selection — see [observability.md](observability-metrics.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
 
-> **Cardinality caution.** Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods *also* carry per-job annotations like `actions-gateway.com/run-id`). Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the [label cardinality warning](observability.md#label-cardinality-warning).
+> **Cardinality caution.** Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods *also* carry per-job annotations like `actions-gateway.com/run-id`). Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the [label cardinality warning](observability-metrics.md#label-cardinality-warning).
 
 ---
 
@@ -157,7 +157,7 @@ The single most useful thing an allocation report *proves* about GAG is the prop
 
 This live data is the input to the **showback vs chargeback** choice in [Appendix F §F.3](../design/appendix-f-cost-model.md#f3-tenant-cost-allocation):
 
-- **Showback:** point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the [tenant dashboard](observability.md#tenant-dashboard) throughput metrics. No billing integration required.
+- **Showback:** point a Grafana panel (or the Kubecost UI) at the per-namespace allocation so each team sees its own real spend next to the [tenant dashboard](observability-dashboards.md#tenant-dashboard) throughput metrics. No billing integration required.
 - **Chargeback:** export the per-namespace allocation on a schedule and feed it into your billing system, optionally applying a discount/overhead factor. The `app.kubernetes.io/instance` breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.
 
 Cross-check the allocation against GAG's own metrics for a sanity test: `actions_gateway_job_duration_seconds` (per `namespace`, `runner_group`) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the `runner`-component allocation for that tenant. A large divergence usually means oversized resource requests — the [worker right-sizing lever](../design/appendix-f-cost-model.md#worker-resource-right-sizing) in Appendix F.
