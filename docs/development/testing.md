@@ -122,6 +122,26 @@ Accepted findings carry a targeted `# shellcheck disable=SCxxxx` directive with 
 
 It fails on two classes of breakage: **dead relative file links** (a `[text](path)` whose resolved target is neither a tracked file nor directory — a trailing `:NN` line reference is tolerated and only the file part is resolved) and **dead anchors** (a `#fragment` that matches no heading slug or explicit `<a id>`/`<a name>` in the target Markdown file). Anchors are resolved with GitHub's heading-slug algorithm (strip inline markdown — respecting code spans — lowercase, drop everything outside `[a-z0-9 _-]`, spaces to hyphens, de-dupe repeats with `-1`/`-2`), so the verdict matches what GitHub renders. External URLs (http/https/mailto/tel), links inside fenced or inline code, and anchors into non-Markdown or vendored targets are out of scope.
 
+### Never foreground-poll CI, logs, or files
+
+Do **not** run a blocking watch/tail on the main thread to wait for something to change — no `gh pr checks --watch`, no `gh run watch`, no `while … sleep` tail loops, no re-running `gh pr checks`/`gh run view`/`kubectl logs -f`/`tail -f` on a timer to see if a result has landed yet. A foreground poll pins the session doing nothing until it times out or is killed, and it competes with the background machinery that already tracks these signals. In a two-week sample this pattern alone produced ~130 blocked poll attempts.
+
+Use the asynchronous mechanisms instead:
+
+- **PRs and CI** — the Auto-fix/PR-monitor path watches CI and pushes fixes on its own (see [parallel-dispatch.md](parallel-dispatch.md) § self-healing); let it. If you need the current state right now, take **one** non-blocking snapshot (`gh pr checks <n>` without `--watch`, `gh run view <id>`) and move on — schedule a later re-check, don't spin.
+- **Long-running local work** — launch it as a background task (a background Bash run, or a background agent) and let the completion notification wake you, rather than blocking the foreground on it.
+
+The rule: a single point-in-time check is fine; a loop or a `--watch`/`-f` that blocks the main thread waiting for change is not.
+
+### Slow tiers need an explicit timeout or a background run
+
+The Bash tool's default timeout is short (two minutes) and it **kills** anything that overruns — in the same two-week sample, 36 slow runs were killed mid-flight this way, wasting the whole run. Any invocation that can exceed the default — the envtest integration suites, the kind e2e tiers, and `go test -race` / `make test-race` above all — must therefore either:
+
+- carry an **explicit timeout** on the Bash call generous enough to cover the run (up to the 10-minute Bash ceiling; use `make … TIMEOUT=…`/`go test -timeout …` for the test-level deadline as well), **or**
+- be launched as a **background task** so it runs to completion detached and notifies on exit.
+
+Never fire one of these as a default-timeout foreground run and hope it finishes — it will be killed partway and you learn nothing. Pick the timeout from the tier's real cost (see [Cost & cadence](#cost--cadence-rough-ephemeral-ci-2026-ballparks) below); when in doubt, background it.
+
 ## Picking the right test tier
 
 Prefer the narrowest tier that can actually *observe* the bug class — but no narrower:

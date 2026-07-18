@@ -35,7 +35,7 @@ that hypothesis rather than assuming it.
   roadmap already binds the *endpoints*: `v1alpha1` is Classic-only and `v2beta1`
   is ScaleSet-only, with `v2alpha1` as the **dual-protocol bridge** (default
   `Classic`, per-set opt-in `ScaleSet`;
-  [Q264 §5a-U7/U8](q264-scale-set-protocol.md#5a-the-three-decisions--analysis-and-recommendations-2026-07-04)).
+  [Q264 §5a-U7/U8](archive/q264-scale-set-protocol-phases.md#5a-the-three-decisions--analysis-and-recommendations-2026-07-04)).
   So retiring the **v1alpha1 API** (Axis 1) and retiring the **classic protocol**
   (Axis 2) are *not the same lever* even though they share an end. The fan-out wall
   is an Axis-2 (protocol) property — a `v2alpha1` RunnerSet on `Classic` hits the
@@ -86,7 +86,7 @@ memo does is keep them apart.
 **Proof they are orthogonal.** The high-burst fan-out failure is a property of the
 **many-acquirers topology** (concurrency = registered runners = acquirers), not of
 the object schema. By design decision
-([Q264 §5a-U7](q264-scale-set-protocol.md#u7--where-the-protocol-selector-lives)),
+([Q264 §5a-U7](archive/q264-scale-set-protocol-phases.md#u7--where-the-protocol-selector-lives)),
 `acquisitionProtocol: ScaleSet` is **v2-exclusive**: a v2alpha1 RunnerSet set to
 `Classic` reproduces the identical wall, and v1alpha1 never gets ScaleSet at all.
 So:
@@ -155,7 +155,7 @@ burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a 
   (~72 polls/hr), because concurrency is expressed as the batch size / capacity
   header, not as a session count. The §3.5 rate-limit ceiling **stops scaling with
   acquisition concurrency**
-  ([Q264 §3 "Improves"](q264-scale-set-protocol.md#improves)). This is a real,
+  ([Q264 §3 "Improves"](archive/q264-scale-set-protocol-phases.md#improves)). This is a real,
   structural scaling win for scale-set, not a wash.
 
 ### 3.2 Performance / density — the story cuts both ways, and a common misread
@@ -168,19 +168,19 @@ burst still stranded 5 jobs forever. This is not "needs more fixes" — it is a 
   The scale-set listener **batch-acquires** and provisions **N workers in
   parallel**; concurrency is governed by `maxWorkers`/`priorityTiers` advertised as
   `X-ScaleSetMaxCapacity`, fully decoupled from the single session
-  ([Q264 §2.3](q264-scale-set-protocol.md#23-batch-acquisition--the-call-that-kills-the-fan-out),
+  ([Q264 §2.3](archive/q264-scale-set-protocol-phases.md#23-batch-acquisition--the-call-that-kills-the-fan-out),
   live-confirmed §2b-1). One session ≠ one concurrent job.
 - **Scale-set *improves* at-rest density** — one session/group instead of classic's
   reactive climb toward `maxListeners` sessions — while keeping the goroutine-listener
   footprint (a Go goroutine, not ARC's .NET pod)
-  ([Q264 §4.7](q264-scale-set-protocol.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate),
+  ([Q264 §4.7](archive/q264-scale-set-protocol-phases.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate),
   §3 "Improves"). The "ARC's protocol, GAG's efficiency" pitch holds.
 - **Overhead machinery classic carries that scale-set deletes by construction:** the
   single-use agent recycle (Q114: 2 REST calls + Secret rewrite + session re-create
   per job), planID dedup (#512/Q260), the renew loop (Q247), completion fan-out
   (Option A), and the multiplexer/self-heal ladder (Q152) — all gone under one
   session + per-job JIT config
-  ([Q264 §3 "Discarded"/"Improves"](q264-scale-set-protocol.md#3-delta-from-todays-classic-machinery)).
+  ([Q264 §3 "Discarded"/"Improves"](archive/q264-scale-set-protocol-phases.md#3-delta-from-todays-classic-machinery)).
 
 **Net:** at rest, both are cheap and scale-set is *slightly* cheaper; at burst,
 classic's rate-limit budget and recycle churn grow with concurrency while
@@ -258,7 +258,7 @@ Resisting hindsight bias:
   Go client had to be read at a pinned tag). GitHub only published the **official
   standalone `actions/scaleset` client** (Public Preview, MIT) in 2026 — four
   releases v0.1.0–v0.4.0, Feb–May 2026
-  ([Q264 §4, §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)).
+  ([Q264 §4, §5a-U6](archive/q264-scale-set-protocol-phases.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)).
   Building on it *then* would have meant reverse-engineering a **second**
   undocumented GitHub-internal protocol and betting the product on a moving,
   pre-1.0-adjacent target.
@@ -285,7 +285,7 @@ useful even if Option A wins").
 
 ### 6.1 What the existing plan already commits to
 
-- **Protocol** ([Q264 §5a-U8](q264-scale-set-protocol.md#u8--support-matrix-policy)):
+- **Protocol** ([Q264 §5a-U8](archive/q264-scale-set-protocol-phases.md#u8--support-matrix-policy)):
   coexist behind `acquisitionProtocol` (default `Classic`) through P3–P4 → **flip
   default to `ScaleSet` at P5** (with the positioning-doc rewrite) → classic
   deprecated **one minor release** → classic machinery removed in an isolated PR
@@ -414,7 +414,7 @@ The go-to-market posture is **pre-adoption dogfooding**, and this is decision-lo
   new endpoints GitHub-hosted, both listener and worker traffic stay behind the
   per-tenant proxy), workers still never see the App token, the JIT-credential surface
   is unchanged, and the admission gate (Q59) *strengthens* under the capacity header
-  ([Q264 §4 "Security check"](q264-scale-set-protocol.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate)).
+  ([Q264 §4 "Security check"](archive/q264-scale-set-protocol-phases.md#4-honest-cost-list-delta-vs-the-q260-4e-estimate)).
   The default stays `Classic` (the more-conservative value) until validated — no
   security property is relaxed to enable the flip.
 - **Positioning identity shifts — and this is the adoption lever, not just hygiene.**
@@ -455,7 +455,7 @@ The direction in §6.2 turns two of these into near-term work and demotes the th
    ([actions/scaleset#107](https://github.com/actions/scaleset/issues/107)) getting
    documented. Per §6.1 this is **not** a graduation or removal blocker — it lifts the
    Public-Preview caveat and triggers the
-   [Q264 §5a-U6](q264-scale-set-protocol.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)
+   [Q264 §5a-U6](archive/q264-scale-set-protocol-phases.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)
    vendor-vs-own revisit.
 3. **[folded into the P5 positioning rewrite] Migration guide states *why v2/ScaleSet*,
    not a Classic-vs-ScaleSet chooser.** Classic is terminal (§6.2 item 4), so the
@@ -464,7 +464,7 @@ The direction in §6.2 turns two of these into near-term work and demotes the th
 
 **Flagged, not actioned:** (a) the §6.4 gate table + the §6.1 v2beta1-ScaleSet-only
 resolution should be folded into
-[Q264 §5a-U8](q264-scale-set-protocol.md#u8--support-matrix-policy) by the Q264 owner
+[Q264 §5a-U8](archive/q264-scale-set-protocol-phases.md#u8--support-matrix-policy) by the Q264 owner
 (that plan is under active P3–P4 work in a parallel session); (b) no `CLAUDE.md` change
 and no new milestone — the retirement is already the Q264/Q74 structure, and the
 live-verify meta-lesson is already a CLAUDE.md rule.

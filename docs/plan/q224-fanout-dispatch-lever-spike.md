@@ -159,7 +159,7 @@ where the two are hard to separate. But the existing evidence **leans toward (b)
   proof: the 5 could in principle have been withheld by an unrelated per-group
   serialization — which is exactly what the §5 probe would settle.)*
 - **The scale-set 1:1 result does *not* transfer.** Investigation E2
-  ([q264 §2b](q264-scale-set-protocol.md#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04))
+  ([q264 §2b](archive/q264-scale-set-protocol-phases.md#2b-investigation-e2--capacity-gating-recovery-and-a-real-runner-2026-07-04))
   showed GitHub delivering distinct jobs 1:1 — but on the **auto-assign scale-set
   backend** (server pushes assignments up to a capacity header), a *different
   dispatch algorithm* from classic offer-to-many long-poll. It proves GitHub *can*
@@ -195,7 +195,7 @@ confirming (a).
 
 Because GitHub's server-side distribution (§4.2, (a) vs (b)) is the one crux a fake
 cannot prove, the confirmatory step is a **live wire probe against real GitHub** — a
-classic analogue of the [Investigation E/E2](q264-scale-set-protocol.md#2a-investigation-e--live-wire-probe-2026-07-04)
+classic analogue of the [Investigation E/E2](archive/q264-scale-set-protocol-phases.md#2a-investigation-e--live-wire-probe-2026-07-04)
 scale-set probes.
 
 ### 5.1 Design
@@ -225,7 +225,7 @@ New: a `classic_dispatch.go` scenario that
 Run the 2×2: {stable, unique} × {warm, reactive}, N ≈ M ≈ 6–8. Same App creds as the
 scale-set probe (App `actions-gateway-test`, id 3752347; PEM in keychain), repo-scoped
 to `github-actions-gateway` (bypasses org runner-group policy, per
-[q264 §2a-6](q264-scale-set-protocol.md#2a-investigation-e--live-wire-probe-2026-07-04)).
+[q264 §2a-6](archive/q264-scale-set-protocol-phases.md#2a-investigation-e--live-wire-probe-2026-07-04)).
 
 ### 5.2 Reading the result
 
@@ -243,7 +243,7 @@ to `github-actions-gateway` (bypasses org runner-group policy, per
 
 - **This is a spike; the deliverable is the verdict + design** (per the task and the
   CLAUDE.md fix/flag/defer discipline). Creds are usable — the [q264
-  §5](q264-scale-set-protocol.md) "STOP if no creds" bar is *not* what gates this;
+  §5](archive/q264-scale-set-protocol-phases.md#5-load-bearing-unknowns) "STOP if no creds" bar is *not* what gates this;
   the value-of-information does.
 - **The result does not move the Q264 go/no-go.** By §4.3, even the favourable (a)
   outcome yields only a probabilistic stopgap that converges on a dominated Option E
