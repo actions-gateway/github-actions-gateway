@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q347
+**Next ID:** Q348
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -54,6 +54,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | <a id="Q345"></a>Q345 | [Enforce v2alpha1/v2beta1 conditions.go sync](development/code-generation.md#crd-marker-and-api-file-gotchas) | `tests` `infra` | 🔲 | S | The two conditions.go files must stay byte-identical except the package line; today the sync is manual discipline. Add a make-check lint (or unit test) diffing them so a one-sided condition/reason addition fails fast. |
 | <a id="Q341"></a>Q341 | Split AGC listener goroutine.go and provisioner.go | `infra` | 🔲 | M | 66KB and 70KB files defeat selective reading (read whole by 7+ sessions each in 2 weeks) and are outsized for review. Mechanical split into focused files, no behavior change. |
 | <a id="Q342"></a>Q342 | Script recurring dogfood e2e ops under scripts/dogfood/ | `infra` | 🔲 | S | Pool config, kata-deploy install, AGC bounce, and debug-pod loops get re-typed ad hoc with per-command PROD_GUARD_OVERRIDEs. Fold them into the lifecycle scripts (hook-exempt, reviewed once). |
+| <a id="Q347"></a>Q347 | go-throttle hook: rewrite compound `-race` forms instead of blocking | `infra` | 🔲 | S | Hook blocks compound `-race` with "add the prefix yourself". Instead compute the prefixed command and return ask+updatedInput or deny citing it verbatim; never auto-allow. Drops the CLAUDE.md recipe. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
