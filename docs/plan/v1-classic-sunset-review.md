@@ -10,7 +10,7 @@ that hypothesis rather than assuming it.
 > **Update (2026-07-05) — P4 is in, and green on the acceptance gate.**
 > [Q264](q264-scale-set-protocol.md) **P4** (live dogfood,
 > [PR #541](https://github.com/actions-gateway/github-actions-gateway/pull/541))
-> confirmed the scale-set path **eliminates the [Q224](gke-dogfood.md) fan-out
+> confirmed the scale-set path **eliminates the [Q224](archive/gke-dogfood-turnup-findings.md) fan-out
 > distinct-delivery starvation by construction**: the single-acquirer listener
 > assigned, ran, and terminally concluded **all 7** distinct jobs (**7/7**, 0 dedup /
 > collision) where classic managed **2/7** across eight re-routes. This is the single
@@ -111,7 +111,7 @@ So:
 ## 2. Does classic actually *work*? (per-workload verdict)
 
 Grounded in the live dogfood series
-([gke-dogfood.md](gke-dogfood.md) re-routes #3–#8), the Q260 saga
+([gke-dogfood.md](archive/gke-dogfood-turnup-findings.md) re-routes #3–#8), the Q260 saga
 ([q260-fanout-completion-reconciliation.md](archive/q260-fanout-completion-reconciliation.md),
 [q260-planid-dedup-refix.md](archive/q260-planid-dedup-refix.md)), and the lever spike
 ([q224-fanout-dispatch-lever-spike.md](q224-fanout-dispatch-lever-spike.md)). The

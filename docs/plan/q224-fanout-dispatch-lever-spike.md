@@ -1,7 +1,7 @@
 # Q224 — AGC-side lever spike: can we beat GitHub's fan-out distinct-delivery starvation without Option E?
 
 **Status:** spike **complete**, no code changed. This is the escape-hatch check
-the [re-route #8 conclusion](gke-dogfood.md) invited: #8 isolated the
+the [re-route #8 conclusion](archive/gke-dogfood-turnup-findings.md) invited: #8 isolated the
 last Q224 blocker to **GitHub's server-side fan-out distinct-delivery
 starvation** on GAG's many-acquirers topology and called
 [Option E / Q264](q264-scale-set-protocol.md) the structural fix. Before the user
@@ -42,7 +42,7 @@ does **not** hinge on that probe (§5.3).
 ## 1. The problem, restated and grounded in code
 
 Re-route #8's decisive AGC debug-log analysis
-([gke-dogfood.md](gke-dogfood.md), re-route #8): a ~7-job burst to an
+([gke-dogfood.md](archive/gke-dogfood-turnup-findings.md), re-route #8): a ~7-job burst to an
 idle pool at `maxListeners = 48`, clean namespace, all recycle/capacity/tax seams
 (Q259/Q266/Q267/Q248/Q265) resolved and quiet. Outcome — **2/7 green, 5/7 wedged
 `in_progress` indefinitely**:
