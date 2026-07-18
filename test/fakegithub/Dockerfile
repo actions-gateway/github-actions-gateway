@@ -15,7 +15,7 @@
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.26@sha256:b900de91b15b2e2953d930ece1d0ecff0a1590ab2006088d20dcf0f56f1e979f AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26@sha256:983a0823d3dab83604654972fe6bbda13142a7c57f987804fbdddb9d47dad9ec AS builder
 WORKDIR /src
 COPY . .
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ## Stage 2: minimal distroless runtime image.
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-FROM gcr.io/distroless/static:nonroot@sha256:963fa6c544fe5ce420f1f54fb88b6fb01479f054c8056d0f74cc2c6000df5240
+FROM gcr.io/distroless/static:nonroot@sha256:d29e660cc75a5b6b1334e03c5c81ccf9bc0884a002c6000dbf0fb96034814478
 COPY --from=builder /bin/fakegithub /fakegithub
 # distroless :nonroot already runs as UID 65532; pin it explicitly so the
 # non-root guarantee survives a base-image/tag change instead of living only in
