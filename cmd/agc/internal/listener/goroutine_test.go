@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/broker"
@@ -248,6 +249,21 @@ func (r *condRecorder) Has(condType string) bool {
 		}
 	}
 	return false
+}
+
+// latest returns the most recently recorded condition of the given type and
+// whether one was found. It lets a test assert the CURRENT state of a condition
+// (e.g. a recovery that flipped an abnormal condition back to False), not merely
+// that the type was ever set.
+func (r *condRecorder) latest(condType string) (metav1.Condition, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := len(r.conds) - 1; i >= 0; i-- {
+		if r.conds[i].Type == condType {
+			return r.conds[i], true
+		}
+	}
+	return metav1.Condition{}, false
 }
 
 // ── eventRecorder ────────────────────────────────────────────────────────────
@@ -683,6 +699,76 @@ func TestListener_RateLimitedConditionAfter10Min(t *testing.T) {
 		clk.Advance(11 * time.Minute)
 		return conds.Has("RateLimited")
 	}, 8*time.Second, 50*time.Millisecond, "expected RateLimited condition after 10 min of 429s")
+
+	cancel()
+	<-done
+	clk.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	closeHTTP(oauthSrv)
+	closeHTTP(brokerSrv)
+	goleak.VerifyNone(t)
+}
+
+// TestListener_RateLimitedConditionClearsOnRecovery pins the Q332 clear-on-recovery
+// parity with the ScaleSet listener: the classic listener publishes the healthy
+// RateLimited=False/PollingHealthy baseline on start, surfaces
+// RateLimited=True/SustainedRateLimit after a sustained-429 window, and — the gap
+// this closes — flips it back to False/PollingHealthy on the first successful poll,
+// rather than leaving the abnormal condition stale until the process restarts.
+func TestListener_RateLimitedConditionClearsOnRecovery(t *testing.T) {
+	oauthSrv := oauthStub()
+	clk := newFakeClock(time.Now())
+	mux := &brokerMux{}
+	// Start rate-limited so the sustained-429 window can trip the condition.
+	var rateLimited atomic.Bool
+	rateLimited.Store(true)
+	mux.SetGetMessage(func(w http.ResponseWriter, _ *http.Request) {
+		if rateLimited.Load() {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted) // 202: healthy poll, no job queued
+	})
+	brokerSrv := httptest.NewServer(mux)
+
+	conds := &condRecorder{}
+	cfg := makeCfg(t, oauthSrv, brokerSrv)
+	cfg.Conditions = conds
+	cfg.IsLastPoller = func() bool { return true }
+	cfg.Clock = clk
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	done := runAndWait(ctx, cfg)
+
+	// Healthy baseline on start: RateLimited=False/PollingHealthy and
+	// Degraded=False/SessionAuthorized are published before any failure.
+	require.Eventually(t, func() bool {
+		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
+		if !ok || rl.Status != metav1.ConditionFalse || rl.Reason != v1alpha1.ReasonPollingHealthy {
+			return false
+		}
+		dg, ok := conds.latest(v1alpha1.ConditionDegraded)
+		return ok && dg.Status == metav1.ConditionFalse && dg.Reason == v1alpha1.ReasonSessionAuthorized
+	}, 4*time.Second, 20*time.Millisecond, "expected healthy baseline conditions on start")
+
+	// Sustained 429 past 10 minutes trips RateLimited=True/SustainedRateLimit.
+	require.Eventually(t, func() bool {
+		clk.Advance(11 * time.Minute)
+		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
+		return ok && rl.Status == metav1.ConditionTrue && rl.Reason == v1alpha1.ReasonSustainedRateLimit
+	}, 8*time.Second, 50*time.Millisecond, "expected RateLimited=True after 10 min of 429s")
+
+	// Recovery: the broker starts answering 202. The first successful poll must
+	// clear the condition back to False/PollingHealthy (the Q332 fix).
+	rateLimited.Store(false)
+	require.Eventually(t, func() bool {
+		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
+		return ok && rl.Status == metav1.ConditionFalse && rl.Reason == v1alpha1.ReasonPollingHealthy
+	}, 4*time.Second, 20*time.Millisecond, "expected RateLimited cleared to False/PollingHealthy on recovery")
 
 	cancel()
 	<-done
