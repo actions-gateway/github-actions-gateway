@@ -26,8 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // runnerSetFinalizer is set on a RunnerSet so its in-process listener/agent state
@@ -109,7 +111,31 @@ type RunnerSetReconciler struct {
 	// goroutines; drainEvents records them on the live RunnerSet each reconcile.
 	eventCh chan eventRecord
 
+	// wakeCh delivers owner-scoped GenericEvents to the source.Channel registered in
+	// SetupWithManager, so a listener/provisioner-pushed condition or event (drained
+	// in Reconcile by drainConditions/drainEvents) wakes the reconciler immediately
+	// rather than waiting for the next worker-Pod event or the resync period (Q333).
+	// Best-effort and never closed: senders use a non-blocking send (wakeReconciler),
+	// and the source's reader goroutine stops when the manager's context is cancelled.
+	wakeCh chan event.GenericEvent
+
+	// pendingConds retains listener-pushed conditions drained but not yet persisted, so a
+	// status-write conflict does not lose a one-shot listener condition (Q333).
+	pendingConds pendingConditions
+
 	reconcileCount atomic.Int64
+}
+
+// condUpdater returns a ConditionUpdater that enqueues onto conditionCh and wakes the
+// reconciler (wakeCh) so the pushed condition is drained promptly (Q333).
+func (r *RunnerSetReconciler) condUpdater() *channelConditionUpdater {
+	return &channelConditionUpdater{ch: r.conditionCh, wake: r.wakeCh}
+}
+
+// eventRecorder returns an EventRecorder that enqueues onto eventCh and wakes the
+// reconciler (wakeCh) so the pushed event is drained promptly (Q333).
+func (r *RunnerSetReconciler) eventRecorder() *channelEventRecorder {
+	return &channelEventRecorder{ch: r.eventCh, wake: r.wakeCh}
 }
 
 // SetupWithManager registers the reconciler and the referent → RunnerSet watches
@@ -155,7 +181,14 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.ResourceQuota{},
 			handler.EnqueueRequestsFromMapFunc(r.quotaToRunnerSets),
 			builder.WithPredicates(quotaHardChangedPredicate()),
-		)
+		).
+		// Wake the reconciler when a listener/provisioner goroutine pushes a condition
+		// or event onto conditionCh/eventCh (Q333). Without this the pushed update sits
+		// in the channel until the next worker-Pod event or the resync period drains it,
+		// so an otherwise-idle RunnerSet could lag a status condition up to 10h. The
+		// GenericEvents carry the owning RunnerSet's namespace/name, which
+		// EnqueueRequestForObject maps straight to its reconcile.Request.
+		WatchesRawSource(source.Channel(r.wakeCh, &handler.EnqueueRequestForObject{}))
 
 	// ClusterRunnerTemplate (cluster-scoped) is watched ONLY by a v2 AGC, gated on
 	// GatewayName. Only a GMC-provisioned v2 AGC (which carries GATEWAY_NAME) holds
@@ -192,6 +225,9 @@ func (r *RunnerSetReconciler) ensureMaps() {
 	}
 	if r.eventCh == nil {
 		r.eventCh = make(chan eventRecord, 256)
+	}
+	if r.wakeCh == nil {
+		r.wakeCh = make(chan event.GenericEvent, 256)
 	}
 }
 
@@ -445,6 +481,7 @@ func (r *RunnerSetReconciler) stopMultiplexer(key types.NamespacedName) {
 func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.stopMultiplexer(key)
 	r.stopScaleSetListener(key)
+	r.pendingConds.forget(key)
 	r.poolsMu.Lock()
 	delete(r.pools, key)
 	r.poolsMu.Unlock()
@@ -494,14 +531,14 @@ func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key ty
 		return mux
 	}
 
-	condUpdater := &channelConditionUpdater{ch: r.conditionCh}
+	condUpdater := r.condUpdater()
 	brokerCfg := r.BrokerConfig
 	target := &runnerSetTarget{
 		client: r.Client,
 		prov:   r.Provisioner,
 		key:    key,
 		uid:    rs.UID,
-		events: &channelEventRecorder{ch: r.eventCh},
+		events: r.eventRecorder(),
 	}
 
 	factory := func(index int) listener.Config {
@@ -537,18 +574,24 @@ func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target p
 		jobHandler = r.Provisioner.Handle(target)
 		admit = r.Provisioner.Admit(target)
 	}
-	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, &channelEventRecorder{ch: r.eventCh}, r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
+	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, r.eventRecorder(), r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
 }
 
 // drainConditions reads pending listener-pushed condition updates and merges those
 // for this RunnerSet into its status; others are re-enqueued.
 func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
+	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
+	// Re-apply any conditions a prior reconcile drained but did not persist (dropping
+	// those the live status now reflects), then drain fresh pushes over the top so the
+	// latest push per type wins (Q333).
+	r.pendingConds.apply(key, &rs.Status.Conditions)
 	var skipped []conditionUpdate
 	for {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rs.Namespace && upd.name == rs.Name {
 				meta.SetStatusCondition(&rs.Status.Conditions, upd.condition)
+				r.pendingConds.retain(key, upd.condition)
 			} else {
 				skipped = append(skipped, upd)
 			}
@@ -731,6 +774,17 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 // ReconcileCountForTest returns how many times Reconcile has run (integration tests).
 func (r *RunnerSetReconciler) ReconcileCountForTest() int64 {
 	return r.reconcileCount.Load()
+}
+
+// SetConditionForTest enqueues a condition update as if it came from a listener
+// goroutine, exercising the same push path (including the Q333 reconciler wake) so
+// integration tests can prove a pushed condition wakes an idle reconciler. Intended
+// for use in tests only.
+func (r *RunnerSetReconciler) SetConditionForTest(ns, name string, cond metav1.Condition) {
+	if r.conditionCh == nil {
+		return
+	}
+	r.condUpdater().SetCondition(ns, name, cond)
 }
 
 // --- watch enqueue mappers ---

@@ -36,17 +36,18 @@ import (
 // its egress wired through the resolved EgressProxy (the provisioner Target seam).
 
 // startRunnerSetReconciler wires and starts a RunnerSetReconciler against the
-// shared envtest apiserver with a real Provisioner attached.
-func startRunnerSetReconciler(t *testing.T) {
+// shared envtest apiserver with a real Provisioner attached. It returns the
+// reconciler so tests can drive its test-only hooks (e.g. SetConditionForTest).
+func startRunnerSetReconciler(t *testing.T) *controller.RunnerSetReconciler {
 	t.Helper()
-	startRunnerSetReconcilerWithRegistrar(t, nil)
+	return startRunnerSetReconcilerWithRegistrar(t, nil)
 }
 
 // startRunnerSetReconcilerWithRegistrar is startRunnerSetReconciler with an optional
 // Registrar override (nil selects the default brokerRegistrar). A failing registrar
 // drives agentpool.EnsureAgents to error so the reconciler's Ready=False provisioning
 // path can be asserted against the real apiserver (Q308).
-func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar) {
+func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar) *controller.RunnerSetReconciler {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -99,6 +100,7 @@ func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Reg
 	mgrDone := make(chan struct{})
 	go func() { defer close(mgrDone); _ = mgr.Start(mgrCtx) }()
 	t.Cleanup(func() { mgrCancel(); <-mgrDone })
+	return r
 }
 
 func newRunnerSet(name, ns, gateway string) *v2alpha1.RunnerSet {
