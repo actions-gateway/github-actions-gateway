@@ -53,6 +53,8 @@ All runtime modules share a single `vendor/` at the repo root, produced by `go w
 
 `tools/` has its own separate `vendor/` (`tools/vendor/`) for the kubebuilder/controller-gen toolchain. That's independent and managed by `make tools`. Do not merge it into the workspace vendor.
 
+When you need to *read* a dependency's source, read the committed `vendor/` (or `tools/vendor/`) tree, not the module cache — `~/go/pkg/mod` sits outside the worktree (so workspace-guard prompts on it) *and* may hold a different version than the `-mod=vendor` build actually uses.
+
 ### Why replace directives are still present
 
 `broker`, `githubapp`, and the `cmd/*` modules depend on each other using `replace` directives in their individual `go.mod` files, even though the workspace `use` directives already provide local overrides at build time. This is necessary because `go mod tidy` and `go work sync` validate that required versions are resolvable; the zero pseudo-version placeholder (`v0.0.0-00010101000000-000000000000`) is only valid alongside a `replace` directive. Do not remove those `replace` lines — they are load-bearing for tidy.
