@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q353
+**Next ID:** Q354
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,6 +49,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q352"></a>Q352 | [Flake: e2e reach-real-GitHub egress blips (both lanes)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** Runner→GitHub egress died 07-14 (kindnet, CONNECT 502) + 07-19 (calico, curl 28 incl DirectEgress); reruns green. Add runner-host GitHub preflight so blips self-attribute. |
+| <a id="Q353"></a>Q353 | [Bump kind v0.31.0 → v0.32.0 (newer NP enforcer)](plan/q300-gmc-kindnet-e2e-flake.md) | `infra` `tests` | 🔲 | S | Enforcer jumps kube-network-policies v0.8.0 → 2026-05 snapshot: fixes short-lived-pod + same-node gaps, shrinking [Q300](#Q300)'s fail-open surface. Digest-pin the v1.35.5 node image; unthrottle patch still applies (limits unchanged). |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
