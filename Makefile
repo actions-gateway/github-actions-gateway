@@ -127,11 +127,12 @@ license-header-check: ## Fail if any first-party .go file carries a per-file Apa
 # parsing, Q184). Lightweight pure-bash checks; part of `check` and the CI
 # shellcheck job.
 .PHONY: scripts-test
-scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory)
+scripts-test: ## Run scripts/ behavioural assertions (release identity regexp, validate-cluster helpers, STATUS.md lint rules, dep-advisory, go-throttle hook)
 	scripts/verify-release-test.sh
 	scripts/validate-cluster-test.sh
 	scripts/lint-backlog-test.sh
 	scripts/check-dep-advisory-test.sh
+	scripts/claude-go-throttle-hook-test.sh
 
 # Install the tracked git hooks for this clone by pointing core.hooksPath at the
 # in-repo .githooks/ directory. The path is relative, so it resolves correctly in

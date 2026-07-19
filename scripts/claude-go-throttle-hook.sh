@@ -30,22 +30,32 @@
 #     repo's `Bash(go build *)` / `Bash(go test *)` allowlist already trusts. It
 #     is also necessary — without it the rewritten `taskpolicy … go test …` form
 #     would no longer match that allowlist and would trigger a *new* prompt.
-#   * A command we cannot safely auto-allow — a compound command (contains
-#     `&&`, `|`, `;`, `$()`, …) or one with a redirect (`>`, `<`) — carrying
-#     `-race` (the dangerous amplifier) -> block (exit 2) and tell the caller to
-#     use the documented prefix. We block rather than silently rewrite because
-#     auto-allowing such a command would let it ride past the permission system
-#     and the security-guard hooks (branch-guard, workspace-guard) on our allow.
+#   * A compound command (contains `&&`, `|`, `;`, `$()`, …) or one with a
+#     redirect (`>`, `<`) carrying `-race` (the dangerous amplifier) -> rewrite
+#     it to insert the QoS prefix before its single `go build`/`go test` token
+#     and return an `ask` decision (not `allow`). `ask` still throttles the run
+#     while keeping the permission system, the user, and the security-guard hooks
+#     (branch-guard, workspace-guard) in the loop — an `allow` would ride the
+#     whole command (its other segments, an outside-workspace redirect) past
+#     them, which is why the bare form uses `allow` but this one must not.
+#   * The same compound/redirected `-race` case when the hook cannot identify a
+#     single `go build`/`go test` token to prefix (more than one invocation, or a
+#     form it cannot parse) -> `deny` with the specific reason. We deny rather
+#     than emit a command that throttles the wrong token — or none — because a
+#     silently mis-thrown prefix would leave the real `-race` run unthrottled.
 #   * Any other such `go build`/`go test` (no `-race`)         -> allow unchanged.
 #
-# Why redirects disqualify the transparent path: an outside-workspace redirect
-# target (`go test … > /tmp/out`) is exactly what the workspace-guard hook
-# prompts on. Claude Code does not document how a PreToolUse `allow` composes
-# with another hook's `ask`/`deny`, so — secure by default — we never emit
-# `allow` for a command a guard might care about. With chaining and redirects
-# both excluded, the auto-allowed class is a bare `go build`/`go test` with no
-# guarded file command, no git op, and no redirect: nothing for branch-guard or
-# workspace-guard to act on, whatever the (undocumented) hook composition order.
+# Why redirects/chaining disqualify the *auto-allow* path (but not throttling):
+# an outside-workspace redirect target (`go test … > /tmp/out`) is exactly what
+# the workspace-guard hook prompts on, and a chained segment could be any guarded
+# op. Claude Code does not document how a PreToolUse `allow` composes with another
+# hook's `ask`/`deny`, so — secure by default — we never emit `allow` for a
+# command a guard might care about. The auto-*allowed* class stays a bare
+# `go build`/`go test`: no guarded file command, no git op, no redirect. But the
+# throttle itself must still reach the dangerous `-race` forms, so for those we
+# rewrite and emit `ask` — which, unlike `allow`, leaves the command in the
+# permission flow for the user and the guard hooks to act on however Claude Code
+# composes them — instead of blocking the caller outright.
 #
 # Wired up by .claude/settings.json as a PreToolUse hook on the Bash matcher.
 # Requires jq; if jq is missing the hook is a no-op (fail-open).
@@ -126,6 +136,30 @@ rewrite_simple() {
 	printf '%s%s %s' "$env_prefix" "$prefix" "$rest"
 }
 
+# rewrite_compound prints a compound or redirected command with the QoS prefix
+# inserted immediately before its single `go build`/`go test` invocation,
+# preserving everything around it (a subshell wrapper, a leading `cd`, redirects,
+# `VAR=val` assignments). It rewrites ONLY a form it can pin down unambiguously:
+# exactly one `go build`/`go test` token. When the command holds more than one
+# such invocation — or a shape this simple parse cannot place the prefix in — it
+# prints nothing and returns non-zero, and the caller denies with a specific
+# reason rather than throttle the wrong token (or none) and leave `-race`
+# running at full tilt.
+rewrite_compound() {
+	local cmd="$1" prefix="$2"
+	# Group 1 (greedy) captures everything up to and including the boundary char
+	# before the LAST `go build`/`go test`; it is optional so a redirect-only
+	# command whose `go` sits at position 0 (`go test -race … > out`) still
+	# matches. Group 2 is that invocation through end of string.
+	local re='^(.*[^[:alnum:]_-])?(go[[:space:]]+(build|test)([[:space:]].*)?)$'
+	[[ "$cmd" =~ $re ]] || return 1
+	local before="${BASH_REMATCH[1]}" invocation="${BASH_REMATCH[2]}"
+	# A second `go build`/`go test` in the pre-match text means we cannot know
+	# which invocation to throttle — bail so the caller denies.
+	is_heavy_go_command "$before" && return 1
+	printf '%s%s %s' "$before" "$prefix" "$invocation"
+}
+
 main() {
 	# jq is required to parse the hook payload and emit a rewrite safely.
 	command -v jq >/dev/null 2>&1 || emit_allow_unchanged
@@ -157,28 +191,39 @@ main() {
 	[[ -n "$prefix" ]] || emit_allow_unchanged
 
 	if is_compound "$command" || has_redirect "$command"; then
-		# We can only safely auto-allow a bare, single go build/test. A compound
-		# command (its other segments would ride past the permission system) or
-		# one with a redirect (an outside-workspace target is what workspace-guard
-		# prompts on) must not be auto-allowed. Block only the genuinely dangerous
-		# case — one carrying `-race` — and steer the caller to the documented
-		# prefix; otherwise leave it for the normal permission flow (and the
-		# security-guard hooks) to handle.
+		# We can only safely auto-*allow* a bare, single go build/test. A compound
+		# command (its other segments would ride past the permission system) or one
+		# with a redirect (an outside-workspace target is what workspace-guard
+		# prompts on) must not be auto-allowed. For the genuinely dangerous case —
+		# one carrying `-race` — we still MUST throttle it, so instead of blocking
+		# we rewrite it and return `ask`: the throttle is applied and the prompt
+		# keeps the user and the guard hooks in the loop. A non-`-race` form stays
+		# on the normal permission flow (and the guards) unchanged.
 		if [[ "$command" == *-race* ]]; then
-			cat >&2 <<-'EOF'
-				Blocked: a heavy `go ... -race` that the throttle hook can't safely
-				auto-throttle (compound command, or an output redirect) would run
-				unthrottled and can saturate the machine — an unthrottled `-race` run
-				has frozen the macOS GUI (WindowServer watchdog restart).
-
-				Re-run with the throttle prefix, e.g. from a module subdir:
-
-				  TP="$(git rev-parse --show-toplevel)/scripts/local-throttle.sh"; (cd cmd/agc && $("$TP" prefix) go test -race ./...)
-
-				or prefer the matching `make` target, which throttles itself. See CLAUDE.md
-				("Throttle raw go build/test run outside make").
-			EOF
-			exit 2
+			local racecmd
+			if racecmd="$(rewrite_compound "$command" "$prefix")"; then
+				jq -cn --arg cmd "$racecmd" '{
+					hookSpecificOutput: {
+						hookEventName: "PreToolUse",
+						permissionDecision: "ask",
+						permissionDecisionReason: "Auto-throttled a heavy `go ... -race` (utility QoS) — confirm to run the throttled form. An unthrottled -race run can saturate the machine and freeze the local GUI; see CLAUDE.md.",
+						updatedInput: { command: $cmd }
+					}
+				}'
+				return 0
+			fi
+			# Could not pin down a single go build/test token to prefix (more than
+			# one invocation, or a shape the parse can't place the prefix in). Deny
+			# with the specific reason rather than emit a command that throttles the
+			# wrong token — or none — and leaves the real `-race` run unthrottled.
+			jq -cn '{
+				hookSpecificOutput: {
+					hookEventName: "PreToolUse",
+					permissionDecision: "deny",
+					permissionDecisionReason: "Blocked: this `go ... -race` has more than one go build/test invocation (or a shape the throttle hook cannot parse), so the hook cannot insert the throttle prefix unambiguously. Give each `go ... -race` its own throttle prefix ($(scripts/local-throttle.sh prefix)), run each go line on its own, or use the matching `make` target (it throttles itself). See CLAUDE.md."
+				}
+			}'
+			return 0
 		fi
 		emit_allow_unchanged
 	fi
