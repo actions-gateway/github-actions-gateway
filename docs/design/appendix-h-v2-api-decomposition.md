@@ -519,16 +519,28 @@ on a change to a set's impaired signature, dropping high-frequency `activeSessio
 Shared objects must not be owner-referenced by their referrers:
 
 - **`EgressProxy`** is standalone and owns its *own* children (the proxy
-  Deployment/Service/HPA/PDB/NetworkPolicy and a self-signed proxy TLS Secret,
-  reconciled by the GMC). Nothing owns the `EgressProxy`. Each child is derived as
-  `<ep>-proxy` (the TLS Secret as `<ep>-proxy-tls`) and carries the per-`EgressProxy`
-  identity label `actions-gateway.com/egress-proxy: <name>`; every Deployment /
-  Service / PDB / HPA / NetworkPolicy selector and the pod anti-affinity key on that
-  label. This is load-bearing twice: it keeps multiple proxy pools in one namespace
-  selector-isolated (v1 could assume one proxy per namespace), and because each pool
-  is now its own Deployment, proxy metrics carry the proxy identity automatically
-  (M2's free observability win). Same-namespace only at M2; cross-namespace sharing
-  is M4.
+  Deployment/Service/HPA/PDB/NetworkPolicy, a self-signed proxy TLS Secret, and the
+  metrics-mTLS bundle below, reconciled by the GMC). Nothing owns the `EgressProxy`.
+  Each child is derived as `<ep>-proxy` (the TLS Secret as `<ep>-proxy-tls`) and
+  carries the per-`EgressProxy` identity label `actions-gateway.com/egress-proxy:
+  <name>`; every Deployment / Service / PDB / HPA / NetworkPolicy selector and the pod
+  anti-affinity key on that label. This is load-bearing twice: it keeps multiple proxy
+  pools in one namespace selector-isolated (v1 could assume one proxy per namespace),
+  and because each pool is now its own Deployment, proxy metrics carry the proxy
+  identity automatically. Same-namespace only at M2; cross-namespace sharing is M4.
+  - **Proxy metrics-mTLS + ServiceMonitor (Q324, at classic parity).** The proxy
+    serves `/metrics` over mutual TLS on `:8443`, requiring a scraper client cert
+    signed by this `EgressProxy`'s *own* metrics CA (never shared with the AGC or
+    another tenant). The GMC issues a per-`EgressProxy` PKI and writes a server bundle
+    Secret `<ep>-metrics-tls` (mounted into the proxy) and a scraper client bundle
+    `<ep>-metrics-client` (published for monitoring); the NetworkPolicy admits the
+    `:8443` scrape only from `metrics: enabled` namespaces. A `<ep>-proxy-metrics`
+    `ServiceMonitor` is provisioned when `--enable-tenant-service-monitors` is on
+    (graceful `ServiceMonitorCRDMissing` handling otherwise). This is secure-by-default
+    parity with the classic proxy — without the mounted bundle the proxy binary would
+    fall back to serving `/metrics` plaintext on the health port, so mounting it is
+    what prevents an unauthenticated-metrics regression. Both metrics Secrets carry an
+    owner reference and are GC-delegated (the GMC holds no Secret delete verb).
 - **`RunnerTemplate`** is pure data — no children, nothing owns it.
 - **`ActionsGateway` teardown is fail-closed, not GC-trusting (Q328, ports v1's
   Q125).** The gateway's namespaced children all carry a controller owner

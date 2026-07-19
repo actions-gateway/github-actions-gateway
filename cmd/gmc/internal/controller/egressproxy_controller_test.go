@@ -82,6 +82,19 @@ func TestEgressProxyReconcile_CreatesOwnedChildren(t *testing.T) {
 	assert.Equal(t, corev1.SecretTypeTLS, sec.Type)
 	assert.NotEmpty(t, sec.Data[corev1.TLSCertKey])
 
+	// Metrics mTLS bundle (Q324): server bundle mounted into the proxy, scraper
+	// client bundle published for monitoring — both owner-referenced for GC.
+	var metricsServer corev1.Secret
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared-metrics-tls"}, &metricsServer))
+	assert.NotEmpty(t, metricsServer.Data[corev1.TLSCertKey])
+	assert.NotEmpty(t, metricsServer.Data[metricsCACertKey])
+	require.Len(t, metricsServer.OwnerReferences, 1)
+	assert.Equal(t, "EgressProxy", metricsServer.OwnerReferences[0].Kind)
+	var metricsClient corev1.Secret
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared-metrics-client"}, &metricsClient))
+	assert.NotEmpty(t, metricsClient.Data[corev1.TLSCertKey])
+	assert.NotEmpty(t, metricsClient.Data[metricsCACertKey])
+
 	// Status contract: Ready=False/ProxyNotReady, Degraded=False, observedGeneration set.
 	var got gmcv2alpha1.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))

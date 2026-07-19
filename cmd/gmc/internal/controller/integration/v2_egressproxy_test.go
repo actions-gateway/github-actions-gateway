@@ -18,6 +18,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -378,4 +380,134 @@ func findCondition(conds []metav1.Condition, condType string) *metav1.Condition 
 		}
 	}
 	return nil
+}
+
+// TestV2_EgressProxy_ProvisionsMetricsMTLS proves the EgressProxy reconciler wires the
+// proxy metrics-mTLS stack end to end (Q324): a per-EgressProxy server bundle mounted
+// into the proxy, a scraper client bundle published for monitoring, the metrics port
+// on the Service, the PROXY_METRICS_* env on the container, and the metrics-scrape
+// ingress rule on the NetworkPolicy — all at parity with the classic proxy, with no
+// plaintext regression (the three env vars are what force the proxy binary onto the
+// dedicated mTLS listener).
+func TestV2_EgressProxy_ProvisionsMetricsMTLS(t *testing.T) {
+	const ns = "v2-ep-metrics-mtls"
+	createNamespace(t, ns)
+	startEgressProxyReconciler(t, nil)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "metered", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	name := proxyChildName("metered")
+
+	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so a
+	// successful Get guarantees every earlier child (both metrics Secrets, the
+	// Deployment, the Service) already exists, avoiding a mid-reconcile read race.
+	var np networkingv1.NetworkPolicy
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+
+	// Server bundle Secret: created, owned, TLS type, carries the metrics CA so the
+	// proxy can verify scraper client certs.
+	var serverSec corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "metered-metrics-tls"}, &serverSec))
+	assert.True(t, hasControllerOwnerRef(serverSec.OwnerReferences, "metered"))
+	assert.Equal(t, corev1.SecretTypeTLS, serverSec.Type)
+	assert.NotEmpty(t, serverSec.Data[corev1.TLSCertKey])
+	assert.NotEmpty(t, serverSec.Data[corev1.TLSPrivateKeyKey])
+	assert.NotEmpty(t, serverSec.Data["ca.crt"], "server bundle must carry the metrics CA to verify scraper certs")
+
+	// Scraper client bundle Secret: published for monitoring, owned, TLS type + CA.
+	var clientSec corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "metered-metrics-client"}, &clientSec))
+	assert.True(t, hasControllerOwnerRef(clientSec.OwnerReferences, "metered"))
+	assert.NotEmpty(t, clientSec.Data[corev1.TLSCertKey])
+	assert.NotEmpty(t, clientSec.Data["ca.crt"])
+
+	// Deployment: metrics-mTLS volume + all three PROXY_METRICS_* files set (the mTLS
+	// gate) + the metrics container port.
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep))
+	env := containerEnv(t, dep)
+	assert.NotEmpty(t, env["PROXY_METRICS_TLS_CERT_FILE"])
+	assert.NotEmpty(t, env["PROXY_METRICS_TLS_KEY_FILE"])
+	assert.NotEmpty(t, env["PROXY_METRICS_CLIENT_CA_FILE"], "the client-CA file is what enables mTLS (not plaintext) metrics")
+	assert.Equal(t, "8443", env["PROXY_METRICS_PORT"])
+	metricsVolFound := false
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		if v.Secret != nil && v.Secret.SecretName == "metered-metrics-tls" {
+			metricsVolFound = true
+		}
+	}
+	assert.True(t, metricsVolFound, "proxy pod must mount the metrics server bundle")
+
+	// Service: fronts the mTLS metrics port so a ServiceMonitor can target it by name.
+	var svc corev1.Service
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &svc))
+	metricsPortFound := false
+	for _, p := range svc.Spec.Ports {
+		if p.Name == "metrics" {
+			metricsPortFound = true
+			assert.Equal(t, int32(8443), p.Port)
+		}
+	}
+	assert.True(t, metricsPortFound, "proxy Service must front the metrics port")
+
+	// NetworkPolicy (already fetched above): monitoring-namespace scrape of the
+	// metrics port is admitted.
+	metricsIngressFound := false
+	for _, rule := range np.Spec.Ingress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 8443 {
+				metricsIngressFound = true
+				require.NotEmpty(t, rule.From)
+				assert.Equal(t, "enabled", rule.From[0].NamespaceSelector.MatchLabels["metrics"],
+					"metrics scrape must be admitted only from monitoring namespaces")
+			}
+		}
+	}
+	assert.True(t, metricsIngressFound, "NetworkPolicy must admit the metrics-port scrape")
+}
+
+// TestV2_EgressProxy_ProvisionsServiceMonitor proves that with the tenant
+// ServiceMonitor toggle on, the reconciler creates the per-EgressProxy ServiceMonitor
+// (Q324) with the scrape TLS config Prometheus needs — owned for GC, targeting the
+// metrics port over HTTPS, presenting the scraper client bundle and pinning serverName
+// to a SAN on the metrics server cert.
+func TestV2_EgressProxy_ProvisionsServiceMonitor(t *testing.T) {
+	const ns = "v2-ep-servicemonitor"
+	createNamespace(t, ns)
+	startEgressProxyReconcilerWithServiceMonitor(t, nil)
+
+	ep := &gmcv2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "scraped", Namespace: ns},
+		Spec:       gmcv2alpha1.EgressProxySpec{},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	smGVK := schema.GroupVersionKind{Group: "monitoring.coreos.com", Version: "v1", Kind: "ServiceMonitor"}
+	sm := &unstructured.Unstructured{}
+	sm.SetGroupVersionKind(smGVK)
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "scraped-proxy-metrics"}, sm) == nil
+	}, 10*time.Second, 100*time.Millisecond, "per-EgressProxy ServiceMonitor should be created")
+
+	assert.True(t, hasControllerOwnerRef(sm.GetOwnerReferences(), "scraped"), "ServiceMonitor must be owned for GC")
+
+	endpoints, found, err := unstructured.NestedSlice(sm.Object, "spec", "endpoints")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Len(t, endpoints, 1)
+	ep0 := endpoints[0].(map[string]interface{})
+	assert.Equal(t, "metrics", ep0["port"])
+	assert.Equal(t, "https", ep0["scheme"])
+	tlsCfg := ep0["tlsConfig"].(map[string]interface{})
+	assert.Equal(t, "scraped-proxy."+ns+".svc", tlsCfg["serverName"])
+	ca := tlsCfg["ca"].(map[string]interface{})["secret"].(map[string]interface{})
+	assert.Equal(t, "scraped-metrics-client", ca["name"], "scrape must present the per-EgressProxy client bundle")
 }

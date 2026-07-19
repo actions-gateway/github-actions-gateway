@@ -64,6 +64,13 @@ type EgressProxyReconciler struct {
 	// first fetch lands (mirrors the ActionsGatewayReconciler contract).
 	IPCache    *IPRangeCache
 	ProxyImage string
+	// EnableServiceMonitor gates creation of the per-EgressProxy Prometheus-Operator
+	// ServiceMonitor that scrapes the proxy's mTLS metrics port (Q324). The
+	// monitoring.coreos.com CRD is an optional, operator-installed prerequisite, so
+	// creating a ServiceMonitor unconditionally would fail on clusters without it.
+	// Fed from the same --enable-tenant-service-monitors flag as the AGC path; when
+	// false, any previously-created ServiceMonitor is pruned.
+	EnableServiceMonitor bool
 	// EgressStaleThreshold is the age past which the shared GitHub IP-range refresh
 	// loop's last success trips the EgressRulesStale condition (Q157). Zero uses
 	// DefaultEgressStaleThreshold. Shares the value the ActionsGatewayReconciler is
@@ -116,6 +123,9 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err := r.ensureProxyCert(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure proxy TLS cert", err: err}
 	}
+	if err := r.ensureMetricsCerts(ctx, ep); err != nil {
+		return &provisioningError{step: "ensure metrics TLS certs", err: err}
+	}
 	if err := r.applyDeployment(ctx, ep, buildEgressProxyDeployment(ep, r.ProxyImage)); err != nil {
 		return &provisioningError{step: "apply proxy Deployment", err: err}
 	}
@@ -133,6 +143,9 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	if err := r.reconcileFQDNPolicy(ctx, ep); err != nil {
 		return &provisioningError{step: "reconcile FQDN egress policy", err: err}
+	}
+	if err := r.applyOrPruneServiceMonitor(ctx, ep); err != nil {
+		return &provisioningError{step: "reconcile proxy ServiceMonitor", err: err}
 	}
 	return nil
 }
@@ -256,6 +269,116 @@ func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2al
 	r.recordEvent(ep, corev1.EventTypeNormal, "ProxyCertificateIssued", "EnsureProxyCert",
 		"issued proxy TLS certificate (%s)", reason)
 	return nil
+}
+
+// ensureMetricsCerts ensures the EgressProxy's metrics mTLS bundle exists and is not
+// near expiry. It (re)generates a per-EgressProxy CA + server cert (SANs on the
+// "<ep>-proxy" Service) + scraper client cert and writes two Secrets: the server
+// bundle (egressProxyMetricsTLSSecretName, mounted into the proxy pod) and the scraper
+// client bundle (egressProxyMetricsClientSecretName, published for the monitoring
+// stack). Both carry a controller owner reference so they are GC'd on EgressProxy
+// delete (§H.8). The whole bundle regenerates together when either Secret is missing
+// or the server cert is within metricsCertRenewBefore of expiry — mirroring v1's
+// ensureMetricsCerts and the EgressProxy's own ensureProxyCert. No key material is
+// logged. The CA is per-EgressProxy, never shared with the AGC or another tenant.
+func (r *EgressProxyReconciler) ensureMetricsCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+	var serverSec corev1.Secret
+	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: egressProxyMetricsTLSSecretName(ep)}, &serverSec)
+	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
+		return serverErr
+	}
+	var clientSec corev1.Secret
+	clientErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: egressProxyMetricsClientSecretName(ep)}, &clientSec)
+	if clientErr != nil && !apierrors.IsNotFound(clientErr) {
+		return clientErr
+	}
+
+	reason := "secret missing"
+	if !apierrors.IsNotFound(serverErr) && !apierrors.IsNotFound(clientErr) {
+		reason = "unparseable cert"
+		if cert, err := parseCertPEM(serverSec.Data[corev1.TLSCertKey]); err == nil {
+			if time.Until(cert.NotAfter) > metricsCertRenewBefore {
+				return nil // both Secrets present and the server cert is not near expiry
+			}
+			reason = "near expiry"
+		}
+	}
+
+	logf.FromContext(ctx).V(1).Info("generating EgressProxy metrics mTLS bundle",
+		"secret", egressProxyMetricsTLSSecretName(ep), "reason", reason)
+
+	// generateMetricsCertsV2 is keyed on (namespace, Service name) and is reused here
+	// for the standalone proxy metrics listener; the "<ep>-proxy" Service name gives
+	// the server cert the SANs the ServiceMonitor's serverName pins to.
+	bundle, err := generateMetricsCertsV2(ep.Namespace, proxyResourceName(ep))
+	if err != nil {
+		return fmt.Errorf("generate metrics certs: %w", err)
+	}
+	if err := r.applyOwnedSecret(ctx, ep, buildEgressProxyMetricsTLSSecret(ep, bundle)); err != nil {
+		return fmt.Errorf("metrics server Secret: %w", err)
+	}
+	if err := r.applyOwnedSecret(ctx, ep, buildEgressProxyMetricsClientSecret(ep, bundle)); err != nil {
+		return fmt.Errorf("metrics client Secret: %w", err)
+	}
+	// The steady-state path returns early above, so this Event fires only on an actual
+	// issuance or rotation, not on every reconcile.
+	r.recordEvent(ep, corev1.EventTypeNormal, "MetricsCertificateIssued", "EnsureMetricsCerts",
+		"issued metrics mTLS certificate (%s)", reason)
+	return nil
+}
+
+// applyOrPruneServiceMonitor reconciles the per-EgressProxy ServiceMonitor (Q324)
+// according to EnableServiceMonitor: when enabled it creates/patches the monitor
+// (presenting this EgressProxy's scraper client bundle for mTLS); when disabled it
+// best-effort deletes any existing one so flipping the flag off leaves nothing stale.
+// If the monitoring.coreos.com CRD is not installed, the apply fails with a NoMatch
+// error — downgraded to a Warning Event and a logged note rather than failing the
+// whole reconcile, so a missing optional scrape prerequisite never blocks provisioning
+// (a NoMatch on the delete path means there is nothing to prune).
+func (r *EgressProxyReconciler) applyOrPruneServiceMonitor(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+	if !r.EnableServiceMonitor {
+		sm := &unstructured.Unstructured{}
+		sm.SetGroupVersionKind(serviceMonitorGVK)
+		sm.SetNamespace(ep.Namespace)
+		sm.SetName(egressProxyMetricsServiceMonitorName(ep))
+		if err := r.Delete(ctx, sm); err != nil && !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := r.applyServiceMonitor(ctx, ep, buildEgressProxyServiceMonitor(ep)); err != nil {
+		if meta.IsNoMatchError(err) {
+			logf.FromContext(ctx).Info("skipping EgressProxy ServiceMonitor: monitoring.coreos.com CRD not installed",
+				"name", egressProxyMetricsServiceMonitorName(ep))
+			r.recordEvent(ep, corev1.EventTypeWarning, "ServiceMonitorCRDMissing", "ApplyServiceMonitor",
+				"ServiceMonitor scraping is enabled but the monitoring.coreos.com ServiceMonitor CRD is not installed; install the Prometheus Operator to enable proxy metrics scraping. Skipping %q.",
+				egressProxyMetricsServiceMonitorName(ep))
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// applyServiceMonitor creates or patches the unstructured EgressProxy ServiceMonitor,
+// writing only the controller-managed labels + spec and stamping a controller owner
+// reference so the apiserver garbage-collects it on EgressProxy delete (§H.8). Mirrors
+// the other apply* helpers and v1's applyServiceMonitor.
+func (r *EgressProxyReconciler) applyServiceMonitor(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(serviceMonitorGVK)
+	obj.SetNamespace(desired.GetNamespace())
+	obj.SetName(desired.GetName())
+	_, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
+		obj.SetLabels(desired.GetLabels())
+		spec, _, _ := unstructured.NestedMap(desired.Object, "spec")
+		if err := unstructured.SetNestedMap(obj.Object, spec, "spec"); err != nil {
+			return err
+		}
+		return controllerutil.SetControllerReference(ep, obj, r.Scheme)
+	})
+	return err
 }
 
 // recordEvent emits a Kubernetes Event on the EgressProxy when a Recorder is wired.

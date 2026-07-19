@@ -97,10 +97,15 @@ func TestBuildEgressProxyDeployment(t *testing.T) {
 	assert.True(t, *c.SecurityContext.ReadOnlyRootFilesystem)
 	require.NotNil(t, dep.Spec.Template.Spec.SecurityContext)
 
-	// Proxy TLS cert mounted; no metrics-mTLS volume in M2.
-	require.Len(t, dep.Spec.Template.Spec.Volumes, 1)
-	assert.Equal(t, proxyTLSVolumeName, dep.Spec.Template.Spec.Volumes[0].Name)
-	assert.Equal(t, "shared-proxy-tls", dep.Spec.Template.Spec.Volumes[0].Secret.SecretName)
+	// Proxy TLS cert + metrics-mTLS server bundle both mounted (Q324).
+	require.Len(t, dep.Spec.Template.Spec.Volumes, 2)
+	vols := map[string]string{}
+	for _, v := range dep.Spec.Template.Spec.Volumes {
+		require.NotNil(t, v.Secret)
+		vols[v.Name] = v.Secret.SecretName
+	}
+	assert.Equal(t, "shared-proxy-tls", vols[proxyTLSVolumeName])
+	assert.Equal(t, "shared-metrics-tls", vols[metricsTLSVolumeName])
 
 	// Required anti-affinity keyed on the pool identity.
 	require.NotNil(t, dep.Spec.Template.Spec.Affinity)
@@ -116,7 +121,26 @@ func TestBuildEgressProxyDeployment(t *testing.T) {
 	}
 	assert.Contains(t, envNames, "PROXY_TLS_CERT_FILE")
 	assert.Contains(t, envNames, "PROXY_TLS_KEY_FILE")
-	assert.NotContains(t, envNames, "PROXY_METRICS_TLS_CERT_FILE")
+
+	// Metrics mTLS env points every file at the mounted metrics bundle (Q324). All
+	// three must be set — the proxy binary enables the dedicated mTLS listener only
+	// when cert+key+client-CA are all present, else it serves plaintext metrics on
+	// the health port (the regression this closes).
+	assert.Equal(t, metricsTLSMountPath+"/"+corev1.TLSCertKey, envNames["PROXY_METRICS_TLS_CERT_FILE"])
+	assert.Equal(t, metricsTLSMountPath+"/"+corev1.TLSPrivateKeyKey, envNames["PROXY_METRICS_TLS_KEY_FILE"])
+	assert.Equal(t, metricsTLSMountPath+"/"+metricsCACertKey, envNames["PROXY_METRICS_CLIENT_CA_FILE"])
+	assert.Equal(t, "8443", envNames["PROXY_METRICS_PORT"])
+
+	// The container exposes the mTLS metrics port so the Service/ServiceMonitor can
+	// target it by name.
+	metricsPortFound := false
+	for _, p := range c.Ports {
+		if p.Name == "metrics" {
+			metricsPortFound = true
+			assert.Equal(t, metricsPort, p.ContainerPort)
+		}
+	}
+	assert.True(t, metricsPortFound, "proxy container must expose the metrics port")
 
 	// LOG_LEVEL defaults to info when spec.logLevel is unset (a hand-built object
 	// that skipped apiserver defaulting) — never an empty value the proxy would
@@ -152,8 +176,13 @@ func TestBuildEgressProxyServiceHPAPDB(t *testing.T) {
 	svc := buildEgressProxyService(ep)
 	assert.Equal(t, "shared-proxy", svc.Name)
 	assert.Equal(t, "shared", svc.Spec.Selector[egressProxyComponentLabel])
-	require.Len(t, svc.Spec.Ports, 1)
-	assert.Equal(t, proxyPort, svc.Spec.Ports[0].Port)
+	require.Len(t, svc.Spec.Ports, 2)
+	svcPorts := map[string]int32{}
+	for _, p := range svc.Spec.Ports {
+		svcPorts[p.Name] = p.Port
+	}
+	assert.Equal(t, proxyPort, svcPorts["proxy"])
+	assert.Equal(t, metricsPort, svcPorts["metrics"], "Service must front the mTLS metrics port (Q324)")
 
 	hpa := buildEgressProxyHPA(ep)
 	assert.Equal(t, "shared-proxy", hpa.Name)
@@ -191,8 +220,14 @@ func TestBuildEgressProxyNetworkPolicy(t *testing.T) {
 		}
 	}
 	assert.True(t, foundGitHub, "managed policy must allow egress to the GitHub CIDR")
-	require.Len(t, np.Spec.Ingress, 1)
+	// Two ingress rules: workload pods → proxy port, monitoring namespaces → metrics
+	// port (Q324).
+	require.Len(t, np.Spec.Ingress, 2)
 	assert.Equal(t, componentWorkload, np.Spec.Ingress[0].From[0].PodSelector.MatchLabels[labelComponent])
+	assert.Equal(t, proxyPort, np.Spec.Ingress[0].Ports[0].Port.IntVal)
+	metricsRule := np.Spec.Ingress[1]
+	assert.Equal(t, metricsScrapeNamespaceValue, metricsRule.From[0].NamespaceSelector.MatchLabels[metricsScrapeNamespaceLabel])
+	assert.Equal(t, metricsPort, metricsRule.Ports[0].Port.IntVal, "monitoring scrape must target the mTLS metrics port")
 
 	// managedNetworkPolicy=false: GitHub CIDR egress omitted (additive model), DNS kept.
 	unmanaged := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {

@@ -118,6 +118,10 @@ func TestMain(m *testing.M) {
 			// against the test apiserver. Minimal preserve-unknown-fields schemas — real
 			// clusters install the CNI's own CRDs.
 			"testdata/cni-crds",
+			// Stub monitoring.coreos.com ServiceMonitor CRD (Q324) so the tenant
+			// ServiceMonitor apply lands against the test apiserver. Real clusters
+			// install the Prometheus Operator's own CRD.
+			"testdata/monitoring-crds",
 		},
 		ErrorIfCRDPathMissing: true,
 		Scheme:                testScheme,
@@ -434,6 +438,15 @@ func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) 
 	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendNone)
 }
 
+// startEgressProxyReconcilerWithServiceMonitor is startEgressProxyReconciler with the
+// tenant ServiceMonitor toggle on (Q324), so a test can prove the per-EgressProxy
+// ServiceMonitor is created against the stub monitoring.coreos.com CRD.
+func startEgressProxyReconcilerWithServiceMonitor(t *testing.T, ipCache *controller.IPRangeCache) {
+	t.Helper()
+	syncPeriod := 2 * time.Second
+	startEgressProxyReconcilerFull(t, ipCache, controller.FQDNBackendNone, &syncPeriod, true)
+}
+
 // startEgressProxyReconcilerWithBackend is startEgressProxyReconciler with an explicit
 // FQDN egress backend (Q245), so a test can drive the FQDN intent through the operator's
 // chosen mechanism (cilium/calico/gke).
@@ -456,6 +469,13 @@ func startEgressProxyReconcilerNoResync(t *testing.T, ipCache *controller.IPRang
 // manager's default resync behavior.
 func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration) {
 	t.Helper()
+	startEgressProxyReconcilerFull(t, ipCache, backend, syncPeriod, false)
+}
+
+// startEgressProxyReconcilerFull is the underlying constructor; enableServiceMonitor
+// toggles the per-EgressProxy ServiceMonitor provisioning (Q324).
+func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool) {
+	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
 
@@ -475,12 +495,13 @@ func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCac
 	}
 
 	err = (&controller.EgressProxyReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		IPCache:     ipCache,
-		ProxyImage:  "proxy:test",
-		FQDNBackend: backend,
-		Recorder:    mgr.GetEventRecorder("egressproxy-controller"),
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		IPCache:              ipCache,
+		ProxyImage:           "proxy:test",
+		FQDNBackend:          backend,
+		EnableServiceMonitor: enableServiceMonitor,
+		Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
 
