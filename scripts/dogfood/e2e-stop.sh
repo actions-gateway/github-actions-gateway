@@ -9,6 +9,11 @@
 # NetworkPolicy are left in place — inert without the gateway and cheap to keep,
 # so a later e2e-start.sh re-applies the gateway and the AGC comes back.
 #
+# Capacity (Q335): e2e-start.sh scaled the system pool up for the e2e window;
+# this script scales it back to the at-rest size (1 node, what dogfood/start.sh
+# leaves it in). dogfood/stop.sh later takes the whole system pool to 0 for the
+# zero-cost-at-rest state.
+#
 # Required env vars (export before running):
 #   PROJECT   GCP project ID (e.g. actions-gateway-dogfood)
 #   CLUSTER   GKE cluster name (e.g. gag-dogfood)
@@ -19,6 +24,11 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+
+# System pool sizing (Q335). At rest the system pool sits at 1 node (what
+# dogfood/start.sh leaves it in); e2e-stop.sh restores that after the e2e window.
+SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
+SYSTEM_POOL_AT_REST_NODES="${SYSTEM_POOL_AT_REST_NODES:-1}"
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"
@@ -47,6 +57,15 @@ main() {
 	echo "Tearing down the on-demand e2e AGC (deleting the ActionsGateway)..."
 	kubectl delete actionsgateway dogfood-e2e \
 		--namespace gag-dogfood-e2e --ignore-not-found
+
+	# Restore the system pool to its at-rest size now the e2e window is over
+	# (Q335). --project/--zone are pinned per call so the resize never relies on
+	# the active gcloud config; a resize to the current node count is a no-op, so
+	# this is safe to re-run. dogfood/stop.sh later takes it to 0.
+	echo "Scaling system pool (${SYSTEM_POOL}) back to ${SYSTEM_POOL_AT_REST_NODES} node(s)..."
+	gcloud container clusters resize "${CLUSTER}" \
+		--project="${PROJECT}" \
+		--node-pool="${SYSTEM_POOL}" --num-nodes="${SYSTEM_POOL_AT_REST_NODES}" --zone="${ZONE}" --quiet
 
 	echo "E2e jobs will now route to GitHub-hosted runners."
 	echo "e2e pool nodes autoscale to 0 once in-flight jobs finish (~10 min)."
