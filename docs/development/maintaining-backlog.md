@@ -41,6 +41,37 @@ Exceptions: a flake rooted in an outside service that hasn't recurred (file, don
 - **Observed, unfixed** → Queue top (flakes-first); pick next.
 - **Mitigation shipped, not recurred** → Deferred § Flake watch.
 - **Recurs** → back to Queue top, escalated.
+- **Soaked or obsolete** → retire to the ledger (below).
+
+### Retiring a flake-watch row
+
+Flake watch must not grow without bound — a row whose recurrence-memory has decayed to ~zero still costs a live-table scan every grooming pass and a slice of context budget, for no signal. During a grooming pass (never automatically), retire a row when **either** holds:
+
+- **Soaked** — the covering spec has passed its **blast-radius run threshold** on `main` since the fix merged (table below), with no recurrence (any recurrence bounces the row back to the Queue, so "since the fix" passes are necessarily consecutive); **or**
+- **Obsolete** — the flaky test or the mitigated code path no longer exists or was materially rewritten, so the old memory can no longer map to today's code (auto-retire regardless of age).
+
+The two are an **or**, not an **and**: a stable test that simply keeps passing graduates via *soaked*; a deleted/rewritten test graduates immediately via *obsolete*. Requiring both would mean a row never retires while its test sits quietly passing — exactly the row that has served its purpose.
+
+The soak threshold scales with **blast radius** — how much a *false* retirement costs, keyed on one question: if this spec silently started failing *for real* after we retire it, what do we lose?
+
+| Blast radius of a recurrence | Threshold |
+|---|---|
+| **Infra / CI flake** — a recurrence just costs a rerun (network / timing / disk / registry; e.g. kindnet, calico) | **≥25** passing `main` runs |
+| **Correctness-guarding test** — the spec asserts a product behavior, so a false retirement makes a future *real* red read as "known flake, rerun" | **≥50** passing `main` runs |
+| **Could mask a data-loss or security regression** | **Do not soak-retire** — root-cause it, or keep watching indefinitely |
+
+The counts are the ~3/N 95% upper bound on the residual per-run failure rate (25 → ~12%, 50 → ~6%); the higher bar buys a trustworthy regression signal after retirement, not just more confidence the flake is gone. Tune per flake — these are floors, not ceilings.
+
+Soak is counted in **runs, not calendar days**: what proves a flake dead is the spec being *exercised* green, and calendar time is only a proxy for that — one that breaks whenever merge velocity shifts or the spec is path-gated and runs rarely. Counting runs measures the thing directly and never needs re-tuning to velocity; the recurrences seen here (Q300, Q291) surfaced within a few dozen runs, inside even the lower threshold. Count green runs of the covering workflow since the fix's merge date:
+
+```bash
+gh run list --workflow <name>.yml --branch main --status success \
+  --created '>=YYYY-MM-DD' --json databaseId --jq 'length'
+```
+
+A run that failed on an *unrelated* flake is excluded, so this undercounts slightly — conservative, which is what we want. One thing run-count can't see: a flake suspected to be **time-correlated** (nightly-load or API-rate-limit windows) should also sit through a few day/night cycles before graduating — judgment, not a fixed number.
+
+On retirement, **move the row to [flake-watch-retired.md](flake-watch-retired.md)** (a cold, greppable ledger) rather than deleting it. That preserves the "a fix was already attempted here" memory at zero live-table cost: if the flake ever returns post-retirement it re-enters as a fresh find, and the ledger is one `grep` away to reconnect the history. Deleting outright throws that memory away and makes the next occurrence look novel.
 
 ## The Progress table
 
