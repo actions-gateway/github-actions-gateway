@@ -1,8 +1,26 @@
 # Q300 — systemic kindnet `e2e / e2e` leg flakiness (cross-spec, control-plane starvation suspected)
 
-**Status:** open — root cause found (kindnetd 100m CPU limit starves the
-in-band kube-network-policies enforcer) and fix shipped (limit removed at
-bring-up); keep open until the kindnet leg soaks clean on `main`.
+**Status:** open, **escalated** — the PR #612 kindnetd-unthrottle fix did **not**
+hold. Row briefly moved to [Flake watch](../STATUS.md#flake-watch) after #612, then
+**recurred on `main`** and was pulled back to the top of the Queue per
+[flakes-first](../development/maintaining-backlog.md#flake-fixes-go-first). Original
+root cause found (kindnetd 100m CPU limit starves the in-band
+kube-network-policies enforcer) and mitigated (limit removed at bring-up), but
+that alone was insufficient — see Recurrence below.
+
+## Recurrence (2026-07-18)
+
+`main` push run
+[29634174711](https://github.com/actions-gateway/github-actions-gateway/actions/runs/29634174711)
+(`e2e / e2e`, kindnet) failed a *different* spec again:
+`E2E_AGC_AcquireAdmissionControl / E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees`
+([acquire_admission_test.go:276](../../cmd/gmc/test/e2e/acquire_admission_test.go))
+timed out waiting for the curl-probe pod to reach `Succeeded`/`Failed` — the same
+cross-spec, control-plane-starvation signature this doc tracks, ~5 days after #612
+merged (2026-07-13). The next `main` push run was green, confirming it as a flake,
+not a hard break. The CPU-limit removal narrowed but did not close the starvation
+window; the next investigation step should widen beyond kindnetd's limit to the
+GMC/AGC control-plane resourcing under CI load.
 
 ## Symptom
 
