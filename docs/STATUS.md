@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q349
+**Next ID:** Q350
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -48,6 +48,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q349"></a>Q349 | Flake: e2e `E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees` | `flake` `tests` | 🔲 | S | Timed out at 90s once (PR #688), passed on rerun untouched. HPA warned `no metrics` same window — redelivery deadline races metrics-server/HPA readiness. Raise timeout or gate on readiness. cmd/agc. |
 | <a id="Q335"></a>Q335 | [On-demand e2e AGC no longer fits the 1-node system pool](plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) | `infra` | 🔲 | S | DaemonSet/kube-dns growth leaves <500m free on the single e2-standard-2, so `e2e-start.sh` times out Pending. Scale the system pool for the e2e window (start/stop scripts) or document 2 nodes in the runbook. |
 | <a id="Q324"></a>Q324 | v2 proxy metrics scrape stack (metrics-mTLS + ServiceMonitors) | `infra` | 🔲 | M | The M2→M3a metrics deferral never landed: v2 EgressProxy has no metrics port/TLS/scrape rule and the v2 gateway provisions no ServiceMonitors, so v2 proxy metrics are unscrapable. [Analysis](plan/v2-api-gap-analysis.md#observability). |
 | <a id="Q345"></a>Q345 | [Enforce v2alpha1/v2beta1 conditions.go sync](development/code-generation.md#crd-marker-and-api-file-gotchas) | `tests` `infra` | 🔲 | S | The two conditions.go files must stay byte-identical except the package line; today the sync is manual discipline. Add a make-check lint (or unit test) diffing them so a one-sided condition/reason addition fails fast. |
