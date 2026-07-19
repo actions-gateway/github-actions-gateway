@@ -48,7 +48,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q342"></a>Q342 | Script recurring dogfood e2e ops under scripts/dogfood/ | `infra` | 🔲 | S | Pool config, kata-deploy install, AGC bounce, and debug-pod loops get re-typed ad hoc with per-command PROD_GUARD_OVERRIDEs. Fold them into the lifecycle scripts (hook-exempt, reviewed once). |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---

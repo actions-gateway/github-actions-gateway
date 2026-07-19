@@ -907,6 +907,37 @@ or both at the same time.
 
 ---
 
+## Recurring maintenance + debug ops
+
+Between turn-up and teardown, a handful of maintenance and debug operations
+recur: rescaling a node pool by hand, reinstalling `kata-deploy` after a version
+bump, bouncing a wedged AGC, launching a throwaway pod on the e2e pool to bisect
+worker-shape problems, and confirming `/dev/kvm` on the e2e nodes. These are
+folded into [`scripts/dogfood/ops.sh`](../../scripts/dogfood/ops.sh) as named
+subcommands so they aren't re-typed ad hoc (Q342). Each pins `--project`/`--zone`
+on every gcloud call and verifies the resolved kubectl context before any
+mutating kubectl call — the same target-safety layer the lifecycle scripts use —
+so they need no per-command `PROD_GUARD_OVERRIDE` (the hook doesn't parse a
+`bash scripts/…` invocation; see
+[kind-iteration.md](../development/kind-iteration.md#verify-the-resolved-target-before-any-mutating-command)).
+All subcommands are idempotent and safe to re-run.
+
+```bash
+export PROJECT CLUSTER ZONE   # from the Variables section
+
+scripts/dogfood/ops.sh pool-scale <pool> <nodes>  # resize default-pool|workers|e2e
+scripts/dogfood/ops.sh kata-install               # (re)install kata-deploy + `kata` RuntimeClass
+scripts/dogfood/ops.sh agc-bounce [ci|e2e]        # roll-restart the CI (default) or e2e AGC + wait
+scripts/dogfood/ops.sh debug-pod [--kata]         # interactive shell pod on the e2e pool (bisecting)
+scripts/dogfood/ops.sh kvm-check [<node>]         # verify /dev/kvm on the e2e node(s)
+```
+
+`kata-install` reuses exactly the install logic `e2e-setup.sh` runs (both source
+`scripts/dogfood/lib/kata.sh`), so it re-applies the DaemonSet + RuntimeClass
+without re-running the full billable one-time setup. `debug-pod`/`kvm-check`
+target the `e2e` pool, which autoscales from 0 — scale a node up first
+(`ops.sh pool-scale e2e 1`) or run them during an in-flight e2e session.
+
 ## Operations quick-reference
 
 | Action | Script |
@@ -917,10 +948,12 @@ or both at the same time.
 | Enable e2e on GAG | `scripts/dogfood/e2e-start.sh` |
 | Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood/e2e-setup.sh` |
+| Recurring maintenance + debug ops (pool resize, kata reinstall, AGC bounce, debug pod, `/dev/kvm` check) | `scripts/dogfood/ops.sh <subcommand>` |
 
 All scripts read `PROJECT`, `CLUSTER`, `ZONE`, `REPO` (and `APP_ID`,
 `INSTALLATION_ID` for the setup scripts) from the environment. Export the
-Variables block once per shell session.
+Variables block once per shell session. (`ops.sh` needs only `PROJECT`,
+`CLUSTER`, `ZONE`.)
 
 ---
 
