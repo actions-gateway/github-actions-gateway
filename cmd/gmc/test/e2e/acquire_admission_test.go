@@ -249,6 +249,33 @@ spec:
 	})
 
 	It("E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees: a skipped job is redelivered once capacity frees", func() {
+		// Q349 flake guard. The redelivery assertion below runs inside a tight 90s
+		// window (deliveries must climb while the slot is full). metrics-server is
+		// installed suite-wide but asynchronously to this spec, and nothing here
+		// otherwise gates on it being ready. If that 90s window opens while
+		// metrics-server is still coming up — the HPA logs `no metrics` in exactly
+		// this window — its warmup contends for CPU with the AGC's
+		// poll/skip/redeliver loop on the single-node kind cluster and can delay
+		// redelivery past the deadline (observed on PR #688: timed out at 90s,
+		// passed untouched on rerun).
+		//
+		// Gate the whole spec on the proxy HPA reporting ScalingActive=True — the
+		// direct observable that metrics-server is serving metrics — so the tight
+		// window can only open once the metrics subsystem has settled (and it stays
+		// serving thereafter). This removes the race at its source rather than
+		// papering over it with a larger timeout. Same readiness signal
+		// E2E_GMC_HPADrivesScaleUp waits on.
+		By("waiting for the proxy HPA to be scaling-active (metrics-server serving) before the tight redelivery window")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "hpa", proxyName,
+				"-n", tenantNS, "-o",
+				`jsonpath={.status.conditions[?(@.type=="ScalingActive")].status}`)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(strings.TrimSpace(out)).To(Equal("True"),
+				"proxy HPA not yet scaling-active (metrics-server not serving metrics)")
+		}, 4*time.Minute, 5*time.Second).Should(Succeed())
+
 		By("acquiring a first job that holds the single worker slot (Pending pod)")
 		var s1 string
 		Eventually(func(g Gomega) { s1 = liveSession(g) }, 4*time.Minute, 2*time.Second).Should(Succeed())
