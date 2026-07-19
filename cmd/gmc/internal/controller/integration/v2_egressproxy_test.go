@@ -403,12 +403,18 @@ func TestV2_EgressProxy_ProvisionsMetricsMTLS(t *testing.T) {
 
 	name := proxyChildName("metered")
 
+	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so a
+	// successful Get guarantees every earlier child (both metrics Secrets, the
+	// Deployment, the Service) already exists, avoiding a mid-reconcile read race.
+	var np networkingv1.NetworkPolicy
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+
 	// Server bundle Secret: created, owned, TLS type, carries the metrics CA so the
 	// proxy can verify scraper client certs.
 	var serverSec corev1.Secret
-	require.Eventually(t, func() bool {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "metered-metrics-tls"}, &serverSec) == nil
-	}, 10*time.Second, 100*time.Millisecond, "metrics server bundle Secret should be created")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "metered-metrics-tls"}, &serverSec))
 	assert.True(t, hasControllerOwnerRef(serverSec.OwnerReferences, "metered"))
 	assert.Equal(t, corev1.SecretTypeTLS, serverSec.Type)
 	assert.NotEmpty(t, serverSec.Data[corev1.TLSCertKey])
@@ -451,9 +457,8 @@ func TestV2_EgressProxy_ProvisionsMetricsMTLS(t *testing.T) {
 	}
 	assert.True(t, metricsPortFound, "proxy Service must front the metrics port")
 
-	// NetworkPolicy: monitoring-namespace scrape of the metrics port is admitted.
-	var np networkingv1.NetworkPolicy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np))
+	// NetworkPolicy (already fetched above): monitoring-namespace scrape of the
+	// metrics port is admitted.
 	metricsIngressFound := false
 	for _, rule := range np.Spec.Ingress {
 		for _, port := range rule.Ports {
