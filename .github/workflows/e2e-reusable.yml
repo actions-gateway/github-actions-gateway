@@ -531,9 +531,17 @@ jobs:
           for pod in $(kubectl get pods -n kube-system -l app=kindnet -o name); do
             echo "--- ${pod} cpu.stat (nr_throttled/nr_periods = CFS throttle ratio) ---"
             kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/cpu.stat
+            echo "--- ${pod} memory.current / memory.max (kindnetd keeps a 50Mi memory limit) ---"
+            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.max
+            echo "--- ${pod} memory.events (nonzero 'high'/'max' = enforcer stalled on memory pressure) ---"
+            kubectl exec -n kube-system "${pod#pod/}" -- cat /sys/fs/cgroup/memory.events
+            echo "--- ${pod} nfnetlink_queue (queue_dropped/user_dropped > 0 = verdicts overflowed; with"
+            echo "    the bypass flag an overflowed packet is ACCEPTED, i.e. NetworkPolicy fails open) ---"
+            kubectl exec -n kube-system "${pod#pod/}" -- cat /proc/net/netfilter/nfnetlink_queue
           done
-          echo "--- kindnet logs (NetworkPolicy programming/verdict lag shows here) ---"
-          kubectl logs -n kube-system -l app=kindnet --tail=100 --prefix
+          echo "--- kindnet logs (NetworkPolicy programming/verdict lag shows here; --since spans the"
+          echo "    whole suite so the failing spec's window is covered, not just the dump-time tail) ---"
+          kubectl logs -n kube-system -l app=kindnet --since=30m --tail=-1 --prefix
 
       - name: Delete kind cluster
         if: always()

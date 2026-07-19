@@ -48,7 +48,6 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
-| <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | 🔲 | M | **Top of queue per [flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** Recurred on `main` 07-18: `SkippedJobIsRedeliveredAfterCapacityFrees` curl-probe timeout; PR #612 held <5 days. Recurrence + next steps in the linked plan. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
@@ -97,6 +96,7 @@ Flakes whose mitigation has shipped and that have **not recurred since**, plus r
 | ID | Item | Labels | Sz | Trigger to revive |
 |---|---|---|---|---|
 | <a id="Q350"></a>Q350 | [scalesetlistener name-conflict test setup race](../cmd/agc/internal/scalesetlistener/listener_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #700 (staging conflicts after `EnqueueJob` raced the poll loop; tests now hold capacity 0 until the conflict is staged). → top of Queue, escalated. |
+| <a id="Q300"></a>Q300 | [Systemic kindnet e2e leg flakiness (cross-spec)](plan/q300-gmc-kindnet-e2e-flake.md) | `tests` `flake` `infra` | M | **Event:** kindnet `e2e / e2e` red on `main` again. 07-18 escalation was misattributed (Q349, pre-fix). Dump now captures nfqueue/memory counters + full-window kindnet logs — attribute per the plan's triage table before any code change. |
 | <a id="Q299"></a>Q299 | [manager-metrics curl pod flake (kindnet)](../cmd/gmc/test/e2e/e2e_test.go) | `tests` `flake` | S | **Event:** recurs on `main` after PR #608 (bound curl connect-timeout + gate on metrics endpoints; unbounded curls hung ~133s, so the retry loop got ~2 tries before the 5min budget). → top of Queue, escalated. |
 | <a id="Q291"></a>Q291 | [e2e-calico egress-to-GitHub reachability flake](plan/q291-e2e-calico-egress-github-flake.md) | `tests` `flake` `infra` | S | **Event:** recurs on `main` after PR #593 (egress retry budget widened to 150s/4m; Felix ipBlock-programming window outlasted the curl budget under CI load). Recurred 07-04 + 07-11 pre-fix. → top of Queue, escalated. |
 | <a id="Q292"></a>Q292 | [e2e hosted-runner disk exhaustion during bring-up](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | S | **Event:** recurs after PR #597 (drop ~15–20 GB unused toolchains up front; a main calico run hit ENOSPC mid kind-load, 59 MB free — distinct from Q291). → top of Queue, escalated. |

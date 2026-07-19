@@ -1,26 +1,55 @@
 # Q300 — systemic kindnet `e2e / e2e` leg flakiness (cross-spec, control-plane starvation suspected)
 
-**Status:** open, **escalated** — the PR #612 kindnetd-unthrottle fix did **not**
-hold. Row briefly moved to [Flake watch](../STATUS.md#flake-watch) after #612, then
-**recurred on `main`** and was pulled back to the top of the Queue per
-[flakes-first](../development/maintaining-backlog.md#flake-fixes-go-first). Original
-root cause found (kindnetd 100m CPU limit starves the in-band
-kube-network-policies enforcer) and mitigated (limit removed at bring-up), but
-that alone was insufficient — see Recurrence below.
+**Status:** watching — the PR #612 kindnetd-unthrottle fix **did** close the
+CFS-throttling mechanism (throttle counters are zero in every post-#612 failure
+dump), and the 2026-07-18 "recurrence" that briefly escalated this row was a
+**misattribution** (it was the Q349 flake on a commit that predated the Q349
+fix — see the triage below). One genuinely unexplained dataplane event remains
+(2026-07-15, `CrossTenantNetworkBlocked` fail-open), so the row sits in
+[Flake watch](../STATUS.md#flake-watch) with the failure dump upgraded to
+attribute the next occurrence from CI artifacts alone.
 
-## Recurrence (2026-07-18)
+## Post-#612 soak triage (corrected 2026-07-19)
 
-`main` push run
-[29634174711](https://github.com/actions-gateway/github-actions-gateway/actions/runs/29634174711)
-(`e2e / e2e`, kindnet) failed a *different* spec again:
-`E2E_AGC_AcquireAdmissionControl / E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees`
-([acquire_admission_test.go:276](../../cmd/gmc/test/e2e/acquire_admission_test.go))
-timed out waiting for the curl-probe pod to reach `Succeeded`/`Failed` — the same
-cross-spec, control-plane-starvation signature this doc tracks, ~5 days after #612
-merged (2026-07-13). The next `main` push run was green, confirming it as a flake,
-not a hard break. The CPU-limit removal narrowed but did not close the starvation
-window; the next investigation step should widen beyond kindnetd's limit to the
-GMC/AGC control-plane resourcing under CI load.
+#612 merged 2026-07-13. Of ~26 `main` kindnet runs through 2026-07-19, three
+were red (down from 3 of 5 pre-fix). All three dumps show kindnetd
+`nr_throttled 0` on every node — the CPU-limit starvation mechanism did not
+recur. Per-run attribution:
+
+| Run | Spec(s) | Attribution |
+|---|---|---|
+| [29346467482](https://github.com/actions-gateway/github-actions-gateway/actions/runs/29346467482) (07-14) | `E2E_GMC_TenantProvisioning_ProxyConnectWorks` + `E2E_V2_ProxyConnectWorks` | Both the v1 proxy and the v2 EgressProxy returned `CONNECT tunnel failed, response 502` on every attempt — clients reached the proxies fine (NP dataplane healthy); the proxies could not dial **real GitHub**. A shared upstream cause on the hosted runner's external egress (network/DNS blip), not cluster-internal. Not Q300's mechanism; watch for recurrence before filing separately. |
+| [29432174271](https://github.com/actions-gateway/github-actions-gateway/actions/runs/29432174271) (07-15) | `E2E_GMC_CrossTenantNetworkBlocked` | **The one genuine open signal.** The gate probe observed enforcement live (3 consecutive blocked attempts), then the fresh one-shot curl pod's connection was **accepted** (`HTTP_CODE=400` from the nsB proxy) — enforcement flapped open *after* being confirmed, with zero kindnetd throttling. See "Remaining hypotheses" below. |
+| [29634174711](https://github.com/actions-gateway/github-actions-gateway/actions/runs/29634174711) (07-18) | `E2E_AGC_SkippedJobIsRedeliveredAfterCapacityFrees` | **Not Q300 — this was Q349, pre-fix.** The run's commit `0160e26` (a Dependabot merge) predates the Q349 fix (PR #692, merged later that day): deliveries stayed 0 through the 90 s window, the exact Q349 signature #692 removes by gating the spec on the HPA being scaling-active. This run drove the erroneous "#612 held <5 days" escalation. All subsequent `main` runs (6+ with #692 in) are green. |
+
+## Remaining hypotheses (07-15 fail-open event)
+
+The CrossTenant sequence — blocked, blocked, blocked, then a new pod's
+connection accepted — is not *programming lag* (enforcement was already live).
+Candidates, none yet discriminable from the 07-15 dump:
+
+1. **nfqueue overflow → bypass.** kube-network-policies verdicts packets in
+   userspace via nfqueue; the nftables queue rule carries the `bypass` flag, so
+   when the queue is full the packet is **accepted** unverdicted. A burst
+   (suite at `--procs 6`) could overflow the queue for exactly the window the
+   one-shot pod connected in. `/proc/net/netfilter/nfnetlink_queue`
+   `queue_dropped`/`user_dropped` counters now captured in the dump would prove
+   or rule this out.
+2. **Memory pressure in kindnetd.** #612 removed the CPU limit but kept
+   `memory: 50Mi`. A GC-thrashing or reclaim-stalled enforcer delays verdicts
+   (with bypass → accepts). `memory.events` (`high`/`max` counters) now
+   captured.
+3. **Per-node / traffic-path asymmetry.** The one-shot pod is a fresh pod with
+   a fresh IP, potentially on a different node than the gate probe; verdict
+   hooks differ for node-local vs cross-node traffic. Full-window kindnet logs
+   (now captured via `--since`) plus the existing all-namespace `-o wide` pod
+   listing cover this.
+
+The 07-15 dump could not discriminate these because the kindnet log capture
+(`--tail=100`) started ~2 minutes **after** the failure window ended, and no
+nfqueue/memory counters were collected. The failure dump in
+[`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) now captures all
+three signals.
 
 ## Symptom
 
@@ -194,10 +223,16 @@ pre-existing Terminating namespace.
 ## Recurrence guard
 
 Same rule as Q291: this reproduces only under CI load, so **one green run
-proves nothing**. Keep the row open until the kindnet leg soaks clean on
-`main` across several consecutive runs. If starvation is confirmed and a fix
-still doesn't hold, the next lever is runner sizing (Q286's dedicated pool),
-not more retry-budget widening.
+proves nothing**. The row sits in Flake watch; on the next red kindnet run on
+`main`, attribute from the upgraded failure dump **before** touching code:
+
+- Check the failing spec against the triage table above first — `ProxyConnectWorks`
+  502s to real GitHub are the external-egress class, not the dataplane class.
+- For a dataplane-class failure, read the dump's nfqueue counters, kindnetd
+  `memory.events`, and the full-window kindnet logs against the three
+  hypotheses above; fix whichever is proven.
+- If the dump implicates none of them, the next lever is runner sizing (Q286's
+  dedicated pool), not more retry-budget widening.
 
 ## Not in scope
 
