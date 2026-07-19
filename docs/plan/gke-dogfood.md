@@ -847,8 +847,8 @@ ScaleSet (single-label), `GAG_E2E_RUNNER` is a single JSON **string**
 ### F3. E2e operations — on-demand
 
 The e2e tenant's AGC is **on-demand** (Q231), not always-on: its standing
-~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the single
-`e2-standard-2` system node (leaving the CI AGC `Pending`/`Insufficient cpu`),
+~500m-CPU AGC pod competes with the CI AGC + GMC + Athens on the
+`e2-standard-2` system pool (leaving the CI AGC `Pending`/`Insufficient cpu`),
 and the `SSD_TOTAL_GB=500` quota bounds the workers pool. So rather than keep it
 running, `e2e-start.sh` applies the tenant to spin the AGC up per e2e session and
 `e2e-stop.sh` deletes the `ActionsGateway` to tear it back down (the namespace,
@@ -856,14 +856,24 @@ Secret, quota, template, and RunnerSet are inert without the gateway and kept).
 The e2e **node** pool is already on-demand independently (autoscales 0→2 on job
 arrival, back to 0 ~10 min after drain).
 
+A single `e2-standard-2` system node no longer leaves ~500m free for the
+on-demand AGC (DaemonSet/kube-dns growth), so it stays `Pending` and the start
+script's Ready wait times out (Q335). `e2e-start.sh` therefore scales the system
+pool up to 2 nodes for the e2e window (`E2E_SYSTEM_NODES`, default `2`), and
+`e2e-stop.sh` restores it to the at-rest 1 node (`SYSTEM_POOL_AT_REST_NODES`,
+default `1`) that `dogfood/start.sh` leaves it in; `dogfood/stop.sh` later takes
+the pool to 0 for the zero-cost-at-rest state. Both resizes pin `--project` and
+`--zone` and are idempotent, so re-running either script is safe.
+
 ```bash
 export PROJECT CLUSTER ZONE REPO   # from the Variables section
 
-# Enable (requires the system pool up via dogfood/start.sh first): spins up the
-# on-demand AGC, then routes e2e onto GAG.
+# Enable (requires the system pool up via dogfood/start.sh first): scales the
+# system pool to 2 nodes, spins up the on-demand AGC, then routes e2e onto GAG.
 scripts/dogfood/e2e-start.sh
 
-# Disable: routes e2e back to github-hosted, then deletes the AGC (frees ~500m).
+# Disable: routes e2e back to github-hosted, deletes the AGC (frees ~500m), then
+# restores the system pool to the at-rest 1 node.
 scripts/dogfood/e2e-stop.sh
 ```
 
