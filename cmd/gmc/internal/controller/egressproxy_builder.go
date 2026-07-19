@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -256,15 +257,17 @@ func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
 // It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
 // cross-node anti-affinity, self-signed proxy TLS mount, /healthz + /readyz probes,
-// 60s graceful drain) but is keyed on the EgressProxy: the pod labels/selector and
-// the anti-affinity term use the per-EgressProxy identity so pools in one namespace
-// stay isolated. Unlike v1's, the anti-affinity is a *default* the author can
-// override via spec.scheduling.affinity (Q282) — see egressProxyAffinity.
+// 60s graceful drain, mTLS /metrics listener) but is keyed on the EgressProxy: the
+// pod labels/selector and the anti-affinity term use the per-EgressProxy identity so
+// pools in one namespace stay isolated. Unlike v1's, the anti-affinity is a *default*
+// the author can override via spec.scheduling.affinity (Q282) — see egressProxyAffinity.
 //
-// M2 omits v1's metrics-mTLS volume/port/env: that listener shares a per-tenant
-// metrics CA jointly owned with the AGC, which lands in M3a. Exposing a metrics
-// port with no cert would serve plaintext (a regression) or nothing; the proxy
-// binary boots fine without it (cmd/proxy/main.go treats metrics mTLS as optional).
+// Metrics mTLS (Q324): the proxy serves /metrics over mutual TLS on metricsPort,
+// verifying scraper client certs against the per-EgressProxy metrics CA. The three
+// PROXY_METRICS_* env vars mirror the classic proxy exactly; without them the proxy
+// binary falls back to serving /metrics plaintext on the health port, so mounting
+// the bundle is what keeps the endpoint from regressing to unauthenticated plaintext.
+// The bundle is a per-EgressProxy PKI (ensureMetricsCerts), never shared cross-tenant.
 func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) *appsv1.Deployment {
 	replicas := egressProxyMinReplicas(ep)
 	name := proxyResourceName(ep)
@@ -313,6 +316,18 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 								},
 							},
 						},
+						{
+							// Metrics mTLS server bundle (ca.crt + tls.crt + tls.key):
+							// the proxy serves /metrics over mTLS on metricsPort and
+							// verifies scraper client certs against ca.crt (Q324).
+							Name: metricsTLSVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName:  egressProxyMetricsTLSSecretName(ep),
+									DefaultMode: &tlsMode,
+								},
+							},
+						},
 					},
 					Containers: []corev1.Container{{
 						Name:      proxyContainerName,
@@ -321,21 +336,38 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 						Ports: []corev1.ContainerPort{
 							{Name: "proxy", ContainerPort: proxyPort, Protocol: corev1.ProtocolTCP},
 							{Name: "health", ContainerPort: healthMetricsPort, Protocol: corev1.ProtocolTCP},
+							{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 						},
 						Env: append([]corev1.EnvVar{
 							{Name: "PROXY_TLS_CERT_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSCertKey},
 							{Name: "PROXY_TLS_KEY_FILE", Value: proxyTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+							// Metrics mTLS listener (Q324). All three files are mounted
+							// from the per-EgressProxy metrics bundle; the proxy binary
+							// enables the dedicated mTLS /metrics listener only when all
+							// three are set (else it falls back to plaintext metrics on
+							// the health port), so this is what enforces the mTLS gate.
+							{Name: "PROXY_METRICS_PORT", Value: fmt.Sprintf("%d", metricsPort)},
+							{Name: "PROXY_METRICS_TLS_CERT_FILE", Value: metricsTLSMountPath + "/" + corev1.TLSCertKey},
+							{Name: "PROXY_METRICS_TLS_KEY_FILE", Value: metricsTLSMountPath + "/" + corev1.TLSPrivateKeyKey},
+							{Name: "PROXY_METRICS_CLIENT_CA_FILE", Value: metricsTLSMountPath + "/" + metricsCACertKey},
 							// LOG_LEVEL mirrors spec.logLevel (info|debug, default
 							// info) — the per-pool debug knob, v1 parity (Q327). A
 							// change here reaches the pod template, which is what
 							// rolls the pool so the new level takes effect.
 							{Name: "LOG_LEVEL", Value: logLevelOrDefault(ep.Spec.LogLevel)},
 						}, proxyAllowlistEnv(ep)...),
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      proxyTLSVolumeName,
-							MountPath: proxyTLSMountPath,
-							ReadOnly:  true,
-						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      proxyTLSVolumeName,
+								MountPath: proxyTLSMountPath,
+								ReadOnly:  true,
+							},
+							{
+								Name:      metricsTLSVolumeName,
+								MountPath: metricsTLSMountPath,
+								ReadOnly:  true,
+							},
+						},
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								HTTPGet: &corev1.HTTPGetAction{Path: "/healthz", Port: intstr.FromInt32(healthMetricsPort)},
@@ -355,8 +387,8 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string) 
 }
 
 // buildEgressProxyService builds the ClusterIP Service that fronts an EgressProxy's
-// pool on the proxy port. The selector carries the per-EgressProxy identity so it
-// never fronts another pool's pods.
+// pool on the proxy port and the mTLS metrics port. The selector carries the
+// per-EgressProxy identity so it never fronts another pool's pods.
 func buildEgressProxyService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
@@ -364,6 +396,10 @@ func buildEgressProxyService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
 			Selector: egressProxyPodSelector(ep),
 			Ports: []corev1.ServicePort{
 				{Name: "proxy", Port: proxyPort, TargetPort: intstr.FromInt32(proxyPort), Protocol: corev1.ProtocolTCP},
+				// metrics: the mTLS Prometheus listener (metricsPort/:8443, Q324).
+				// Named "metrics" so the EgressProxy ServiceMonitor targets it by name
+				// without scraping the :8080 data port.
+				{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt32(metricsPort), Protocol: corev1.ProtocolTCP},
 			},
 			Type: corev1.ServiceTypeClusterIP,
 		},
@@ -459,14 +495,21 @@ func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []ne
 		})
 	}
 
-	ingress := []networkingv1.NetworkPolicyIngressRule{{
-		From: []networkingv1.NetworkPolicyPeer{{
-			PodSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{labelComponent: componentWorkload},
-			},
-		}},
-		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
-	}}
+	// Ingress: workload pods may reach the proxy port; monitoring namespaces may
+	// scrape the mTLS metrics port (Q324); default-deny otherwise. The plaintext
+	// kubelet probe port (healthMetricsPort) carries no metrics and needs no rule —
+	// kubelet probe traffic is exempt from NetworkPolicy on every CNI this targets.
+	ingress := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From: []networkingv1.NetworkPolicyPeer{{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{labelComponent: componentWorkload},
+				},
+			}},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(proxyPort))}},
+		},
+		metricsScrapeIngressRule(),
+	}
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},

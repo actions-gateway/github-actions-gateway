@@ -124,6 +124,28 @@ per tenant so Prometheus can scrape them:
      keySecret: { name: actions-gateway-metrics-client, key: tls.key }
    ```
 
+#### v2 `EgressProxy` proxy metrics
+
+The names above are the **classic/v1** layout, where a single proxy pool per
+namespace uses fixed names. Under the **v2 API**, the egress proxy is a standalone
+`EgressProxy` resource (multiple per namespace are allowed), so its proxy-metrics
+objects are keyed on the `EgressProxy` name `<ep>` instead:
+
+| Object | Classic/v1 | v2 `EgressProxy` |
+|---|---|---|
+| Proxy `Service` (metrics port `:8443`) | `actions-gateway-proxy` | `<ep>-proxy` |
+| Server bundle Secret (mounted into the proxy) | `actions-gateway-metrics-tls` | `<ep>-metrics-tls` |
+| Scraper client bundle Secret (published) | `actions-gateway-metrics-client` | `<ep>-metrics-client` |
+| `ServiceMonitor` | `actions-gateway-proxy-metrics` | `<ep>-proxy-metrics` |
+
+Each `EgressProxy` owns its **own** metrics CA — distinct from the AGC's and from
+every other `EgressProxy` — so Prometheus must read that proxy's own
+`<ep>-metrics-client` bundle, with `serverName: <ep>-proxy.<namespace>.svc`. The
+same toggle (`metrics.serviceMonitor.enabled` → `--enable-tenant-service-monitors`),
+the same `metrics: enabled` NetworkPolicy prerequisite, and the same graceful
+`ServiceMonitorCRDMissing` handling apply; the AGC metrics under v2 keep their own
+per-gateway `<gateway>-agc-metrics-{tls,client}` bundle.
+
 **Prerequisites:**
 
 - **Prometheus Operator** must be installed (the `monitoring.coreos.com`

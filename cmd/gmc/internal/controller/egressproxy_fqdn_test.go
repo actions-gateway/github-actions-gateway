@@ -157,7 +157,9 @@ func TestBuildEgressProxyNetworkPolicy_FQDNModeDropsCIDR(t *testing.T) {
 			}
 		}
 		assert.NotEmpty(t, np.Spec.Egress, "DNS egress is always present")
-		require.Len(t, np.Spec.Ingress, 1, "%s mode keeps the workload ingress rule", mode)
+		// Two ingress rules regardless of egress mode: workload → proxy port, and the
+		// monitoring → metrics-port scrape rule (Q324).
+		require.Len(t, np.Spec.Ingress, 2, "%s mode keeps the workload + metrics ingress rules", mode)
 	}
 }
 

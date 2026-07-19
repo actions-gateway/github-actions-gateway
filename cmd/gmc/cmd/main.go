@@ -588,6 +588,7 @@ func main() {
 			IPCache:              ipCache,
 			ProxyImage:           proxyImage,
 			FQDNBackend:          fqdnBackend,
+			EnableServiceMonitor: enableTenantServiceMonitors,
 			EgressStaleThreshold: 2*ipInterval + time.Hour,
 			Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
 		}).SetupWithManager(mgr); err != nil {

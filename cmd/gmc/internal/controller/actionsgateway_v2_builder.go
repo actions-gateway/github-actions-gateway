@@ -539,10 +539,13 @@ func metricsServerSANsV2(namespace, agcName string) []string {
 	}
 }
 
-// generateMetricsCertsV2 builds the per-tenant metrics mTLS bundle (CA + server
-// leaf for the AGC metrics listener + client leaf for the scraper). Mirrors v1's
-// generateMetricsCerts, reusing the shared signLeaf/encodeCertPEM helpers; the CA
-// key is not persisted (the whole bundle regenerates together on renewal).
+// generateMetricsCertsV2 builds a metrics mTLS bundle (CA + server leaf + client leaf
+// for the scraper). Mirrors v1's generateMetricsCerts, reusing the shared
+// signLeaf/encodeCertPEM helpers; the CA key is not persisted (the whole bundle
+// regenerates together on renewal). It is keyed on (namespace, Service name) and is
+// used for both the AGC metrics listener (svcName = the AGC Service) and, since Q324,
+// the standalone EgressProxy proxy metrics listener (svcName = the "<ep>-proxy"
+// Service) — each caller owns its own per-component CA, never a shared one.
 func generateMetricsCertsV2(namespace, agcName string) (*metricsCertBundle, error) {
 	caKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
