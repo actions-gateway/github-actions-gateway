@@ -92,7 +92,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q310"></a>Q310 | Operator diagnostic aggregator (`gag status` / kubectl plugin) | `infra` | L | **Demand:** operators ask for gateway diagnostics beyond raw kubectl + the runbook. Add a `gag status <gateway>` / kubectl plugin aggregating session, pool, and runner state per gateway. |
 | <a id="Q319"></a>Q319 | Export v2 RunnerSet worker-capacity conditions as gauges | `infra` | S | **Demand:** an operator wants to Prometheus-alert on v2 RunnerSet capacity. The Q303 conditions exist but no gauges do — only v1 RunnerGroup exports them. Add per-`RunnerSet` gauge collectors. |
 | <a id="Q344"></a>Q344 | First-class `scaleset` list/prune for orphan scale sets | `infra` | S | **Event:** orphan scale sets recur or an operator wants a prune path. Q334 fixed runner-*record* orphans, not stale *scale sets*; a throwaway deleted `gag-scaleset3`. Add a `scaleset` prune command. |
-| <a id="Q348"></a>Q348 | [Re-trim CLAUDE.md as guard-plugin fixes land](plan/claude-md-hook-rule-retirement.md) | `docs` | S | **Event:** any upstream fix in the retirement map ships in an installed plugin release, or Q347 lands. Retire the mapped rule(s) piecemeal; verify the previously-prompting command no longer prompts before deleting. |
+| <a id="Q348"></a>Q348 | [Re-trim CLAUDE.md as guard-plugin fixes land](plan/claude-md-hook-rule-retirement.md) | `docs` | S | **Event:** any remaining upstream guard-plugin fix in the retirement map ships in an installed plugin release. Retire the mapped rule(s) piecemeal; verify the previously-prompting command no longer prompts before deleting. |
 
 ### Flake watch
 
