@@ -26,30 +26,66 @@ recur. Per-run attribution:
 
 The CrossTenant sequence — blocked, blocked, blocked, then a new pod's
 connection accepted — is not *programming lag* (enforcement was already live).
-Candidates, none yet discriminable from the 07-15 dump:
+Candidates, ordered by likelihood after the upstream source review below:
 
-1. **nfqueue overflow → bypass.** kube-network-policies verdicts packets in
-   userspace via nfqueue; the nftables queue rule carries the `bypass` flag, so
-   when the queue is full the packet is **accepted** unverdicted. A burst
-   (suite at `--procs 6`) could overflow the queue for exactly the window the
-   one-shot pod connected in. `/proc/net/netfilter/nfnetlink_queue`
-   `queue_dropped`/`user_dropped` counters now captured in the dump would prove
-   or rule this out.
-2. **Memory pressure in kindnetd.** #612 removed the CPU limit but kept
-   `memory: 50Mi`. A GC-thrashing or reclaim-stalled enforcer delays verdicts
-   (with bypass → accepts). `memory.events` (`high`/`max` counters) now
-   captured.
-3. **Per-node / traffic-path asymmetry.** The one-shot pod is a fresh pod with
-   a fresh IP, potentially on a different node than the gate probe; verdict
-   hooks differ for node-local vs cross-node traffic. Full-window kindnet logs
-   (now captured via `--since`) plus the existing all-namespace `-o wide` pod
-   listing cover this.
+1. **nfqueue overflow → bypass accept → conntrack latch.** kindnetd runs
+   kube-network-policies with **`FailOpen: true` hardcoded**
+   ([kindnetd `main.go`, kind v0.31.0](https://github.com/kubernetes-sigs/kind/blob/v0.31.0/images/kindnetd/cmd/kindnetd/main.go)),
+   which sets `QueueFlagBypass` on the nftables queue rules with
+   `MaxQueueLen: 1024`: past 1024 in-flight verdicts the kernel **accepts**
+   packets unverdicted. Critically, the agent's chain has
+   `ct state established,related accept` *before* the queue rule, so one
+   bypassed SYN makes the whole connection conntrack-established and
+   permanently accepted — which is why 07-15 saw a complete HTTP
+   request/response, not a lone stray packet. The
+   `/proc/net/netfilter/nfnetlink_queue` `queue_dropped`/`user_dropped`
+   counters in the dump are **cumulative since boot**, so overflow evidence
+   survives even a late dump. (A packet the agent fails to parse is also
+   accepted under FailOpen — "Can not process packet, applying default
+   policy".)
+2. **Stale IP→pod mapping on pod-IP reuse.** In v0.8.0's `evaluateIngress` an
+   *unknown* source IP fails **closed** (it can't match a selector peer), so an
+   informer race on the brand-new probe pod cannot produce an allow. But kind
+   reuses pod IPs aggressively and the suite churns short-lived probe pods; if
+   `getPodAssignedToIP` still maps the reused IP to a **deleted pod from an
+   allowed namespace**, the verdict is a genuine spurious allow. Discriminator:
+   no queue drops in the dump + full-window kindnet logs showing the stale pod
+   attribution.
+3. **Memory pressure in kindnetd.** #612 removed the CPU limit but kept
+   `memory: 50Mi`. A GC-thrashing or reclaim-stalled enforcer delays verdicts,
+   and with FailOpen a stalled queue overflows into accepts (folds into #1).
+   `memory.events` (`high`/`max` counters) now captured.
 
 The 07-15 dump could not discriminate these because the kindnet log capture
 (`--tail=100`) started ~2 minutes **after** the failure window ended, and no
 nfqueue/memory counters were collected. The failure dump in
 [`e2e-reusable.yml`](../../.github/workflows/e2e-reusable.yml) now captures all
 three signals.
+
+## Upstream prior art (researched 2026-07-19)
+
+kind v0.31.0's kindnetd bundles **kube-network-policies v0.8.0** (2025-04);
+upstream is at **v1.1.0** (2026-06). Relevant upstream issues:
+
+- [#171 NetworkPolicy enforcement delayed for newly created pods](https://github.com/kubernetes-sigs/kube-network-policies/issues/171)
+  — short-lived pods could escape enforcement entirely; fixed May 2025,
+  **after** v0.8.0 cut, so our lane carries it (egress-side mechanism — the
+  new pod's IP missing from the `@podips` nftables set means its packets are
+  never queued).
+- [#283 same-node traffic always allowed](https://github.com/kubernetes-sigs/kube-network-policies/issues/283)
+  (egress side, fixed 2026-04) and field report
+  [#158](https://github.com/kubernetes-sigs/kube-network-policies/issues/158)
+  — same-node allow exceptions exist by design (kubelet probes; the
+  `meta skuid 0 accept` rule); worth remembering when a same-node placement
+  coincides with a spurious allow.
+- [#366 Scalability Improvements](https://github.com/kubernetes-sigs/kube-network-policies/issues/366)
+  (open) — upstream acknowledges the userspace-verdict architecture struggles
+  under high pod churn, which also retroactively validates the #612
+  unthrottling: the verdict path is inherently CPU-hungry.
+
+**Extra lever if the flake recurs:** upgrade kind (a newer bundled
+kube-network-policies reduces both queue pressure and known enforcement
+gaps) — alongside the runner-sizing lever (Q286).
 
 ## Symptom
 
