@@ -401,12 +401,17 @@ func TestListener_RunnerNameConflictReclaimsBaseNameByDeregister(t *testing.T) {
 
 	prov := &recordingProvisioner{srv: srv}
 	m := newCountingMetrics()
-	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+	// Advertise zero capacity until the conflict is staged: the fake assigns queued jobs
+	// as soon as a poll advertises free slots, so configuring the conflict after the job
+	// is assignable races the poll loop (the job can provision conflict-free first).
+	var capVal atomicInt
+	_, ssID := startListener(t, srv, func(context.Context) int { return capVal.get() }, prov, m)
 
 	_, jobID := srv.EnqueueJob(ssID)
 	// A stale record holds the base name (a reaped never-started worker's) — deletable
 	// via the REST API, so the listener reclaims the base name.
 	srv.FailJITConfigName("linux-" + jobID)
+	capVal.set(5)
 
 	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"the stale record must be deleted and the base name reclaimed so the job provisions")
@@ -430,13 +435,18 @@ func TestListener_RunnerNameConflictBusyRecordFallsBackToFreshName(t *testing.T)
 
 	prov := &recordingProvisioner{srv: srv}
 	m := newCountingMetrics()
-	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+	// Advertise zero capacity until the conflict is staged (see the deregister test):
+	// staging it after the job is assignable races the poll loop — the listener can hit
+	// the 409 between FailJITConfigName and SetRunnerBusy and reclaim the base name.
+	var capVal atomicInt
+	_, ssID := startListener(t, srv, func(context.Context) int { return capVal.get() }, prov, m)
 
 	_, jobID := srv.EnqueueJob(ssID)
 	// The base name conflicts AND its record is busy — the delete 422s, so only a fresh
 	// suffixed name clears it.
 	srv.FailJITConfigName("linux-" + jobID)
 	srv.SetRunnerBusy("linux-" + jobID)
+	capVal.set(5)
 
 	require.Eventually(t, func() bool { return prov.count() == 1 }, 5*time.Second, 10*time.Millisecond,
 		"a busy stale record must not block the job — the fresh-name fallback provisions it")
@@ -459,7 +469,11 @@ func TestListener_PersistentRunnerNameConflictDoesNotWedgeBatch(t *testing.T) {
 
 	prov := &recordingProvisioner{srv: srv}
 	m := newCountingMetrics()
-	_, ssID := startListener(t, srv, fixedCapacity(5), prov, m)
+	// Advertise zero capacity until the conflict is staged (see the deregister test):
+	// staging it after the stuck job is assignable races the poll loop — the stuck job
+	// can provision conflict-free first.
+	var capVal atomicInt
+	_, ssID := startListener(t, srv, func(context.Context) int { return capVal.get() }, prov, m)
 
 	// Enqueue the stuck job FIRST so its (lower-id) message sits ahead of the healthy one:
 	// under the old no-skip behavior its unadvanced cursor would wedge the healthy job behind
@@ -467,6 +481,7 @@ func TestListener_PersistentRunnerNameConflictDoesNotWedgeBatch(t *testing.T) {
 	_, stuckJobID := srv.EnqueueJob(ssID)
 	srv.FailJITConfigNamePrefix("linux-" + stuckJobID)
 	_, healthyJobID := srv.EnqueueJob(ssID)
+	capVal.set(5)
 
 	require.Eventually(t, func() bool {
 		for _, id := range prov.jobIDs() {
