@@ -6,10 +6,15 @@
 # See docs/plan/gke-dogfood.md Part F.
 #
 # On-demand (Q231): the e2e tenant's ~500m-CPU AGC pod is NOT kept always-on —
-# it competes with the CI AGC + GMC + Athens on the single e2-standard-2 system
-# node. This script applies the selected worker-isolation overlay to spin the
-# AGC up per e2e run; e2e-stop.sh deletes the ActionsGateway to tear it back
-# down.
+# it competes with the CI AGC + GMC + Athens on the system pool. This script
+# applies the selected worker-isolation overlay to spin the AGC up per e2e run;
+# e2e-stop.sh deletes the ActionsGateway to tear it back down.
+#
+# Capacity (Q335): a single e2-standard-2 system node no longer has ~500m free
+# for the on-demand AGC (DaemonSet/kube-dns growth), so it stays Pending and the
+# Ready wait below times out. This script scales the system pool up for the e2e
+# window; e2e-stop.sh scales it back to the at-rest size (1 node, what
+# dogfood/start.sh leaves it in — dogfood/stop.sh later takes it to 0).
 #
 # Required env vars (export before running):
 #   PROJECT      GCP project ID (e.g. actions-gateway-dogfood)
@@ -33,6 +38,12 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 
 E2E_VARIANT="${E2E_VARIANT:-kata}"
 
+# System pool sizing for the e2e window (Q335). The at-rest size (1 node) does
+# not fit the on-demand AGC; 2 nodes was live-validated green (see
+# docs/plan/archive/kata-on-gke.md#what-the-live-session-found-2026-07-16).
+SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
+E2E_SYSTEM_NODES="${E2E_SYSTEM_NODES:-2}"
+
 main() {
 	: "${PROJECT:?PROJECT must be set}"
 	: "${CLUSTER:?CLUSTER must be set}"
@@ -52,6 +63,15 @@ main() {
 	require_cmd kubectl "https://kubernetes.io/docs/tasks/tools/"
 	require_cmd gke-gcloud-auth-plugin \
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
+
+	# Scale the system pool up for the e2e window so the on-demand AGC has room
+	# to schedule (Q335). --project/--zone are pinned per call so the resize
+	# never relies on the active gcloud config; a resize to the current node
+	# count is a no-op, so this is safe to re-run.
+	echo "Scaling system pool (${SYSTEM_POOL}) to ${E2E_SYSTEM_NODES} nodes for the e2e window..."
+	gcloud container clusters resize "${CLUSTER}" \
+		--project="${PROJECT}" \
+		--node-pool="${SYSTEM_POOL}" --num-nodes="${E2E_SYSTEM_NODES}" --zone="${ZONE}" --quiet
 
 	# Pin the target cluster and fail closed if it is not the active context, so
 	# the on-demand tenant apply never lands on another cluster.
