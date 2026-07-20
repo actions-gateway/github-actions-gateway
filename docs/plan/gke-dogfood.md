@@ -867,8 +867,17 @@ two 500m tenant AGCs (`dogfood-agc`, `dogfoodss-agc`). At 1 node the two race
 for the node and the loser stays `Pending` indefinitely — and because
 `dogfood/start.sh` waits on `instance=dogfood` specifically, a `dogfoodss` win
 times the wait out and fails the caller (this is what blocked
-`validate-release.sh` before it ever reached the e2e leg). `dogfood/start.sh`
-therefore sizes the system pool to **2 nodes** (`SYSTEM_NODES`, default `2`).
+`validate-release.sh` before it ever reached the e2e leg). Rather than pin a
+count that a third tenant would silently outgrow (Q357), `dogfood/start.sh`
+**derives** the size from the deployed always-on `ActionsGateway` CRs via
+`scripts/dogfood/lib/pool.sh`: one node per always-on tenant AGC, floored at
+the live-validated **2** (the on-demand e2e tenant's namespace is excluded —
+its AGC packs into the non-first nodes' larger headroom, validated with all
+three AGCs on 2 nodes). One-node-per-AGC is deliberately conservative; a spare
+node during the running window is cheaper than a `Pending` AGC. `SYSTEM_NODES`
+pins the size explicitly instead (a pin below the derived need warns).
+`scripts/dogfood/pool-test.sh` (in `make check` via `make scripts-test`)
+asserts the sizing against stubs.
 
 The e2e leg triggers the matrix with `gh run rerun`, which **refuses an in-flight
 run** (`This workflow is already running`). Since the gate is typically run minutes
@@ -892,23 +901,25 @@ scale-up + deploy + e2e cycle. `main()` now preflights it alongside the
 `crd_smoke` only consumes the resolved `COSIGN_BIN`. The test script asserts the
 preflight's paths too.
 
-`e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`,
-default `2`), and `e2e-stop.sh` restores the running size
-(`SYSTEM_POOL_AT_REST_NODES`, default `2`) that `dogfood/start.sh` leaves it in;
+`e2e-start.sh` scales the system pool up for the e2e window
+(`E2E_SYSTEM_NODES`, default `2`, never below the derived running size — a
+smaller resize would evict a tenant AGC), and `e2e-stop.sh` restores the
+running size afterwards (derived the same way as `dogfood/start.sh`, so the two
+agree by construction; `SYSTEM_POOL_AT_REST_NODES` pins it instead);
 `dogfood/stop.sh` later takes the pool to 0 for the zero-cost-at-rest state.
-Keep `SYSTEM_POOL_AT_REST_NODES` in sync with `SYSTEM_NODES` — restoring fewer
-nodes than the running size re-evicts a tenant AGC. All resizes pin `--project`
-and `--zone` and are idempotent, so re-running any of these scripts is safe.
+All resizes pin `--project` and `--zone` and are idempotent, so re-running any
+of these scripts is safe.
 
 ```bash
 export PROJECT CLUSTER ZONE REPO   # from the Variables section
 
 # Enable (requires the system pool up via dogfood/start.sh first): scales the
-# system pool to 2 nodes, spins up the on-demand AGC, then routes e2e onto GAG.
+# system pool up for the e2e window, spins up the on-demand AGC, then routes
+# e2e onto GAG.
 scripts/dogfood/e2e-start.sh
 
 # Disable: routes e2e back to github-hosted, deletes the AGC (frees ~500m), then
-# restores the system pool to the at-rest 1 node.
+# restores the system pool to the derived running size.
 scripts/dogfood/e2e-stop.sh
 ```
 

@@ -9,9 +9,12 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
 > **Status: ❌ Open — filed 2026-07-20.** No remediation started. Queue rows
-> [Q361](../STATUS.md#Q361)–[Q370](../STATUS.md#Q370) track the individual items,
+> [Q362](../STATUS.md#Q362)–[Q370](../STATUS.md#Q370) and
+> [Q373](../STATUS.md#Q373) track the individual items,
 > [Q371](../STATUS.md#Q371) adds the prevention gates, and
 > [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
+> (Q361 is unrelated — it was allocated to a CI-latency item by #722 while this
+> audit was in flight, so the Secret-leak finding moved to Q373.)
 
 ## Headline
 
@@ -36,7 +39,7 @@ three places:
 
 ### Fixed as a bug, not flagged as debt
 
-**F1 — ScaleSet worker leaks a JIT-config Secret per job.** → [Q361](../STATUS.md#Q361)
+**F1 — ScaleSet worker leaks a JIT-config Secret per job.** → [Q373](../STATUS.md#Q373)
 
 `ProvisionScaleSetWorker` ([provisioner.go:548](../../cmd/agc/internal/provisioner/provisioner.go))
 stages `job-ss-<jobID>` at :573, then has three failure exits (:585 ceiling held,

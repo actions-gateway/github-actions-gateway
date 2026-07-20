@@ -257,7 +257,7 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.work
-      # Run the per-module unit tests under the race detector. `make test-race`
+      # Run the workspace unit tests under the race detector. `make test-race`
       # is the single source of truth for the race flags/timeout; its throttle
       # prefix is a no-op on CI (the CI env var is set), so this runs at full
       # speed here while staying desktop-safe when invoked locally.
