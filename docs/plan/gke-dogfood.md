@@ -870,6 +870,20 @@ times the wait out and fails the caller (this is what blocked
 `validate-release.sh` before it ever reached the e2e leg). `dogfood/start.sh`
 therefore sizes the system pool to **2 nodes** (`SYSTEM_NODES`, default `2`).
 
+The e2e leg triggers the matrix with `gh run rerun`, which **refuses an in-flight
+run** (`This workflow is already running`). Since the gate is typically run minutes
+after a merge, the latest `e2e-test.yml` run is usually that merge's push-run and
+still going — selecting it inside the e2e leg aborted the gate after the scale-up,
+deploy, and e2e AGC were already paid for (observed 2026-07-20, after PR #709).
+`validate-release.sh` therefore resolves *and settles* the run in `main()` before
+the trap arms and before anything billable: it waits out an in-flight run for up to
+`E2E_WAIT_TIMEOUT` (default 1800s) and otherwise fails there, where failure is free.
+Waiting rather than falling back to an older completed run keeps the semantics — the
+matrix re-run is the one for the commit under validation. `E2E_RUN_ID` still pins a
+run explicitly (it is status-checked too, so a pinned in-flight run fails early).
+`scripts/dogfood/validate-release-test.sh` (in `make check` via `make scripts-test`)
+asserts these paths against stubs.
+
 `e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`,
 default `2`), and `e2e-stop.sh` restores the running size
 (`SYSTEM_POOL_AT_REST_NODES`, default `2`) that `dogfood/start.sh` leaves it in;

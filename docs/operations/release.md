@@ -139,6 +139,14 @@ self-cleans back to 0 nodes on exit (success or failure). The manual steps that
 follow document what it does (and the recovery path if a leg needs re-running by
 hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
+**If you just merged something, the gate waits before it spends anything.** `gh run
+rerun` refuses a run that is still in flight, and the latest `e2e-test.yml` run is
+usually the push-run of the merge you just made. The gate resolves and settles that
+run up front — before the node scale-up, the deploy, and the e2e AGC — so a collision
+costs a wait, not a cluster cycle. It polls for up to `E2E_WAIT_TIMEOUT` seconds
+(default 1800), then fails with the run id. To skip the wait, pin an already-completed
+run with `E2E_RUN_ID=<id>`; `E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
+
 1. **Deploy the RC to dogfood.** `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, and
    `ASSUME_YES=1` exported alongside `GAG_IMAGE_TAG` — it reads the GitHub App private
    key from the macOS keychain (not from an env var), so run it on a macOS host that
@@ -156,7 +164,9 @@ hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`
    targets the GAG scale set — it does **not** start a run. Trigger the matrix by
    **re-running an existing e2e workflow run** (`gh run rerun <run-id>` for
    `e2e-test.yml` / `e2e-calico.yml`); the rerun's jobs pick up the new `runs-on` and
-   land on the RC's GAG-provisioned runners. **Node contention:** the on-demand e2e AGC
+   land on the RC's GAG-provisioned runners. Pick a **completed** run — `gh run rerun`
+   rejects one that is still in flight (`This workflow is already running`), so check
+   `gh run view <run-id> --json status` first when re-running this leg by hand. **Node contention:** the on-demand e2e AGC
    (~500m CPU) does not fit on the single `e2-standard-2` system node beside the
    always-on CI AGCs (the CI AGC goes `Pending`/`Insufficient cpu`), so temporarily add
    a system node (e.g. scale `default-pool` to 2) for the duration of the e2e leg and
