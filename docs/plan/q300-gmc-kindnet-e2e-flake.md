@@ -87,6 +87,15 @@ upstream is at **v1.1.0** (2026-06). Relevant upstream issues:
 kube-network-policies reduces both queue pressure and known enforcement
 gaps) — alongside the runner-sizing lever (Q286).
 
+**Lever pulled (Q353, 2026-07-19):** CI now pins kind v0.32.0 with the
+`kindest/node:v1.35.5` image, whose kindnetd (`v20260528-9350166c`, a 2026-05
+kube-network-policies snapshot) carries the #171 short-lived-pod and #283
+same-node fixes above. Verified against the image itself: the bundled kindnet
+DaemonSet still ships `limits: cpu=100m` on the `kindnet-cni` container, so
+the #612 unthrottle patch (`tune_kindnet_limits` in
+[`kind-with-registry.sh`](../../scripts/kind-with-registry.sh)) still applies
+unchanged and is still needed.
+
 ## Symptom
 
 The GMC kindnet e2e leg (job `e2e / e2e` in

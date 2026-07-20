@@ -61,15 +61,15 @@ jobs:
       # from registry.k8s.io at test time (Q150).
       METRICSSERVER_VERSION: v0.8.1
       # kind release, pinned (not @latest) for reproducibility. KIND_NODE_IMAGE
-      # is digest-pinned to the node image kind v0.31.0 ships for K8s v1.35.0 so
+      # is digest-pinned to the node image kind v0.32.0 ships for K8s v1.35.5 so
       # the cluster's K8s version is deterministic and the image is cacheable by
       # a stable key. KIND_VERSION + KIND_BINARY_SHA256 are bumped together
       # automatically by updatecli (updatecli.d/kind.yaml); KIND_NODE_IMAGE is
       # reviewed and bumped by hand in that PR when the tested Kubernetes version
       # should move (see docs/development/dependency-updates.md).
-      KIND_VERSION: v0.31.0
-      KIND_BINARY_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
-      KIND_NODE_IMAGE: kindest/node:v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
+      KIND_VERSION: v0.32.0
+      KIND_BINARY_SHA256: 50030de23cf40a18505f20426f6a8506bedf13c6e509244bd1fa9463721b0f54
+      KIND_NODE_IMAGE: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
       # All six images live in the local registry the e2e-cluster target
       # stands up. SHA-suffixed so kubelet's IfNotPresent cache cannot serve a
       # stale image across runs that reuse the cluster. The full ${{ github.sha }}
