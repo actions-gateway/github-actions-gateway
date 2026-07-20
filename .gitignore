@@ -5,6 +5,7 @@
 .claude/*
 !.claude/settings.json
 !.claude/prod-guard.json
+!.claude/foreground-guard.json
 !.claude/commands/
 !.claude/agents/
 !.claude/skills/
