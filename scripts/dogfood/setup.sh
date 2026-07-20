@@ -146,6 +146,47 @@ create_worker_pool() {
 }
 
 # ---------------------------------------------------------------------------
+# Part A4b — non-preemptible worker pool for benchmark runs.
+# ---------------------------------------------------------------------------
+
+create_worker_od_pool() {
+	if node_pool_exists workers-od; then
+		echo "Node pool 'workers-od' already exists — skipping create."
+		return
+	fi
+	echo "Creating on-demand worker node pool (fixed size, starts at 0)..."
+	# The `workers` pool above is spot, which is the right default for routine CI:
+	# cheap, and a preemption just re-runs a job. It is the WRONG shape for a
+	# benchmark. Q260 chased a job-starvation signal that turned out to be spot
+	# preemption mid-burst (nodes dropping 3->1) rather than anything in GAG; the
+	# run only became readable once it was pinned to a non-preemptible pool, where
+	# all nodes stayed Ready across 58 monitor samples and the phantom starvation
+	# did not recur. Q264's protocol benchmarks used the same pool for the same
+	# reason. See docs/plan/archive/gke-dogfood-turnup-findings.md and
+	# docs/plan/archive/q260-fanout-completion-reconciliation.md.
+	#
+	# Deliberately NOT autoscaled: a benchmark wants a fixed, known node count so
+	# the capacity under test is a constant, not something the autoscaler moves
+	# mid-run. Size it per run with `ops.sh pool-scale workers-od <n>` and return
+	# it to 0 afterwards — at 0 nodes it costs nothing, so it is safe to leave in
+	# place between campaigns.
+	#
+	# pd-standard for the same quota reason as `workers` (Q248): pd-balanced boot
+	# disks count against the 500 GB regional SSD quota and capped this pool at ~4
+	# nodes. Same taint as `workers` so the identical worker-pod toleration
+	# schedules onto either pool.
+	gcloud container node-pools create workers-od \
+		--project="${PROJECT}" \
+		--cluster="${CLUSTER}" \
+		--zone="${ZONE}" \
+		--machine-type=e2-standard-4 \
+		--num-nodes=0 \
+		--node-taints=dedicated=workers:NoSchedule \
+		--disk-type=pd-standard \
+		--disk-size=100GB
+}
+
+# ---------------------------------------------------------------------------
 # Part A5 — fetch kubeconfig credentials and assert the active kubectl context
 # is the cluster we targeted (shared helper). Every kubectl/helm step below
 # runs against the current context, so this fails closed before any
@@ -653,6 +694,7 @@ main() {
 	# Part A — cluster + node pools + credentials.
 	create_cluster
 	create_worker_pool
+	create_worker_od_pool
 	get_credentials
 
 	# Part B — install GAG + provision the tenant.
