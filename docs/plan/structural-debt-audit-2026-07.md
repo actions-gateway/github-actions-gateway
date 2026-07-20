@@ -8,13 +8,13 @@ a finding (per [maintaining-backlog.md](../development/maintaining-backlog.md)).
 
 Classification follows [technical-debt.md](../development/technical-debt.md).
 
-> **Status: ❌ Open — filed 2026-07-20.** No remediation started. Queue rows
-> [Q362](../STATUS.md#Q362)–[Q370](../STATUS.md#Q370) and
-> [Q373](../STATUS.md#Q373) track the individual items,
+> **Status: ⚠️ Partial — filed 2026-07-20; F1 shipped.** The F1 Secret leak was
+> fixed and merged the same day (Q373, #727). The remaining findings are tracked
+> by Queue rows [Q362](../STATUS.md#Q362)–[Q370](../STATUS.md#Q370),
 > [Q371](../STATUS.md#Q371) adds the prevention gates, and
 > [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
 > (Q361 is unrelated — it was allocated to a CI-latency item by #722 while this
-> audit was in flight, so the Secret-leak finding moved to Q373.)
+> audit was in flight, which is why the Secret-leak finding became Q373.)
 
 ## Headline
 
@@ -39,7 +39,7 @@ three places:
 
 ### Fixed as a bug, not flagged as debt
 
-**F1 — ScaleSet worker leaks a JIT-config Secret per job.** → [Q373](../STATUS.md#Q373)
+**F1 — ScaleSet worker leaks a JIT-config Secret per job.** ✅ **Shipped** (Q373, #727)
 
 `ProvisionScaleSetWorker` ([provisioner.go:548](../../cmd/agc/internal/provisioner/provisioner.go))
 stages `job-ss-<jobID>` at :573, then has three failure exits (:585 ceiling held,
@@ -63,6 +63,13 @@ implementer, which is why it is a bug rather than debt.
 Remedy: mirror `provision()`'s cleanup on each failure exit, and delete on the
 listener's terminal `JobCompleted` (`scalesetlistener/listener.go` `completeJob`,
 which today only bumps a metric).
+
+**Shipped in #727** — the reclaim went in at the listener's terminal-completion
+seam (`ReclaimJobSecret`), not just on the failure exits, so the steady-state
+success path is covered too. The `IsAlreadyExists` replay path deliberately does
+**not** delete: a replayed job's pod may still be mounting the Secret. Covered by
+an internal provisioner test, a listener-seam test, and an envtest integration
+test.
 
 ### High
 
