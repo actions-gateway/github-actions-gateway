@@ -6,8 +6,8 @@ Single source of truth for progress and priorities across the full project. `doc
 
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
-**Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q355
+**Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
+**Next ID:** Q359
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,6 +49,10 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q352"></a>Q352 | [Flake: e2e reach-real-GitHub egress blips (both lanes)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** Runner→GitHub egress died 07-14 (kindnet, CONNECT 502) + 07-19 (calico, curl 28 incl DirectEgress); reruns green. Add runner-host GitHub preflight so blips self-attribute. |
+| <a id="Q355"></a>Q355 | [Capture gate diagnostics before teardown](../scripts/dogfood/validate-release.sh) | `infra` `retro` | 🔲 | S | Teardown scales to 0, marking nodes unschedulable and evicting pods — masking the original FailedScheduling reason, so failures need a re-run to diagnose. Dump pods/node/events before teardown. |
+| <a id="Q356"></a>Q356 | [Preflight local tools before billable gate work](../scripts/dogfood/validate-release.sh) | `infra` `retro` | 🔲 | S | The CRD-smoke leg aborts on a missing `.build/cosign` ~25 min in, after a full cluster cycle. Check required local tools up front — same shape as PR #710, which does not cover cosign. |
+| <a id="Q357"></a>Q357 | [Assert system pool fits the deployed AGCs](../scripts/dogfood/start.sh) | `infra` `retro` | 🔲 | S | System pool size is a hardcoded 2 (Q335, PR #709). A third tenant AGC re-breaks scheduling silently. Assert the pool fits deployed AGC requests, or derive the node count from them. |
+| <a id="Q358"></a>Q358 | Generalize the measure-before-asserting rule | `docs` `retro` | 🔲 | S | The "unverified until confirmed end-to-end" guidance covers plan-doc findings only. Generalize it: when a prior issue's symptoms match, measure before asserting a root cause. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
 ---
@@ -83,7 +87,7 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q217"></a>Q217 | [OLM / OperatorHub bundle](operations/install.md) | `infra` `docs` | M | **Demand:** OpenShift/OperatorHub adoption demand. Helm-only is the deliberate install stance; an OLM bundle/catalog entry waits for a concrete OperatorHub ask. Additive packaging, no core code change. |
 | <a id="Q268"></a>Q268 | [Warm worker pool (`minIdleWorkers`)](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers) | `infra` | M | **Demand:** a CPU-CI team hits pod-schedule latency after pre-pull (Q211) + cache volumes (Q215) are exhausted. Opt-in per-RG idle-pod pool. Does NOT address Q224 starvation — see the [lever spike](plan/q224-fanout-dispatch-lever-spike.md). |
 | <a id="Q272"></a>Q272 | [Scale-set upstream maturity watch](plan/v1-classic-sunset-review.md) | `infra` | S | **Event:** `actions/scaleset` reaches GA/v1.0 or the auto-assign contract (`actions/scaleset#107`) is documented. Not a graduation blocker (sunset review §6.1); it lifts the Public-Preview caveat and triggers the U6 vendor-vs-own client revisit. |
-| <a id="Q264"></a>Q264 | [Remove deprecated classic acquisition machinery](plan/q264-scale-set-protocol.md) | `infra` | L | **Event:** v1.2.0 ships (deprecation window from v1.1.0 elapses) and [Q273](#Q273) completes (v1alpha1 migrated). Then one isolated PR removes the classic machinery + transitional `acquisitionProtocol`/`maxListeners`. |
+| <a id="Q264"></a>Q264 | [Remove deprecated classic acquisition machinery](plan/q264-scale-set-protocol.md) | `infra` | L | **Event:** v1.2.0 shipped 2026-07-20, so the v1.1.0 deprecation window has elapsed — now waiting only on [Q273](#Q273) (v1alpha1 migrated). Then one isolated PR removes the classic machinery + transitional `acquisitionProtocol`/`maxListeners`. |
 | <a id="Q275"></a>Q275 | [Reconcile AGC capacity/density docs with the ScaleSet default](design/appendix-a-capacity-slos.md) | `docs` | S | **Decision:** classic removal proceeds on the deprecation-window schedule ([Q264](#Q264)) — reconcile alongside it. appendix-a's ≤1,000-session ceiling and README Tier 2's "thousands per AGC" are classic framing; keep the density evidence. |
 | <a id="Q274"></a>Q274 | [Live-GitHub e2e: rerun-failed-jobs on eviction](plan/archive/milestone-3-tests.md) | `tests` | S | **Event:** a live-GitHub Tier-C e2e lane/credentials exist. The eviction→rerun-failed-jobs retry logic is already envtest-covered (`failure_recovery_test.go`); this adds the live happy-path companion. |
 | <a id="Q310"></a>Q310 | Operator diagnostic aggregator (`gag status` / kubectl plugin) | `infra` | L | **Demand:** operators ask for gateway diagnostics beyond raw kubectl + the runbook. Add a `gag status <gateway>` / kubectl plugin aggregating session, pool, and runner state per gateway. |
