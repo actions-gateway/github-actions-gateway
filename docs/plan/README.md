@@ -72,6 +72,7 @@ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
+| [runner-sizing-profiles.md](runner-sizing-profiles.md) | Worker right-sizing profiles: per-RunnerSet usage observability → recommendations in `RunnerSet.status` → opt-in auto-apply profiles (`Binpack`/`Throughput`/`NodeShare`); automates the manual dogfood right-sizing loop for every tenant, ARC has no equivalent | ❌ Open — filed 2026-07-20, no phase started ([Q359](../STATUS.md#Q359)) |
 | [docs.md](docs.md) | Documentation roadmap across phases | ✅ Done — all Phase 1/2/3 items shipped except alerting.md, deferred as [Q18](../STATUS.md#Q18) |
 | [docs-six-layer-audit.md](docs-six-layer-audit.md) | Six-layer consistency audit of `docs/` (terminology, cross-refs, nav, reuse) | ✅ Done — all six layers resolved; Layer 3 metrics gap closed by Q51; the optional link-check CI gate is a separate non-blocking decision |
 | [make.md](make.md) | Makefile UX (help target, e2e workflow, image var consistency) | ✅ Done — Phase 1 + Phase 2 complete; items 2.5/2.7b are cosmetic defers only |
