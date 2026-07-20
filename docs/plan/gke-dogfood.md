@@ -884,6 +884,14 @@ run explicitly (it is status-checked too, so a pinned in-flight run fails early)
 `scripts/dogfood/validate-release-test.sh` (in `make check` via `make scripts-test`)
 asserts these paths against stubs.
 
+The same fail-early rule covers local tools (Q356): the CRD smoke is the gate's
+*last* leg, so its `cosign` dependency (`.build/cosign`, `make cosign`; `COSIGN=`
+to override) used to be checked ~25 minutes in — aborting after a full node
+scale-up + deploy + e2e cycle. `main()` now preflights it alongside the
+`require_cmd` checks, before the confirmation prompt and anything billable;
+`crd_smoke` only consumes the resolved `COSIGN_BIN`. The test script asserts the
+preflight's paths too.
+
 `e2e-start.sh` scales the system pool up for the e2e window (`E2E_SYSTEM_NODES`,
 default `2`), and `e2e-stop.sh` restores the running size
 (`SYSTEM_POOL_AT_REST_NODES`, default `2`) that `dogfood/start.sh` leaves it in;

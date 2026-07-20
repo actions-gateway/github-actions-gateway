@@ -152,6 +152,11 @@ costs a wait, not a cluster cycle. It polls for up to `E2E_WAIT_TIMEOUT` seconds
 (default 1800), then fails with the run id. To skip the wait, pin an already-completed
 run with `E2E_RUN_ID=<id>`; `E2E_WAIT_TIMEOUT=0` fails immediately instead of waiting.
 
+The gate also checks every local tool it needs up front — including the pinned
+`cosign` the final CRD-smoke leg verifies with (`make cosign` downloads it to
+`.build/cosign`; `COSIGN=<path>` overrides) — so a missing binary fails the run
+before it spends anything, not 25 minutes in.
+
 1. **Deploy the RC to dogfood.** `setup.sh` needs `APP_ID`, `INSTALLATION_ID`, and
    `ASSUME_YES=1` exported alongside `GAG_IMAGE_TAG` — it reads the GitHub App private
    key from the macOS keychain (not from an env var), so run it on a macOS host that

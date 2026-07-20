@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/dogfood/validate-release.sh: resolve_e2e_run_id (the
-# step that decides which e2e workflow run the dogfood gate re-runs) and the
-# teardown-time failure diagnostics.
+# Unit tests for scripts/dogfood/validate-release.sh: the pre-billable steps —
+# resolve_e2e_run_id (which e2e run the gate re-runs) and preflight_cosign (the
+# local-tool check for the CRD smoke) — plus the teardown-time failure
+# diagnostics.
 #
-# Why resolve_e2e_run_id is tested: `gh run rerun` refuses an in-flight run, and
-# the gate is normally started minutes after a merge, while that merge's push-run
-# is still going. Selecting the run inside the e2e leg aborted the gate *after*
-# the node scale-up, RC deploy, and on-demand e2e AGC — a wasted cluster cycle
-# and ~5 minutes. The resolution now runs before any billable work, and the paths
-# that regress (in-flight wait, timeout, E2E_RUN_ID override) are asserted here.
+# Why the pre-billable steps are tested: both used to fail LATE. `gh run rerun`
+# refuses an in-flight run — and the latest run usually is one, minutes after a
+# merge — which aborted the gate *after* the node scale-up, RC deploy, and
+# on-demand e2e AGC (PR #710); a missing .build/cosign aborted the CRD-smoke leg
+# ~25 minutes in, after a full cluster cycle (Q356). Both now run before any
+# billable work, and the paths that regress (in-flight wait, timeout, E2E_RUN_ID
+# override, missing/overridden cosign) are asserted here.
 #
 # Why the diagnostics are tested: teardown's scale-to-0 evicts every pod and so
 # destroys the evidence (FailedScheduling reasons above all) that explains a
@@ -120,6 +122,31 @@ reset_statuses completed
 E2E_WORKFLOW=e2e-calico.yml FAKE_LATEST=777 E2E_RESOLVED_RUN_ID=""
 resolve_e2e_run_id >"${WORKDIR}/out"
 check_contains "E2E_WORKFLOW selects the lane" "e2e-calico.yml run 777" "$(cat "${WORKDIR}/out")"
+
+# A missing cosign binary fails the preflight — before anything billable.
+if err="$(COSIGN="${WORKDIR}/no-such-cosign" preflight_cosign 2>&1)"; then
+	echo "FAIL a missing cosign binary must fail the preflight" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a missing cosign binary fails the preflight"
+	check_contains "the cosign error says how to fix it" "make cosign" "${err}"
+fi
+
+# A present binary (via the COSIGN override) resolves into COSIGN_BIN.
+printf '#!/bin/sh\n' >"${WORKDIR}/fake-cosign"
+chmod +x "${WORKDIR}/fake-cosign"
+COSIGN_BIN=""
+COSIGN="${WORKDIR}/fake-cosign" preflight_cosign
+check "COSIGN override resolves into COSIGN_BIN" "${WORKDIR}/fake-cosign" "${COSIGN_BIN}"
+
+# A non-executable file is as unusable as a missing one (e.g. a partial download).
+printf '' >"${WORKDIR}/noexec-cosign"
+if COSIGN="${WORKDIR}/noexec-cosign" preflight_cosign 2>/dev/null; then
+	echo "FAIL a non-executable cosign must fail the preflight" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a non-executable cosign fails the preflight"
+fi
 
 # --- Q355: failure diagnostics are captured before teardown evicts them ---
 
