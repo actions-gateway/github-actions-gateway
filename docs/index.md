@@ -36,7 +36,7 @@ hide:
 ```sh
 helm install gag \
   oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.0.0 \
+  --version 1.2.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
