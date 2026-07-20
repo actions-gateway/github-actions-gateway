@@ -90,7 +90,7 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 	SetDefaultEventuallyTimeout(3 * time.Minute)
 	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
-	It("E2E_V2_DirectEgress_Provisions: proxy-less gateway wires direct mode and a GitHub-CIDR workload NetworkPolicy", func() {
+	It("E2E_V2_DirectEgress_Provisions: proxy-less gateway wires direct mode and a GitHub-CIDR workload NetworkPolicy", Label(realGitHubEgressLabel), func() {
 		By("verifying the AGC Deployment carries NO proxy env (direct mode: control-plane HTTP goes direct)")
 		// In direct mode the GMC omits HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME entirely
 		// (actionsgateway_v2_builder.go buildAGCDeploymentV2). Their presence would
@@ -120,7 +120,7 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 		}, 3*time.Minute, 5*time.Second).Should(Succeed())
 	})
 
-	It("E2E_V2_DirectEgress_ReachesGitHub: a direct-egress workload pod reaches GitHub without a proxy", func() {
+	It("E2E_V2_DirectEgress_ReachesGitHub: a direct-egress workload pod reaches GitHub without a proxy", Label(realGitHubEgressLabel), func() {
 		By("waiting for the workload NetworkPolicy GitHub ipBlock peers to be present")
 		Eventually(func(g Gomega) {
 			out, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", workloadNP,

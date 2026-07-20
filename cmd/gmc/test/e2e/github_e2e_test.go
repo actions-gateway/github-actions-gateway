@@ -31,7 +31,7 @@ import (
 //	GITHUB_E2E_REPO               — name of the repo containing the workflow
 //	GITHUB_E2E_WORKFLOW           — optional; workflow filename (default: test-job.yml)
 
-var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real"), func() {
+var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGitHubEgressLabel), func() {
 	const (
 		tenantNS   = "tenant-github-real"
 		agName     = "real-ag"
