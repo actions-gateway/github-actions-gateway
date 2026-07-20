@@ -6,7 +6,7 @@ Make-target backends — the root `Makefile` keeps recipes as thin target→scri
 
 | Script | Purpose |
 |---|---|
-| [go-test.sh](go-test.sh) | Per-module unit tests across the Go workspace; `--race` for the race-detector gate. Backs `make test` / `make test-race`. |
+| [go-test.sh](go-test.sh) | Workspace unit tests in one multi-module `go test` invocation; `--race` for the race-detector gate. Backs `make test` / `make test-race`. |
 | [go-lint.sh](go-lint.sh) | gofmt check + per-module golangci-lint. Backs `make lint` and the CI `lint` job. |
 | [go-vulncheck.sh](go-vulncheck.sh) | Per-module govulncheck. Backs `make vulncheck` and the CI `govulncheck` job. |
 | [shellcheck-scripts.sh](shellcheck-scripts.sh) | Shellcheck every tracked `scripts/*.sh` (recursive). Backs `make shellcheck`. |

@@ -210,7 +210,8 @@ docs-serve: ## Live-reload the docs/marketing site at http://localhost:8000 (iso
 docs-build: ## Build the static docs/marketing site into site/ (isolated venv)
 	scripts/docs-preview.sh build
 
-# The heavy per-module loops (test, lint) live in scripts/go-test.sh and
+# The heavy phases (test: one workspace-wide `go test`; lint: a per-module
+# loop) live in scripts/go-test.sh and
 # scripts/go-lint.sh, which apply the local auto-throttle themselves
 # (scripts/local-throttle.sh: parallelism cap + low-priority QoS prefix on an
 # interactive GUI dev shell; no-op on CI/headless — rationale in that script's
