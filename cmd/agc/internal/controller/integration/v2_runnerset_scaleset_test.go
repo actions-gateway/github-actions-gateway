@@ -376,3 +376,90 @@ func TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet(t *testing.T) {
 	_, ok := srv.ScaleSetIDByName("self-hosted")
 	assert.False(t, ok, "no scale set is registered for a Classic set")
 }
+
+// TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion is the Q373 proof at the tier
+// the unit tests cannot reach: it exercises the whole reconciler → listener → provisioner
+// wiring against a real apiserver. The unit tests pin that the provisioner reclaims when
+// asked and that the listener asks on a terminal completion; only this one shows the
+// reconciler actually connects the two, which is exactly what was missing — the Provision
+// closure was wired and no cleanup closure existed at all, so every ScaleSet job leaked
+// its credential-bearing JIT-config Secret until the RunnerSet was deleted.
+func TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion(t *testing.T) {
+	const ns = "v2-rs-ss-reclaim"
+	const label = "linux-reclaim"
+	createNSForAGC(t, ns)
+
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newScaleSetRunnerSet("ss-reclaim", ns, "gw", label, 3)
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		bg := context.Background()
+		_ = k8sClient.Delete(bg, rs)
+		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconcilerWithScaleSet(t, srv)
+
+	var ssID int
+	require.Eventually(t, func() bool {
+		id, ok := srv.ScaleSetIDByName(label)
+		ssID = id
+		return ok
+	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
+	waitForSetReadyReason(t, ns, "ss-reclaim", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	_, jobID := srv.EnqueueJob(ssID)
+
+	// The JIT-config Secret is staged and — critically — SURVIVES provisioning: the
+	// worker pod mounts it, so an eager delete here would strand the pod.
+	var secretName string
+	require.Eventually(t, func() bool {
+		var secrets corev1.SecretList
+		if err := k8sClient.List(ctx, &secrets, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-reclaim"}); err != nil {
+			return false
+		}
+		for i := range secrets.Items {
+			if len(secrets.Items[i].Data["jitconfig"]) > 0 {
+				secretName = secrets.Items[i].Name
+				return true
+			}
+		}
+		return false
+	}, 20*time.Second, 50*time.Millisecond, "the JIT-config Secret must be staged for the assigned job")
+
+	require.Eventually(t, func() bool {
+		var pods corev1.PodList
+		if err := k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: "ss-reclaim"}); err != nil {
+			return false
+		}
+		return len(pods.Items) > 0
+	}, 20*time.Second, 50*time.Millisecond, "the worker pod that mounts the Secret must exist")
+
+	var staged corev1.Secret
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: secretName}, &staged),
+		"the Secret must still exist once the worker pod is created")
+
+	// The worker finishes its job: the queue delivers the terminal JobCompleted, and the
+	// listener's reclaim hook must delete the Secret — while the RunnerSet still exists,
+	// so a pass here cannot be cascade-GC in disguise.
+	require.True(t, srv.CompleteAssignedJob(ssID, jobID, "succeeded"),
+		"the job must be assigned server-side before it can complete")
+
+	require.Eventually(t, func() bool {
+		var got corev1.Secret
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: secretName}, &got)
+		return apierrors.IsNotFound(err)
+	}, 20*time.Second, 50*time.Millisecond,
+		"a completed job's JIT-config Secret must be reclaimed, not left for the RunnerSet's cascade-GC")
+
+	var stillThere v2alpha1.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "ss-reclaim"}, &stillThere),
+		"the RunnerSet must still exist — the reclaim is steady-state, not teardown")
+}
