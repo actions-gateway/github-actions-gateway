@@ -1,5 +1,7 @@
 # Unit Test Speed Improvements
 
+**Status: Complete (Q17).** Items 1–4 below all shipped together in `c4660ea` (2026-05-23, the same commit that wrote this doc). The Q17 revival (2026-07-20) re-baselined against CI and shipped the single-invocation change described in [the re-baseline section](#2026-07-20-re-baseline-q17-revival); the remaining CI-latency levers (lint, coverage) are parked as [Q361](../../STATUS.md#Q361).
+
 This document analyses where time is spent in the unit test suite and describes four concrete improvements, in order of estimated impact. Each section covers motivation, implementation steps, files affected, and estimated savings.
 
 ---
@@ -219,3 +221,26 @@ Depends on CPU count. On a 4-core machine the listener package alone (currently 
 | 4 | Add `t.Parallel()` to independent tests | Medium — needs per-package audit | ~5–8s on CI |
 
 Implementing 1–3 alone saves ~6–7s (reducing total suite time from ~22s to ~15s) with minimal risk. Adding parallelism (4) could cut the total further by half on multi-core CI runners.
+
+---
+
+## 2026-07-20 re-baseline (Q17 revival)
+
+Items 1–4 had all shipped in `c4660ea`, so the revival re-measured where CI unit-workflow time actually goes. From `unit-test.yml` run 29722162250 (jobs run in parallel; workflow wall ≈ 270 s):
+
+| Job | Wall | Notes |
+|---|---|---|
+| lint | 233 s | **critical path** — gofmt + per-module `golangci-lint` loop ([go-lint.sh](../../../scripts/go-lint.sh)) |
+| unit-test (`-race`) | 189 s | was per-module-serial `go test` ([go-test.sh](../../../scripts/go-test.sh)) |
+| coverage | 139 s | per-module `-cover` loop ([coverage.sh](../../../scripts/coverage.sh)) — per-module profiles are load-bearing for the ratchet's per-module floors |
+
+Inside the 189 s unit-test job, **compilation dominates, not test execution**: the sequential per-module loop spent ~39 s on `./api`, ~93 s on `./cmd/agc`, and ~35 s on `./cmd/gmc`, and within `cmd/agc` only ~20 s was actual test packages running — the rest was the `-race` compile of the controller-runtime/k8s dependency graph, serialized behind the smaller modules.
+
+**Change shipped by the Q17 revival PR:** `scripts/go-test.sh` now issues **one** `go test` invocation over every `./<module>/...` pattern (a repo-root `./...` still does not work in a workspace, but explicit multi-module patterns do). Go then schedules the whole workspace as a single parallel build graph — small modules overlap the big `cmd/agc`/`cmd/gmc` compiles instead of queueing behind them. Unit-only selection is preserved because the integration (envtest) and e2e packages are build-tagged. Applies to both `make test` and the CI `-race` gate (`make test-race`).
+
+**Measured outcome (first PR run):** the `-race` unit gate dropped 189s → 163s (−14%). Smaller than the compile-serialization arithmetic suggests because the 4-vCPU CI runner was already near CPU-bound during the `cmd/agc`/`cmd/gmc` compiles — the win is the removal of the inter-module barriers (small-module idle time), not extra parallelism during the big compiles.
+
+**Remaining levers (parked as [Q361](../../STATUS.md#Q361)):**
+
+- **lint** is now the workflow critical path: the per-module `golangci-lint` loop re-loads the shared dependency graph per module. Levers: a workspace-aware golangci-lint invocation, cross-run analysis cache tuning, or running the module loop concurrently on CI.
+- **coverage** re-runs the suite per module for the ratchet's per-module floors. Levers: run the module loop concurrently, or a single multi-module `-coverprofile` run split per module by package prefix before `go tool cover -func`.

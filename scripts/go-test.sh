@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 #
-# Run the per-module unit tests across the Go workspace (`go test` in each
-# go.work module — a repo-root `./...` does not work in a workspace). Backs
-# `make test` and `make test-race`.
+# Run the unit tests across the Go workspace in a single `go test` invocation
+# covering every go.work module (a repo-root `./...` does not work in a
+# workspace, but explicit per-module patterns — `./api/... ./broker/... …` —
+# do). One invocation lets Go schedule the whole workspace as a single build
+# graph: modules no longer compile and test one after another, so the many
+# small modules overlap with the big cmd/agc / cmd/gmc dependency compiles.
+# Measured on the CI -race unit gate: 189s → 163s (Q17) — the 4-vCPU runner
+# was already near CPU-bound during the big compiles, so the win is the
+# removal of the serial inter-module barriers, not a multiple.
+# Backs `make test` and `make test-race`.
 #
 # Usage: scripts/go-test.sh [--race]
 #   --race   Run under the race detector (the CI unit gate). ~2-10× CPU/
@@ -47,12 +54,15 @@ init_throttle
 p_flag=""
 [[ -n "$THROTTLE_JOBS" ]] && p_flag="-p $THROTTLE_JOBS"
 
+# One `./<module>/...` pattern per go.work module. Unit-only stays intact:
+# the integration (envtest) and e2e packages are build-tagged, so they no-op
+# under these patterns exactly as they did under a per-module `./...`.
+patterns=()
 for dir in $(workspace_modules); do
-	echo "==> go test ${race_flag:+$race_flag }$dir"
-	(
-		cd "$dir"
-		[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
-		# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
-		$THROTTLE_PREFIX go test $race_flag -timeout "$timeout" $p_flag $verbose_flag ./...
-	)
+	patterns+=("$dir/...")
 done
+
+[[ -n "$THROTTLE_JOBS" ]] && export GOMAXPROCS="$THROTTLE_JOBS"
+echo "==> go test ${race_flag:+$race_flag }${patterns[*]}"
+# shellcheck disable=SC2086  # flag strings and the throttle prefix word-split intentionally
+$THROTTLE_PREFIX go test $race_flag -timeout "$timeout" $p_flag $verbose_flag "${patterns[@]}"
