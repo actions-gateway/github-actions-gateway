@@ -22,7 +22,9 @@
 # Idempotent: every underlying script is idempotent (guarded creates,
 # apply/upsert, --ignore-not-found), so a re-run after a partial failure is
 # safe. Self-cleaning: an EXIT trap tears the environment back down to 0 nodes
-# on success AND failure.
+# on success AND failure. On failure the trap first dumps a cluster snapshot
+# (nodes, pods, events) — teardown's scale-to-0 evicts everything, destroying
+# the evidence (e.g. the FailedScheduling reason) a diagnosis needs (Q355).
 #
 # PROD NOTE: gag-dogfood is hard-classified prod (.claude/prod-guard.json). This
 # is a lifecycle script run as `bash validate-release.sh …`, which the prod-guard
@@ -257,12 +259,47 @@ crd_smoke() {
 	done
 }
 
+# dump_diagnostics — snapshot the cluster's scheduling state to stdout before
+# teardown destroys it. Scaling the pool to 0 cordons the nodes and evicts
+# every pod, which erases the FailedScheduling (or crash-loop) evidence that
+# explains a failed gate — so diagnosing a failure used to need a second
+# billable run just to watch it happen again (Q355). Runs only on failure,
+# from a subshell in teardown(): the context pin re-runs fail-closed here (the
+# failure may predate any credential fetch, and its `exit` on a wrong context
+# only kills the subshell), and every step is best-effort so a broken or
+# unreachable cluster can never block the teardown that follows.
+dump_diagnostics() {
+	echo "=== Failure diagnostics (cluster snapshot before teardown evicts it) ==="
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}" || {
+		echo "could not pin the cluster context — skipping the snapshot" >&2
+		return 0
+	}
+	echo "--- Nodes ---"
+	kubectl get nodes -o wide || true
+	echo "--- Pods (all namespaces) ---"
+	kubectl get pods -A -o wide || true
+	echo "--- Unhealthy pod detail (scheduling/image/crash reasons) ---"
+	local ns name _rest
+	kubectl get pods -A --no-headers \
+		--field-selector 'status.phase!=Running,status.phase!=Succeeded' 2>/dev/null |
+		while read -r ns name _rest; do
+			kubectl describe pod -n "${ns}" "${name}" || true
+		done || true
+	echo "--- Events (all namespaces, oldest first) ---"
+	kubectl get events -A --sort-by=.lastTimestamp || true
+	echo "=== End failure diagnostics ==="
+}
+
 # teardown — EXIT trap: route e2e + CI off GAG and scale the cluster back to 0 on
 # both success and failure, so a failed gate never strands billable nodes. Each
-# step is guarded so one failure does not skip the rest.
+# step is guarded so one failure does not skip the rest. On failure, diagnostics
+# are captured FIRST — the scale-down below destroys the evidence.
 teardown() {
 	local rc="$?"
 	echo ""
+	if ((rc != 0)); then
+		(dump_diagnostics) || echo "diagnostics dump failed — continuing teardown" >&2
+	fi
 	echo "=== Teardown (self-cleaning; runs on success and failure) ==="
 	bash "${SCRIPT_DIR}/e2e-stop.sh" || echo "e2e-stop failed — continuing teardown" >&2
 	bash "${SCRIPT_DIR}/stop.sh" || echo "stop failed — continuing teardown" >&2

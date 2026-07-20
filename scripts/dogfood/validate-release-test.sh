@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 #
-# Unit tests for resolve_e2e_run_id in scripts/dogfood/validate-release.sh — the
-# step that decides which e2e workflow run the dogfood gate re-runs.
+# Unit tests for scripts/dogfood/validate-release.sh: resolve_e2e_run_id (the
+# step that decides which e2e workflow run the dogfood gate re-runs) and the
+# teardown-time failure diagnostics.
 #
-# Why this one function is tested: `gh run rerun` refuses an in-flight run, and
+# Why resolve_e2e_run_id is tested: `gh run rerun` refuses an in-flight run, and
 # the gate is normally started minutes after a merge, while that merge's push-run
 # is still going. Selecting the run inside the e2e leg aborted the gate *after*
 # the node scale-up, RC deploy, and on-demand e2e AGC — a wasted cluster cycle
 # and ~5 minutes. The resolution now runs before any billable work, and the paths
 # that regress (in-flight wait, timeout, E2E_RUN_ID override) are asserted here.
+#
+# Why the diagnostics are tested: teardown's scale-to-0 evicts every pod and so
+# destroys the evidence (FailedScheduling reasons above all) that explains a
+# failed gate (Q355). Both directions matter: the snapshot must run on failure
+# BEFORE the stop scripts, and a broken snapshot (e.g. no cluster credentials)
+# must never block the teardown that keeps billable nodes from stranding.
 #
 # The gate script is sourced with VALIDATE_RELEASE_LIB_ONLY=1 so main() does not
 # run; `gh` and `run_status` are stubbed, so no network and no cluster.
@@ -113,6 +120,68 @@ reset_statuses completed
 E2E_WORKFLOW=e2e-calico.yml FAKE_LATEST=777 E2E_RESOLVED_RUN_ID=""
 resolve_e2e_run_id >"${WORKDIR}/out"
 check_contains "E2E_WORKFLOW selects the lane" "e2e-calico.yml run 777" "$(cat "${WORKDIR}/out")"
+
+# --- Q355: failure diagnostics are captured before teardown evicts them ---
+
+# Stub the cluster touchpoints. kubectl records its argv (proving which
+# snapshots run) and prints nothing, so the unhealthy-pod describe loop has no
+# lines to read.
+PROJECT=p ZONE=z CLUSTER=c
+KUBECTL_LOG="${WORKDIR}/kubectl.log"
+gke_get_credentials_and_verify() { echo "pin $1/$2/$3"; }
+kubectl() { echo "kubectl $*" >>"${KUBECTL_LOG}"; }
+
+: >"${KUBECTL_LOG}"
+out="$(dump_diagnostics)"
+check_contains "diagnostics snapshot the nodes" "get nodes" "$(cat "${KUBECTL_LOG}")"
+check_contains "diagnostics snapshot the pods" "get pods -A -o wide" "$(cat "${KUBECTL_LOG}")"
+check_contains "diagnostics snapshot the events" "get events" "$(cat "${KUBECTL_LOG}")"
+
+# A failed context pin skips the snapshot without failing — teardown follows.
+gke_get_credentials_and_verify() { return 1; }
+: >"${KUBECTL_LOG}"
+if out="$(dump_diagnostics 2>&1)"; then
+	echo "ok   a failed context pin does not fail the dump"
+else
+	echo "FAIL a failed context pin must not fail the dump" >&2
+	fails=$((fails + 1))
+fi
+check_contains "a failed pin announces the skip" "skipping the snapshot" "${out}"
+check "a failed pin runs no kubectl" "" "$(cat "${KUBECTL_LOG}")"
+
+# teardown dumps diagnostics only on failure, and BEFORE the stop scripts run.
+# The stop scripts are stubbed via SCRIPT_DIR; WORKDIR is cleared inside the
+# subshell so teardown's cleanup cannot delete this test's own workdir.
+STUB_DIR="${WORKDIR}/stubs"
+mkdir -p "${STUB_DIR}"
+printf 'echo "stub e2e-stop"\n' >"${STUB_DIR}/e2e-stop.sh"
+printf 'echo "stub stop"\n' >"${STUB_DIR}/stop.sh"
+gke_get_credentials_and_verify() { echo "pin"; }
+
+out="$(
+	set +e
+	SCRIPT_DIR="${STUB_DIR}" WORKDIR=""
+	(exit 3)
+	teardown 2>&1
+)"
+check_contains "a failed gate dumps diagnostics" "Failure diagnostics" "${out}"
+check_contains "diagnostics run before the stop scripts" "Failure diagnostics" "${out%%stub e2e-stop*}"
+check_contains "teardown still stops after the dump" "stub stop" "${out}"
+check_contains "teardown reports the gate's exit code" "(exit 3)" "${out}"
+
+out="$(
+	set +e
+	SCRIPT_DIR="${STUB_DIR}" WORKDIR=""
+	(exit 0)
+	teardown 2>&1
+)"
+if [[ "${out}" == *"Failure diagnostics"* ]]; then
+	echo "FAIL a green gate must not dump diagnostics" >&2
+	fails=$((fails + 1))
+else
+	echo "ok   a green gate does not dump diagnostics"
+fi
+check_contains "a green teardown still stops" "stub stop" "${out}"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

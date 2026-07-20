@@ -135,7 +135,12 @@ PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX
 
 `validate-release.sh` bakes in all the env and ordering below — deploy → route CI →
 on-demand e2e → `gh run rerun` → CRD smoke → teardown — is idempotent, and
-self-cleans back to 0 nodes on exit (success or failure). The manual steps that
+self-cleans back to 0 nodes on exit (success or failure). On failure it first
+dumps a cluster snapshot (nodes, pods, unhealthy-pod detail, events) to the
+gate's output, because the teardown's scale-to-0 evicts every pod and destroys
+the evidence — read the `Failure diagnostics` section of a failed run's log
+(e.g. the `FailedScheduling` events) instead of re-running the gate to watch
+it fail again. The manual steps that
 follow document what it does (and the recovery path if a leg needs re-running by
 hand). From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
