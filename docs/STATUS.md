@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q362
+**Next ID:** Q364
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -49,6 +49,7 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
+| <a id="Q363"></a>Q363 | [Flake: manifest-validate `changes` job fails silently](../.github/workflows/manifest-validate.yml) | `tests` `flake` `infra` | 🔲 | S | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** 07-20 #728: paths-filter `changes` failed logging no error (last line `Invoking listFiles`), failing the gate. Sibling `changes` jobs passed; rerun green. |
 | <a id="Q222"></a>Q222 | [AGC SIGTERM teardown race](plan/q222-agc-sigterm-teardown-race.md) | `tests` `flake` | 🔲 | M | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first)**, escalated — recurs after the 30→60s ceiling bump. Both owner sessions time out in full, so a third bump is ruled out; investigate the exit-defer race per the plan. |
 | <a id="Q352"></a>Q352 | [Flake: e2e reach-real-GitHub egress blips (both lanes)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** Runner→GitHub egress died 07-14 (kindnet, CONNECT 502) + 07-19 (calico, curl 28 incl DirectEgress); reruns green. Add runner-host GitHub preflight so blips self-attribute. |
 | <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | L | Killer-feature gap vs ARC: measure per-RunnerSet worker usage, surface recommended requests/limits in status, later opt-in auto-apply profiles. Phase 1 is usage metrics + an operator recipe; see the plan. |
