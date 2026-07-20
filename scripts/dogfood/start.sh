@@ -14,16 +14,18 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/dogfood/lib/pool.sh
+source "${REPO_ROOT}/scripts/dogfood/lib/pool.sh"
 
-# System pool sizing for the running state. A single e2-standard-2 has 1930m
-# allocatable against a ~1080m kube-system baseline, leaving room for exactly
-# one 500m tenant AGC — so dogfood-agc and dogfoodss-agc race for the node and
-# the loser stays Pending indefinitely. When dogfoodss wins, the Ready wait
-# below (which selects instance=dogfood) times out and the caller exits 1. Two
-# nodes fit both. Same capacity ceiling Q335 fixed for the on-demand e2e AGC in
-# e2e-start.sh; dogfood/stop.sh still takes the pool to 0 at rest.
+# System pool sizing for the running state (Q335/Q357). One e2-standard-2 fits
+# only one 500m tenant AGC beside the kube-system baseline, so at a fixed size
+# the tenant AGCs race for nodes and a loser stays Pending indefinitely — when
+# dogfoodss wins, the Ready wait below (which selects instance=dogfood) times
+# out and the caller exits 1. The size is therefore derived from the deployed
+# ActionsGateways (lib/pool.sh) so adding a tenant grows the pool; SYSTEM_NODES
+# pins it explicitly instead. dogfood/stop.sh still takes the pool to 0 at rest.
 SYSTEM_POOL="${SYSTEM_POOL:-default-pool}"
-SYSTEM_NODES="${SYSTEM_NODES:-2}"
+SYSTEM_NODES="${SYSTEM_NODES:-}"
 
 main() {
 	: "${PROJECT:?PROJECT must be set}"
@@ -37,6 +39,23 @@ main() {
 		"https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#install_plugin"
 	require_cmd gh "https://cli.github.com/"
 
+	# Point kubectl at the dogfood cluster and fail closed if it is not the
+	# active context, so the sizing read and the readiness waits never run
+	# against another cluster.
+	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
+
+	# Size the pool from the deployed tenant AGCs (Q357) unless the operator
+	# pinned SYSTEM_NODES. A pin below the derived need is honored but flagged —
+	# the failure it causes (an AGC Pending forever) is otherwise silent.
+	local needed
+	needed="$(required_system_nodes)"
+	if [[ -z "${SYSTEM_NODES}" ]]; then
+		SYSTEM_NODES="${needed}"
+	elif ((SYSTEM_NODES < needed)); then
+		echo "warning: SYSTEM_NODES=${SYSTEM_NODES} is below the ${needed} node(s)" >&2
+		echo "  the deployed tenant AGCs need — an AGC may stay Pending." >&2
+	fi
+
 	# --project/--zone are pinned per call so the resize never relies on the
 	# active gcloud config; a resize to the current node count is a no-op, so
 	# this is safe to re-run.
@@ -44,10 +63,6 @@ main() {
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
 		--node-pool="${SYSTEM_POOL}" --num-nodes="${SYSTEM_NODES}" --zone="${ZONE}" --quiet
-
-	# Point kubectl at the dogfood cluster and fail closed if it is not the
-	# active context, so the readiness waits never run against another cluster.
-	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
 	echo "Waiting for GMC to be ready (~3 min)..."
 	kubectl rollout status deployment/gmc-controller-manager \
