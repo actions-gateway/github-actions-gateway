@@ -7,7 +7,7 @@ Single source of truth for progress and priorities across the full project. `doc
 **Status:** 🔲 ready · 🚫 blocked  
 **Size:** S = one session · M = 2–3 sessions · L = multi-session, needs a phased plan doc in `docs/plan/`  
 **Labels:** `milestone` `security` `tests` `speed` `docs` `infra` `bug` `flake` `retro` `1.0-gate` (blocks the [Release 1.0](plan/release-1.0.md) tag)  
-**Next ID:** Q359
+**Next ID:** Q361
 
 Maintained per [`docs/development/maintaining-backlog.md`](development/maintaining-backlog.md): done rows are deleted (git is the archive), the open PR is the in-flight signal, new items enter at the priority they deserve, parked items live in [Deferred](#deferred), and every edit is an isolated `docs(status):` commit gated by `scripts/lint-backlog.sh`.
 
@@ -39,6 +39,7 @@ Plan-level view. ✅ = no open Queue row remains (intentionally-deferred residua
 | [GKE dogfood](plan/gke-dogfood.md) | `infra` `docs` | ✅ |
 | <a id="Q248"></a>[Dogfood runner right-sizing](plan/dogfood-runner-rightsizing.md) | `infra` | ✅ |
 | [v1 sunset → v2-only](plan/v1-classic-sunset-review.md) | `infra` | ⚠️ |
+| [Worker right-sizing profiles](plan/runner-sizing-profiles.md) | `infra` | ⚠️ |
 
 ---
 
@@ -49,6 +50,9 @@ Specific actionable items in priority order. Pick from the top; skip 🚫 items 
 | ID | Item | Labels | St | Sz | Notes |
 |---|---|---|---|---|---|
 | <a id="Q352"></a>Q352 | [Flake: e2e reach-real-GitHub egress blips (both lanes)](../.github/workflows/e2e-reusable.yml) | `tests` `flake` `infra` | 🔲 | S | **[Flakes-first](development/maintaining-backlog.md#flake-fixes-go-first).** Runner→GitHub egress died 07-14 (kindnet, CONNECT 502) + 07-19 (calico, curl 28 incl DirectEgress); reruns green. Add runner-host GitHub preflight so blips self-attribute. |
+| <a id="Q359"></a>Q359 | [Worker right-sizing profiles (recommendations first)](plan/runner-sizing-profiles.md) | `infra` | 🔲 | L | Killer-feature gap vs ARC: measure per-RunnerSet worker usage, surface recommended requests/limits in status, later opt-in auto-apply profiles. Phase 1 is usage metrics + an operator recipe; see the plan. |
+| <a id="Q173"></a>Q173 | [v2 bring-your-own proxy autoscaler (managedAutoscaling opt-out)](plan/v2-api.md#deferred-out-of-the-critical-path) | `infra` | 🔲 | M | Add managedAutoscaling (default true) on EgressProxy: false ⇒ GMC creates only the proxy Deployment; the operator attaches KEDA / VPA / the OSS MPA / a custom HPA. Additive; distinct from connection-metric scaling ([Q19](#Q19)). |
+| <a id="Q360"></a>Q360 | [Managed VPA opt-in for the control planes](design/appendix-e-capacity-planning.md) | `infra` | 🔲 | M | Chart `vpa.enabled` emits a VPA for the GMC; a per-gateway opt-in has the GMC stamp one next to each AGC Deployment (appendix-e documents AGC restart safety). Needs the VPA CRDs present (degrade gracefully) + precedence over `agcResources` settled. |
 | <a id="Q357"></a>Q357 | [Assert system pool fits the deployed AGCs](../scripts/dogfood/start.sh) | `infra` `retro` | 🔲 | S | System pool size is a hardcoded 2 (Q335, PR #709). A third tenant AGC re-breaks scheduling silently. Assert the pool fits deployed AGC requests, or derive the node count from them. |
 | <a id="Q273"></a>Q273 | [Complete v1 removal (full v2-only)](plan/q273-v2-front-door.md) | `docs` `infra` | 🚫 | M | v1-sunset milestone. Front door, deprecate-v1 banners, and `gag-migrate` are done; the residual v1 removal is blocked on the Classic/v1alpha1 deprecation window (from v1.1.0, §6.2) elapsing. Completing it unblocks [Q264](#Q264). |
 
@@ -66,7 +70,6 @@ Each trigger is tagged by source: **Demand:** an outside operator/user ask · **
 | <a id="Q298"></a>Q298 | [Infra PriorityClass allowlist ConfigMap watch (Q188 parity)](operations/security-operations.md#infra-pods-the-separate-allowed-infra-priority-classes-allowlist) | `infra` `security` | S | **Demand:** an operator wants to grow `--allowed-infra-priority-classes` without a GMC restart. Q284 shipped it flag-only; add the same additive, fail-safe watched-ConfigMap augmentation the worker allowlist has (Q188). |
 | <a id="Q238"></a>Q238 | [Versioned docs tree (per-release docs)](plan/docs-six-layer-audit.md) | `docs` | M | **Event:** a single `main` page can't be correct for all supported users at once — a release's install/config steps would break a prior, still-supported release. NOT a new *API* version. Then adopt a versioned docs tree (mike/Docusaurus). |
 | <a id="Q166"></a>Q166 | [v2 API M4: cross-namespace EgressProxy sharing](plan/v2-api.md) | `infra` `security` | M | **Demand:** a concrete operator ask for cross-namespace proxy sharing (same-namespace already works). Adds allowedNamespaces consent, CA distribution, dual-side NetworkPolicy, managed-IP refresh relocation. Additive on M3a. |
-| <a id="Q173"></a>Q173 | [v2 bring-your-own proxy autoscaler (managedAutoscaling opt-out)](plan/v2-api.md#deferred-out-of-the-critical-path) | `infra` | M | **Demand:** an operator wants KEDA / VPA / a custom HPA for the proxy pool. Add managedAutoscaling (default true): false ⇒ GMC creates only the Deployment; the operator targets it. Additive. Distinct from the connection-metric work (Q19). |
 | <a id="Q174"></a>Q174 | [v2 bring-your-own proxy TLS certificate](plan/v2-api.md#deferred-out-of-the-critical-path) | `infra` `security` | M | **Demand:** an operator with managed PKI/Vault wants to supply the proxy cert instead of GMC's self-signed default. Add certificateSecretRef on EgressProxy. Invariant: same-namespace TLS Secret, no cross-tenant reuse. Additive; design goal 6. |
 | <a id="Q169"></a>Q169 | [AGC horizontal scaling / multi-replica HA](design/appendix-e-capacity-planning.md) | `infra` | L | **Event:** a single per-tenant AGC becomes a measured bottleneck or a SPOF concern (near the ~1000-session ceiling). Single-replica with an in-memory session registry by design; real HA needs distributed session state. |
 | <a id="Q15"></a>Q15 | [gVisor RuntimeClass validation](plan/milestone-5.md) | `milestone` `security` | S | **Demand:** an operator wants lightweight (non-VM) syscall-filtering for compute-only, non-DinD CI jobs — likeliest on GKE, where gVisor is first-party. Kata (Q224) already covers the DinD case, the primary sandboxing motivation here. |
