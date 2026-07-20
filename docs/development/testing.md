@@ -155,6 +155,15 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
 
 Before concluding a test failure is a code bug, check whether the problem is in the test expectations, the test setup, or the code itself — the intent of the test must match the implementation.
 
+## Diagnosing failures: measure before asserting a root cause
+
+A root-cause claim needs evidence measured from *this* failure, not a resemblance to a remembered one. Two shortcuts recur and both produce confident-but-wrong diagnoses:
+
+- **Symptom-matching a prior issue.** When a failure looks like a known issue — a flake row on the [backlog](../STATUS.md), a previously fixed bug, a memory of "this is always X" — that match is a **hypothesis, not a diagnosis**. The same surface symptom (a scheduling timeout, an egress blip, a wedged run) can have a different cause each time. Before acting on the remembered cause — and above all before spending a billable re-run, a fix PR, or a state-changing command on it — take a direct measurement from the failing system: read the actual events, describe the actual pod, pull the actual log line. If the environment tears down evidence on failure, capturing diagnostics *before* teardown is part of the fix, not optional (filed from the v1.2.0 release retro, where gate failures had to be re-run just to observe them).
+- **Trusting source inspection.** Reading code — or a plan doc's ✅ investigation findings, which usually derive from source-reading — tells you what *should* happen, not what does. Treat such findings as unverified until confirmed end-to-end: actually exec the thing. Source-reading alone has produced wrong conclusions before (PR #59).
+
+The [structural-ceiling triage](technical-debt.md#distinguish-a-fixable-defect-from-an-external-structural-ceiling) is the same principle at a larger scale: when fixes stop converging, isolate and *measure* the external actor instead of asserting the next on-our-side cause.
+
 ## Where each tier can physically run (and what it costs)
 
 The tier above says *what* observes a bug; this says *where that tier can run*. Most validation is local on a dev machine; a short list needs real GitHub, real cloud, or real scale. The **environment definitions** below are durable; the **Q-item mapping** is a snapshot of the [backlog](../STATUS.md) as of 2026-06 and may lag.
