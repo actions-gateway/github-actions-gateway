@@ -141,6 +141,40 @@ gcloud container node-pools create workers \
   --disk-size=100GB
 ```
 
+### A4b. Add non-preemptible worker pool (benchmarks)
+
+The spot pool above is right for routine CI — cheap, and a preemption just
+re-runs a job. It is the wrong shape for a **benchmark**. Q260 chased a
+job-starvation signal that turned out to be spot preemption mid-burst (nodes
+dropping 3→1), not anything in GAG; the run only became readable once it was
+pinned to a non-preemptible pool, where every node stayed Ready across all 58
+monitor samples and the phantom starvation did not recur (see
+[gke-dogfood-turnup-findings.md](archive/gke-dogfood-turnup-findings.md)).
+Q264's protocol benchmarks used the same pool for the same reason.
+
+This pool existed on the live cluster for months as a hand-made resource,
+recorded only in those plan docs — so a cluster rebuilt from `setup.sh` came
+back spot-only and silently reintroduced the Q260 measurement hazard. It is now
+part of the scripted bootstrap.
+
+```bash
+# On-demand (non-preemptible) e2-standard-4, fixed size, starts at 0.
+# Deliberately NOT autoscaled: a benchmark wants a fixed, known node count so the
+# capacity under test is constant, not something the autoscaler moves mid-run.
+# Size it per run with `ops.sh pool-scale workers-od <n>`, return it to 0 after.
+# At 0 nodes it costs nothing, so it is safe to leave in place between campaigns.
+# pd-standard for the same Q248 quota reason as `workers`; same taint so the
+# identical worker-pod toleration schedules onto either pool.
+gcloud container node-pools create workers-od \
+  --cluster="$CLUSTER" \
+  --zone="$ZONE" \
+  --machine-type=e2-standard-4 \
+  --num-nodes=0 \
+  --node-taints=dedicated=workers:NoSchedule \
+  --disk-type=pd-standard \
+  --disk-size=100GB
+```
+
 ### A5. Get cluster credentials
 
 ```bash
@@ -759,11 +793,83 @@ adoption signal).
 
 ## Part E — Teardown
 
-```bash
-# Delete cluster (stops all compute billing immediately)
-gcloud container clusters delete "$CLUSTER" --zone="$ZONE" --quiet
+There are two levels of teardown. Pick deliberately — they are not the same
+operation with different urgency.
 
-# Optionally delete the project (irreversible — removes all GCP resources)
+| | `stop.sh` | `delete.sh` |
+|---|---|---|
+| What goes away | Nodes only | The whole cluster |
+| GAG install, tenant CRs, cert-manager CA, App secret | **Kept** | **Destroyed** |
+| Cost at rest | $0.00/hr | $0.00/hr |
+| Coming back | `start.sh`, ~5 min | `setup.sh` (+ `e2e-setup.sh`), ~20 min |
+| Use when | Between CI sessions — the normal at-rest state | Done for the foreseeable future, or converging a drifted cluster |
+
+**Deleting is not a cost optimisation.** The cluster is a zonal Standard
+cluster, one of which is free per billing account, so at 0 nodes it already
+bills nothing — `stop.sh` captures the entire saving (see
+[Cost reference](#cost-reference)). Delete because you want the environment
+*gone* or *rebuilt*, not because you want the bill lower.
+
+```bash
+export PROJECT CLUSTER ZONE REPO   # from the Variables section
+scripts/dogfood/delete.sh
+```
+
+The script routes CI off the cluster (resetting `GAG_RUNNER` and
+`GAG_E2E_RUNNER`) **before** deleting, so no dispatched job can aim at a
+cluster that is mid-deletion; deletes the cluster; prunes the now-dead
+kubeconfig context so a later `kubectl` fails loudly instead of timing out
+against a cluster that no longer exists; and reports any disk or reserved
+address that outlived the cluster, since those keep billing. It quotes the live
+node and worker-pod counts back at you in the confirmation, so deleting a
+cluster that is actually busy is a decision rather than an accident.
+
+`ASSUME_YES=1` skips the prompt for automation. A missing cluster is a no-op,
+so the script is safe to re-run.
+
+**What survives, and therefore makes recreate possible:** the GCP project,
+billing link, enabled APIs, quota, the GitHub App and its installation, and the
+App private key in the local Keychain. **What does not:** the GAG control-plane
+install, every tenant namespace and CR, the cert-manager CA and all certs
+minted from it, the per-tenant metrics PKI, the in-cluster GitHub App secret,
+and every node pool. Recreate rebuilds these; it does not restore them.
+
+### Recreate is not yet proven end-to-end (Q380)
+
+> **State as of 2026-07-20: there is no dogfood cluster.** It was deleted with
+> `delete.sh` on that date. So the next dogfood session does not start from
+> `start.sh` — it starts from a full `setup.sh` bootstrap, and that path has
+> never run.
+
+`delete.sh` **is** proven: the 2026-07-20 deletion was its first live run and it
+worked end-to-end — occupancy probes read the cluster correctly (0 nodes, 0
+worker pods), the runner labels were reset to `ubuntu-latest` *before* the
+delete, the kubeconfig context was pruned, and the orphan sweep confirmed no
+disks or reserved addresses survived.
+
+`setup.sh` is **not**. It is written to be a from-zero bootstrap and is guarded
+to be idempotent, but **the from-zero path has never actually been executed.**
+Every run to date happened against a live cluster and so took the "already
+exists — skipping create" branch on the cluster and pool steps. Treat recreate
+as unverified until someone runs `setup.sh` → `e2e-setup.sh` against the empty
+project and fixes whatever breaks.
+
+Two known things that first run will settle:
+
+- **`workers-od` has never been script-created.** It was added to `setup.sh`
+  (Part A4b) from a hand-made pool that no longer exists, so its `gcloud`
+  invocation has not been executed even once. Most likely thing to break.
+- **The App secret round-trip.** `create_secret` reads the App private key from
+  the local Keychain. That path ran on every past setup, but never in the case
+  that now applies — the in-cluster secret *absent* rather than upserted.
+
+Validate this before you need it. The failure mode this guards against is
+discovering a broken bootstrap at the moment dogfood is wanted for a release.
+
+To go further and remove the project itself (irreversible, and it takes the
+GCP-side App wiring with it):
+
+```bash
 gcloud projects delete "$PROJECT"
 ```
 
@@ -988,9 +1094,10 @@ target the `e2e` pool, which autoscales from 0 — scale a node up first
 
 | Action | Script |
 |---|---|
-| One-time bootstrap: cluster + node pools + GAG install + tenant | `scripts/dogfood/setup.sh` |
+| One-time bootstrap **and** full recreate after a delete: cluster + node pools + GAG install + tenant | `scripts/dogfood/setup.sh` |
 | Start cluster + dispatch opt-in validation runs onto GAG | `scripts/dogfood/start.sh` |
-| Stop cluster + reset GAG runner label | `scripts/dogfood/stop.sh` |
+| Stop cluster + reset GAG runner label (normal at-rest state) | `scripts/dogfood/stop.sh` |
+| Delete the cluster entirely (see [Part E](#part-e--teardown) — destroys the GAG install and all tenant state) | `scripts/dogfood/delete.sh` |
 | Enable e2e on GAG | `scripts/dogfood/e2e-start.sh` |
 | Disable e2e on GAG | `scripts/dogfood/e2e-stop.sh` |
 | One-time e2e pool + Kata setup | `scripts/dogfood/e2e-setup.sh` |
@@ -1008,6 +1115,7 @@ Variables block once per shell session. (`ops.sh` needs only `PROJECT`,
 | Scenario | $/hr | $/day (4 hr active) |
 |---|---|---|
 | Cluster at rest (0 nodes) | $0.00 | $0.00 |
+| Cluster deleted | $0.00 | $0.00 |
 | System node only, no jobs | $0.067 | $0.27 |
 | System + 1 spot CI worker (e2-standard-4) | ~$0.11 | — |
 | System + 4 spot CI workers (peak) | ~$0.23 | — |
