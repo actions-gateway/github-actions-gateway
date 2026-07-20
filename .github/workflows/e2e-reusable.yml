@@ -473,6 +473,14 @@ jobs:
           echo "=== runner disk (ENOSPC during bring-up is Q292's signature) ==="
           df -h /
           echo
+          echo "=== runner-host GitHub egress (Q352: a transport failure here means the runner's"
+          echo "    GitHub egress is down — real-GitHub e2e spec failures in this run are an"
+          echo "    infra blip; re-run the job) ==="
+          curl -sS -o /dev/null --max-time 10 \
+            --write-out 'api.github.com: HTTP %{http_code} in %{time_total}s\n' \
+            https://api.github.com/zen \
+            || echo "!!! runner host CANNOT reach https://api.github.com (curl rc=$?)"
+          echo
           echo "=== nodes ==="
           kubectl get nodes -o wide
           echo

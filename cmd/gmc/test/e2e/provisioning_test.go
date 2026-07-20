@@ -184,7 +184,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	// IP-range allowlist (populated by the IPRangeReconciler at startup), and
 	// the proxy TLS cert+SAN chain. This is the test that would have caught
 	// 4 of the 5 PR #59 bugs at local-iteration speed.
-	It("E2E_GMC_TenantProvisioning_ProxyConnectWorks: curl through proxy reaches GitHub", func() {
+	It("E2E_GMC_TenantProvisioning_ProxyConnectWorks: curl through proxy reaches GitHub", Label(realGitHubEgressLabel), func() {
 		By("waiting for proxy NetworkPolicy to be populated with GitHub IP ranges")
 		// The IPRangeReconciler refreshes the cache on Manager start, which both
 		// seeds the proxy NP's ipBlock allowlist at creation and patches existing

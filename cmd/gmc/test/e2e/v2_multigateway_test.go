@@ -130,7 +130,7 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 		assertGatewayJobYieldsScopedWorker(tenantNS, "set-beta", "beta-worker")
 	})
 
-	It("E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy", func() {
+	It("E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy", Label(realGitHubEgressLabel), func() {
 		By("waiting for the v2 EgressProxy NetworkPolicy to gain GitHub ipBlock peers")
 		Eventually(func(g Gomega) {
 			out, err := utils.Run(exec.Command("kubectl", "get", "networkpolicy", proxyDeploy,
