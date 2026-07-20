@@ -377,7 +377,7 @@ func TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet(t *testing.T) {
 	assert.False(t, ok, "no scale set is registered for a Classic set")
 }
 
-// TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion is the Q361 proof at the tier
+// TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion is the Q373 proof at the tier
 // the unit tests cannot reach: it exercises the whole reconciler → listener → provisioner
 // wiring against a real apiserver. The unit tests pin that the provisioner reclaims when
 // asked and that the listener asks on a terminal completion; only this one shows the

@@ -542,7 +542,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 //
 // Cleanup: every exit that fails BEFORE the worker pod exists deletes the Secret this
 // call staged, so a credential-bearing Secret never outlives a job that never ran
-// (Q361). In steady state the Secret must outlive this method — the pod mounts it — so
+// (Q373). In steady state the Secret must outlive this method — the pod mounts it — so
 // it is reclaimed by CleanupScaleSetJob, which the scale-set listener calls on the
 // terminal JobCompleted for the job. The Secret and pod also carry the RunnerSet
 // OwnerRef, so both cascade-GC when the set is deleted; the reconciler's reaper deletes
@@ -577,7 +577,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	// below delete it: an AlreadyExists means an earlier delivery of the same job staged
 	// it, and that delivery may already have a live worker pod mounting it (or be about
 	// to create one). Deleting another delivery's Secret would strand its pod in
-	// ContainerCreating, so a replay cleans up nothing it does not own (Q361).
+	// ContainerCreating, so a replay cleans up nothing it does not own (Q373).
 	staged := false
 	secret := p.buildSecret(target, secretName, jobID, workerVersion, nil, jitConfig)
 	if err := p.Client.Create(ctx, secret); err != nil {
@@ -658,7 +658,7 @@ func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID
 
 // CleanupScaleSetJob deletes the per-job JIT-config Secret staged for jobID by
 // ProvisionScaleSetWorker. It is the steady-state reclaim point for the scale-set path
-// (Q361): the Secret cannot be deleted when the worker pod is created (the pod mounts
+// (Q373): the Secret cannot be deleted when the worker pod is created (the pod mounts
 // it), so the scale-set listener calls this on the terminal JobCompleted for the job,
 // at which point the runner has consumed its JIT config and exited.
 //

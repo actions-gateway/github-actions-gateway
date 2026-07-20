@@ -562,7 +562,7 @@ func (r *recordingCleanup) seen() []string {
 	return append([]string(nil), r.jobIDs...)
 }
 
-// TestListener_ReclaimsCompletedJobResources is the Q361 contract at the listener seam:
+// TestListener_ReclaimsCompletedJobResources is the Q373 contract at the listener seam:
 // the per-job JIT-config Secret the provisioner staged cannot be deleted when the pod is
 // created (the pod mounts it), so the terminal JobCompleted is its reclaim point. Every
 // completed job must be handed to Cleanup — otherwise a credential-bearing Secret

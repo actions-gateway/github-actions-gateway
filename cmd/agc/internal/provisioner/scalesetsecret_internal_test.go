@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// The Q361 contract for the ScaleSet worker path: a JIT-config Secret is
+// The Q373 contract for the ScaleSet worker path: a JIT-config Secret is
 // credential-bearing, so it must never outlive the worker pod that consumes it. Every
 // exit of ProvisionScaleSetWorker that leaves no pod behind unstages the Secret it
 // staged, and the steady-state Secret is reclaimed by CleanupScaleSetJob when the

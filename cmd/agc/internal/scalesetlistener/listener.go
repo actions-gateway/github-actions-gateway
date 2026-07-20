@@ -119,7 +119,7 @@ type Job struct {
 type ProvisionFunc func(ctx context.Context, job Job) error
 
 // CleanupFunc releases the per-job resources ProvisionFunc staged — the worker's
-// JIT-config Secret — once the job is terminally complete (Q361). It is called with
+// JIT-config Secret — once the job is terminally complete (Q373). It is called with
 // the jobID of every terminal JobCompleted the queue delivers, and must be idempotent:
 // a re-created session replays completions from cursor 0, so the same job may be
 // cleaned up more than once, and a job may complete having never been provisioned by
@@ -190,7 +190,7 @@ type Config struct {
 	Capacity CapacityFunc
 	// Cleanup releases a completed job's staged worker resources (its JIT-config
 	// Secret). Nil disables reclaim, which leaks one Secret per job until the owning
-	// RunnerSet is deleted — so the reconciler always wires it (Q361).
+	// RunnerSet is deleted — so the reconciler always wires it (Q373).
 	Cleanup CleanupFunc
 	// Metrics records job accounting. Nil is safe.
 	Metrics MetricsRecorder
@@ -767,7 +767,7 @@ func (l *Listener) generateJITConfig(ctx context.Context, ssID int, jobID string
 
 // completeJob records a terminal JobCompleted, counting the completion metric at most
 // once per job even if the message replays to a re-created session, and reclaiming the
-// job's staged worker Secret (Q361).
+// job's staged worker Secret (Q373).
 //
 // The metric is deduped; the cleanup deliberately is NOT. Re-running an idempotent
 // delete costs one tolerated NotFound, and running it on every delivery makes replay a
@@ -786,7 +786,7 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) {
 		return
 	}
 	// Best-effort: a failed reclaim leaves the Secret to the RunnerSet's cascade-GC
-	// (the pre-Q361 behaviour) rather than holding the cursor, which would redeliver
+	// (the pre-Q373 behaviour) rather than holding the cursor, which would redeliver
 	// the whole batch and re-provision nothing useful.
 	if err := l.cfg.Cleanup(ctx, cj.JobID); err != nil {
 		l.log.Warn("scaleset: reclaim completed job's worker Secret",
