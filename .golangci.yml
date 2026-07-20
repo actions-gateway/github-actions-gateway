@@ -101,8 +101,8 @@ linters:
       # setup/reconcile/assert scaffolding per case (e.g. the ScaleUp/ScaleDown
       # and VersionTooOld/RateLimited condition tests in cmd/agc), which reads
       # more clearly kept separate than merged behind a helper. Scoping the
-      # exclusion to _test.go — rather than all of internal/* as
-      # cmd/gmc/.golangci.yml does — keeps dupl active on production code,
+      # exclusion to _test.go — rather than the rejected alternative of
+      # excluding all of internal/* — keeps dupl active on production code,
       # including the builder.go SecurityContext copy-paste this linter is here
       # to catch.
       - path: _test\.go
