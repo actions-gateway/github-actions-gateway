@@ -10,11 +10,15 @@ Classification follows [technical-debt.md](../development/technical-debt.md).
 
 > **Status: ⚠️ Partial — filed 2026-07-20; F1 shipped.** The F1 Secret leak was
 > fixed and merged the same day (Q373, #727). The remaining findings are tracked
-> by Queue rows [Q362](../STATUS.md#Q362)–[Q370](../STATUS.md#Q370),
-> [Q371](../STATUS.md#Q371) adds the prevention gates, and
-> [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
-> (Q361 is unrelated — it was allocated to a CI-latency item by #722 while this
-> audit was in flight, which is why the Secret-leak finding became Q373.)
+> by Queue rows [Q362](../STATUS.md#Q362), [Q364](../STATUS.md#Q364)–[Q370](../STATUS.md#Q370)
+> and [Q374](../STATUS.md#Q374); [Q371](../STATUS.md#Q371) adds the prevention
+> gates; [Q372](../STATUS.md#Q372) (Deferred) carries the re-run trigger.
+>
+> The ID range is not contiguous because concurrent branches allocated IDs while
+> this audit was in flight: Q361 went to a CI-latency item (#722) and Q363 to a
+> manifest-validate flake (#729), so this audit's F1 and F3 became Q373 and Q374.
+> See [§Audit cadence](#audit-cadence) — `Next ID` cannot stay correct under
+> parallel work, so open PRs are the authority.
 
 ## Headline
 
@@ -92,7 +96,7 @@ visibility the client hides, add a response hook to the client rather than keepi
 a parallel implementation. Highest-leverage deletion available — most of the 1,048
 lines go away.
 
-**F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.** → [Q363](../STATUS.md#Q363)
+**F3 — The v2 conditions sync gate covers 13% of the duplication it appears to.** → [Q374](../STATUS.md#Q374)
 
 Modulo the version string, nine files are byte-identical across `api/v2alpha1` and
 `api/v2beta1` — **2,550 lines**:
@@ -253,7 +257,7 @@ audit class is the larger one here.
 
 | Finding | Catchable by a gate? |
 |---|---|
-| F3 sync gate covers 13% | **Yes** — already a script; generalize its file list ([Q363](../STATUS.md#Q363)) |
+| F3 sync gate covers 13% | **Yes** — already a script; generalize its file list ([Q374](../STATUS.md#Q374)) |
 | F8 god `main`/`run` functions | **Yes** — `funlen` / `gocyclo` ([Q371](../STATUS.md#Q371)) |
 | F10 script sprawl | Partly — a line-count check on `scripts/` would flag `setup.sh` |
 | F1 Secret leak | No — semantic resource-lifecycle bug |
